@@ -26,6 +26,7 @@ import {
   unwrap,
 } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { Canvas } from '../canvases/canvas';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -46,7 +47,6 @@ import {
   editWithInstructions,
 } from './ai-edit';
 import { DocumentAnchor } from './anchor';
-import { Canvas } from './canvas';
 import { Comment } from './comment';
 import type {
   PresentationCopy,

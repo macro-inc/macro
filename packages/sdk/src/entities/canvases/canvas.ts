@@ -7,9 +7,12 @@ import type {
 } from '../../../generated/storage/types.gen';
 import type { MacroClient } from '../../utils/client';
 import { MacroApiError, unwrap } from '../../utils/unwrap';
+import {
+  DocumentEditRefusedError,
+  EditOutcomeUnknownError,
+} from '../documents/ai-edit';
+import type { Document } from '../documents/document';
 import { StaticImage } from '../images/image';
-import { DocumentEditRefusedError, EditOutcomeUnknownError } from './ai-edit';
-import type { Document } from './document';
 
 export type {
   CanvasBounds,
@@ -185,6 +188,8 @@ export class CanvasEditRejectedError extends MacroApiError {
  * A native Macro canvas: a live, shared scene of shapes, text, connectors,
  * groups and artifacts. Get one with `document.canvas()`; it reads and edits
  * the scene everyone sees, never a file copy.
+ *
+ * @routing Use when reading, editing or rendering a native canvas, such as a diagram, flowchart or whiteboard; not markdown documents, spreadsheets or decks.
  */
 export class Canvas {
   /** @internal Use `document.canvas()`. */

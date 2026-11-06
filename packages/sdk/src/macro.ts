@@ -340,6 +340,24 @@ export {
   type UpdateBotOptions,
 } from './entities/bots/bot';
 export { BotToken } from './entities/bots/token';
+export {
+  Canvas,
+  type CanvasApplyOptions,
+  type CanvasApplyResult,
+  type CanvasBounds,
+  type CanvasEditOptions,
+  CanvasEditRejectedError,
+  type CanvasEditResult,
+  CanvasRenderImage,
+  type CanvasRenderObject,
+  type CanvasRenderOptions,
+  CanvasRevisionConflictError,
+  type CanvasScene,
+  type CanvasSceneItem,
+  type CanvasSceneOptions,
+  type CanvasTextLayout,
+  type CanvasUnavailable,
+} from './entities/canvases/canvas';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
@@ -376,24 +394,6 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
-export {
-  Canvas,
-  type CanvasApplyOptions,
-  type CanvasApplyResult,
-  type CanvasBounds,
-  type CanvasEditOptions,
-  CanvasEditRejectedError,
-  type CanvasEditResult,
-  CanvasRenderImage,
-  type CanvasRenderObject,
-  type CanvasRenderOptions,
-  CanvasRevisionConflictError,
-  type CanvasScene,
-  type CanvasSceneItem,
-  type CanvasSceneOptions,
-  type CanvasTextLayout,
-  type CanvasUnavailable,
-} from './entities/documents/canvas';
 export type { FileContent } from './entities/documents/namespace';
 export {
   RevisionConflictError,
