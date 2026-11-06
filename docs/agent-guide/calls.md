@@ -70,9 +70,10 @@ The rail's live waveform opens a 300px popover without leaving the current view.
 It shows the call title and duration, current attendees and compact media controls.
 The popup and floating player reuse the full call's microphone, camera/background
 and screen-audio caret menus, without the full toolbar container.
-Open call returns to the existing meeting/channel route; Copy meeting link is in
-More and creates the link only after explicit selection. More also offers
-**Show floating player**. This is the standard grouped dropdown, anchored below
+Open call returns to the existing meeting/channel route. Copy meeting link is
+an icon-only action immediately after More and creates the link only after
+explicit selection; the shared CopyButton briefly swaps its icon to a checkmark.
+More offers **Show floating player**. This is the standard grouped dropdown, anchored below
 the More button and aligned to its right edge. Away from the channel's Call tab, the desktop player
 starts bottom-right, follows the speaker and gives screen sharing priority.
 Drag its header freely within the window. Within 64px of a corner, a target

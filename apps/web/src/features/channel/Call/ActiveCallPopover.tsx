@@ -23,37 +23,39 @@ export function ActiveCallPopover(props: {
     <Popover.Content class="menu-surface z-modal w-75 max-w-[calc(100vw-1rem)] overflow-hidden outline-none animate-menu-open">
       <div class="flex min-w-0 items-center gap-2 p-3">
         <Hash class="size-4 shrink-0 text-ink-muted" />
-        <Popover.Title class="min-w-0 flex-1 truncate text-sm font-semibold">
-          {record.isSuccess
-            ? record.data.channelName || t('nav.returnToCall')
-            : t('nav.returnToCall')}
-        </Popover.Title>
-        <CallLiveChip
-          bare
-          hideWave
-          startedAt={record.isSuccess ? record.data.startedAt : undefined}
-        />
-        <Dropdown placement="bottom-end">
-          <Dropdown.Trigger
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('calls.more')}
-            tooltip={t('calls.more')}
-          >
-            <DotsThree class="size-4 shrink-0 pointer-events-none" />
-          </Dropdown.Trigger>
-          <Dropdown.Content class="min-w-56">
-            <Dropdown.Group>
-              <Show when={props.onShowPlayer}>
+        <div class="flex min-w-0 flex-1 items-center gap-1">
+          <Popover.Title class="min-w-0 truncate text-sm font-semibold">
+            {record.isSuccess
+              ? record.data.channelName || t('nav.returnToCall')
+              : t('nav.returnToCall')}
+          </Popover.Title>
+          <CallLiveChip
+            bare
+            hideWave
+            startedAt={record.isSuccess ? record.data.startedAt : undefined}
+          />
+        </div>
+        <Show when={props.onShowPlayer}>
+          <Dropdown placement="bottom-end">
+            <Dropdown.Trigger
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('calls.more')}
+              tooltip={t('calls.more')}
+            >
+              <DotsThree class="size-4 shrink-0 pointer-events-none" />
+            </Dropdown.Trigger>
+            <Dropdown.Content class="min-w-56">
+              <Dropdown.Group>
                 <Dropdown.Item onSelect={props.onShowPlayer}>
                   <PictureInPicture class="size-4 shrink-0" />
                   <span class="flex-1 truncate">{t('calls.showPlayer')}</span>
                 </Dropdown.Item>
-              </Show>
-              <ActiveCallLink menuItem />
-            </Dropdown.Group>
-          </Dropdown.Content>
-        </Dropdown>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
+        </Show>
+        <ActiveCallLink compact />
         <Button
           variant="ghost"
           size="icon-sm"
