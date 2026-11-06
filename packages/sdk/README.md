@@ -267,6 +267,22 @@ nonempty means a read hit the row cap and aggregates may be partial. SQL schemas
 are dynamic, so result cells use a generated tagged union rather than an inferred
 TypeScript interface for each table. The HTTP route is `POST /databases/query`.
 
+To show a live answer in a document, save the `SELECT` as a question. The
+server refuses anything but one `SELECT` that compiles, and chart columns the
+`SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
+`<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
+views it. `withView()` restyles the answer without saving a new question.
+
+```ts
+const question = await database.saveQuery({
+  sql: 'SELECT "Party", COUNT(*) AS invites FROM "Guests" GROUP BY "Party"',
+  title: 'Invites per party',
+  display: { mode: 'bar', chart: { x: 'Party', y: ['invites'] } },
+});
+await macro.documents.create({ name: 'Invites', markdown: question.toBlock() });
+const pie = question.withView({ displayMode: 'pie' }).toBlock();
+```
+
 The SDK's schema methods write typed ops through one endpoint,
 `POST /databases/{id}/ops`. The methods below each send a one-op batch: the
 SDK mints the new table, column, and option ids (UUIDv7) itself and builds the
@@ -641,6 +657,30 @@ It returns the new revision, not a diff; read `content()` to see what changed.
 `options.signal` cancels the edit, keeping what was applied before the abort. A
 refused edit throws `DocumentEditRefusedError` with the editor's reason;
 `EditOutcomeUnknownError` means read the document before retrying.
+
+### Spreadsheets
+
+`documents.createSpreadsheet({ name })` creates a blank native spreadsheet, and
+`documents.spreadsheet(document)` addresses an existing one. `read()` returns
+every sheet's summary and the cells of the requested ranges with the revision,
+`calculate(formulas, { overrides })` evaluates scratch formulas without saving,
+and `applyEdits(operations, { expectedRevision })` saves one atomic batch:
+
+```ts
+const sheet = macro.documents.spreadsheet(document);
+const { revision, sheets } = await sheet.read({ ranges: ['A1:D20'] });
+await sheet.applyEdits(
+  [{ type: 'set_cells', sheetId: sheets[0].id, cells: [{ address: 'D21', value: '=SUM(D2:D20)' }] }],
+  { expectedRevision: revision },
+);
+```
+
+A workbook that changed since the read throws `RevisionConflictError` and
+saves nothing: read again and rebuild the batch.
+
+`sheet.edit(instructions)` hands the change to an AI writer instead, which reads
+what it needs and saves one batch the same way. It is billed as an AI edit and
+throws `DocumentEditRefusedError` with the writer's reason when it can't do it.
 
 ### Document lifecycle and other resources
 

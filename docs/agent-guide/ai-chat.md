@@ -1191,7 +1191,10 @@ For Macro's in-process agent, the backend evaluates the session owner's
 `ai-code-mode` flag once per conversational turn. Enabled users get a smaller
 direct toolset: SDK-supported searches, reads, listing, and data operations run
 through the SDK, including AI document and task edits
-(`document.edit(instructions)`; `EditDocument` is hidden in code mode), and
+(`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
+native spreadsheets (`macro.documents.spreadsheet(document)` reads, calculates
+and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
+`EditSpreadsheet` are hidden in code mode), and
 results are presented with `execution.views.present`. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy
@@ -2499,8 +2502,9 @@ Invalid drafts remain editable; navigation opens the first draft needing attenti
 
 Each saved change to a review (presentation, edits, decisions, finished sends)
 logs a `_macro/review_updated` frame in its session, so in the session view the
-card refetches only when a newer revision is announced and statuses set by the
-agent or another editor appear in place. Cards shown outside the session view
+card refetches only when a newer revision is announced, and statuses and drafts
+set by the agent or another editor appear in place. A card with unsaved local
+edits keeps them and offers **Reload saved review** instead. Cards shown outside the session view
 (DM and channel activity) still poll while the review is preparing or has
 pending drafts. A fetch that returns the card's own in-flight save is not a
 conflict and leaves the editor focused.

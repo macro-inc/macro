@@ -13,9 +13,7 @@
   "paths": {
     "/ai-cost/pricing": {
       "post": {
-        "tags": [
-          "ai_usage"
-        ],
+        "tags": ["ai_usage"],
         "summary": "Set the pricing for a model and recompute its recorded rows. Admin only.",
         "operationId": "set_pricing_handler",
         "requestBody": {
@@ -67,9 +65,7 @@
     },
     "/ai-cost/usage": {
       "post": {
-        "tags": [
-          "ai_usage"
-        ],
+        "tags": ["ai_usage"],
         "summary": "Query recorded AI usage. Admin only.",
         "operationId": "get_usage_handler",
         "requestBody": {
@@ -128,9 +124,7 @@
     },
     "/ai-projections": {
       "post": {
-        "tags": [
-          "ai_projections::inbound::axum_router::upsert_projection"
-        ],
+        "tags": ["ai_projections::inbound::axum_router::upsert_projection"],
         "summary": "Gets or creates an ai projection and the requesting user's instance,\ntriggering (or awaiting) materialization when needed.",
         "operationId": "upsert_ai_projection",
         "requestBody": {
@@ -189,9 +183,7 @@
     },
     "/attachments/{attachment_id}/chats": {
       "get": {
-        "tags": [
-          "get_chats_for_attachment"
-        ],
+        "tags": ["get_chats_for_attachment"],
         "operationId": "get_chats_for_attachment_handler",
         "parameters": [
           {
@@ -250,9 +242,7 @@
     },
     "/calendar/events/create-confirmed": {
       "post": {
-        "tags": [
-          "confirmed_actions"
-        ],
+        "tags": ["confirmed_actions"],
         "summary": "Create a calendar event the user approved in conversation, quoting their approval.",
         "operationId": "create_confirmed_calendar_event",
         "requestBody": {
@@ -305,9 +295,7 @@
     },
     "/chat/{chat_id}": {
       "delete": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Soft-delete a chat.",
         "operationId": "delete_chat",
         "parameters": [
@@ -348,9 +336,7 @@
         }
       },
       "patch": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Patch a chat's name, project, or share permissions.",
         "operationId": "patch_chat",
         "parameters": [
@@ -403,9 +389,7 @@
     },
     "/chat/{chat_id}/permanent": {
       "delete": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Permanently delete a chat and all associated data.",
         "operationId": "permanently_delete_chat",
         "parameters": [
@@ -448,9 +432,7 @@
     },
     "/chats": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Create a new chat.",
         "operationId": "create_chat",
         "requestBody": {
@@ -509,9 +491,7 @@
     },
     "/chats/history/{chat_id}": {
       "get": {
-        "tags": [
-          "chat_history"
-        ],
+        "tags": ["chat_history"],
         "summary": "Retrieves chat history for a specific chat ID",
         "operationId": "get_chat_history_handler",
         "parameters": [
@@ -561,9 +541,7 @@
     },
     "/chats/history_batch_messages": {
       "post": {
-        "tags": [
-          "chat_history_batch_messages"
-        ],
+        "tags": ["chat_history_batch_messages"],
         "summary": "Retrieves chat history for multiple message IDs",
         "operationId": "get_chat_history_batch_messages_handler",
         "requestBody": {
@@ -622,9 +600,7 @@
     },
     "/chats/{chat_id}": {
       "get": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Get a chat by ID with messages and web citations.",
         "operationId": "get_chat",
         "parameters": [
@@ -684,9 +660,7 @@
     },
     "/chats/{chat_id}/copy": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Copy a chat and its messages into a new chat.",
         "operationId": "copy_chat",
         "parameters": [
@@ -746,9 +720,7 @@
     },
     "/chats/{chat_id}/permissions": {
       "get": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Get the share permissions for a chat.",
         "operationId": "get_chat_permissions",
         "parameters": [
@@ -798,9 +770,7 @@
     },
     "/chats/{chat_id}/revert_delete": {
       "put": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Revert a soft-deleted chat.",
         "operationId": "revert_delete_chat",
         "parameters": [
@@ -843,9 +813,7 @@
     },
     "/chats/{chat_id}/tool/call": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Execute a pending tool call, optionally with updated arguments.",
         "operationId": "call_tool",
         "parameters": [
@@ -915,9 +883,7 @@
     },
     "/chats/{chat_id}/tool/reject": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Reject a pending tool call.",
         "operationId": "reject_tool_call",
         "parameters": [
@@ -970,9 +936,7 @@
     },
     "/chats/{chat_id}/tool/response/update": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Update a tool response.",
         "operationId": "update_tool_response",
         "parameters": [
@@ -1025,9 +989,7 @@
     },
     "/chats/{chat_id}/tool/update": {
       "post": {
-        "tags": [
-          "chats"
-        ],
+        "tags": ["chats"],
         "summary": "Update a tool call's arguments after validation.",
         "operationId": "update_tool_call",
         "parameters": [
@@ -1090,9 +1052,7 @@
     },
     "/citations/{id}": {
       "get": {
-        "tags": [
-          "citations"
-        ],
+        "tags": ["citations"],
         "operationId": "get_citation_handler",
         "parameters": [
           {
@@ -1141,9 +1101,7 @@
     },
     "/database-query": {
       "post": {
-        "tags": [
-          "database_query"
-        ],
+        "tags": ["database_query"],
         "operationId": "generate_database_query",
         "requestBody": {
           "content": {
@@ -1224,9 +1182,7 @@
     },
     "/decisions": {
       "post": {
-        "tags": [
-          "decisions"
-        ],
+        "tags": ["decisions"],
         "operationId": "decisions",
         "requestBody": {
           "content": {
@@ -1320,9 +1276,7 @@
     },
     "/email/send-confirmed": {
       "post": {
-        "tags": [
-          "confirmed_actions"
-        ],
+        "tags": ["confirmed_actions"],
         "summary": "Send an email the user approved in conversation, quoting their approval.",
         "operationId": "send_confirmed_email",
         "requestBody": {
@@ -1375,9 +1329,7 @@
     },
     "/health": {
       "get": {
-        "tags": [
-          "health"
-        ],
+        "tags": ["health"],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -1396,9 +1348,7 @@
     },
     "/images/generate": {
       "post": {
-        "tags": [
-          "images"
-        ],
+        "tags": ["images"],
         "summary": "Generate an image with Nano Banana and store it as a static file owned by\nthe caller. Charged to the acting user's AI allowance.",
         "operationId": "generate_image",
         "requestBody": {
@@ -1500,9 +1450,7 @@
     },
     "/import/notion": {
       "get": {
-        "tags": [
-          "import"
-        ],
+        "tags": ["import"],
         "summary": "Where the user's Notion workspace import stands.",
         "operationId": "notion_report_handler",
         "responses": {
@@ -1524,9 +1472,7 @@
     },
     "/import/notion/cancel": {
       "post": {
-        "tags": [
-          "import"
-        ],
+        "tags": ["import"],
         "summary": "Stop planning or writing the user's Notion import. Objects already\nimported stay.",
         "operationId": "cancel_notion_handler",
         "responses": {
@@ -1548,9 +1494,7 @@
     },
     "/import/run": {
       "post": {
-        "tags": [
-          "import"
-        ],
+        "tags": ["import"],
         "summary": "Accept staged imports (starts import jobs) and/or discard staged rows.",
         "operationId": "run_import_handler",
         "requestBody": {
@@ -1582,9 +1526,7 @@
     },
     "/import/runs/{source}/discover": {
       "post": {
-        "tags": [
-          "import"
-        ],
+        "tags": ["import"],
         "summary": "Discover candidates for user selection. Only Slack supports discovery.",
         "operationId": "discover_handler",
         "parameters": [
@@ -1613,9 +1555,7 @@
     },
     "/import/state": {
       "get": {
-        "tags": [
-          "import"
-        ],
+        "tags": ["import"],
         "summary": "Get the authenticated user's import state: discovery runs plus visible\nledger rows.",
         "operationId": "get_state_handler",
         "responses": {
@@ -1637,9 +1577,7 @@
     },
     "/import/workspaces/{source}": {
       "get": {
-        "tags": [
-          "import"
-        ],
+        "tags": ["import"],
         "summary": "Report progress for one reviewed workspace source.",
         "operationId": "workspace_report_handler",
         "parameters": [
@@ -1668,9 +1606,7 @@
     },
     "/import/workspaces/{source}/cancel": {
       "post": {
-        "tags": [
-          "import"
-        ],
+        "tags": ["import"],
         "summary": "Cancel this source's plan or write, keeping completed entities.",
         "operationId": "cancel_workspace_handler",
         "parameters": [
@@ -1699,9 +1635,7 @@
     },
     "/mcp/servers": {
       "get": {
-        "tags": [
-          "mcp"
-        ],
+        "tags": ["mcp"],
         "summary": "List all MCP servers configured for the authenticated user.",
         "operationId": "list_mcp_servers",
         "responses": {
@@ -1741,9 +1675,7 @@
         }
       },
       "put": {
-        "tags": [
-          "mcp"
-        ],
+        "tags": ["mcp"],
         "summary": "Update an existing MCP server's name or enabled status.",
         "operationId": "update_mcp_server",
         "requestBody": {
@@ -1800,9 +1732,7 @@
         }
       },
       "post": {
-        "tags": [
-          "mcp"
-        ],
+        "tags": ["mcp"],
         "summary": "Add a new MCP server for the authenticated user. A URL the user already\nhas is returned as stored, keeping its credentials.",
         "operationId": "add_mcp_server",
         "requestBody": {
@@ -1859,9 +1789,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "mcp"
-        ],
+        "tags": ["mcp"],
         "summary": "Delete an MCP server by URL.",
         "operationId": "delete_mcp_server",
         "parameters": [
@@ -1904,9 +1832,7 @@
     },
     "/mcp/servers/auth/callback": {
       "get": {
-        "tags": [
-          "mcp"
-        ],
+        "tags": ["mcp"],
         "summary": "OAuth callback endpoint — receives code and state, or an error, from the\nauthorization server.",
         "operationId": "mcp_auth_callback",
         "parameters": [
@@ -1976,9 +1902,7 @@
     },
     "/mcp/servers/auth/client-metadata": {
       "get": {
-        "tags": [
-          "mcp"
-        ],
+        "tags": ["mcp"],
         "summary": "Return Macro's public OAuth Client ID Metadata Document.",
         "operationId": "mcp_oauth_client_metadata",
         "responses": {
@@ -1990,9 +1914,7 @@
     },
     "/mcp/servers/auth/start": {
       "post": {
-        "tags": [
-          "mcp"
-        ],
+        "tags": ["mcp"],
         "summary": "Start the OAuth authorization flow for an MCP server.",
         "operationId": "start_mcp_auth",
         "requestBody": {
@@ -2041,9 +1963,7 @@
     },
     "/memory": {
       "get": {
-        "tags": [
-          "memory"
-        ],
+        "tags": ["memory"],
         "summary": "Get the authenticated user's latest memory.",
         "description": "Compose stored private preferences, latest activity, and current team profiles.\nEnrolls the caller for daily refresh; generation never runs on this request.",
         "operationId": "get_memory_handler",
@@ -2076,9 +1996,7 @@
     },
     "/onboarding": {
       "get": {
-        "tags": [
-          "onboarding"
-        ],
+        "tags": ["onboarding"],
         "summary": "Get the authenticated user's onboarding state.",
         "operationId": "get_state_handler",
         "responses": {
@@ -2100,9 +2018,7 @@
     },
     "/onboarding/complete": {
       "post": {
-        "tags": [
-          "onboarding"
-        ],
+        "tags": ["onboarding"],
         "summary": "Complete (or skip) onboarding. Unreserved leftover onboarding-staged\nimport candidates are deleted.",
         "operationId": "complete_handler",
         "requestBody": {
@@ -2134,9 +2050,7 @@
     },
     "/onboarding/prompts": {
       "get": {
-        "tags": [
-          "onboarding"
-        ],
+        "tags": ["onboarding"],
         "summary": "List the sidebar prompts the authenticated user dismissed on any device.",
         "operationId": "dismissed_prompts_handler",
         "responses": {
@@ -2158,9 +2072,7 @@
     },
     "/onboarding/prompts/{prompt_id}/dismiss": {
       "post": {
-        "tags": [
-          "onboarding"
-        ],
+        "tags": ["onboarding"],
         "summary": "Dismiss one sidebar prompt for the authenticated user, on every device.\nIdempotent.",
         "operationId": "dismiss_prompt_handler",
         "parameters": [
@@ -2189,9 +2101,7 @@
     },
     "/pipedream/mcp/catalog": {
       "get": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "Browse or search the catalog of connectable apps.",
         "description": "Results come from Pipedream's app directory, most popular first.",
         "operationId": "browse_pipedream_mcp_catalog",
@@ -2272,9 +2182,7 @@
     },
     "/pipedream/mcp/complete": {
       "post": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "Register a connected account reported by the Pipedream Connect UI.",
         "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything. An overlaid app is\nrefused with 409: it connects through its own MCP server instead.",
         "operationId": "complete_pipedream_mcp_connection",
@@ -2354,9 +2262,7 @@
     },
     "/pipedream/mcp/connect/complete": {
       "post": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "Record an app the user connected through Macro Connect.",
         "description": "Answers 404 until Connect lists an active connection for this user and\napp, so the frontend can poll it while the consent window is open.",
         "operationId": "complete_pipedream_mcp_connect",
@@ -2426,9 +2332,7 @@
     },
     "/pipedream/mcp/connections": {
       "get": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "List the MCP apps connected by the authenticated user.",
         "operationId": "list_pipedream_mcp_connections",
         "responses": {
@@ -2468,9 +2372,7 @@
         }
       },
       "put": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "Rename or enable/disable a connected app.",
         "operationId": "update_pipedream_mcp_connection",
         "requestBody": {
@@ -2527,9 +2429,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "Disconnect an app, revoking its Pipedream account.",
         "operationId": "delete_pipedream_mcp_connection",
         "parameters": [
@@ -2572,9 +2472,7 @@
     },
     "/pipedream/mcp/overlays": {
       "get": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "List the catalog apps that connect through their own MCP server.",
         "description": "Clients connect these with the native MCP OAuth flow against\n`server_url`; Pipedream refuses to complete a connection for them.",
         "operationId": "list_pipedream_mcp_overlays",
@@ -2617,9 +2515,7 @@
     },
     "/pipedream/mcp/recover": {
       "post": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "Register an account a Connect flow created but the Connect UI never\nreported.",
         "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.\nAn overlaid app is refused with 409, as in [`complete_connection`].",
         "operationId": "recover_pipedream_mcp_connection",
@@ -2699,9 +2595,7 @@
     },
     "/pipedream/mcp/token": {
       "post": {
-        "tags": [
-          "pipedream-mcp"
-        ],
+        "tags": ["pipedream-mcp"],
         "summary": "Start a connect flow for the authenticated user.",
         "description": "By default, a short-lived Pipedream Connect token: the frontend opens\nPipedream's hosted Connect UI with it, and the user picks (or is\ndeep-linked into) an app and authorizes it there. When the body names an\napp Macro Connect serves and the `macro-connect` rollout is on for the\nuser, a Connect URL instead.",
         "operationId": "create_pipedream_mcp_token",
@@ -2767,9 +2661,7 @@
     },
     "/preview": {
       "post": {
-        "tags": [
-          "get_batch_preview"
-        ],
+        "tags": ["get_batch_preview"],
         "operationId": "get_batch_preview",
         "requestBody": {
           "content": {
@@ -2817,9 +2709,7 @@
     },
     "/skills": {
       "get": {
-        "tags": [
-          "skills"
-        ],
+        "tags": ["skills"],
         "summary": "List the caller's skills, or search them by name when `query` is given.\nBuilt-in skills are included.",
         "operationId": "list_skills",
         "parameters": [
@@ -2891,9 +2781,7 @@
     },
     "/skills/{id}": {
       "get": {
-        "tags": [
-          "skills"
-        ],
+        "tags": ["skills"],
         "summary": "Read one skill's complete instructions: a skill document the caller can\nview, or a built-in skill.",
         "operationId": "read_skill",
         "parameters": [
@@ -2957,9 +2845,7 @@
     },
     "/stream/chat/message": {
       "post": {
-        "tags": [
-          "chat_message"
-        ],
+        "tags": ["chat_message"],
         "summary": "Send a new chat message and stream the AI response.",
         "description": "This endpoint initiates a chat message and streams the response via the stream service.\nThe client should subscribe to the returned stream_id via connection_gateway to receive chunks.",
         "operationId": "send_chat_message",
@@ -3032,9 +2918,7 @@
     },
     "/stream/chat/message/stop": {
       "post": {
-        "tags": [
-          "stream_stop"
-        ],
+        "tags": ["stream_stop"],
         "summary": "Stop an in-flight AI chat stream.",
         "description": "Cancels the streaming task associated with the given `stream_id`, causing\nit to persist whatever has been generated so far and emit `StreamEnd`.\nThe caller must have at least `Edit` access to the chat.",
         "operationId": "stop_chat_stream",
@@ -3074,9 +2958,7 @@
     },
     "/structured-completion": {
       "post": {
-        "tags": [
-          "structured_completion"
-        ],
+        "tags": ["structured_completion"],
         "operationId": "structured_completion",
         "requestBody": {
           "content": {
@@ -3167,9 +3049,7 @@
     },
     "/web/fetch": {
       "post": {
-        "tags": [
-          "web"
-        ],
+        "tags": ["web"],
         "summary": "Read one public web page as Markdown. Charged to the acting user's AI allowance.",
         "operationId": "fetch_web_page",
         "requestBody": {
@@ -3254,9 +3134,7 @@
     },
     "/web/search": {
       "post": {
-        "tags": [
-          "web"
-        ],
+        "tags": ["web"],
         "summary": "Search the public web. Charged to the acting user's AI allowance.",
         "operationId": "search_web",
         "requestBody": {
@@ -3335,20 +3213,12 @@
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
-        "enum": [
-          "view",
-          "comment",
-          "edit",
-          "owner"
-        ]
+        "enum": ["view", "comment", "edit", "owner"]
       },
       "AddServerRequest": {
         "type": "object",
         "description": "Request body for adding a new MCP server.",
-        "required": [
-          "url",
-          "server_name"
-        ],
+        "required": ["url", "server_name"],
         "properties": {
           "server_name": {
             "type": "string",
@@ -3388,10 +3258,7 @@
           {
             "type": "object",
             "description": "Plain text produced by the model.",
-            "required": [
-              "text",
-              "type"
-            ],
+            "required": ["text", "type"],
             "properties": {
               "text": {
                 "type": "string",
@@ -3399,21 +3266,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "text"
-                ]
+                "enum": ["text"]
               }
             }
           },
           {
             "type": "object",
             "description": "A native tool call issued by the model.",
-            "required": [
-              "name",
-              "json",
-              "id",
-              "type"
-            ],
+            "required": ["name", "json", "id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -3428,28 +3288,17 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "toolCall"
-                ]
+                "enum": ["toolCall"]
               }
             }
           },
           {
             "type": "object",
             "description": "A tool call routed through an MCP service.",
-            "required": [
-              "name",
-              "service",
-              "json",
-              "id",
-              "type"
-            ],
+            "required": ["name", "service", "json", "id", "type"],
             "properties": {
               "display_name": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Optional human-readable name."
               },
               "id": {
@@ -3469,21 +3318,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "mcpToolCall"
-                ]
+                "enum": ["mcpToolCall"]
               }
             }
           },
           {
             "type": "object",
             "description": "A JSON response from a tool call.",
-            "required": [
-              "name",
-              "json",
-              "id",
-              "type"
-            ],
+            "required": ["name", "json", "id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -3498,21 +3340,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "toolCallResponseJson"
-                ]
+                "enum": ["toolCallResponseJson"]
               }
             }
           },
           {
             "type": "object",
             "description": "An error response from a tool call.",
-            "required": [
-              "name",
-              "description",
-              "id",
-              "type"
-            ],
+            "required": ["name", "description", "id", "type"],
             "properties": {
               "description": {
                 "type": "string",
@@ -3528,19 +3363,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "toolCallErr"
-                ]
+                "enum": ["toolCallErr"]
               }
             }
           },
           {
             "type": "object",
             "description": "A thinking/reasoning block from the model.",
-            "required": [
-              "thinking",
-              "type"
-            ],
+            "required": ["thinking", "type"],
             "properties": {
               "thinking": {
                 "type": "string",
@@ -3548,9 +3378,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "thinking"
-                ]
+                "enum": ["thinking"]
               }
             }
           }
@@ -3561,11 +3389,7 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "document_type",
-              "document_name",
-              "type"
-            ],
+            "required": ["document_type", "document_name", "type"],
             "properties": {
               "document_name": {
                 "type": "string",
@@ -3577,37 +3401,26 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "document"
-                ]
+                "enum": ["document"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "project_name",
-              "type"
-            ],
+            "required": ["project_name", "type"],
             "properties": {
               "project_name": {
                 "type": "string"
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "project"
-                ]
+                "enum": ["project"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "image_extension",
-              "image_name",
-              "type"
-            ],
+            "required": ["image_extension", "image_name", "type"],
             "properties": {
               "image_extension": {
                 "$ref": "#/components/schemas/FileType",
@@ -3619,19 +3432,13 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "image"
-                ]
+                "enum": ["image"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "channel_name",
-              "channel_type",
-              "type"
-            ],
+            "required": ["channel_name", "channel_type", "type"],
             "properties": {
               "channel_name": {
                 "type": "string"
@@ -3641,28 +3448,21 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "channel"
-                ]
+                "enum": ["channel"]
               }
             }
           },
           {
             "type": "object",
             "description": "an email thread",
-            "required": [
-              "email_subject",
-              "type"
-            ],
+            "required": ["email_subject", "type"],
             "properties": {
               "email_subject": {
                 "type": "string"
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "email"
-                ]
+                "enum": ["email"]
               }
             }
           }
@@ -3670,22 +3470,12 @@
       },
       "AttachmentType": {
         "type": "string",
-        "enum": [
-          "document",
-          "image",
-          "channel",
-          "email",
-          "project",
-          "skill"
-        ]
+        "enum": ["document", "image", "channel", "email", "project", "skill"]
       },
       "CallToolRequest": {
         "type": "object",
         "description": "Request body for executing a pending tool call.",
-        "required": [
-          "messageId",
-          "toolCallId"
-        ],
+        "required": ["messageId", "toolCallId"],
         "properties": {
           "args": {
             "description": "Optional updated arguments. Uses original args if omitted."
@@ -3703,9 +3493,7 @@
       "CallToolResponse": {
         "type": "object",
         "description": "Response body for a successful tool call.",
-        "required": [
-          "result"
-        ],
+        "required": ["result"],
         "properties": {
           "result": {
             "description": "The tool execution result."
@@ -3715,10 +3503,7 @@
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
-        "required": [
-          "channel_id",
-          "access_level"
-        ],
+        "required": ["channel_id", "access_level"],
         "properties": {
           "access_level": {
             "$ref": "#/components/schemas/AccessLevel",
@@ -3732,35 +3517,19 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": [
-          "public",
-          "private",
-          "direct_message",
-          "team"
-        ]
+        "enum": ["public", "private", "direct_message", "team"]
       },
       "Chat": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "isPersistent"
-        ],
+        "required": ["id", "name", "userId", "isPersistent"],
         "properties": {
           "createdAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was deleted"
           },
@@ -3772,10 +3541,7 @@
             "type": "boolean"
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The model used to generate the chat"
           },
           "name": {
@@ -3783,24 +3549,15 @@
             "description": "The name of the chat"
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The project id of the chat"
           },
           "tokenCount": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64"
           },
           "updatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was last updated"
           },
@@ -3812,11 +3569,7 @@
       },
       "ChatAttachment": {
         "type": "object",
-        "required": [
-          "id",
-          "attachment_type",
-          "attachment_id"
-        ],
+        "required": ["id", "attachment_type", "attachment_id"],
         "properties": {
           "attachment_id": {
             "type": "string",
@@ -3827,10 +3580,7 @@
             "description": "The type of attachment"
           },
           "chat_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The id of the chat if the attachment is a chat"
           },
           "id": {
@@ -3838,19 +3588,14 @@
             "description": "db attachment id - unused"
           },
           "message_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The id of the message if the attachment is a message"
           }
         }
       },
       "ChatHistory": {
         "type": "object",
-        "required": [
-          "conversation"
-        ],
+        "required": ["conversation"],
         "properties": {
           "conversation": {
             "type": "array",
@@ -3862,9 +3607,7 @@
       },
       "ChatHistoryBatchMessagesRequest": {
         "type": "object",
-        "required": [
-          "message_ids"
-        ],
+        "required": ["message_ids"],
         "properties": {
           "message_ids": {
             "type": "array",
@@ -3876,11 +3619,7 @@
       },
       "ChatMessage": {
         "type": "object",
-        "required": [
-          "id",
-          "content",
-          "role"
-        ],
+        "required": ["id", "content", "role"],
         "properties": {
           "content": {
             "$ref": "#/components/schemas/ChatMessageContent",
@@ -3891,10 +3630,7 @@
             "description": "The chat message id"
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "the model used to generate the message"
           },
           "role": {
@@ -3922,36 +3658,23 @@
       "ChatMessageError": {
         "type": "object",
         "description": "Error response for chat message endpoints",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "code": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Stable machine-readable code for admission errors (402 or 503)."
           },
           "error": {
             "type": "string"
           },
           "stream_id": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
       "ChatMessageWithAttachments": {
         "type": "object",
-        "required": [
-          "id",
-          "content",
-          "role",
-          "attachments"
-        ],
+        "required": ["id", "content", "role", "attachments"],
         "properties": {
           "attachments": {
             "type": "array",
@@ -3983,15 +3706,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "access"
-                    ]
+                    "enum": ["access"]
                   }
                 }
               }
@@ -4004,15 +3723,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "no_access"
-                    ]
+                    "enum": ["no_access"]
                   }
                 }
               }
@@ -4025,15 +3740,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "does_not_exist"
-                    ]
+                    "enum": ["does_not_exist"]
                   }
                 }
               }
@@ -4043,11 +3754,7 @@
       },
       "ChatPreviewData": {
         "type": "object",
-        "required": [
-          "chat_id",
-          "chat_name",
-          "owner"
-        ],
+        "required": ["chat_id", "chat_name", "owner"],
         "properties": {
           "chat_id": {
             "type": "string"
@@ -4059,10 +3766,7 @@
             "type": "string"
           },
           "updated_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -4070,18 +3774,10 @@
       "ChatResponse": {
         "type": "object",
         "description": "The full chat response, matching the DCS API response shape.",
-        "required": [
-          "id",
-          "userId",
-          "name",
-          "messages"
-        ],
+        "required": ["id", "userId", "name", "messages"],
         "properties": {
           "createdAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was created."
           },
@@ -4097,10 +3793,7 @@
             "description": "The messages in the chat."
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The model used to generate the chat (`provider/model` id)."
           },
           "name": {
@@ -4108,17 +3801,11 @@
             "description": "The name of the chat."
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The project id the chat belongs to."
           },
           "updatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "The time the chat was last updated."
           },
@@ -4138,15 +3825,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "error"
-                    ]
+                    "enum": ["error"]
                   }
                 }
               }
@@ -4185,9 +3868,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_user_message"
-                ]
+                "enum": ["chat_user_message"]
               }
             }
           },
@@ -4216,27 +3897,20 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "chat_message_response"
-                ]
+                "enum": ["chat_message_response"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "type"
-            ],
+            "required": ["stream_id", "type"],
             "properties": {
               "stream_id": {
                 "type": "string"
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "stream_end"
-                ]
+                "enum": ["stream_end"]
               }
             }
           }
@@ -4255,29 +3929,19 @@
       "CompletionThinking": {
         "type": "string",
         "description": "How much a model may think before it gives a structured answer.",
-        "enum": [
-          "default",
-          "low"
-        ]
+        "enum": ["default", "low"]
       },
       "CompletionUsage": {
         "type": "object",
         "description": "User and feature attribution for one invocation.",
-        "required": [
-          "feature",
-          "user",
-          "cost"
-        ],
+        "required": ["feature", "user", "cost"],
         "properties": {
           "cost": {
             "$ref": "#/components/schemas/Usage",
             "description": "Measured usage and resolved cost."
           },
           "entity": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Related entity, if any."
           },
@@ -4294,11 +3958,7 @@
       "ConnectedServer": {
         "type": "object",
         "description": "One of the user's MCP server connections, as the setup page sees it.",
-        "required": [
-          "name",
-          "url",
-          "authenticated"
-        ],
+        "required": ["name", "url", "authenticated"],
         "properties": {
           "authenticated": {
             "type": "boolean",
@@ -4316,11 +3976,7 @@
       },
       "ConversationRecord": {
         "type": "object",
-        "required": [
-          "chat_id",
-          "title",
-          "messages"
-        ],
+        "required": ["chat_id", "title", "messages"],
         "properties": {
           "chat_id": {
             "type": "string"
@@ -4341,17 +3997,11 @@
         "description": "Request body for creating a chat.",
         "properties": {
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional name for the chat."
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional project to associate the chat with."
           }
         }
@@ -4360,39 +4010,28 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "none"
-                ]
+                "enum": ["none"]
               }
             }
           },
           {
             "type": "object",
             "description": "Databases, tables, columns or saved views.",
-            "required": [
-              "kind"
-            ],
+            "required": ["kind"],
             "properties": {
               "kind": {
                 "type": "string",
-                "enum": [
-                  "schema"
-                ]
+                "enum": ["schema"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "count",
-              "kind"
-            ],
+            "required": ["count", "kind"],
             "properties": {
               "count": {
                 "type": "integer",
@@ -4401,9 +4040,7 @@
               },
               "kind": {
                 "type": "string",
-                "enum": [
-                  "rows"
-                ]
+                "enum": ["rows"]
               }
             }
           }
@@ -4435,10 +4072,7 @@
             ]
           },
           "databaseId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "displayMode": {
             "$ref": "#/components/schemas/DatabaseQueryDisplayMode"
@@ -4458,18 +4092,10 @@
       "DatabaseQueryChart": {
         "type": "object",
         "description": "Chart fields name the proposal's result columns exactly.",
-        "required": [
-          "x",
-          "y",
-          "title",
-          "stack"
-        ],
+        "required": ["x", "y", "title", "stack"],
         "properties": {
           "color": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "stack": {
             "type": "boolean"
@@ -4492,31 +4118,15 @@
       "DatabaseQueryDisplayMode": {
         "type": "string",
         "description": "Supported live-answer presentations.",
-        "enum": [
-          "scalar",
-          "table",
-          "bar",
-          "line",
-          "area",
-          "scatter",
-          "pie"
-        ]
+        "enum": ["scalar", "table", "bar", "line", "area", "scatter", "pie"]
       },
       "DatabaseQueryRequest": {
         "type": "object",
         "description": "The question and untrusted schema hints; authorization remains in the read services.",
-        "required": [
-          "model",
-          "prompt",
-          "sql",
-          "schema"
-        ],
+        "required": ["model", "prompt", "sql", "schema"],
         "properties": {
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The SQL engine's error from one failed proposal, used for a bounded repair."
           },
           "model": {
@@ -4534,10 +4144,7 @@
       "DecisionErrorBody": {
         "type": "object",
         "description": "Sanitized, machine-readable failure of a decision request.",
-        "required": [
-          "error",
-          "code"
-        ],
+        "required": ["error", "code"],
         "properties": {
           "code": {
             "type": "string",
@@ -4552,10 +4159,7 @@
       "DecisionRequest": {
         "type": "object",
         "description": "Named yes/no questions to evaluate against one arbitrary JSON input.",
-        "required": [
-          "input",
-          "questions"
-        ],
+        "required": ["input", "questions"],
         "properties": {
           "input": {
             "description": "Data to classify. The entire compact request must fit in 64 KiB."
@@ -4576,9 +4180,7 @@
       "DecisionResponse": {
         "type": "object",
         "description": "The probability of yes for every requested question, under its original key.",
-        "required": [
-          "probabilities"
-        ],
+        "required": ["probabilities"],
         "properties": {
           "probabilities": {
             "type": "object",
@@ -4596,9 +4198,7 @@
       "DismissedPrompts": {
         "type": "object",
         "description": "The prompts the user dismissed, on any device.",
-        "required": [
-          "dismissed"
-        ],
+        "required": ["dismissed"],
         "properties": {
           "dismissed": {
             "type": "array",
@@ -4611,10 +4211,7 @@
       },
       "DocumentCognitionServiceApiVersion": {
         "type": "string",
-        "enum": [
-          "v1",
-          "v2"
-        ]
+        "enum": ["v1", "v2"]
       },
       "DocumentReference": {
         "oneOf": [
@@ -4625,15 +4222,11 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "kind"
-                ],
+                "required": ["kind"],
                 "properties": {
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "pdf"
-                    ]
+                    "enum": ["pdf"]
                   }
                 }
               }
@@ -4643,11 +4236,7 @@
       },
       "DocumentTextPart": {
         "type": "object",
-        "required": [
-          "id",
-          "document_id",
-          "reference"
-        ],
+        "required": ["id", "document_id", "reference"],
         "properties": {
           "document_id": {
             "type": "string"
@@ -4663,16 +4252,10 @@
       "DynamicSchema": {
         "type": "object",
         "description": "Schema definition for dynamic structured completions.",
-        "required": [
-          "schema",
-          "name"
-        ],
+        "required": ["schema", "name"],
         "properties": {
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional description of what the schema represents."
           },
           "name": {
@@ -4687,10 +4270,7 @@
       "Entity": {
         "type": "object",
         "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
-        "required": [
-          "entity_type",
-          "entity_id"
-        ],
+        "required": ["entity_type", "entity_id"],
         "properties": {
           "entity_id": {
             "type": "string",
@@ -4735,9 +4315,7 @@
       "ErrorBody": {
         "type": "object",
         "description": "Error response body.",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "string",
@@ -4748,9 +4326,7 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "properties": {
           "message": {
             "type": "string",
@@ -4761,20 +4337,12 @@
       "Expiry": {
         "type": "string",
         "description": "How long a projection remains active without being requested.",
-        "enum": [
-          "day",
-          "week",
-          "month"
-        ]
+        "enum": ["day", "week", "month"]
       },
       "FeatureUsage": {
         "type": "object",
         "description": "Recorded invocations and total for one feature.",
-        "required": [
-          "feature",
-          "entries",
-          "total"
-        ],
+        "required": ["feature", "entries", "total"],
         "properties": {
           "entries": {
             "type": "array",
@@ -5231,28 +4799,17 @@
       "FreeTierModel": {
         "type": "string",
         "description": "A `provider/model` id every user may request without professional features.",
-        "enum": [
-          "google/gemini-3.8-flash"
-        ]
+        "enum": ["google/gemini-3.8-flash"]
       },
       "GenerateImageAspectRatio": {
         "type": "string",
         "description": "Shape of the generated image.",
-        "enum": [
-          "square",
-          "landscape",
-          "portrait",
-          "widescreen",
-          "tall"
-        ]
+        "enum": ["square", "landscape", "portrait", "widescreen", "tall"]
       },
       "GenerateImageErrorBody": {
         "type": "object",
         "description": "Sanitized, machine-readable failure of an image request.",
-        "required": [
-          "error",
-          "code"
-        ],
+        "required": ["error", "code"],
         "properties": {
           "code": {
             "type": "string",
@@ -5269,10 +4826,7 @@
           {
             "type": "object",
             "description": "An image document the caller can view.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -5281,19 +4835,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "document"
-                ]
+                "enum": ["document"]
               }
             }
           },
           {
             "type": "object",
             "description": "An uploaded or previously generated static file.",
-            "required": [
-              "id",
-              "type"
-            ],
+            "required": ["id", "type"],
             "properties": {
               "id": {
                 "type": "string",
@@ -5302,9 +4851,7 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "staticFile"
-                ]
+                "enum": ["staticFile"]
               }
             }
           }
@@ -5314,9 +4861,7 @@
       "GenerateImageRequest": {
         "type": "object",
         "description": "What image to generate.",
-        "required": [
-          "prompt"
-        ],
+        "required": ["prompt"],
         "properties": {
           "aspectRatio": {
             "oneOf": [
@@ -5365,10 +4910,7 @@
             "description": "IANA media type of the image, e.g. `image/png`."
           },
           "note": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Commentary the model produced alongside the image, when any."
           },
           "sizeBytes": {
@@ -5396,10 +4938,7 @@
       },
       "GenericErrorResponse": {
         "type": "object",
-        "required": [
-          "error",
-          "message"
-        ],
+        "required": ["error", "message"],
         "properties": {
           "error": {
             "type": "boolean",
@@ -5413,9 +4952,7 @@
       },
       "GetBatchPreviewRequest": {
         "type": "object",
-        "required": [
-          "chat_ids"
-        ],
+        "required": ["chat_ids"],
         "properties": {
           "chat_ids": {
             "type": "array",
@@ -5427,9 +4964,7 @@
       },
       "GetBatchPreviewResponse": {
         "type": "object",
-        "required": [
-          "previews"
-        ],
+        "required": ["previews"],
         "properties": {
           "previews": {
             "type": "array",
@@ -5442,9 +4977,7 @@
       "GetChatPermissionsResponse": {
         "type": "object",
         "description": "Response body for get chat permissions.",
-        "required": [
-          "permissions"
-        ],
+        "required": ["permissions"],
         "properties": {
           "permissions": {
             "$ref": "#/components/schemas/SharePermissionV2",
@@ -5455,10 +4988,7 @@
       "GetChatResponse": {
         "type": "object",
         "description": "Wrapper response for get_chat, matching the DCS API response shape.",
-        "required": [
-          "chat",
-          "userAccessLevel"
-        ],
+        "required": ["chat", "userAccessLevel"],
         "properties": {
           "chat": {
             "$ref": "#/components/schemas/ChatResponse",
@@ -5472,9 +5002,7 @@
       },
       "GetChatsForAttachmentResponse": {
         "type": "object",
-        "required": [
-          "all_chats"
-        ],
+        "required": ["all_chats"],
         "properties": {
           "all_chats": {
             "type": "array",
@@ -5497,33 +5025,21 @@
       "HttpSendChatMessageRequest": {
         "type": "object",
         "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
-        "required": [
-          "content",
-          "model"
-        ],
+        "required": ["content", "model"],
         "properties": {
           "additional_instructions": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Additional system instructions appended to the base system prompt"
           },
           "attachments": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/Entity"
             },
             "description": "Attachments for the message"
           },
           "chat_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Id of the chat the message belongs to (optional - if not provided, a new chat is created)"
           },
           "content": {
@@ -5566,17 +5082,11 @@
             "description": "When the row was first staged."
           },
           "entity_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The Macro entity it became, once imported."
           },
           "entity_type": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The Macro entity type (`task` | `md` | `channel`), once imported."
           },
           "foreign_id": {
@@ -5597,28 +5107,19 @@
             "description": "What the item is in its source system."
           },
           "last_error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Failure detail from the last import attempt, when one failed."
           },
           "metadata": {
             "description": "Per-source metadata (shape depends on `source`; see\n[`LinearIssueMeta`], [`NotionDocMeta`], [`SlackChannelMeta`])."
           },
           "parent_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The import row this item was imported under (a subpage's parent page,\na row's database), when it was imported as part of a tree."
           },
           "review_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The agent session review that approved importing this item, when it\ncame from one."
           },
@@ -5631,10 +5132,7 @@
             "description": "Where the row is in its lifecycle."
           },
           "team_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The team the created entity was shared with, when it was."
           },
@@ -5648,10 +5146,7 @@
             "description": "The user who staged/imported it. Team-imported rows from teammates\nare visible with their owner's id, so clients can say \"created by a\nteammate\"."
           },
           "waiting_on": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The teammate's row this one waits on: that teammate is writing the\nsame object for the team, and this row links to their copy once it\nis imported."
           }
@@ -5677,24 +5172,14 @@
       "ImportRun": {
         "type": "object",
         "description": "Discovery-run state for one user × source.",
-        "required": [
-          "source",
-          "status",
-          "updated_at"
-        ],
+        "required": ["source", "status", "updated_at"],
         "properties": {
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Discovery failure detail, when the run failed."
           },
           "review_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The review presenting the run's plan, once one does. A Notion plan is\npresented while it is still `running`; rows staged after that take it."
           },
@@ -5727,20 +5212,12 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": [
-          "linear",
-          "jira",
-          "notion",
-          "slack"
-        ]
+        "enum": ["linear", "jira", "notion", "slack"]
       },
       "ImportState": {
         "type": "object",
         "description": "The full import aggregate for a user: discovery runs plus visible ledger\nrows (their own, and teammates' team-imported rows).",
-        "required": [
-          "runs",
-          "entities"
-        ],
+        "required": ["runs", "entities"],
         "properties": {
           "entities": {
             "type": "array",
@@ -5761,28 +5238,16 @@
       "ImportStatus": {
         "type": "string",
         "description": "Lifecycle of one import entity.",
-        "enum": [
-          "staged",
-          "importing",
-          "imported",
-          "discarded"
-        ]
+        "enum": ["staged", "importing", "imported", "discarded"]
       },
       "Initiator": {
         "type": "string",
         "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
-        "enum": [
-          "onboarding",
-          "chat",
-          "archive",
-          "manual"
-        ]
+        "enum": ["onboarding", "chat", "archive", "manual"]
       },
       "JwtPayload": {
         "type": "object",
-        "required": [
-          "token"
-        ],
+        "required": ["token"],
         "properties": {
           "token": {
             "type": "string"
@@ -5792,57 +5257,34 @@
       "LinearIssueMeta": {
         "type": "object",
         "description": "Metadata for one staged Linear issue.",
-        "required": [
-          "title"
-        ],
+        "required": ["title"],
         "properties": {
           "assignee": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Assignee display name as Linear reports it."
           },
           "assignee_email": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Assignee email, when Linear exposes it."
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Short markdown description."
           },
           "due_date": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Due date as an ISO date (`YYYY-MM-DD`), when set."
           },
           "identifier": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Linear's human identifier (e.g. `ENG-142`)."
           },
           "priority": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Priority label (e.g. `Urgent`)."
           },
           "status": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Workflow status name (e.g. `In Progress`)."
           },
           "title": {
@@ -5850,10 +5292,7 @@
             "description": "Issue title."
           },
           "url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Deep link back to the issue in Linear."
           }
         }
@@ -5861,19 +5300,14 @@
       "LinkShare": {
         "type": "string",
         "description": "Defines who can access an item through its share link.",
-        "enum": [
-          "PUBLIC",
-          "TEAM"
-        ]
+        "enum": ["PUBLIC", "TEAM"]
       },
       "MacroUserIdStr": {
         "type": "string"
       },
       "MemoryErrorBody": {
         "type": "object",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "string",
@@ -5884,9 +5318,7 @@
       "MemoryResponse": {
         "type": "object",
         "description": "The user's latest memory.",
-        "required": [
-          "memory"
-        ],
+        "required": ["memory"],
         "properties": {
           "memory": {
             "type": "string",
@@ -5896,11 +5328,7 @@
       },
       "MessageWithAttachments": {
         "type": "object",
-        "required": [
-          "content",
-          "date",
-          "attachmentIds"
-        ],
+        "required": ["content", "date", "attachmentIds"],
         "properties": {
           "attachmentIds": {
             "type": "array",
@@ -5920,18 +5348,11 @@
       "ModelSpeed": {
         "type": "string",
         "description": "The requested inference speed. Standard is backward compatible with old clients.",
-        "enum": [
-          "standard",
-          "fast",
-          "ultrafast"
-        ]
+        "enum": ["standard", "fast", "ultrafast"]
       },
       "NewAttachment": {
         "type": "object",
-        "required": [
-          "attachment_type",
-          "attachment_id"
-        ],
+        "required": ["attachment_type", "attachment_id"],
         "properties": {
           "attachment_id": {
             "type": "string"
@@ -5943,19 +5364,10 @@
       },
       "NewChatMessage": {
         "type": "object",
-        "required": [
-          "content",
-          "role",
-          "model",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["content", "role", "model", "createdAt", "updatedAt"],
         "properties": {
           "attachments": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/NewAttachment"
             },
@@ -5970,10 +5382,7 @@
             "format": "date-time"
           },
           "id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional pre-generated ID. If None, the database generates one."
           },
           "model": {
@@ -5992,11 +5401,7 @@
       },
       "NewMessageAttachment": {
         "type": "object",
-        "required": [
-          "messageId",
-          "attachmentType",
-          "attachmentId"
-        ],
+        "required": ["messageId", "attachmentType", "attachmentId"],
         "properties": {
           "attachmentId": {
             "type": "string"
@@ -6012,11 +5417,7 @@
       "NotionAlreadyImported": {
         "type": "object",
         "description": "A teammate's copy of a Notion object, shared with the user's team.",
-        "required": [
-          "by",
-          "entityId",
-          "entityType"
-        ],
+        "required": ["by", "entityId", "entityType"],
         "properties": {
           "by": {
             "type": "string",
@@ -6035,19 +5436,12 @@
       "NotionDecision": {
         "type": "string",
         "description": "What a workspace import does with one Notion object.",
-        "enum": [
-          "copy",
-          "tasks",
-          "skip",
-          "hand"
-        ]
+        "enum": ["copy", "tasks", "skip", "hand"]
       },
       "NotionDocMeta": {
         "type": "object",
         "description": "Metadata for one staged Notion page. Deliberately has NO content field:\npage bodies are fetched at import time, for accepted pages only.",
-        "required": [
-          "title"
-        ],
+        "required": ["title"],
         "properties": {
           "plan": {
             "oneOf": [
@@ -6061,10 +5455,7 @@
             ]
           },
           "summary": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "One-line summary of what the page contains."
           },
           "title": {
@@ -6072,10 +5463,7 @@
             "description": "Page title."
           },
           "url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Deep link back to the page in Notion."
           }
         }
@@ -6149,10 +5537,7 @@
             "minimum": 0
           },
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Why the run failed, when it did."
           },
           "failures": {
@@ -6204,10 +5589,7 @@
             "minimum": 0
           },
           "reviewId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The review the plan is tied to, once presented."
           },
@@ -6287,10 +5669,7 @@
       "NotionImporter": {
         "type": "object",
         "description": "A teammate who already imported some of a plan's objects.",
-        "required": [
-          "by",
-          "count"
-        ],
+        "required": ["by", "count"],
         "properties": {
           "by": {
             "type": "string",
@@ -6338,17 +5717,11 @@
             "description": "Titles of the pages above it, outermost first."
           },
           "reason": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Why, in a short sentence, when the decision model gave one."
           },
           "rows": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int32",
             "description": "For a data source: rows counted while planning.",
             "minimum": 0
@@ -6369,10 +5742,7 @@
             "description": "Whether what it becomes is shared with the user's team."
           },
           "sharedReason": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Why it is (or is not) shared, when the decision model chose or the\nimport could not share it."
           },
           "taskFields": {
@@ -6391,11 +5761,7 @@
       "NotionReportItem": {
         "type": "object",
         "description": "One object a workspace import report calls out.",
-        "required": [
-          "importId",
-          "title",
-          "kind"
-        ],
+        "required": ["importId", "title", "kind"],
         "properties": {
           "importId": {
             "type": "string",
@@ -6407,10 +5773,7 @@
             "description": "What the object is."
           },
           "reason": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Why it is called out: the decision model's reason, or the failure."
           },
           "title": {
@@ -6418,10 +5781,7 @@
             "description": "The object's title."
           },
           "url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Its Notion URL."
           }
         }
@@ -6431,31 +5791,19 @@
         "description": "Which Notion columns hold a task list's task fields, by property name.",
         "properties": {
           "assignee": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The assignee column."
           },
           "due": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The due date column."
           },
           "priority": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The priority column."
           },
           "status": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The status column."
           }
         }
@@ -6463,17 +5811,10 @@
       "OnboardingRow": {
         "type": "object",
         "description": "One user's onboarding row.",
-        "required": [
-          "status",
-          "skipped",
-          "started_at"
-        ],
+        "required": ["status", "skipped", "started_at"],
         "properties": {
           "completed_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the flow completed, if it has."
           },
@@ -6495,10 +5836,7 @@
       "OnboardingState": {
         "type": "object",
         "description": "The onboarding aggregate served to the setup page. Import runs and\nstaged entities are served separately by `GET /import/state`.",
-        "required": [
-          "row",
-          "connected_servers"
-        ],
+        "required": ["row", "connected_servers"],
         "properties": {
           "connected_servers": {
             "type": "array",
@@ -6512,10 +5850,7 @@
             "description": "The user's onboarding row."
           },
           "suggested_team_domain": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The account email's domain when it can back a domain team — i.e. it\nis not a generic consumer provider — `None` otherwise. Judged with\nthe same list the teams service uses for domain auto-join and\nclaiming, so the client never suggests a domain team the server\nwould refuse."
           }
         }
@@ -6523,27 +5858,18 @@
       "OnboardingStatus": {
         "type": "string",
         "description": "Lifecycle of the onboarding flow itself.",
-        "enum": [
-          "active",
-          "completed"
-        ]
+        "enum": ["active", "completed"]
       },
       "PatchChatRequest": {
         "type": "object",
         "description": "Request body for patching a chat.",
         "properties": {
           "name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "New name for the chat."
           },
           "projectId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "New project ID for the chat. Empty string clears the project."
           },
           "sharePermission": {
@@ -6562,10 +5888,7 @@
       "PipedreamCatalogEntryResponse": {
         "type": "object",
         "description": "One connectable app in the catalog.",
-        "required": [
-          "app_slug",
-          "display_name"
-        ],
+        "required": ["app_slug", "display_name"],
         "properties": {
           "app_slug": {
             "type": "string",
@@ -6579,10 +5902,7 @@
             "description": "Categories assigned by Pipedream."
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "One-line description of the app."
           },
           "display_name": {
@@ -6590,10 +5910,7 @@
             "description": "Human-readable name to display."
           },
           "icon_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "URL of the app's icon, when available."
           }
         }
@@ -6601,15 +5918,10 @@
       "PipedreamCatalogResponse": {
         "type": "object",
         "description": "A page of the connector catalog.",
-        "required": [
-          "servers"
-        ],
+        "required": ["servers"],
         "properties": {
           "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Cursor for the next page. Absent on the last page."
           },
           "servers": {
@@ -6624,19 +5936,14 @@
       "PipedreamCompleteRequest": {
         "type": "object",
         "description": "Request body for completing a Pipedream connect flow.",
-        "required": [
-          "account_id"
-        ],
+        "required": ["account_id"],
         "properties": {
           "account_id": {
             "type": "string",
             "description": "The connected-account ID reported by the Connect UI on success."
           },
           "server_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional display name for the connector. Defaults to the app's name\nfor new connections; existing connections keep their name."
           }
         }
@@ -6644,19 +5951,14 @@
       "PipedreamConnectCompleteRequest": {
         "type": "object",
         "description": "Request body for recording a finished Macro Connect flow.",
-        "required": [
-          "app_slug"
-        ],
+        "required": ["app_slug"],
         "properties": {
           "app_slug": {
             "type": "string",
             "description": "The app that was connected, by Pipedream slug."
           },
           "server_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional display name for the connector, as for completion."
           }
         }
@@ -6664,12 +5966,7 @@
       "PipedreamConnectionResponse": {
         "type": "object",
         "description": "A connected MCP app as returned by the API.",
-        "required": [
-          "app_slug",
-          "server_name",
-          "enabled",
-          "provider"
-        ],
+        "required": ["app_slug", "server_name", "enabled", "provider"],
         "properties": {
           "app_slug": {
             "type": "string",
@@ -6692,10 +5989,7 @@
       "PipedreamOverlayResponse": {
         "type": "object",
         "description": "A catalog app that connects through its own MCP server instead of\nPipedream.",
-        "required": [
-          "app_slug",
-          "server_url"
-        ],
+        "required": ["app_slug", "server_url"],
         "properties": {
           "app_slug": {
             "type": "string",
@@ -6710,27 +6004,19 @@
       "PipedreamProviderResponse": {
         "type": "string",
         "description": "Which backend a connection or connect flow uses.",
-        "enum": [
-          "pipedream",
-          "connect"
-        ]
+        "enum": ["pipedream", "connect"]
       },
       "PipedreamRecoverRequest": {
         "type": "object",
         "description": "Request body for recovering a connect flow whose result the Connect UI\nnever reported.",
-        "required": [
-          "app_slug"
-        ],
+        "required": ["app_slug"],
         "properties": {
           "app_slug": {
             "type": "string",
             "description": "The Pipedream app the flow was connecting, by name slug."
           },
           "server_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional display name for the connector, as for completion."
           }
         }
@@ -6740,10 +6026,7 @@
         "description": "Request body for starting a connect flow.",
         "properties": {
           "app_slug": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The app to connect, by Pipedream slug. With it, an app Macro Connect\nserves can answer with a Connect URL instead of a Pipedream token."
           }
         }
@@ -6751,29 +6034,18 @@
       "PipedreamTokenResponse": {
         "type": "object",
         "description": "Response from starting a connect flow: a Pipedream Connect token, or for\n`provider = connect` a Macro Connect URL.",
-        "required": [
-          "provider"
-        ],
+        "required": ["provider"],
         "properties": {
           "connect_link_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Shareable link that opens the same connect flow in a browser tab.\nPipedream only."
           },
           "connect_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "URL to open in a popup or browser tab for Macro Connect's consent\nflow; once it finishes, call `/pipedream/mcp/connect/complete`.\nConnect only."
           },
           "expires_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "RFC 3339 expiry of the token. Pipedream only."
           },
           "provider": {
@@ -6781,10 +6053,7 @@
             "description": "The backend this flow connects through."
           },
           "token": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Short-lived token to open the Pipedream Connect UI with. Pipedream only."
           }
         }
@@ -6792,26 +6061,18 @@
       "PipedreamUpdateRequest": {
         "type": "object",
         "description": "Request body for updating a connected app.",
-        "required": [
-          "app_slug"
-        ],
+        "required": ["app_slug"],
         "properties": {
           "app_slug": {
             "type": "string",
             "description": "The app slug to update."
           },
           "enabled": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Enable or disable the connector."
           },
           "server_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "New display name for the connector."
           }
         }
@@ -6819,33 +6080,20 @@
       "Price": {
         "type": "object",
         "description": "Rates applied to an invocation and its resolved dollar cost.",
-        "required": [
-          "price_per_million_in",
-          "price_per_million_out",
-          "total"
-        ],
+        "required": ["price_per_million_in", "price_per_million_out", "total"],
         "properties": {
           "price_per_audio_minute": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per audio minute (USD), absent for token and credit billing."
           },
           "price_per_million_cache_read": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
           "price_per_million_cache_write": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
@@ -6860,10 +6108,7 @@
             "description": "Price per million output tokens (USD); zero for audio and credit billing."
           },
           "price_per_provider_credit": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per vendor credit (USD), absent for token and audio billing."
           },
@@ -6877,30 +6122,18 @@
       "ProjectionStateResponse": {
         "type": "object",
         "description": "The current state of a user's projection instance.",
-        "required": [
-          "id",
-          "status"
-        ],
+        "required": ["id", "status"],
         "properties": {
           "data": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The cached result, if any. JSON-encoded when the projection defines an\n`output_schema`."
           },
           "error": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The most recent materialization error, if any."
           },
           "generated_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the result was generated."
           },
@@ -6909,10 +6142,7 @@
             "description": "The projection id."
           },
           "stale_at": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the result becomes stale."
           },
@@ -6925,30 +6155,17 @@
       "ProjectionStatus": {
         "type": "string",
         "description": "The materialization status of a user's projection instance.",
-        "enum": [
-          "loading",
-          "cold",
-          "ready",
-          "refreshing",
-          "error"
-        ]
+        "enum": ["loading", "cold", "ready", "refreshing", "error"]
       },
       "RefreshCadence": {
         "type": "string",
         "description": "How frequently an active projection is regenerated.",
-        "enum": [
-          "high",
-          "medium",
-          "low"
-        ]
+        "enum": ["high", "medium", "low"]
       },
       "RejectToolCallRequest": {
         "type": "object",
         "description": "Request body for rejecting a pending tool call.",
-        "required": [
-          "messageId",
-          "toolCallId"
-        ],
+        "required": ["messageId", "toolCallId"],
         "properties": {
           "messageId": {
             "type": "string",
@@ -6963,19 +6180,12 @@
       "Role": {
         "type": "string",
         "description": "The role of a message participant.",
-        "enum": [
-          "user",
-          "assistant",
-          "system"
-        ]
+        "enum": ["user", "assistant", "system"]
       },
       "RunImportOutcome": {
         "type": "object",
         "description": "Outcome of accepting/declining staged rows via `POST /import/run`.",
-        "required": [
-          "discarded",
-          "importing"
-        ],
+        "required": ["discarded", "importing"],
         "properties": {
           "discarded": {
             "type": "integer",
@@ -7028,10 +6238,7 @@
       "ScanCounts": {
         "type": "object",
         "description": "What a planning run has found in the source so far.",
-        "required": [
-          "pages",
-          "dataSources"
-        ],
+        "required": ["pages", "dataSources"],
         "properties": {
           "dataSources": {
             "type": "integer",
@@ -7054,25 +6261,14 @@
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "content",
-              "chat_id",
-              "model"
-            ],
+            "required": ["stream_id", "content", "chat_id", "model"],
             "properties": {
               "additional_instructions": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "description": "Additional system instructions appended to the base system prompt"
               },
               "attachments": {
-                "type": [
-                  "array",
-                  "null"
-                ],
+                "type": ["array", "null"],
                 "items": {
                   "$ref": "#/components/schemas/Entity"
                 },
@@ -7105,11 +6301,7 @@
       "SendChatMessageResponse": {
         "type": "object",
         "description": "Response for initiating a chat message stream",
-        "required": [
-          "stream_id",
-          "message_id",
-          "chat_id"
-        ],
+        "required": ["stream_id", "message_id", "chat_id"],
         "properties": {
           "chat_id": {
             "type": "string",
@@ -7128,12 +6320,7 @@
       "ServerResponse": {
         "type": "object",
         "description": "An MCP server record as returned by the API.",
-        "required": [
-          "url",
-          "server_name",
-          "enabled",
-          "authenticated"
-        ],
+        "required": ["url", "server_name", "enabled", "authenticated"],
         "properties": {
           "authenticated": {
             "type": "boolean",
@@ -7156,59 +6343,39 @@
       "SetPricingRequest": {
         "type": "object",
         "description": "Request body for [`set_pricing_handler`].",
-        "required": [
-          "model"
-        ],
+        "required": ["model"],
         "properties": {
           "model": {
             "type": "string",
             "description": "The model api id to (re)price."
           },
           "price_per_audio_minute": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per minute of audio (USD), or null for token-only pricing."
           },
           "price_per_mil_cache_read": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per million cache-read input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache reads then stay unpriced."
           },
           "price_per_mil_cache_write": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per million cache-write input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache writes then stay unpriced."
           },
           "price_per_mil_in": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "New price per million input tokens (USD). Required for token pricing."
           },
           "price_per_mil_out": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "New price per million output tokens (USD). Required for token pricing."
           },
           "price_per_provider_credit": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "float",
             "description": "Price per vendor credit (USD), or null unless the model bills in credits."
           }
@@ -7216,16 +6383,10 @@
       },
       "SharePermissionV2": {
         "type": "object",
-        "required": [
-          "id",
-          "owner"
-        ],
+        "required": ["id", "owner"],
         "properties": {
           "channelSharePermissions": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/ChannelSharePermission"
             },
@@ -7277,12 +6438,7 @@
       "SkillContentResponse": {
         "type": "object",
         "description": "A skill's complete instructions.",
-        "required": [
-          "id",
-          "name",
-          "content",
-          "builtIn"
-        ],
+        "required": ["id", "name", "content", "builtIn"],
         "properties": {
           "builtIn": {
             "type": "boolean",
@@ -7306,10 +6462,7 @@
       "SkillErrorBody": {
         "type": "object",
         "description": "Machine-readable failure of a skill request.",
-        "required": [
-          "error",
-          "code"
-        ],
+        "required": ["error", "code"],
         "properties": {
           "code": {
             "type": "string",
@@ -7324,21 +6477,14 @@
       "SkillListing": {
         "type": "object",
         "description": "One skill the caller can read.",
-        "required": [
-          "id",
-          "name",
-          "builtIn"
-        ],
+        "required": ["id", "name", "builtIn"],
         "properties": {
           "builtIn": {
             "type": "boolean",
             "description": "Whether this is a built-in skill, with no document behind it."
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "When to use the skill, when it says."
           },
           "id": {
@@ -7351,10 +6497,7 @@
             "description": "The skill's name."
           },
           "updatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "When the skill document was last updated; built-in skills have none."
           }
@@ -7363,17 +6506,12 @@
       "SkillsMatchType": {
         "type": "string",
         "description": "How search terms are matched against skill names.",
-        "enum": [
-          "partial",
-          "exact"
-        ]
+        "enum": ["partial", "exact"]
       },
       "SkillsResponse": {
         "type": "object",
         "description": "The skills matching a listing or search, most recently updated first,\nbuilt-in skills last.",
-        "required": [
-          "skills"
-        ],
+        "required": ["skills"],
         "properties": {
           "skills": {
             "type": "array",
@@ -7387,26 +6525,18 @@
       "SlackChannelMeta": {
         "type": "object",
         "description": "Metadata for one staged Slack channel.",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "archived": {
             "type": "boolean",
             "description": "Whether Slack has archived this channel."
           },
           "channel_id": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Slack's channel id (e.g. `C0123456789`), stable across renames."
           },
           "member_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64",
             "description": "Total human members in the Slack channel.",
             "minimum": 0
@@ -7427,10 +6557,7 @@
             "description": "Slack members matched to the Macro team roster when discovery resolved membership."
           },
           "purpose": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The channel's purpose/topic, when set."
           }
         }
@@ -7438,15 +6565,10 @@
       "SlackParticipant": {
         "type": "object",
         "description": "A person active in a staged Slack channel.",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "email": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Email, when the workspace exposes it."
           },
           "name": {
@@ -7458,10 +6580,7 @@
       "StartAuthRequest": {
         "type": "object",
         "description": "Request body for starting an OAuth authorization flow.",
-        "required": [
-          "server_url",
-          "server_name"
-        ],
+        "required": ["server_url", "server_name"],
         "properties": {
           "server_name": {
             "type": "string",
@@ -7476,9 +6595,7 @@
       "StartAuthResponse": {
         "type": "object",
         "description": "Response from starting an OAuth authorization flow.",
-        "required": [
-          "authorization_url"
-        ],
+        "required": ["authorization_url"],
         "properties": {
           "authorization_url": {
             "type": "string",
@@ -7489,9 +6606,7 @@
       "StopChatStreamError": {
         "type": "object",
         "description": "Error response for the stop endpoint.",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "string",
@@ -7502,10 +6617,7 @@
       "StopChatStreamRequest": {
         "type": "object",
         "description": "Request body for stopping an in-flight chat stream.",
-        "required": [
-          "chat_id",
-          "stream_id"
-        ],
+        "required": ["chat_id", "stream_id"],
         "properties": {
           "chat_id": {
             "type": "string",
@@ -7520,9 +6632,7 @@
       "StopChatStreamResponse": {
         "type": "object",
         "description": "Response from a stop request.",
-        "required": [
-          "stopped"
-        ],
+        "required": ["stopped"],
         "properties": {
           "stopped": {
             "type": "boolean",
@@ -7534,20 +6644,14 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "model",
-              "stream_error"
-            ],
+            "required": ["stream_id", "model", "stream_error"],
             "properties": {
               "model": {
                 "type": "string"
               },
               "stream_error": {
                 "type": "string",
-                "enum": [
-                  "provider_error"
-                ]
+                "enum": ["provider_error"]
               },
               "stream_id": {
                 "type": "string"
@@ -7556,16 +6660,11 @@
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "stream_error"
-            ],
+            "required": ["stream_id", "stream_error"],
             "properties": {
               "stream_error": {
                 "type": "string",
-                "enum": [
-                  "model_context_overflow"
-                ]
+                "enum": ["model_context_overflow"]
               },
               "stream_id": {
                 "type": "string"
@@ -7574,16 +6673,11 @@
           },
           {
             "type": "object",
-            "required": [
-              "stream_id",
-              "stream_error"
-            ],
+            "required": ["stream_id", "stream_error"],
             "properties": {
               "stream_error": {
                 "type": "string",
-                "enum": [
-                  "internal_error"
-                ]
+                "enum": ["internal_error"]
               },
               "stream_id": {
                 "type": "string"
@@ -7594,9 +6688,7 @@
       },
       "StringIDResponse": {
         "type": "object",
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "properties": {
           "id": {
             "type": "string"
@@ -7605,15 +6697,10 @@
       },
       "StructuredCompletionError": {
         "type": "object",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "code": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Stable machine-readable code for admission errors (402 or 503)."
           },
           "error": {
@@ -7626,36 +6713,26 @@
           {
             "type": "object",
             "description": "The answer, shaped by the request's `output_schema`.",
-            "required": [
-              "result",
-              "status"
-            ],
+            "required": ["result", "status"],
             "properties": {
               "result": {},
               "status": {
                 "type": "string",
-                "enum": [
-                  "completed"
-                ]
+                "enum": ["completed"]
               }
             }
           },
           {
             "type": "object",
             "description": "The model failed after committing database changes, so there is no\nanswer but `tool_activity` says what was saved.",
-            "required": [
-              "reason",
-              "status"
-            ],
+            "required": ["reason", "status"],
             "properties": {
               "reason": {
                 "type": "string"
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "interrupted"
-                ]
+                "enum": ["interrupted"]
               }
             }
           }
@@ -7663,17 +6740,10 @@
       },
       "StructuredCompletionRequest": {
         "type": "object",
-        "required": [
-          "prompt",
-          "model",
-          "output_schema"
-        ],
+        "required": ["prompt", "model", "output_schema"],
         "properties": {
           "additional_instructions": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "model": {
             "type": "string"
@@ -7695,10 +6765,7 @@
       },
       "StructuredCompletionResponse": {
         "type": "object",
-        "required": [
-          "outcome",
-          "toolActivity"
-        ],
+        "required": ["outcome", "toolActivity"],
         "properties": {
           "outcome": {
             "$ref": "#/components/schemas/StructuredCompletionOutcome"
@@ -7715,10 +6782,7 @@
       "StructuredToolActivity": {
         "type": "object",
         "description": "One tool call the agent finished, and what it did.",
-        "required": [
-          "name",
-          "outcome"
-        ],
+        "required": ["name", "outcome"],
         "properties": {
           "name": {
             "type": "string"
@@ -7731,42 +6795,30 @@
       "TargetType": {
         "type": "string",
         "description": "The kind of entity a projection is materialized for.",
-        "enum": [
-          "user",
-          "team"
-        ]
+        "enum": ["user", "team"]
       },
       "ToolOutcome": {
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "changes",
-              "status"
-            ],
+            "required": ["changes", "status"],
             "properties": {
               "changes": {
                 "$ref": "#/components/schemas/DatabaseChange"
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "succeeded"
-                ]
+                "enum": ["succeeded"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "status"
-            ],
+            "required": ["status"],
             "properties": {
               "status": {
                 "type": "string",
-                "enum": [
-                  "failed"
-                ]
+                "enum": ["failed"]
               }
             }
           }
@@ -7776,57 +6828,41 @@
         "oneOf": [
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "all"
-                ]
+                "enum": ["all"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "none"
-                ]
+                "enum": ["none"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "databases"
-                ]
+                "enum": ["databases"]
               }
             }
           },
           {
             "type": "object",
-            "required": [
-              "type"
-            ],
+            "required": ["type"],
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "databases_read_only"
-                ]
+                "enum": ["databases_read_only"]
               }
             }
           }
@@ -7834,10 +6870,7 @@
       },
       "UpdateChannelSharePermission": {
         "type": "object",
-        "required": [
-          "operation",
-          "channelId"
-        ],
+        "required": ["operation", "channelId"],
         "properties": {
           "accessLevel": {
             "oneOf": [
@@ -7862,31 +6895,19 @@
       },
       "UpdateOperation": {
         "type": "string",
-        "enum": [
-          "add",
-          "remove",
-          "replace"
-        ]
+        "enum": ["add", "remove", "replace"]
       },
       "UpdateServerRequest": {
         "type": "object",
         "description": "Request body for updating an MCP server.",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "enabled": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Enable or disable the server."
           },
           "server_name": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "New name for the server."
           },
           "url": {
@@ -7899,10 +6920,7 @@
         "type": "object",
         "properties": {
           "channelSharePermissions": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/UpdateChannelSharePermission"
             },
@@ -7946,11 +6964,7 @@
       "UpdateToolCallRequest": {
         "type": "object",
         "description": "Request body for updating a tool call's arguments.",
-        "required": [
-          "messageId",
-          "toolCallId",
-          "args"
-        ],
+        "required": ["messageId", "toolCallId", "args"],
         "properties": {
           "args": {
             "description": "The new arguments for the tool call."
@@ -7968,11 +6982,7 @@
       "UpdateToolResponseRequest": {
         "type": "object",
         "description": "Request body for updating a tool response.",
-        "required": [
-          "messageId",
-          "toolCallId",
-          "response"
-        ],
+        "required": ["messageId", "toolCallId", "response"],
         "properties": {
           "messageId": {
             "type": "string",
@@ -8012,17 +7022,11 @@
             "description": "The frontend-defined projection id (e.g. `notification_important_widget`)."
           },
           "model": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "Optional `provider/model` id used for generation (e.g.\n`cerebras/llama-3.3-70b`). The default model is used when absent."
           },
           "output_schema": {
-            "type": [
-              "object",
-              "null"
-            ],
+            "type": ["object", "null"],
             "description": "Optional JSON schema the generated result must conform to. When set,\n`data` holds the JSON serialization of a conforming value. Enforcement\nis prompted (non-strict), so it works across providers."
           },
           "prompt": {
@@ -8056,10 +7060,7 @@
         ],
         "properties": {
           "audio_seconds": {
-            "type": [
-              "number",
-              "null"
-            ],
+            "type": ["number", "null"],
             "format": "double",
             "description": "Audio duration in seconds, absent for token and credit billing."
           },
@@ -8108,10 +7109,7 @@
             ]
           },
           "provider_credits": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int64",
             "description": "Vendor credits consumed, absent for token and audio billing.",
             "minimum": 0
@@ -8130,10 +7128,7 @@
             "description": "If empty, include all features."
           },
           "from": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Inclusive lower bound on `created_at`."
           },
@@ -8145,10 +7140,7 @@
             "description": "If empty, include all users."
           },
           "until": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Exclusive upper bound on `created_at`."
           }
@@ -8157,10 +7149,7 @@
       "UsageSummary": {
         "type": "object",
         "description": "Per-feature breakdown and grand total.",
-        "required": [
-          "entries",
-          "total"
-        ],
+        "required": ["entries", "total"],
         "properties": {
           "entries": {
             "type": "array",
@@ -8179,13 +7168,7 @@
       "UserPdfRect": {
         "type": "object",
         "description": "UserPdfRect is in UserSpace\n(0,0) top left\npercent page units\n1-based page index",
-        "required": [
-          "page_index",
-          "left",
-          "top",
-          "width",
-          "height"
-        ],
+        "required": ["page_index", "left", "top", "width", "height"],
         "properties": {
           "height": {
             "type": "number",
@@ -8215,23 +7198,17 @@
           {
             "type": "string",
             "description": "Tool has not yet been executed",
-            "enum": [
-              "PendingUserExecution"
-            ]
+            "enum": ["PendingUserExecution"]
           },
           {
             "type": "string",
             "description": "User rejected suggested tool execution",
-            "enum": [
-              "Rejected"
-            ]
+            "enum": ["Rejected"]
           },
           {
             "type": "object",
             "description": "Tool is executed and has whatever return type the wrapped tool returns",
-            "required": [
-              "UserAction"
-            ],
+            "required": ["UserAction"],
             "properties": {
               "UserAction": {}
             }
@@ -8242,30 +7219,18 @@
       "WebCitation": {
         "type": "object",
         "description": "A web citation associated with a chat message.",
-        "required": [
-          "url",
-          "title"
-        ],
+        "required": ["url", "title"],
         "properties": {
           "description": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "A description of the cited page."
           },
           "favicon_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The URL of the page's favicon."
           },
           "image_url": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The URL of the page's image."
           },
           "title": {
@@ -8281,10 +7246,7 @@
       "WebErrorBody": {
         "type": "object",
         "description": "Machine-readable failure of a web request.",
-        "required": [
-          "error",
-          "code"
-        ],
+        "required": ["error", "code"],
         "properties": {
           "code": {
             "type": "string",
@@ -8299,15 +7261,10 @@
       "WebFetch": {
         "type": "object",
         "description": "Read one public web page.",
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "properties": {
           "maxChars": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int32",
             "description": "Most characters of page text to return, 1 to 100,000 (default 20,000).",
             "minimum": 0
@@ -8321,21 +7278,14 @@
       "WebFetchResponse": {
         "type": "object",
         "description": "The text of a fetched page.",
-        "required": [
-          "url",
-          "content",
-          "truncated"
-        ],
+        "required": ["url", "content", "truncated"],
         "properties": {
           "content": {
             "type": "string",
             "description": "The page text as Markdown, cut to `maxChars`."
           },
           "title": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The page title, when the provider reports one."
           },
           "truncated": {
@@ -8351,42 +7301,28 @@
       "WebSearch": {
         "type": "object",
         "description": "Search the public web.",
-        "required": [
-          "query"
-        ],
+        "required": ["query"],
         "properties": {
           "domains": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "type": "string"
             },
             "description": "Only return pages from these domains, e.g. `[\"docs.rs\", \"github.com\"]`."
           },
           "excludeDomains": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": ["array", "null"],
             "items": {
               "type": "string"
             },
             "description": "Never return pages from these domains."
           },
           "includeContent": {
-            "type": [
-              "boolean",
-              "null"
-            ],
+            "type": ["boolean", "null"],
             "description": "Also return each page's text as Markdown (up to 8,000 characters per result)."
           },
           "maxResults": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "format": "int32",
             "description": "How many results to return, 1 to 20 (default 5).",
             "minimum": 0
@@ -8396,10 +7332,7 @@
             "description": "What to search for, in natural language or keywords (at most 400 characters)."
           },
           "since": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date",
             "description": "Only return pages published on or after this date (`YYYY-MM-DD`)."
           },
@@ -8419,9 +7352,7 @@
       "WebSearchResponse": {
         "type": "object",
         "description": "The pages a search found, best match first.",
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "properties": {
           "results": {
             "type": "array",
@@ -8435,24 +7366,14 @@
       "WebSearchResult": {
         "type": "object",
         "description": "One page a search found.",
-        "required": [
-          "title",
-          "url",
-          "snippet"
-        ],
+        "required": ["title", "url", "snippet"],
         "properties": {
           "content": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "The page text as Markdown, when `includeContent` was set."
           },
           "publishedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "description": "When the page was published, as the search provider reports it."
           },
           "snippet": {
@@ -8472,16 +7393,11 @@
       "WebSearchTopic": {
         "type": "string",
         "description": "The kind of results a search favours.",
-        "enum": [
-          "general",
-          "news"
-        ]
+        "enum": ["general", "news"]
       },
       "WithChatId": {
         "type": "object",
-        "required": [
-          "chat_id"
-        ],
+        "required": ["chat_id"],
         "properties": {
           "chat_id": {
             "type": "string"

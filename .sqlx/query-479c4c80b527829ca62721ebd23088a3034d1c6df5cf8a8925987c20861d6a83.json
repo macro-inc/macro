@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id,m.person_id,p.user_id,COALESCE(p.display_name,'WhatsApp participant') AS \"name!\",\n            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once\n            FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id\n            WHERE m.chat_id = $1 AND m.message_id IS NOT NULL\n              AND ($2::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $2 AND chat_id = $1 AND message_id IS NOT NULL))\n              AND ($4::uuid IS NULL OR m.id = $4)\n            ORDER BY m.source_at DESC,m.id DESC LIMIT $3",
+  "query": "SELECT m.id,m.person_id,p.user_id,p.display_name AS name,\n            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once\n            FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id\n            WHERE m.chat_id = $1 AND m.message_id IS NOT NULL\n              AND ($2::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $2 AND chat_id = $1 AND message_id IS NOT NULL))\n              AND ($4::uuid IS NULL OR m.id = $4)\n            ORDER BY m.source_at DESC,m.id DESC LIMIT $3",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "name!",
+        "name": "name",
         "type_info": "Text"
       },
       {
@@ -91,7 +91,7 @@
       false,
       false,
       true,
-      null,
+      true,
       false,
       true,
       false,
@@ -105,5 +105,5 @@
       false
     ]
   },
-  "hash": "035fe2a061ac76943164a8d577be44f62adf3708358c79be2fb3f2985eabebc9"
+  "hash": "479c4c80b527829ca62721ebd23088a3034d1c6df5cf8a8925987c20861d6a83"
 }

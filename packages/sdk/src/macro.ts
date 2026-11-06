@@ -375,6 +375,18 @@ export type {
   QueryTableVersion,
 } from './entities/databases/query';
 export {
+  SAVED_QUERY_CHART_MODES,
+  SAVED_QUERY_HEIGHT_RANGE,
+  SAVED_QUERY_MAX_SERIES,
+  SavedQuery,
+  type SavedQueryChart,
+  type SavedQueryChartMode,
+  type SavedQueryDisplay,
+  type SavedQueryDisplayMode,
+  type SavedQueryView,
+  type SaveQueryOptions,
+} from './entities/databases/saved-query';
+export {
   type DocumentEditOptions,
   DocumentEditRefusedError,
   type DocumentEditResult,
@@ -382,6 +394,17 @@ export {
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export type { FileContent } from './entities/documents/namespace';
+export {
+  RevisionConflictError,
+  Spreadsheet,
+  type SpreadsheetCalculateOptions,
+  type SpreadsheetCalculation,
+  type SpreadsheetEdited,
+  type SpreadsheetEditOptions,
+  type SpreadsheetRead,
+  type SpreadsheetReadOptions,
+  type SpreadsheetSheet,
+} from './entities/documents/spreadsheet';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,

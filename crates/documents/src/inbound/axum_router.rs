@@ -5,6 +5,9 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
+//! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits`, `/ai-edit` —
+//!   read, calculate and edit a native spreadsheet, by operations or instructions
+//! - `POST /create_spreadsheet` — create a native spreadsheet
 //! - `GET /{document_id}/presentation`, `POST .../presentation/edits`,
 //!   `POST .../presentation/copy` — read, edit, or copy a PowerPoint deck
 //! - `GET /{document_id}/word`, `POST .../word/edits` — read or edit an uploaded
@@ -60,6 +63,8 @@ pub mod presentation;
 pub mod put_interaction;
 pub mod put_snapshot;
 pub mod skill_description;
+#[cfg(feature = "ai_tools")]
+pub mod spreadsheet;
 pub mod sync_content_updated;
 pub mod system_skills;
 pub mod task_duplicates;
@@ -214,6 +219,13 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// The spreadsheet tools' read, calculate and edit workflows.
+    #[cfg(feature = "ai_tools")]
+    pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<T, DefaultEditingWorker>>,
+    /// Spreadsheet edits by instructions, with the host's admission and metering.
+    #[cfg(feature = "ai_tools")]
+    pub spreadsheet_ai_edit:
+        Arc<crate::domain::spreadsheet::SpreadsheetAiEditService<T, DefaultEditingWorker>>,
     /// The presentation tools' read, edit and copy use cases.
     #[cfg(feature = "ai_tools")]
     pub presentations: Arc<crate::domain::presentation::PresentationService>,
@@ -255,6 +267,10 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             creator: self.creator.clone(),
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
+            #[cfg(feature = "ai_tools")]
+            spreadsheet: self.spreadsheet.clone(),
+            #[cfg(feature = "ai_tools")]
+            spreadsheet_ai_edit: self.spreadsheet_ai_edit.clone(),
             #[cfg(feature = "ai_tools")]
             presentations: self.presentations.clone(),
             #[cfg(feature = "ai_tools")]
@@ -377,6 +393,22 @@ where
             axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
         )
         .route(
+            "/{document_id}/spreadsheet/read",
+            axum::routing::post(spreadsheet::read_spreadsheet_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/spreadsheet/calculate",
+            axum::routing::post(spreadsheet::calculate_spreadsheet_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/spreadsheet/edits",
+            axum::routing::post(spreadsheet::edit_spreadsheet_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/spreadsheet/ai-edit",
+            axum::routing::post(spreadsheet::ai_edit_spreadsheet_handler::<T, Svc, Auth>),
+        )
+        .route(
             "/{document_id}/presentation",
             axum::routing::get(presentation::read_presentation_handler::<T, Svc, Auth>),
         )
@@ -467,6 +499,12 @@ where
                 ),
             ),
         );
+
+    #[cfg(feature = "ai_tools")]
+    let router = router.route(
+        "/create_spreadsheet",
+        axum::routing::post(spreadsheet::create_spreadsheet_handler::<T, Svc, Auth>),
+    );
 
     router.with_state(state)
 }

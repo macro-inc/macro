@@ -7,6 +7,7 @@ import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 import { Document } from './document';
+import { Spreadsheet } from './spreadsheet';
 import { SystemSkill } from './system-skill';
 
 /** One skill found by {@link DocumentNamespace.skills}. */
@@ -200,6 +201,41 @@ export class DocumentNamespace {
       }),
     );
     return Document.byId(this.client, result.documentId);
+  }
+
+  /**
+   * Create a blank native spreadsheet, ready to read and edit; fill it with
+   * `applyEdits`.
+   *
+   * @example
+   * ```js
+   * const sheet = await macro.documents.createSpreadsheet({ name: 'Q4 budget' });
+   * const { revision, sheets } = await sheet.read();
+   * await sheet.applyEdits(
+   *   [{ type: 'set_cells', sheetId: sheets[0].id, cells: [{ address: 'A1', value: 'Item' }, { address: 'B1', value: 'Cost' }] }],
+   *   { expectedRevision: revision },
+   * );
+   * return { data: sheet.webUrl() };
+   * ```
+   */
+  async createSpreadsheet(opts: {
+    name: string;
+    project?: Project;
+  }): Promise<Spreadsheet> {
+    const result = unwrap(
+      await this.client.storage.createSpreadsheet({
+        body: { documentName: opts.name, projectId: opts.project?.id },
+      }),
+    );
+    return Spreadsheet.byId(this.client, result.documentId);
+  }
+
+  /**
+   * Read, calculate and edit a document as a native spreadsheet, such as a
+   * search result or mention. Its methods refuse a document of another type.
+   */
+  spreadsheet(document: Document): Spreadsheet {
+    return Spreadsheet.byId(this.client, document.id);
   }
 
   /** Create a snippet: a reusable markdown document. */
