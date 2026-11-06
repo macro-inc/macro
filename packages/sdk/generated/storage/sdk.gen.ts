@@ -2972,6 +2972,9 @@ export class Sdk extends HeyApiClient {
 
     /**
      * Handler for `PATCH /harnesses/{harness_id}`.
+     *
+     * An owner change is refused with 409 while it would leave bound agents
+     * their owners could no longer run on this harness.
      */
     public patchHarness<ThrowOnError extends boolean = false>(options: Options<PatchHarnessData, ThrowOnError>): RequestResult<PatchHarnessResponses, PatchHarnessErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchHarnessResponses, PatchHarnessErrors, ThrowOnError>({

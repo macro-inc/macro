@@ -1638,6 +1638,28 @@ export type BotToken = {
 };
 
 /**
+ * An agent bound to a harness, with its owner.
+ */
+export type BoundHarnessAgent = {
+    /**
+     * The agent's bot id.
+     */
+    bot_id: BotId;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Who owns the agent.
+     */
+    owner: HarnessAgentOwner;
+};
+
+/**
  * Branch name response.
  */
 export type BranchNameResponse = {
@@ -9624,6 +9646,23 @@ export type HarnessAgent = {
     name: string;
 };
 
+/**
+ * Owner of an agent bound to a harness.
+ */
+export type HarnessAgentOwner = {
+    type: 'user';
+    /**
+     * Owner user id.
+     */
+    user_id: string;
+} | {
+    /**
+     * Owner team id.
+     */
+    team_id: string;
+    type: 'team';
+};
+
 export type HarnessId = string;
 
 /**
@@ -9644,6 +9683,21 @@ export type HarnessOwner = {
      */
     team_id: string;
     type: 'team';
+};
+
+/**
+ * Body of a refused owner change.
+ */
+export type HarnessOwnerConflict = {
+    /**
+     * The bound agents whose owners could no longer run them on the
+     * harness. Move them to another runtime first.
+     */
+    blocking_agents: Array<BoundHarnessAgent>;
+    /**
+     * Why the change was refused.
+     */
+    message: string;
 };
 
 /**
@@ -11679,6 +11733,7 @@ export type PatchHarnessRequest = {
      * New display name.
      */
     name?: string | null;
+    owner?: null | RequestedHarnessOwner;
 };
 
 /**
@@ -12574,6 +12629,19 @@ export type RequestAccountManagerBody = {
  * Durable outcome; reading a notification never changes it.
  */
 export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
+
+/**
+ * Who a harness should belong to after a change.
+ */
+export type RequestedHarnessOwner = {
+    type: 'user';
+} | {
+    /**
+     * Owner team id.
+     */
+    team_id: string;
+    type: 'team';
+};
 
 /**
  * A layout as an op asks for it: a board or timeline may leave its title
@@ -24582,6 +24650,7 @@ export type PatchHarnessErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     404: ErrorResponse;
+    409: HarnessOwnerConflict;
     500: ErrorResponse;
 };
 

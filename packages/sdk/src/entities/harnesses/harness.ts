@@ -2,6 +2,13 @@ import type { Harness as HarnessRecord } from '../../../generated/storage/types.
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
+import { Team } from '../teams/team';
+import { User } from '../users/user';
+
+/** Who owns a host: a user (private to them) or a team. */
+export type HarnessOwner =
+  | { type: 'user'; user: User }
+  | { type: 'team'; team: Team };
 
 /** A registered host for coding agents. */
 export class Harness extends MacroEntity<HarnessRecord> {
@@ -33,6 +40,15 @@ export class Harness extends MacroEntity<HarnessRecord> {
   /** Runtime kind. */
   readonly kind = this.field('kind');
 
+  /** The owning user or team. */
+  readonly owner = this.mappedField(
+    'owner',
+    (owner): HarnessOwner =>
+      owner.type === 'user'
+        ? { type: 'user', user: User.byId(this.client, owner.user_id) }
+        : { type: 'team', team: Team.byId(this.client, owner.team_id) },
+  );
+
   /** Whether agents here may bypass permission prompts. */
   readonly allowPermissionBypass = this.field('allow_permission_bypass');
 
@@ -45,6 +61,34 @@ export class Harness extends MacroEntity<HarnessRecord> {
       c.storage.patchHarness({
         path: { harness_id: this.id },
         body: { allow_permission_bypass: allowed },
+      }),
+    );
+  }
+
+  /**
+   * Make the host private to the caller. Refused with a 409 `MacroApiError`
+   * while agents other people own run on it; its `data.blocking_agents` lists
+   * them, to move to another runtime first.
+   */
+  async makePrivate(): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.patchHarness({
+        path: { harness_id: this.id },
+        body: { owner: { type: 'user' } },
+      }),
+    );
+  }
+
+  /**
+   * Share the host with a team the caller belongs to. Refused with a 409
+   * `MacroApiError` while agents of its current team run on it; its
+   * `data.blocking_agents` lists them.
+   */
+  async shareWithTeam(team: Team): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.patchHarness({
+        path: { harness_id: this.id },
+        body: { owner: { type: 'team', team_id: team.id } },
       }),
     );
   }
