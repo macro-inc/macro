@@ -77,6 +77,9 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
         .arg("build")
         .args(&args)
         .env("SQLX_OFFLINE", "true");
+    for name in cargo_run_vars(std::env::vars().map(|(name, _)| name)) {
+        cmd.env_remove(name);
+    }
     stage.run("Building service binaries", &mut cmd)?;
 
     if let Some(entry) = &entry
@@ -97,6 +100,26 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
     }
     Ok(())
 }
+
+/// The variables `cargo run` set for xtask itself, which the service build
+/// would otherwise inherit. Some build scripts track them (ring's tracks
+/// `CARGO_MANIFEST_DIR`). xtask's own compile and a developer's `cargo build`
+/// run without them, so inheriting them made each of those builds and the
+/// next service build rerun those scripts and rebuild everything above them.
+fn cargo_run_vars(names: impl Iterator<Item = String>) -> Vec<String> {
+    names
+        .filter(|name| CARGO_RUN_VARS.contains(&name.as_str()) || name.starts_with("CARGO_PKG_"))
+        .collect()
+}
+
+const CARGO_RUN_VARS: &[&str] = &[
+    "CARGO",
+    "CARGO_MANIFEST_DIR",
+    "CARGO_MANIFEST_PATH",
+    "CARGO_CRATE_NAME",
+    "CARGO_BIN_NAME",
+    "CARGO_PRIMARY_PACKAGE",
+];
 
 /// The cache entry for building `args` in `ws`.
 fn cache_entry(ws: &Path, args: &[String]) -> Result<PathBuf> {

@@ -45,3 +45,28 @@ fn a_fresh_worktree_needs_both_js_installs_and_a_ready_one_needs_none() {
 
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn drops_the_variables_cargo_run_sets() {
+    let names = [
+        "CARGO_MANIFEST_DIR",
+        "CARGO_PKG_NAME",
+        "CARGO_PKG_VERSION_MAJOR",
+        "CARGO",
+        "CARGO_HOME",
+        "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS",
+        "CARGO_PROFILE_DEV_DEBUG",
+        "PATH",
+    ]
+    .into_iter()
+    .map(str::to_owned);
+    assert_eq!(
+        cargo_run_vars(names),
+        [
+            "CARGO_MANIFEST_DIR",
+            "CARGO_PKG_NAME",
+            "CARGO_PKG_VERSION_MAJOR",
+            "CARGO"
+        ]
+    );
+}
