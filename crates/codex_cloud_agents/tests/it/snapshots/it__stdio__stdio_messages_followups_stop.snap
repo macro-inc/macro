@@ -1,5 +1,5 @@
 ---
-source: crates/codex_cloud_agents/tests/stdio.rs
+source: crates/codex_cloud_agents/tests/it/stdio.rs
 expression: "normalize(&json!({\"initialize\":init,\"new\":new,\"first\":first,\"followup\":second,\"stop\":stopped}),\n&session)"
 ---
 {

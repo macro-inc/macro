@@ -1,6 +1,6 @@
 // Opt-in main-thread timings for a Soup-like page: a full result (parse plus
 // keyed reconcile) vs the patches cache-core sends for leaf, link and
-// tombstone edits. Mirrors crates/client/cache-core/tests/watch_query_timing.rs.
+// tombstone edits. Mirrors crates/client/cache-core/tests/it/watch_query_timing.rs.
 // LIVE_QUERY_TIMINGS=1 bunx vitest run --project graphql-cache \
 //   --reporter=default live-query.timing
 import { gql } from '@urql/core';

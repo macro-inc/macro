@@ -183,7 +183,7 @@ impl CloudConversation for Provider {
         let id = turn.as_str();
         if self.0.recorded.load(Ordering::SeqCst) {
             let events: Vec<CloudEvent> =
-                serde_json::from_str(include_str!("fixtures/recorded_cloud_turn.json")).unwrap();
+                serde_json::from_str(include_str!("../fixtures/recorded_cloud_turn.json")).unwrap();
             let calls = self.0.clone();
             return Ok(Box::pin(
                 futures::stream::iter(

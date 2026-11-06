@@ -396,8 +396,8 @@ Primary files:
 - `crates/predicate_index/src/lib.rs` and `src/test.rs`;
 - `crates/client/cache-core/src/predicate.rs`;
 - `crates/client/cache-core/src/queue.rs` if source/version handling changes;
-- `crates/client/cache-core/tests/predicate.rs`;
-- `crates/client/cache-core/tests/optimistic.rs`.
+- `crates/client/cache-core/tests/it/predicate.rs`;
+- `crates/client/cache-core/tests/it/optimistic.rs`.
 
 ### Phase 2: Shadow schema and cascades
 
@@ -414,7 +414,7 @@ Primary files:
 
 - `crates/client/cache-turso/src/storage.rs`;
 - `crates/client/cache-turso/src/storage/test.rs`;
-- `crates/client/cache-turso/tests/storage_conformance.rs`.
+- `crates/client/cache-turso/tests/it/storage_conformance.rs`.
 
 ### Phase 3: Atomic enqueue shadow updates
 
@@ -430,8 +430,8 @@ Primary files:
 
 - `crates/client/cache-core/src/store.rs`;
 - `crates/client/cache-core/src/engine.rs`;
-- `crates/client/cache-core/tests/mutation_queue.rs`;
-- `crates/client/cache-core/tests/optimistic.rs`;
+- `crates/client/cache-core/tests/it/mutation_queue.rs`;
+- `crates/client/cache-core/tests/it/optimistic.rs`;
 - `crates/client/cache-turso/src/storage.rs`;
 - in-memory/test storage implementations and conformance suites.
 
@@ -457,10 +457,10 @@ In cache-turso and cache-core:
 Primary files:
 
 - `crates/client/cache-turso/src/storage.rs`;
-- `crates/client/cache-turso/tests/predicate.rs`;
+- `crates/client/cache-turso/tests/it/predicate.rs`;
 - `crates/client/cache-core/src/predicate.rs`;
 - `crates/client/cache-core/src/engine.rs`;
-- `crates/client/cache-core/tests/predicate.rs`.
+- `crates/client/cache-core/tests/it/predicate.rs`.
 
 ### Phase 6: Browser evidence and cleanup
 

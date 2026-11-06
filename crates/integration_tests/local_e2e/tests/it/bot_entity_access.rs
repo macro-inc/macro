@@ -1,12 +1,11 @@
-#[path = "support/http.rs"]
-mod http;
-
 use anyhow::{Context, ensure};
 use local_e2e_test_support::{LocalE2eConfig, LocalE2eServices};
 use reqwest::{Client, StatusCode};
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use uuid::Uuid;
+
+use crate::support::http;
 
 const DEFAULT_LOCAL_DATABASE_URL: &str = "postgres://user:password@localhost:5432/macrodb";
 const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";

@@ -1,7 +1,7 @@
 //! Prints the worker-side cost of watched document queries on Soup-like pages:
 //! leaf edits, structural edits, journal barriers and retained memory. Ignored
 //! by default; run in release mode:
-//! `cargo test --release -p cache-core --test watch_query_timing -- --ignored --nocapture`
+//! `cargo test --release -p cache-core --test it -- watch_query_timing:: --ignored --nocapture`
 
 use cache_core::engine::watch_query::QueryUpdate;
 use cache_core::engine::{Engine, ReadResult};

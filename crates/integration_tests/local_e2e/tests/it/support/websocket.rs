@@ -12,7 +12,7 @@ pub async fn connect_async(
 )> {
     let mut roots = rustls::RootCertStore::empty();
     roots.add(CertificateDer::from_pem_slice(include_bytes!(
-        "../../../../../infra/local/certs/ca.pem"
+        "../../../../../../infra/local/certs/ca.pem"
     ))?)?;
     let config = rustls::ClientConfig::builder_with_provider(
         rustls::crypto::aws_lc_rs::default_provider().into(),

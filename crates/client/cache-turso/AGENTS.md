@@ -13,7 +13,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - `src/driver.rs`: Turso connection/transaction handling.
 - `src/key.rs`: the compound key schema (frozen — see Gotchas).
 - `src/error.rs`: `TursoStorageError` / `PhysicalResetReason`.
-- `tests/storage_conformance.rs`, `tests/shared_conformance.rs`: the shared
+- `tests/it/storage_conformance.rs`, `tests/it/shared_conformance.rs`: the shared
   conformance suite every storage backend must pass.
 
 ## Scope
@@ -31,7 +31,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 ## Recipes
 
 - Add a storage operation: implement it in `src/storage.rs` → add a case to
-  `tests/storage_conformance.rs` (native) and the `tests/web.rs` wasm suite.
+  `tests/it/storage_conformance.rs` (native) and the `tests/it/web.rs` wasm suite.
 
 ## Checks
 

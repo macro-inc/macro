@@ -1,6 +1,3 @@
-#[path = "support/http.rs"]
-mod http;
-
 use std::time::Duration;
 
 use anyhow::{Context, ensure};
@@ -10,11 +7,11 @@ use local_e2e_test_support::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-#[path = "support/websocket.rs"]
-mod websocket;
 use tokio::time::{Instant, timeout};
 use tokio_tungstenite::tungstenite::{Error as WebsocketError, Message as WebsocketMessage};
-use websocket::connect_async;
+
+use crate::support::http;
+use crate::support::websocket::connect_async;
 
 const WEBSOCKET_TIMEOUT: Duration = Duration::from_secs(10);
 

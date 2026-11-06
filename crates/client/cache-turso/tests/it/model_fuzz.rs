@@ -1,7 +1,7 @@
 //! The core's independent oracle also runs against real filesystem storage.
 #![cfg(not(target_arch = "wasm32"))]
 
-#[path = "../../cache-core/tests/support/optimistic_model.rs"]
+#[path = "../../../cache-core/tests/it/support/optimistic_model.rs"]
 mod optimistic_model;
 
 use cache_turso::{TursoFileDatabase, TursoStorageCloseOutcome};
