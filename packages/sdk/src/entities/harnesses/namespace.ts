@@ -1,4 +1,7 @@
-import type { CreatePairingRequest } from '../../../generated/storage/types.gen';
+import type {
+  CreatePairingRequest,
+  ReportedWorkspace,
+} from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
@@ -43,6 +46,18 @@ export class HarnessNamespace {
   async agents(): Promise<Agent[]> {
     return unwrap(await this.client.storage.listHarnessAgents()).map((a) =>
       Agent.byId(this.client, a.bot_id),
+    );
+  }
+
+  /**
+   * Report the directories the currently authenticated host's sessions may
+   * use, replacing its last report. Workspaces are picked from these.
+   */
+  async reportWorkspaces(workspaces: ReportedWorkspace[]): Promise<void> {
+    unwrap(
+      await this.client.storage.reportHarnessWorkspaces({
+        body: { workspaces },
+      }),
     );
   }
 
