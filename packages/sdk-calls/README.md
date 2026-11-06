@@ -3,7 +3,7 @@
 `@macro-inc/sdk-calls` connects SDK call handles to a real LiveKit room. Install
 `@macro-inc/sdk` and one runtime peer: `@livekit/rtc-node` for Node or Bun, or
 `livekit-client` for browsers. The core SDK grants access and issues the room
-token; this package does not store or log it.
+token as `CallConnection` (import it from `@macro-inc/sdk`); this package does not store or log it.
 
 The package uses `@opentelemetry/api` for `call.sdk.*` spans. Tracing is a
 no-op until the host installs an OpenTelemetry tracer provider.

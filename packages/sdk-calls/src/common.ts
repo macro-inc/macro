@@ -1,21 +1,18 @@
+import type {
+  CallConnection as CoreCallConnection,
+  JoinOptions as CoreJoinOptions,
+} from '@macro-inc/sdk';
+
+export type JoinOptions = CoreJoinOptions;
+/** Structural connection accepted from the core SDK. */
+export type CallConnection = Omit<
+  Pick<
+    CoreCallConnection,
+    'call' | 'url' | 'token' | 'identity' | 'roomName' | 'started' | 'leave'
+  >,
+  'call'
+> & { readonly call: { readonly id: string } };
 import { reportError, startSpan, withSpan } from './telemetry';
-
-export type JoinOptions = {
-  onOtherCall?: 'fail' | 'switch';
-  replace?: boolean;
-  name?: string;
-};
-
-/** The public SDK supplies this shape; no runtime import is needed. */
-export type CallConnection = {
-  readonly call: { readonly id: string };
-  readonly url: string;
-  readonly token: string;
-  readonly identity: string;
-  readonly roomName: string;
-  readonly started: boolean;
-  leave(): Promise<{ callEnded: boolean }>;
-};
 
 export type CallTarget =
   | { join(options?: JoinOptions): Promise<CallConnection> }

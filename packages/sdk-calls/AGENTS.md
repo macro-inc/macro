@@ -7,7 +7,7 @@ screen-share publishing for Node and browsers.
 
 ## Start here
 
-- `src/common.ts`: handle contract, connection lifecycle, and one-time leave.
+- `src/common.ts`: structural contract derived from the core SDK `CallConnection`, connection lifecycle, and one-time leave.
 - `src/node.ts`: rtc-node connection and frame-based screen publishing.
 - `src/browser.ts`: browser connection and MediaStream screen publishing.
 
