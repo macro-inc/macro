@@ -16,11 +16,11 @@ use std::net::SocketAddr;
 
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 
-use super::is_private_ip;
+use super::remote_image::is_private_ip;
 
 /// reqwest DNS resolver that drops private / internal IPs from the answer
 /// set and errors out if nothing public remains.
-pub(super) struct PrivateIpFilteringResolver;
+pub(crate) struct PrivateIpFilteringResolver;
 
 impl Resolve for PrivateIpFilteringResolver {
     fn resolve(&self, name: Name) -> Resolving {

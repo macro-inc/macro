@@ -10,9 +10,11 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 
 - `src/api/proxy.rs`: the `/proxy` route — size cap (`MAX_IMAGE_SIZE` 10 MB),
   redirect cap, timeouts, and a browser-like User-Agent to clear strict WAFs.
-- `src/api/proxy/resolver.rs`: `PrivateIpFilteringResolver` — blocks DNS
+- `src/outbound/resolver.rs`: `PrivateIpFilteringResolver` — blocks DNS
   resolution to private/loopback IPs to prevent SSRF.
 - `src/api/context.rs`: `ApiContext` / `AuthorizationService`.
+- `/logos?domain=`: authenticated, bounded raster favicon cache; `src/domain.rs`
+  owns cache policy and `src/outbound.rs` fetches through the shared DNS guard.
 - `src/openapi.rs`, `src/doppler_config.rs`: separate `[[bin]]` targets for
   OpenAPI generation and Doppler config.
 
@@ -29,7 +31,7 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 
 ## Gotchas
 
-- Never bypass or weaken `PrivateIpFilteringResolver` — it is the only thing
+- Never bypass or weaken `src/outbound/resolver.rs`'s `PrivateIpFilteringResolver` — it is the only thing
   stopping this service from being an SSRF vector into internal infra.
 
 ## Related

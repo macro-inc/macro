@@ -34,6 +34,9 @@ fn test_context() -> ApiContext {
     );
 
     ApiContext {
+        logo_service: crate::domain::LogoService::new(crate::outbound::FaviconProvider(
+            proxy::build_http_client().expect("test client"),
+        )),
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
         environment: Environment::Production,
         http_client: proxy::build_http_client().expect("test HTTP client should build"),
@@ -110,6 +113,23 @@ async fn proxy_rejects_missing_credentials() {
         StatusCode::UNAUTHORIZED,
         json!({ "message": "unauthorized" }),
     );
+}
+
+#[tokio::test]
+async fn logos_require_authentication_and_reject_non_domains() {
+    for path in [
+        "/logos?domain=example.com",
+        "/image-proxy/logos?domain=example.com",
+    ] {
+        let request = Request::get(path).body(Body::empty()).unwrap();
+        assert_eq!(send(request).await.0, StatusCode::UNAUTHORIZED);
+    }
+    let token = access_token(valid_expiration());
+    let request = Request::get("/logos?domain=127.0.0.1")
+        .header(COOKIE, format!("{ACCESS_TOKEN_COOKIE}={token}"))
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(send(request).await.0, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
