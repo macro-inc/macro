@@ -57,6 +57,13 @@ to the host's API/service; UI capabilities only determine which controls appear.
 creation. It receives the selected lane/group and date-range values before any
 row is written; hosts without a composer retain direct row creation.
 
+`onOpenRecord` takes over opening a record someone clicks (a row's open button,
+a board card, a timeline bar, a saved-record notice), in place of the record
+panel, and returns whether it opened it; when it could not, the panel opens. A
+document's database card opens the full database at that row, and keeps the panel
+where there are no splits (call chat). Records the view opens itself, such as one
+just created, keep the panel.
+
 `editRows` and `editColumns` enable their respective controls. Optional record-view
 props supply persisted board positions, conversion previews, relationships,
 presence, and stored-view changes. Omit an unsupported action. A board can render

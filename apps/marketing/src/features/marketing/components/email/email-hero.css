@@ -53,8 +53,17 @@
 }
 
 .email-page-hero .feature-page-cta {
-  margin-top: 28px;
   padding-inline: 26px;
+}
+
+/* Get started, then the Block's "Watch demo" tutorial. */
+.feature-page-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
 }
 
 @media (max-width: 699px) {

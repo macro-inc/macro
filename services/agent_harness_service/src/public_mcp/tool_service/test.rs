@@ -315,17 +315,23 @@ mod code_mode {
 
     /// Records who ran what, as which agent, and returns the source length as data.
     #[derive(Default)]
-    struct Runs(Mutex<Vec<(String, String)>>, Mutex<Vec<ToolCaller>>);
+    struct Runs(
+        Mutex<Vec<(String, String)>>,
+        Mutex<Vec<ToolCaller>>,
+        Mutex<Vec<Option<uuid::Uuid>>>,
+    );
     #[async_trait::async_trait]
     impl UserCodeMode for Runs {
         async fn execute(
             &self,
             user: &MacroUserIdStr<'static>,
             caller: &ToolCaller,
+            session: Option<uuid::Uuid>,
             request: ExecuteRequest,
             _: CancellationToken,
         ) -> Result<UserExecutionReceipt, CodeModeError> {
             self.1.lock().unwrap().push(caller.clone());
+            self.2.lock().unwrap().push(session);
             self.0
                 .lock()
                 .unwrap()
@@ -752,6 +758,34 @@ mod code_mode {
         assert_eq!(*runs.1.lock().unwrap(), callers);
     }
 
+    #[tokio::test]
+    async fn managed_mcp_provenance_reaches_code_mode_but_external_callers_have_none() {
+        let runs = Arc::new(Runs::default());
+        let session = uuid::Uuid::now_v7();
+        let external = app(runs.clone());
+        let managed = external.clone().layer(axum::Extension(
+            mcp_auth_proxy::inbound::middleware::ManagedAgentSession(session),
+        ));
+        let call = serde_json::json!({"name": "ExecuteCode", "arguments": {"source": "export async function main() { return {data: 1}; }"}});
+        rpc_as(
+            managed,
+            FLAGGED,
+            Some(ToolCaller::Agent(BotId::TEST_A)),
+            "tools/call",
+            call.clone(),
+        )
+        .await;
+        rpc_as(
+            external,
+            FLAGGED,
+            Some(ToolCaller::ApiKey),
+            "tools/call",
+            call,
+        )
+        .await;
+        assert_eq!(*runs.2.lock().unwrap(), [Some(session), None]);
+    }
+
     /// A request the middleware left without a caller runs nothing.
     #[tokio::test]
     async fn execute_code_without_a_caller_runs_nothing() {
@@ -804,6 +838,7 @@ mod code_mode {
             &self,
             _: &MacroUserIdStr<'static>,
             _: &ToolCaller,
+            _: Option<uuid::Uuid>,
         ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
             Ok(code_execution::domain::RunEnvironment::default())
         }

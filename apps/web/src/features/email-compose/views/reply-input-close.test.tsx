@@ -144,6 +144,7 @@ function mount(draftId?: string, text = '', context = createComposeContext()) {
             inbox_visible: true,
           }),
           recipientOptions: () => [],
+          ownsThreadInbox: () => true,
           isPersonalReply: () => false,
           onDraftRemoved,
           exitToThread,

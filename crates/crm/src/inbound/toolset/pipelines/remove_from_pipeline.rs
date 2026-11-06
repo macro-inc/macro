@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{PipelineToolContext, ToolEntry, record_name, workflow_error};
+use super::{PipelineToolContext, ToolEntry, entry_name, workflow_error};
 use crate::domain::pipeline_workflows::{EntryTarget, PipelineWorkflowService};
 
 /// Remove entries from a pipeline.
@@ -81,7 +81,7 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                 "Removed {} from the pipeline; the records stay in the CRM.",
                 entries
                     .iter()
-                    .map(|entry| record_name(&entry.record))
+                    .map(|entry| entry_name(entry.record.as_ref(), entry.entry_id))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

@@ -4,7 +4,7 @@ import type { MacroClient } from '../../utils/client';
 import { Document } from '../documents/document';
 import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 
@@ -53,8 +53,9 @@ export interface SimilarTask {
 }
 
 /**
- * A Macro task: a document with sub-type `task`. Inherits the full document
- * surface ({@link Document.rename}, move, delete, restore, content, events)
+ * A Macro task: a document with sub-type `task`, so every `Document` method
+ * works on it, including `content` and `edit` for its body. Inherits the full
+ * document surface ({@link Document.rename}, move, delete, restore, events)
  * and adds task-specific state.
  */
 export class Task extends Document {

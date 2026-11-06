@@ -54,30 +54,34 @@ pub(crate) async fn ingest(
         envelope.event.ingest(envelope.event_id)
     }
 
-    match event {
-        ActivitySourceEvent::DocumentMacroEvent(e) => {
-            let envelope = e.event();
-            documents_hex::domain::activity::ingest_with_editing_sessions(
-                &envelope.event,
-                envelope.event_id,
-                editing_activity,
-            )
-            .await
+    let correlation = event.agent_correlation_id();
+    agent_correlation::context::scope(correlation, async {
+        match event {
+            ActivitySourceEvent::DocumentMacroEvent(e) => {
+                let envelope = e.event();
+                documents_hex::domain::activity::ingest_with_editing_sessions(
+                    &envelope.event,
+                    envelope.event_id,
+                    editing_activity,
+                )
+                .await
+            }
+            ActivitySourceEvent::ChannelMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::MessageMacroEvent(e) => {
+                let envelope = e.event();
+                channels::domain::activity::ingest_message_event(envelope.event_id, &envelope.event)
+            }
+            ActivitySourceEvent::ChatMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::ProjectMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::EmailMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::PropertyMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::CallMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::InitiativeMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
+            ActivitySourceEvent::FormMacroEvent(event) => arm(event.event()),
         }
-        ActivitySourceEvent::ChannelMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::MessageMacroEvent(e) => {
-            let envelope = e.event();
-            channels::domain::activity::ingest_message_event(envelope.event_id, &envelope.event)
-        }
-        ActivitySourceEvent::ChatMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::ProjectMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::EmailMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::PropertyMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::CallMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::InitiativeMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
-        ActivitySourceEvent::FormMacroEvent(event) => arm(event.event()),
-    }
+    })
+    .await
 }
 
 /// Realtime activity audience: everyone with current access to the entity,

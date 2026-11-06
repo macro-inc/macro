@@ -6,6 +6,7 @@ chat). WhatsApp is the only provider today. The view, its rail button, its More-
 mobile and the `g x` shortcut exist only with the `enable-whatsapp-linked`
 flag; a deep link with the flag off goes to Home once the flag resolves. Turn
 it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
+The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/video-tutorials`, shaped like the page's chat rows) once that video is in its catalog, above the chats whether or not an account is linked.
 
 ## Where it is
 
