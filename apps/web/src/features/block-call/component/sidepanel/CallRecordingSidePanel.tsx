@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { SidePanel, useSidePanel } from '@components/app/side-panel';
+import { useSidePanel } from '@components/app/side-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, Tabs } from '@ui';
@@ -35,9 +35,6 @@ export function CallRecordingSidePanel(props: {
             value={tab()}
             onChange={setTab}
           />
-          <Show when={!panel?.isOverlayMode()}>
-            <SidePanel.Toggle />
-          </Show>
         </div>
       </Show>
       <Show

@@ -46,7 +46,9 @@ tag picker sits below the title metadata and uses the call's property tags. The 
 precedes the stored summary and read-only Call chat. Summary headings are the
 stored Markdown, not generated client-side sections.
 
-The side panel is docked in wide panes and has Transcript and Details tabs.
+The full-width top bar stays above both content and the side panel, with a
+single panel toggle beside Share. The side panel is docked below that top bar
+in wide panes and has Transcript and Details tabs.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video floats above pinned or phone playback and returns to

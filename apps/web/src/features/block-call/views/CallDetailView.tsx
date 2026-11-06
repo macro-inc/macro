@@ -3,7 +3,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
-import { SidePanel, useSidePanel } from '@components/app/side-panel';
+import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
@@ -66,7 +66,6 @@ export function CallDetailActions(props: {
   name: string;
 }) {
   const panel = useSplitPanelOrThrow();
-  const sidePanel = useSidePanel();
   const openShare = useShareModal(() => ({
     id: props.callId,
     blockAlias: 'call',
@@ -85,9 +84,7 @@ export function CallDetailActions(props: {
         blockType="call"
         hotkeyScope={panel.splitHotkeyScope}
       />
-      <Show when={!sidePanel?.isOpen() || sidePanel?.isOverlayMode()}>
-        <SidePanel.Toggle />
-      </Show>
+      <SidePanel.Toggle />
     </div>
   );
 }

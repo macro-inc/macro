@@ -4,7 +4,7 @@
 
 import type { CallRecord } from '@service-call/client';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CallRecordingBody } from './CallRecordingBody';
 
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   canCallAgain: true,
   activeCallId: null as string | null,
   mobile: false,
+  overlayMode: undefined as (() => boolean) | undefined,
 }));
 
 vi.mock('../use-call-again', () => ({
@@ -39,9 +40,14 @@ vi.mock('@components/app/HeaderActionGroup', () => ({
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
     HeaderActions: () => null,
-    Layout: (props: { children: JSX.Element }) => props.children,
+    Layout: (props: { children: JSX.Element }) => (
+      <div data-testid="panel-layout">{props.children}</div>
+    ),
   },
-  useSidePanel: () => null,
+  useSidePanel: () =>
+    mocks.overlayMode
+      ? { isOpen: () => false, isOverlayMode: mocks.overlayMode }
+      : null,
 }));
 vi.mock('@core/component/CustomScrollbar', () => ({
   CustomScrollbar: () => null,
@@ -89,6 +95,7 @@ beforeEach(() => {
   mocks.canCallAgain = true;
   mocks.activeCallId = null;
   mocks.mobile = false;
+  mocks.overlayMode = undefined;
 });
 
 afterEach(cleanup);
@@ -129,4 +136,25 @@ it('opens a linked message in the phone Chat tab instead of Summary', () => {
   ));
   expect(screen.getByText('Chat history')).toBeTruthy();
   expect(screen.queryByText('Summary content')).toBeNull();
+});
+
+it('keeps the full-width header mounted above the panel when its mode changes', () => {
+  const [overlay, setOverlay] = createSignal(false);
+  mocks.overlayMode = overlay;
+  const action = vi.fn();
+  render(() => (
+    <CallRecordingBody
+      record={callRecord(false)}
+      callId="call-id"
+      header={() => <button onClick={action}>Header action</button>}
+    />
+  ));
+  const header = screen.getByRole('button', { name: 'Header action' });
+  expect(screen.getByTestId('panel-layout').contains(header)).toBe(false);
+  setOverlay(true);
+  expect(screen.getByRole('button', { name: 'Header action' })).toBe(header);
+  setOverlay(false);
+  expect(screen.getByRole('button', { name: 'Header action' })).toBe(header);
+  fireEvent.click(header);
+  expect(action).toHaveBeenCalledOnce();
 });

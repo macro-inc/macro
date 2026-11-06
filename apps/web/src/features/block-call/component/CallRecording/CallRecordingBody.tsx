@@ -93,8 +93,6 @@ export function CallRecordingBody(props: {
   const floatingPlayback = () => playerOffscreen() && !!record().recordingUrl;
   const mobilePlaybackActive = () =>
     selectedTab() === 'transcript' && floatingPlayback() && !panel?.isOpen();
-  const headerToggle = () =>
-    props.headerToggle && (!panel?.isOpen() || panel?.isOverlayMode());
   createEffect(
     on([scrollRef, playerRef], ([root, player]) => {
       if (!root || !player) return;
@@ -244,10 +242,10 @@ export function CallRecordingBody(props: {
           record().recordingUrl ? seekToSeconds : undefined;
         return (
           <div class="flex size-full min-h-0 min-w-0 flex-col">
-            <Show when={panel?.isOverlayMode()}>{props.header?.()}</Show>
+            {props.header?.()}
             <div class="relative min-h-0 flex-1">
               <SidePanel.Layout
-                headerToggle={headerToggle()}
+                headerToggle={props.headerToggle ?? false}
                 narrowThreshold={960}
                 plainSections
                 drawerHeader={<CallDetailsSheetHeader />}
@@ -289,7 +287,6 @@ export function CallRecordingBody(props: {
                 )}
               >
                 <div class="relative flex h-full min-h-0 flex-col overflow-hidden @container/call-column">
-                  <Show when={!panel?.isOverlayMode()}>{props.header?.()}</Show>
                   <SidePanel.HeaderActions>
                     <HeaderActionGroup label={t('calls.detailActions')}>
                       <AskMacroButton
