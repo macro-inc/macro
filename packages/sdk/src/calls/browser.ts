@@ -23,7 +23,7 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
     options,
     room,
     (room, connection) => room.connect(connection.url, connection.token),
-    (room, callback) => room.on(RoomEvent.Disconnected, callback)
+    (room, callback) => room.on(RoomEvent.Disconnected, callback),
   );
 }
 
@@ -31,7 +31,7 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
 export async function publishScreen(
   room: Room,
   source?: MediaStream,
-  options: ScreenOptions = {}
+  options: ScreenOptions = {},
 ): Promise<ScreenShare> {
   return withSpan('call.sdk.publish_screen', async (span) => {
     const callId = callIdForRoom(room);
@@ -47,7 +47,10 @@ export async function publishScreen(
       }));
     const video = stream.getVideoTracks()[0];
     if (!video) {
-      if (owned) stream.getTracks().forEach((track) => track.stop());
+      if (owned)
+        stream.getTracks().forEach((track) => {
+          track.stop();
+        });
       throw new Error('Screen stream has no video track');
     }
     const audio = stream.getAudioTracks()[0];
@@ -70,7 +73,10 @@ export async function publishScreen(
             await room.localParticipant.unpublishTrack(track, false);
           }
         } finally {
-          if (owned) stream.getTracks().forEach((track) => track.stop());
+          if (owned)
+            stream.getTracks().forEach((track) => {
+              track.stop();
+            });
           resolveStopped();
         }
       })());
@@ -78,14 +84,14 @@ export async function publishScreen(
       'ended',
       () => {
         stop().catch((error: unknown) =>
-          reportError('call.sdk.publish_screen', error, callId)
+          reportError('call.sdk.publish_screen', error, callId),
         );
       },
-      { once: true }
+      { once: true },
     );
     room.on(RoomEvent.Disconnected, () => {
       stop().catch((error: unknown) =>
-        reportError('call.sdk.publish_screen', error, callId)
+        reportError('call.sdk.publish_screen', error, callId),
       );
     });
 
