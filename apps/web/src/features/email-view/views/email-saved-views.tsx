@@ -754,15 +754,25 @@ function useCanSaveCurrentFilters() {
   };
 }
 
-/** Desktop: left of Filters when the list's filters could become a view. */
+/** Desktop: Save view and Revert, left of Filters, once a tab's filters leave its own. */
 export function EmailSaveViewButton() {
+  const { clearFilters } = useEmailView();
   const visible = useCanSaveCurrentFilters();
   const create = useCreateEmailSavedView();
   return (
     <Show when={visible()}>
-      <Button variant="primary" onClick={() => create({ fromCurrent: true })}>
-        {t('emailViews.saveView')}
-      </Button>
+      <HeaderActionGroup label={t('emailViews.viewActions')}>
+        <ButtonGroup.Button
+          variant="primary"
+          class="touch:order-last"
+          onClick={() => create({ fromCurrent: true })}
+        >
+          {t('emailViews.saveView')}
+        </ButtonGroup.Button>
+        <ButtonGroup.Button variant="ghost" onClick={clearFilters}>
+          {t('emailViews.revert')}
+        </ButtonGroup.Button>
+      </HeaderActionGroup>
     </Show>
   );
 }
@@ -775,6 +785,7 @@ type DrawerDialogProps = {
 
 /** Mobile: the filter drawer's banner above its footer. */
 export function EmailSavedViewCreateBanner(props: DrawerDialogProps) {
+  const { clearFilters } = useEmailView();
   const visible = useCanSaveCurrentFilters();
   const create = useCreateEmailSavedView(props.dialogOwner ?? getOwner());
   const open = () => create({ fromCurrent: true });
@@ -793,6 +804,9 @@ export function EmailSavedViewCreateBanner(props: DrawerDialogProps) {
         >
           <BookmarkIcon class="size-4" aria-hidden="true" />
           {t('emailViews.saveView')}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={clearFilters}>
+          {t('emailViews.revert')}
         </Button>
       </div>
     </Show>

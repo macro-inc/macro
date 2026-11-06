@@ -15,6 +15,7 @@ export default {
   saveFiltersPrompt: 'Save these filters as a view',
   saveChanges: 'Save changes',
   reset: 'Reset',
+  revert: 'Revert',
   saveError: 'Saved view save error',
   reload: 'Reload saved view',
   duplicate: 'Duplicate',

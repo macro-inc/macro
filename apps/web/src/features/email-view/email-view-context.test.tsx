@@ -369,6 +369,26 @@ describe('saved views', () => {
     expect(view.state.facets).toEqual({ done: ['not-done'] });
   });
 
+  it('offers Save view once a tab’s filters change, and Revert withdraws it', () => {
+    const view = mountSavedViews({ known: true });
+    // The chosen inbox narrows Signal beyond its own filters.
+    expect(view.savedViews?.view()).toEqual({ kind: 'default', changed: true });
+    view.clearFilters();
+    expect(view.savedViews?.view()).toEqual({
+      kind: 'default',
+      changed: false,
+    });
+
+    view.setFilters({ facets: { ...view.state.facets, read: ['unread'] } });
+    expect(view.savedViews?.view()).toEqual({ kind: 'default', changed: true });
+
+    view.clearFilters();
+    expect(view.savedViews?.view()).toEqual({
+      kind: 'default',
+      changed: false,
+    });
+  });
+
   it('keeps a view scoped to an inbox that is no longer linked', () => {
     const view = mountSavedViews({ known: true });
 
