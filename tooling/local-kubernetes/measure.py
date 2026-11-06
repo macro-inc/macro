@@ -40,11 +40,62 @@ def node_stats(namespace):
     return {
         'ram_bytes': sum(p['memory']['workingSetBytes'] for p in pods),
         'cpu_core_seconds': sum(p['cpu']['usageCoreNanoSeconds'] for p in pods) / 1e9,
+        'pod_cpu': {p['podRef']['uid']: {
+            'seconds': p['cpu']['usageCoreNanoSeconds'] / 1e9,
+            'at': datetime.fromisoformat(p['cpu']['time'].replace('Z', '+00:00')).timestamp(),
+        } for p in pods},
         'disk_writable_bytes': sum(c.get('rootfs', {}).get('usedBytes', 0) + c.get('logs', {}).get('usedBytes', 0) for c in containers),
         'disk_volume_bytes': sum(v.get('usedBytes', 0) for p in pods for v in p.get('volume', [])),
         'shared_node_ram_bytes': stats['node']['memory']['workingSetBytes'],
         'shared_node_cpu_core_seconds': stats['node']['cpu']['usageCoreNanoSeconds'] / 1e9,
+        'shared_node_cpu_at': datetime.fromisoformat(stats['node']['cpu']['time'].replace('Z', '+00:00')).timestamp(),
     }
+
+
+def kube_cpu_rates(first, last):
+    """Normalize counters using their metric timestamps, not HTTP sampling time."""
+    def rate(start, end, elapsed):
+        if elapsed <= 0 or end < start:
+            raise RuntimeError('CPU metrics stalled or reset; repeat with stable pods')
+        return (end - start) / elapsed
+
+    if first['pod_cpu'].keys() != last['pod_cpu'].keys():
+        raise RuntimeError('pods changed during sampling; repeat with stable pods')
+    pods = sum(rate(value['seconds'], last['pod_cpu'][uid]['seconds'],
+                    last['pod_cpu'][uid]['at'] - value['at'])
+               for uid, value in first['pod_cpu'].items())
+    node = rate(first['shared_node_cpu_core_seconds'], last['shared_node_cpu_core_seconds'],
+                last['shared_node_cpu_at'] - first['shared_node_cpu_at'])
+    return pods, node
+
+
+def persistent_volume_bytes(namespace):
+    """Host-path PVC usage is absent from kubelet summary volume metrics."""
+    claims = json.loads(kube('-n', namespace, 'get', 'pvc', '-o', 'json', capture=True))
+    names = [c['spec']['volumeName'] for c in claims['items'] if c['status']['phase'] == 'Bound']
+    if not names:
+        return 0
+    volumes = json.loads(kube('get', 'pv', *names, '-o', 'json', capture=True))
+    paths = []
+    for volume in volumes['items']:
+        if volume['spec']['claimRef']['namespace'] != namespace:
+            raise RuntimeError('persistent volume belongs to another namespace')
+        path = volume['spec']['hostPath']['path']
+        if not path.startswith('/var/local-path-provisioner/'):
+            raise RuntimeError('unexpected persistent volume path')
+        paths.append(path)
+    return sum(int(line.split()[0]) for line in output([
+        'docker', 'exec', 'macro-eks-local-control-plane', 'du', '-s', '-B1', '--', *paths]).splitlines())
+
+
+def node_disk():
+    """Count the owned node's writable layer and volumes, including image cache."""
+    node = json.loads(output(['docker', 'inspect', '--size', 'macro-eks-local-control-plane']))[0]
+    volumes = {m['Source'] for m in node['Mounts'] if m['Type'] == 'volume'}
+    size = sum(int(output(['sudo', '-n', 'du', '-s', '-B1', source]).split()[0]) for source in volumes)
+    image = json.loads(output(['docker', 'image', 'inspect', node['Image']]))[0]
+    return {'shared_node_total_writable_disk_bytes': node['SizeRw'] + size,
+            'shared_node_base_image_logical_bytes': image['Size']}
 
 
 def compose_stats(instance):
@@ -150,10 +201,11 @@ def main():
             time.sleep(5)
         entry['samples'] = samples
         if args.runtime == 'kube':
-            elapsed = samples[-1]['sampled_at'] - samples[0]['sampled_at']
-            entry['cpu_cores'] = (samples[-1]['cpu_core_seconds'] - samples[0]['cpu_core_seconds']) / elapsed
-            node_cpu = (samples[-1]['shared_node_cpu_core_seconds'] - samples[0]['shared_node_cpu_core_seconds']) / elapsed
-            entry['shared_node_overhead_cpu_cores'] = max(0, node_cpu - entry['cpu_cores'])
+            entry['cpu_cores'], node_cpu = kube_cpu_rates(samples[0], samples[-1])
+            entry['shared_node_cpu_cores'] = node_cpu
+            # These intervals can still have different endpoints. Keep the signed
+            # difference visible rather than silently clamping an inconsistency.
+            entry['shared_node_overhead_cpu_cores'] = node_cpu - entry['cpu_cores']
             entry['shared_node_overhead_ram_bytes'] = statistics.median(
                 s['shared_node_ram_bytes'] - s['ram_bytes'] for s in samples)
         else:
@@ -162,6 +214,10 @@ def main():
             elapsed = samples[-1]['sampled_at'] - samples[0]['sampled_at']
             entry['cpu_cores'] += (samples[-1]['host_cpu_core_seconds'] - samples[0]['host_cpu_core_seconds']) / elapsed
         entry['ram_bytes'] = statistics.median(s['ram_bytes'] for s in samples)
+        if args.runtime == 'kube':
+            # Disk inspection is outside the CPU/RAM sampling window.
+            entry.update(node_disk())
+            entry['disk_persistent_volume_bytes'] = persistent_volume_bytes('macro-kube-' + args.instance)
         if entry['cpu_cores'] < 0:
             raise RuntimeError('CPU counters reset during sampling; repeat with stable pods')
     entry['host_after'] = host()

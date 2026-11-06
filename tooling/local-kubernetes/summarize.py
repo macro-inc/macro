@@ -38,7 +38,7 @@ def main():
             disk = []
             for runs in group:
                 disk.append(statistics.median(
-                    statistics.median(s['disk_writable_bytes'] + s.get('disk_volume_bytes', 0) for s in r['samples'])
+                    statistics.median(s['disk_writable_bytes'] + s.get('disk_volume_bytes', 0) for s in r['samples']) + r.get('disk_persistent_volume_bytes', 0)
                     for r in runs) / 1024**3)
             row(label + ' writable disk and volumes', disk, 'GiB')
             kube_runs = group[1]
@@ -46,7 +46,15 @@ def main():
                 ram = statistics.median(r['shared_node_overhead_ram_bytes'] for r in kube_runs) / 1024**3
                 cpu = statistics.median(r['shared_node_overhead_cpu_cores'] for r in kube_runs)
                 print(f'| Shared kind node overhead RAM | — | {ram:.3f} GiB |')
-                print(f'| Shared kind node overhead CPU | — | {cpu:.3f} cores |')
+                print(f'| Shared kind node overhead CPU (estimate) | — | {cpu:.3f} cores |')
+            if 'shared_node_cpu_cores' in kube_runs[0]:
+                cpu = statistics.median(r['shared_node_cpu_cores'] for r in kube_runs)
+                ram = statistics.median(statistics.median(s['shared_node_ram_bytes'] for s in r['samples']) for r in kube_runs) / 1024**3
+                print(f'| Whole kind node RAM | — | {ram:.3f} GiB |')
+                print(f'| Whole kind node CPU | — | {cpu:.3f} cores |')
+            if 'shared_node_total_writable_disk_bytes' in kube_runs[0]:
+                disk = statistics.median(r['shared_node_total_writable_disk_bytes'] for r in kube_runs) / 1024**3
+                print(f'| Whole kind node writable disk, cache and volumes | — | {disk:.3f} GiB |')
         else:
             for route in group[0][0]['latency']:
                 for percentile in ['p50_ms', 'p95_ms']:
