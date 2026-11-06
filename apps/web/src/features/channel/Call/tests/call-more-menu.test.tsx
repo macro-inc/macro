@@ -124,3 +124,28 @@ it('keeps layout descriptions concise without a heading or persistence footer', 
     screen.queryByText('Your choice is kept for your next calls')
   ).toBeNull();
 });
+
+it.each([false, true])(
+  'includes the reaction row only in compact More: %s',
+  async (compact) => {
+    render(() => (
+      <CallMoreMenu
+        compact={compact}
+        layout="auto"
+        onLayoutChange={() => {}}
+        hasScreenShare={false}
+        hideParticipants={false}
+        onHideParticipantsChange={() => {}}
+        onReaction={() => {}}
+        onOpenChange={() => {}}
+      />
+    ));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+      key: 'ArrowDown',
+    });
+    await screen.findByRole('menuitem', { name: /Layout/ });
+    expect(!!screen.queryByRole('toolbar', { name: 'Reactions' })).toBe(
+      compact
+    );
+  }
+);

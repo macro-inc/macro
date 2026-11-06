@@ -12,10 +12,8 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, Dropdown, Hotkey, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { type CallLayout, normalizeCallLayout } from '../call-layout';
-import {
-  CALL_REACTION_EMOJIS,
-  type CallReactionEmoji,
-} from '../call-reactions';
+import type { CallReactionEmoji } from '../call-reactions';
+import { CallReactionRow } from './CallReactionMenu';
 
 const layouts = [
   {
@@ -143,25 +141,11 @@ export function CallMoreMenu(props: {
               if (shortcutsOpen()) event.preventDefault();
             }}
           >
-            <Show when={props.onReaction}>
+            <Show when={props.compact && props.onReaction}>
               <Dropdown.Group>
-                <Dropdown.GroupLabel>
-                  {t('calls.reactions')}
-                </Dropdown.GroupLabel>
-                <div class="flex items-center justify-between gap-1 px-1">
-                  <For each={CALL_REACTION_EMOJIS}>
-                    {(emoji) => (
-                      <Button
-                        variant="secondary"
-                        size="icon-lg"
-                        aria-label={emoji}
-                        onClick={() => props.onReaction?.(emoji)}
-                      >
-                        <span class="text-xl">{emoji}</span>
-                      </Button>
-                    )}
-                  </For>
-                </div>
+                <CallReactionRow
+                  onReaction={(emoji) => props.onReaction?.(emoji)}
+                />
               </Dropdown.Group>
             </Show>
             <Dropdown.Group>

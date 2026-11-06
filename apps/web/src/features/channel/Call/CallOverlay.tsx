@@ -39,6 +39,7 @@ import {
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
 import { CallMoreMenu } from './CallControls/CallMoreMenu';
+import { CallReactionMenu } from './CallControls/CallReactionMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
 import { CallParticipantsList } from './CallParticipantsList';
 import {
@@ -673,6 +674,21 @@ export function CallOverlay(props: {
                             fireAndForget(teamShare.toggle(), 'channel-call')
                           }
                           onOpenChange={setSharingOpen}
+                        />
+                      </Show>
+                      <Show
+                        when={
+                          !isMobile() && !compactControls() && callCtx.room()
+                        }
+                      >
+                        <CallReactionMenu
+                          onReaction={(emoji) =>
+                            fireAndForget(
+                              reactions.send(emoji),
+                              'call-reaction'
+                            )
+                          }
+                          onOpenChange={setSettingsOpen}
                         />
                       </Show>
                       <Show when={!isMobile()}>
