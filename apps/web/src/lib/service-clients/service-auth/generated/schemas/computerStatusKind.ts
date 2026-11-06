@@ -14,6 +14,7 @@ export type ComputerStatusKind =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ComputerStatusKind = {
   setting_up: 'setting_up',
+  needs_attention: 'needs_attention',
   waiting_for_capacity: 'waiting_for_capacity',
   ready: 'ready',
   asleep: 'asleep',

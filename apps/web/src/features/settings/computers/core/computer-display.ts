@@ -1,6 +1,5 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import type {
-  ComputerSize,
   ComputerStatus,
   Quote,
   SetupStep,
@@ -8,12 +7,12 @@ import type {
 } from '@service-auth/computers';
 import { match } from 'ts-pattern';
 
-export function sizeLabel(size: ComputerSize): string {
+export function sizeLabel(size: string): string {
   return match(size)
     .with('standard', () => t('computers.standard'))
     .with('large', () => t('computers.large'))
     .with('xl', () => t('computers.xl'))
-    .exhaustive((unknown) => String(unknown));
+    .otherwise((unknown) => String(unknown));
 }
 
 export function offerSpecs(offer: SizeOffer): string {
@@ -91,6 +90,10 @@ export function computerStatusLabel(computer: ComputerStatus): {
       detail: t('computers.waitingForCapacityHint'),
       tone: 'muted',
     }))
+    .with('needs_attention', () => ({
+      label: t('computers.needsAttention'),
+      tone: 'failure',
+    }))
     .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
     .with('asleep', () => ({
       label: t('computers.asleep'),
@@ -129,6 +132,7 @@ export function canTogglePower(computer: ComputerStatus): boolean {
       'stopping',
       'failed',
       'payment_failed',
+      'needs_attention',
       'released',
       () => false
     )

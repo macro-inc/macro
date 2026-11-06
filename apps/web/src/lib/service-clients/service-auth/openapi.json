@@ -7204,10 +7204,6 @@
         "description": "How often the team subscription bills.",
         "enum": ["month", "year"]
       },
-      "CatalogEntryId": {
-        "type": "string",
-        "description": "The versioned identity recorded at purchase."
-      },
       "ChangePlanRequest": {
         "type": "object",
         "description": "Request body for switching plans",
@@ -7411,7 +7407,6 @@
           "diskGib",
           "catalogEntry",
           "status",
-          "payment",
           "poweredOn",
           "createdAt"
         ],
@@ -7422,7 +7417,7 @@
             "description": "When billing stops, for a computer canceled at period end."
           },
           "catalogEntry": {
-            "$ref": "#/components/schemas/CatalogEntryId",
+            "type": "string",
             "description": "Versioned catalog entry saved at purchase."
           },
           "compReason": {
@@ -7435,7 +7430,8 @@
             "description": "Time the computer was reserved."
           },
           "diskGib": {
-            "$ref": "#/components/schemas/DiskGib",
+            "type": "integer",
+            "format": "int64",
             "description": "Root disk limit saved at purchase."
           },
           "harnessId": {
@@ -7449,7 +7445,8 @@
             "description": "Stable resource identity."
           },
           "memoryGib": {
-            "$ref": "#/components/schemas/MemoryGib",
+            "type": "integer",
+            "format": "int64",
             "description": "Memory limit saved at purchase."
           },
           "name": {
@@ -7457,8 +7454,15 @@
             "description": "Display name."
           },
           "payment": {
-            "$ref": "#/components/schemas/PaymentOutcome",
-            "description": "Latched purchase outcome."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentOutcome",
+                "description": "Latched purchase outcome; unknown for quarantined records."
+              }
+            ]
           },
           "personaName": {
             "type": ["string", "null"],
@@ -7466,7 +7470,7 @@
           },
           "poweredOn": {
             "type": "boolean",
-            "description": "Whether power is requested on."
+            "description": "Whether validated state requests power on; false for quarantined records."
           },
           "retainedUntil": {
             "type": ["string", "null"],
@@ -7485,7 +7489,7 @@
             ]
           },
           "size": {
-            "$ref": "#/components/schemas/ComputerSize",
+            "type": "string",
             "description": "Purchased catalog size."
           },
           "status": {
@@ -7493,7 +7497,8 @@
             "description": "Observed guest status."
           },
           "vcpus": {
-            "$ref": "#/components/schemas/Vcpus",
+            "type": "integer",
+            "format": "int64",
             "description": "Virtual CPU count."
           }
         }
@@ -7503,6 +7508,7 @@
         "description": "The coarse status the team sees.",
         "enum": [
           "setting_up",
+          "needs_attention",
           "waiting_for_capacity",
           "ready",
           "asleep",
@@ -7825,12 +7831,6 @@
           "overage_limit_reached",
           "overage_payment_failed"
         ]
-      },
-      "DiskGib": {
-        "type": "integer",
-        "format": "int32",
-        "description": "A recorded resource quantity.",
-        "minimum": 0
       },
       "EmailConnectionProviders": {
         "type": "object",
@@ -8859,12 +8859,6 @@
             "description": "The newly created macro_api_token"
           }
         }
-      },
-      "MemoryGib": {
-        "type": "integer",
-        "format": "int32",
-        "description": "A recorded resource quantity.",
-        "minimum": 0
       },
       "MergeGithubPullRequestRequest": {
         "type": "object",
@@ -10575,12 +10569,6 @@
             "description": "The users refresh token"
           }
         }
-      },
-      "Vcpus": {
-        "type": "integer",
-        "format": "int32",
-        "description": "A recorded resource quantity.",
-        "minimum": 0
       }
     }
   },

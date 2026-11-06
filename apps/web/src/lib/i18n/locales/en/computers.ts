@@ -1,4 +1,5 @@
 export default {
+  needsAttention: 'Needs attention — contact support',
   purchased: 'Computer purchased. Setting it up now.',
   purchaseFailed: "Couldn't buy the computer. Please try again.",
   notifyFailed: "Couldn't save your request.",
