@@ -278,7 +278,7 @@ async fn checking_steps_reports_knobs_and_sentences_saving_would_refuse() {
 }
 
 #[test]
-fn starters_are_offered_as_code_only_where_code_can_be_saved() {
+fn the_drafter_sees_code_examples_only_where_code_can_be_saved() {
     assert!(starters(&NoRoutineCode).is_empty());
     let offered = starters(&Checker::default());
     assert_eq!(
@@ -286,7 +286,14 @@ fn starters_are_offered_as_code_only_where_code_can_be_saved() {
             .iter()
             .map(|starter| starter.key.as_str())
             .collect::<Vec<_>>(),
-        ["inbox", "triage", "updates", "invoices"]
+        [
+            "inbox",
+            "triage",
+            "updates",
+            "email_tags",
+            "document_tags",
+            "invoices"
+        ]
     );
     for starter in &offered {
         assert_eq!(starter.steps.len(), 1);
