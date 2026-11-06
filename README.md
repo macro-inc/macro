@@ -4,7 +4,7 @@
   </a>
   <p>The unified workspace for your team</p>
   <a target="_blank" href="https://macro.com">
-    <img width="2400" height="1350" alt="Macro — an agent request and completed linked code changes in one workspace" src=".github/readme/header.png" />
+    <img width="2400" height="1350" alt="Macro — three equal panes showing a team request, linked code changes, and the matching agent session" src=".github/readme/header.png" />
   </a>
 
   <br />

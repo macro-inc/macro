@@ -8,12 +8,15 @@ the 512×70 asset displays at 256×35. A regular-weight paragraph avoids heading
 and GitHub’s horizontal divider.
 
 `header.png` is a 2400×1350 desktop workspace capture at the common UI scale.
-The request and completed linked code changes remain alongside one another.
+Three equal-width panes show the team request, linked code changes, and matching
+agent session, in that left-to-right order. This is the selected three-pane
+comparison captured in the desktop app, not reconstructed product content.
 The navigation rail, pane headers, and bottom composer remain intact.
 Only the native tab strip is excluded; ordinary split close controls remain
 inside the workspace rather than cutting away the headers to hide them.
 The product is 2280 pixels wide with a 60-pixel horizontal inset; its full
-height is retained on the transparent canvas. The corner radius is 32 pixels.
+height is retained on the transparent canvas. The outer corner radius is
+32 pixels, matching the feature images, with a subtle one-pixel border.
 The fresh capture has no blue desktop-update progress indicator.
 Keep the logo first, regular-weight title second, product third.
 
