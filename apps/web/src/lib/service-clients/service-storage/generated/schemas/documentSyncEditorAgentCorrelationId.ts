@@ -6,6 +6,6 @@
  */
 
 /**
- * Root being replied to, or no root for the parent composer.
+ * Invocation from the editor's signed document grant.
  */
-export type MessageChangeOneOfOneoneThreadId = string | null;
+export type DocumentSyncEditorAgentCorrelationId = string | null;

@@ -41,6 +41,7 @@
     ],
     "activity": [
       "crates/activity",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/broadcast",
@@ -48,6 +49,7 @@
       "crates/cowlike",
       "crates/genai_telemetry",
       "crates/kafka_util",
+      "crates/macro_auth",
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_event_broker",
@@ -55,6 +57,7 @@
       "crates/macro_user_id",
       "crates/model-entity",
       "crates/model_owner",
+      "crates/remote_env_var",
       "crates/workspace-hack"
     ],
     "agent": [
@@ -87,6 +90,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_api_keys",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -173,6 +177,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -270,6 +275,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_code_mode",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -313,6 +319,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -388,6 +395,16 @@
       "crates/unfurl",
       "crates/workspace-hack"
     ],
+    "agent_correlation": [
+      "crates/agent_correlation",
+      "crates/cowlike",
+      "crates/macro_auth",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/remote_env_var",
+      "crates/workspace-hack"
+    ],
     "agent_credentials": [
       "crates/agent_credentials",
       "crates/bot_id",
@@ -409,6 +426,7 @@
     "agent_egress": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_egress",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
@@ -545,6 +563,7 @@
     "agent_git": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_credentials",
       "crates/agent_git",
       "crates/ai_toolset",
@@ -630,6 +649,7 @@
     "agent_git_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_credentials",
       "crates/agent_git",
       "crates/ai_toolset",
@@ -721,6 +741,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_api_keys",
+      "crates/agent_correlation",
       "crates/agent_egress",
       "crates/agent_harness",
       "crates/agent_runtime_protocol",
@@ -864,6 +885,7 @@
       "crates/agent_api_keys",
       "crates/agent_changes",
       "crates/agent_code_mode",
+      "crates/agent_correlation",
       "crates/agent_credentials",
       "crates/agent_egress",
       "crates/agent_git",
@@ -1083,6 +1105,7 @@
       "crates/agent_api_keys",
       "crates/agent_changes",
       "crates/agent_code_mode",
+      "crates/agent_correlation",
       "crates/agent_egress",
       "crates/agent_inmem",
       "crates/agent_runtime_protocol",
@@ -1352,6 +1375,7 @@
     "agent_session": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -1445,6 +1469,7 @@
     "agent_session_realtime": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_session_realtime",
@@ -1539,6 +1564,7 @@
     "agent_trigger": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
@@ -1571,6 +1597,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -1638,6 +1665,7 @@
     "agent_trigger_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
@@ -1673,6 +1701,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -1746,6 +1775,7 @@
     "ai_billing": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -1830,6 +1860,7 @@
     "ai_billing_cli": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -1921,6 +1952,7 @@
       "crates/agent",
       "crates/agent_changes",
       "crates/agent_code_mode",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -2107,6 +2139,7 @@
       "crates/agent",
       "crates/agent_changes",
       "crates/agent_code_mode",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -2323,6 +2356,7 @@
     "anthropic": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -2418,6 +2452,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -2466,6 +2501,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -2562,6 +2598,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_api_keys",
+      "crates/agent_correlation",
       "crates/agent_credentials",
       "crates/agent_git",
       "crates/agent_runtime_protocol",
@@ -2775,6 +2812,7 @@
     "bots": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -2866,6 +2904,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -2910,6 +2949,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/foreign_entity",
@@ -3002,6 +3042,7 @@
     "calendar_events": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -3024,6 +3065,7 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -3078,6 +3120,7 @@
     "calendar_scheduling": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/analytics_client",
@@ -3103,6 +3146,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -3165,6 +3209,7 @@
     "calendar_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/analytics_client",
@@ -3193,6 +3238,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -3263,6 +3309,7 @@
     "call": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -3282,6 +3329,7 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -3346,6 +3394,7 @@
       "crates/agent",
       "crates/agent_changes",
       "crates/agent_code_mode",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -3574,6 +3623,7 @@
     "channels": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -3645,6 +3695,7 @@
     "chat": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -3716,6 +3767,7 @@
     "codex_cloud_agents": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -3810,6 +3862,7 @@
     "codex_connection": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -3916,6 +3969,7 @@
     "coding_agent_worker": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
@@ -3955,6 +4009,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -4047,6 +4102,7 @@
     "cognition": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -4133,6 +4189,7 @@
     "collab_surface": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -4213,6 +4270,7 @@
     "comms_db_client": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4286,6 +4344,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_session_realtime",
@@ -4508,6 +4567,7 @@
     ],
     "connection_gateway": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4594,6 +4654,7 @@
     ],
     "contacts_service": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4640,6 +4701,7 @@
     "convert_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4730,6 +4792,7 @@
     "crm": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4752,6 +4815,7 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -4813,6 +4877,7 @@
     "cursor_cloud_agents": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -4928,6 +4993,7 @@
     "database_webhooks": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -4994,6 +5060,7 @@
     "databases": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -5060,6 +5127,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -5101,6 +5169,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/foreign_entity",
@@ -5229,6 +5298,7 @@
     "deleted_item_poller": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_billing",
       "crates/ai_engine",
@@ -5373,6 +5443,7 @@
       "crates/agent",
       "crates/agent_changes",
       "crates/agent_code_mode",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_session_realtime",
@@ -5683,6 +5754,7 @@
     "document_upload_finalizer_handler": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_billing",
       "crates/ai_engine",
@@ -5802,6 +5874,7 @@
     "documents": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_billing",
       "crates/ai_engine",
@@ -5922,6 +5995,7 @@
     "docx_unzip_handler": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -6019,6 +6093,7 @@
     "email": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -6051,6 +6126,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -6117,6 +6193,7 @@
     "email_api_client": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -6140,6 +6217,7 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -6207,6 +6285,7 @@
     "email_focus_worker": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -6350,6 +6429,7 @@
       "services/email_focus_worker"
     ],
     "email_formatting": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -6429,6 +6509,7 @@
     "email_scheduled_handler": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -6461,6 +6542,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -6529,6 +6611,7 @@
     "email_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -6565,6 +6648,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -6645,6 +6729,7 @@
     "email_service_client": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -6678,6 +6763,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -6785,6 +6871,7 @@
     "email_suppression_handler": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7147,6 +7234,7 @@
     "forms": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -7179,6 +7267,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/forms",
@@ -7289,6 +7378,7 @@
     "github": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_billing",
       "crates/ai_engine",
@@ -7407,6 +7497,7 @@
     ],
     "github_pull_requests": [
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7498,6 +7589,7 @@
     "granola_sync": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7518,6 +7610,7 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -7575,6 +7668,7 @@
     "graphql_activity": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7623,6 +7717,7 @@
     "graphql_calendar": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7645,6 +7740,7 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -7701,6 +7797,7 @@
     "graphql_channel": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7800,6 +7897,7 @@
     "graphql_crm": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -7822,6 +7920,7 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -7883,6 +7982,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -7931,6 +8031,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -8035,6 +8136,7 @@
     "graphql_email": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -8067,6 +8169,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -8136,6 +8239,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -8183,6 +8287,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -8288,6 +8393,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -8335,6 +8441,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -8441,6 +8548,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -8488,6 +8596,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -8591,6 +8700,7 @@
       "crates/workspace-hack"
     ],
     "graphql_notification": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -8637,6 +8747,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -8685,6 +8796,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -8828,6 +8940,7 @@
     "graphql_properties": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -8887,6 +9000,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -8935,6 +9049,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -9039,6 +9154,7 @@
     "graphql_scheduled_action": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -9181,6 +9297,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -9228,6 +9345,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -9359,6 +9477,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -9407,6 +9526,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -9597,6 +9717,7 @@
     "image_generation": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_billing",
       "crates/ai_toolset",
@@ -9696,6 +9817,7 @@
     "image_proxy_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -9774,6 +9896,7 @@
     "import": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -9974,6 +10097,7 @@
     "initiative": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -10032,6 +10156,7 @@
     "initiative_description": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -10111,6 +10236,7 @@
       "crates/workspace-hack"
     ],
     "invite_email": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -10174,6 +10300,7 @@
     "jev": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -10275,6 +10402,7 @@
     "lexical_client": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -10343,6 +10471,7 @@
     "lexical_mention_extractor": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -10491,6 +10620,7 @@
     "macro_db_client": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -10579,11 +10709,16 @@
       "crates/workspace-hack"
     ],
     "macro_event_broker": [
+      "crates/agent_correlation",
+      "crates/cowlike",
       "crates/kafka_util",
+      "crates/macro_auth",
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_event_broker",
       "crates/macro_event_topics",
+      "crates/macro_user_id",
+      "crates/remote_env_var",
       "crates/workspace-hack"
     ],
     "macro_event_topics": [
@@ -10593,6 +10728,7 @@
     "macro_middleware": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -10851,6 +10987,7 @@
     "memory": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -11000,6 +11137,7 @@
     "messages": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -11113,6 +11251,7 @@
       "crates/model_file_type"
     ],
     "model_notifications": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -11233,6 +11372,7 @@
     "models_search": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -11265,6 +11405,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -11345,6 +11486,7 @@
     "models_soup": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -11377,6 +11519,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -11448,6 +11591,7 @@
     "name_search": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -11534,6 +11678,7 @@
       "crates/non_empty"
     ],
     "notification": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -11564,6 +11709,7 @@
       "crates/workspace-hack"
     ],
     "notification_db_client": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -11603,6 +11749,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -11651,6 +11798,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -11745,6 +11893,7 @@
       "crates/workspace-hack"
     ],
     "notification_retention_handler": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -11777,6 +11926,7 @@
       "services/notification_retention_handler"
     ],
     "notification_sandbox": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -11817,6 +11967,7 @@
     "notification_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12059,6 +12210,7 @@
     "projects": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_billing",
       "crates/ai_engine",
@@ -12181,6 +12333,7 @@
     "properties": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12237,6 +12390,7 @@
     "properties_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12304,6 +12458,7 @@
       "crates/workspace-hack"
     ],
     "referral": [
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
@@ -12339,6 +12494,7 @@
     "reminders": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -12371,6 +12527,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -12451,6 +12608,7 @@
     "routine_program": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12526,6 +12684,7 @@
     "routines": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -12619,6 +12778,7 @@
     "scheduled_action": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -12759,6 +12919,7 @@
     "search_processing_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -12806,6 +12967,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -12908,6 +13070,7 @@
     "search_service": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -12948,6 +13111,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -13033,6 +13197,7 @@
     "search_service_client": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -13065,6 +13230,7 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/frecency",
@@ -13183,6 +13349,7 @@
     "seed_cli": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -13348,6 +13515,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -13394,6 +13562,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -13493,6 +13662,7 @@
     "slack_import_worker": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -13600,6 +13770,7 @@
     "slack_integration": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -13709,6 +13880,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -13749,6 +13921,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/foreign_entity",
@@ -13828,6 +14001,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -13869,6 +14043,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/foreign_entity",
@@ -13954,6 +14129,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -13994,6 +14170,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/filter_ast",
       "crates/folds/agent_fold",
       "crates/foreign_entity",
@@ -14075,6 +14252,7 @@
     "soup_realtime": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -14121,6 +14299,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -14425,6 +14604,7 @@
     "task_dedup": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -14497,6 +14677,7 @@
     "team_agents": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_credentials",
       "crates/agent_git",
       "crates/agent_secrets",
@@ -14589,6 +14770,7 @@
     "teams": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/analytics_client",
@@ -14696,6 +14878,7 @@
     "universal_input": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -14909,6 +15092,7 @@
     "user_link_cleanup_handler": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_toolset",
       "crates/ai_usage",
       "crates/attachment",
@@ -14985,6 +15169,7 @@
     "web_search": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/ai_billing",
       "crates/ai_toolset",
       "crates/ai_usage",
@@ -15070,6 +15255,7 @@
     "webhook": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/agent_trigger",
@@ -15108,6 +15294,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",
@@ -15377,6 +15564,7 @@
       "crates/activity",
       "crates/agent",
       "crates/agent_changes",
+      "crates/agent_correlation",
       "crates/agent_runtime_protocol",
       "crates/agent_session",
       "crates/ai_billing",
@@ -15425,6 +15613,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",

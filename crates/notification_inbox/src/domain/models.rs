@@ -174,6 +174,14 @@ impl InboxRow {
     pub fn revision(&self) -> FeedRevision {
         FeedRevision::covering(self.all_notifications())
     }
+
+    /// Whether the row shows the notification and nothing else.
+    pub fn shows_only(&self, notification: Uuid) -> bool {
+        matches!(
+            self.notifications.as_slice(),
+            [only] if only.notification_id == notification
+        )
+    }
 }
 
 /// One group of the inbox: the matching rows of the notifications filed
@@ -242,6 +250,43 @@ pub struct InboxRowTarget {
     /// The row's revision the caller observed; `None` acknowledges
     /// everything current.
     pub revision: Option<FeedRevision>,
+}
+
+/// One batch of clearing an inbox: every matching row of the groups read is
+/// marked done.
+#[derive(Debug, Clone)]
+pub struct InboxClearRequest {
+    /// Which rows are cleared.
+    pub scope: InboxScope,
+    /// Clear only unread rows.
+    pub unread_only: bool,
+    /// Clear only rows whose newest notification arrived at or after this
+    /// time; older groups end the clear.
+    pub since: Option<DateTime<Utc>>,
+    /// Groups read in this batch.
+    pub limit: u16,
+    /// Resume after this position; `None` for the first batch.
+    pub after: Option<FeedPosition>,
+}
+
+/// The outcome of one batch of clearing an inbox.
+#[derive(Debug)]
+pub struct InboxClearOutcome {
+    /// How many rows were cleared.
+    pub rows: usize,
+    /// What the batch changed, for undo.
+    pub receipt: DoneReceipt,
+    /// Where the next batch starts; `None` once nothing is left to clear.
+    pub next: Option<FeedPosition>,
+}
+
+/// The outcome of marking one notification of a row done.
+#[derive(Debug)]
+pub struct InboxNotificationDoneOutcome<E> {
+    /// The row's group in the caller's inbox, now without the notification.
+    pub changes: Vec<InboxChange<E>>,
+    /// What the operation changed, for undo.
+    pub receipt: DoneReceipt,
 }
 
 /// The outcome of marking rows done.

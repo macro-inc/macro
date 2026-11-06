@@ -18,6 +18,11 @@ IDs, messages and editors resolve the current name and fall back to the email
 local part when lookup fails. Verify that these mentions remain intact when
 editing and saving a message; integrations need not supply email or displayName.
 
+## Channel calls
+
+A channel call may have its own row and thread in the channel. See
+[calls whose discussion is a channel thread](calls.md#calls-whose-discussion-is-a-channel-thread).
+
 ## Channel list previews
 
 Message text in channel rows and Home cards is display-only, including quoted
@@ -1042,11 +1047,12 @@ Chat remembers this choice independently of other workspaces and restores it
 after reload. While no conversation is selected, the rail stays open regardless
 of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
 selecting a conversation applies the saved choice again. Chat uses
-the shared 256px default sidebar width and resize limits. In splits narrower than
-720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
-with the same full sidebar contents. With no conversation selected, the
-slide-over opens on its own and closes once a conversation is picked; the
-backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
+the shared 256px default sidebar width and resize limits. In splits 720px wide or
+narrower, the rail and the conversation take turns at full width instead of a
+slide-over: with no conversation selected the rail fills the split (no Hide
+navigation, `Cmd+.` inert), and an open conversation shows **Back** (left arrow)
+where the hamburger was. Back opens the Channels list route, so browser or split
+back returns to the conversation. There is no separate skinny sidebar mode.
 
 ### Sidebar redesign rollout
 
@@ -1074,8 +1080,8 @@ collapses and sorts independently; open groups split the available height.
 the channel filter, while the Conversations section lists channels and DMs with
 threads the user participates in. Scrolling loads more. Selecting a conversation
 filters the thread view instead of opening that conversation. On desktop, Threads
-pins navigation open with no Hide navigation control. In narrow splits, changing
-between Threads, All, and Recent preserves an already-open navigation overlay.
+pins navigation open with no Hide navigation control. In narrow splits the thread
+view fills the split like a conversation, and **Back** returns to All.
 
 ### Sectioned sidebar (flag on)
 

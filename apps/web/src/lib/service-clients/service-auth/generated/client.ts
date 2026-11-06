@@ -5667,6 +5667,11 @@ export type inviteToTeamResponse401 = {
   status: 401;
 };
 
+export type inviteToTeamResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
 export type inviteToTeamResponse404 = {
   data: ErrorResponse;
   status: 404;
@@ -5689,6 +5694,7 @@ export type inviteToTeamResponseError = (
   | inviteToTeamResponse304
   | inviteToTeamResponse400
   | inviteToTeamResponse401
+  | inviteToTeamResponse403
   | inviteToTeamResponse404
   | inviteToTeamResponse409
   | inviteToTeamResponse500
@@ -7392,7 +7398,7 @@ export const quoteTeamAgent = async (
 };
 
 /**
- * @summary Computer specifications for team admins, independent of billing or rollout.
+ * @summary Computer specifications for rollout-enabled team admins, independent of billing.
  */
 export type getTeamAgentSizesResponse200 = {
   data: TeamAgentSizes;

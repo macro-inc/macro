@@ -29,6 +29,7 @@ path = "src/openapi.rs"
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }

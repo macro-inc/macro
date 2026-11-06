@@ -1091,6 +1091,87 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/activity": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read activity using the same visibility capability as the session transcript.",
+        "operationId": "get_agent_session_activity",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "agentCorrelationId",
+            "in": "query",
+            "description": "Restrict activity to one code-mode invocation within this session.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "beforeAt",
+            "in": "query",
+            "description": "Cursor timestamp from the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "beforeId",
+            "in": "query",
+            "description": "Cursor activity ID from the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, from 1 to 100; defaults to 50.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentActivityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/app-connections": {
       "post": {
         "tags": ["agent-sessions"],
@@ -3777,6 +3858,59 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
+      "ActivityWireRow": {
+        "type": "object",
+        "description": "One activity row on the wire — the realtime projection of an inserted\n`activity_events` row.",
+        "required": [
+          "id",
+          "actor_id",
+          "subject_id",
+          "entity_type",
+          "entity_id",
+          "action",
+          "occurred_at"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The stored action tag."
+          },
+          "action_payload": {
+            "description": "The stored action payload, if any."
+          },
+          "actor_id": {
+            "type": "string",
+            "description": "Who mechanically acted, as a principal string (`macro|…` / `bot|…`)."
+          },
+          "agent_correlation_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Originating code-mode invocation, absent on older events."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "The entity acted on."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The kind of entity acted on."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The stored activity id."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it happened."
+          },
+          "subject_id": {
+            "type": "string",
+            "description": "Whose activity this is (a principal string)."
+          }
+        }
+      },
       "AgentAction": {
         "oneOf": [
           {
@@ -3903,6 +4037,48 @@
         "type": "string",
         "format": "uuid",
         "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nA v7 uuid, so ids sort by mint time. Minted by the server at accept time,\nor by a client that speculated the action and named it in the control\nrequest - either way the server is the only writer of runtime-bound\nframes, so a uuid-shaped request id remains the whole ownership test. The\nmachine's own handshake request ids (`agent_session:{session}:{n}`) are\nnot uuids and stay `None`."
+      },
+      "AgentActivityCursor": {
+        "type": "object",
+        "description": "Stable chronological resume position.",
+        "required": ["occurredAt", "id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Tie-breaking activity identity."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last stored event time."
+          }
+        }
+      },
+      "AgentActivityPage": {
+        "type": "object",
+        "description": "One page of the activity caused by this session.",
+        "required": ["activities"],
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityWireRow"
+            },
+            "description": "Original activity rows, also retained in the affected entities' histories."
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentActivityCursor",
+                "description": "Resume position, present when more raw rows remain."
+              }
+            ]
+          }
+        }
       },
       "AgentConfigKindDto": {
         "oneOf": [
@@ -5926,6 +6102,36 @@
           }
         },
         "additionalProperties": false
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "channel_message",
+          "document",
+          "project",
+          "email_thread",
+          "calendar_event",
+          "team",
+          "call",
+          "foreign_entity",
+          "static_file",
+          "crm_company",
+          "crm_contact",
+          "crm_pipeline",
+          "reminder",
+          "skill",
+          "agent_session",
+          "scheduled_action",
+          "initiative",
+          "database",
+          "database_row",
+          "form",
+          "external_chat"
+        ]
       },
       "ExecutionActivity": {
         "type": "object",

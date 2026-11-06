@@ -772,6 +772,9 @@ async fn run() -> anyhow::Result<()> {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
+                    correlations: agent_correlation::outbound::PgCorrelationRepository(
+                        pool.clone(),
+                    ),
                     signer: MacroApiTokenSigner::new(
                         pool.clone(),
                         config.macro_api_token_issuer.as_ref(),
@@ -847,6 +850,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
             Arc::new(code_mode::RunCredentials {
+                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
                 signer: MacroApiTokenSigner::new(
                     pool.clone(),
                     config.macro_api_token_issuer.as_ref(),
@@ -1925,6 +1929,17 @@ async fn run() -> anyhow::Result<()> {
             service: notification_service,
         },
     );
+    let correlation = agent_correlation::inbound::CorrelationState::new(
+        pool.clone(),
+        JwtValidationArgs::new_with_secret_manager(config.environment, &secrets).await?,
+    );
+    let agent_activity = agent_session::inbound::axum_router::activity::router(
+        agent_session::inbound::axum_router::activity::AgentActivityState::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone()),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -1937,6 +1952,8 @@ async fn run() -> anyhow::Result<()> {
                 repositories_state,
                 changes_state,
             )
+            .with_agent_correlation(correlation)
+            .with_activity(agent_activity)
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)

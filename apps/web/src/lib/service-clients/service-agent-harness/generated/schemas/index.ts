@@ -6,6 +6,8 @@
  */
 
 export * from './accessLevel';
+export * from './activityWireRow';
+export * from './activityWireRowAgentCorrelationId';
 export * from './agentAction';
 export * from './agentActionId';
 export * from './agentActionOneOf';
@@ -27,6 +29,9 @@ export * from './agentActionOneOfOnezeroType';
 export * from './agentActionOneOfSeven';
 export * from './agentActionOneOfSevenAllOf';
 export * from './agentActionOneOfSevenAllOfType';
+export * from './agentActivityCursor';
+export * from './agentActivityPage';
+export * from './agentActivityPageNextCursor';
 export * from './agentConfigKindDto';
 export * from './agentConfigKindDtoOneOf';
 export * from './agentConfigKindDtoOneOfThree';
@@ -226,6 +231,7 @@ export * from './emailSearchSuggestionsQuery';
 export * from './emailSuggestions';
 export * from './emailSuggestionsBody';
 export * from './emailSuggestionsSubject';
+export * from './entityType';
 export * from './executionActivity';
 export * from './executionId';
 export * from './executionRecord';
@@ -241,6 +247,7 @@ export * from './extractInputRequestSearchType';
 export * from './extractInputResponse';
 export * from './extractInputResponseAllOf';
 export * from './fileChangeKindDto';
+export * from './getAgentSessionActivityParams';
 export * from './gitRefDto';
 export * from './gitRefDtoName';
 export * from './gitRefDtoSha';

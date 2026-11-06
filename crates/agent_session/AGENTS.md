@@ -161,3 +161,5 @@ on completion, disconnect, cancellation, or a caller-owned deadline.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.

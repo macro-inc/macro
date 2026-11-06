@@ -78,6 +78,8 @@ impl RoutineCredentials for MacroApiTokenSigner {
                 TOKEN_LIFETIME_SECONDS,
                 Some(bot_id::MACRO_NEW_BOT_ID.as_uuid()),
                 None,
+                None,
+                None,
             )
             .await?)
     }

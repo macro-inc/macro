@@ -2008,6 +2008,7 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
             chrono::Utc::now(),
         );
         activity::ActivityRecord {
+            agent_correlation_id: activity.agent_correlation_id,
             id: activity.id,
             actor: activity.actor.clone(),
             subject_id: activity.subject_id.clone(),
@@ -2609,6 +2610,7 @@ fn activity_record(
     occurred_at_secs: i64,
 ) -> activity::ActivityRecord {
     activity::ActivityRecord {
+        agent_correlation_id: None,
         id: Uuid::from_u128(id),
         actor: activity::Actor::new_from_user(
             MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),

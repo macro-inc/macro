@@ -1,16 +1,26 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { UserGroup } from '@core/component/UserGroup';
+import { useChannel } from '@core/context/channels';
 import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
-import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
+import { CallDiscussionContent } from './discussion/CallDiscussionContent';
+import { callDiscussionOf } from './discussion/call-discussion';
 import { useCall } from './use-call';
 
 function ParticipantFirstName(props: { id: string }) {
@@ -113,6 +123,14 @@ export function ChannelCallTab(props: {
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
+  const record = useLiveCallRecordQuery(
+    () => call.callCtx.activeCallId() ?? ''
+  );
+  const discussion = () =>
+    callDiscussionOf(record, call.callCtx.activeCallId());
+  const channel = useChannel(props.channelId);
+  const [outsideCount, setOutsideCount] = createSignal(0);
+
   async function handleJoin() {
     try {
       await call.joinCall();
@@ -157,6 +175,23 @@ export function ChannelCallTab(props: {
           </Show>
           <CallOverlay
             onLeave={handleLeave}
+            discussion={{
+              label: () =>
+                discussion()?.kind === 'channel_thread'
+                  ? (channel()?.name ?? undefined)
+                  : undefined,
+              opensByDefault: () =>
+                !isMobile() && discussion()?.kind === 'channel_thread',
+              hasUpdates: () => outsideCount() > 0,
+              render: (panel) => (
+                <CallDiscussionContent
+                  discussion={discussion}
+                  panel={panel}
+                  onViewChannel={() => setActiveTab('messages')}
+                  onOutsideCountChange={setOutsideCount}
+                />
+              ),
+            }}
             footerLeading={
               <Show when={!isMobile()}>
                 <ActiveCallLink />

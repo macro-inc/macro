@@ -161,6 +161,7 @@ fn started_event() -> CallTopicEvent {
 
 fn archived_event() -> CallTopicEvent {
     CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
+        channel_thread: false,
         call_id: CALL_ID,
         channel_id: Some(CHANNEL_ID),
         created_by: user_id(),

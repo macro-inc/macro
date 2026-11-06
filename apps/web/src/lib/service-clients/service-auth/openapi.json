@@ -4802,6 +4802,16 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -6349,7 +6359,7 @@
     "/team_agents/sizes": {
       "get": {
         "tags": ["team-agents"],
-        "summary": "Computer specifications for team admins, independent of billing or rollout.",
+        "summary": "Computer specifications for rollout-enabled team admins, independent of billing.",
         "operationId": "get_team_agent_sizes",
         "responses": {
           "200": {

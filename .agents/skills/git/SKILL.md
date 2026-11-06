@@ -145,6 +145,9 @@ failures before handing off.
 
 ## Updating a PR
 
+Fetch the current base branch before diagnosing conflicts or checking ancestry;
+the PR API's base SHA can lag the branch ref.
+
 Push follow-up commits rather than force-pushing over review history, unless the
 user asks for a rebase. When the scope changes, update the title and the What
 section to match.

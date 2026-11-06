@@ -1,0 +1,29 @@
+[package]
+name = "agent_correlation"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+http = ["dep:axum", "dep:macro_auth", "dep:serde_urlencoded"]
+postgres = ["dep:sqlx"]
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, optional = true }
+macro_auth = { path = "../macro_auth", optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_urlencoded = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+serde_json = { workspace = true }
