@@ -1,4 +1,4 @@
-//! Bearer token middleware for the protected MCP endpoint.
+//! Existing user API keys and JWT bearer authentication for protected MCP.
 
 #[cfg(test)]
 mod test;
@@ -115,7 +115,7 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
     response
 }
 
-/// Validates `Authorization: Bearer <token>` and stores the authenticated
+/// Validates an existing user API key or `Authorization: Bearer <token>` and stores the authenticated
 /// [`MacroUserIdStr`], its [`McpAuthMethod`], and its [`ToolCaller`] in the
 /// request extensions. Every authenticated request carries a caller:
 /// - a Macro API token signed for an agent (only key holders such as the
@@ -123,7 +123,7 @@ fn unauthorized_response(request: &Request<Body>, error: Option<&str>) -> Respon
 ///   [`ToolCaller::Agent`];
 /// - an OAuth access token is [`ToolCaller::McpClient`], named after the
 ///   client the broker issued it to;
-/// - any other Macro API token is a pasted key, [`ToolCaller::ApiKey`].
+/// - an existing user API key or any other Macro API token is [`ToolCaller::ApiKey`].
 #[tracing::instrument(skip_all, fields(caller = tracing::field::Empty))]
 pub async fn validate_bearer(
     axum::extract::State(auth): axum::extract::State<BearerAuth>,
@@ -137,6 +137,7 @@ pub async fn validate_bearer(
             .and_then(|value| value.to_str().ok())
         && let Some(user_id) = keys.user(key).await
     {
+        tracing::Span::current().record("caller", tracing::field::debug(&ToolCaller::ApiKey));
         request.extensions_mut().insert(user_id);
         request.extensions_mut().insert(McpAuthMethod::ApiKey);
         request.extensions_mut().insert(ToolCaller::ApiKey);

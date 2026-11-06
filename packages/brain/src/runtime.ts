@@ -25,7 +25,7 @@ export async function runtimeDeps(
     tracedFetch(fetch)
   );
   const macro = macroSdk(config.hosts, config.macroApiKey);
-  const codeMode = new MacroCodeMode(config.mcpUrl, config.macroApiKey);
+  const codeMode = new MacroCodeMode(config);
   const baseEnv: Record<string, string> = {};
   for (const name of ['PATH', 'HOME', 'LANG', 'TZ']) {
     const value = env(name);

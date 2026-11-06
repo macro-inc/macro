@@ -20,9 +20,13 @@ export type CodeModeConnection = {
 export class MacroCodeMode {
   readonly #url: URL;
   readonly #key: string;
-  constructor(url: string, apiKey: string) {
-    this.#url = new URL(url);
-    this.#key = apiKey;
+  constructor(config: { hosts: { mcp: string }; macroApiKey: string }) {
+    if (!config.hosts.mcp)
+      throw new Error(
+        'OVERRIDE_MCP_SERVICE_URL is required for Macro code mode'
+      );
+    this.#url = new URL(`${config.hosts.mcp.replace(/\/+$/, '')}/mcp`);
+    this.#key = config.macroApiKey;
   }
   async connect(signal: AbortSignal): Promise<CodeModeConnection> {
     const client = new Client({ name: 'macro-brain', version: '1.0.0' });

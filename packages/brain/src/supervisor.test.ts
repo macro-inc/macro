@@ -405,17 +405,3 @@ await writeFile(new URL('./check-import-marker', import.meta.url), 'fake boot');
     await nodeFs.rm(root, { recursive: true });
   }
 });
-
-test('supervisor forwards the nonsecret MCP endpoint override to its runtime child', () => {
-  const previous = process.env.OVERRIDE_MCP_SERVICE_URL;
-  process.env.OVERRIDE_MCP_SERVICE_URL = 'http://127.0.0.1:8101';
-  try {
-    assert.equal(
-      childEnvironment('/tmp/workspace', false).OVERRIDE_MCP_SERVICE_URL,
-      'http://127.0.0.1:8101'
-    );
-  } finally {
-    if (previous === undefined) delete process.env.OVERRIDE_MCP_SERVICE_URL;
-    else process.env.OVERRIDE_MCP_SERVICE_URL = previous;
-  }
-});

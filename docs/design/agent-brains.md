@@ -205,8 +205,11 @@ The turn can use the full SDK as the agent itself, including channels,
 documents, tasks, email, calendar and search, within its account permissions,
 charter and budget. The key stays in a private transport field in the brain
 process and never enters a turn's environment, tool arguments, prompt or
-telemetry. The canonical MCP service base may be supplied by
-`OVERRIDE_MCP_SERVICE_URL`; its transport endpoint is `/mcp` under that base.
+telemetry. The required canonical `OVERRIDE_MCP_SERVICE_URL` is parsed as
+`config.hosts.mcp`, a service base. The bridge appends `/mcp` once; there is no
+gateway-derived default or fallback. Like the other canonical persona URLs it
+arrives only in transient enrollment env on create and recreate, never in the
+persisted persona or the Claude turn environment.
 
 Public MCP keeps JWT bearer authentication and additionally accepts the same
 user-key authorizer as other API-key routes, including revocation and scope

@@ -49,7 +49,6 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 | `jev.ts`, `learning.ts` | Explicit all-event start, deterministic/Jev filtering, decision and feedback history, must-wake regressions and tune tasks. |
 | `lanes.ts` | Durable JSONL queue per conversation; bursts batch, crashes replay, failures go to `failed/`. |
 | `pool.ts` | Per-tier concurrency, one speaking turn at a time, per-run and per-day spend caps. |
-| `code-mode.ts` | Credential-private MCP client; discovers and forwards the three public SDK tools and server documentation. |
 | `runner.ts` | `start(turn) → { events, inject, abort, done }` over the Claude Agent SDK with streaming input. |
 | `work.ts` | Hand-offs: a Macro task, a git worktree, follow-ups injected, the final message posted as the report. |
 | `schedules.ts` | Macro routines the agent creates for itself; their runs arrive as `agent_session.opened`. |
@@ -60,23 +59,6 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 | `brain.ts`, `main.ts` | Default composition and the `brain` CLI. |
 | `supervisor.ts`, `host.ts` | Checked main-only activation, Node child, draining and last-known-good recovery. |
 | `runtime.ts`, `dry-run.ts` | Scoped live adapters and fake-event boot adapters. |
-
-Respond, heartbeat and work turns receive `ExecuteCode`, `DescribeCodeTools`
-and `ReadCodeDocs` through the existing in-process `brain` MCP server. The brain
-connects to the public MCP transport with `x-macro-user-api-key`, discovers the
-current tool descriptions and schemas, and forwards calls as the agent's own
-account. SDK docs are read from the server, not bundled in the persona. Triage
-never connects. Discovery/auth failures fail the turn explicitly; there is no
-fallback to native tools or another identity. Each turn closes its connection;
-abort cancels requests and execution. Tool spans carry names only, never code,
-docs, results or credentials.
-
-The transport uses `{MACRO_GATEWAY}/mcp/mcp`; `OVERRIDE_MCP_SERVICE_URL` can
-supply the canonical MCP service base (the client appends `/mcp`). In-process
-adapters retain the key; the model, subprocess environment and tool schemas do
-not receive it. Backend `ai-code-mode` explicitly includes team-agent accounts
-resolved by the server; ordinary users keep their existing rollout policy.
-Permissions, budget admission and the persona's charter still apply.
 
 Turns never get the Macro key. They call the `brain` binary (`post`, `reply`,
 `context`, `handoff`, `remember`, `recall`, `forget`, `focus`, `promise`,

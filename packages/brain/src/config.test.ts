@@ -13,12 +13,6 @@ test('loadConfig reads every value and derives the gateway hosts', () => {
     ANTHROPIC_AUTH_TOKEN: 'token',
   };
   const config = loadConfig((name) => env[name]);
-  assert.equal(config.mcpUrl, 'https://dev-gateway.macro.com/mcp/mcp');
-  env.OVERRIDE_MCP_SERVICE_URL = 'http://127.0.0.1:8101/';
-  assert.equal(
-    loadConfig((name) => env[name]).mcpUrl,
-    'http://127.0.0.1:8101/mcp'
-  );
   assert.deepEqual(config.healthPort, 7801);
   assert.deepEqual(config.hosts, {
     storage: 'https://dev-gateway.macro.com/dss',

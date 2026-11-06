@@ -189,6 +189,7 @@ test('respond receives the full SDK tools through the brain without exposing its
   );
   const { MacroCodeMode } = await import('./code-mode.ts');
   let advertiseCode = true;
+  let expectedPath = '/mcp/mcp';
   const seen: { method: string; key: string | undefined; params: unknown }[] =
     [];
   const endpoint = createServer(async (request, response) => {
@@ -196,6 +197,7 @@ test('respond receives the full SDK tools through the brain without exposing its
       response.writeHead(405).end();
       return;
     }
+    assert.equal(request.url, expectedPath);
     const body = JSON.parse(
       Buffer.concat(await Array.fromAsync(request)).toString()
     );
@@ -259,18 +261,24 @@ test('respond receives the full SDK tools through the brain without exposing its
   );
   const address = endpoint.address();
   assert.ok(address && typeof address !== 'string');
-  const bridge = new MacroCodeMode(
-    `http://127.0.0.1:${address.port}/mcp`,
-    'fixture-agent-key'
-  );
+  const parsedConfig = {
+    hosts: { mcp: `http://127.0.0.1:${address.port}/mcp` },
+    macroApiKey: 'fixture-agent-key',
+  };
+  const bridge = new MacroCodeMode(parsedConfig);
   let calls = 0;
   const runner = new AgentSdkRunner({
     ...RUNNER_OPTIONS,
-    baseEnv: { ...RUNNER_OPTIONS.baseEnv, MACRO_API_KEY: 'fixture-agent-key' },
+    baseEnv: {
+      ...RUNNER_OPTIONS.baseEnv,
+      MACRO_API_KEY: 'fixture-agent-key',
+      OVERRIDE_MCP_SERVICE_URL: parsedConfig.hosts.mcp,
+    },
     macroTools: (signal) => bridge.connect(signal),
     query(params) {
       return (async function* () {
         assert.equal(params.options.env?.MACRO_API_KEY, undefined);
+        assert.equal(params.options.env?.OVERRIDE_MCP_SERVICE_URL, undefined);
         assert.equal(
           JSON.stringify(params.options.env).includes('fixture-agent-key'),
           false
@@ -334,6 +342,22 @@ test('respond receives the full SDK tools through the brain without exposing its
     assert.match(unavailable.result, /Macro code mode unavailable/);
     assert.equal(unavailable.result.includes('fixture-agent-key'), false);
     assert.equal(calls, 3);
+    advertiseCode = true;
+    expectedPath = '/mcp';
+    const localBridge = new MacroCodeMode({
+      hosts: { mcp: `http://127.0.0.1:${address.port}` },
+      macroApiKey: 'fixture-agent-key',
+    });
+    const local = await localBridge.connect(new AbortController().signal);
+    try {
+      assert.deepEqual(
+        local.tools.map((tool) => tool.name),
+        ['ExecuteCode', 'DescribeCodeTools', 'ReadCodeDocs']
+      );
+    } finally {
+      await local.close();
+    }
+
     assert.ok(seen.every((request) => request.key === 'fixture-agent-key'));
     assert.deepEqual(
       seen

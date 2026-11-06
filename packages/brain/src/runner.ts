@@ -157,7 +157,12 @@ export class AgentSdkRunner implements Runner {
                 Object.entries({
                   ...this.#options.baseEnv,
                   ...turn.env,
-                }).filter(([name]) => name !== 'MACRO_API_KEY')
+                }).filter(
+                  ([name]) =>
+                    !['MACRO_API_KEY', 'OVERRIDE_MCP_SERVICE_URL'].includes(
+                      name
+                    )
+                )
               ),
               ANTHROPIC_BASE_URL: this.#options.anthropicBaseUrl,
               ANTHROPIC_AUTH_TOKEN: this.#options.anthropicAuthToken,
