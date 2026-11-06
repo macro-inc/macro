@@ -15,17 +15,13 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster } from '../agents-view/core/roster';
 import { getDefaultTimezone } from './core/routine-draft';
-import { newRoutineDraft, routineTemplates } from './core/routine-templates';
+import { newRoutineDraft } from './core/routine-templates';
 import { loadRoutineComposerDraft } from './draft-storage';
 import { RoutineCreator } from './routine-creator';
 import { startRoutineDraft } from './routine-draft-start';
 import { RoutineNew } from './routine-new';
 
-const findTemplateByKey = (key: string) => {
-  const template = routineTemplates.find((each) => each.key === key);
-  if (!template) throw new Error(`No template ${key}`);
-  return template;
-};
+import { TEST_CATALOG, testTemplate } from './tests/catalog';
 
 const host = vi.hoisted(() => ({
   create: vi.fn<(body: ActionConfiguration) => Promise<ScheduledAction>>(),
@@ -44,6 +40,10 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled: host.flags.has(flag.key),
   }),
+}));
+vi.mock('./queries/catalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./queries/catalog')>()),
+  useRoutineCatalog: () => () => TEST_CATALOG,
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: host.openWithSplit }),
@@ -952,9 +952,9 @@ describe('new routine', () => {
     fireEvent.blur(name);
     inputPrompt('An unsaved prompt');
     startRoutineDraft(
-      newRoutineDraft(findTemplateByKey('brief'), {
+      newRoutineDraft(testTemplate('brief'), {
         defaultModel: 'claude-sonnet-4-6',
-        starters: {},
+        codeSteps: false,
       })
     );
     await waitFor(() =>
