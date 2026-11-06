@@ -59,7 +59,10 @@ this fence prevents delayed pre-delete requests from recreating credentials.
 
 TOTP setup stages a unique enrollment UUID before writing its seed. The active
 pointer changes atomically only after setup succeeds; replacements and removals
-retire prior generations. DSS runs the tracked cleanup worker every minute.
+retire prior generations. Activation and user removal compare the authorized
+metadata revision before changing any enrollment, so a sender that loses its lease
+cannot replace or remove a newer generation. Unconditional retirement is restricted
+to deletion tombstones. DSS runs the tracked cleanup worker every minute.
 Under the vault lease, the first cleanup pass quarantines an unreferenced generation
 for 180 seconds. Later passes erase it and retain its journal tombstone for hourly
 repeated erasure, covering responses or senders that resume after losing a lease.

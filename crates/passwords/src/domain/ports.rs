@@ -7,10 +7,21 @@ use async_trait::async_trait;
 pub trait Repository: Send + Sync {
     /// Persist a unique pending enrollment before any provider mutation.
     async fn stage_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error>;
-    /// Atomically select a successful enrollment and retire the previous generation.
-    async fn activate_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error>;
-    /// Clear the active pointer and durably retire every enrollment of the item.
-    async fn retire_totp(&self, team: TeamId, item: ItemId) -> Result<(), Error>;
+    /// Select a successful enrollment only while its authorized metadata revision remains current.
+    async fn activate_totp(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        key: TotpKeyId,
+        expected_revision: i64,
+    ) -> Result<(), Error>;
+    /// Retire enrollments at the authorized revision; omission is restricted to deleting tombstones.
+    async fn retire_totp(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        expected_revision: Option<i64>,
+    ) -> Result<(), Error>;
     /// List every known enrollment so deletion can immediately attempt erasure.
     async fn totp_keys(&self, team: TeamId, item: ItemId) -> Result<Vec<TotpKeyId>, Error>;
     /// Return a bounded batch of enrollment cleanup facts whose grace period elapsed.

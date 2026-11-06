@@ -531,6 +531,12 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
         )
         .await
         .expect("create");
+    let before_setup = repository.get(team, item.id).await.expect("record");
+    let paused_key = TotpKeyId(Uuid::now_v7());
+    repository
+        .stage_totp(team, item.id, paused_key)
+        .await
+        .expect("paused enrollment");
     service
         .configure_totp(
             &owner,
@@ -562,6 +568,30 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
         .totp_key_id
         .expect("active second key");
     assert_ne!(first, second);
+    assert!(matches!(
+        repository
+            .activate_totp(team, item.id, paused_key, before_setup.revision)
+            .await,
+        Err(Error::Conflict)
+    ));
+    assert!(matches!(
+        repository
+            .retire_totp(team, item.id, Some(before_setup.revision))
+            .await,
+        Err(Error::Conflict)
+    ));
+    assert!(matches!(
+        repository.retire_totp(team, item.id, None).await,
+        Err(Error::Conflict)
+    ));
+    assert_eq!(
+        repository
+            .get(team, item.id)
+            .await
+            .expect("current record")
+            .totp_key_id,
+        Some(second)
+    );
     provider
         .set_totp(team, first, &SecretString("JBSWY3DPEHPK3PXP".into()))
         .await
@@ -599,7 +629,7 @@ async fn unique_totp_generations_isolate_late_writes_and_durable_cleanup_preserv
             .cleanup_expired_totp_enrollments()
             .await
             .expect("retired cleanup"),
-        1
+        2
     );
     assert!(
         !provider

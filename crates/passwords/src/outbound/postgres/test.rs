@@ -275,6 +275,11 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         repository.save(&stale_folder, Some(3)).await,
         Err(Error::Conflict)
     ));
+    let enrollment_revision = repository
+        .get(first, record.metadata.id)
+        .await
+        .expect("enrollment revision")
+        .revision;
     let first_key = TotpKeyId(Uuid::now_v7());
     let second_key = TotpKeyId(Uuid::now_v7());
     repository
@@ -291,12 +296,12 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
     );
     assert!(matches!(
         repository
-            .activate_totp(second, record.metadata.id, first_key)
+            .activate_totp(second, record.metadata.id, first_key, enrollment_revision)
             .await,
         Err(Error::NotFound)
     ));
     repository
-        .activate_totp(first, record.metadata.id, first_key)
+        .activate_totp(first, record.metadata.id, first_key, enrollment_revision)
         .await
         .expect("activate");
     assert_eq!(
@@ -307,12 +312,17 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .totp_key_id,
         Some(first_key)
     );
+    let replacement_revision = repository
+        .get(first, record.metadata.id)
+        .await
+        .expect("replacement revision")
+        .revision;
     repository
         .stage_totp(first, record.metadata.id, second_key)
         .await
         .expect("replacement intent");
     repository
-        .activate_totp(first, record.metadata.id, second_key)
+        .activate_totp(first, record.metadata.id, second_key, replacement_revision)
         .await
         .expect("replace");
     let retiring = TotpCleanup {
@@ -375,7 +385,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         .await
         .expect("active TOTP snapshot");
     repository
-        .retire_totp(first, record.metadata.id)
+        .retire_totp(first, record.metadata.id, Some(stale_totp.revision))
         .await
         .expect("retire active");
     let retired = repository
@@ -462,9 +472,14 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .await
             .expect("quarantine canceled setup")
     );
+    let canceled_revision = repository
+        .get(first, record.metadata.id)
+        .await
+        .expect("canceled enrollment revision")
+        .revision;
     assert!(matches!(
         repository
-            .activate_totp(first, record.metadata.id, canceled_key)
+            .activate_totp(first, record.metadata.id, canceled_key, canceled_revision)
             .await,
         Err(Error::Conflict)
     ));
@@ -638,4 +653,127 @@ async fn distinct_team_leases_share_admission_and_reserve_database_query_capacit
         .connect_lazy("postgres://user:password@127.0.0.1:15442/macrodb")
         .expect("fixture URL");
     assert!(matches!(PgRepository::new(too_small), Err(Error::Invalid)));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn stale_totp_setup_and_removal_cannot_override_a_newer_enrollment_or_removal(pool: PgPool) {
+    let team = TeamId(Uuid::now_v7());
+    let item = ItemId(Uuid::now_v7());
+    let owner = MacroUserIdStr::parse_from_str("macro|revision@example.test")
+        .expect("identity")
+        .into_owned();
+    let macro_user_id = Uuid::now_v7();
+    sqlx::query!("INSERT INTO macro_user(id,username,email,stripe_customer_id) VALUES($1,'revision@example.test','revision@example.test',$2)",macro_user_id,format!("fixture-{macro_user_id}")).execute(&pool).await.expect("account");
+    sqlx::query!(
+        r#"INSERT INTO "User"(id,email,macro_user_id) VALUES($1,'revision@example.test',$2)"#,
+        owner.as_ref(),
+        macro_user_id
+    )
+    .execute(&pool)
+    .await
+    .expect("user");
+    sqlx::query!(
+        "INSERT INTO team(id,name,owner_id) VALUES($1,'Fixture',$2)",
+        team.0,
+        owner.as_ref()
+    )
+    .execute(&pool)
+    .await
+    .expect("team");
+    let repository = PgRepository::new(pool).expect("repository capacity");
+    let now = Utc::now();
+    repository
+        .save(
+            &Record {
+                user_id: owner,
+                grants: vec![],
+                deleting: false,
+                revision: 0,
+                totp_key_id: None,
+                metadata: ItemMetadata {
+                    id: item,
+                    team_id: team,
+                    name: "Synthetic login".into(),
+                    kind: ItemKind::Login,
+                    url: None,
+                    folder_id: None,
+                    favorite: false,
+                    version: 1,
+                    has_totp: false,
+                    shared: false,
+                    created_at: now,
+                    updated_at: now,
+                    last_used_at: None,
+                },
+            },
+            None,
+        )
+        .await
+        .expect("metadata");
+    let observed = repository.get(team, item).await.expect("setup snapshot");
+    let old_key = TotpKeyId(Uuid::now_v7());
+    let new_key = TotpKeyId(Uuid::now_v7());
+    repository
+        .stage_totp(team, item, old_key)
+        .await
+        .expect("old setup pending at provider");
+    repository
+        .stage_totp(team, item, new_key)
+        .await
+        .expect("newer setup");
+    repository
+        .activate_totp(team, item, new_key, observed.revision)
+        .await
+        .expect("newer setup commits first");
+    assert!(matches!(
+        repository
+            .activate_totp(team, item, old_key, observed.revision)
+            .await,
+        Err(Error::Conflict)
+    ));
+    assert!(matches!(
+        repository
+            .retire_totp(team, item, Some(observed.revision))
+            .await,
+        Err(Error::Conflict)
+    ));
+    assert!(matches!(
+        repository.retire_totp(team, item, None).await,
+        Err(Error::Conflict)
+    ));
+    let active = repository
+        .get(team, item)
+        .await
+        .expect("new active enrollment preserved");
+    assert_eq!(active.totp_key_id, Some(new_key));
+    assert!(active.metadata.has_totp);
+    let new_state = sqlx::query!(
+        "SELECT state FROM password_totp_enrollments WHERE team_id=$1 AND key_id=$2",
+        team.0,
+        new_key.0
+    )
+    .fetch_one(&repository.pool)
+    .await
+    .expect("active provider enrollment journal");
+    assert_eq!(new_state.state, "active");
+    repository
+        .retire_totp(team, item, Some(active.revision))
+        .await
+        .expect("current removal");
+    let resumed_key = TotpKeyId(Uuid::now_v7());
+    // The old setup can resume before staging after a newer remove already completed.
+    repository
+        .stage_totp(team, item, resumed_key)
+        .await
+        .expect("late setup intent");
+    assert!(matches!(
+        repository
+            .activate_totp(team, item, resumed_key, active.revision)
+            .await,
+        Err(Error::Conflict)
+    ));
+    let removed = repository.get(team, item).await.expect("removal preserved");
+    assert!(removed.totp_key_id.is_none());
+    assert!(!removed.metadata.has_totp);
+    assert!(removed.revision > active.revision);
 }

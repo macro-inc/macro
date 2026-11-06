@@ -64,11 +64,20 @@ impl Repository for PgRepository {
         sqlx::query!("INSERT INTO password_totp_enrollments(team_id,item_id,key_id,state,cleanup_after) VALUES($1,$2,$3,'pending',now()+interval '180 seconds') ON CONFLICT(team_id,key_id) DO NOTHING",team.0,item.0,key.0).execute(&self.pool).await.map_err(|_|Error::Unavailable)?;
         Ok(())
     }
-    async fn activate_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error> {
+    async fn activate_totp(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        key: TotpKeyId,
+        expected_revision: i64,
+    ) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await.map_err(|_| Error::Unavailable)?;
-        let item_row=sqlx::query!("SELECT id FROM password_item_entities WHERE team_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE",team.0,item.0).fetch_optional(&mut *transaction).await.map_err(|_|Error::Unavailable)?;
-        if item_row.is_none() {
+        let item_row=sqlx::query!("SELECT revision,deleting FROM password_item_entities WHERE team_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE",team.0,item.0).fetch_optional(&mut *transaction).await.map_err(|_|Error::Unavailable)?.ok_or(Error::NotFound)?;
+        if item_row.deleting {
             return Err(Error::NotFound);
+        }
+        if item_row.revision != expected_revision {
+            return Err(Error::Conflict);
         }
 
         let enrolled=sqlx::query!("UPDATE password_totp_enrollments SET state='active' WHERE team_id=$1 AND item_id=$2 AND key_id=$3 AND state='pending'",team.0,item.0,key.0).execute(&mut *transaction).await.map_err(|_|Error::Unavailable)?;
@@ -82,18 +91,26 @@ impl Repository for PgRepository {
         }
         transaction.commit().await.map_err(|_| Error::Unavailable)
     }
-    async fn retire_totp(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+    async fn retire_totp(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        expected_revision: Option<i64>,
+    ) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await.map_err(|_| Error::Unavailable)?;
         let item_row = sqlx::query!(
-            "SELECT id FROM password_item_entities WHERE team_id=$1 AND id=$2 FOR UPDATE",
+            "SELECT revision,deleting FROM password_item_entities WHERE team_id=$1 AND id=$2 FOR UPDATE",
             team.0,
             item.0
         )
         .fetch_optional(&mut *transaction)
         .await
-        .map_err(|_| Error::Unavailable)?;
-        if item_row.is_none() {
-            return Err(Error::NotFound);
+        .map_err(|_| Error::Unavailable)?.ok_or(Error::NotFound)?;
+        if match expected_revision {
+            Some(revision) => item_row.deleting || item_row.revision != revision,
+            None => !item_row.deleting,
+        } {
+            return Err(Error::Conflict);
         }
 
         sqlx::query!("UPDATE password_totp_enrollments SET state='retired',cleanup_after=GREATEST(cleanup_after,now()+interval '180 seconds') WHERE team_id=$1 AND item_id=$2 AND state<>'retired'",team.0,item.0).execute(&mut *transaction).await.map_err(|_|Error::Unavailable)?;

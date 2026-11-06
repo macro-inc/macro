@@ -326,7 +326,7 @@ impl PasswordService {
                 .audit(team, item, actor, Action::Delete, Uuid::now_v7())
                 .await?;
         }
-        self.repository.retire_totp(team, item).await?;
+        self.repository.retire_totp(team, item, None).await?;
         for key_id in self.repository.totp_keys(team, item).await? {
             self.provider.delete_totp(team, key_id).await?;
         }
@@ -538,10 +538,14 @@ impl PasswordService {
             let key_id = TotpKeyId(Uuid::now_v7());
             self.repository.stage_totp(team, item, key_id).await?;
             self.provider.set_totp(team, key_id, &key).await?;
-            self.repository.activate_totp(team, item, key_id).await?;
+            self.repository
+                .activate_totp(team, item, key_id, record.revision)
+                .await?;
             Action::TotpSetup
         } else {
-            self.repository.retire_totp(team, item).await?;
+            self.repository
+                .retire_totp(team, item, Some(record.revision))
+                .await?;
             if let Some(key_id) = record.totp_key_id {
                 self.provider.delete_totp(team, key_id).await?;
             }

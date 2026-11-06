@@ -37,7 +37,9 @@ assignments and grant revocation; contention returns a retryable conflict.
 
 Each TOTP setup uses a unique enrollment key and journals its identity before
 contacting OpenBao. Replacement switches the active pointer only after setup;
-removal and item deletion retire enrollments. A tracked worker quarantines retired
+activation and user removal compare the authorized metadata revision so a lost
+lease cannot let an older request override a newer enrollment decision.
+Removal and item deletion retire enrollments. A tracked worker quarantines retired
 and abandoned enrollments under the team lease, then erases them after 180 seconds,
 preserving the active generation. Retained tombstones schedule hourly erasure
 retries even after success, covering arbitrarily delayed provider completions

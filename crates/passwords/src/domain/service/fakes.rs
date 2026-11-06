@@ -39,7 +39,21 @@ impl Repository for FakeRepository {
             .insert(key.0, (team, item, false, false, false));
         Ok(())
     }
-    async fn activate_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error> {
+    async fn activate_totp(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        key: TotpKeyId,
+        expected_revision: i64,
+    ) -> Result<(), Error> {
+        let mut records = self.records.lock().expect("fixture lock");
+        let record = records
+            .get_mut(&item.0)
+            .filter(|record| record.metadata.team_id == team && !record.deleting)
+            .ok_or(Error::NotFound)?;
+        if record.revision != expected_revision {
+            return Err(Error::Conflict);
+        }
         let mut enrollments = self.enrollments.lock().expect("fixture lock");
         if !enrollments
             .get(&key.0)
@@ -52,24 +66,36 @@ impl Repository for FakeRepository {
                 entry.2 = *id == key.0;
             }
         }
-        let mut records = self.records.lock().expect("fixture lock");
-        let record = records.get_mut(&item.0).ok_or(Error::NotFound)?;
         record.totp_key_id = Some(key);
         record.metadata.has_totp = true;
         record.revision += 1;
         Ok(())
     }
-    async fn retire_totp(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+    async fn retire_totp(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        expected_revision: Option<i64>,
+    ) -> Result<(), Error> {
+        let mut records = self.records.lock().expect("fixture lock");
+        let record = records
+            .get_mut(&item.0)
+            .filter(|record| record.metadata.team_id == team)
+            .ok_or(Error::NotFound)?;
+        if match expected_revision {
+            Some(revision) => record.deleting || record.revision != revision,
+            None => !record.deleting,
+        } {
+            return Err(Error::Conflict);
+        }
         for entry in self.enrollments.lock().expect("fixture lock").values_mut() {
             if entry.0 == team && entry.1 == item {
                 entry.2 = false;
             }
         }
-        if let Some(record) = self.records.lock().expect("fixture lock").get_mut(&item.0) {
-            record.totp_key_id = None;
-            record.metadata.has_totp = false;
-            record.revision += 1;
-        }
+        record.totp_key_id = None;
+        record.metadata.has_totp = false;
+        record.revision += 1;
         Ok(())
     }
     async fn totp_keys(&self, team: TeamId, item: ItemId) -> Result<Vec<TotpKeyId>, Error> {
