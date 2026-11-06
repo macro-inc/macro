@@ -38,27 +38,19 @@ export function createTeamStep(
   const state = (): TeamStepState => {
     const teams = directory.teams();
     const invites = directory.invites();
-    const domainTeam = directory.domainTeam();
-    if (
-      teams.t === 'error' ||
-      invites.t === 'error' ||
-      domainTeam.t === 'error'
-    )
-      return { t: 'error' };
-    if (
-      teams.t === 'loading' ||
-      invites.t === 'loading' ||
-      domainTeam.t === 'loading'
-    )
+    if (teams.t === 'error' || invites.t === 'error') return { t: 'error' };
+    if (teams.t === 'loading' || invites.t === 'loading')
       return { t: 'loading' };
     const team = teams.value[0];
     if (team) return { t: 'on-team', name: team.name };
-    if (invites.value.length > 0 || domainTeam.value)
-      return {
-        t: 'invites',
-        invites: invites.value,
-        domainTeam: domainTeam.value,
-      };
+
+    const lookup = directory.domainTeam();
+    if (lookup.t === 'loading') return { t: 'loading' };
+    // The domain team is an extra offer: a failed lookup leaves the invites
+    // and create options available instead of blocking the step.
+    const domainTeam = lookup.t === 'ready' ? lookup.value : null;
+    if (invites.value.length > 0 || domainTeam)
+      return { t: 'invites', invites: invites.value, domainTeam };
     return { t: 'create' };
   };
 

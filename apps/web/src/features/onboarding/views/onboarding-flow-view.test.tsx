@@ -487,6 +487,16 @@ describe('onboarding flow', () => {
     });
   });
 
+  it('keeps team creation available when the domain team lookup fails', async () => {
+    setup({
+      resume: 'team',
+      world: { failures: { domainTeam: 'lookup failed' } },
+    });
+    await heading('Built for teams.');
+    expect(await screen.findByDisplayValue('Acme')).toBeTruthy();
+    expect(screen.queryByText("Couldn't load your team.")).toBeNull();
+  });
+
   it('passes over the team step for someone who already joined a team', async () => {
     const { fake } = setup({
       resume: 'tools',

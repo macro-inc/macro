@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { useIsAuthenticated } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
@@ -122,9 +123,11 @@ function fetchDomainTeam() {
 
 /** The team that lets people on the user's email domain join, or null. */
 export function useDomainTeamQuery() {
+  const authenticated = useIsAuthenticated();
   return useQuery(() => ({
     queryKey: teamKeys.domainTeam.queryKey,
     queryFn: fetchDomainTeam,
+    enabled: authenticated() === true,
   }));
 }
 

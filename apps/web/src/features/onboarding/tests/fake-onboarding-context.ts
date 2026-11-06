@@ -60,6 +60,7 @@ export type FakeOnboardingWorld = {
       | 'emailAccounts'
       | 'record'
       | 'teams'
+      | 'domainTeam'
       | 'catalog'
       | 'createTeam'
       | 'joinTeam'
@@ -309,7 +310,7 @@ export function createFakeOnboarding(
     createTeamDirectory: () => ({
       teams: () => loadable('teams', () => world.teams),
       invites: () => loadable('teams', () => world.invites),
-      domainTeam: () => loadable('teams', () => world.domainTeam),
+      domainTeam: () => loadable('domainTeam', () => world.domainTeam),
       contacts: () => ({ t: 'ready', value: world.contacts }),
       retry: () => call('retryTeams'),
     }),
