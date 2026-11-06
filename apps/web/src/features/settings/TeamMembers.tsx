@@ -75,6 +75,7 @@ import {
   SettingsSection,
 } from './primitives';
 import { InviteToTeamDialog, useTeamViewer } from './Team';
+import { CopyTeamInviteLinkButton } from './TeamInviteLinkSection';
 import {
   canInviteToTeam,
   canRemoveTeamMember,
@@ -560,25 +561,32 @@ export function TeamMembers(props: { team: TeamSummary }) {
             : `Invite people to ${props.team.name} and manage their roles.`
         }
         actions={
-          <MemberInviteActions
-            canInviteAgents={canManageAgents()}
-            canInvitePeople={canInviteToTeam(
-              currentUserRole(),
-              allowNonAdminInvites()
-            )}
-            onInvitePerson={() => setShowInviteModal(true)}
-            onInviteAgent={() => {
-              if (!canManageAgents()) return;
-              const interaction = beginInteraction('team-agent.open', {
-                attributes: { 'team.id': props.team.id },
-              });
-              try {
-                setInviteAgentOpen(true);
-              } finally {
-                interaction.end();
-              }
-            }}
-          />
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <Show
+              when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
+            >
+              <CopyTeamInviteLinkButton teamId={props.team.id} />
+            </Show>
+            <MemberInviteActions
+              canInviteAgents={canManageAgents()}
+              canInvitePeople={canInviteToTeam(
+                currentUserRole(),
+                allowNonAdminInvites()
+              )}
+              onInvitePerson={() => setShowInviteModal(true)}
+              onInviteAgent={() => {
+                if (!canManageAgents()) return;
+                const interaction = beginInteraction('team-agent.open', {
+                  attributes: { 'team.id': props.team.id },
+                });
+                try {
+                  setInviteAgentOpen(true);
+                } finally {
+                  interaction.end();
+                }
+              }}
+            />
+          </div>
         }
       >
         <SettingsSection

@@ -53,6 +53,11 @@ vi.mock('./components/invite-agent-dialog', () => ({
     </Show>
   ),
 }));
+vi.mock('./TeamInviteLinkSection', () => ({
+  CopyTeamInviteLinkButton: () => (
+    <button type="button">Copy invite link</button>
+  ),
+}));
 vi.mock('@queries/auth', () => ({
   useAiBillingSummaryQuery: () => ({
     isSuccess: true,
