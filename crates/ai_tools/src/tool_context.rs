@@ -976,6 +976,25 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn generate_named_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_program_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn build_voip_push_payloads<'a>(
         &self,
         _request: call::domain::models::VoipPushPayloadRequest<'a>,

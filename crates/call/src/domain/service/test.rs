@@ -118,6 +118,10 @@ impl CallRtcClient for MockRtcClient {
         Ok(())
     }
 
+    async fn remove_bot(&self, _room: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
     }
@@ -163,6 +167,15 @@ impl CallRtcClient for MockRtcClient {
         _name: Option<String>,
     ) -> anyhow::Result<String> {
         self.generate_token(room_name, participant_identity).await
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        Ok(format!("bot-token:{bot_id:?}"))
     }
 
     async fn build_voip_push_payloads<'a>(
@@ -1177,6 +1190,7 @@ fn egress_ended_rtc_client(egress_id: Option<&str>, file_url: Option<&str>) -> M
         id: "egress-ended-event-id".to_string(),
         room_name: None,
         participant_identity: None,
+        bot_identity: None,
         egress_id: egress_id.map(str::to_string),
         file_url: file_url.map(str::to_string),
         created_at: 1_775_000_000,
@@ -1203,6 +1217,7 @@ fn webhook_rtc_client(
         id: format!("{event_type}-event-id"),
         room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
         participant_identity: participant_identity.map(|email| user(email).into_owned()),
+        bot_identity: None,
         egress_id: None,
         file_url: None,
         created_at: 1_775_000_000,
@@ -4267,6 +4282,7 @@ async fn guest_webhook_events_reconcile_join_and_leave() {
             id: "evt".to_string(),
             room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
             participant_identity: None,
+            bot_identity: None,
             guest_identity: Some(guest_id),
             egress_id: None,
             file_url: None,
@@ -4327,6 +4343,7 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
         id: "evt-user".to_string(),
         room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
         participant_identity: Some(user(ARCHIVED_EVENT_CREATOR).into_owned()),
+        bot_identity: None,
         guest_identity: None,
         egress_id: None,
         file_url: None,
@@ -4335,6 +4352,7 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
     let guest_left = CallWebhookEvent {
         guest_identity: Some(guest_id),
         participant_identity: None,
+        bot_identity: None,
         id: "evt-guest".to_string(),
         ..user_left.clone()
     };

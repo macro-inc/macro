@@ -489,6 +489,13 @@ pub async fn start_call_handler<
     request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
+    if !state
+        .service
+        .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+        .await
+    {
+        return Err(CallError::NotFound("call".to_string()));
+    }
     if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
         return Err(CallError::Forbidden(
             "an agent-attributed start requires approval".to_string(),
@@ -526,6 +533,13 @@ pub async fn join_call_handler<
     request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
+    if !state
+        .service
+        .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+        .await
+    {
+        return Err(CallError::NotFound("call".to_string()));
+    }
     Ok(Json(
         state
             .service
@@ -553,6 +567,13 @@ pub async fn leave_call_handler<
     axum::extract::Path(call_id): axum::extract::Path<Uuid>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
 ) -> Result<Json<LeaveCallResponse>, CallError> {
+    if !state
+        .service
+        .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+        .await
+    {
+        return Err(CallError::NotFound("call".to_string()));
+    }
     Ok(Json(
         state
             .service

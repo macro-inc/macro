@@ -162,6 +162,17 @@ fn receive_webhook_parses_macro_user_participant_identity() {
 }
 
 #[test]
+fn receive_webhook_parses_bot_without_user_attendance() {
+    let bot_id = bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07A));
+    let event = receive_participant_joined(&client(), bot_id.into_storage_id().as_ref())
+        .expect("bot join must parse identity");
+
+    assert_eq!(event.bot_identity, Some(bot_id));
+    assert!(event.participant_identity.is_none());
+    assert!(event.guest_identity.is_none());
+}
+
+#[test]
 fn receive_webhook_skips_configured_transcription_agent_name() {
     let event = receive_participant_joined(
         &client_with_transcription_agent("macro-transcriber"),

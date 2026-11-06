@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod test;
 
+use bot_id::{BotId, BotIdStr};
 use chrono::DateTime;
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
@@ -229,6 +230,31 @@ impl CallRtcClient for LivekitRtcClient {
         token.to_jwt().map_err(Into::into)
     }
 
+    async fn generate_bot_token(
+        &self,
+        room_name: &str,
+        bot_id: BotId,
+        name: Option<String>,
+    ) -> anyhow::Result<String> {
+        let identity = bot_id.into_storage_id();
+        let mut token = AccessToken::with_api_key(&self.api_key, &self.api_secret)
+            .with_identity(identity.as_ref())
+            .with_attributes([("macro.program", "bot")])
+            .with_ttl(std::time::Duration::from_secs(6 * 3600))
+            .with_grants(VideoGrants {
+                room_join: true,
+                room: room_name.to_string(),
+                can_publish: true,
+                can_subscribe: true,
+                can_publish_data: true,
+                ..Default::default()
+            });
+        if let Some(name) = name {
+            token = token.with_name(&name);
+        }
+        token.to_jwt().map_err(Into::into)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn generate_named_token(
         &self,
@@ -279,6 +305,14 @@ impl CallRtcClient for LivekitRtcClient {
         ignore_not_found(
             self.room_client
                 .remove_participant(room_name, &guest_id.to_string())
+                .await,
+        )
+    }
+
+    async fn remove_bot(&self, room_name: &str, bot_id: BotId) -> anyhow::Result<()> {
+        ignore_not_found(
+            self.room_client
+                .remove_participant(room_name, bot_id.into_storage_id().as_ref())
                 .await,
         )
     }
@@ -397,8 +431,10 @@ impl CallRtcClient for LivekitRtcClient {
                         LiveParticipantKind::User
                     } else if GuestId::parse_rtc_identity(&participant.identity).is_some() {
                         LiveParticipantKind::Guest
-                    } else {
+                    } else if BotIdStr::parse_from_str(&participant.identity).is_ok() {
                         LiveParticipantKind::Bot
+                    } else {
+                        LiveParticipantKind::Guest
                     };
                     let tracks = participant
                         .tracks
@@ -527,6 +563,11 @@ impl CallRtcClient for LivekitRtcClient {
             .as_ref()
             .filter(|p| MacroUserIdStr::parse_from_str(&p.identity).is_err())
             .and_then(|p| GuestId::parse_rtc_identity(&p.identity));
+        let bot_identity = event
+            .participant
+            .as_ref()
+            .and_then(|p| BotIdStr::parse_from_str(&p.identity).ok())
+            .map(|id| id.bot_id());
 
         Ok(CallWebhookEvent {
             guest_identity,
@@ -545,6 +586,7 @@ impl CallRtcClient for LivekitRtcClient {
                     }
                 }
             }),
+            bot_identity,
             egress_id,
             file_url,
             created_at: event.created_at,

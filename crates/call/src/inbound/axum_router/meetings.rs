@@ -282,11 +282,18 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
     // body and keep today's behavior: they switch calls, reclaim their identity
     // after a reconnect, and are never treated as programs.
     let (request, is_program) = match request {
-        Some(body) => (
-            body.0,
-            credential_is_program(&actor.authorization.user.origin),
-        ),
-        None => (JoinCallRequest::for_app(), false),
+        Some(body)
+            if state
+                .service
+                .programmatic_calls_enabled(actor.authorization.user.macro_user_id.clone())
+                .await =>
+        {
+            (
+                body.0,
+                credential_is_program(&actor.authorization.user.origin),
+            )
+        }
+        _ => (JoinCallRequest::for_app(), false),
     };
     Ok(Json(
         state

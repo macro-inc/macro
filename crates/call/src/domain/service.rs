@@ -67,8 +67,8 @@ use super::models::{
 };
 use super::ports::{
     CallRecordQueryService, CallRecordReader, CallRepository, CallRtcClient, CallService,
-    CallStartLimiter, CallSummarizer, NoOpVoiceRepository, RecordingDownload, RecordingStorage,
-    VoiceRepository,
+    CallStartLimiter, CallSummarizer, NoOpVoiceRepository, ProgrammaticCallGate, RecordingDownload,
+    RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -100,6 +100,7 @@ pub struct CallServiceImpl<
     event_broker: B,
     channel_threads: Option<Arc<dyn crate::domain::ports::ChannelThreads>>,
     start_limiter: Option<Arc<dyn CallStartLimiter>>,
+    programmatic_call_gate: Option<Arc<dyn ProgrammaticCallGate>>,
 }
 
 impl<
@@ -139,6 +140,7 @@ impl<
             event_broker: NoopMacroEventBroker,
             channel_threads: None,
             start_limiter: None,
+            programmatic_call_gate: None,
         }
     }
 }
@@ -168,6 +170,12 @@ impl<
     /// Attach a per-account budget for calls that ring others.
     pub fn with_start_limiter(mut self, limiter: impl CallStartLimiter + 'static) -> Self {
         self.start_limiter = Some(Arc::new(limiter));
+        self
+    }
+
+    /// Attach the per-caller switch for explicit programmatic call routes.
+    pub fn with_programmatic_call_gate(mut self, gate: impl ProgrammaticCallGate) -> Self {
+        self.programmatic_call_gate = Some(Arc::new(gate));
         self
     }
 
@@ -221,6 +229,7 @@ impl<
             event_broker: self.event_broker,
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
+            programmatic_call_gate: self.programmatic_call_gate,
         }
     }
 
@@ -246,6 +255,7 @@ impl<
             event_broker: self.event_broker,
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
+            programmatic_call_gate: self.programmatic_call_gate,
         }
     }
 
@@ -271,6 +281,7 @@ impl<
             event_broker,
             channel_threads: self.channel_threads,
             start_limiter: self.start_limiter,
+            programmatic_call_gate: self.programmatic_call_gate,
         }
     }
 
@@ -713,6 +724,13 @@ impl<
     B: MacroEventBroker + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    async fn programmatic_calls_enabled(&self, caller: MacroUserIdStr<'_>) -> bool {
+        match &self.programmatic_call_gate {
+            Some(gate) => gate.enabled_for(caller).await,
+            None => false,
+        }
+    }
+
     async fn prepare_meeting(
         &self,
         actor: MacroUserIdStr<'_>,
@@ -1640,12 +1658,16 @@ impl<
             .await?;
         }
 
-        // Identities are `macro|<email>`: log which kind of participant this
-        // is, never who.
-        let participant_kind = match (&event.participant_identity, &event.guest_identity) {
-            (Some(_), _) => "user",
-            (None, Some(_)) => "guest",
-            (None, None) => "none",
+        // Log the participant kind without exposing its identity.
+        let participant_kind = match (
+            &event.participant_identity,
+            &event.guest_identity,
+            &event.bot_identity,
+        ) {
+            (Some(_), _, _) => "user",
+            (None, Some(_), _) => "guest",
+            (None, None, Some(_)) => "bot",
+            (None, None, None) => "none",
         };
         tracing::info!(
             event_type = %event.event,
@@ -1690,6 +1712,22 @@ impl<
                 }
             }
             "participant_joined" => {
+                if let (Some(room), Some(identity)) = (&event.room_name, event.bot_identity) {
+                    if self
+                        .repo
+                        .get_call_by_room_name(room)
+                        .await
+                        .map_err(|error| CallError::Internal(error.into()))?
+                        .is_none()
+                    {
+                        self.evict_from_untracked_room(
+                            room,
+                            orphan_rooms::RoomParticipant::Bot(identity),
+                        )
+                        .await?;
+                    }
+                    return Ok(());
+                }
                 if let (Some(room), Some(identity)) = (&event.room_name, &event.guest_identity) {
                     match self
                         .repo
@@ -1785,6 +1823,9 @@ impl<
                 }
             }
             "participant_left" => {
+                if event.bot_identity.is_some() {
+                    return Ok(());
+                }
                 let Some(room_name) = &event.room_name else {
                     return Ok(());
                 };
