@@ -21,7 +21,8 @@ pub trait ClearLog: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Record one batch: the rows it cleared and what it changed. Returns
-    /// whether an undo asked the clear to stop.
+    /// whether the clear should stop: an undo asked it to, or already took
+    /// its log (the batch is then not recorded).
     fn record(
         &self,
         user: &MacroUserIdStr<'static>,

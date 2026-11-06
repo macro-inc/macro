@@ -65,7 +65,8 @@ impl ClearLog for MemoryClearLog {
                 }
                 entry.cancelled
             })
-            .unwrap_or(false))
+            // An undo already took the log: stop.
+            .unwrap_or(true))
     }
 
     async fn finish(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {

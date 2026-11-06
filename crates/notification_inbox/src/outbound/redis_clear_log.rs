@@ -15,6 +15,19 @@ mod test;
 /// How long a clear can be undone: a day, well past the undo the app offers.
 const TTL_SECONDS: i64 = 24 * 60 * 60;
 
+/// Records a batch while the clear's state exists; returns 1 when the clear
+/// was cancelled or its log is gone.
+const RECORD_SCRIPT: &str = r"
+if redis.call('EXISTS', KEYS[1]) == 0 then return 1 end
+if ARGV[2] ~= '' then
+  redis.call('RPUSH', KEYS[2], ARGV[2])
+  redis.call('EXPIRE', KEYS[2], ARGV[3])
+end
+redis.call('HINCRBY', KEYS[1], 'rows', ARGV[1])
+if redis.call('HGET', KEYS[1], 'cancelled') == '1' then return 1 end
+return 0
+";
+
 /// [`ClearLog`] in Redis: a hash of the clear's state and a list of its
 /// batches' receipts, keyed by viewer and clear.
 #[derive(Clone)]
@@ -58,21 +71,22 @@ impl ClearLog for RedisClearLog {
         rows: usize,
         receipt: &DoneReceipt,
     ) -> Result<bool, Report> {
-        let key = state_key(user, id);
-        let receipts = receipts_key(user, id);
-        let mut pipe = redis::pipe();
-        pipe.atomic();
-        if !receipt.keys.is_empty() {
-            pipe.rpush(&receipts, receipt.encode())
-                .ignore()
-                .expire(&receipts, TTL_SECONDS)
-                .ignore();
-        }
-        pipe.hincr(&key, "rows", rows)
-            .ignore()
-            .hget(&key, "cancelled");
-        let (cancelled,): (Option<u8>,) = pipe.query_async(&mut self.conn.clone()).await?;
-        Ok(cancelled == Some(1))
+        // One script, so a log an undo already took stays gone: the clear
+        // then reads as cancelled instead of recording into a new log.
+        let encoded = if receipt.keys.is_empty() {
+            String::new()
+        } else {
+            receipt.encode()
+        };
+        let cancelled: u8 = redis::Script::new(RECORD_SCRIPT)
+            .key(state_key(user, id))
+            .key(receipts_key(user, id))
+            .arg(rows)
+            .arg(encoded)
+            .arg(TTL_SECONDS)
+            .invoke_async(&mut self.conn.clone())
+            .await?;
+        Ok(cancelled == 1)
     }
 
     async fn finish(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {

@@ -80,3 +80,20 @@ async fn cancelling_an_unknown_clear_leaves_nothing_behind() {
     log.cancel(&user, id).await.unwrap();
     assert_eq!(log.progress(&user, id).await.unwrap(), None);
 }
+
+#[tokio::test]
+async fn a_clear_whose_log_was_taken_stops_and_records_nothing() {
+    let log = log().await;
+    let user = viewer();
+    let id = Uuid::now_v7();
+    log.begin(&user, id).await.unwrap();
+    log.take(&user, id).await.unwrap();
+
+    assert!(
+        log.record(&user, id, 1, &receipt("document:a", 1))
+            .await
+            .unwrap()
+    );
+    assert_eq!(log.progress(&user, id).await.unwrap(), None);
+    assert!(log.take(&user, id).await.unwrap().is_empty());
+}
