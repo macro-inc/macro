@@ -439,7 +439,9 @@ the shimmer.
   **Conversations** is a mixed list
   of chats and coding sessions, with one search across both. **Group conversations**
   switches between Status (the default), Type, and None, preserving newest-first
-  order within each group. **Filter conversations** combines Type, Status, and
+  order within each group. Status grouping has **Needs you** (waiting on a
+  permission or question) and **Recent**; running sessions stay in Recent with
+  a spinner rather than moving to a section of their own. **Filter conversations** combines Type, Status, and
   Pull request filters; choices within a category are ORed and categories are
   ANDed. Grouping and filters are remembered per user. Clear filters from the menu
   or an empty filtered list.
@@ -447,21 +449,22 @@ the shimmer.
   Conversations: your non-archived coding sessions whose pull request is open or
   draft, newest first, using the same rows (they stay in Conversations too). It
   is hidden when empty.
-  Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
-  pull request is linked). Home and the Agents sidebar share these agent rows.
-  Rows have no agent or runtime-status subtext. A session that is starting or
-  whose turn is still running (the agent is working, writing code, or stopping)
-  shows the same three-dot working wave as the transcript in place of the
-  leading icon; the row's accessible name appends `Starting` or `Working`.
+  Home and the Agents sidebar share these agent rows. Agents sidebar rows are a
+  single line: title, age, then trailing icons (routine run, archived, PR
+  status, activity). A session that is starting or whose turn is still running
+  (the agent is working, writing code, or stopping) shows a spinner at the end
+  of the row; a dot there means a question waiting on you, a failed turn, or
+  unread output. The row's accessible description says `Starting` or `Working`.
   The row follows each turn without a reload: it turns Working when a turn
   starts and clears when the last turn ends. Each session update re-reads the
   row from the primary database after the list refetch, which corrects a
   stale replica read at that point; a later replica-backed refetch from
   another trigger can still briefly restore an older row until the next
   session update.
-  Sessions with a linked PR show
-  **#<number>** beneath the title (icon colored by open / merged / closed; no
-  status word). Clicking it opens the synced
+  Sessions with a linked PR show its status icon (colored by open / merged /
+  closed); hovering it shows a card with the repository, working branch, and
+  **#<number>** with its status. Home rows instead show the PR number,
+  repository, and branch beneath the title. Clicking the PR icon or number opens the synced
   GitHub PR entity in a split (the same destination as the session header chip
   and Magic Chip). A synced PR opens at `/pr/<foreign-entity-id>`; existing
   inline previews retain their legacy block host. Until GitHub has synced the
@@ -475,8 +478,10 @@ the shimmer.
   not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. Archived sessions are grouped at the bottom under **Archived**, a
-  section that starts collapsed; click its header (count and caret) to expand it.
+  actions. Archived sessions are left out of the list until **Show archived** is
+  checked in the **Filter conversations** menu; they then appear in place, by
+  age, with an archive icon. It counts on the filter badge, **Clear filters**
+  unchecks it, and the list starts without them each time the Agents view opens.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
   conversations** menu, which counts it on the filter badge and unchecks it with

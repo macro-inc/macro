@@ -3,10 +3,15 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { AgentSessionEntity } from '@entity';
 import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
+import ArchiveIcon from '@icon/system/regular/archive.svg';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { Show } from 'solid-js';
-import { AgentSessionCodeDetails } from '../components/AgentSessionCodeDetails';
+import {
+  AgentSessionCodeDetails,
+  AgentSessionPullRequestStatus,
+} from '../components/AgentSessionCodeDetails';
 import {
   AgentSessionRow,
   AgentSessionStatusIndicator,
@@ -62,23 +67,17 @@ export function AgentSessionListItem(props: Props) {
     };
   };
 
-  const hideLeading = () => props.surface === 'agents';
-  const codeStatusIndicator = () =>
-    props.surface === 'agents' && mode() === 'code' ? (
-      <AgentSessionStatusIndicator
-        state={state()}
-        unread={props.unread}
-        failed={failed()}
-      />
-    ) : undefined;
-  const workStatusIndicator = () =>
-    props.surface === 'agents' && (mode() !== 'code' || !details()) ? (
-      <AgentSessionStatusIndicator
-        state={state()}
-        unread={props.unread}
-        failed={failed()}
-      />
-    ) : undefined;
+  const agents = () => props.surface === 'agents';
+  const openPullRequest = (event: MouseEvent) => {
+    const id = props.entity.pullRequestId;
+    if (!id) return;
+    openWithSplit(
+      { type: 'pr', id },
+      { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
+    );
+  };
+  const onOpenPullRequest = () =>
+    props.entity.pullRequestId ? openPullRequest : undefined;
 
   return (
     <AgentSessionRow
@@ -89,23 +88,12 @@ export function AgentSessionListItem(props: Props) {
       failed={failed()}
       active={props.active}
       unread={props.unread}
-      hideLeading={hideLeading()}
+      hideLeading={agents()}
       onOpen={props.onOpen}
       timestamp={compactAge(conversationTimestamp(props.entity))}
       leading={
-        <Show
-          when={props.surface === 'home'}
-          fallback={
-            <AgentSessionStatusIndicator
-              state={state()}
-              unread={props.unread}
-              failed={failed()}
-            />
-          }
-        >
-          <Show when={mode() === 'code'} fallback={<SparkleIcon />}>
-            <FilledSparkleIcon />
-          </Show>
+        <Show when={mode() === 'code'} fallback={<SparkleIcon />}>
+          <FilledSparkleIcon />
         </Show>
       }
       trailing={
@@ -117,39 +105,52 @@ export function AgentSessionListItem(props: Props) {
               class="size-3.5 shrink-0 text-ink-extra-muted"
             />
           </Show>
-          <Show when={props.surface === 'home' && (props.unread || failed())}>
-            <span
-              aria-label={props.unread ? 'Unread' : 'Last turn failed'}
-              class="size-1.5 shrink-0 rounded-full"
-              classList={{ 'bg-failure': failed(), 'bg-accent': !failed() }}
+          <Show when={agents() && isSessionArchived(props.entity)}>
+            <ArchiveIcon
+              aria-hidden={false}
+              aria-label="Archived"
+              class="size-3.5 shrink-0 text-ink-extra-muted"
             />
           </Show>
-          {workStatusIndicator()}
+          <Show when={agents() && details()}>
+            {(details) => (
+              <Show when={details().pullRequest}>
+                {(pullRequest) => (
+                  <AgentSessionPullRequestStatus
+                    details={details()}
+                    pullRequest={pullRequest()}
+                    onOpenPullRequest={onOpenPullRequest()}
+                  />
+                )}
+              </Show>
+            )}
+          </Show>
+          <Show
+            when={agents()}
+            fallback={
+              <Show when={props.unread || failed()}>
+                <span
+                  aria-label={props.unread ? 'Unread' : 'Last turn failed'}
+                  class="size-1.5 shrink-0 rounded-full"
+                  classList={{ 'bg-failure': failed(), 'bg-accent': !failed() }}
+                />
+              </Show>
+            }
+          >
+            <AgentSessionStatusIndicator
+              state={state()}
+              unread={props.unread}
+              failed={failed()}
+            />
+          </Show>
         </>
       }
     >
-      <Show when={details()}>
+      <Show when={!agents() && details()}>
         {(details) => (
           <AgentSessionCodeDetails
             details={details()}
-            statusIndicator={codeStatusIndicator()}
-            onOpenPullRequest={
-              props.entity.pullRequestId
-                ? (event) => {
-                    const id = props.entity.pullRequestId;
-                    if (!id) return;
-                    openWithSplit(
-                      { type: 'pr', id },
-                      {
-                        preferNewSplit: openInNewSplitForMention(
-                          event.shiftKey,
-                          true
-                        ),
-                      }
-                    );
-                  }
-                : undefined
-            }
+            onOpenPullRequest={onOpenPullRequest()}
           />
         )}
       </Show>

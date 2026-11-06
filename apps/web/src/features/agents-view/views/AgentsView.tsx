@@ -57,7 +57,7 @@ import {
   type AgentConversationEntity,
   type AgentConversationTarget,
   conversationMode,
-  partitionArchived,
+  listedConversations,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
@@ -156,6 +156,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   // Routines that run often leave their runs unlisted; those stay a click
   // away instead of in the list.
   const [showUnlistedRuns, setShowUnlistedRuns] = createSignal(false);
+  // Archived sessions stay out of the way until the filter menu asks for them.
+  const [showArchived, setShowArchived] = createSignal(false);
   const rosterSource = createAgentRosterSource();
   const query = useSoupAstItemsQuery(
     () =>
@@ -174,7 +176,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       search()
     )
   );
-  const partitioned = createMemo(() => partitionArchived(conversations()));
+  const listed = createMemo(() =>
+    listedConversations(conversations(), showArchived())
+  );
   const updateSessions = () =>
     (query.isPending ? [] : (query.data?.entities ?? [])).filter(
       (entity): entity is AgentSessionEntity => entity.type === 'agent_session'
@@ -366,8 +370,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       modeForConversation={modeForConversation}
       activeConversationId={selected()?.activeConversationId}
       search={search()}
-      conversations={partitioned().conversations}
-      archived={partitioned().archived}
+      conversations={listed()}
       loading={query.isPending}
       error={Boolean(query.error) && !query.isFetchNextPageError}
       hasNextPage={Boolean(query.hasNextPage)}
@@ -375,6 +378,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       onSearchChange={setSearch}
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
+      showArchived={showArchived()}
+      onShowArchivedChange={setShowArchived}
       onOpenConversation={(conversation, event) => {
         markRowNotificationsSeenOnOpen(conversation, notifications);
         openConversation(
