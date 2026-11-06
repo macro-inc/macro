@@ -347,6 +347,9 @@ impl<
                 created_at: call.created_at,
                 recording_enabled: self.egress_s3_config.is_some(),
             }));
+            let mut metadata = CallNotificationMetadata::new(call.id, None);
+            metadata.created_by = Some(call.created_by.clone());
+            self.publish_call_notification(CallNotificationEvent::Started(metadata));
             // Token issuance needs a room, not a running recorder or agent.
             // Only the allocation winner schedules these best-effort services.
             let rtc = self.rtc_client.clone();
@@ -470,7 +473,7 @@ impl<
                 .await
         }
         .map_err(CallError::Internal)?;
-        self.send_meeting_answered_event(meeting.id, actor.copied())
+        self.send_meeting_answered_event(meeting.id, call.id, actor.copied())
             .await;
         Ok(CallTokenResponse {
             started,
@@ -558,6 +561,10 @@ impl<
             .remove_participant(&other.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+        let mut metadata = CallNotificationMetadata::new(other.id, other.channel_id);
+        metadata.identity = Some(user_id.to_string());
+        metadata.user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
         // Archiving closes this room to future joins. Its whole-room teardown
         // can then run independently without kicking a later rejoin.
         if self.finish_empty_call(&other).await? {
@@ -659,6 +666,9 @@ impl<
         }
         if let Some(guest_id) = GuestId::parse_rtc_identity(&verified.identity) {
             self.repo.reconcile_guest(&call.id, guest_id, false).await?;
+            let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+            metadata.identity = Some(guest_id.to_string());
+            self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
             if self.finish_empty_call(&call).await? {
                 return Ok(LeaveCallResponse { call_ended: true });
             }
@@ -673,6 +683,10 @@ impl<
                 .remove_participant(&call.id, identity.copied())
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
+            let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+            metadata.identity = Some(identity.to_string());
+            metadata.user_id = Some(identity.to_string());
+            self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
             if self.finish_empty_call(&call).await? {
                 return Ok(LeaveCallResponse { call_ended: true });
             }

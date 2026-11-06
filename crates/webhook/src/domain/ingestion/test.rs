@@ -10,6 +10,7 @@ use crate::domain::{
     },
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
+use call::domain::notification_events::{CallNotificationEvent, CallNotificationMetadata};
 use channel_sender::ChannelSender;
 use channels::domain::{
     broker_events::{
@@ -47,6 +48,98 @@ const COPIED_DOCUMENT_ID: &str = "22222222-2222-2222-2222-222222222222";
 const PERSONAL_WORKSPACE_ID: &str = "macro|reader@example.com";
 const BOT_PRINCIPAL_ID: &str = "bot|66666666-6666-6666-6666-666666666666";
 const TEAM_WORKSPACE_ID: &str = "33333333-3333-3333-3333-333333333333";
+const CALL_ID: &str = "0198a1b2-c3d4-7e5f-8061-728394a5b6c7";
+
+#[tokio::test]
+async fn private_call_invitation_reaches_only_the_recipient_workspace() {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let mut metadata = CallNotificationMetadata::new(call_id, None);
+    metadata.recipient_user_id = Some(PERSONAL_WORKSPACE_ID.to_string());
+    metadata.invited_by = Some("macro|sender@example.com".to_string());
+    let event = Event::new(CallNotificationEvent::Invited(metadata));
+    let access = MockAccessService::with_users(Vec::new());
+    let repository = MockRepository::new(
+        vec![TEAM_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_recipient", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+
+    service(access.clone(), repository.clone(), enqueuer.clone())
+        .ingest_call_notification_event(event)
+        .await
+        .unwrap();
+
+    assert!(lock(&access.calls).is_empty());
+    let state = lock(&repository.state);
+    assert!(state.workspace_calls.is_empty());
+    assert_eq!(
+        state.match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_string()]
+    );
+    drop(state);
+    let messages = lock(&enqueuer.state);
+    let delivered = &messages.attempted_messages[0].event;
+    assert_eq!(delivered.event_name, "call.invited");
+    assert_eq!(delivered.entity_id, CALL_ID);
+    assert!(
+        delivered.broker_envelope["metadata"]
+            .get("recipient_user_id")
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn private_call_event_without_recipient_is_never_fanned_out() {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let event = Event::new(CallNotificationEvent::Invited(
+        CallNotificationMetadata::new(call_id, None),
+    ));
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+
+    let result = service(access, repository.clone(), enqueuer.clone())
+        .ingest_call_notification_event(event)
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(WebhookEventIngestionError::MissingCallRecipient)
+    ));
+    assert!(lock(&repository.state).match_calls.is_empty());
+    assert!(lock(&enqueuer.state).attempted_messages.is_empty());
+}
+
+#[tokio::test]
+async fn public_call_event_resolves_current_call_accessors() {
+    let call_id = Uuid::parse_str(CALL_ID).unwrap();
+    let event = Event::new(CallNotificationEvent::Ended(CallNotificationMetadata::new(
+        call_id, None,
+    )));
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![
+            PERSONAL_WORKSPACE_ID.to_string(),
+            TEAM_WORKSPACE_ID.to_string(),
+        ],
+        vec![webhook("wh_member", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+
+    service(access.clone(), repository.clone(), enqueuer)
+        .ingest_call_notification_event(event)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(CALL_ID.to_string(), EntityType::Call)]
+    );
+    assert_eq!(lock(&repository.state).workspace_calls.len(), 1);
+}
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().expect("test mutex is not poisoned")

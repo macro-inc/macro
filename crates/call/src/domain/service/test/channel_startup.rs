@@ -242,6 +242,7 @@ async fn ended_call_does_not_ring_recipients() {
         server_url: "wss://example.com".into(),
         ring_status_base_url: None,
         egress_s3_config: None,
+        event_broker: macro_event_broker::NoopMacroEventBroker,
     };
     startup
         .spawn(
