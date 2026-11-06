@@ -13,13 +13,25 @@ export type JoinOptions = JoinCallRequest;
 
 /** A room credential. Keep `token` out of logs and serialized values. */
 export class CallConnection {
+  /** The call this credential enters. */
   readonly call: CallRecord;
+
+  /** LiveKit server URL. */
   readonly url: string;
+
+  /** Short-lived LiveKit token; never serialize or log it. */
   readonly token: string;
+
+  /** RTC participant identity. */
   readonly identity: string;
+
+  /** RTC room name. */
   readonly roomName: string;
+
+  /** Whether this request created the call. */
   readonly started: boolean;
 
+  /** Construct a connection from the server's admission response. */
   constructor(
     private readonly client: MacroClient,
     response: CallTokenResponse,
