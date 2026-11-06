@@ -435,7 +435,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
 - Keep add-only email and personal-provider company edits in shared CRM field views, using Tasks
-  property primitives and committed-response/session-fenced cache updates;
+  property primitives and committed-response/session-fenced cache updates. Close
+  direct cache-write admission on logout and login replacement, and drain admitted
+  durable writes before clearing storage. On login, remove only session-written
+  contact records before refetch, preserve queued offline edits, and keep admission
+  closed if repair fails; serialize login behind every logout wipe;
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.

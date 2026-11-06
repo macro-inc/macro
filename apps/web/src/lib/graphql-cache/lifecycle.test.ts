@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createNoopCacheHost } from './host/noop-host';
+import { createRetirableCacheHost } from './host/retirable-host';
 import type { CacheHost } from './host/types';
 
 function hostWithClear(clear: () => Promise<unknown>): CacheHost {
@@ -164,6 +166,43 @@ describe('clearRegisteredCaches', () => {
     expect(failedClear).toHaveBeenCalledOnce();
     expect(localStorage.getItem('graphql-cache:scope')).toBe(
       '00000000-0000-4000-8000-000000000001'
+    );
+  });
+
+  it('preserves a persisted scope on login without session-written records or a mounted host', async () => {
+    localStorage.setItem('graphql-cache:scope', 'pending-drafts-scope');
+    const { replaceCacheWriteSession } = await import('./lifecycle');
+    const session = replaceCacheWriteSession();
+    await session.ready;
+    expect(session.isCurrent()).toBe(true);
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      'pending-drafts-scope'
+    );
+  });
+
+  it('rejects retired-host repair without forgetting the records or rotating queued drafts away', async () => {
+    localStorage.setItem('graphql-cache:scope', 'pending-drafts-scope');
+    const { recordSessionCacheWrite, replaceCacheWriteSession } = await import(
+      './lifecycle'
+    );
+    const host = createRetirableCacheHost({
+      ...createNoopCacheHost(),
+      disabled: false,
+    });
+    recordSessionCacheWrite(host, 'GraphqlSoupCrmContact:old-contact');
+    host.dispose();
+    const first = replaceCacheWriteSession();
+    await expect(first.ready).rejects.toThrow(
+      'Contact cache repair unavailable'
+    );
+    expect(first.isCurrent()).toBe(false);
+    const retry = replaceCacheWriteSession();
+    await expect(retry.ready).rejects.toThrow(
+      'Contact cache repair unavailable'
+    );
+    expect(retry.isCurrent()).toBe(false);
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      'pending-drafts-scope'
     );
   });
 });
