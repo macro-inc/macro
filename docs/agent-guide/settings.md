@@ -257,7 +257,7 @@ like any other rail item, and Shift-click opens it in a new split.
 visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
 **Search settings** field, a team action at the top of the list (hidden while
-searching): **Invite your team** in rainbow text (opens the invite dialog;
+searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
 hidden for members when the team limits invites to admins) or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
 pills. Unlike other views, it cannot be hidden at
