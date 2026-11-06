@@ -126,6 +126,17 @@ Named-channel invites still show `#<channel name>` and **Join channel**.
 Verify both emails in local Mailpit using distinct, unregistered test addresses;
 repeat with a plus-addressed DM recipient to check the email-name fallback.
 
+## Agent names and pictures stay current
+
+An agent's name and picture show as they are now everywhere: the `@` menu,
+mention chips, and the sender of every message it has sent, including older
+ones. Creating, renaming, re-picturing or deleting a bot (from settings, the
+SDK, or an agent's own tools) pushes a `bot_profile_changed` message to its
+owner, team and channel members, and open views update without a reload. To
+check it, open the same channel in two windows, ask an agent in one to create
+an agent or change its own name or picture, and confirm the other window's `@`
+menu, chips and earlier messages follow, on desktop and at phone width.
+
 ## Private conversations with an agent
 
 Agent DM discovery is on in development builds (dev.macro.com and `bun run dev`)

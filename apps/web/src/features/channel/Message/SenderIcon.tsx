@@ -3,6 +3,7 @@ import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useLiveBotSender } from '@queries/bots/profiles';
 import {
   getBotDisplayName,
   senderFromStorageId,
@@ -21,8 +22,10 @@ type SenderIconProps = {
 export function SenderIcon(props: SenderIconProps) {
   const message = useMessage();
 
-  const sender = (): MessageSender =>
-    message().sender ?? senderFromStorageId(message().sender_id);
+  const sender = useLiveBotSender(
+    (): MessageSender =>
+      message().sender ?? senderFromStorageId(message().sender_id)
+  );
 
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu

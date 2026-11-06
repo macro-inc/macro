@@ -26,6 +26,8 @@ import {
   subscribeAgentSessionRenamed,
   subscribeAgentSessionUpdated,
 } from '@queries/agent-session/session-metadata-sync';
+import { useBotProfile } from '@queries/bots/profiles';
+import { queryReadyGate } from '@queries/gate';
 import type {
   FoldedMessage,
   FoldedStreamEvent,
@@ -137,7 +139,32 @@ export function createAgentSession(
   const openedPending = sessionId() === undefined;
 
   const [list, setList] = createStore<FoldedMessage[]>([]);
-  const [bot, setBot] = createSignal<SessionBot>();
+  const [loadedBot, setBot] = createSignal<SessionBot>();
+  // The bot as it is now: a rename or new picture reaches the profile cache
+  // while the session stays open, and the loaded record only seeds it.
+  const botProfile = useBotProfile(
+    () => loadedBot()?.id ?? '',
+    () => {
+      const loaded = loadedBot();
+      if (!loaded) return undefined;
+      return {
+        name: loaded.name,
+        avatarUrl: loaded.avatarUrl ?? undefined,
+        deleted: false,
+      };
+    }
+  );
+  const bot = (): SessionBot | undefined => {
+    const loaded = loadedBot();
+    if (!loaded || !queryReadyGate(botProfile) || !botProfile.data) {
+      return loaded;
+    }
+    return {
+      ...loaded,
+      name: botProfile.data.name,
+      avatarUrl: botProfile.data.avatarUrl,
+    };
+  };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
 
   // A whole new view of the conversation: what a load reports, and what every
