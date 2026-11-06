@@ -1,6 +1,8 @@
 //! Permission-scoped spreadsheet workflows and their transport-independent commands.
 
+mod instructions;
 mod models;
+pub use instructions::*;
 pub use models::*;
 
 use super::{
