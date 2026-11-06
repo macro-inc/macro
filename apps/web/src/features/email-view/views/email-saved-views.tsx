@@ -11,7 +11,11 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
-import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import {
+  useTagOptionSummaries,
+  useTagSets,
+  useTagSetsReady,
+} from '@property/tags/tag-sets-context';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import {
   Button,
@@ -138,6 +142,7 @@ type BuilderProps = ManagedDialogProps & {
 /** The view builder: the shared name dialog around the email conditions. */
 function EmailSavedViewDialog(props: BuilderProps) {
   const suggestions = useEmailParticipantSuggestions();
+  const tags = useTagOptionSummaries();
   const analytics = useAnalytics();
   const [filters, setFilters] = createSignal(props.initial);
   const config = () => configOf(filters());
@@ -147,6 +152,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       onChange={setFilters}
       inboxes={props.inboxes}
       suggestions={suggestions}
+      tags={tags()}
     />
   );
   const shared = {

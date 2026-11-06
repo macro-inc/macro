@@ -4,6 +4,8 @@ import { parseDomain } from '@core/util/domain';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import GlobeIcon from '@icon/system/regular/globe.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import { TagDot } from '@property/tags/TagDot';
+import type { TagOptionSummary } from '@property/tags/tag-options';
 import {
   Button,
   Checkbox,
@@ -196,6 +198,7 @@ export function EmailSavedViewFields(props: {
   onChange: (filters: EmailSavedViewFilters) => void;
   inboxes: readonly { id: string; label: string }[];
   suggestions: Accessor<EmailParticipantSuggestion[]>;
+  tags: readonly TagOptionSummary[];
 }) {
   const matchFromId = createUniqueId();
   const advancedId = createUniqueId();
@@ -217,6 +220,36 @@ export function EmailSavedViewFields(props: {
     { equals: sameList }
   );
   const options = createMemo(() => props.suggestions().map(participantOption));
+  const tagValues = createMemo(
+    () => props.filters.tags.map((tag) => tag.optionId),
+    undefined,
+    { equals: sameList }
+  );
+  const tagOptions = createMemo(() =>
+    props.tags.map(
+      (tag): ChipComboboxOption => ({
+        value: tag.id,
+        label: tag.label,
+        icon: () => <TagDot color={tag.color} />,
+      })
+    )
+  );
+  // A chosen tag keeps its stored binding, even one the viewer can't see now.
+  const setTags = (ids: string[]) => {
+    const bindings = new Map([
+      ...props.tags.map((tag) => [tag.id, tag.propertyDefinitionId] as const),
+      ...props.filters.tags.map(
+        (tag) => [tag.optionId, tag.propertyDefinitionId] as const
+      ),
+    ]);
+    set(
+      'tags',
+      ids.flatMap((optionId) => {
+        const propertyDefinitionId = bindings.get(optionId);
+        return propertyDefinitionId ? [{ optionId, propertyDefinitionId }] : [];
+      })
+    );
+  };
 
   const toggleField = (field: EmailParticipantField) => {
     const fields = props.filters.participantFields.includes(field)
@@ -306,6 +339,22 @@ export function EmailSavedViewFields(props: {
           }}
         />
       </Section>
+
+      <Show when={props.tags.length > 0 || props.filters.tags.length > 0}>
+        <Section label={t('emailViews.tags')}>
+          <ChipCombobox
+            aria-label={t('emailViews.tags')}
+            placeholder={t('emailViews.tagsPlaceholder')}
+            values={tagValues()}
+            onChange={setTags}
+            options={tagOptions()}
+            describeValue={() => ({ label: t('emailViews.unavailableTag') })}
+            addLabel={(value) => t('emailViews.addEntry', { entry: value })}
+            removeLabel={(entry) => t('emailViews.removeEntry', { entry })}
+            portalScope="local"
+          />
+        </Section>
+      </Show>
 
       <div class="flex flex-col">
         <Button

@@ -1,3 +1,4 @@
+import type { TagOptionSummary } from '@property/tags/tag-options';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
@@ -16,6 +17,20 @@ const SUGGESTIONS: EmailParticipantSuggestion[] = [
   { type: 'domain', domain: 'example.com', contacts: 2 },
   { type: 'address', email: 'ada@example.com', name: 'Ada' },
   { type: 'address', email: 'bo@example.com', name: 'Bo' },
+];
+
+const TAG_SET = '0198a4cc-e138-7670-a308-a6b766602700';
+const URGENT = '0198a4cc-e138-7670-a308-a6b766602701';
+const INVOICES = '0198a4cc-e138-7670-a308-a6b766602702';
+const DELETED = '0198a4cc-e138-7670-a308-a6b766602703';
+const TAGS: TagOptionSummary[] = [
+  { id: URGENT, label: 'Urgent', scope: 'user', propertyDefinitionId: TAG_SET },
+  {
+    id: INVOICES,
+    label: 'Invoices',
+    scope: 'user',
+    propertyDefinitionId: TAG_SET,
+  },
 ];
 
 // The Advanced settings disclosure measures its body.
@@ -42,6 +57,7 @@ function renderFields(initial = EMPTY_EMAIL_SAVED_VIEW_FILTERS) {
       onChange={setFilters}
       inboxes={[]}
       suggestions={() => SUGGESTIONS}
+      tags={TAGS}
     />
   ));
   return {
@@ -49,6 +65,7 @@ function renderFields(initial = EMPTY_EMAIL_SAVED_VIEW_FILTERS) {
       name: 'People and companies',
     }),
     participants: () => filters().participants,
+    tags: () => filters().tags,
   };
 }
 
@@ -128,5 +145,44 @@ describe('EmailSavedViewFields advanced settings', () => {
         .getAttribute('aria-expanded')
     ).toBe('true');
     expect(importance()).not.toBeNull();
+  });
+});
+
+describe('EmailSavedViewFields tags', () => {
+  it('picks tags without opening Advanced settings and keeps their sets', async () => {
+    const user = userEvent.setup();
+    const { tags } = renderFields();
+    const input = screen.getByRole('combobox', { name: 'Tags' });
+    await user.click(input);
+    await user.type(input, 'inv');
+    await user.click(await screen.findByRole('option', { name: 'Invoices' }));
+
+    expect(tags()).toEqual([
+      { optionId: INVOICES, propertyDefinitionId: TAG_SET },
+    ]);
+    expect(
+      screen
+        .getByRole('button', { name: 'Advanced settings' })
+        .getAttribute('aria-expanded')
+    ).toBe('false');
+  });
+
+  it('keeps a tag the viewer can no longer see when adding another', async () => {
+    const user = userEvent.setup();
+    const deleted = { optionId: DELETED, propertyDefinitionId: TAG_SET };
+    const { tags } = renderFields({
+      ...EMPTY_EMAIL_SAVED_VIEW_FILTERS,
+      tags: [deleted],
+    });
+    expect(screen.getByText('Unavailable tag')).toBeTruthy();
+
+    const input = screen.getByRole('combobox', { name: 'Tags' });
+    await user.click(input);
+    await user.click(await screen.findByRole('option', { name: 'Urgent' }));
+
+    expect(tags()).toEqual([
+      deleted,
+      { optionId: URGENT, propertyDefinitionId: TAG_SET },
+    ]);
   });
 });

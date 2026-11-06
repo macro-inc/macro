@@ -44,6 +44,8 @@ export default {
   fieldBcc: 'Bcc',
   subjectContains: 'Subject contains',
   subjectPlaceholder: 'Words or phrases, separated by commas',
+  tagsPlaceholder: 'Add tags',
+  unavailableTag: 'Unavailable tag',
   any: 'Any',
   importance: 'Importance',
   signal: 'Signal',
