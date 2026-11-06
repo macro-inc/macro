@@ -1,14 +1,12 @@
-//! Places a [`Phrase`] on the calendar for a [`Purpose`]. The rules are listed
+//! Places a [`Phrase`] on the calendar and takes the part a [`Pick`] names. The rules are listed
 //! in the crate documentation.
 use chrono::{Datelike, Months, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Weekday};
 
 use crate::phrase::{
     DateRef, DayRef, Daypart, Edge, Length, Meridiem, Period, Phrase, Side, Span, Time, WeekRef,
 };
-use crate::{Assumed, Error, Moment, Purpose, Reading};
+use crate::{Assumed, Error, Moment, Pick, Reading};
 
-/// Reminders with no time written show up at 9am, like Reminders' presets.
-const REMINDER_HOUR: u32 = 9;
 /// How far back a month and day may lie and still be this year's.
 const RECENT_MONTHS: u32 = 1;
 /// How many years ahead to look for a month and day, enough to reach Feb 29.
@@ -72,16 +70,17 @@ impl Point {
 pub(crate) fn resolve(
     phrase: &Phrase,
     now: NaiveDateTime,
-    purpose: Purpose,
+    pick: Pick,
+    default_time: Option<NaiveTime>,
 ) -> Result<Reading, Error> {
     let mut assumed = Assumed::default();
     if let Some(minutes) = phrase.offset {
         let start = TimeDelta::minutes(minutes);
-        let end = match (purpose, phrase.length) {
-            (Purpose::Event, Some(Length::Minutes(length))) => {
+        let end = match (pick, phrase.length) {
+            (Pick::Span, Some(Length::Minutes(length))) => {
                 Some(Moment::After(start + TimeDelta::minutes(length)))
             }
-            (Purpose::Event, Some(Length::Days(days))) => {
+            (Pick::Span, Some(Length::Days(days))) => {
                 Some(Moment::After(start + TimeDelta::days(days)))
             }
             _ => None,
@@ -94,21 +93,21 @@ pub(crate) fn resolve(
     }
 
     let today = now.date();
-    let (mut date, roll) = start_date(&phrase.start, today, purpose, &mut assumed)?;
+    let (mut date, roll) = start_date(&phrase.start, today, pick, &mut assumed)?;
     let (start_wall, end_wall) = walls(
         phrase.start.time.as_ref(),
         phrase.end.as_ref().and_then(|side| side.time.as_ref()),
         &mut assumed,
     )?;
-    let start_wall = match start_wall {
-        None if purpose == Purpose::Reminder => {
+    let start_wall = match (start_wall, default_time) {
+        (None, Some(time)) => {
             assumed.time = true;
             Some(Wall {
-                time: clock(REMINDER_HOUR, 0)?,
+                time,
                 next_day: false,
             })
         }
-        wall => wall,
+        (wall, _) => wall,
     };
     if let Some(wall) = start_wall
         && !wall.next_day
@@ -130,9 +129,9 @@ pub(crate) fn resolve(
             .transpose()?,
     };
 
-    let (start, end) = match (purpose, end) {
-        (Purpose::Deadline, Some(end)) => (end, None),
-        (Purpose::Reminder, _) => (start, None),
+    let (start, end) = match (pick, end) {
+        (Pick::End, Some(end)) => (end, None),
+        (Pick::Start, _) => (start, None),
         (_, end) => (start, end),
     };
     Ok(Reading {
@@ -146,7 +145,7 @@ pub(crate) fn resolve(
 fn start_date(
     side: &Side,
     today: NaiveDate,
-    purpose: Purpose,
+    pick: Pick,
     assumed: &mut Assumed,
 ) -> Result<(NaiveDate, Roll), Error> {
     let (date, roll) = match side.date {
@@ -161,15 +160,15 @@ fn start_date(
         }
         Some(DateRef::Span(span)) => {
             let (first, last) = span_days(span, today, assumed)?;
-            let date = match purpose {
-                Purpose::Deadline => match span {
+            let date = match pick {
+                Pick::End => match span {
                     Span::Week(_) => week_due(first, today)?,
                     Span::Weekend(_) | Span::Month(_) | Span::NamedMonth { .. } | Span::Year(_) => {
                         last
                     }
                 },
-                Purpose::Reminder | Purpose::Event if (first..=last).contains(&today) => today,
-                Purpose::Reminder | Purpose::Event => first,
+                Pick::Start | Pick::Span if (first..=last).contains(&today) => today,
+                Pick::Start | Pick::Span => first,
             };
             (date, Roll::Never)
         }

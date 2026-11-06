@@ -2,8 +2,9 @@
 //! "end of month", "in 2 hours" or "nov 5-7", into calendar dates, with no
 //! model or network.
 //!
-//! [`read`] takes the phrase, the reader's local wall-clock time and what the
-//! date is for. Callers turn the result into an instant in their own time
+//! [`read`] takes the phrase, the reader's local wall-clock time, which part
+//! of a longer phrase to [`Pick`], and an optional time for dates written
+//! without one. Callers turn the result into an instant in their own time
 //! zone, so the crate carries no time zone database and builds for the
 //! browser.
 //!
@@ -12,10 +13,10 @@
 //! - Weeks run Monday to Sunday. A bare or `this` weekday is its next
 //!   occurrence, today included. `next friday` is the Friday of next week;
 //!   `last friday` is the most recent Friday before today.
-//! - A week, weekend, month or year is a range. A [`Purpose::Deadline`] takes
-//!   its end: a week's Friday (its Sunday once that Friday has passed), a
-//!   weekend's Sunday, a month's or year's last day. A reminder or an event
-//!   takes its start, or today when the range has already begun.
+//! - A week, weekend, month or year is a range. [`Pick::End`] takes its end:
+//!   a week's Friday (its Sunday once that Friday has passed), a weekend's
+//!   Sunday, a month's or year's last day. [`Pick::Start`] and [`Pick::Span`]
+//!   take its start, or today when the range has already begun.
 //! - A month and day without a year is this year's, unless it passed more
 //!   than a month ago; then it is next year's. `the 12th` is the next 12th.
 //! - Numeric dates are month first: `11/12` is November 12.
@@ -26,11 +27,11 @@
 //!   of day 5pm, evening 6pm, night and tonight 8pm. Midnight ends its day.
 //! - A time alone, or on a bare weekday, that has already passed today moves
 //!   to its next occurrence.
-//! - A reminder with no time is at 9am. A deadline or an event with no time is
-//!   a whole day.
-//! - A range end or a length (`for 45 min`) gives an event its end; a
-//!   deadline takes the end, a reminder the start. `in 2 hours` is elapsed
-//!   time from now.
+//! - A date with no time is at the caller's default time when one is given,
+//!   and otherwise a whole day.
+//! - A range end or a length (`for 45 min`) is kept by [`Pick::Span`];
+//!   [`Pick::End`] reads the range's end and [`Pick::Start`] its start.
+//!   `in 2 hours` is elapsed time from now.
 //! - Day and month names take common abbreviations (`tues`, `thurs`, `sept`)
 //!   and typos: one in a name of six or seven letters (`fridya`), two from
 //!   eight letters up (`thrsdy`). The closest name wins; a tie isn't read.
@@ -38,7 +39,7 @@
 //! - Repeating phrases (`every friday`) are not read yet.
 #![deny(missing_docs)]
 
-use chrono::{NaiveDate, NaiveDateTime, TimeDelta};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
 
 mod grammar;
 mod phrase;
@@ -48,16 +49,21 @@ mod words;
 #[cfg(test)]
 mod test;
 
-/// What a date is for, which decides how a week, a month or a range becomes
-/// one date.
+/// Which part to read of a phrase that covers more than a moment: a week, a
+/// month, or a range such as "2-3pm".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Purpose {
-    /// A task's due date: the end of a week, month or range.
-    Deadline,
-    /// When a reminder shows up: the start, at 9am when no time is written.
-    Reminder,
-    /// A calendar event: the start, and the end when one is written.
-    Event,
+pub enum Pick {
+    /// The first day or time, as when a reminder shows up. A week or month
+    /// that has already begun starts today.
+    Start,
+    /// The last day or time, as a due date. A week ends on its Friday, or on
+    /// its Sunday once that Friday has passed; a weekend on its Sunday; a
+    /// month or year on its last day.
+    End,
+    /// The start, and the end when the phrase writes one: a range such as
+    /// "nov 12-14" or "2-3pm", or a length such as "for 45 min", as for a
+    /// calendar event. A week or month alone gives only its start.
+    Span,
 }
 
 /// A point a phrase names.
@@ -79,16 +85,16 @@ pub struct Assumed {
     pub meridiem: bool,
     /// The year wasn't written, and the date is past or not in this year.
     pub year: bool,
-    /// The time is the reminder default, 9am.
+    /// The time is the caller's default, because the phrase wrote none.
     pub time: bool,
 }
 
 /// Where a phrase lands on the calendar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reading {
-    /// The date or time the phrase gives for its purpose.
+    /// The date or time picked.
     pub start: Moment,
-    /// An event's end, when the phrase gives a range or a length.
+    /// With [`Pick::Span`], the end the phrase writes as a range or a length.
     pub end: Option<Moment>,
     /// What was guessed.
     pub assumed: Assumed,
@@ -126,9 +132,16 @@ pub enum Error {
     OutOfRange,
 }
 
-/// Reads `phrase` at `now`, the reader's local wall-clock time, for `purpose`.
-pub fn read(phrase: &str, now: NaiveDateTime, purpose: Purpose) -> Result<Reading, Error> {
+/// Reads `phrase` at `now`, the reader's local wall-clock time, taking the
+/// part of it that `pick` names. A date written without a time is at
+/// `default_time` when one is given, and otherwise a whole day.
+pub fn read(
+    phrase: &str,
+    now: NaiveDateTime,
+    pick: Pick,
+    default_time: Option<NaiveTime>,
+) -> Result<Reading, Error> {
     let items = grammar::items(&grammar::normalize(phrase))?;
     let phrase = phrase::Phrase::from_items(&items)?;
-    resolve::resolve(&phrase, now, purpose)
+    resolve::resolve(&phrase, now, pick, default_time)
 }

@@ -12,7 +12,8 @@ calendar events, without a model. The reading rules are the crate docs in
 `grammar::normalize` lowercases and strips punctuation, `grammar::items` splits
 the phrase into order-free items (a day, a span, a clock, a range separator),
 `Phrase::from_items` combines them into the sides of a range, and `resolve`
-places that on the calendar for a `Purpose` at the caller's local wall time.
+places that on the calendar at the caller's local wall time, taking the part a
+`Pick` names: the start, the end, or the span.
 
 ## Start here
 
@@ -21,7 +22,7 @@ places that on the calendar for a `Purpose` at the caller's local wall time.
 
 ## Scope
 
-- Owns: parsing date phrases and the meaning of each one per purpose.
+- Owns: parsing date phrases and which date each one means for a `Pick`.
 - Not here: time zones and instants (callers convert the local wall time),
   finding a date phrase inside longer text (the extraction model picks it).
 

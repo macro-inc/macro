@@ -1,7 +1,7 @@
 //! Phrases people write, read at fixed times. Each table lists the phrase and
 //! the expected reading: `2026-11-13` is a whole day, `2026-11-13 15:00` a
 //! time, `+90m` elapsed time, `a → b` a range, and `[...]` what was assumed.
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, NaiveTime};
 
 use super::*;
 
@@ -16,6 +16,28 @@ const SUNDAY: &str = "2026-11-08 10:00";
 const YEAR_END: &str = "2026-12-30 10:00";
 /// Sunday, January 31, 2027: a month later has no 31st.
 const MONTH_END: &str = "2027-01-31 10:00";
+
+/// How the app's surfaces read dates.
+#[derive(Debug, Clone, Copy)]
+enum Caller {
+    /// A task's due date: the end of a week or range, a whole day by default.
+    TaskDue,
+    /// When a reminder shows up: the start, at 9am by default.
+    Reminder,
+    /// A calendar event: the start and any written end, all-day by default.
+    Event,
+}
+
+impl Caller {
+    fn read(self, phrase: &str, now: NaiveDateTime) -> Result<Reading, Error> {
+        let nine = NaiveTime::from_hms_opt(9, 0, 0);
+        match self {
+            Self::TaskDue => read(phrase, now, Pick::End, None),
+            Self::Reminder => read(phrase, now, Pick::Start, nine),
+            Self::Event => read(phrase, now, Pick::Span, None),
+        }
+    }
+}
 
 fn moment(moment: Moment) -> String {
     match moment {
@@ -53,13 +75,13 @@ fn show(result: Result<Reading, Error>) -> String {
 }
 
 /// Reads every phrase and reports all mismatches together.
-fn check(now: &str, purpose: Purpose, cases: &[(&str, &str)]) {
+fn check(now: &str, caller: Caller, cases: &[(&str, &str)]) {
     let now = NaiveDateTime::parse_from_str(now, "%Y-%m-%d %H:%M").unwrap();
     let failures: Vec<String> = cases
         .iter()
         .filter_map(|(phrase, want)| {
-            let got = show(read(phrase, now, purpose));
-            (got != *want).then(|| format!("{phrase:?} ({purpose:?}): want {want}, got {got}"))
+            let got = show(caller.read(phrase, now));
+            (got != *want).then(|| format!("{phrase:?} ({caller:?}): want {want}, got {got}"))
         })
         .collect();
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
@@ -69,7 +91,7 @@ fn check(now: &str, purpose: Purpose, cases: &[(&str, &str)]) {
 fn days_relative_to_today() {
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("today", "2026-11-06"),
             ("tdy", "2026-11-06"),
@@ -118,7 +140,7 @@ fn days_relative_to_today() {
 fn weekdays_and_their_abbreviations() {
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("friday", "2026-11-06"),
             ("fri", "2026-11-06"),
@@ -179,7 +201,7 @@ fn weekdays_and_their_abbreviations() {
 fn weekdays_from_other_days_of_the_week() {
     check(
         MONDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("friday", "2026-11-06"),
             ("this friday", "2026-11-06"),
@@ -195,7 +217,7 @@ fn weekdays_from_other_days_of_the_week() {
     );
     check(
         SATURDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("friday", "2026-11-13"),
             ("next friday", "2026-11-13"),
@@ -211,7 +233,7 @@ fn weekdays_from_other_days_of_the_week() {
     );
     check(
         SUNDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("monday", "2026-11-09"),
             ("next monday", "2026-11-09"),
@@ -226,7 +248,7 @@ fn weekdays_from_other_days_of_the_week() {
 fn written_dates() {
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("nov 12", "2026-11-12"),
             ("november 12", "2026-11-12"),
@@ -276,10 +298,10 @@ fn written_dates() {
 }
 
 #[test]
-fn a_deadline_takes_the_end_of_a_week_or_month() {
+fn a_due_date_takes_the_end_of_a_week_or_month() {
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("next week", "2026-11-13"),
             ("due next week", "2026-11-13"),
@@ -323,7 +345,7 @@ fn a_deadline_takes_the_end_of_a_week_or_month() {
 fn reminders_and_events_take_the_start_of_a_week_or_month() {
     check(
         FRIDAY,
-        Purpose::Reminder,
+        Caller::Reminder,
         &[
             ("next week", "2026-11-09 09:00 [time]"),
             ("next week at 3pm", "2026-11-09 15:00"),
@@ -335,7 +357,7 @@ fn reminders_and_events_take_the_start_of_a_week_or_month() {
     );
     check(
         FRIDAY,
-        Purpose::Event,
+        Caller::Event,
         &[
             ("next week", "2026-11-09"),
             ("this weekend", "2026-11-07"),
@@ -352,7 +374,7 @@ fn reminders_and_events_take_the_start_of_a_week_or_month() {
 fn times_of_day() {
     check(
         FRIDAY,
-        Purpose::Event,
+        Caller::Event,
         &[
             ("tomorrow at 3pm", "2026-11-07 15:00"),
             ("tomorrow 3pm", "2026-11-07 15:00"),
@@ -420,7 +442,7 @@ fn times_of_day() {
     );
     check(
         FRIDAY_EVENING,
-        Purpose::Event,
+        Caller::Event,
         &[
             ("tonight", "2026-11-06 20:00"),
             ("8pm", "2026-11-06 20:00"),
@@ -435,7 +457,7 @@ fn times_of_day() {
 fn event_ranges_and_lengths() {
     check(
         FRIDAY,
-        Purpose::Event,
+        Caller::Event,
         &[
             ("tomorrow 2-3pm", "2026-11-07 14:00 → 2026-11-07 15:00"),
             ("tomorrow 2 - 3pm", "2026-11-07 14:00 → 2026-11-07 15:00"),
@@ -529,10 +551,10 @@ fn event_ranges_and_lengths() {
 }
 
 #[test]
-fn deadlines_and_reminders_take_one_end_of_a_range() {
+fn due_dates_and_reminders_take_one_end_of_a_range() {
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("nov 12-14", "2026-11-14"),
             ("mon-wed", "2026-11-11"),
@@ -542,7 +564,7 @@ fn deadlines_and_reminders_take_one_end_of_a_range() {
     );
     check(
         FRIDAY,
-        Purpose::Reminder,
+        Caller::Reminder,
         &[
             ("tomorrow 2-3pm", "2026-11-07 14:00"),
             ("nov 12-14", "2026-11-12 09:00 [time]"),
@@ -554,7 +576,7 @@ fn deadlines_and_reminders_take_one_end_of_a_range() {
 fn reminders_default_to_nine_and_count_elapsed_time() {
     check(
         FRIDAY,
-        Purpose::Reminder,
+        Caller::Reminder,
         &[
             ("tomorrow", "2026-11-07 09:00 [time]"),
             ("monday", "2026-11-09 09:00 [time]"),
@@ -590,7 +612,7 @@ fn reminders_default_to_nine_and_count_elapsed_time() {
 fn dates_as_people_write_them_in_messages() {
     check(
         FRIDAY,
-        Purpose::Event,
+        Caller::Event,
         &[
             ("Thu, Nov 12 at 3:30 PM", "2026-11-12 15:30"),
             ("3:30 PM Thursday", "2026-11-12 15:30"),
@@ -621,7 +643,7 @@ fn dates_as_people_write_them_in_messages() {
     );
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("due 11/20", "2026-11-20"),
             ("due by EOW", "2026-11-06"),
@@ -635,7 +657,7 @@ fn dates_as_people_write_them_in_messages() {
     );
     check(
         FRIDAY,
-        Purpose::Reminder,
+        Caller::Reminder,
         &[
             ("tmrw 9a", "2026-11-07 09:00"),
             ("mon 8am", "2026-11-09 08:00"),
@@ -650,7 +672,7 @@ fn dates_as_people_write_them_in_messages() {
 fn filler_and_punctuation_are_ignored() {
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("due next friday", "2026-11-13"),
             ("by friday", "2026-11-06"),
@@ -673,7 +695,7 @@ fn filler_and_punctuation_are_ignored() {
 fn phrases_it_does_not_read() {
     check(
         FRIDAY,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("", "error: Unrecognized"),
             ("someday", "error: Unrecognized"),
@@ -697,7 +719,7 @@ fn phrases_it_does_not_read() {
 fn weeks_and_months_across_the_new_year() {
     check(
         YEAR_END,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("tomorrow", "2026-12-31"),
             ("in 2 days", "2027-01-01"),
@@ -714,12 +736,35 @@ fn weeks_and_months_across_the_new_year() {
     );
     check(
         MONTH_END,
-        Purpose::Deadline,
+        Caller::TaskDue,
         &[
             ("in a month", "2027-02-28"),
             ("next month", "2027-02-28"),
             ("end of month", "2027-01-31"),
             ("feb 1", "2027-02-01"),
         ],
+    );
+}
+
+#[test]
+fn a_default_time_applies_to_any_pick() {
+    let now = NaiveDateTime::parse_from_str(FRIDAY, "%Y-%m-%d %H:%M").unwrap();
+    let five = NaiveTime::from_hms_opt(17, 0, 0);
+    for (pick, default, want) in [
+        (Pick::Start, None, "2026-11-09"),
+        (Pick::Start, five, "2026-11-09 17:00 [time]"),
+        (Pick::End, five, "2026-11-13 17:00 [time]"),
+        (Pick::Span, five, "2026-11-09 17:00 [time]"),
+    ] {
+        assert_eq!(
+            show(read("next week", now, pick, default)),
+            want,
+            "{pick:?}"
+        );
+    }
+    // A written time wins over the default.
+    assert_eq!(
+        show(read("next week at 3pm", now, Pick::End, five)),
+        "2026-11-13 15:00"
     );
 }
