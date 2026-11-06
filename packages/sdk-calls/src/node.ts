@@ -14,10 +14,10 @@ import {
   callIdForRoom,
   connectRoomWith,
   type JoinOptions,
-} from './common';
-import { reportError, withSpan } from './telemetry';
+} from './common.js';
+import { reportError, withSpan } from './telemetry.js';
 
-export type { CallConnection, CallTarget, JoinOptions } from './common';
+export type { CallConnection, CallTarget, JoinOptions } from './common.js';
 
 export type ScreenFrame = {
   data: Uint8Array;

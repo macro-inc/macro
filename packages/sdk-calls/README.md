@@ -8,6 +8,17 @@ token as `CallConnection` (import it from `@macro-inc/sdk`); this package does n
 The package uses `@opentelemetry/api` for `call.sdk.*` spans. Tracing is a
 no-op until the host installs an OpenTelemetry tracer provider.
 
+
+## Install
+
+The version of this package always matches the `@macro-inc/sdk` it requires.
+Add the LiveKit client for your runtime:
+
+```sh
+npm install @macro-inc/sdk @macro-inc/sdk-calls @livekit/rtc-node # Node
+npm install @macro-inc/sdk @macro-inc/sdk-calls livekit-client    # browser
+```
+
 ## Voice agent (Node or Bun)
 
 ```ts
@@ -33,6 +44,10 @@ quiet speech behavior. In Node, `rtc-node` has no room-wide publish default,
 so `connectRoom` wraps the local participant's `publishTrack` to apply it.
 
 ## Screen share
+
+`publishScreen` has only run against mocks. It has not published to a real
+LiveKit room or been rendered by the app, so test it in a real call before
+relying on it. Audio and joining are the proven parts of this path.
 
 Node capture is supplied by your program as an async stream of fixed-size
 I420 or RGBA frames. The helper publishes them as a screen share and closes

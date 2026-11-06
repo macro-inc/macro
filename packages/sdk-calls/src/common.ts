@@ -13,7 +13,7 @@ export type CallConnection = Omit<
   'call'
 > & { readonly call: { readonly id: string } };
 
-import { reportError, startSpan, withSpan } from './telemetry';
+import { reportError, startSpan, withSpan } from './telemetry.js';
 
 export type CallTarget =
   | { join(options?: JoinOptions): Promise<CallConnection> }

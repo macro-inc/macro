@@ -9,7 +9,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": { "@macro-inc/sdk": ["../sdk/dist/src/macro.d.ts"] }
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
