@@ -7,7 +7,6 @@ import {
   $collapseInlineSearch,
   $createAgentSessionMentionNode,
   $createBookingLinkMentionNode,
-  $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
   $createGroupMentionNode,
@@ -30,7 +29,6 @@ import {
   AgentSessionMentionNode,
   type BookingLinkMentionInfo,
   BookingLinkMentionNode,
-  type ContactMentionInfo,
   ContactMentionNode,
   type DateMentionInfo,
   DateMentionNode,
@@ -89,9 +87,6 @@ export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo
 
 const INSERT_SNAPSHOT_NODE_COMMAND: LexicalCommand<SnapshotNodeInfo> =
   createCommand('INSERT_SNAPSHOT_NODE_COMMAND');
-
-export const INSERT_CONTACT_MENTION_COMMAND: LexicalCommand<ContactMentionInfo> =
-  createCommand('INSERT_CONTACT_MENTION_COMMAND');
 
 export const INSERT_DATE_MENTION_COMMAND: LexicalCommand<DateMentionInfo> =
   createCommand('INSERT_DATE_MENTION_COMMAND');
@@ -578,27 +573,6 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(() => {
           const mentionNode = $createUserMentionNode(payload);
-
-          if (payload.mentionUuid) {
-            mentionNode.setMentionUuid(payload.mentionUuid);
-          }
-
-          $insertNodes([mentionNode]);
-          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
-            $wrapNodeInElement(mentionNode, $createParagraphNode);
-          }
-          mentionNode.selectEnd();
-        });
-        return true;
-      },
-      COMMAND_PRIORITY_NORMAL
-    ),
-
-    editor.registerCommand(
-      INSERT_CONTACT_MENTION_COMMAND,
-      (payload) => {
-        editor.update(() => {
-          const mentionNode = $createContactMentionNode(payload);
 
           if (payload.mentionUuid) {
             mentionNode.setMentionUuid(payload.mentionUuid);

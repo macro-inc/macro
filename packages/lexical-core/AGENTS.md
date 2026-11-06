@@ -41,6 +41,10 @@ literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.
 `NodeReplacements` must copy `ListNode` start when wrapping as `TaskListNode`;
 dropping it resets every typed `6.` marker to `1.`
 
+`ContactMentionNode` (`<m-contact-mention>`) is deprecated: keep it reading and
+rendering existing content, but never create one. CRM contacts are document
+mentions with `blockName: "contact"`.
+
 An image under a list item is a child of that `ListItemNode`. Lexical runs
 element transformers only on top-level nodes, so `listItemImage` exports it as
 an indented line, and the image importers attach an indented image line after a

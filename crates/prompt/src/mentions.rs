@@ -42,6 +42,7 @@ Use `<m-document-mention>` with the right `blockName` (and `blockParams` when ne
 - Routine mention: `<m-document-mention>{"documentId":"{id}","documentName":"{name}","blockName":"routine"}</m-document-mention>`
 - Snippet mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"snippet","blockParams":{}}</m-document-mention>`
 - CRM company mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"company","blockParams":{}}</m-document-mention>`
+- CRM contact mention: `<m-document-mention>{"documentId":"{contact_id}","documentName":"","blockName":"contact","blockParams":{}}</m-document-mention>`
 - CRM pipeline mention: `<m-document-mention>{"documentId":"{pipeline_id}","documentName":"","blockName":"pipeline","blockParams":{}}</m-document-mention>`
 - Database mention: `<m-document-mention>{"documentId":"{database_id}","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>`
 - Form mention: `<m-document-mention>{"documentId":"{form_id}","documentName":"","blockName":"form","blockParams":{}}</m-document-mention>`
@@ -50,6 +51,7 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 
 - A database is `database` and a form is `form`, never `md` or `document`. A form chip opens the builder; link its `/respond` page as a plain URL when people should submit responses.
 - A project is `initiative`, with the id from ListInitiatives or ReadInitiative; `project` means a folder. A CRM pipeline is `pipeline`.
+- A CRM contact is `contact`, with the contact's UUID from a CRM tool as `documentId`, never an email. A Macro user is a person mention instead; anyone else is plain text.
 - An email thread is `email`, never `thread` or `email_thread`. A calendar event is `calendar`, never `calendar_event`, with the `eventId` as `documentId`; add a recurring event's `recurrenceId` as `occurrenceKey` to target one occurrence. Channel members without the event see a read-only preview. Private and confidential events are never shared.
 - When a tool returns a channel message id, mention that message, not just its channel.
 
@@ -62,7 +64,6 @@ Whenever you name a task — one you created, linked, searched, or were assigned
 These use their own tags — never wrap them in `<m-document-mention>`:
 
 - Person: `<m-user-mention>{"userId":"{id}","email":"{email}"}</m-user-mention>`
-- Contact: `<m-contact-mention>{"contactId":"{id}","name":"{name}","emailOrDomain":"{email_or_domain}","isCompany":false}</m-contact-mention>`
 - Group: `<m-group-mention>{"groupAlias":"{alias}"}</m-group-mention>`
 - Date/time: `<m-date-mention>{"date":"{iso_datetime}","displayFormat":"{label}"}</m-date-mention>`
 - Agent session: `<m-agent-session-mention>{"id":"{session_id}","label":""}</m-agent-session-mention>`

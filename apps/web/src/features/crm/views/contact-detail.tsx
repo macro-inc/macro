@@ -1,9 +1,10 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
-import { CrmListSkeleton } from '../components/list-state';
+import { CrmListError, CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
+import { legacyContactEmail } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
@@ -20,12 +21,6 @@ import {
 import { RecordDetailsSection } from './record-details-section';
 import { useContactQuery } from './use-crm';
 
-/**
- * Root of the contact detail view, laid out like a project: the host's top
- * bar picks the section, Overview shows the contact and its discussion, and
- * the other sections list its emails, files, tasks and calls. References
- * stay in the floating information panel.
- */
 type ContactProps = {
   contactId: string;
   section?: ContactSection;
@@ -34,7 +29,35 @@ type ContactProps = {
   onOpenPipeline?: (pipelineId: string) => void;
 };
 
+/**
+ * Root of the contact detail view, laid out like a project: the host's top
+ * bar picks the section, Overview shows the contact and its discussion, and
+ * the other sections list its emails, files, tasks and calls. References
+ * stay in the floating information panel. A legacy email id shows the CRM
+ * contact with that email.
+ */
 export function Contact(props: ContactProps) {
+  const contactQuery = useContactQuery(() => props.contactId);
+  const contactId = () =>
+    legacyContactEmail(props.contactId)
+      ? contactQuery.data?.id
+      : props.contactId;
+  return (
+    <Switch fallback={<CrmListSkeleton label="Loading contact" />}>
+      <Match when={contactId()} keyed>
+        {(id) => <TracedContact {...props} contactId={id} />}
+      </Match>
+      <Match when={contactQuery.isError}>
+        <CrmListError
+          title="Couldn't load this contact."
+          onRetry={() => contactQuery.refetch()}
+        />
+      </Match>
+    </Switch>
+  );
+}
+
+function TracedContact(props: ContactProps) {
   return (
     <TraceFlow
       name="crm.contact"
