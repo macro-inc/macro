@@ -690,31 +690,6 @@ pub async fn build(
     });
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
-    let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
-        pipedream_client.as_ref().map(|client| {
-            Arc::new(granola_sync::domain::service::Service {
-                repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
-                    db.clone(),
-                    &granola_signing_key,
-                ),
-                granola: granola_sync::outbound::api::GranolaApi(client.clone()),
-                accounts: granola_sync::outbound::accounts::ConnectedAccounts(
-                    pipedream_repo.clone(),
-                ),
-                verifier: granola_sync::outbound::signature::StandardWebhooks,
-                calls: Arc::new(call::domain::imports::CallImportServiceImpl(
-                    call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(
-                        db.clone(),
-                    ),
-                    macro_event_broker.clone(),
-                )),
-                public_url: public_url.to_string(),
-            }) as Arc<dyn granola_sync::domain::service::SyncService>
-        });
-    let granola_worker = granola_sync
-        .as_ref()
-        .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
-
     // The one sanctioned meeting point of the two MCP stacks: agents load
     // tools through this selector, which prefers a user's Pipedream
     // connectors and falls back to the native ones (see `mcp_select`).
@@ -750,6 +725,62 @@ pub async fn build(
         ),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
+    // Synced tables: Granola meetings and Notion data sources kept in sync
+    // with database tables by the worker below. Granola imports mark their
+    // owner's syncs due, so the call import granola_sync uses is wrapped.
+    let imported_calls: Arc<dyn call::domain::imports::CallImportService> =
+        Arc::new(call::domain::imports::CallImportServiceImpl(
+            call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(db.clone()),
+            macro_event_broker.clone(),
+        ));
+    let database_syncs_service = Arc::new(database_syncs::wiring::build_service(
+        db.clone(),
+        databases_tool_context.service.clone(),
+        entity_access_service.clone(),
+        database_syncs::wiring::SyncSources {
+            calls: imported_calls.clone(),
+            granola_accounts: Arc::new(granola_sync::outbound::accounts::ConnectedAccounts(
+                pipedream_repo.clone(),
+            )),
+            notion: import_notion::outbound::pipedream::PipedreamNotionConnections::new(
+                Arc::new(pipedream_repo.clone()),
+                connectors.clone(),
+            ),
+            teams: ai_tools::build_team_repository(db.clone()),
+        },
+    ));
+    import_jobs
+        .tracker
+        .spawn(database_syncs::inbound::worker::run_worker(
+            database_syncs_service.clone(),
+            import_jobs.shutdown.clone(),
+        ));
+
+    let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
+        pipedream_client.as_ref().map(|client| {
+            Arc::new(granola_sync::domain::service::Service {
+                repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
+                    db.clone(),
+                    &granola_signing_key,
+                ),
+                granola: granola_sync::outbound::api::GranolaApi(client.clone()),
+                accounts: granola_sync::outbound::accounts::ConnectedAccounts(
+                    pipedream_repo.clone(),
+                ),
+                verifier: granola_sync::outbound::signature::StandardWebhooks,
+                calls: Arc::new(
+                    database_syncs::inbound::call_imports::SyncOnCallImport::new(
+                        imported_calls.clone(),
+                        database_syncs_service.clone(),
+                    ),
+                ),
+                public_url: public_url.to_string(),
+            }) as Arc<dyn granola_sync::domain::service::SyncService>
+        });
+    let granola_worker = granola_sync
+        .as_ref()
+        .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
+
     let project_tool_context = ai_tools::build_project_tool_context(
         db.clone(),
         macro_event_broker.clone(),
@@ -1171,6 +1202,7 @@ pub async fn build(
         granola_sync,
         mcp_selector,
         import_service,
+        database_syncs_service,
         onboarding_service,
         macro_event_broker: macro_event_broker.clone(),
     });

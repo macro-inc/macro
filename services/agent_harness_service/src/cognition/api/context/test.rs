@@ -452,6 +452,29 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::ToolTableEventPublisher::NoOp(Default::default()),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
+    let database_syncs_service = Arc::new(database_syncs::wiring::build_service(
+        pool.clone(),
+        databases_tool_context.service.clone(),
+        entity_access_service.clone(),
+        database_syncs::wiring::SyncSources {
+            calls: Arc::new(call::domain::imports::CallImportServiceImpl(
+                call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(pool.clone()),
+                macro_event_broker.clone(),
+            )),
+            granola_accounts: Arc::new(granola_sync::outbound::accounts::ConnectedAccounts(
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+            )),
+            notion: import_notion::outbound::pipedream::PipedreamNotionConnections::new(
+                Arc::new(
+                    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
+                        pool.clone(),
+                    ),
+                ),
+                None,
+            ),
+            teams: ai_tools::build_team_repository(pool.clone()),
+        },
+    ));
     let project_tool_context = ai_tools::build_project_tool_context(
         pool.clone(),
         macro_event_broker.clone(),
@@ -826,6 +849,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             },
         },
         granola_sync: None,
+        database_syncs_service,
         pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
             None,
