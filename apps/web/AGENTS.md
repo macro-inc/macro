@@ -44,6 +44,12 @@ Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
 
+Settings → Team → Teams (the list, New team, a team's page, and member
+read-only views) has a backend-free desktop/phone regression over the real
+page and queries with an in-memory auth service that follows the server's
+subteam rules:
+`bunx playwright test --config src/features/settings/browser-test/teams/playwright.config.ts`.
+
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 

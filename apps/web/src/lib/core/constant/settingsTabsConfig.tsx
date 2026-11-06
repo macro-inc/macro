@@ -20,6 +20,7 @@ import BotIcon from '@icon/system/regular/robot.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import SwatchesIcon from '@icon/system/regular/swatches.svg';
 import TagIcon from '@icon/system/regular/tag-simple.svg';
+import TreeStructureIcon from '@icon/system/regular/tree-structure.svg';
 import UserIconPhosphor from '@icon/system/regular/user.svg';
 import UserGearIcon from '@icon/system/regular/user-gear.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
@@ -133,6 +134,11 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
           'roles',
           'seats',
         ],
+      }),
+      tabItem('tabTeamTeams', {
+        tab: 'Teams',
+        icon: TreeStructureIcon,
+        keywords: ['teams', 'groups', 'departments', 'subteams', 'nested'],
       }),
     ],
   },
@@ -311,6 +317,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Bots: 'bots',
   Team: 'team',
   'Team Members': 'team-members',
+  Teams: 'teams',
   Calendar: 'calendar',
   Tags: 'tags',
   CRM: 'crm',
@@ -378,6 +385,7 @@ export const useSettingsTabAvailable = () => {
         return true;
       case 'Team':
       case 'Team Members':
+      case 'Teams':
       case 'Tags':
         return true;
       // CRM is still rolling out (Macro-internal only); keep the settings tab

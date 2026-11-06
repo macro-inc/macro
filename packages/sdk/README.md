@@ -546,6 +546,17 @@ parent. Cursors are opaque; pass the returned cursor on the next request.
 reads activity handles. `ChannelPicture.byId(uploadId)` references an uploaded
 picture for `channel.setPicture(picture)`; omit it to clear the picture.
 
+### Subteams
+
+A team holds subteams, such as Engineering or Design, nested one level.
+`team.subteams()` lists them with their members, and
+`team.createSubteam({ name, color, members, parent })` creates one that the
+caller manages. On a `Subteam`, `update(changes)`, `nestUnder(parent | null)`,
+`addMember(user, role)`, `removeMember(user)` and `delete()` follow the
+server's rules: managers and team admins change a subteam, and anyone may add
+themselves to an open one or leave. Both work only on the caller's current
+team (`macro.teams.current()`).
+
 ### Meetings and calendar browsing
 
 `macro.meetings.create/list/active/lookup` returns meeting handles. `list()` contains
