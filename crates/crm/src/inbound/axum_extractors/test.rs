@@ -795,7 +795,7 @@ async fn contact_mutation_http_contract_is_add_only_and_personal_scoped(
     )
     .execute(&pool)
     .await?;
-    sqlx::query!("INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES ($1, TRUE) ON CONFLICT (team_id) DO UPDATE SET crm_enabled = TRUE", team).execute(&pool).await?;
+    // Manual contact edits need team access, never contribution enrollment.
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let contact = repo
         .create_contact_for_team(&team, None, "Contact", Utc::now())

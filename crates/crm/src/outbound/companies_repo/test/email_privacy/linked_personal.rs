@@ -40,13 +40,16 @@ async fn linked_personal_parent_consent_and_domain_matrix(pool: PgPool) -> anyho
         let team = Uuid::now_v7();
         let owner = format!("macro|owner-{index}@example.com");
         seed_team(&pool, team, &owner).await?;
-        sqlx::query!(
-            "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'member')",
+        // A user has one current team. Move this isolated reader into each
+        // case's team without granting any independent mailbox access.
+        let membership = sqlx::query!(
+            "UPDATE team_user SET team_id = $1, team_role = 'member' WHERE user_id = $2",
             team,
             member
         )
         .execute(&pool)
         .await?;
+        assert_eq!(membership.rows_affected(), 1);
         let link = insert_email_link(&pool, &owner, &format!("owner-{index}@example.com")).await?;
         let repo = CompaniesRepositoryImpl::new(pool.clone());
         let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);

@@ -2635,6 +2635,8 @@ export * from './sourceIdentityOneOf';
 export * from './sourceIdentityOneOfKind';
 export * from './sourceIdentityOneOfThree';
 export * from './sourceIdentityOneOfThreeKind';
+export * from './spreadsheetAiEdited';
+export * from './spreadsheetAiEditRequest';
 export * from './spreadsheetBorderStyle';
 export * from './spreadsheetCellInput';
 export * from './spreadsheetChange';

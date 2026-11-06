@@ -1,14 +1,19 @@
 //! Create, read, calculate and edit native spreadsheets over HTTP, through the
 //! same engine as the ReadSpreadsheet, CalculateSpreadsheet and
-//! EditSpreadsheet tools.
+//! EditSpreadsheet tools, and edit them by instructions through a writer model.
 use super::DocumentRouterState;
+use super::ai_edit::{
+    DocumentAiEditFailed, DocumentAiEditFailedCode, DocumentAiEditRefused,
+    DocumentAiEditRefusedCode,
+};
 use crate::domain::{
     create::NewDocumentMetadata,
     models::DocumentError,
     ports::{DocumentService, create::DocumentCreationService},
     spreadsheet::{
-        SpreadsheetCaller, SpreadsheetError, SpreadsheetFormula, SpreadsheetOperation,
-        SpreadsheetOverride, SpreadsheetRequest, SpreadsheetResponse,
+        SpreadsheetAiEditError, SpreadsheetAiEdited, SpreadsheetCaller, SpreadsheetError,
+        SpreadsheetFormula, SpreadsheetOperation, SpreadsheetOverride, SpreadsheetRequest,
+        SpreadsheetResponse,
     },
 };
 use axum::{
@@ -110,6 +115,54 @@ impl IntoResponse for SpreadsheetError {
             }),
         )
             .into_response()
+    }
+}
+
+/// What to change in a workbook, in words.
+#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+pub struct SpreadsheetAiEditRequest {
+    /// Natural-language instructions. Name the sheet and the cells, columns
+    /// or table to change, describe the outcome, and say what must stay.
+    #[schema(min_length = 1)]
+    pub instructions: String,
+}
+
+impl IntoResponse for SpreadsheetAiEditError {
+    fn into_response(self) -> Response {
+        match self {
+            SpreadsheetAiEditError::Spreadsheet(error) => error.into_response(),
+            SpreadsheetAiEditError::Admission(error) => error.into_response(),
+            SpreadsheetAiEditError::Refused(reason) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(DocumentAiEditRefused {
+                    error: DocumentAiEditRefusedCode::EditRefused,
+                    reason,
+                }),
+            )
+                .into_response(),
+            SpreadsheetAiEditError::NotSaved(error) => {
+                tracing::error!(error = %error, "spreadsheet ai edit failed before saving");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "The edit failed before saving; nothing changed. Retry it.".into(),
+                    }),
+                )
+                    .into_response()
+            }
+            SpreadsheetAiEditError::OutcomeUnknown(error) => {
+                tracing::error!(error = ?error, "spreadsheet ai edit outcome unknown");
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(DocumentAiEditFailed {
+                        error: DocumentAiEditFailedCode::EditFailed,
+                        message: "The edit may have been saved; read the workbook before retrying."
+                            .to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+        }
     }
 }
 
@@ -287,6 +340,51 @@ pub async fn edit_spreadsheet_handler<
             request.expected_revision,
             request.operations,
         )
+        .await
+        .map(Json)
+}
+
+/// Edit a native spreadsheet by instructions with the caller's edit access:
+/// a writer model reads the workbook and saves one atomic batch, with AI
+/// admission and billing. A workbook changed while it worked saves nothing
+/// and answers 409.
+///
+/// A client that disconnects drops the worker request, which cancels the
+/// edit before its save.
+#[utoipa::path(
+    post,
+    tag = "document",
+    path = "/documents/{document_id}/spreadsheet/ai-edit",
+    operation_id = "edit_spreadsheet_with_ai",
+    params(("document_id" = String, Path, description = "Document identity")),
+    request_body = SpreadsheetAiEditRequest,
+    responses(
+        (status = 200, body = SpreadsheetAiEdited),
+        (status = 400, description = "Not a native spreadsheet, or empty instructions", body = ErrorResponse),
+        (status = 401, description = "Authentication required"),
+        (status = 402, description = "AI allowance exhausted", body = ai_billing::inbound::admission::AiAdmissionErrorBody),
+        (status = 403, description = "Document edit access denied"),
+        (status = 404, description = "Document not found"),
+        (status = 409, description = "The workbook changed while the edit ran; nothing changed", body = ErrorResponse),
+        (status = 422, description = "The writer could not do the edit; nothing changed", body = DocumentAiEditRefused),
+        (status = 500, description = "The edit failed before saving; nothing changed", body = ErrorResponse),
+        (status = 502, description = "The edit may have been saved", body = DocumentAiEditFailed),
+        (status = 503, description = "AI usage validation unavailable; retry later", body = ai_billing::inbound::admission::AiAdmissionErrorBody)
+    )
+)]
+pub async fn ai_edit_spreadsheet_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: DocumentAccessExtractor<EditAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    request: Result<Json<SpreadsheetAiEditRequest>, JsonRejection>,
+) -> Result<Json<SpreadsheetAiEdited>, SpreadsheetAiEditError> {
+    let request = body(request)?;
+    state
+        .spreadsheet_ai_edit
+        .edit(access.entity_access_receipt, &request.instructions)
         .await
         .map(Json)
 }
