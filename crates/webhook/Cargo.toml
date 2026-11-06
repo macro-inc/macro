@@ -26,6 +26,7 @@ inbound = [
   "dep:serde_json",
   "dep:utoipa",
   "agent_session/schema",
+  "call/inbound",
   "channels/schema",
   "documents/schema",
   "messages/schema",
@@ -36,6 +37,7 @@ ingestion = [
   "dep:agent_session",
   "dep:agent_trigger",
   "dep:channels",
+  "dep:call",
   "dep:documents",
   "dep:entity_access",
   "dep:futures",
@@ -71,6 +73,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 agent_session = { path = "../agent_session", default-features = false, optional = true }
 agent_trigger = { path = "../agent_trigger", optional = true }
+call = { path = "../call", default-features = false, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }

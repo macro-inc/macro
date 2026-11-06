@@ -2085,6 +2085,25 @@
         }
       }
     },
+    "/call/active/all": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "List all channel and standalone calls this account can join.",
+        "operationId": "get_live_calls",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveCallsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/guest-chat/{call_id}": {
       "get": {
         "tags": ["messages::inbound::guest_chat"],
@@ -2764,6 +2783,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinCallRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "",
@@ -3363,6 +3391,102 @@
         }
       }
     },
+    "/call/record/{call_id}/join": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Join a live call by its session id.",
+        "operationId": "join_call",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTokenResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": ""
+          },
+          "410": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/leave": {
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Leave a specific live call.",
+        "operationId": "leave_call",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaveCallResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/{call_id}/link": {
       "post": {
         "tags": ["call::inbound::axum_router::meetings"],
@@ -3426,6 +3550,133 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/participants": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Read live participants and track state for a joinable call.",
+        "operationId": "get_call_participants",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveCallParticipantsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/recording": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Stream the recording bytes for a call record the caller may view.",
+        "operationId": "get_call_recording",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingBytes"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/record/{call_id}/ring": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Read this account's ring state for a call.",
+        "operationId": "get_call_ring_state",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RingStatusResponse"
                 }
               }
             }
@@ -3761,6 +4012,57 @@
                 }
               }
             }
+          }
+        }
+      },
+      "post": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Start or join a channel call explicitly.",
+        "operationId": "start_call",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallTokenResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": ""
           }
         }
       },
@@ -25221,6 +25523,199 @@
           }
         }
       },
+      "CallNotificationEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A call started.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.started"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "A call started."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call ended.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.ended"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "A call ended."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A participant entered the RTC room.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.participant_joined"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "A participant entered the RTC room."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A participant left the RTC room.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.participant_left"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "A participant left the RTC room."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A recording became available.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.recording_ready"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "A recording became available."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A summary became available.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.summarized"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "A summary became available."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The recipient is being rung.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.ringing"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "The recipient is being rung."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The recipient answered.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.answered"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "The recipient answered."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The recipient declined.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.declined"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "The recipient declined."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The recipient was invited.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["call.invited"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/CallNotificationMetadata",
+                "description": "The recipient was invited."
+              }
+            }
+          }
+        ],
+        "description": "Public call events. Private variants carry a recipient on the broker only."
+      },
+      "CallNotificationMetadata": {
+        "type": "object",
+        "description": "Identifiers and actors for a public call notification. Optional fields are\nabsent when they do not apply to the event.",
+        "required": ["call_id"],
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Call identifier."
+          },
+          "channel_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Channel containing the call, if any."
+          },
+          "created_by": {
+            "type": ["string", "null"],
+            "description": "User who created the call."
+          },
+          "identity": {
+            "type": ["string", "null"],
+            "description": "Room identity of the joining or departing participant."
+          },
+          "invited_by": {
+            "type": ["string", "null"],
+            "description": "User who sent an invitation."
+          },
+          "meeting_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Meeting associated with an invitation."
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "Account identifier of the participant or answering user."
+          }
+        }
+      },
       "CallProvider": {
         "type": "string",
         "description": "Supported call and transcript providers. Add variants as integrations grow.",
@@ -25583,6 +26078,7 @@
         "type": "object",
         "description": "Response returned when creating or joining a call.",
         "required": [
+          "started",
           "participantId",
           "callId",
           "token",
@@ -25615,6 +26111,10 @@
           "shareToken": {
             "type": ["string", "null"],
             "description": "Meeting link capability, when joined using a link."
+          },
+          "started": {
+            "type": "boolean",
+            "description": "Whether this request allocated the call."
           },
           "token": {
             "type": "string",
@@ -37459,6 +37959,24 @@
           "cancelled"
         ]
       },
+      "JoinCallRequest": {
+        "type": "object",
+        "description": "Options for an authenticated call join.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "Optional display name in the RTC room."
+          },
+          "onOtherCall": {
+            "$ref": "#/components/schemas/OnOtherCall",
+            "description": "What to do when this account is participating in another call."
+          },
+          "replace": {
+            "type": "boolean",
+            "description": "Disconnect an existing RTC connection for this identity."
+          }
+        }
+      },
       "KeySegment": {
         "type": "string",
         "description": "Single safe source folder/key segment; never a path or authorization proof."
@@ -37791,6 +38309,168 @@
             "description": "The form's facts."
           }
         }
+      },
+      "LiveCallKind": {
+        "type": "string",
+        "description": "Whether a live call is associated with a channel.",
+        "enum": ["channel", "standalone"]
+      },
+      "LiveCallParticipant": {
+        "type": "object",
+        "description": "A connected participant in an RTC room.",
+        "required": ["identity", "displayName", "kind", "isProgram", "tracks"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Name displayed to room members."
+          },
+          "identity": {
+            "type": "string",
+            "description": "RTC identity."
+          },
+          "isProgram": {
+            "type": "boolean",
+            "description": "Whether the caller is a program."
+          },
+          "joinedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "RTC connection time."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LiveParticipantKind",
+            "description": "User or guest."
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveCallTrack"
+            },
+            "description": "Published media tracks."
+          },
+          "userId": {
+            "type": ["string", "null"],
+            "description": "Macro account identifier, if this is a user."
+          }
+        }
+      },
+      "LiveCallParticipantsResponse": {
+        "type": "object",
+        "description": "A live RTC room roster.",
+        "required": ["participants"],
+        "properties": {
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveCallParticipant"
+            },
+            "description": "Connected participants."
+          }
+        }
+      },
+      "LiveCallSummary": {
+        "type": "object",
+        "description": "A live call visible to an account that can join it.",
+        "required": [
+          "callId",
+          "kind",
+          "createdBy",
+          "createdAt",
+          "participantCount",
+          "ringing"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Session identifier."
+          },
+          "channelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Channel identifier, if present."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Caller identifier."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LiveCallKind",
+            "description": "Channel or standalone call."
+          },
+          "meetingId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Invitation identifier, if present."
+          },
+          "participantCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of active people and guests."
+          },
+          "ringing": {
+            "type": "boolean",
+            "description": "Whether this account is currently being rung."
+          },
+          "shareToken": {
+            "type": ["string", "null"],
+            "description": "Invitation capability, if present."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Invitation title, if present."
+          }
+        }
+      },
+      "LiveCallTrack": {
+        "type": "object",
+        "description": "A live media track.",
+        "required": ["source", "muted"],
+        "properties": {
+          "muted": {
+            "type": "boolean",
+            "description": "Whether the track is muted."
+          },
+          "source": {
+            "$ref": "#/components/schemas/LiveTrackSource",
+            "description": "Microphone, camera, or screen source."
+          }
+        }
+      },
+      "LiveCallsResponse": {
+        "type": "object",
+        "description": "Response containing every live call this account may join.",
+        "required": ["calls"],
+        "properties": {
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveCallSummary"
+            },
+            "description": "Joinable live calls."
+          }
+        }
+      },
+      "LiveParticipantKind": {
+        "type": "string",
+        "description": "Participant kind in the live room.",
+        "enum": ["user", "guest", "bot"]
+      },
+      "LiveTrackSource": {
+        "type": "string",
+        "description": "A live media track.",
+        "enum": [
+          "microphone",
+          "camera",
+          "screen_share",
+          "screen_share_audio",
+          "unknown"
+        ]
       },
       "LocationResponseData": {
         "oneOf": [
@@ -39526,6 +40206,11 @@
           "lessThan",
           "lessThanOrEqual"
         ]
+      },
+      "OnOtherCall": {
+        "type": "string",
+        "description": "Policy for another active call.",
+        "enum": ["fail", "switch"]
       },
       "OpBatch": {
         "type": "object",
@@ -41496,6 +42181,11 @@
             "description": "The items returned from the call"
           }
         }
+      },
+      "RecordingBytes": {
+        "type": "string",
+        "format": "binary",
+        "description": "OpenAPI representation of streamed recording bytes."
       },
       "RegisterUploads": {
         "type": "object",
@@ -48684,6 +49374,10 @@
           {
             "$ref": "#/components/schemas/ChannelTopicEvent",
             "description": "Channel lifecycle events from the `macro.channels` topic."
+          },
+          {
+            "$ref": "#/components/schemas/CallNotificationEvent",
+            "description": "Access-checked call notifications from `macro.call_notifications`."
           },
           {
             "$ref": "#/components/schemas/MessageTopicEvent",
