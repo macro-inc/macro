@@ -231,6 +231,7 @@ where
                     name: computer.name.clone(),
                     service_url_overrides: self.defaults.service_url_overrides.clone(),
                     persona: computer.persona.clone(),
+                    persona_enrollment: Default::default(),
                 };
                 self.fleet
                     .create(&computer, &enrollment, *start)

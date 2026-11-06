@@ -136,6 +136,17 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `service::validate_persona` checks commands and values. Persisted config and
   service env reject credential names ending in `_TOKEN`, `_KEY`, or `_SECRET`
   (case-insensitive) with `PersonaFieldError::ReservedConfigKey`.
+- **Persona credentials**: `PersonaCredentialSource::issue(computer, generation)`
+  returns `PersonaEnrollment { secrets: PersonaCredentials, env: PersonaEnv }`.
+  Each call rotates credentials; neither half is stored in `hosted_runtime`,
+  outbox effects, timers, or logs. `PersonaCredentials` has validated
+  `PersonaConfigKey` names, Debug lists keys only, values zeroize on drop,
+  and it does not implement Serialize. Only `Enrollment.persona_enrollment`
+  serializes it for the one-time `user.macro.enrollment` JSON or Docker file.
+  That is the only transient fleet copy, removed by `clear_enrollment` after
+  macrod connects. Enrollment Debug redacts secrets. macrod merges both halves
+  with non-secret persona config into the guest's mode-0600
+  `/etc/macro/personas/<os_user>.env` before claiming the pairing.
 - Persona computers are never idle-frozen; they run until powered off or canceled.
 - Fleet host discovery must not abort harness startup: report unhealthy and retry
   registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers

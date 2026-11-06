@@ -12,6 +12,7 @@ use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
 use crate::domain::models::ComputerName;
+use crate::domain::persona_credentials::PersonaEnrollment;
 use serde::{Deserialize, Serialize};
 
 /// Instance config key carrying the JSON [`Enrollment`].
@@ -32,6 +33,10 @@ pub struct Enrollment {
     pub service_url_overrides: BTreeMap<String, String>,
     /// The agent persona this computer is bought for, if any.
     pub persona: Option<Persona>,
+    /// The only transient transport copy of issued persona material. Deleted
+    /// from the fleet after macrod connects; never put in state or the outbox.
+    #[serde(serialize_with = "crate::domain::persona_credentials::serialize_enrollment")]
+    pub persona_enrollment: PersonaEnrollment,
 }
 
 /// An agent identity that lives on the computer next to macrod: its own OS

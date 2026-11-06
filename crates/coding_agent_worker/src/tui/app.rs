@@ -306,7 +306,7 @@ impl App {
             (created.pairing_id, created.device_secret.clone())
         };
         let client = PairingClient::new(&self.config);
-        match client.claim(pairing_id, &device_secret).await {
+        match client.claim(pairing_id.as_uuid(), &device_secret).await {
             Ok(ClaimStatus::Pending) => {}
             Ok(ClaimStatus::Claimed(credentials)) => {
                 if let Err(error) = self.form.persist_credentials(&credentials) {

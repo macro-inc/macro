@@ -134,6 +134,7 @@ async fn main() -> Result<(), rootcause::Report> {
         state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
         harness_id: None,
         persona: None,
+        persona_enrollment: Default::default(),
         created_by: "incus_fleet_smoke".to_owned(),
         created_at: now,
         enrolled_at: None,
@@ -145,6 +146,7 @@ async fn main() -> Result<(), rootcause::Report> {
         name: computer.name.clone(),
         service_url_overrides: BTreeMap::new(),
         persona: None,
+        persona_enrollment: Default::default(),
     };
     let id = computer.id;
     println!("instance {}", instance_name(id));

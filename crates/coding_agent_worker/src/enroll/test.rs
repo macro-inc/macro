@@ -17,6 +17,7 @@ const ENROLLMENT_JSON: &str = r#"{
         "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL": "http://10.200.0.1:41009/dss",
         "OVERRIDE_APP_SERVICE_URL": "http://10.200.0.1:41000"
     },
+    "persona_enrollment": {"secrets": {}, "env": {}},
     "persona": {
         "name": "Ada 100%",
         "os_user": "agent-ada",
@@ -127,14 +128,15 @@ fn persona_installs_its_user_environment_and_unit() {
         root: root.path().to_owned(),
     };
     let persona = enrollment().persona.expect("the literal has a persona");
-    let files = PersonaFiles::render(&persona, &paths).expect("valid persona");
+    let files = PersonaFiles::render(&persona, &PersonaEnrollment::default(), &paths)
+        .expect("valid persona");
     let host = FakeHost::default();
     files.install(&host).expect("install");
 
     let env_path = root.path().join("etc/macro/personas/agent-ada.env");
     assert_eq!(
         std::fs::read_to_string(&env_path).unwrap(),
-        "PERSONA_LABEL=\"a\\$b\\\"c\"\nPERSONA=\"ada\"\n"
+        "PERSONA=\"ada\"\nPERSONA_LABEL=\"a\\$b\\\"c\"\n"
     );
     assert_eq!(
         std::fs::metadata(&env_path).unwrap().permissions().mode() & 0o777,
@@ -190,7 +192,7 @@ fn persona_exec_is_validated_before_anything_is_written() {
         },
         ..persona.clone()
     };
-    assert!(PersonaFiles::render(&bad_exec, &paths).is_err());
+    assert!(PersonaFiles::render(&bad_exec, &PersonaEnrollment::default(), &paths).is_err());
 }
 
 #[tokio::test]
@@ -372,7 +374,7 @@ fn a_recreated_guest_installs_its_saved_persona_and_enables_the_unit_idempotentl
         let paths = SystemPaths {
             root: root.to_owned(),
         };
-        let files = PersonaFiles::render(&persona, &paths).unwrap();
+        let files = PersonaFiles::render(&persona, &PersonaEnrollment::default(), &paths).unwrap();
         let host = FakeHost::default();
         let env_path = root.join("etc/macro/personas/agent-ada.env");
         let unit_path = root.join("etc/systemd/system/macro-brain-ada.service");
@@ -400,4 +402,50 @@ fn a_recreated_guest_installs_its_saved_persona_and_enables_the_unit_idempotentl
             );
         }
     }
+}
+
+#[test]
+fn issued_credentials_and_environment_are_written_only_to_the_private_env_file() {
+    use hosted_runtimes::domain::persona_credentials::{PersonaCredentials, PersonaEnv};
+    let root = tempfile::tempdir().unwrap();
+    let paths = SystemPaths {
+        root: root.path().to_owned(),
+    };
+    let persona = enrollment().persona.unwrap();
+    let issued = PersonaEnrollment {
+        secrets: PersonaCredentials::new(BTreeMap::from([
+            (
+                PersonaConfigKey::parse("MACRO_API_KEY").unwrap(),
+                "fixture-api-value".to_owned(),
+            ),
+            (
+                PersonaConfigKey::parse("MACRO_REPO_TOKEN").unwrap(),
+                "fixture-repo-value".to_owned(),
+            ),
+        ]))
+        .unwrap(),
+        env: PersonaEnv::new(BTreeMap::from([(
+            PersonaConfigKey::parse("OVERRIDE_APP_SERVICE_URL").unwrap(),
+            "https://app.example.com".to_owned(),
+        )]))
+        .unwrap(),
+    };
+    let files = PersonaFiles::render(&persona, &issued, &paths).unwrap();
+    files.install(&FakeHost::default()).unwrap();
+    let env = std::fs::read_to_string(&files.env_path).unwrap();
+    assert!(env.contains("MACRO_API_KEY=\"fixture-api-value\""));
+    assert!(env.contains("MACRO_REPO_TOKEN=\"fixture-repo-value\""));
+    assert!(env.contains("OVERRIDE_APP_SERVICE_URL=\"https://app.example.com\""));
+    assert!(env.contains("PERSONA=\"ada\""));
+    assert_eq!(
+        std::fs::metadata(&files.env_path)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+    let unit = std::fs::read_to_string(&files.unit_path).unwrap();
+    assert!(!unit.contains("fixture-api-value"));
+    assert!(!unit.contains("fixture-repo-value"));
 }

@@ -211,7 +211,7 @@ async fn pair(path: &Path, config: &Config) -> rootcause::Result<HarnessCredenti
             rootcause::bail!("the pairing code expired before it was approved");
         }
         match client
-            .claim(created.pairing_id, &created.device_secret)
+            .claim(created.pairing_id.as_uuid(), &created.device_secret)
             .await?
         {
             ClaimStatus::Pending => {}

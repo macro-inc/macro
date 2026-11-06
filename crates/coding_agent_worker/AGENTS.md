@@ -33,8 +33,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `macrod.toml` with the deployment URLs resolved from its
   `macro_service_urls` `OVERRIDE_*` values (API, storage and app together, plus an optional
   computer-reachable egress URL; macrod.toml stays the one URL source at runtime), claims the
-  pre-approved pairing, chowns the config to its directory's owner, installs
-  the persona (names and keys validated by `hosted_runtimes::domain::enrollment`; useradd, `/etc/macro/personas/<os_user>.env` 0600,
+  pre-approved pairing after installing the persona, chowns the config to its directory's owner, installs
+  the persona (names and keys validated by `hosted_runtimes::domain::enrollment`; useradd, `/etc/macro/personas/<os_user>.env` 0600 merging non-secret config
+  with the transient `persona_enrollment.env` and zeroizing `persona_enrollment.secrets`,
   `/etc/systemd/system/<unit>.service`, `enable --now`), then writes
   `/var/lib/macrod/enrolled`. A stored credential skips the claim, so retries
   are safe. `--root` (hidden) prefixes system paths for tests.

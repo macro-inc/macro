@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use hosted_runtimes::domain::enrollment::{
     Enrollment, INCUS_ENROLLMENT_KEY, Persona, PersonaOsUser, SystemdUnitName,
 };
+use hosted_runtimes::domain::persona_credentials::PersonaEnrollment;
 use macro_service_urls::{
     AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
 };
@@ -198,7 +199,7 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     let persona = enrollment
         .persona
         .as_ref()
-        .map(|persona| PersonaFiles::render(persona, &paths))
+        .map(|persona| PersonaFiles::render(persona, &enrollment.persona_enrollment, &paths))
         .transpose()?;
     let urls = DeploymentUrls::from_overrides(&enrollment.service_url_overrides)?;
 
@@ -208,12 +209,13 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         Some(crate::service::installed_agent(&options.agent)?)
     };
     write_config(&options, agent, urls.as_ref())?;
-    ensure_credentials(&options.config, &enrollment).await?;
-    own_like_parent(&options.config, host)?;
-
+    // Claim only after the persona file is safely installed: a claimed guest
+    // must never be left with the credentials from a retired issuance.
     if let Some(persona) = persona {
         persona.install(host)?;
     }
+    ensure_credentials(&options.config, &enrollment).await?;
+    own_like_parent(&options.config, host)?;
 
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
@@ -433,13 +435,17 @@ struct PersonaFiles {
     os_user: PersonaOsUser,
     unit_name: SystemdUnitName,
     env_path: PathBuf,
-    env_contents: String,
+    env_contents: zeroize::Zeroizing<String>,
     unit_path: PathBuf,
     unit_contents: String,
 }
 
 impl PersonaFiles {
-    fn render(persona: &Persona, paths: &SystemPaths) -> rootcause::Result<Self> {
+    fn render(
+        persona: &Persona,
+        enrollment: &PersonaEnrollment,
+        paths: &SystemPaths,
+    ) -> rootcause::Result<Self> {
         let os_user = &persona.os_user;
         let unit_name = &persona.extra_service.unit_name;
         for (field, value) in [
@@ -452,8 +458,11 @@ impl PersonaFiles {
         }
 
         let env_system_path = format!("{PERSONA_ENV_DIR}/{os_user}.env");
-        let mut env_contents = String::new();
-        for (key, value) in &persona.config {
+        let mut env_contents = zeroize::Zeroizing::new(String::new());
+        let mut values: BTreeMap<_, _> = persona.config.iter().collect();
+        values.extend(enrollment.env.as_map());
+        values.extend(enrollment.secrets.expose());
+        for (key, value) in values {
             env_contents.push_str(&format!("{}=\"{}\"\n", key, env_file_value(value)?));
         }
 

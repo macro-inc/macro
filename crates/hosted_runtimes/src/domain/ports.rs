@@ -371,3 +371,19 @@ impl CompPolicy for NoComps {
         Ok(None)
     }
 }
+
+/// Supplies fresh persona material only while the fleet Create effect runs.
+/// Every call mints new credentials and revokes the earlier ones; the fleet
+/// must skip this call when an existing guest has claimed this generation.
+pub trait PersonaCredentialSource: Send + Sync + 'static {
+    fn issue(
+        &self,
+        computer: ComputerId,
+        generation: crate::domain::persona_credentials::EnrollmentGeneration,
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::persona_credentials::PersonaEnrollment,
+            crate::domain::persona_credentials::PersonaCredentialError,
+        >,
+    > + Send;
+}

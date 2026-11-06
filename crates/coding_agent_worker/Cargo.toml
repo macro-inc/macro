@@ -89,6 +89,8 @@ windows-sys = { workspace = true, features = [
 ] }
 zip = { workspace = true }
 
+zeroize = { workspace = true }
+
 [dev-dependencies]
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
