@@ -11,6 +11,8 @@
   --color-accent-contrast: #000;
   --color-accent-contrast-muted: #292929;
   --color-input: #171717;
+  /* Shared @ui inputs (the demo booking picker) match onboarding's own fields. */
+  --color-control: var(--color-input);
   --color-ink-placeholder: #737373;
   --glass-tint: #fff;
   --glass-shade-color: #000;
@@ -40,6 +42,7 @@ html[data-theme-light='true'] .onboarding-flow {
   --color-accent-contrast: #f5f1e8;
   --color-accent-contrast-muted: #e6e1d7;
   --color-input: #faf8f3;
+  --color-control: var(--color-input);
   --glass-highlight-base: 18%;
   --glass-rim-strong-base: 18%;
   --glass-rim-soft-base: 12%;

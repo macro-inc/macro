@@ -284,7 +284,11 @@ export function createAppOnboardingContext(): OnboardingContext {
       return {
         teams: () =>
           loadableQuery(teams, (data) =>
-            data.map((team) => ({ name: team.name }))
+            data.map((team) => ({
+              name: team.name,
+              owned:
+                userInfo.isSuccess && team.owner_id === userInfo.data.userId,
+            }))
           ),
         invites: () =>
           loadableQuery(invites, (data) =>

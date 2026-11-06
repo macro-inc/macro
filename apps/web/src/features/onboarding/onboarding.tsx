@@ -1,6 +1,9 @@
 import { InviteOfferPanel } from '@app/features/gtm-invite/InviteOfferPanel';
+import { InlineBooking } from '@app/features/scheduling/inline-booking';
+import { openExternalUrl } from '@core/util/url';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
+import { Button } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, onMount } from 'solid-js';
 import { OnboardingProvider } from './context/onboarding-context';
@@ -9,6 +12,13 @@ import { parseOnboardingStepParam } from './core/steps';
 import { createAppOnboardingContext } from './create-app-onboarding-context';
 import { OnboardingFlowView } from './views/onboarding-flow-view';
 import { SignupJourneyView } from './views/signup-journey-view';
+
+/** Macro's demo booking page (`/book/<profile>/<event>`), also linked from the website. */
+const DEMO_BOOKING = {
+  profile: '6de4003c-15e4-549f-b5a9-0e930bbf56e4',
+  event: 'macro-demo',
+};
+const DEMO_BOOKING_URL = `https://macro.com/app/book/${DEMO_BOOKING.profile}/${DEMO_BOOKING.event}`;
 
 /** The signed-in onboarding flow, wired to the app's services and router. */
 export function Onboarding() {
@@ -44,6 +54,25 @@ export function Onboarding() {
             finishing={actions.finishing()}
             onStartCheckout={actions.onClaim}
             onContinueFree={actions.onContinueFree}
+          />
+        )}
+        renderDemoBooking={(actions) => (
+          <InlineBooking
+            profile={DEMO_BOOKING.profile}
+            event={DEMO_BOOKING.event}
+            guestEmail={actions.guestEmail}
+            onBooked={(booking) => actions.onBooked(booking.startsAt)}
+            unavailable={
+              <div class="flex flex-col items-center gap-4 p-8 text-center text-sm text-ink-muted">
+                <p>Pick a time on our booking page.</p>
+                <Button
+                  variant="secondary"
+                  onClick={() => openExternalUrl(DEMO_BOOKING_URL)}
+                >
+                  Open booking page
+                </Button>
+              </div>
+            }
           />
         )}
       />

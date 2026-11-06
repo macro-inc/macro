@@ -66,14 +66,17 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await expect(page.getByRole('textbox')).toHaveCount(0);
   await page.getByRole('button', { name: 'Start 30 day trial' }).click();
 
-  // Stripe returns on the success leg; the flow waits for the webhook's license.
+  // Stripe returns on the success leg; the flow waits for the webhook's license,
+  // then offers the team's creator an optional demo call.
+  await expect(heading(page, 'Book a demo with our team.')).toBeVisible();
+  await page.getByRole('button', { name: 'Skip for now' }).click();
   await expectLanded(page, 'Entered Macro at /home');
   const world = await fakeWorld(page);
   expect(world.viewer).toMatchObject({
     tutorialComplete: true,
     licensed: true,
   });
-  expect(world.teams).toEqual([{ name: 'Acme' }]);
+  expect(world.teams).toEqual([{ name: 'Acme', owned: true }]);
   expect(world.connectedTools).toEqual(['linear']);
 });
 
@@ -291,8 +294,72 @@ test('an invite’s free months replace the trial and keep its promotion', async
   expect((await fakeWorld(page)).viewer?.licensed).toBe(true);
 });
 
+for (const width of [1280, 390]) {
+  test(`a team owner pays, then books the optional demo call at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page, '/?view=flow&step=team', {
+      teams: [{ name: 'Acme', owned: true }],
+    });
+    await expect(page.getByText("You're on Acme")).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Start 30 day trial' }).click();
+
+    // Stripe returns to the plan step; once the license lands, the demo follows.
+    await expect(heading(page, 'Book a demo with our team.')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(
+      page.getByRole('button', { name: 'Back to previous step' })
+    ).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth
+      )
+    ).toBe(true);
+
+    const day = page
+      .locator('button:not([disabled])')
+      .filter({ hasText: /^\d+$/ });
+    await day.last().click();
+    await page.getByRole('button', { name: /1:00/ }).first().click();
+    await page.getByLabel('Name').fill('Ada Lovelace');
+    await expect(page.getByLabel('Email address')).toHaveValue('ada@acme.com');
+    await page
+      .getByRole('button', { name: /Book|Confirm/ })
+      .last()
+      .click();
+
+    await expect(heading(page, "You're booked.")).toBeVisible();
+    await page.getByRole('button', { name: 'Continue to workspace' }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+    expect(await fakeEvents(page)).toContainEqual({
+      event: 'onboarding_v4_step',
+      data: { step: 'demo', index: 8, state: 'completed' },
+    });
+  });
+}
+
+test('a team owner can skip the demo call', async ({ page }) => {
+  await openFixture(page, '/?view=flow&step=demo', {
+    teams: [{ name: 'Acme', owned: true }],
+    viewer: {
+      id: 'macro|ada@acme.com',
+      email: 'ada@acme.com',
+      tutorialComplete: false,
+      licensed: true,
+    },
+  });
+  await expect(heading(page, 'Book a demo with our team.')).toBeVisible();
+  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await expectLanded(page, 'Entered Macro at /home');
+});
+
 test('an existing team member just confirms and moves on', async ({ page }) => {
-  await openFixture(page, '/?view=flow', { teams: [{ name: 'Acme' }] });
+  await openFixture(page, '/?view=flow', {
+    teams: [{ name: 'Acme', owned: false }],
+  });
   await page.evaluate(() => {
     localStorage.setItem(
       'onboarding-flow-step',
@@ -442,6 +509,7 @@ for (const width of [1440, 390]) {
         'tools',
         'team',
         'plan',
+        'demo',
       ]) {
         await page.evaluate((step) => {
           localStorage.setItem(

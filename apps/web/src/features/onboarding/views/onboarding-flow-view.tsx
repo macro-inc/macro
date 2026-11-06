@@ -1,5 +1,13 @@
+import type { PaidPlanTier } from '@app/features/paywall/plans';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
   animateStepChange,
@@ -19,6 +27,7 @@ import {
 } from '../core/steps';
 import { createFlowFinish } from '../primitives/flow-finish';
 import { createOnboardingFlow } from '../primitives/onboarding-flow';
+import { type DemoBookingSlot, DemoStep } from './demo-step';
 import { EmailStep } from './email-step';
 import { PlanComparisonView } from './plan-comparison-view';
 import { type InviteOfferSlot, PlanStep } from './plan-step';
@@ -39,6 +48,8 @@ export function OnboardingFlowView(props: {
   onSignedOut: () => void;
   /** Shown instead of the trial to an account holding an invite promotion. */
   renderInviteOffer: InviteOfferSlot;
+  /** The booking picker on the optional demo step. */
+  renderDemoBooking: DemoBookingSlot;
 }) {
   const context = useOnboardingContext();
   const emailAccounts = context.createEmailAccounts();
@@ -100,6 +111,28 @@ export function OnboardingFlowView(props: {
       queueMicrotask(() => focusStepHeading(content));
     });
   };
+  // A paid team owner gets an optional demo booking before entering the app;
+  // everyone else who paid finishes right away.
+  const [paidTier, setPaidTier] = createSignal<PaidPlanTier>('premium');
+  const ownsTeam = () => {
+    const teams = teamDirectory.teams();
+    return teams.t === 'ready' && teams.value.some((team) => team.owned);
+  };
+  const finishPaid = async (tier: PaidPlanTier = 'premium') => {
+    if (!ownsTeam()) return finish.finishPremium(tier);
+    setPaidTier(tier);
+    goTo('demo');
+  };
+  const leaveDemo = (outcome: StepOutcome) => {
+    if (finish.finishing()) return;
+    flow.leave(outcome);
+    const viewer = context.viewer();
+    const licensed = viewer.t === 'signed-in' && viewer.viewer.licensed;
+    fireAndForget(
+      licensed ? finish.finishPremium(paidTier()) : finish.finishFree(),
+      'onboarding'
+    );
+  };
   // Someone who already joined a team (invite link or domain) has nothing to
   // do on the team step, so the flow passes over it in both directions.
   const passesTeam = (target: OnboardingStep | undefined) => {
@@ -118,7 +151,7 @@ export function OnboardingFlowView(props: {
       viewer.t === 'signed-in' &&
       viewer.viewer.licensed
     ) {
-      fireAndForget(finish.finishPremium(), 'onboarding');
+      fireAndForget(finishPaid(), 'onboarding');
       return;
     }
     goTo(skipsTeam ? 'plan' : next);
@@ -138,6 +171,8 @@ export function OnboardingFlowView(props: {
   };
   const back = () => {
     const current = step();
+    // Payment is done by the demo step; there is nothing to go back to.
+    if (current === 'demo') return undefined;
     const previous = current && previousOnboardingStep(current);
     const target = passesTeam(previous) ? 'tools' : previous;
     return target && !finish.finishing() ? () => goTo(target) : undefined;
@@ -230,7 +265,15 @@ export function OnboardingFlowView(props: {
                 fireAndForget(finish.finishFree(), 'onboarding')
               }
               renderInviteOffer={props.renderInviteOffer}
-              onPremiumPaid={finish.finishPremium}
+              onPremiumPaid={finishPaid}
+            />
+          </Match>
+          <Match when={step() === 'demo'}>
+            <DemoStep
+              finishing={finish.finishing()}
+              renderBooking={props.renderDemoBooking}
+              onContinue={() => leaveDemo('completed')}
+              onSkip={() => leaveDemo('skipped')}
             />
           </Match>
         </Switch>

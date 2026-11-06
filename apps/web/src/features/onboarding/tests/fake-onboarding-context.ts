@@ -314,7 +314,7 @@ export function createFakeOnboarding(
       );
       fail('createTeam');
       update((draft) => {
-        draft.teams = [{ name }];
+        draft.teams = [{ name, owned: true }];
       });
     },
     joinTeam: async (inviteId) => {
@@ -323,7 +323,8 @@ export function createFakeOnboarding(
       update((draft) => {
         const invite = draft.invites.find((item) => item.id === inviteId);
         draft.invites = draft.invites.filter((item) => item.id !== inviteId);
-        if (invite) draft.teams = [{ name: `${invite.invitedBy}'s team` }];
+        if (invite)
+          draft.teams = [{ name: `${invite.invitedBy}'s team`, owned: false }];
       });
     },
     copyTeamInviteLink: async () => {
