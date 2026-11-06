@@ -94,6 +94,14 @@ export type AppEvents = {
   onboarding_v4_email_connected: { connected_count: number };
   /** A connector completed OAuth from its step. */
   onboarding_v4_connector_connected: { connector: string };
+  /** How the last step's routine suggestions were left. */
+  onboarding_v4_routines: {
+    suggested: number;
+    /** Switched on before the person changed anything. */
+    recommended: number;
+    enabled: number;
+    recommended_kept: number;
+  };
   /** What happened on the team step. */
   onboarding_v4_team: {
     action:

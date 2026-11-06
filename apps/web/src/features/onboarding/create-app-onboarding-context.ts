@@ -1,4 +1,5 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { useRoutineSuggestionsEnabled } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
@@ -56,6 +57,10 @@ import {
   onboardingToolState,
 } from './queries/connected-tools';
 import { loadableQuery } from './queries/loadable-query';
+import {
+  createAppRoutinesStep,
+  warmRoutineSuggestions,
+} from './queries/routines-step';
 import { createOnboardingToolCatalog } from './queries/tool-catalog';
 import { createOnboardingToolConnect } from './queries/tool-connect';
 
@@ -160,6 +165,7 @@ export function createAppOnboardingContext(): OnboardingContext {
   const connectTool = createOnboardingToolConnect();
   const createInviteLink = useCreateTeamInviteLinkMutation();
   const sendReferrals = useSendReferralInvitesMutation();
+  const routineSuggestionsEnabled = useRoutineSuggestionsEnabled();
   // A team created on this step: its optimistic placeholder is in the teams
   // cache until creation settles, so the invite link waits for the real id.
   let createdTeam: Promise<string | undefined> | undefined;
@@ -406,6 +412,9 @@ export function createAppOnboardingContext(): OnboardingContext {
       await completeTutorial.mutateAsync();
       return { t: 'completed' };
     },
+    routineSuggestionsEnabled,
+    warmRoutineSuggestions,
+    createRoutinesStep: createAppRoutinesStep,
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();
     },
