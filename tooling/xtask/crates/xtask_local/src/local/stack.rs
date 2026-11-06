@@ -357,6 +357,7 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         // running stack's wiring keyed on the port probe as before.
         true,
     )?;
+    adopt_proxy_config(&stage, &instance, mode, &env, &state)?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;
         new.validate(&super::inventory::local_binaries())?;
@@ -406,6 +407,56 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Rewrite the instance's Caddyfile and recreate only the proxy when it changed,
+/// so a stack started by an older xtask gets current routing and cookie rules
+/// with its data intact. `stack up` would wipe it.
+fn adopt_proxy_config(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    env: &env_layer::ResolvedEnv,
+    state: &StackState,
+) -> Result<()> {
+    let config = proxy::caddyfile(instance, mode, state.frontend == "static");
+    let mut up = super::compose_cmd(instance, env);
+    up.args(["up", "-d", "--force-recreate", "--no-deps", "proxy"]);
+    replace_running_config(
+        &super::gen_compose::caddyfile_path(instance),
+        &config,
+        stage.is_dry_run(),
+        || stage.run("Recreating proxy (configuration changed)", &mut up),
+    )
+}
+
+/// Put `config` at `path` and `reload` whatever runs it, only when it differs.
+/// The new file stays on disk only once the reload succeeds: a dry run writes
+/// nothing, and a failed reload restores the previous file (or removes a new
+/// one), so the next update sees the change again and retries.
+fn replace_running_config(
+    path: &std::path::Path,
+    config: &str,
+    dry_run: bool,
+    reload: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    let previous = std::fs::read_to_string(path).ok();
+    if previous.as_deref() == Some(config) {
+        return Ok(());
+    }
+    if dry_run {
+        return reload();
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    std::fs::write(path, config).with_context(|| format!("writing {}", path.display()))?;
+    reload().inspect_err(|_| {
+        let _ = match &previous {
+            Some(previous) => std::fs::write(path, previous),
+            None => std::fs::remove_file(path),
+        };
+    })
 }
 
 fn remount(

@@ -34,6 +34,11 @@ fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
             } else {
                 assert!(!env.contains_key("VITE_AI_EDITING_WORKER_URL"));
             }
+            if mode == Mode::Local {
+                assert_eq!(env["VITE_LOCAL_STACK"], "true");
+            } else {
+                assert!(!env.contains_key("VITE_LOCAL_STACK"));
+            }
         }
         let env: std::collections::HashMap<_, _> = dev_env(&instance, Mode::Local, false)
             .unwrap()
