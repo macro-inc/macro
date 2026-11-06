@@ -222,8 +222,8 @@ mod authenticated_join_routes {
     };
     use entity_access::domain::ports::NoOpEntityAccessService;
     use macro_authorization::{
-        InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
-        MacroAuthorizationState, ValidatedCredential,
+        CredentialOrigin, InternalIdentityClaims, MacroAuthorizationError,
+        MacroAuthorizationService, MacroAuthorizationState, ValidatedCredential,
     };
     use model_user::UserContext;
     use rootcause::Report;
@@ -246,6 +246,7 @@ mod authenticated_join_routes {
         ) -> Result<UserContext, Report<MacroAuthorizationError>> {
             let user_id = match jwt {
                 "member" => "macro|member@example.com",
+                "program" => "macro|member@example.com",
                 "viewer" => "macro|viewer@example.com",
                 _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
             };
@@ -261,7 +262,13 @@ mod authenticated_join_routes {
             &self,
             jwt: &str,
         ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
-            self.authorize(jwt).await.map(ValidatedCredential::session)
+            self.authorize(jwt).await.map(|context| {
+                let mut credential = ValidatedCredential::session(context);
+                if jwt == "program" {
+                    credential.origin = CredentialOrigin::UserApiKey;
+                }
+                credential
+            })
         }
 
         async fn authorize_internal(
@@ -352,6 +359,43 @@ mod authenticated_join_routes {
 
         let response = router(service)
             .oneshot(join(call_id, "member"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn meeting_join_without_body_uses_app_options_and_person_client() {
+        let call_id = Uuid::now_v7();
+        let mut service = MockCallService::new();
+        service
+            .expect_join_meeting_with_options()
+            .times(1)
+            .returning(move |_, _, request, is_program, _| {
+                assert_eq!(request.on_other_call, crate::domain::models::OnOtherCall::Switch);
+                assert!(request.replace);
+                assert!(!is_program);
+                Box::pin(async move {
+                    Ok(CallTokenResponse {
+                        started: false,
+                        participant_id: "macro|member@example.com".to_string(),
+                        share_token: None,
+                        call_id,
+                        channel_id: None,
+                        token: "test-token".to_string(),
+                        room_name: call_id.to_string(),
+                        server_url: "wss://example.com".to_string(),
+                    })
+                })
+            });
+
+        let response = router(service)
+            .oneshot(
+                Request::post(format!("/meetings/join/{}", "a".repeat(64)))
+                    .header("authorization", "Bearer program")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
