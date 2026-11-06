@@ -47,9 +47,10 @@ each run.
   every first draft failed the type check. The request carries no
   workspace lists: before drafting, the model lists the items the words name
   (`drafts/lookup.rs`, at most `MAX_LOOKUPS`), and the fixed `lookup.ts` step
-  finds them through `RoutineCode::run` as a dry run with the person's access,
-  bounded by `LOOKUP_TIMEOUT`. Only a name matching one item exactly (or, for a
-  person, the only one found) reaches the model; the rest stay empty for the
+  finds them through `RoutineCode::run` as a dry run with the person's access
+  (names in its `lookups` knob), bounded by `LOOKUP_TIMEOUT`. Only a name that
+  means exactly one item (its name, or a person's first name or email) reaches
+  the model; the rest stay empty for the
   review's pickers, and saving checks every id. A draft is bounded by
   `DRAFT_TIMEOUT`; the `routine.draft` span records the lookup count,
   model turns and outcome (`timeout` included), never the words. `DraftContext`

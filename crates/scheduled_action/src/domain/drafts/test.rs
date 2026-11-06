@@ -730,10 +730,8 @@ async fn looks_up_the_names_as_a_dry_run_and_counts_its_turns() {
     // Blank names are dropped before the lookup runs.
     let ran = checker.ran.lock().unwrap().clone();
     assert_eq!(ran.len(), 1);
-    assert_eq!(
-        ran[0]["lookups"],
-        json!([{ "kind": "label", "name": "Finance" }])
-    );
+    let asked: Value = serde_json::from_str(ran[0]["lookups"].as_str().unwrap()).unwrap();
+    assert_eq!(asked, json!([{ "kind": "label", "name": "Finance" }]));
     assert!(model.asked()[0].0.contains(r#""emailLabels":["Finance"]"#));
 }
 

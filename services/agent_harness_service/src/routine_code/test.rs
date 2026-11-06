@@ -693,6 +693,20 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         let problems = code.check_program(&program(steps)).await.unwrap();
         assert_eq!(problems, Vec::new(), "the CreateRoutine example");
     }
+
+    /// The drafter runs its lookup step as it is, so it must check against
+    /// today's SDK too.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn the_drafters_lookup_step_type_checks() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let step = scheduled_action::domain::drafts::lookup_step(&[]);
+        let problems = code
+            .check_program(&program(json!([routine_program::Step::Code(step)])))
+            .await
+            .unwrap();
+        assert_eq!(problems, Vec::new());
+    }
 }
 
 #[test]

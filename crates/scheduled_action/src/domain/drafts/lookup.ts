@@ -1,7 +1,8 @@
 // Finds the items a routine description names, as the person, with their
-// access. Runs as a dry run: it only reads. Each name gets the items whose
-// name contains it, at most MAX_MATCHES; the drafter decides which, if any,
-// the name means.
+// access. Runs as a dry run: it only reads. The names arrive as JSON in the
+// `lookups` knob. Each name gets the items whose name contains it, at most
+// MAX_MATCHES; the drafter decides which, if any, the name means. A name
+// whose SDK call failed comes back `failed`, with no matches.
 
 type Kind = 'channel' | 'person' | 'folder' | 'label' | 'tag' | 'agent';
 type Lookup = { kind: Kind; name: string };
@@ -22,8 +23,8 @@ function contains(name: string | undefined, query: string): boolean {
   return (name ?? '').toLocaleLowerCase().includes(query.toLocaleLowerCase());
 }
 
-export async function main(context: StepContext & { lookups: Lookup[] }) {
-  const { macro, lookups } = context;
+export async function main({ macro, knobs }: StepContext) {
+  const lookups: Lookup[] = JSON.parse(knobs.lookups);
   // Lists are read once, however many names need them.
   let labels: Promise<Match[]> | undefined;
   let tags: Promise<Match[]> | undefined;
@@ -74,9 +75,12 @@ export async function main(context: StepContext & { lookups: Lookup[] }) {
 
   // One failed lookup leaves only that name unresolved.
   return Promise.all(
-    lookups.map(async (lookup) => ({
-      ...lookup,
-      matches: await find(lookup).catch(() => []),
-    })),
+    lookups.map(async (lookup) => {
+      try {
+        return { ...lookup, matches: await find(lookup), failed: false };
+      } catch {
+        return { ...lookup, matches: [], failed: true };
+      }
+    }),
   );
 }

@@ -10,7 +10,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use routine_program::{CodeIdentity, CodeStep};
+use routine_program::{CodeIdentity, CodeStep, Knob};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -54,6 +54,9 @@ struct Found {
     name: String,
     #[serde(default)]
     matches: Vec<Match>,
+    /// Its SDK call failed, so nothing was found.
+    #[serde(default)]
+    failed: bool,
 }
 
 /// An item whose name contains the one looked up.
@@ -123,6 +126,7 @@ pub struct WorkspaceAgent {
 #[tracing::instrument(name = "routine.draft.lookup", skip_all, fields(
     routine.draft.lookups = tracing::field::Empty,
     routine.draft.lookups_resolved = tracing::field::Empty,
+    routine.draft.lookups_failed = tracing::field::Empty,
     routine.draft.lookup_outcome = tracing::field::Empty,
 ))]
 pub async fn look_up<Code: RoutineCode, Model: DraftModel>(
@@ -162,19 +166,11 @@ pub async fn look_up<Code: RoutineCode, Model: DraftModel>(
         span.record("routine.draft.lookup_outcome", "none_named");
         return Workspace::default();
     }
-    let step = CodeStep {
-        id: None,
-        title: "Look up named items".to_owned(),
-        summary: String::new(),
-        source: LOOKUP_SOURCE.to_owned(),
-        knobs: Vec::new(),
-        sentence: None,
-    };
+    let step = lookup_step(&lookups);
     let context = json!({
         "run": { "id": Uuid::now_v7().to_string(), "at": now, "timezone": "UTC", "dryRun": true, "previous": null, "lastSucceededAt": null },
         "routine": { "id": "routine-draft", "name": "Routine draft" },
         "trigger": { "kind": "manual", "by": owner.as_ref() },
-        "lookups": lookups,
     });
     let no_steps = json!({});
     let run = code.run(
@@ -194,39 +190,64 @@ pub async fn look_up<Code: RoutineCode, Model: DraftModel>(
     };
     let found = outcome
         .result
-        .map_err(|error| error.to_string())
-        .and_then(|value| serde_json::from_value::<Vec<Found>>(value).map_err(|e| e.to_string()));
+        .ok()
+        .and_then(|value| serde_json::from_value::<Vec<Found>>(value).ok())
+        .ok_or(());
     match found {
         Ok(found) => {
             let workspace = resolve(&found);
             span.record("routine.draft.lookups_resolved", workspace.len());
+            span.record(
+                "routine.draft.lookups_failed",
+                found.iter().filter(|found| found.failed).count(),
+            );
             span.record("routine.draft.lookup_outcome", "looked_up");
             workspace
         }
-        Err(error) => {
+        // The step's error can quote what it read, so it isn't logged.
+        Err(_) => {
             span.record("routine.draft.lookup_outcome", "failed");
-            tracing::warn!(error = %error, "looking up named items failed; drafting without them");
+            tracing::warn!("looking up named items failed; drafting without them");
             Workspace::default()
         }
     }
 }
 
-/// The item each name means: the one whose name is the name (ignoring case
-/// and a leading # or @), or for a person, the only one found. Nothing for a
-/// name that matches nothing or several items.
+/// The fixed code step that looks up `lookups`, which it reads from its
+/// `lookups` knob as JSON.
+pub fn lookup_step(lookups: &[Lookup]) -> CodeStep {
+    let knobs = match "lookups".to_owned().try_into() {
+        Ok(name) => vec![Knob::Text {
+            name,
+            label: "Names to look up".to_owned(),
+            value: serde_json::to_string(lookups).unwrap_or_else(|_| "[]".to_owned()),
+        }],
+        Err(_) => Vec::new(),
+    };
+    CodeStep {
+        id: None,
+        title: "Look up named items".to_owned(),
+        summary: String::new(),
+        source: LOOKUP_SOURCE.to_owned(),
+        knobs,
+        sentence: None,
+    }
+}
+
+/// The item each name means: the one item called that (ignoring case and a
+/// leading # or @), or for a person, the one whose first name or email it
+/// is. Nothing for a name that matches nothing or several items.
 fn resolve(found: &[Found]) -> Workspace {
     let mut workspace = Workspace::default();
     for found in found {
         let wanted = normalized(&found.name);
-        let exact: Vec<&Match> = found
+        let meant: Vec<&Match> = found
             .matches
             .iter()
-            .filter(|item| normalized(&item.name) == wanted)
+            .filter(|item| means(found.kind, &wanted, item))
             .collect();
-        let chosen = match (exact.as_slice(), found.kind, found.matches.as_slice()) {
-            ([only], _, _) => *only,
-            ([], LookupKind::Person, [only]) => only,
-            _ => continue,
+        let [chosen] = meant.as_slice() else {
+            continue;
         };
         let named = || NamedItem {
             name: chosen.name.clone(),
@@ -260,6 +281,17 @@ fn resolve(found: &[Found]) -> Workspace {
         }
     }
     workspace
+}
+
+/// Whether `item` is what a name, normalized as `wanted`, means.
+fn means(kind: LookupKind, wanted: &str, item: &Match) -> bool {
+    let name = normalized(&item.name);
+    if name == wanted {
+        return true;
+    }
+    kind == LookupKind::Person
+        && (name.split_whitespace().next() == Some(wanted)
+            || item.id.to_lowercase() == format!("macro|{wanted}"))
 }
 
 fn push_new<T: PartialEq>(items: &mut Vec<T>, item: T) {

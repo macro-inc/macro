@@ -16,8 +16,8 @@ pub(crate) struct Checker {
     pub unavailable: bool,
     /// What a run returns; saving never runs code, drafting looks up names.
     pub runs: Option<serde_json::Value>,
-    /// The context each run was given.
-    pub ran: Mutex<Vec<serde_json::Value>>,
+    /// The knobs each run's step had.
+    pub ran: Mutex<Vec<serde_json::Map<String, serde_json::Value>>>,
     /// Runs never finish.
     pub hangs: bool,
 }
@@ -59,7 +59,7 @@ impl RoutineCode for Checker {
 
     async fn run(&self, _: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
         assert!(run.dry_run, "only dry runs here");
-        self.ran.lock().unwrap().push(run.context.clone());
+        self.ran.lock().unwrap().push(run.step.knob_values());
         if self.hangs {
             std::future::pending::<()>().await;
         }

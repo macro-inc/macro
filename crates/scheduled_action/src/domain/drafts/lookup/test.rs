@@ -66,26 +66,44 @@ fn an_ambiguous_or_unknown_name_stays_unresolved() {
         found(
             "person",
             "sam",
-            json!([{ "name": "Sam Lee", "id": "u1" }, { "name": "Samir", "id": "u2" }]),
+            json!([{ "name": "Sam Lee", "id": "u1" }, { "name": "Sam Ortiz", "id": "u2" }]),
         ),
+        // A longer name that merely contains it is someone else.
+        found("person", "sam", json!([{ "name": "Samir", "id": "u3" }])),
     ]);
 
     assert_eq!(workspace, Workspace::default());
 }
 
 #[test]
-fn a_person_found_alone_is_the_one_meant() {
-    let workspace = resolve(&[found(
-        "person",
-        "@sam",
-        json!([{ "name": "Sam Lee", "id": "macro|sam@example.com" }]),
-    )]);
+fn a_person_is_found_by_first_name_or_email() {
+    let workspace = resolve(&[
+        found(
+            "person",
+            "@sam",
+            json!([
+                { "name": "Sam Lee", "id": "macro|sam@example.com" },
+                { "name": "Samir Khan", "id": "macro|samir@example.com" },
+            ]),
+        ),
+        found(
+            "person",
+            "dana@example.com",
+            json!([{ "name": "Dana Park", "id": "macro|dana@example.com" }]),
+        ),
+    ]);
 
     assert_eq!(
         workspace.people,
-        vec![NamedItem {
-            name: "Sam Lee".into(),
-            id: "macro|sam@example.com".into(),
-        }]
+        vec![
+            NamedItem {
+                name: "Sam Lee".into(),
+                id: "macro|sam@example.com".into(),
+            },
+            NamedItem {
+                name: "Dana Park".into(),
+                id: "macro|dana@example.com".into(),
+            },
+        ]
     );
 }

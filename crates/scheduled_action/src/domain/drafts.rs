@@ -28,6 +28,7 @@ mod lookup;
 mod test;
 
 use lookup::Workspace;
+pub use lookup::{Lookup, LookupKind, lookup_step};
 
 /// Times the model may fix code the type checker rejects before the draft
 /// comes back with its problems.
