@@ -188,3 +188,59 @@ test('failed durable cost accounting refuses further spend instead of releasing 
     await nodeFs.rm(directory, { recursive: true });
   }
 });
+
+test('unknown timeout cost consumes the admitted cap durably while releasing slots', async (t) => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-unknown-spend-')
+  );
+  t.after(() => nodeFs.rm(directory, { recursive: true, force: true }));
+  const ledger = new SpendLedger(directory);
+  const runner = new HeldRunner();
+  const pool = new Pool({
+    runner,
+    limits: { work: 1 },
+    budget: async () => BUDGET,
+    ledger,
+    log() {},
+  });
+  const run = await pool.start(turn('stuck', 'work'));
+  runner.finish.get('stuck')?.({
+    status: 'aborted',
+    result: 'inactivity',
+    costUsd: 0,
+    costIncomplete: true,
+    sessionId: null,
+  });
+  await run.done;
+  assert.deepEqual(pool.active(), []);
+  assert.equal(await new SpendLedger(directory).spentToday(), 10);
+  await assert.rejects(() => pool.start(turn('next', 'work')), BudgetExceeded);
+});
+
+test('a rejected runner retains unknown spend across a new ledger instance', async (t) => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-rejected-spend-')
+  );
+  t.after(() => nodeFs.rm(directory, { recursive: true, force: true }));
+  const failure = Promise.withResolvers<Outcome>();
+  const pool = new Pool({
+    runner: {
+      start: () => ({
+        events: new AsyncQueue<RunEvent>(),
+        inject() {},
+        abort() {},
+        done: failure.promise,
+      }),
+    },
+    limits: { work: 1 },
+    budget: async () => BUDGET,
+    ledger: new SpendLedger(directory),
+    log() {},
+  });
+  const run = await pool.start(turn('failed', 'work'));
+  failure.reject(new Error('runner failed'));
+  await assert.rejects(run.done, /runner failed/);
+  assert.deepEqual(pool.active(), []);
+  assert.equal(await new SpendLedger(directory).spentToday(), 10);
+  await assert.rejects(() => pool.start(turn('retry', 'work')), BudgetExceeded);
+});

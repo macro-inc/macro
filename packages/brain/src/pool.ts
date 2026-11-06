@@ -153,26 +153,36 @@ export class Pool {
       tier: turn.tier,
       startedAt: new Date().toISOString(),
     });
+    const recordCost = async (costUsd: number) => {
+      const unlock = await this.admission.acquire();
+      try {
+        const spent = await this.deps.ledger.record(costUsd);
+        this.reservedUsd -= reservation;
+        reservation = 0;
+        return spent;
+      } catch (error) {
+        this.accountingFailed = true;
+        throw error;
+      } finally {
+        unlock();
+      }
+    };
     const done = handle.done.then(
       async (outcome) => {
         try {
-          const unlock = await this.admission.acquire();
-          let spent: number;
-          try {
-            spent = await this.deps.ledger.record(outcome.costUsd);
-            this.reservedUsd -= reservation;
-            reservation = 0;
-          } catch (error) {
-            this.accountingFailed = true;
-            throw error;
-          } finally {
-            unlock();
-          }
+          // A missing final SDK result cannot prove unused budget. Persist the
+          // admitted cap so a timeout/restart cannot recycle unknown spend.
+          const accounted = outcome.costIncomplete
+            ? Math.max(admitted.maxBudgetUsd, outcome.costUsd)
+            : outcome.costUsd;
+          const spent = await recordCost(accounted);
           this.deps.log({
             turn: turn.id,
             tier: turn.tier,
             status: outcome.status,
             cost_usd: outcome.costUsd,
+            accounted_cost_usd: accounted,
+            cost_incomplete: outcome.costIncomplete ?? false,
             spent_today_usd: spent,
           });
           await this.deps.afterTurn?.(admitted, outcome);
@@ -186,10 +196,21 @@ export class Pool {
       },
       async (error) => {
         try {
+          const spent = await recordCost(admitted.maxBudgetUsd);
+          this.deps.log({
+            turn: turn.id,
+            tier: turn.tier,
+            status: 'error',
+            cost_usd: 0,
+            accounted_cost_usd: admitted.maxBudgetUsd,
+            cost_incomplete: true,
+            spent_today_usd: spent,
+          });
           await this.deps.afterTurn?.(admitted, {
             status: 'error',
             result: '',
             costUsd: 0,
+            costIncomplete: true,
             sessionId: null,
           });
         } finally {

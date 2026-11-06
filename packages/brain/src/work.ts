@@ -156,6 +156,7 @@ export class Work {
     try {
       handle = await this.deps.pool.start({
         id: turnId,
+        timeout: { wallClockMs: 30 * 60_000, inactivityMs: 5 * 60_000 },
         tier: tier ?? 'work',
         prompt,
         system,
@@ -178,6 +179,14 @@ export class Work {
     });
     this.deps.log({ work: task.id, started: label, conversation: key });
     const finished = handle.done
+      .catch(
+        (): Outcome => ({
+          status: 'error',
+          result: 'The work runner failed before completion.',
+          costUsd: 0,
+          sessionId: null,
+        })
+      )
       .then((outcome) => this.finish(key, turnId, outcome, worktree, branch))
       .catch((error) =>
         this.deps.log({ work: task.id, finish_failed: String(error) })
@@ -215,9 +224,12 @@ export class Work {
       outcome.status === 'success'
         ? outcome.result
         : `I couldn't finish "${run.label}" (${outcome.status}${outcome.result ? `: ${outcome.result}` : ''}).`;
-    if (run.report) await this.deps.report(run.conversationRef, report);
-    await this.deps.commit(turnId, `work ${run.label}: ${outcome.status}`);
-    await this.cleanUp(worktree, branch);
+    try {
+      if (run.report) await this.deps.report(run.conversationRef, report);
+      await this.deps.commit(turnId, `work ${run.label}: ${outcome.status}`);
+    } finally {
+      await this.cleanUp(worktree, branch);
+    }
   }
   /** Remove the worktree and branch unless they hold uncommitted or unmerged work. */
   private async cleanUp(worktree: string, branch: string) {
