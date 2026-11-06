@@ -11,6 +11,8 @@ import chatVideo from './assets/chat.mp4';
 import chatPoster from './assets/chat-poster.jpg';
 import crmVideo from './assets/crm.mp4';
 import crmPoster from './assets/crm-poster.jpg';
+import databasesVideo from './assets/databases.mp4';
+import databasesPoster from './assets/databases-poster.jpg';
 import docsVideo from './assets/docs.mp4';
 import docsPoster from './assets/docs-poster.jpg';
 import driveVideo from './assets/drive.mp4';
@@ -135,6 +137,23 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: spreadsheetsVideo,
     posterUrl: spreadsheetsPoster,
+  },
+  databases: {
+    id: 'databases',
+    get title() {
+      return t('tutorials.databasesTitle');
+    },
+    get block() {
+      return t('tutorials.databasesBlock');
+    },
+    get snippet() {
+      return t('tutorials.databasesSnippet');
+    },
+    get length() {
+      return t('tutorials.databasesLength');
+    },
+    videoUrl: databasesVideo,
+    posterUrl: databasesPoster,
   },
   canvas: {
     id: 'canvas',

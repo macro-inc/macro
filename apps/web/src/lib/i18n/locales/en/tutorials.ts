@@ -35,6 +35,11 @@ export default {
   spreadsheetsSnippet:
     'Formulas, @mentions, charts, agents and comments, linked to everything else',
   spreadsheetsLength: '0:56',
+  databasesTitle: 'Learn how to use Macro Databases',
+  databasesBlock: 'Macro Databases',
+  databasesSnippet:
+    'Track and sort by any property, @mention anything, link tables, ask an agent',
+  databasesLength: '1:05',
   canvasTitle: 'Learn how to use Macro Canvas',
   canvasBlock: 'Macro Canvas',
   canvasSnippet:
