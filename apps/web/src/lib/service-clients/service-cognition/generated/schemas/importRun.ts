@@ -6,6 +6,7 @@
  */
 import type { ImportRunError } from './importRunError';
 import type { ImportRunReviewId } from './importRunReviewId';
+import type { ImportRunReviewSessionId } from './importRunReviewSessionId';
 import type { ImportRunScanned } from './importRunScanned';
 import type { ImportSource } from './importSource';
 import type { RunStatus } from './runStatus';
@@ -19,6 +20,8 @@ export interface ImportRun {
   /** The review presenting the run's plan, once one does. A Notion plan is
 presented while it is still `running`; rows staged after that take it. */
   review_id?: ImportRunReviewId;
+  /** The agent session presenting that review. */
+  review_session_id?: ImportRunReviewSessionId;
   scanned?: ImportRunScanned;
   /** The source this run discovered from. */
   source: ImportSource;

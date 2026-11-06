@@ -110,7 +110,8 @@ approves the review itself (a `DecideReview` submit, the card's own approve with
 card's choices), and the card's run state adds **Started by the agent at your
 request** ("at the owner's request" for other viewers). A message from anyone
 but the owner never approves, and a plan still being made cannot be approved
-yet. Filter
+yet. On desktop the run also shows in the corner's
+[import tray](setup-cards.md#import-tray) from planning to done. Filter
 by tag from the **Filter** menu's Tags submenu; navigating to another tab or folder
 clears tag filters. A folder with no files matching the active tag
 shows the list's no-match state rather than `This folder is empty`.

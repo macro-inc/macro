@@ -406,6 +406,9 @@ async fn a_reviewed_run_reports_its_review_and_a_cancel_survives_the_write_endin
     )
     .await
     .unwrap();
+    let runs = repo.list_runs(&alice).await.unwrap();
+    assert_eq!(runs[0].review_id, Some(review));
+    assert_eq!(runs[0].review_session_id, Some(session));
     let to_importing = repo
         .transition_reviewed_run(
             &alice,
