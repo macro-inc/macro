@@ -471,3 +471,19 @@ pub enum BotError {
     #[error(transparent)]
     Repo(#[from] anyhow::Error),
 }
+
+/// Trusted runtime-routing lookups for agent harness assignments.
+pub trait HarnessAssignments: Send + Sync {
+    /// Lookup the registered harness selected by an agent.
+    fn harness_for(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
+    /// List every agent assigned to a harness, including retired bots.
+    fn bots_on_harness(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<Vec<BotId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
+}
