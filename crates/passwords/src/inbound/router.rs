@@ -82,20 +82,18 @@ async fn csrf(request: axum::extract::Request, next: Next) -> Response {
     if !matches!(
         *request.method(),
         axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
-    ) {
-        if request
+    ) && (request
+        .headers()
+        .get("x-macro-passwords")
+        .and_then(|value| value.to_str().ok())
+        != Some("1")
+        || request
             .headers()
-            .get("x-macro-passwords")
+            .get("sec-fetch-site")
             .and_then(|value| value.to_str().ok())
-            != Some("1")
-            || request
-                .headers()
-                .get("sec-fetch-site")
-                .and_then(|value| value.to_str().ok())
-                == Some("cross-site")
-        {
-            return StatusCode::FORBIDDEN.into_response();
-        }
+            == Some("cross-site"))
+    {
+        return StatusCode::FORBIDDEN.into_response();
     }
     next.run(request).await
 }

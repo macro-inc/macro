@@ -105,16 +105,15 @@ impl PasswordService {
         Ok(record)
     }
     async fn validate_folder(&self, team: TeamId, id: Option<Uuid>) -> Result<(), Error> {
-        if let Some(id) = id {
-            if !self
+        if let Some(id) = id
+            && !self
                 .repository
                 .folders(team)
                 .await?
                 .iter()
                 .any(|folder| folder.id == id)
-            {
-                return Err(Error::Invalid);
-            }
+        {
+            return Err(Error::Invalid);
         }
         Ok(())
     }
@@ -164,15 +163,15 @@ impl PasswordService {
         self.validate_folder(team, command.folder_id).await?;
         let id = ItemId(command.operation_id);
         let _lock = self.repository.lock(team, id).await?;
-        if let Ok(existing) = self.repository.get(team, id).await {
-            if existing.user_id != actor.user_id {
-                return Err(Error::Forbidden);
-            }
+        if let Ok(existing) = self.repository.get(team, id).await
+            && existing.user_id != actor.user_id
+        {
+            return Err(Error::Forbidden);
         }
-        if let Ok(staged) = self.repository.staged(team, id, command.operation_id).await {
-            if staged.user_id != actor.user_id {
-                return Err(Error::Forbidden);
-            }
+        if let Ok(staged) = self.repository.staged(team, id, command.operation_id).await
+            && staged.user_id != actor.user_id
+        {
+            return Err(Error::Forbidden);
         }
         self.reconcile(team, id).await?;
         match self.repository.get(team, id).await {
@@ -234,13 +233,14 @@ impl PasswordService {
         let mut record = self.access(actor, team, item, true).await?;
         command.validate()?;
         if command.expected_version != Some(record.metadata.version) {
-            if let Some((version, operation)) = self.provider.status(team, item).await? {
-                if operation == command.operation_id && version == record.metadata.version {
-                    self.repository
-                        .audit(team, item, actor, Action::Update, command.operation_id)
-                        .await?;
-                    return Ok(record.metadata);
-                }
+            if let Some((version, operation)) = self.provider.status(team, item).await?
+                && operation == command.operation_id
+                && version == record.metadata.version
+            {
+                self.repository
+                    .audit(team, item, actor, Action::Update, command.operation_id)
+                    .await?;
+                return Ok(record.metadata);
             }
             return Err(Error::Conflict);
         }
