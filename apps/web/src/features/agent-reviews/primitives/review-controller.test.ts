@@ -108,9 +108,12 @@ describe('persisted review decisions', () => {
     });
     await Promise.resolve();
     expect(controller.stale()).toBe(false);
-    expect(controller.record().items[0].draft.subject).toBe(
-      'Changed elsewhere'
-    );
+    expect(controller.record()).toMatchObject({
+      items: [
+        { draft: { subject: 'Changed elsewhere' } },
+        { draft: { subject: 'Changed elsewhere' } },
+      ],
+    });
     expect(controller.generation()).toBe(1);
   });
   it('keeps unsaved local edits when another editor changes the draft', async () => {
