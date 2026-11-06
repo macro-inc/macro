@@ -143,11 +143,14 @@ describe `env_http_headers` and per-server configuration.
 Start macrod inside Herdr and choose **Claude Code in herdr** or **Codex in
 herdr** in Quickstart. Select a workspace directory containing your existing
 clones and pair with Macro. Native CLI authentication and Git credentials are
-reused. Each instance has one configuration, with no profiles to choose per run.
-The TUI and `macrod service` share `~/.macrod/macrod.toml`
-(`%USERPROFILE%\.macrod\macrod.toml` on Windows; `--config` overrides it), and
-only one macrod can serve a config at a time. The runtime's name, access, and
-permission bypass are set on the web at Settings → Agents → Runtimes.
+reused. Each instance has one configuration. The TUI and `macrod service`
+share `~/.macrod/macrod.toml` (`%USERPROFILE%\.macrod\macrod.toml` on Windows;
+`--config` overrides it), and only one macrod can serve a config at a time.
+Another runtime on the same machine is a named profile, `macrod --profile
+<name>` (`~/.macrod/profiles/<name>.toml`); `macrod profiles` lists them. The
+runtime's name, access, and permission bypass are set on the web at
+Settings → Runtimes. `allow_permission_bypass = false` in an old local config
+no longer vetoes bypass: the runtime's managers decide it on the web.
 
 The Config tab adds **Model** (empty uses the native default, and is only the
 launch fallback: Macro picks each agent's model), **Extra args**
