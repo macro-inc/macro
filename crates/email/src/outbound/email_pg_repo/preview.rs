@@ -125,13 +125,11 @@ pub(super) async fn attachments_by_thread_ids(
             a.size_bytes,
             a.content_id,
             a.created_at,
-            m.thread_id
+            a.thread_id
         FROM
             email_attachments a
-        JOIN
-            email_messages m ON a.message_id = m.id
         WHERE
-            m.thread_id = ANY($1)
+            a.thread_id = ANY($1)
         ORDER BY
             a.created_at ASC
         "#,

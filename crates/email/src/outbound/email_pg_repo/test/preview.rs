@@ -129,6 +129,82 @@ async fn test_attachments_by_thread_ids_empty_input(pool: Pool<Postgres>) -> any
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn test_attachments_by_thread_ids_follow_moved_message(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let thread2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    sqlx::query!(
+        "UPDATE email_messages SET thread_id = $1 WHERE id = $2",
+        thread2,
+        msg1
+    )
+    .execute(&pool)
+    .await?;
+
+    let repo = EmailPgRepo::new(pool);
+    assert!(repo.attachments_by_thread_ids(&[thread1]).await?.is_empty());
+    let moved = repo.attachments_by_thread_ids(&[thread2]).await?;
+    assert_eq!(moved.len(), 2);
+    assert!(moved.iter().all(|a| a.thread_id == thread2));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn test_attachments_by_thread_ids_follow_reassigned_attachment(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread3 = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
+    let msg4 = Uuid::parse_str("ee000004-0000-0000-0000-000000000004")?;
+    let attachment = Uuid::parse_str("aa000001-0000-0000-0000-000000000001")?;
+    sqlx::query!(
+        "UPDATE email_attachments SET message_id = $1 WHERE id = $2",
+        msg4,
+        attachment
+    )
+    .execute(&pool)
+    .await?;
+
+    let repo = EmailPgRepo::new(pool);
+    let attachments = repo.attachments_by_thread_ids(&[thread3]).await?;
+    assert_eq!(attachments.len(), 2);
+    assert!(attachments.iter().any(|a| a.id == attachment));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_attachment_insert_for_missing_message_is_foreign_key_violation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let err = sqlx::query!(
+        "INSERT INTO email_attachments (id, message_id) VALUES ($1, $2)",
+        Uuid::new_v4(),
+        Uuid::new_v4()
+    )
+    .execute(&pool)
+    .await
+    .expect_err("insert without a message must fail");
+
+    let db_err = err.as_database_error().expect("database error");
+    assert_eq!(db_err.code().as_deref(), Some("23503"));
+    assert_eq!(
+        db_err.constraint(),
+        Some("email_attachments_message_id_fkey")
+    );
+
+    Ok(())
+}
+
 // ── contacts_by_thread_ids ──────────────────────────────────────────
 
 #[sqlx::test(

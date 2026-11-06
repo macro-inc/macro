@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            a.id,\n            a.message_id,\n            a.provider_attachment_id,\n            a.filename,\n            a.mime_type,\n            a.size_bytes,\n            a.content_id,\n            a.created_at,\n            m.thread_id\n        FROM\n            email_attachments a\n        JOIN\n            email_messages m ON a.message_id = m.id\n        WHERE\n            m.thread_id = ANY($1)\n        ORDER BY\n            a.created_at ASC\n        ",
+  "query": "\n        SELECT\n            a.id,\n            a.message_id,\n            a.provider_attachment_id,\n            a.filename,\n            a.mime_type,\n            a.size_bytes,\n            a.content_id,\n            a.created_at,\n            a.thread_id\n        FROM\n            email_attachments a\n        WHERE\n            a.thread_id = ANY($1)\n        ORDER BY\n            a.created_at ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -66,5 +66,5 @@
       false
     ]
   },
-  "hash": "2c1ca56683bc4ff97f5b9768e6da72ee6558c2ea8bb9b58237370e3cb80d309c"
+  "hash": "71c430b475b3ef8ad7ad83666208146bf9ba70e819b5bb1a166b00ce0fb1ae87"
 }
