@@ -101,6 +101,10 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- Dependency changes require refreshing both platform hashes in
+  `nix-support/node_modules-hashes.json`; use
+  `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
+  generation otherwise restores dependencies from the old SDK snapshot.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
