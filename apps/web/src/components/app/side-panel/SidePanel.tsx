@@ -201,6 +201,8 @@ function Layout(
     /** Compose content around the standard sections in every panel mode. */
     panel?: (sections: JSX.Element) => JSX.Element;
     narrowThreshold?: number;
+    /** Optional pinned chrome below the touch drawer handle. */
+    drawerHeader?: JSX.Element;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -227,6 +229,7 @@ function Layout(
             floating={props.floating ?? ctx.isFloating()}
             panel={props.panel}
             narrowThreshold={props.narrowThreshold}
+            drawerHeader={props.drawerHeader}
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -264,6 +267,7 @@ function SidePanelLayoutInner(
     floating: boolean;
     panel?: (sections: JSX.Element) => JSX.Element;
     narrowThreshold?: number;
+    drawerHeader?: JSX.Element;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -379,6 +383,7 @@ function SidePanelLayoutInner(
             <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label="Item details">
               <MobileDrawer.Handle />
+              {props.drawerHeader}
               <MobileDrawer.ScrollBody>
                 {renderPanel(
                   <SidePanelOutlet

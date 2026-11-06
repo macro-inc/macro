@@ -1,6 +1,7 @@
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { isMobile } from '@core/mobile/isMobile';
-import { Tabs } from '@ui';
+import CloseIcon from '@icon/system/regular/x.svg';
+import { Button, Tabs } from '@ui';
 import { createSignal, type JSX, onMount, Show } from 'solid-js';
 
 export function CallRecordingSidePanel(props: {
@@ -52,5 +53,24 @@ export function CallRecordingSidePanel(props: {
         <div class="min-h-0 flex-1">{props.details}</div>
       </Show>
     </div>
+  );
+}
+
+export function CallDetailsSheetHeader() {
+  const panel = useSidePanel();
+  return (
+    <Show when={isMobile()}>
+      <div class="flex shrink-0 items-center justify-between px-5 pb-2">
+        <h2 class="text-lg font-semibold">Details</h2>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close details"
+          onClick={() => panel?.setIsOpen(false)}
+        >
+          <CloseIcon class="size-5" />
+        </Button>
+      </div>
+    </Show>
   );
 }

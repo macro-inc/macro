@@ -26,7 +26,10 @@ import type { CallTranscriptTarget } from '../../constants';
 import { recordingChatMessages } from '../../core/recording-chat';
 import { createRecordingPlayback } from '../../primitives/recording-playback';
 import { CallTranscript } from '../CallTranscript';
-import { CallRecordingSidePanel } from '../sidepanel/CallRecordingSidePanel';
+import {
+  CallDetailsSheetHeader,
+  CallRecordingSidePanel,
+} from '../sidepanel/CallRecordingSidePanel';
 import {
   getActiveTranscriptSequenceNum,
   getSegmentVideoSeconds,
@@ -211,6 +214,7 @@ export function CallRecordingBody(props: {
             <SidePanel.Layout
               headerToggle={false}
               narrowThreshold={960}
+              drawerHeader={<CallDetailsSheetHeader />}
               panel={(details) => (
                 <CallRecordingSidePanel
                   details={details}
