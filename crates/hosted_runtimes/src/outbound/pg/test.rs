@@ -1,3 +1,5 @@
+mod boot;
+
 use chrono::{Duration, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;

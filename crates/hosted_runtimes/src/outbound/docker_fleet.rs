@@ -220,7 +220,7 @@ impl Fleet for DockerFleet {
         enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<(), DockerFleetError> {
-        if self.state(computer.id).await?.is_some() {
+        if let Some(state) = self.state(computer.id).await? {
             let identity = self.docker("inspect", &[
                 "inspect".to_owned(), "--format".to_owned(),
                 format!("{{{{index .Config.Labels \"{CONTROL_PLANE_LABEL}\"}}}} {{{{index .Config.Labels \"{GENERATION_LABEL}\"}}}} {{{{index .Config.Labels \"{PAIRING_LABEL}\"}}}}"),
@@ -242,9 +242,26 @@ impl Fleet for DockerFleet {
             }
             let enrollment = enrollment.issue().await?;
             self.write_enrollment(computer.id, &enrollment).await?;
-            self.restart(computer.id).await?;
             if !start {
                 self.stop(computer.id).await?;
+            } else if state == ContainerState::Exited || state == ContainerState::Created {
+                self.start(computer.id).await?;
+            } else {
+                if state == ContainerState::Paused {
+                    self.unfreeze(computer.id).await?;
+                }
+                self.docker(
+                    "exec",
+                    &[
+                        "exec".to_owned(),
+                        container_name(computer.id),
+                        "systemctl".to_owned(),
+                        "restart".to_owned(),
+                        "macrod-enroll.service".to_owned(),
+                        "macrod.service".to_owned(),
+                    ],
+                )
+                .await?;
             }
         } else {
             if !matches!(

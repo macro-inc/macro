@@ -194,10 +194,25 @@ impl Fleet for IncusFleet {
                 self.client
                     .set_config_key(&name, INCUS_ENROLLMENT_KEY, &enrollment_json)
                     .await?;
-                // Claim has not happened: reboot the enroll oneshot with the fresh payload.
-                self.restart(computer.id).await?;
                 if !start {
                     self.stop(computer.id).await?;
+                } else {
+                    let status = observed_status(&instance)?;
+                    self.start(computer.id).await?;
+                    if status != InstanceStatus::Stopped {
+                        // Refresh the enrollment without resetting a booting guest.
+                        self.client
+                            .exec(
+                                &name,
+                                &[
+                                    "systemctl",
+                                    "restart",
+                                    "macrod-enroll.service",
+                                    "macrod.service",
+                                ],
+                            )
+                            .await?;
+                    }
                 }
             }
             None => {

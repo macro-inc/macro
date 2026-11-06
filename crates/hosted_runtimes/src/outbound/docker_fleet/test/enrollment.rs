@@ -26,7 +26,7 @@ impl DockerCommand for FakeDocker {
             "ps" if self.exists => "running".to_owned(),
             "ps" => String::new(),
             "inspect" => "test-a 1 00000000-0000-0000-0000-000000000001".to_owned(),
-            "create" | "start" | "restart" | "stop" => String::new(),
+            "create" | "start" | "restart" | "stop" | "exec" => String::new(),
             _ => panic!("unexpected Docker command"),
         })
     }
@@ -65,10 +65,10 @@ impl FleetEnrollment for TestEnrollment {
 }
 
 #[tokio::test]
-async fn docker_create_claim_gate_controls_issuance_rewrite_and_restart() {
+async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() {
     for (exists, claimed, expected_issue_calls, expected_commands) in [
         (false, false, 1, vec!["ps", "create", "ps", "start"]),
-        (true, false, 1, vec!["ps", "inspect", "ps", "restart"]),
+        (true, false, 1, vec!["ps", "inspect", "exec"]),
         (true, true, 0, vec!["ps", "inspect"]),
     ] {
         let root = tempfile::tempdir().unwrap();
