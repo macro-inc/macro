@@ -2299,6 +2299,7 @@ export * from './saveDocumentResponseDataPresignedUrl';
 export * from './savedQuery';
 export * from './savedQueryCreatedBy';
 export * from './savedQueryDatabaseId';
+export * from './saveQueryChart';
 export * from './saveQueryRequest';
 export * from './searchContactsParams';
 export * from './searchContactsResponse';

@@ -9413,7 +9413,7 @@
     "/databases/queries": {
       "post": {
         "tags": ["databases"],
-        "summary": "Save an immutable query. Editing a question saves a new one.",
+        "summary": "Save a question: a `SELECT` that compiles against the caller's databases,\nwhose chart columns, when given, are ones it returns. Saved questions\nnever change; editing one saves a new one.",
         "operationId": "save_database_query",
         "requestBody": {
           "content": {
@@ -9432,6 +9432,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SavedQuery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a SELECT, does not compile, or the chart names a column it does not return",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -48235,11 +48245,37 @@
           }
         }
       },
+      "SaveQueryChart": {
+        "type": "object",
+        "description": "The result columns a chart of a saved question plots.",
+        "required": ["x", "y"],
+        "properties": {
+          "color": {
+            "type": "string",
+            "description": "The column whose values split the series."
+          },
+          "x": {
+            "type": "string",
+            "description": "The label column."
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The value columns, each a number."
+          }
+        }
+      },
       "SaveQueryRequest": {
         "type": "object",
-        "description": "Request body for saving a query.",
+        "description": "Request body for saving a question.",
         "required": ["definition"],
         "properties": {
+          "chart": {
+            "$ref": "#/components/schemas/SaveQueryChart",
+            "description": "The result columns a chart of the answer plots, checked against what\nthe `SELECT` returns. The chart itself lives with the answer's block."
+          },
           "databaseId": {
             "type": "string",
             "format": "uuid",
@@ -48247,7 +48283,7 @@
           },
           "definition": {
             "$ref": "#/components/schemas/QueryDefinition",
-            "description": "What the query asks: `{\"version\": 1, \"query\": \"<SELECT>\"}`."
+            "description": "What the question asks: `{\"version\": 1, \"query\": \"<SELECT>\"}`."
           }
         }
       },
