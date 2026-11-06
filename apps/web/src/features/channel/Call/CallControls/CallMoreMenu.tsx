@@ -38,17 +38,17 @@ const layouts = [
   },
 ] as const;
 
-function LayoutThumbnail(props: { layout: CallLayout }) {
+function LayoutThumbnail(props: { layout: CallLayout; selected: boolean }) {
   return (
     <div
       aria-hidden="true"
-      class={`flex h-8 w-11 shrink-0 gap-0.5 rounded border border-edge-muted p-0.5 ${props.layout === 'speaker' ? 'flex-col' : ''}`}
+      class={`flex h-8 w-11 shrink-0 gap-0.5 rounded border p-0.5 ${props.selected ? 'bg-accent/10 border-accent/60 [&_.layout-cell]:bg-accent/70' : 'bg-surface-3 border-edge [&_.layout-cell]:bg-ink-muted/40'} ${props.layout === 'speaker' ? 'flex-col' : ''}`}
     >
       <Show
         when={props.layout === 'grid'}
         fallback={
           <>
-            <div class="flex-1 rounded-sm bg-ink-muted" />
+            <div class="layout-cell flex-1 rounded-sm" />
             <div
               class={
                 props.layout === 'speaker'
@@ -57,7 +57,7 @@ function LayoutThumbnail(props: { layout: CallLayout }) {
               }
             >
               <For each={[0, 1, 2]}>
-                {() => <div class="flex-1 rounded-sm bg-ink-extra-muted" />}
+                {() => <div class="layout-cell flex-1 rounded-sm" />}
               </For>
             </div>
           </>
@@ -65,7 +65,7 @@ function LayoutThumbnail(props: { layout: CallLayout }) {
       >
         <div class="grid w-full grid-cols-2 gap-0.5">
           <For each={[0, 1, 2, 3]}>
-            {() => <div class="rounded-sm bg-ink-muted" />}
+            {() => <div class="layout-cell rounded-sm" />}
           </For>
         </div>
       </Show>
@@ -200,7 +200,10 @@ export function CallMoreMenu(props: {
                             textValue={t(item.label)}
                             class="gap-3 py-2"
                           >
-                            <LayoutThumbnail layout={item.value} />
+                            <LayoutThumbnail
+                              layout={item.value}
+                              selected={props.layout === item.value}
+                            />
                             <span class="min-w-0 flex-1">
                               <span class="block">{t(item.label)}</span>
                               <span class="block whitespace-nowrap text-xs text-ink-muted">
