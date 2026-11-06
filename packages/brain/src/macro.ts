@@ -1,5 +1,5 @@
 // The agent's own Macro account over HTTP, for the calls the brain makes on
-// every event: messages, channels, typing, decisions, secrets, the event
+// every event: messages, channels, typing, decisions, the event
 // stream. Request shapes mirror crates/agent_brain's client. `fetch` is
 // injected so tests never touch the network.
 import type { CountedReaction } from '../../sdk/generated/storage/types.gen.ts';
@@ -190,17 +190,6 @@ export class MacroHttp {
         body: JSON.stringify(request),
       }
     );
-  }
-  /** One secret's value. Never cached or written anywhere. */
-  async secret(name: string): Promise<string> {
-    const found = await this.json<{
-      name: string;
-      value: string;
-    }>(
-      'read a secret',
-      `${this.hosts.auth}/team_agents/me/secrets/${encodeURIComponent(name)}`
-    );
-    return found.value;
   }
   /** Open `GET {storage}/webhook/events/stream` as the agent. */
   async openEventStream(

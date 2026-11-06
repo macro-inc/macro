@@ -1102,7 +1102,4 @@ export class Brain implements Control {
   unschedule(routineId: string) {
     return this.scheduleBook.delete(routineId);
   }
-  secret(name: string) {
-    return this.deps.http.secret(name);
-  }
 }

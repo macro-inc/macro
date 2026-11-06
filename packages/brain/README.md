@@ -60,11 +60,10 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 
 Turns never get the Macro key. They call the `brain` binary (`post`, `reply`,
 `context`, `handoff`, `remember`, `recall`, `forget`, `focus`, `promise`,
-`release`, `schedule`, `schedules`, `unschedule`, `secret`), which reaches the
+`release`, `schedule`, `schedules`, `unschedule`), which reaches the
 running brain over its control endpoint with the per-start token in
 `BRAIN_CONTROL_TOKEN`. So memory writes stay on the single writer, a post stops
-that turn's typing, and secrets come from `GET {auth}/team_agents/me/secrets/{name}`
-per use and are never written to disk.
+that turn's typing.
 
 ## The workspace
 

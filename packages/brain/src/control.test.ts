@@ -32,13 +32,12 @@ const CONTROL: Control = {
   schedule: unused,
   schedules: unused,
   unschedule: unused,
-  secret: unused,
 };
 test('health needs no token; everything else does', async () => {
   const handler = controlHandler(CONTROL, 'token-1', () => {});
   const health = await handler(new Request('http://127.0.0.1:7801/health'));
   const forbidden = await handler(
-    new Request('http://127.0.0.1:7801/secrets/github', {
+    new Request('http://127.0.0.1:7801/schedules', {
       headers: { [TOKEN_HEADER]: 'guess' },
     })
   );

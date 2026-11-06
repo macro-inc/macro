@@ -26,7 +26,6 @@ export function talkCommands(
     `- Memory: \`${exe} remember <topic> -\`, \`${exe} recall <words>\`, \`${exe} forget <topic>\`.`,
     `- Your state: \`${exe} focus -\` (what you're on now), \`${exe} promise <to> -\` (a commitment), \`${exe} release <words>\` (a commitment kept or dropped).`,
     `- Wake yourself later: \`${exe} schedule --once <RFC 3339 time> -\` or \`${exe} schedule --cron "<sec min hour dom month dow>" --timezone <tz> -\`, the note on stdin; \`${exe} schedules\` lists them, \`${exe} unschedule <routine_id>\` removes one.`,
-    `- A secret, for piping into a command (never print, log, or post it): \`${exe} secret <name>\`.`,
   ];
   if (tier === 'respond') {
     lines.push(

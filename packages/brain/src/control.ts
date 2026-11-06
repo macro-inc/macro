@@ -1,6 +1,6 @@
 // The brain's localhost endpoint. macrod polls `GET /health`; turns reach the
 // running brain through the rest (the `brain post|reply|context|handoff|...`
-// commands), so the agent's Macro key, its memory writes, and its secrets stay
+// commands), so the agent's Macro key and its memory writes stay
 // in this one process. Every route but /health needs the per-start control
 // token the brain hands its turns.
 import { match, P } from 'ts-pattern';
@@ -68,7 +68,6 @@ export interface Control {
   schedule(note: string, trigger: Trigger): Promise<unknown>;
   schedules(): Promise<unknown>;
   unschedule(routineId: string): Promise<void>;
-  secret(name: string): Promise<string>;
 }
 export const TOKEN_HEADER = 'x-brain-control-token';
 const json = (body: unknown, status = 200) =>
@@ -130,12 +129,6 @@ export function controlHandler(
         if (unscheduled?.[1]) {
           await control.unschedule(decodeURIComponent(unscheduled[1]));
           return json({ ok: true });
-        }
-        const secret = /^GET \/secrets\/([^/]+)$/.exec(route);
-        if (secret?.[1]) {
-          return json({
-            value: await control.secret(decodeURIComponent(secret[1])),
-          });
         }
         return await match(route)
           .with('POST /talk/post', async () =>

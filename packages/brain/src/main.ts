@@ -16,7 +16,7 @@ inside a turn:
   remember <topic> <text|->                recall <words...>             forget <topic>
   focus <text|->                           promise <to> <text|->         release <words...>
   schedule (--once <time> | --cron <expr> --timezone <tz>) <note|->
-  schedules                                unschedule <routine_id>       secret <name>`;
+  schedules                                unschedule <routine_id>`;
 class UsageError extends Error {}
 const env = (name: string) => process.env[name];
 /** The argument, or stdin when it is `-`. Empty text is refused. */
@@ -196,15 +196,6 @@ async function command(args: string[]): Promise<number> {
         )
       )
     )
-    .with('secret', async () => {
-      const { value } = (await brain(
-        'GET',
-        `/secrets/${encodeURIComponent(required(rest[0], 'name'))}`
-      )) as {
-        value: string;
-      };
-      process.stdout.write(value);
-    })
     .with(P.union('--help', 'help'), () => console.log(USAGE))
     .otherwise((unknown) => {
       throw new UsageError(`unknown command ${unknown}`);

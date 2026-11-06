@@ -24,7 +24,7 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 - Owns: the brain process, its CLI, and the persona template.
 - Packaging: `nix/macro-box/_brain.nix` ships Node 24, the runner and offline versioned library; the image
   owns its first-start clone script and hardened `brain@` unit.
-- Not here: provisioning, the repo host, secrets storage, macrod's
+- Not here: provisioning, the repo host, macrod's
   supervision of the brain unit.
 
 ## Checks
