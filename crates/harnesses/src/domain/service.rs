@@ -481,7 +481,10 @@ where
                 HarnessError::Gone("this pairing's credential was already claimed".to_owned())
             })?;
 
-        Ok(ClaimOutcome::Claimed(ClaimedPairing { harness, token }))
+        Ok(ClaimOutcome::Claimed(Box::new(ClaimedPairing {
+            harness,
+            token,
+        })))
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]

@@ -256,7 +256,7 @@ pub enum ClaimOutcome {
     /// The user has not approved the pairing yet; poll again.
     Pending,
     /// The pairing was approved; the credential is released exactly once.
-    Claimed(ClaimedPairing),
+    Claimed(Box<ClaimedPairing>),
 }
 
 /// The credential released to the daemon when a pairing is claimed.
