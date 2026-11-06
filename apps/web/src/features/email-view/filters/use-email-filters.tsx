@@ -258,10 +258,13 @@ function useParticipantOptions(chosen: Accessor<readonly string[]>) {
       label: option.detail ? `${option.label} ${option.detail}` : option.label,
       icon: option.icon,
       content: () => (
+        // The name keeps its room; the address or count gives way first.
         <span class="flex min-w-0 items-baseline gap-1.5">
-          <span class="truncate">{option.label}</span>
+          <span class="max-w-full shrink-0 truncate">{option.label}</span>
           {option.detail && (
-            <span class="truncate text-xs text-ink-muted">{option.detail}</span>
+            <span class="min-w-0 truncate text-xs text-ink-muted">
+              {option.detail}
+            </span>
           )}
         </span>
       ),
