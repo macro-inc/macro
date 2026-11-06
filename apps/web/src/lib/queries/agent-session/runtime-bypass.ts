@@ -3,32 +3,39 @@ import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import { invalidateHarnesses } from '@queries/harnesses/harnesses';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { agentSessionRuntimeBypassKeys } from './keys';
+
+// Never cached as fresh: the runtime and the agent can change in Settings at
+// any time.
+function runtimeBypassOfferQueryOptions(sessionId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: agentSessionRuntimeBypassKeys.offer(sessionId).queryKey,
+    queryFn: async () =>
+      (
+        await throwOnErr(() =>
+          agentHarnessServiceClient.runtimeBypassOffer(sessionId)
+        )
+      ).offer ?? null,
+    enabled: enabled && sessionId !== '',
+    staleTime: 0,
+    retry: false,
+  });
+}
 
 /**
  * What stopping the session's permission requests on its runtime would
  * change for the viewer, read only while `enabled`: a request is waiting and
- * the viewer may answer it. Never cached as fresh, since the runtime and the
- * agent can change in Settings at any time.
+ * the viewer may answer it.
  */
 export function useRuntimeBypassOfferQuery(
   sessionId: Accessor<string | undefined>,
   enabled: Accessor<boolean>
 ) {
-  return useQuery(() => ({
-    queryKey: agentSessionRuntimeBypassKeys.offer(sessionId() ?? '').queryKey,
-    queryFn: async () =>
-      (
-        await throwOnErr(() =>
-          agentHarnessServiceClient.runtimeBypassOffer(sessionId() ?? '')
-        )
-      ).offer ?? null,
-    enabled: enabled() && sessionId() !== undefined,
-    staleTime: 0,
-    retry: false,
-  }));
+  return useQuery(() =>
+    runtimeBypassOfferQueryOptions(sessionId() ?? '', enabled())
+  );
 }
 
 /**
