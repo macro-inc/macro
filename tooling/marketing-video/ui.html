@@ -10,7 +10,8 @@
    Slab caption says what's happening, and the camera fits each state to the frame. Everything lands on the 112 BPM
    grid of the kit's stock track ("Gimme that Groove!", Mixkit 872): 7 bars, 28 beats, 15 s. The last frame is the
    first frame, so it loops. The UI is drawn from the app's Macro Dark theme and its own icons (ui-icons.js).
-     ?ad=pr|mention|search|email|cmdk   &fmt=45|916|11   (&t=<seconds> to hold a moment in a browser) */
+     ?ad=pr|mention|search|email|cmdk|cmdkpr|gh   &fmt=45|916|11   (&t=<seconds> to hold a moment in a browser)
+   cmdkpr and gh use the lit look (?lit=1 turns it on for the others); gh runs 36 beats instead of 28. */
 @font-face { font-family: "Inter"; src: url("fonts/inter-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 @font-face { font-family: "display"; src: url("fonts/roboto-slab-variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
 @font-face { font-family: "mono"; src: url("fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
@@ -81,6 +82,22 @@ mark.hl { background: rgba(104,160,228,calc(var(--hl, 1) * .3)); color: inherit;
   box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.1), inset 0 -3px 0 rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.55); }
 .cur { position: absolute; left: 0; top: 0; transform-origin: 3px 3px; }
 .mark { position: absolute; left: 0; width: 100%; display: flex; justify-content: center; opacity: .92; }
+/* lit: the look of the team's later X posts. Every surface is lit from above (a bright top rim over a faint ring, a
+   darker bottom lip, a soft top-down sheen) and sits on a deeper shadow, so the UI reads as solid pieces in 3D. */
+.lit .shell { background-image: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0) 42%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.13), inset 0 0 0 2px rgba(255,255,255,.075), inset 0 -2px 0 rgba(0,0,0,.4),
+    0 0 0 1.5px rgba(0,0,0,.7), 0 60px 150px rgba(0,0,0,.8), 0 0 120px rgba(255,255,255,.03); }
+.lit .bub, .lit .cmp { background-image: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,0) 70%);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.1), inset 0 0 0 1.5px rgba(255,255,255,.05), 0 8px 22px rgba(0,0,0,.35); }
+.lit .pop { background-image: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0) 40%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 0 0 1.5px rgba(255,255,255,.08), 0 40px 100px rgba(0,0,0,.8), 0 0 0 1.5px rgba(0,0,0,.6); }
+.lit .kc { background: linear-gradient(180deg, #2b2b2b, #181818);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.2), inset 0 0 0 1.5px rgba(255,255,255,.08), inset 0 -4px 0 rgba(0,0,0,.5), 0 18px 44px rgba(0,0,0,.65); }
+.lit .send { box-shadow: inset 0 1.5px 0 rgba(255,255,255,.12); }
+.keyface { position: absolute; inset: 14px; border-radius: 40px; background: linear-gradient(180deg, #2c2c2c 0%, #1d1d1d 62%, #191919 100%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.17), inset 0 0 0 1.5px rgba(255,255,255,.06), 0 3px 8px rgba(0,0,0,.55); }
+.title { position: absolute; left: 0; width: 100%; text-align: center; font-family: "display", "Inter"; font-weight: 330; letter-spacing: -0.025em;
+  line-height: 1.08; color: #f4f4f2; }
 </style>
 <script src="ui-icons.js"></script>
 </head>
@@ -94,7 +111,8 @@ const FMT = Q.get("fmt") || "45", AD = Q.get("ad") || "pr";
 const [W, H] = { "916": [1080, 1920], "45": [1080, 1350], "11": [1440, 1440] }[FMT];
 // The kit's "Gimme that Groove!" is 112 BPM; the scene is cut from its downbeat, so beat 1 is t = 0 and every change
 // lands on a beat. 7 bars of 4 beats; beat 29 is the loop point (= beat 1).
-const BPM = 112, SPB = 60 / BPM, BEATS = 28, T = BEATS * SPB;
+// gh (Macro Chat for GitHub teams) runs 9 bars: its title card bookends the PR flow.
+const BPM = 112, SPB = 60 / BPM, BEATS = AD === "gh" ? 36 : 28, T = BEATS * SPB;
 const B = (b) => (b - 1) * SPB;
 // Per format: the caption (center y, size), the box the camera fits the UI into, the wordmark, the cursor and keycap
 // sizes. 9:16 keeps the caption below the top 14% and everything above the bottom 35%, inside the middle ~900 px
@@ -110,6 +128,8 @@ const WK = LAY.wk;
 const SAFE = { x: LAY.safe[0], y: LAY.safe[1], w: LAY.safe[2], h: LAY.safe[3] };
 SAFE.cx = SAFE.x + SAFE.w / 2; SAFE.cy = SAFE.y + SAFE.h / 2;
 const TALL = FMT === "916", NARROW = WK < 1;
+const LIT = AD === "cmdkpr" || AD === "gh" || Q.has("lit");
+if (LIT) document.documentElement.classList.add("lit");
 
 // ---------- motion: closed-form springs, summed per key (pure functions of t) ----------
 const clamp = (x, a = 0, b = 1) => (x < a ? a : x > b ? b : x);
@@ -218,7 +238,7 @@ function shellOf(states, keys) {
 function shellFx(t) {
   const S = SHELL, c = { x: S.x(t), y: S.y(t), w: S.w(t), h: S.h(t), r: S.r(t) };
   S.cur = c;
-  Object.assign(S.el.style, { left: px(c.x), top: px(c.y), width: px(c.w), height: px(c.h), borderRadius: px(c.r), background: rgbStr(S.ch.map((f) => f(t))) });
+  Object.assign(S.el.style, { left: px(c.x), top: px(c.y), width: px(c.w), height: px(c.h), borderRadius: px(c.r), backgroundColor: rgbStr(S.ch.map((f) => f(t))) });
 }
 function clipToShell(R) {
   const s = SHELL.cur, [lx, ly, lw, lh] = R.box;
@@ -884,6 +904,200 @@ ADS.cmdk = () => {
 };
 let CAM_TABS = null;
 
+// ---------- shared by cmdkpr and gh: a PR in #web, pasted, previewed, opened in a split and merged ----------
+// S holds each step's beat: cmp (composer windows), paste (⌘V), chip (the link turns into a chip), send (click),
+// msgIn (Jacob's message lands; null if it's there when the card opens), card (the card's window), hover (the cursor
+// reaches the chip), popIn, c5 and c6 (checks), appr (approved), expand (click), split (shell morph), splitOut,
+// merge (click; merged a beat later, the chat's chip flips the beat after, Julia replies two beats after that),
+// card2 (optional: the merged chat after the split).
+function prFlow(S) {
+  const CW = Math.round(1270 * WK), CH = 740, CX = -CW / 2, CY = -CH / 2;
+  const CMP = [CX + 24, CY + CH - 124, CW - 48, 100];
+  const SW = Math.round(1400 * WK), SH = NARROW ? 720 : 620, SX = -SW / 2, SY = -SH / 2, LW = Math.round(620 * WK);
+  const TTL = "Speed up the pricing page", NUM = "#512", REPO = "acme/web#512";
+  const chip = (id, icon = "git-pull-request", color = "var(--green)") => `<span class="chip" id="${id}">${IC(icon, 30, color)}<span class="u">${TTL}</span><span style="color:var(--ink4)">${NUM}</span></span>`;
+  const chatBody = (merged) => `
+    <div class="hdr" style="height:108px">${IC("hash", 34, "var(--ink3)")}<span>web</span><span style="flex:1"></span><span class="avs">${AV("julia", 54)}${AV("jacob", 54)}${AV("teo", 54)}</span></div>
+    <div class="mg" style="left:44px;top:140px"><span class="nm" style="margin-left:84px">Julia</span><div class="row">${AV("julia", 64)}<div class="bub">Is the fix up?</div></div></div>
+    <div class="mg me" ${merged ? "" : 'id="pa-jm"'} style="right:44px;top:${merged ? 290 : 300}px"><span class="nm" style="margin-right:84px">Jacob</span><div class="row"><div class="bub" style="padding:14px 22px">${merged ? chip("pa-chip2", "git-merge", "var(--violet)") : chip("pa-chip1")}</div>${AV("jacob", 64)}</div></div>
+    ${merged ? `<div class="mg" style="left:44px;top:440px"><span class="nm" style="margin-left:84px">Julia</span><div class="row">${AV("julia", 64)}<div class="bub">Shipping it</div></div></div>` : ""}`;
+  L("pa-chat", [CX, CY, CW, CH], chatBody(false), { clip: true, wins: [S.card] });
+  if (S.card2) L("pa-chat2", [CX, CY, CW, CH], chatBody(true), { clip: true, wins: [S.card2] });
+  L("pa-cmp", CMP, `${IC("paperclip", 34, "var(--ink3)")}<div class="slot" id="pa-slot" style="flex:1;height:46px"></div>${IC("microphone", 32, "var(--ink3)")}<div class="send" id="pa-send">${IC("arrow-up", 30)}</div>`,
+    { cls: "cmp", wins: S.cmp });
+  L("", [0, 0], `<span class="ph">Message #web</span>`, { parent: "pa-slot", wins: [[null, S.paste + 0.2, 0.3, 0.16], [S.send + 0.15, null, 0.5]] });
+  L("", [0, 0], `<span class="tx" style="color:var(--accent)">https://github.com/acme/web/pull/512</span><span class="caret" id="pa-c1"></span>`, { parent: "pa-slot", wins: [[S.paste + 0.2, S.chip, 0.25, 0.25]] });
+  L("", [0, 0], `<span class="tx">${chip("pa-chip0")}</span><span class="caret" id="pa-c2"></span>`, { parent: "pa-slot", wins: [[S.chip, S.send + 0.05, 0.3, 0.2]] });
+  const pop = L("pa-pop", [0, 0, 780, 246], `
+    <div class="fx" style="height:80px;padding:0 28px;gap:14px">${IC("git-pull-request", 30, "var(--green)")}<span class="mono" style="font-size:27px;color:var(--ink2)">${REPO}</span>
+      <span class="badge" style="background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)">OPEN</span>
+      <span class="slot" id="pa-apslot" style="width:200px;height:42px"></span><span style="flex:1"></span><span id="pa-exp" style="display:block;padding:6px;border-radius:10px">${IC("arrows-out-simple", 30, "var(--accent)")}</span></div>
+    <div style="padding:2px 28px 0;font-size:33px;font-weight:600;letter-spacing:-0.012em">${TTL}</div>
+    <div class="fx" style="position:absolute;left:0;right:0;bottom:0;height:82px;padding:0 28px;gap:16px;border-top:1.5px solid rgba(255,255,255,.06);font-size:27px">
+      <span class="mono" style="color:var(--green)">+48</span><span class="mono" style="color:var(--red)">−12</span><span style="width:10px"></span>${IC("chat-circle", 30, "var(--ink3)")}<span class="mono" style="color:var(--ink2)">3</span>
+      <span style="flex:1"></span><span class="slot" id="pa-checks" style="width:220px;height:36px"></span></div>`,
+    { cls: "pop", pop: true, origin: "20% 0%", wins: [[S.popIn, S.split - 0.05, 0.45, 0.3]] });
+  L("", [0, 0], `<span class="badge" style="background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)">${IC("check", 22, "var(--green)")}Approved</span>`, { parent: "pa-apslot", pop: true, origin: "0 50%", wins: [[S.appr, null, 0.4]] });
+  [["4/6 checks", "var(--ink2)", null, S.c5], ["5/6 checks", "var(--ink2)", S.c5, S.c6], ["6 passed", "var(--green)", S.c6, null]].forEach(([s, c, a, b]) =>
+    L("", [0, 0], `<span class="mono" style="display:block;width:220px;text-align:right;font-size:27px;line-height:36px;color:${c}">${s}</span>`, { parent: "pa-checks", wins: [[a, b, 0.3, 0.2]] }));
+  const M1 = S.merge + 1, M2 = S.merge + 2, M4 = S.merge + 4;
+  L("pa-split", [SX, SY, SW, SH], `
+    <div class="cmpt" style="position:absolute;left:0;top:0;width:${LW}px;height:${SH}px;border-right:1.5px solid var(--edge)">
+      <div class="hdr" style="height:92px;padding:0 32px;font-size:30px">${IC("hash", 30, "var(--ink3)")}<span>web</span><span style="flex:1"></span><span class="avs">${AV("julia", 46)}${AV("jacob", 46)}${AV("teo", 46)}</span></div>
+      <div class="mg" style="left:32px;top:116px"><span class="nm" style="margin-left:72px">Julia</span><div class="row" style="gap:16px">${AV("julia", 56)}<div class="bub">Is the fix up?</div></div></div>
+      <div class="mg me" style="right:32px;top:236px"><span class="nm" style="margin-right:72px">Jacob</span><div class="row" style="gap:16px"><div class="bub" style="padding:10px 16px"><span class="chip" style="gap:8px"><span class="slot" id="pa-sicon" style="width:28px;height:28px"></span><span class="u" style="display:inline-block;max-width:${LW - 230}px;overflow:hidden;text-overflow:ellipsis">${TTL}</span></span></div>${AV("jacob", 56)}</div></div>
+      <div class="mg" id="pa-reply" style="left:32px;top:${NARROW ? 380 : 362}px"><span class="nm" style="margin-left:72px">Julia</span><div class="row" style="gap:16px">${AV("julia", 56)}<div class="bub">Shipping it</div></div></div>
+      <div class="cmp" style="position:absolute;left:20px;right:20px;bottom:20px;height:84px;padding:0 14px 0 28px;gap:18px">${IC("paperclip", 30, "var(--ink3)")}<span class="ph" style="flex:1;font-size:27px">Message #web</span><div class="send" style="width:52px;height:52px">${IC("arrow-up", 26)}</div></div>
+    </div>
+    <div style="position:absolute;left:${LW}px;top:0;right:0;height:${SH}px">
+      <div class="hdr" style="height:92px;padding:0 24px 0 36px;gap:12px;font-size:26px">${IC("git-pull-request", 28, "var(--green)")}${NARROW ? "" : `<span>${TTL}</span>`}<span style="flex:1"></span>
+        <span class="btn" id="pa-merge" style="box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.1)"><span class="slot" id="pa-micon" style="width:26px;height:26px"></span><span class="slot" id="pa-mlbl" style="width:98px;height:32px"></span></span>
+        <span class="btn" style="color:var(--ink2)">${IC("columns", 26, "var(--ink3)")}Changes</span></div>
+      <div style="position:absolute;left:44px;right:40px;top:126px">
+        <div style="font-size:40px;font-weight:600;letter-spacing:-0.015em;white-space:nowrap">${TTL}</div>
+        <div class="fx" style="gap:12px;margin-top:22px;flex-wrap:wrap"><span class="slot" id="pa-state" style="width:150px;height:48px"></span>
+          <span class="pill">${AV("jacob", 30)}jacob</span><span class="pill mono" style="font-size:24px">${REPO}</span><span class="pill mono" style="font-size:24px"><span style="color:var(--green)">+48</span><span style="color:var(--red)">−12</span></span></div>
+        <div id="pa-what" style="margin-top:34px"><div style="font-size:28px;font-weight:600">What changed</div>
+          <div style="margin-top:12px;font-size:26px;line-height:1.5;color:var(--ink2)">The pricing table renders on the server now,<br>so the page no longer waits on the plans. Fixes WEB-57.</div></div>
+        <div style="margin-top:30px;padding-top:24px;border-top:1.5px solid var(--edge)"><div class="fx" style="gap:14px">${AV("teo", 44)}<span style="font-size:26px;font-weight:600">teo</span><span class="pill" style="height:36px;font-size:21px;color:var(--ink2)">review</span><span style="flex:1"></span><span style="font-size:22px;color:var(--ink3)">10:21 AM</span></div>
+          <div style="margin:8px 0 0 58px;font-size:26px;color:var(--ink1)">Loads instantly on mobile now. Approved.</div></div>
+      </div>
+    </div>`, { clip: true, wins: [[S.split + 0.25, S.splitOut + 0.1, 0.8, 0.3]] });
+  L("", [0, 0], IC("git-pull-request", 28, "var(--green)"), { parent: "pa-sicon", wins: [[null, M2, 0.3, 0.3]] });
+  L("", [0, 0], IC("git-merge", 28, "var(--violet)"), { parent: "pa-sicon", pop: true, wins: [[M2, null, 0.4]] });
+  L("", [0, 0], IC("git-merge", 26, "var(--ink1)"), { parent: "pa-micon", wins: [[null, M1, 0.3, 0.25]] });
+  L("", [0, 0], IC("git-merge", 26, "var(--violet)"), { parent: "pa-micon", wins: [[M1, null, 0.35]] });
+  L("", [0, 0], `<span style="display:block;line-height:32px">Merge</span>`, { parent: "pa-mlbl", wins: [[null, M1, 0.3, 0.25]] });
+  L("", [0, 0], `<span style="display:block;line-height:32px;color:var(--violet)">Merged</span>`, { parent: "pa-mlbl", wins: [[M1, null, 0.35]] });
+  L("", [0, 0], `<span class="pill" style="color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent)">${IC("git-pull-request", 26, "var(--green)")}Open</span>`, { parent: "pa-state", wins: [[null, M1, 0.3, 0.25]] });
+  L("", [0, 0], `<span class="pill" style="color:var(--violet);background:color-mix(in srgb,var(--violet) 14%,transparent)">${IC("git-merge", 26, "var(--violet)")}Merged</span>`, { parent: "pa-state", pop: true, origin: "0 50%", wins: [[M1, null, 0.35]] });
+  return {
+    CMP, CX, CY, CW, CH, SX, SY, SW, SH, LW,
+    // places the preview under Jacob's chip; returns the camera's focus boxes; adds the ⌘V keycap and the sounds
+    wire() {
+      const [cx, cy, , ch] = wpos("pa-chip1");
+      pop.box = [cx - 30, cy + ch + 34, 780, 246]; pop.el.style.left = pop.box[0] + "px"; pop.el.style.top = pop.box[1] + "px";
+      keyOf(S.paste, "⌘ V", [0, CMP[1] - 70], 1.1);
+      cue(S.chip, "pop", 0.35); if (S.msgIn) cue(S.msgIn, "blip", 0.3); cue(S.popIn, "pop", 0.3); cue(S.c5, "tick", 0.35); cue(S.c6, "chime", 0.32); cue(S.appr, "pop", 0.3);
+      cue(S.split + 1.75, "tick", 0.2); cue(M1, "chime", 0.4); cue(M2, "tink", 0.35); cue(M4, "blip", 0.45);
+      return {
+        pill: [CMP[0] - 50, CMP[1] - 150, CMP[2] + 100, CMP[3] + 230],
+        card: [CX - 30, CY - 30, CW + 60, CH + 60],
+        pop: [pop.box[0] - 70, cy - 60, 920, pop.box[1] + 246 - cy + 120],
+        split: [SX - 30, SY - 30, SW + 60, SH + 60],
+        right: [SX + LW - 20, SY - 30, SW - LW + 50, SH + 60],
+        left: [SX - 30, SY - 30, LW + 60, SH + 60],
+      };
+    },
+    fx(t) {
+      const on = win(t, S.paste + 0.2, S.send + 0.05, 0.2, 0.25), pr = bell((t - B(S.send) + 0.04) / 0.2), sb = $("pa-send");
+      sb.style.backgroundColor = mixHex("#262626", "#ededed", on); sb.style.color = mixHex("#8a8a8a", "#111111", on);
+      sb.style.transform = pr > 0 ? `scale(${(1 - 0.08 * pr).toFixed(4)})` : "";
+      const c = caretOn(t, false) ? "1" : "0"; $("pa-c1").style.opacity = c; $("pa-c2").style.opacity = c;
+      if (S.msgIn) fadeEl($("pa-jm"), t, [[S.msgIn, null, 0.45]], 22);
+      $("pa-chip1").style.background = mixHex("#272727", "#333333", win(t, S.hover - 0.15, S.split, 0.3, 0.3));
+      $("pa-exp").style.background = `rgba(255,255,255,${(0.08 * win(t, S.expand - 0.3, S.expand + 0.3, 0.3, 0.3)).toFixed(3)})`;
+      const mh = win(t, S.merge - 1.1, S.merge + 0.6, 0.3, 0.4), mp = bell((t - B(S.merge) + 0.04) / 0.2);
+      $("pa-merge").style.background = `rgba(255,255,255,${(0.1 * mh).toFixed(3)})`;
+      $("pa-merge").style.transform = mp > 0 ? `scale(${(1 - 0.05 * mp).toFixed(4)})` : "";
+      const [o, p] = visOf(t, [[M4, null, 0.4]]), rp = $("pa-reply");
+      rp.style.opacity = o.toFixed(3); rp.style.transform = `translateY(${px((1 - p) * 18)})`; rp.style.filter = o < 0.995 ? `blur(${px((1 - o) * 8)})` : "";
+      const wo = win(t, S.split + 1.35, null, 0.6), wh = $("pa-what"); wh.style.opacity = wo.toFixed(3); wh.style.filter = wo < 0.995 ? `blur(${px((1 - wo) * 8)})` : "";
+    },
+  };
+}
+
+// ---------- 6. ⌘K to the channel, then the PR: the winning ⌘K opener, then a PR pasted, checked and merged in chat ----------
+ADS.cmdkpr = () => {
+  const KT = [-140, -118, 280, 236];
+  const MW = Math.round(1100 * WK), MH = 620, MX = -MW / 2, MY = -MH / 2;
+  const TABS = NARROW ? ["All", "Files", "Tasks", "Channels", "People"] : ["All", "Agents", "Files", "Tasks", "Projects", "Channels", "People"];
+  const it = (id, icon, name, kind) => `<div class="it" id="${id}" style="height:80px">${icon}<span>${name}</span><span style="flex:1"></span><span style="font-size:22px;color:var(--ink3)">${kind}</span></div>`;
+  L("ck-key", KT, `<div class="keyface"></div><div class="fx" style="position:relative;width:100%;height:100%;justify-content:center;gap:4px;font-size:92px;font-weight:500;color:#ededed"><span>⌘</span><span>K</span></div>`,
+    { wins: [[null, 2.8, 0.3, 0.3], [26.25, null, 0.6]] });
+  L("ck-menu", [MX, MY, MW, MH], `
+    <div class="fx" style="height:100px;padding:0 34px;gap:20px;border-bottom:1.5px solid var(--edge)">${IC("magnifying-glass", 34, "var(--ink3)")}<div class="slot" id="ck-q" style="flex:1;height:46px"></div></div>
+    <div class="fx" style="height:74px;padding:0 22px;gap:4px;font-size:25px;color:var(--ink3);white-space:nowrap">${TABS.map((n, i) => `<span style="position:relative;padding:0 16px;line-height:44px;${i ? "" : "border-radius:12px;background:rgba(255,255,255,.08);color:var(--ink1)"}">${n}</span>`).join("")}</div>
+    <div id="ck-res" style="position:absolute;left:0;right:0;top:184px"></div>
+    <div class="fx" style="position:absolute;left:0;right:0;bottom:0;height:68px;padding:0 30px;gap:14px;border-top:1.5px solid var(--edge);font-size:22px;color:var(--ink3);white-space:nowrap">
+      <span class="kbd">↑</span><span class="kbd">↓</span><span>Navigate</span><span style="width:8px"></span><span class="kbd">↵</span><span>Open</span><span style="width:8px"></span><span class="kbd">Tab</span><span>Category</span></div>`,
+    { clip: true, wins: [[3.05, 5.75, 0.7, 0.3], [24.3, 26.0, 0.5, 0.3]] });
+  const recent = [`<div class="sec">Recent</div>`, it("", IC("file-text", 32, "var(--ink2)"), "Q4 planning doc", "Doc"), it("", IC("hash", 32, "var(--ink2)"), "launch", "Channel"), it("", ST("ns", 32), "Review the launch email", "Task")];
+  const web = [it("ck-w0", IC("hash", 32, "var(--ink2)"), "web", "Channel"), it("", IC("file-text", 32, "var(--ink2)"), "Website roadmap", "Doc"), it("", ST("ip", 32), "Fix web vitals on mobile", "Task")];
+  L("", [0, 0, MW], recent.join(""), { parent: "ck-res", wins: [[null, 4.35, 0.3, 0.2], [24.3, null, 0.4]] });
+  L("", [0, 0, MW], web.join(""), { parent: "ck-res", wins: [[4.35, 5.8, 0.3, 0.2]] });
+  L("", [0, 0], `<span class="ph">Search...</span>`, { parent: "ck-q", wins: [[null, 3.8, 0.2, 0.12], [24.3, null, 0.4]] });
+  L("", [0, 0], `<span class="tx"><span id="ck-qt"></span><span class="caret" id="ck-qc"></span></span>`, { parent: "ck-q" });
+  const P = prFlow({ cmp: [[5.95, 14.3, 0.8, 0.3]], card: [5.95, 14.25, 0.8, 0.3], paste: 7, chip: 8.4, send: 9.5, msgIn: 9.6, hover: 10.6, popIn: 10.7,
+    c5: 11.6, c6: 12.4, appr: 13.1, expand: 14, split: 14.2, splitOut: 24.05, merge: 17 });
+  return {
+    wire() {
+      const F = P.wire(), { SX, SY, SH, LW, CMP } = P;
+      shellOf({ key: [...KT, 52, "#1c1c1c"], down: [KT[0] + 7, KT[1] + 9, KT[2] - 14, KT[3] - 14, 48, "#181818"], menu: [MX, MY, MW, MH, 32, "#141414"],
+        card: [P.CX, P.CY, P.CW, P.CH, 48, "#121212"], split: [SX, SY, P.SW, SH, 44, "#121212"] },
+        [[1, "key"], [1.82, "down", 0.22], [2.2, "key", 0.4], [2.8, "menu", 1.0], [5.75, "card", 1.0], [14.2, "split", 1.0], [24.05, "menu", 1.0], [25.9, "key", 1.0]]);
+      F.key = [KT[0] - 300, KT[1] - 230, KT[2] + 600, KT[3] + 460]; F.menu = [MX - 30, MY - 30, MW + 60, MH + 60];
+      cameraOf([[1, F.key], [2.8, F.menu, 1.2], [5.75, F.card, 1.2], [10.3, F.pop, 1.2], [14.2, F.split, 1.2], [15.4, F.right, 1.3], [18.8, F.left, 1.3], [21.8, F.split, 1.2],
+        [24.05, F.menu, 1.2], [25.9, F.key, 1.2]]);
+      const rest = [KT[0] + KT[2] + 140, KT[1] + KT[3] + 110];
+      cursorOf([[1, rest], [4, [MX + MW - 170, MY + MH - 150], 1.4], [6.6, [CMP[0] + CMP[2] - 260, CMP[1] + CMP[3] + 60], 1.2], [9, "pa-send", 1.2],
+        [10.6, ["pa-chip1", 0.45, 0.55], 0.9], [13.5, "pa-exp", 1.0], [16.4, "pa-merge", 1.1], [20.2, ["pa-sicon", 0.5, 0.5, 30, 30], 1.2],
+        [23, [SX + 360, SY + SH - 80], 1.2], [24.6, [MX + MW - 150, MY + MH - 120], 1.2], [27.2, rest, 1.5]], [9.5, 14, 17]);
+      keyOf(5.2, "↵", [0, MY + MH - 120], 0.8, "enter"); keyOf(23.3, "⌘ K", [0, SY + SH - 110], 0.9);
+      capOf([[null, 6.4], [27, null]], "⌘K jumps anywhere");
+      capOf([[6.8, 10.2]], "Paste a PR link");
+      capOf([[10.6, 13.8]], "Status, diff, checks");
+      capOf([[14.2, 16.6]], "Opens in a split");
+      capOf([[17, 23]], "Merge without leaving chat");
+      cue(2, "key", 0.75); typeCues("web", 3.8, 4.3); cue(4.35, "tick", 0.2);
+    },
+    fx(t) {
+      pressEl($("ck-key"), t, 2, 0.05);
+      typedSegs($("ck-qt"), t < B(24) ? [["web", 3.8, 4.3]] : [], t);
+      $("ck-qc").style.opacity = caretOn(t, false) ? "1" : "0";
+      bgA($("ck-w0"), 0.07);
+      P.fx(t);
+    },
+  };
+};
+
+// ---------- 7. Macro Chat for teams that use GitHub: the X post's flow, opened and closed by the claim ----------
+ADS.gh = () => {
+  const P = prFlow({ cmp: [[null, 18.3, 0.4, 0.3], [29.5, null, 0.6]], card: [11.3, 18.25, 0.8, 0.3], card2: [29.35, 31.05, 0.6, 0.3], paste: 7, chip: 9, send: 11, msgIn: null,
+    hover: 13, popIn: 13.05, c5: 15, c6: 16, appr: 17, expand: 18, split: 18.25, splitOut: 29.05, merge: 22 });
+  // the claim, set per ratio: three lines in the square and feed cuts, five bigger ones in the story
+  const TL = { "11": [98, H / 2 - 40], "45": [76, H / 2 - 50], "916": [104, 850] }[FMT];
+  const MC = `<span style="font-weight:520">Macro Chat</span>`;
+  const TITLE = TALL ? `${MC} is,<br>hands down,<br>the best chat for<br>teams that use<br>GitHub.` : `${MC} is, hands down,<br>the best chat for teams<br>that use GitHub.`;
+  let title = null;
+  return {
+    wire() {
+      const F = P.wire(), { SX, SY, SH, CMP } = P;
+      shellOf({ pill: [...CMP, 50, "#1b1b1b"], card: [P.CX, P.CY, P.CW, P.CH, 48, "#121212"], split: [SX, SY, P.SW, SH, 44, "#121212"] },
+        [[1, "pill"], [11.1, "card", 1.0], [18.25, "split", 1.0], [29.05, "card", 1.0], [30.9, "pill", 1.0]]);
+      cameraOf([[1, F.pill], [11.1, F.card, 1.2], [14, F.pop, 1.2], [18.25, F.split, 1.2], [20, F.right, 1.3], [24.2, F.left, 1.3], [27, F.split, 1.2], [29.05, F.card, 1.2], [30.9, F.pill, 1.2]]);
+      const rest = [CMP[0] + CMP[2] - 140, CMP[1] + CMP[3] + 70];
+      cursorOf([[1, rest], [10, "pa-send", 0.9], [13, ["pa-chip1", 0.45, 0.55], 1.0], [17.6, "pa-exp", 1.0], [21.2, "pa-merge", 1.1], [25.5, ["pa-sicon", 0.5, 0.5, 30, 30], 1.2],
+        [28.2, [SX + 360, SY + SH - 80], 1.2], [32.2, rest, 1.5]], [11, 18, 22]);
+      title = document.createElement("div"); title.className = "title"; title.innerHTML = TITLE;
+      title.style.fontSize = px(TL[0]); title.style.width = W + "px"; scr.appendChild(title); title.style.top = px(TL[1] - title.offsetHeight / 2);
+      capOf([[5.6, 13.6]], "Paste a PR link");
+      capOf([[14, 17.6]], "Status, diff, checks");
+      capOf([[18, 21.6]], "Opens in a split");
+      capOf([[22, 31.8]], "Merge without leaving chat");
+      cue(5.3, "swoosh", 0.2); cue(32.6, "swoosh", 0.2);
+    },
+    fx(t) {
+      // the claim holds the first beats, gives way to the composer, and comes back to close the loop
+      fadeEl(title, t, [[null, 5.2, 0.5, 0.5], [32.6, null, 0.9]], 0, 14);
+      const ui = win(t, 5.25, 32.35, 0.7, 0.5);
+      SHELL.el.style.opacity = ui.toFixed(4); $("pa-cmp").style.opacity = ui.toFixed(4); CUR.el.style.opacity = ui.toFixed(4);
+      $("pa-cmp").style.visibility = ui <= 0.003 ? "hidden" : "";
+      P.fx(t);
+    },
+  };
+};
+
 // =====================================================================
 // boot
 // =====================================================================
@@ -891,7 +1105,7 @@ let CAM_TABS = null;
 // funk at the same 112 BPM, which needs no download. Its acts are 0-based beats: the drop lands on beat 2 (the first
 // action), the groove runs to bar 7, and it settles as the UI returns to frame 0. The shell's morphs get swells.
 const MUSIC = Q.get("music") === "score"
-  ? { track: "score", bpm: BPM, beats: BEATS, vibe: "funk", seed: "macro-ui-" + AD, score: { turn: 1, groove: 1, release: 24, end: 28 }, edits: [] }
+  ? { track: "score", bpm: BPM, beats: BEATS, vibe: "funk", seed: "macro-ui-" + AD, score: { turn: 1, groove: 1, release: BEATS - 4, end: BEATS }, edits: [] }
   : { track: "gimme-groove", bpm: BPM, beats: BEATS, vibe: "funk" };
 let AdFx = null;
 function init() {
