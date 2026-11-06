@@ -28,10 +28,11 @@ Pulumi stacks; they do not host extra agent processes.
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
-  reuses the harness tool context and retains bearer authentication. Users with
-  `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
-  `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
-  is cached per user (`tool_mode_cache.rs`).
+  reuses the harness tool context and retains bearer authentication. Wherever
+  the harness can run code, every client but ChatGPT gets only
+  `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
+  (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
+  direct tools: its plugin directory refuses generic executors.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the
