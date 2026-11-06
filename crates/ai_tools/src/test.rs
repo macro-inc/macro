@@ -206,6 +206,7 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "DeleteTag",
         "OpenDirectMessage",
         "MuteNotifications",
+        "GetTeamAvailability",
     ] {
         assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
         assert!(

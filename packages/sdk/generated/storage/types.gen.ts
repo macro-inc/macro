@@ -1195,6 +1195,30 @@ export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 
 export type Audience = 'members' | 'public';
 
 /**
+ * Whether missing busy blocks can safely be interpreted as free time.
+ */
+export type AvailabilityCoverage = 'complete' | 'unknown';
+
+/**
+ * An exact, half-open interval of UTC instants, without event metadata.
+ */
+export type AvailabilityInterval = {
+    /**
+     * Exclusive end.
+     */
+    end: string;
+    /**
+     * Inclusive start.
+     */
+    start: string;
+};
+
+/**
+ * Why a person's unoccupied intervals cannot establish availability.
+ */
+export type AvailabilityUnknownReason = 'hidden' | 'unavailable' | 'truncated' | 'missing_time_zone' | 'invalid_time_zone' | 'invalid_interval' | 'conflicting_copies';
+
+/**
  * Where one viewer is inside a database right now: ephemeral, relayed to
  * the other viewers and never stored. A missing row or column means the
  * viewer is on the table but on no cell. Optional end row and column IDs
@@ -15484,6 +15508,61 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * Availability for exactly the members selected by the domain service.
+ */
+export type TeamAvailability = {
+    /**
+     * True only when all requested people and source intervals were covered.
+     */
+    complete: boolean;
+    /**
+     * Exclusive requested end.
+     */
+    end: string;
+    /**
+     * Common calendar gaps for every included person, present only with
+     * complete coverage. These are not working-hours or booking guarantees.
+     */
+    freeWindows?: Array<AvailabilityInterval> | null;
+    /**
+     * Included people, always including the requester.
+     */
+    members: Array<TeamMemberAvailability>;
+    /**
+     * Inclusive requested start.
+     */
+    start: string;
+    /**
+     * A concise explanation that does not overstate incomplete results.
+     */
+    summary: string;
+    /**
+     * Requested identifiers without a current team relationship. No profile
+     * or calendar data about those identifiers is disclosed.
+     */
+    unknownUserIds: Array<string>;
+};
+
+/**
+ * A bounded window and the teammates whose busy time to merge.
+ */
+export type TeamAvailabilityRequest = {
+    /**
+     * Exclusive instant.
+     */
+    end: string;
+    /**
+     * Inclusive instant.
+     */
+    start: string;
+    /**
+     * At most 100 current teammates; the requester is always included.
+     * Omit for the whole team; an empty list checks only the requester.
+     */
+    userIds?: Array<string> | null;
+};
+
+/**
  * Disjoint busy/detail shapes prevent new event fields leaking by default.
  */
 export type TeamCalendarContent = {
@@ -15602,6 +15681,28 @@ export type TeamCalendarPage = {
  * What a user exposes through their team membership.
  */
 export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
+
+/**
+ * Busy time and confidence for one explicitly included person.
+ */
+export type TeamMemberAvailability = {
+    /**
+     * Merged known busy intervals clipped to the requested range.
+     */
+    busy: Array<AvailabilityInterval>;
+    /**
+     * Whether the whole requested range was established.
+     */
+    coverage: AvailabilityCoverage;
+    /**
+     * Reasons gaps in the busy intervals cannot be called free.
+     */
+    unknownReasons: Array<AvailabilityUnknownReason>;
+    /**
+     * Macro identifier of the included person.
+     */
+    userId: string;
+};
 
 /**
  * One teammate's out-of-office occurrence.
@@ -17677,6 +17778,30 @@ export type ListTeamOutOfOfficeResponses = {
 };
 
 export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
+
+export type GetTeamAvailabilityData = {
+    body: TeamAvailabilityRequest;
+    path?: never;
+    query?: never;
+    url: '/calendar-events/team/availability';
+};
+
+export type GetTeamAvailabilityErrors = {
+    /**
+     * Invalid window or more than 100 teammates
+     */
+    400: unknown;
+    /**
+     * Team calendar sharing is disabled
+     */
+    404: unknown;
+};
+
+export type GetTeamAvailabilityResponses = {
+    200: TeamAvailability;
+};
+
+export type GetTeamAvailabilityResponse = GetTeamAvailabilityResponses[keyof GetTeamAvailabilityResponses];
 
 export type EventIcsData = {
     body?: never;

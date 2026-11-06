@@ -1792,6 +1792,112 @@ export const listTeamOutOfOfficeResponse = zod
   .describe('Team out-of-office viewport response.');
 
 /**
+ * @summary Merge the requester's and selected teammates' busy time in a bounded window.
+ */
+export const getTeamAvailabilityBody = zod
+  .object({
+    end: zod.iso.datetime({}).describe('Exclusive instant.'),
+    start: zod.iso.datetime({}).describe('Inclusive instant.'),
+    userIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'At most 100 current teammates; the requester is always included.\nOmit for the whole team; an empty list checks only the requester.'
+      ),
+  })
+  .describe('A bounded window and the teammates whose busy time to merge.');
+
+export const getTeamAvailabilityResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'True only when all requested people and source intervals were covered.'
+      ),
+    end: zod.iso.datetime({}).describe('Exclusive requested end.'),
+    freeWindows: zod
+      .array(
+        zod
+          .object({
+            end: zod.iso.datetime({}).describe('Exclusive end.'),
+            start: zod.iso.datetime({}).describe('Inclusive start.'),
+          })
+          .describe(
+            'An exact, half-open interval of UTC instants, without event metadata.'
+          )
+      )
+      .nullish()
+      .describe(
+        'Common calendar gaps for every included person, present only with\ncomplete coverage. These are not working-hours or booking guarantees.'
+      ),
+    members: zod
+      .array(
+        zod
+          .object({
+            busy: zod
+              .array(
+                zod
+                  .object({
+                    end: zod.iso.datetime({}).describe('Exclusive end.'),
+                    start: zod.iso.datetime({}).describe('Inclusive start.'),
+                  })
+                  .describe(
+                    'An exact, half-open interval of UTC instants, without event metadata.'
+                  )
+              )
+              .describe(
+                'Merged known busy intervals clipped to the requested range.'
+              ),
+            coverage: zod
+              .enum(['complete', 'unknown'])
+              .describe(
+                'Whether missing busy blocks can safely be interpreted as free time.'
+              ),
+            unknownReasons: zod
+              .array(
+                zod
+                  .enum([
+                    'hidden',
+                    'unavailable',
+                    'truncated',
+                    'missing_time_zone',
+                    'invalid_time_zone',
+                    'invalid_interval',
+                    'conflicting_copies',
+                  ])
+                  .describe(
+                    "Why a person's unoccupied intervals cannot establish availability."
+                  )
+              )
+              .describe(
+                'Reasons gaps in the busy intervals cannot be called free.'
+              ),
+            userId: zod
+              .string()
+              .describe('Macro identifier of the included person.'),
+          })
+          .describe(
+            'Busy time and confidence for one explicitly included person.'
+          )
+      )
+      .describe('Included people, always including the requester.'),
+    start: zod.iso.datetime({}).describe('Inclusive requested start.'),
+    summary: zod
+      .string()
+      .describe(
+        'A concise explanation that does not overstate incomplete results.'
+      ),
+    unknownUserIds: zod
+      .array(zod.string())
+      .describe(
+        'Requested identifiers without a current team relationship. No profile\nor calendar data about those identifiers is disclosed.'
+      ),
+  })
+  .describe(
+    'Availability for exactly the members selected by the domain service.'
+  );
+
+/**
  * @summary Export an event the requester can see — their own, or one shared with a
 channel they belong to — as an iCalendar file named after its title.
  */

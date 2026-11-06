@@ -224,6 +224,7 @@ use utoipa::OpenApi;
         calendar_events::inbound::join_request_router::list_join_requests,
         calendar_events::inbound::axum_router::list_team_out_of_office,
         calendar_events::inbound::team_router::list_team_calendar,
+        calendar_events::inbound::team_router::get_team_availability,
 
         // annotations
         annotations::get::get_document_anchors_handler,
@@ -693,6 +694,12 @@ use utoipa::OpenApi;
             calendar_events::inbound::axum_router::TeamOutOfOfficeItem,
             calendar_events::inbound::axum_router::TeamOutOfOfficeResponse,
             calendar_events::domain::team::TeamCalendarPage,
+            calendar_events::inbound::team_router::TeamAvailabilityRequest,
+            calendar_events::domain::team_availability::TeamAvailability,
+            calendar_events::domain::team_availability::TeamMemberAvailability,
+            calendar_events::domain::team_availability::AvailabilityInterval,
+            calendar_events::domain::team_availability::AvailabilityCoverage,
+            calendar_events::domain::team_availability::AvailabilityUnknownReason,
             calendar_events::domain::team::TeamCalendarItem,
             calendar_events::domain::team::TeamCalendarContent,
             calendar_events::domain::team::TeamCalendarDetails,
