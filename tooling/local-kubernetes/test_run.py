@@ -64,12 +64,14 @@ class ManifestTests(unittest.TestCase):
     def test_fusionauth_seeds_image_defaults_without_overwriting_existing_config(self):
         config = {'name': 'macro-example', 'services': {'fusionauth': {
             'image': 'fusionauth:local', 'volumes': [{'type': 'volume', 'source': 'config',
-                'target': '/usr/local/fusionauth/config'}]}}}
+                'target': '/usr/local/fusionauth/config'}]}, 'db': {'image': 'postgres:local'}}}
         objects = manifests(config, 'macro-kube-example', 0)
         pod = next(o for o in objects if o['kind'] == 'Deployment')['spec']['template']['spec']
         seed = pod['initContainers'][0]
         self.assertEqual(seed['volumeMounts'][0]['mountPath'], '/config')
         self.assertIn('test -f /config/fusionauth.properties || cp -a', seed['command'][-1])
+        database = next(o for o in objects if o['kind'] == 'Service' and o['metadata']['name'] == 'db')
+        self.assertEqual(database['spec']['ports'][0]['port'], 5432)
 
 
 if __name__ == '__main__':

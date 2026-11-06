@@ -223,7 +223,7 @@ def manifests(config, namespace, slot):
             ports.add(32443 + slot)
         if not ports:
             ports.add({'lexical_service': 8096, 'sync_service': 8787, 'websocket_service': 6969,
-                       'static_file_cdn': 80, 'ai_editing_worker': 8933, 'analytics_proxy': 8098}.get(key, 8080))
+                       'db': 5432, 'static_file_cdn': 80, 'ai_editing_worker': 8933, 'analytics_proxy': 8098}.get(key, 8080))
         pod = {'containers': [container], 'volumes': volumes, 'terminationGracePeriodSeconds': 30}
         if key == 'ai_editing_worker':
             volumes.append({'name': 'worker-config', 'emptyDir': {}})
@@ -391,7 +391,10 @@ def up(args):
             xtask('kubernetes-prepare', *flags)
         command, env, config = compose(args.name)
         services = {k: v for k, v in config['services'].items() if not v.get('profiles')}
-        builds = [k for k, v in services.items() if v.get('build')]
+        builds = [k for k, v in services.items() if v.get('build') and
+                  (args.build_aux_services or subprocess.run(
+                      ['docker', 'image', 'inspect', v.get('image', f"{config['name']}-{k}")],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0)]
         if builds:
             run([*command, 'build', *builds], env=env)
         for key, value in services.items():
@@ -424,6 +427,7 @@ def main():
     parser.add_argument('name', nargs='?')
     parser.add_argument('--slot', type=int, choices=[0, 1], default=0)
     parser.add_argument('--frontend-dir', help='reuse an already-built same-origin development frontend bundle')
+    parser.add_argument('--build-aux-services', action='store_true', help='rebuild auxiliary images even when already present')
     parser.add_argument('--binaries-dir')
     parser.add_argument('--env-file', help='same optional dotenv overlay as run_local')
     parser.add_argument('--service', help='Compose service name for roll; build the binary before rolling')

@@ -78,7 +78,8 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
     let dist = {
         let mut cmd = Command::new("bun");
         cmd.current_dir(app_dir())
-            .args(["run", "--bun", "build"])
+            .args(["run", "build"])
+            .env("NODE_OPTIONS", "--max-old-space-size=16384")
             .env("MODE", "development")
             .env("NODE_ENV", "production")
             .env("VITE_LOCAL_SERVERS", "ALL")

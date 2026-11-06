@@ -15,13 +15,16 @@ just kube-local up kube-b --slot 1
 ```
 
 The first run builds the same Rust binaries, auxiliary images and frontend as
-the Compose launcher. Pass `--frontend-dir apps/web/dist` to reuse a prepared
+the Compose launcher. Existing auxiliary images are reused; pass
+`--build-aux-services` after changing their sources. Static builds run Vite under
+Node, with a 16 GiB heap ceiling. Pass `--frontend-dir apps/web/dist` to reuse a prepared
 same-origin development bundle across instances. Build it once with:
 
 ```sh
 MODE=development NODE_ENV=production VITE_LOCAL_SERVERS=ALL \
 VITE_LOCAL_BACKEND_ORIGIN=same-origin VITE_LOCAL_ONLY=true \
-VITE_AI_EDITING_WORKER_URL=/ai-editing bun run --cwd apps/web --bun build
+VITE_AI_EDITING_WORKER_URL=/ai-editing NODE_OPTIONS=--max-old-space-size=16384 \
+bun run --cwd apps/web build
 ```
 
 To use Nix-built binaries for both runtimes:
