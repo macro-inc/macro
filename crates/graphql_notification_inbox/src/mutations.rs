@@ -60,6 +60,7 @@ const CLEAR_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 /// The prefix that marks an undo token as a whole clear's.
 const CLEAR_TOKEN_PREFIX: &str = "clear:";
 
+/// The undo token that names clear `id`.
 fn clear_token(id: Uuid) -> String {
     format!("{CLEAR_TOKEN_PREFIX}{id}")
 }
