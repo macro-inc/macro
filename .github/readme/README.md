@@ -2,15 +2,17 @@
 
 ## Header
 
-`logo.png` centers the supplied Frame 10 full lockup above the native README
-heading. The original white logo is downscaled to 480 pixels wide, with a dark
-backing for both GitHub themes; the complete asset displays at 280×59.
+`logo.png` centers the supplied Frame 10 full lockup above a compact native
+README title. The white logo is downscaled to 480 pixels wide on a dark backing;
+the 512×70 asset displays at 256×35. A bold paragraph avoids heading margins
+and GitHub’s horizontal divider.
 
-`header.png` is a 2400×856 transparent PNG containing only the two product panes.
-Two crops from one real Macro split view show a team-channel agent request and
-its linked code changes, offset vertically with thin borders and soft shadows.
-The heading uses h3 to avoid GitHub’s horizontal divider. Keep the order logo,
-heading, then product view, with compact spacing.
+`header.png` is a 2400×1000 continuous desktop capture of a launch document
+beside its linked internal discussion and an agent scheduling request.
+The global navigation rail remains visible. The crop excludes the native tab
+bar and split close controls; no UI elements or message text were painted out.
+This example demonstrates document/conversation linking, not a completed
+agent-created document. Keep the logo first, title second, product third.
 
 ## Feature screenshots
 

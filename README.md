@@ -1,10 +1,10 @@
 <div align="center">
   <a href="https://macro.com">
-    <img width="280" height="59" alt="Macro" src=".github/readme/logo.png" />
+    <img width="256" height="35" alt="Macro" src=".github/readme/logo.png" />
   </a>
-  <h3>The unified workspace for your team</h3>
+  <p><strong>The unified workspace for your team</strong></p>
   <a target="_blank" href="https://macro.com">
-    <img width="2400" height="856" alt="Macro — an agent request in a team channel beside its linked code changes" src=".github/readme/header.png" />
+    <img width="2400" height="1000" alt="Macro — a launch document beside its linked team discussion and an agent scheduling request" src=".github/readme/header.png" />
   </a>
 
   <br />
