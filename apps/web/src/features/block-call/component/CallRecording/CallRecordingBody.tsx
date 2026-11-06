@@ -242,6 +242,7 @@ export function CallRecordingBody(props: {
               <SidePanel.Layout
                 headerToggle={headerToggle()}
                 narrowThreshold={960}
+                plainSections
                 drawerHeader={<CallDetailsSheetHeader />}
                 panel={(details) => (
                   <CallRecordingSidePanel

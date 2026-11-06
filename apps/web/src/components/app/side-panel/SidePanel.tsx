@@ -201,6 +201,8 @@ function Layout(
     /** Compose content around the standard sections in every panel mode. */
     panel?: (sections: JSX.Element) => JSX.Element;
     narrowThreshold?: number;
+    /** Use the unframed section rows already used by sheets and floating panels. */
+    plainSections?: boolean;
     /** Optional pinned chrome below the touch drawer handle. */
     drawerHeader?: JSX.Element;
   }>
@@ -229,6 +231,7 @@ function Layout(
             floating={props.floating ?? ctx.isFloating()}
             panel={props.panel}
             narrowThreshold={props.narrowThreshold}
+            plainSections={props.plainSections}
             drawerHeader={props.drawerHeader}
           >
             {props.children}
@@ -267,6 +270,7 @@ function SidePanelLayoutInner(
     floating: boolean;
     panel?: (sections: JSX.Element) => JSX.Element;
     narrowThreshold?: number;
+    plainSections?: boolean;
     drawerHeader?: JSX.Element;
   }>
 ) {
@@ -327,6 +331,7 @@ function SidePanelLayoutInner(
             {renderPanel(
               <SidePanelOutlet
                 sections={props.sections}
+                plainSections={props.plainSections}
                 openIds={props.openIds}
                 setOpenIds={props.setOpenIds}
               />
@@ -362,6 +367,7 @@ function SidePanelLayoutInner(
                 {renderPanel(
                   <SidePanelOutlet
                     sections={props.sections}
+                    plainSections={props.plainSections}
                     openIds={props.openIds}
                     setOpenIds={props.setOpenIds}
                   />
@@ -564,6 +570,7 @@ function SidePanelHeaderToggle() {
 
 function SidePanelOutlet(props: {
   floating?: boolean;
+  plainSections?: boolean;
   scrollable?: boolean;
   sections: Accessor<SidePanelSectionEntry[]>;
   openIds: Accessor<string[]>;
@@ -579,6 +586,7 @@ function SidePanelOutlet(props: {
     })
   );
 
+  const plainSections = () => props.floating || props.plainSections || false;
   const Sections = () => (
     <Accordion
       multiple
@@ -587,11 +595,11 @@ function SidePanelOutlet(props: {
       onChange={(value) => props.setOpenIds(value as string[])}
       class={cn(
         'flex flex-col min-h-0',
-        props.floating ? 'p-0 gap-0' : 'p-2 gap-2'
+        plainSections() ? 'p-0 gap-0' : 'p-2 gap-2'
       )}
     >
       <For each={sortedSections().filter((section) => !section.footer)}>
-        {(section) => section.component(props.floating ?? false)}
+        {(section) => section.component(plainSections())}
       </For>
     </Accordion>
   );

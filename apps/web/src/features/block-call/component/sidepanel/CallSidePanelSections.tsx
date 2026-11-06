@@ -85,7 +85,7 @@ function DetailsSectionContent(props: { record: CallRecord }) {
   return (
     <EntityMetadata>
       <EntityMetadataRow label={t('calls.detailOwner')}>
-        <OwnerLabel ownerId={record().createdBy} suppressClick />
+        <OwnerLabel ownerId={record().createdBy} textOnly suppressClick />
       </EntityMetadataRow>
       <Show when={startedAt()}>
         {(value) => (
@@ -112,14 +112,9 @@ function DetailsSectionContent(props: { record: CallRecord }) {
         )}
       </Show>
       <EntityMetadataRow label={t('calls.detailStatus')}>
-        <span class="inline-flex items-center gap-2">
-          <Show when={record().status === 'ATTENDED'}>
-            <span class="size-1.5 rounded-full bg-success" />
-          </Show>
-          {record().isActive
-            ? t('calls.detailInProgress')
-            : statusLabel(record().status)}
-        </span>
+        {record().isActive
+          ? t('calls.detailInProgress')
+          : statusLabel(record().status)}
       </EntityMetadataRow>
       <Show when={record().channelName}>
         {(channel) => (

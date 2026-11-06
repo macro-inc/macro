@@ -51,7 +51,8 @@ The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video returns to the current line. Authorized chat messages
 appear inline at their recorded moment. Details keeps owner, dates, duration,
 status, channel, team sharing, properties, activity and references on their
-existing permission-scoped readers.
+existing permission-scoped readers. Only team sharing has a card; metadata and
+the other sections use the shared unframed side-panel rows.
 
 Close the side panel to widen and center the recording column and expose
 Summary/Transcript tabs. Below 960px of call-pane width the panel starts closed;
