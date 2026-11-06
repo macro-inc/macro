@@ -29,6 +29,17 @@ inbound = [
   "ports",
 ]
 outbound = ["dep:sqlx", "dep:macro_uuid", "dep:entity_registry", "dep:model_owner", "dep:rootcause", "ports"]
+# Pushes changed bot profiles from the bot topic to web clients.
+realtime = [
+  "dep:connection_gateway_client",
+  "dep:kafka_util",
+  "dep:model-entity",
+  "dep:rdkafka",
+  "dep:serde_json",
+  "inbound",
+  "macro_event_broker/outbound",
+  "outbound",
+]
 ports = ["dep:entity_access", "entity_access/ports", "dep:rootcause", "dep:tokio", "messages/ports"]
 test-utils = ["dep:mockall", "ports"]
 
@@ -43,20 +54,24 @@ bot_token = { path = "../bot_token" }
 harness_id = { path = "../harness_id", features = ["schema", "sqlx"] }
 channels = { path = "../channels", optional = true, default-features = false, features = ["ports"] }
 chrono = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 entity_registry = { path = "../entity_registry/entity_registry", optional = true }
 model_owner = { path = "../model_owner", optional = true }
 rootcause = { workspace = true, optional = true }
 hex = { workspace = true }
+kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 messages = { path = "../messages" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 mockall = { workspace = true, optional = true }
+model-entity = { path = "../model-entity", optional = true }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rand = { workspace = true }
+rdkafka = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }

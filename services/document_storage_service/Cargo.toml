@@ -76,7 +76,7 @@ axum = { workspace = true, features = [
 ] }
 axum-extra = { workspace = true }
 base64 = { workspace = true }
-bots = { path = "../../crates/bots" }
+bots = { path = "../../crates/bots", features = ["realtime"] }
 bot_id = { path = "../../crates/bot_id" }
 bytes = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }

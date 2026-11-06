@@ -18,17 +18,23 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   `PATCH /agents/{id}` and the `ConfigureAgent` tool share `patch_agent`;
   `PUT` replaces the whole agent, ownership included.
 - `src/outbound/pg_bots_repo.rs`: Postgres repository (feature `outbound`).
+- `src/domain/profile_fanout.rs`, `src/inbound/profile_consumer.rs`,
+  `src/outbound/connection_gateway_profiles.rs` (feature `realtime`, run by
+  DSS): push each changed bot's current profile to its owner, team and channel
+  members as `bot_profile_changed`, so web views update without a reload.
 
 ## Scope
 
-- Owns: bot CRUD, ownership (user or team), and bot lifecycle events.
+- Owns: bot CRUD, ownership (user or team), bot lifecycle events, and the
+  profile push to web clients.
 - Not here: agent sessions, channel message triggers, or trigger detection →
   `crates/agent_session`, `crates/channel_bots`.
 
 ## Boundaries
 
 - Depends on: `channels` (inbound, optional), `entity_access`, `entity_registry`,
-  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`.
+  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
+  `connection_gateway_client` and `kafka_util` (`realtime`).
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
 ## Recipes
@@ -40,7 +46,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Checks
 
-- `cargo test -p bots` (`SQLX_OFFLINE` unset).
+- `cargo test -p bots --features realtime` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
@@ -48,7 +54,11 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   configuration writes; mention dispatch gates on this flag for every harness.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
-  field serializes as `null` (see `README.md`).
+  field serializes as `null` (see `README.md`). Consumers that need the bot's
+  state read it, as the profile push does.
+- A new way a bot's name or picture becomes visible to more people (a new
+  surface or audience) must be added to `bot_audience`, or those viewers miss
+  live updates.
 
 ## Related
 

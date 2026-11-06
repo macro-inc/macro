@@ -101,6 +101,14 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
 
+    /// Users who see the bot's name and picture: its owner, its team's
+    /// members, and the people in the channels it takes part in. For a
+    /// deleted bot, those channels are the ones its deletion removed it from.
+    fn bot_audience(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
     /// Get an active persisted agent by bot id. Its channels are the ones it
     /// was put in, without the direct agent conversations it takes part in.
     fn get_agent(
@@ -452,6 +460,17 @@ pub trait TeamBotRoster: Send + Sync + 'static {
         &self,
         team_id: Uuid,
     ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
+}
+
+/// Pushes a bot's current profile to the people who see it, so their open
+/// views show its new name and picture without a reload.
+pub trait BotProfilePublisher: Send + Sync + 'static {
+    /// Send `profile` to every user in `recipients`.
+    fn publish_profile(
+        &self,
+        profile: BotOwnerProfile,
+        recipients: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Bot service error.
