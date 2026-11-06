@@ -3,6 +3,7 @@ export default {
   callingYou: 'Calling you',
   join: 'Join',
   openCall: 'Open call',
+  emptyChat: 'Start the conversation.',
   leave: 'Leave call',
   copyLink: 'Copy meeting link',
   linkCopied: 'Meeting URL copied',

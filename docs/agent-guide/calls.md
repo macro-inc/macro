@@ -113,7 +113,7 @@ When it ends the line says how long it lasted. The join card remains above the
 composer while the viewer is outside the call, independent of scroll position.
 
 In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is **Chat**.
-On phones, Chat and People fill the shared sheet's tab row; the sheet opens at 64% height. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
+On phones, Chat and People fill the shared sheet's tab row; the sheet opens at 64% height. It shows the channel up to the call's row, opened on the shared chat empty-state graphic and “Start the conversation.” when the thread is empty
 and at the newest message otherwise. The composer opens as a plain message input bound to the call discussion. Reply
 mode appears only after choosing Reply on a message; closing or sending that reply
 returns to the plain call composer. Nothing posts top-level from the panel. A popup counts top-level messages

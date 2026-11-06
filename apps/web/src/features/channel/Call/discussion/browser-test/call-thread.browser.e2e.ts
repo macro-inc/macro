@@ -200,7 +200,9 @@ test('the panel opens on a blank slate, with the channel above and nothing newer
 }) => {
   await open(page, 'panel', { status: { state: 'live' }, outside: true });
 
-  await expect(page.getByText(/No messages yet/)).toBeVisible({
+  await expect(
+    page.getByText('Start the conversation.', { exact: true })
+  ).toBeVisible({
     timeout: 30_000,
   });
   await expect(page.getByText('Posted outside the call')).toHaveCount(0);
@@ -270,7 +272,9 @@ test('scrolling up through the channel stays put', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name === 'phone');
   await open(page, 'panel', { status: { state: 'live' } });
-  await expect(page.getByText(/No messages yet/)).toBeVisible({
+  await expect(
+    page.getByText('Start the conversation.', { exact: true })
+  ).toBeVisible({
     timeout: 30_000,
   });
 
