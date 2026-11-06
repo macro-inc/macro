@@ -9,7 +9,7 @@ import {
   useClaudeSignInMutation,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
-import { Button } from '@ui';
+import { Button, Input } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 export function ComputerClaudeAccess(props: {
@@ -118,8 +118,7 @@ export function ComputerClaudeAccess(props: {
                 </a>
                 <label class="flex w-full flex-col gap-1">
                   {t('computers.claudeCodeLabel')}
-                  <input
-                    class="rounded border border-edge-muted bg-input p-2 text-ink"
+                  <Input
                     value={code()}
                     onInput={(event) => setCode(event.currentTarget.value)}
                     autocomplete="off"
