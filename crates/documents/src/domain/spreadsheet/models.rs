@@ -216,7 +216,24 @@ pub struct SpreadsheetCellInput {
     /// A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
     /// Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
     /// Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
-    pub value: String,
+    /// Numbers and true/false may also be given as JSON numbers and booleans; null empties the cell.
+    pub value: SpreadsheetCellValue,
+}
+
+/// A cell's new input, typed as the caller has it.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum SpreadsheetCellValue {
+    /// TRUE or FALSE.
+    Boolean(bool),
+    /// A number, passed to the engine exactly as written.
+    #[cfg_attr(feature = "axum", schema(value_type = f64))]
+    Number(serde_json::Number),
+    /// Text, or a formula starting with =.
+    Text(String),
+    /// Empties the cell's input; formatting stays.
+    Empty,
 }
 
 /// A scratch formula evaluated without persisting it.
