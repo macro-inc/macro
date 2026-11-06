@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BotId } from './botId';
+import type { HarnessAgentWorkspacePath } from './harnessAgentWorkspacePath';
 
 /**
  * An agent bound to a harness, as listed for the daemon.
@@ -16,4 +17,7 @@ export interface HarnessAgent {
   handle: string;
   /** Display name. */
   name: string;
+  /** The directory this agent's new sessions use, one of the harness's
+reported workspaces. `None` uses the harness's workspace. */
+  workspace_path?: HarnessAgentWorkspacePath;
 }

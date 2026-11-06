@@ -12,6 +12,7 @@ import type { CreateAgentRequestAvatarUrl } from './createAgentRequestAvatarUrl'
 import type { CreateAgentRequestDescription } from './createAgentRequestDescription';
 import type { CreateAgentRequestHarnessId } from './createAgentRequestHarnessId';
 import type { CreateAgentRequestTeamId } from './createAgentRequestTeamId';
+import type { CreateAgentRequestWorkspacePath } from './createAgentRequestWorkspacePath';
 
 /**
  * Request to create a persisted AI agent.
@@ -46,4 +47,8 @@ chip into its live session (`true`) or a reply in the thread (`false`). */
   name: string;
   /** Team owner. Omit for a private, user-owned agent. */
   team_id?: CreateAgentRequestTeamId;
+  /** The directory on `harness_id` new sessions use, one of the harness's
+reported workspaces. Omit to use the harness's workspace; forbidden
+without a harness id. */
+  workspace_path?: CreateAgentRequestWorkspacePath;
 }

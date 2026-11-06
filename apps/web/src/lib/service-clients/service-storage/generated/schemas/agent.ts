@@ -8,6 +8,7 @@ import type { AgentAutoAcceptPermissions } from './agentAutoAcceptPermissions';
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentHarnessId } from './agentHarnessId';
 import type { AgentMcpServers } from './agentMcpServers';
+import type { AgentWorkspacePath } from './agentWorkspacePath';
 import type { Bot } from './bot';
 
 /**
@@ -37,4 +38,7 @@ settings; the persona's word, not the runtime's. */
   is_coding: boolean;
   /** Which MCP servers sessions of this agent are handed. */
   mcp: AgentMcpServers;
+  /** The directory on the harness its new sessions use, one of the
+harness's reported workspaces. `None` uses the harness's workspace. */
+  workspace_path?: AgentWorkspacePath;
 }

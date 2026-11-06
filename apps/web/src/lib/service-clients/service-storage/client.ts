@@ -165,6 +165,7 @@ import type { RenameChannelLabelRequest } from './generated/schemas/renameChanne
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
+import type { ReportedWorkspace } from './generated/schemas/reportedWorkspace';
 import type { RequestAccountManagerBody } from './generated/schemas/requestAccountManagerBody';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
@@ -357,6 +358,10 @@ export type Harness = {
   updated_at: string;
   connected: boolean;
   last_connected_at: string | null;
+  /** New sessions' directory when their agent names none; `null` uses macrod.toml's. */
+  workspace_path: string | null;
+  /** The directories the daemon last reported; workspaces are picked from these. */
+  reported_workspaces: ReportedWorkspace[];
 };
 
 /** A pending macrod pairing request, looked up by its printed code. */

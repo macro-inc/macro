@@ -7,6 +7,8 @@
 import type { HarnessId } from './harnessId';
 import type { HarnessLastConnectedAt } from './harnessLastConnectedAt';
 import type { HarnessOwner } from './harnessOwner';
+import type { HarnessWorkspacePath } from './harnessWorkspacePath';
+import type { ReportedWorkspace } from './reportedWorkspace';
 
 /**
  * A registered user-run harness.
@@ -32,6 +34,13 @@ export interface Harness {
   name: string;
   /** Owner. */
   owner: HarnessOwner;
+  /** The directories the daemon last reported its sessions may use. The web
+picks workspaces from this list only. */
+  reported_workspaces?: ReportedWorkspace[];
   /** Update timestamp. */
   updated_at: string;
+  /** The directory new sessions use when their agent names none, one of
+`reported_workspaces`. `None` uses the workspace in the machine's
+`macrod.toml`. */
+  workspace_path?: HarnessWorkspacePath;
 }
