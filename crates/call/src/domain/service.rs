@@ -1176,7 +1176,7 @@ impl<
                     &response.room_name,
                     user_id,
                     program,
-                    request.name.as_deref(),
+                    request.name.clone(),
                 )
                 .await
                 .map_err(CallError::Internal)?;
@@ -1304,7 +1304,7 @@ impl<
                     &call.room_name,
                     user_id.copied(),
                     program,
-                    request.name.as_deref(),
+                    request.name.clone(),
                 )
                 .await
         } else if let Some(name) = request.name.as_deref() {
@@ -1431,6 +1431,10 @@ impl<
                 .has_declined(&call.id, user_id.as_ref())
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?;
+            let ringing = matches!(
+                resolve_ring_status(Some(&call), &call.id, joined, declined),
+                RingStatus::Ringing
+            );
             summaries.push(LiveCallSummary {
                 call_id: call.id,
                 kind: if call.channel_id.is_some() {
@@ -1447,10 +1451,7 @@ impl<
                 created_by: call.created_by,
                 created_at: call.created_at,
                 participant_count,
-                ringing: matches!(
-                    resolve_ring_status(Some(&call), &call.id, joined, declined),
-                    RingStatus::Ringing
-                ),
+                ringing,
             });
         }
         Ok(LiveCallsResponse { calls: summaries })

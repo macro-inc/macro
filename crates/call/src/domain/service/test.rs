@@ -146,6 +146,25 @@ impl CallRtcClient for MockRtcClient {
             .unwrap_or_else(|| Ok(format!("default-token-{key}")))
     }
 
+    async fn generate_named_token(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'_>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        self.generate_token(room_name, participant_identity).await
+    }
+
+    async fn generate_program_token(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'_>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        self.generate_token(room_name, participant_identity).await
+    }
+
     async fn build_voip_push_payloads<'a>(
         &self,
         request: VoipPushPayloadRequest<'a>,

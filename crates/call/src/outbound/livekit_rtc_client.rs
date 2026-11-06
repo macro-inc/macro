@@ -209,7 +209,7 @@ impl CallRtcClient for LivekitRtcClient {
         room_name: &str,
         participant_identity: MacroUserIdStr<'_>,
         program: &str,
-        name: Option<&str>,
+        name: Option<String>,
     ) -> anyhow::Result<String> {
         let mut token = AccessToken::with_api_key(&self.api_key, &self.api_secret)
             .with_identity(participant_identity.as_ref())
@@ -224,7 +224,7 @@ impl CallRtcClient for LivekitRtcClient {
                 ..Default::default()
             });
         if let Some(name) = name {
-            token = token.with_name(name);
+            token = token.with_name(&name);
         }
         token.to_jwt().map_err(Into::into)
     }

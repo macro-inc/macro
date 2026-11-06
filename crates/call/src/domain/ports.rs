@@ -788,16 +788,13 @@ pub trait CallRtcClient: Send + Sync + 'static {
         participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
-    /// Mint a room token with an optional display name for a person.
+    /// Mint a room token with a display name for a person.
     fn generate_named_token<'a>(
         &self,
         room_name: &str,
         participant_identity: MacroUserIdStr<'a>,
         name: &str,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send {
-        let _ = name;
-        self.generate_token(room_name, participant_identity)
-    }
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Mint a token for a program, identifying its client in RTC attributes.
     fn generate_program_token<'a>(
@@ -805,11 +802,8 @@ pub trait CallRtcClient: Send + Sync + 'static {
         room_name: &str,
         participant_identity: MacroUserIdStr<'a>,
         program: &str,
-        name: Option<&str>,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send {
-        let _ = (program, name);
-        self.generate_token(room_name, participant_identity)
-    }
+        name: Option<String>,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Mint a room-scoped token for a validated non-account guest.
     fn generate_guest_token(

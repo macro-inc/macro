@@ -460,7 +460,7 @@ impl<
                     &call.room_name,
                     actor.copied(),
                     client,
-                    request.name.as_deref(),
+                    request.name.clone(),
                 )
                 .await
         } else if let Some(name) = request.name.as_deref() {
