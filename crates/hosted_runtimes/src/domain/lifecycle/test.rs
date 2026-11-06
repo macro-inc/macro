@@ -1,3 +1,5 @@
+mod redeploy;
+
 use chrono::{DateTime, TimeZone, Utc};
 use proptest::prelude::*;
 

@@ -1,3 +1,5 @@
+mod redeploy;
+
 mod boot;
 
 use chrono::{Duration, TimeZone};

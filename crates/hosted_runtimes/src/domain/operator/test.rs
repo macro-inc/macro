@@ -1,3 +1,5 @@
+mod redeploy;
+
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -40,6 +42,7 @@ impl FleetError for FakeFleetError {
 /// Records fleet calls; `create` fails `failures` times first.
 #[derive(Default)]
 struct FakeFleet {
+    start_gate: Option<std::sync::Arc<redeploy::FleetGate>>,
     host_failures: Mutex<u32>,
     host_attempts: AtomicU32,
     failures: Mutex<u32>,
@@ -102,6 +105,12 @@ impl Fleet for FakeFleet {
 
     async fn start(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("start {id}"));
+        if let Some(gate) = &self.start_gate {
+            gate.wait().await;
+        }
+        if self.missing {
+            return Err(FakeFleetError::Missing);
+        }
         Ok(())
     }
 
