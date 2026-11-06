@@ -9,6 +9,8 @@ mod binaries_dir;
 mod cargo_build;
 mod dep_cache;
 mod runtime_image;
+#[cfg(test)]
+mod test_support;
 
 pub use binaries_dir::{Adoption, BinariesDir};
 pub use runtime_image::{RUNTIME_IMAGE_TAG, ensure_runtime_image};

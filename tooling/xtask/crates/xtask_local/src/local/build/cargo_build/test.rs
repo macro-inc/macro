@@ -1,3 +1,4 @@
+use super::super::test_support::TempDir;
 use super::*;
 
 #[test]
@@ -35,15 +36,14 @@ fn build_args_build_every_local_service_bin_in_one_invocation() {
 
 #[test]
 fn a_fresh_worktree_needs_both_js_installs_and_a_ready_one_needs_none() {
-    let root = std::env::temp_dir().join(format!("xtask-js-deps-{}", std::process::id()));
+    let tmp = TempDir::new("js-deps");
+    let root = tmp.path();
     std::fs::create_dir_all(root.join("packages/sdk")).unwrap();
-    assert_eq!(missing_js_dependency_dirs(&root), vec![".", "packages/sdk"]);
+    assert_eq!(missing_js_dependency_dirs(root), vec![".", "packages/sdk"]);
 
     std::fs::create_dir_all(root.join("node_modules")).unwrap();
     std::fs::create_dir_all(root.join("packages/sdk/node_modules")).unwrap();
-    assert!(missing_js_dependency_dirs(&root).is_empty());
-
-    std::fs::remove_dir_all(&root).unwrap();
+    assert!(missing_js_dependency_dirs(root).is_empty());
 }
 
 #[test]
