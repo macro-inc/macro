@@ -45,7 +45,10 @@ Pulumi stacks; they do not host extra agent processes.
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
   `incus`, local-only `docker`, or explicit `disabled`; missing selection fails
-  startup.
+  startup. Shutdown stops computer passes through the shared CancellationToken
+  and waits on their TaskTracker; fleet effects drain for up to thirty seconds
+  and release unfinished leases. See hosted_runtimes' Contracts for redeploy
+  grace, bounded effect execution, and hard-kill recovery.
 - `src/computer_screen.rs` + `src/computer_screen/`: Macro computer routes.
   Viewer Screen and all Claude routes require the caller's `enable-macro-computers`
   flag through `hosted_runtimes::domain::rollout::ComputerRollout`; missing

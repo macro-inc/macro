@@ -74,6 +74,30 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Purchaser deletion is RESTRICTed to retain enrollment/billing attribution until
   the computer or team is deleted; harness deletion clears its reference, and
   user deletion cascades waitlist requests.
+- **Control-plane redeploys**: A missing macrod never reboots a fleet-observed
+  Running guest. Persist consecutive misses; after three grace periods, page
+  the operator and restart only macrod once per outage. Reconnection resets the
+  counter; an obsolete daemon-restart effect is ignored. Stopped or missing
+  awake guests retain crash/reprovision recovery. Crash-recovery effects use
+  idempotent start, so replay after a lost completion cannot reboot a guest.
+  Booting and disconnected Running guests use persisted `MacrodMissing` timer
+  rows, never process uptime. On each successful operator registration, one SQL
+  update gives that host's pending macrod timers a fresh three-minute grace;
+  stale timer snapshots cannot consume the refreshed rows.
+- **Effect shutdown and leases**: Keep `FOR UPDATE SKIP LOCKED` and ten-minute
+  leases. Bound composite fleet calls to seven minutes and the entire leased
+  batch (including lease acquisition, queueing and completion writes) to eight
+  minutes; there is no lease heartbeat. Incus request/operation limits alone
+  do not bound a composite effect. On cancellation, stop leasing, drain the
+  current effect for up to thirty seconds, drop its future, then return only
+  this batch's unfinished leases with their original deadline to `run_after =
+  now`. Preserve recorded retry backoffs and replacement replicas' leases.
+  Persist fleet completion, its lifecycle event, effects and timers atomically.
+  SIGKILL cannot release leases; replacements recover them at lease expiry.
+  RPC cancellation does not cancel an Incus operation already accepted by the
+  host (or a Docker daemon operation). Fleet create/start idempotence and
+  idempotent crash recovery remain required; leases bound worker execution,
+  not exactly-once execution of remote commands.
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
   `COMPUTERS_FLEET` is `incus` or `docker`, shared across replicas but distinct per control plane.
   Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;
@@ -177,7 +201,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Fleet Create checks the persisted generation and pairing identity before
   polling `FleetEnrollment::issue`: an already-claimed guest completes without
   issuance or re-keying. An unclaimed guest receives a fresh enrollment and a
-  restart so its enroll oneshot applies the replacement values. Creation runs
+  restart of the enrollment and macrod units so its enroll oneshot applies the
+  replacement values without rebooting a running guest. A stopped guest starts
+  normally. Creation runs
   under the per-computer enrollment guard (`hosted-enrollment:<computer UUID>`
   advisory key), also taken by the harness claim transaction. Claims recheck the
   device-secret hash after acquiring it. This fences claims racing a retry,
