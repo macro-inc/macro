@@ -57,8 +57,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `/etc/macro/personas/*.env` and returns only OS usernames and health ports;
   no persona token enters the reporter or its logs. Polls use independent
   timeouts, no redirects/proxies, bounded bodies and bounded diagnostics.
-  Keep the typed health problem categories synchronized with the brain; unknown
-  response text becomes a fixed diagnostic and is never persisted.
+  Keep the typed health problem categories synchronized with the brain:
+  `budget`, `event stream disconnected`, `turn execution failed`, and
+  `event handling failed`. Unknown response text becomes a fixed diagnostic
+  and is never persisted.
   Reports carry healthy/unhealthy/missing, `checked_at`, last error when
   applicable, and `last_turn_at`; the previous turn survives unavailable probes.
   The capability reporter is cancellation-aware and tracked by the daemon's

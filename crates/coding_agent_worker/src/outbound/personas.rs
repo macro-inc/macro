@@ -270,6 +270,10 @@ enum BrainProblem {
     Budget,
     #[serde(rename = "event stream disconnected")]
     Disconnected,
+    #[serde(rename = "turn execution failed")]
+    TurnExecutionFailed,
+    #[serde(rename = "event handling failed")]
+    EventHandlingFailed,
 }
 
 impl BrainProblem {
@@ -277,6 +281,8 @@ impl BrainProblem {
         match self {
             Self::Budget => "budget",
             Self::Disconnected => "event stream disconnected",
+            Self::TurnExecutionFailed => "turn execution failed",
+            Self::EventHandlingFailed => "event handling failed",
         }
     }
 }

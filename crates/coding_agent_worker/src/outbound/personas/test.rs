@@ -89,6 +89,40 @@ async fn a_real_health_endpoint_reports_degradation_and_preserves_turns_when_it_
 }
 
 #[tokio::test]
+async fn execution_failure_health_preserves_the_reported_last_turn() {
+    let server = MockServer::start().await;
+    let checked_at = Utc::now();
+    let last_turn_at = checked_at - chrono::Duration::seconds(30);
+    for problem in ["turn execution failed", "event handling failed"] {
+        Mock::given(method("GET"))
+            .and(path("/health"))
+            .respond_with(ResponseTemplate::new(503).set_body_json(serde_json::json!({
+                "status": "degraded", "problems": [problem], "lastTurnAt": last_turn_at
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let report = HttpHealth::new()
+            .unwrap()
+            .probe(
+                NonZeroU16::new(server.address().port()).unwrap(),
+                checked_at,
+            )
+            .await;
+        assert_eq!(
+            report,
+            PersonaHealth::Unhealthy {
+                checked_at,
+                last_turn_at: Some(last_turn_at),
+                last_error: problem.to_owned(),
+            }
+        );
+        server.verify().await;
+        server.reset().await;
+    }
+}
+
+#[tokio::test]
 async fn absent_and_oversized_endpoints_report_bounded_diagnostics() {
     let checked_at = Utc::now();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
