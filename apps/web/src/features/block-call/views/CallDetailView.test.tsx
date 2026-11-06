@@ -30,6 +30,9 @@ vi.mock('@app/lib/split-router', () => ({
 vi.mock('../call-route', () => ({
   callDetailSearch: { namespace: 'call-detail' },
 }));
+vi.mock('./CallDetailMobileHeader', () => ({
+  CallDetailMobileHeader: () => null,
+}));
 vi.mock('@app/components/view-shell', () => ({ ViewShell: {} }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   ChatWithAgentButton: () => null,

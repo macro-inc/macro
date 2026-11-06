@@ -3,10 +3,10 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createSearchParams } from '@app/lib/split-router';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -33,6 +33,8 @@ import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import type { CallTranscriptTarget } from '../constants';
+
+import { CallDetailMobileHeader } from './CallDetailMobileHeader';
 
 export type CallDetailData = { record: CallRecord; name: string };
 
@@ -153,7 +155,7 @@ export function CallDetailContent(props: {
         fallback={
           <Switch>
             <Match when={props.query.status === 'pending'}>
-              <div class="grid size-full place-items-center text-ink-muted">
+              <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <SpinnerIcon
                   aria-hidden={false}
                   aria-label="Loading call recording"
@@ -162,7 +164,7 @@ export function CallDetailContent(props: {
               </div>
             </Match>
             <Match when={props.query.status === 'error'}>
-              <div class="grid size-full place-items-center text-ink-muted">
+              <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <div class="flex flex-col items-center gap-3 text-sm">
                   <span>This call recording could not be displayed.</span>
                   <Button
@@ -183,7 +185,7 @@ export function CallDetailContent(props: {
         {(data) => (
           <Suspense
             fallback={
-              <div class="grid size-full place-items-center text-ink-muted">
+              <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <SpinnerIcon
                   aria-hidden={false}
                   aria-label="Loading call recording"
@@ -226,6 +228,9 @@ export function CallDetailView(props: {
   return (
     <CallDetailRoot callId={props.callId}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+        <Show when={isTouchDevice()}>
+          <CallDetailMobileHeader callId={props.callId} data={detail.data()} />
+        </Show>
         <CallDetailContent
           callId={props.callId}
           query={detail.query}
@@ -234,43 +239,44 @@ export function CallDetailView(props: {
           messageId={props.messageId}
           seek={props.seek}
           header={() => (
-            <ViewShell.TopBar class="touch:flex">
-              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-              <Show
-                when={props.header}
-                fallback={
-                  <>
-                    <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
-                    <span class="min-w-0 truncate text-sm font-semibold">
-                      {detail.data()?.name ?? 'Call Recording'}
-                    </span>
-                  </>
-                }
-              >
-                {(header) => (
-                  <>
-                    <div class="contents @max-[600px]/split-header:hidden">
-                      {header()(detail.data)}
-                    </div>
-                    <div class="hidden min-w-0 items-center gap-1.5 @max-[600px]/split-header:flex">
+            <Show when={!isTouchDevice()}>
+              <ViewShell.TopBar>
+                <Show
+                  when={props.header}
+                  fallback={
+                    <>
                       <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
-                      <span class="truncate text-sm font-medium">
+                      <span class="min-w-0 truncate text-sm font-semibold">
                         {detail.data()?.name ?? 'Call Recording'}
                       </span>
-                    </div>
-                  </>
-                )}
-              </Show>
-              <Show when={detail.data()}>
-                {(data) => (
-                  <CallDetailActions
-                    callId={props.callId}
-                    record={data().record}
-                    name={data().name}
-                  />
-                )}
-              </Show>
-            </ViewShell.TopBar>
+                    </>
+                  }
+                >
+                  {(header) => (
+                    <>
+                      <div class="contents @max-[600px]/split-header:hidden">
+                        {header()(detail.data)}
+                      </div>
+                      <div class="hidden min-w-0 items-center gap-1.5 @max-[600px]/split-header:flex">
+                        <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
+                        <span class="truncate text-sm font-medium">
+                          {detail.data()?.name ?? 'Call Recording'}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </Show>
+                <Show when={detail.data()}>
+                  {(data) => (
+                    <CallDetailActions
+                      callId={props.callId}
+                      record={data().record}
+                      name={data().name}
+                    />
+                  )}
+                </Show>
+              </ViewShell.TopBar>
+            </Show>
           )}
         />
       </div>
