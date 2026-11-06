@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
@@ -37,7 +38,7 @@ export function ComputerClaudeAccess(props: {
       setUrl(result.url);
       openExternalUrl(result.url);
     } catch {
-      setError('Could not start Claude sign-in. Please try again.');
+      setError(t('computers.claudeStartFailed'));
     }
   };
   const submit = async () => {
@@ -51,9 +52,7 @@ export function ComputerClaudeAccess(props: {
       setCode('');
       setUrl(undefined);
     } catch {
-      setError(
-        'Could not complete Claude sign-in. Check the code and try again.'
-      );
+      setError(t('computers.claudeCompleteFailed'));
     }
   };
   const useCredits = async () => {
@@ -63,7 +62,7 @@ export function ComputerClaudeAccess(props: {
       setCode('');
       setUrl(undefined);
     } catch {
-      setError('Could not switch to Macro credits. Please try again.');
+      setError(t('computers.claudeCreditsFailed'));
     }
   };
 
@@ -71,12 +70,11 @@ export function ComputerClaudeAccess(props: {
     <Show when={rollout().enabled}>
       <span class="flex min-w-0 flex-col items-start gap-2">
         <span>
-          Claude:{' '}
           {currentMode() === 'own_account'
-            ? 'your account'
+            ? t('computers.claudeOwnAccount')
             : currentMode() === 'macro_credits'
-              ? 'Macro credits'
-              : 'unavailable'}
+              ? t('computers.claudeCredits')
+              : t('computers.claudeUnavailable')}
         </span>
         <Show when={props.canManage}>
           <Show
@@ -88,7 +86,7 @@ export function ComputerClaudeAccess(props: {
                 disabled={pending()}
                 onClick={() => fireAndForget(begin(), 'computer-claude')}
               >
-                Sign in with Claude
+                {t('computers.claudeSignIn')}
               </Button>
             }
           >
@@ -98,7 +96,7 @@ export function ComputerClaudeAccess(props: {
               disabled={pending()}
               onClick={() => fireAndForget(useCredits(), 'computer-claude')}
             >
-              Use Macro credits
+              {t('computers.useCredits')}
             </Button>
           </Show>
           <Show when={url()}>
@@ -116,10 +114,10 @@ export function ComputerClaudeAccess(props: {
                   rel="noopener noreferrer"
                   class="text-accent underline"
                 >
-                  Open Claude sign-in
+                  {t('computers.openClaudeSignIn')}
                 </a>
                 <label class="flex w-full flex-col gap-1">
-                  Paste the code or the URL you were sent to
+                  {t('computers.claudeCodeLabel')}
                   <input
                     class="rounded border border-edge-muted bg-input p-2 text-ink"
                     value={code()}
@@ -133,14 +131,14 @@ export function ComputerClaudeAccess(props: {
                   size="sm"
                   disabled={pending() || !code().trim()}
                 >
-                  Complete sign-in
+                  {t('computers.completeSignIn')}
                 </Button>
               </form>
             )}
           </Show>
           <Show when={mode.isError}>
             <span role="alert" class="text-failure">
-              Could not load Claude access.
+              {t('computers.claudeLoadFailed')}
             </span>
           </Show>
           <Show when={error()}>

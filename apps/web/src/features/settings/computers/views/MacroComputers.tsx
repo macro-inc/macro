@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -107,11 +108,9 @@ export function MacroComputers(props: {
       await purchase.mutateAsync({ size: offer.size, name });
       closeConfirm();
       setSelectedSize(undefined);
-      toast.success('Computer purchased. Setting it up now.');
+      toast.success(t('computers.purchased'));
     } catch (error) {
-      setPurchaseError(
-        failureMessage(error, "Couldn't buy the computer. Please try again.")
-      );
+      setPurchaseError(failureMessage(error, t('computers.purchaseFailed')));
     }
   };
 
@@ -119,7 +118,7 @@ export function MacroComputers(props: {
     try {
       await notify.mutateAsync(size);
     } catch (error) {
-      toast.failure(failureMessage(error, "Couldn't save your request."));
+      toast.failure(failureMessage(error, t('computers.notifyFailed')));
     }
   };
 
@@ -130,7 +129,7 @@ export function MacroComputers(props: {
       toast.failure(
         failureMessage(
           error,
-          on ? "Couldn't turn the computer on." : "Couldn't turn it off."
+          on ? t('computers.powerOnFailed') : t('computers.powerOffFailed')
         )
       );
     }
@@ -141,20 +140,23 @@ export function MacroComputers(props: {
       const updated = await cancel.mutateAsync(computer.id);
       toast.success(
         updated.cancelsAt
-          ? `${computer.name} cancels on ${formatComputerDate(updated.cancelsAt)}.`
-          : `${computer.name} cancels at the end of this billing period.`
+          ? t('computers.cancelOn', {
+              name: computer.name,
+              date: formatComputerDate(updated.cancelsAt),
+            })
+          : t('computers.cancelAtPeriodEnd', { name: computer.name })
       );
     } catch (error) {
-      toast.failure(failureMessage(error, "Couldn't cancel the computer."));
+      toast.failure(failureMessage(error, t('computers.cancelFailed')));
     }
   };
 
   const keep = async (computer: ComputerStatus) => {
     try {
       await undoCancel.mutateAsync(computer.id);
-      toast.success(`Keeping ${computer.name}.`);
+      toast.success(t('computers.keeping', { name: computer.name }));
     } catch (error) {
-      toast.failure(failureMessage(error, "Couldn't keep the computer."));
+      toast.failure(failureMessage(error, t('computers.keepFailed')));
     }
   };
 
@@ -168,19 +170,15 @@ export function MacroComputers(props: {
       setReleasing(undefined);
       toast.success(
         computer.status === 'payment_failed'
-          ? `${computer.name} removed`
-          : `${computer.name} released`
+          ? t('computers.removed', { name: computer.name })
+          : t('computers.released', { name: computer.name })
       );
     } catch (error) {
       if (computer.status === 'payment_failed') {
-        toast.failure(
-          failureMessage(error, "Couldn't remove the computer. Try again.")
-        );
+        toast.failure(failureMessage(error, t('computers.removeFailed')));
         return;
       }
-      setReleaseError(
-        failureMessage(error, "Couldn't release the computer. Try again.")
-      );
+      setReleaseError(failureMessage(error, t('computers.releaseFailed')));
     }
   };
 
@@ -198,7 +196,7 @@ export function MacroComputers(props: {
       <Show when={computers().length > 0 || failed()}>
         <div>
           <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-            Macro computers
+            {t('computers.title')}
           </h2>
           <SettingsCard>
             <For each={computers()}>
@@ -248,7 +246,7 @@ export function MacroComputers(props: {
             </For>
             <Show when={failed()}>
               <p class="px-4 py-3 text-xs text-negative">
-                Could not load your team's computers. Try refreshing this page.
+                {t('computers.loadFailed')}
               </p>
             </Show>
           </SettingsCard>
@@ -258,23 +256,20 @@ export function MacroComputers(props: {
       <Show when={canPurchase() && isAdmin()}>
         <div data-settings-target="macro-computer">
           <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-            Get a Macro computer
+            {t('computers.getComputer')}
           </h2>
           <SettingsCard>
             <section class="flex flex-col gap-4 px-6 py-5 mobile:px-4">
-              <p class="text-sm text-ink-muted">
-                A cloud machine for your team's agents, with macrod, Claude
-                Code, a browser, and Docker ready to go. It sleeps when idle and
-                wakes when an agent gets a prompt. Billed on your team
-                subscription.
-              </p>
+              <p class="text-sm text-ink-muted">{t('computers.description')}</p>
               <Switch>
                 <Match when={offers.isPending}>
-                  <p class="text-xs text-ink-muted">Loading sizes…</p>
+                  <p class="text-xs text-ink-muted">
+                    {t('computers.loadingSizes')}
+                  </p>
                 </Match>
                 <Match when={offers.isError}>
                   <p class="text-xs text-negative">
-                    Could not load computer sizes. Try refreshing this page.
+                    {t('computers.sizesFailed')}
                   </p>
                 </Match>
                 <Match when={offers.isSuccess}>
@@ -297,7 +292,7 @@ export function MacroComputers(props: {
                       disabled={!selectedOffer()}
                       onClick={openConfirm}
                     >
-                      Continue
+                      {t('computers.continue')}
                     </Button>
                   </div>
                 </Match>

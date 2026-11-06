@@ -1,3 +1,4 @@
+import { formatLocale, t } from '@app/lib/i18n';
 import type {
   ComputerSize,
   ComputerStatus,
@@ -9,37 +10,47 @@ import { match } from 'ts-pattern';
 
 export function sizeLabel(size: ComputerSize): string {
   return match(size)
-    .with('standard', () => 'Standard')
-    .with('large', () => 'Large')
-    .with('xl', () => 'XL')
+    .with('standard', () => t('computers.standard'))
+    .with('large', () => t('computers.large'))
+    .with('xl', () => t('computers.xl'))
     .exhaustive((unknown) => String(unknown));
 }
 
 export function offerSpecs(offer: SizeOffer): string {
-  return `${offer.vcpus} vCPU · ${offer.memoryGb} GB memory · ${offer.diskGb} GB disk`;
+  return t('computers.offerSpecs', {
+    cpus: offer.vcpus,
+    memory: offer.memoryGb,
+    disk: offer.diskGb,
+  });
 }
 
 /** The resources recorded when this computer was purchased. */
 export function computerSpecs(computer: ComputerStatus): string {
-  return `${computer.vcpus} vCPU · ${computer.memoryGib} GiB memory · ${computer.diskGib} GiB disk`;
+  return t('computers.computerSpecs', {
+    cpus: computer.vcpus,
+    memory: computer.memoryGib,
+    disk: computer.diskGib,
+  });
 }
 
 /** "$40/month" from a quote in the currency's smallest unit. */
 export function formatQuote(quote: Quote): string {
-  const amount = new Intl.NumberFormat(undefined, {
+  const amount = new Intl.NumberFormat(formatLocale(), {
     style: 'currency',
     currency: quote.currency.toUpperCase(),
     minimumFractionDigits: quote.amount % 100 === 0 ? 0 : 2,
   }).format(quote.amount / 100);
   const interval = match(quote.interval)
-    .with('month', () => 'month')
-    .with('year', () => 'year')
-    .exhaustive((unknown) => String(unknown));
-  return `${amount}/${interval}`;
+    .with('month', () => t('computers.priceMonthly', { amount }))
+    .with('year', () => t('computers.priceYearly', { amount }))
+    .exhaustive((interval) =>
+      t('computers.priceInterval', { amount, interval: String(interval) })
+    );
+  return interval;
 }
 
 export function formatComputerDate(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString(formatLocale(), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -48,11 +59,11 @@ export function formatComputerDate(value: string): string {
 
 function setupStepLabel(step: SetupStep): string {
   return match(step)
-    .with('paying', () => 'Confirming payment')
-    .with('creating', () => 'Creating the computer')
-    .with('booting', () => 'Starting up')
-    .with('connecting', () => 'Connecting to Macro')
-    .with('ready', () => 'Ready')
+    .with('paying', () => t('computers.stepPaying'))
+    .with('creating', () => t('computers.stepCreating'))
+    .with('booting', () => t('computers.stepBooting'))
+    .with('connecting', () => t('computers.stepConnecting'))
+    .with('ready', () => t('computers.ready'))
     .exhaustive((unknown) => String(unknown));
 }
 
@@ -66,31 +77,41 @@ export function computerStatusLabel(computer: ComputerStatus): {
   return match(computer.status)
     .returnType<{ label: string; detail?: string; tone: StatusTone }>()
     .with('setting_up', () => ({
-      label: 'Setting up',
+      label: t('computers.settingUp'),
       detail: computer.setup
-        ? `${setupStepLabel(computer.setup.step)} (step ${computer.setup.position} of ${computer.setup.total})`
+        ? t('computers.setupProgress', {
+            step: setupStepLabel(computer.setup.step),
+            position: computer.setup.position,
+            total: computer.setup.total,
+          })
         : undefined,
       tone: 'progress',
     }))
-    .with('ready', () => ({ label: 'Ready', tone: 'success' }))
+    .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
     .with('asleep', () => ({
-      label: 'Asleep',
-      detail: 'Wakes when an agent gets a prompt.',
+      label: t('computers.asleep'),
+      detail: t('computers.wakeHint'),
       tone: 'muted',
     }))
-    .with('waking', () => ({ label: 'Waking', tone: 'progress' }))
-    .with('stopping', () => ({ label: 'Stopping', tone: 'progress' }))
-    .with('stopped', () => ({ label: 'Stopped', tone: 'muted' }))
+    .with('waking', () => ({ label: t('computers.waking'), tone: 'progress' }))
+    .with('stopping', () => ({
+      label: t('computers.stopping'),
+      tone: 'progress',
+    }))
+    .with('stopped', () => ({ label: t('computers.stopped'), tone: 'muted' }))
     .with('failed', () => ({
-      label: 'Failed',
-      detail: 'Macro is looking into it. Contact support if it stays failed.',
+      label: t('computers.failed'),
+      detail: t('computers.failedHint'),
       tone: 'failure',
     }))
     .with('payment_failed', () => ({
-      label: 'Payment failed',
+      label: t('computers.paymentFailed'),
       tone: 'failure',
     }))
-    .with('released', () => ({ label: 'Released', tone: 'muted' }))
+    .with('released', () => ({
+      label: t('computers.releasedStatus'),
+      tone: 'muted',
+    }))
     .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }));
 }
 
