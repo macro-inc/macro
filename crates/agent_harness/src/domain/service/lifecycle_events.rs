@@ -152,6 +152,18 @@ where
         prompt_markdown: &str,
         origin_message_id: Option<Uuid>,
     ) {
+        match self.sessions.get_session(session_id).await {
+            Ok(session)
+                if session
+                    .thread_visibility
+                    .as_ref()
+                    .is_some_and(|visibility| visibility.is_public()) => {}
+            Ok(_) => return,
+            Err(error) => {
+                tracing::warn!(?error, %session_id, "skipping prompt mention grants: audience unavailable");
+                return;
+            }
+        }
         let mentioned = match self
             .mentions
             .share_with_mentioned(session_id, actor.as_ref(), prompt_markdown)

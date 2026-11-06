@@ -7,6 +7,7 @@ use entity_access::domain::models::{
 };
 use uuid::Uuid;
 
+mod privacy;
 #[cfg(test)]
 mod test;
 mod timeline;
@@ -44,6 +45,7 @@ pub struct MessageService<R, E> {
     references: std::sync::Arc<dyn MessageReferenceAccess>,
     mentions: std::sync::Arc<dyn MessageMentionExtractor>,
     groups: std::sync::Arc<dyn MessageGroupRecipients>,
+    ephemeral_agents: Option<std::sync::Arc<dyn EphemeralAgentReader>>,
 }
 
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
@@ -51,6 +53,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub fn new(repo: R, events: E) -> Self {
         Self {
             activity: None,
+            ephemeral_agents: None,
             repo,
             events,
             references: std::sync::Arc::new(DenyMessageReferences),
@@ -158,6 +161,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
         let parent = parent_from_receipt(access)?;
         self.ensure_parent(&parent).await?;
+        query.viewer = privacy::principal(access.auth());
+        query.viewer_user = access.acting_user_id().map(ToString::to_string);
         query.limit = Some(query.limit.unwrap_or(50).clamp(1, 100));
         if query.ids.len() > 100 || (query.around.is_some() && query.cursor.is_some()) {
             return Err(MessageError::Invalid("invalid timeline selection"));
@@ -175,7 +180,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         async {
             let parent = parent_from_receipt(&access)?;
             self.ensure_parent(&parent).await?;
-            self.active_message(&parent, id, true).await
+            self.active_message(access.auth(), &parent, id, true).await
         }
         .await
         .inspect_err(log_read_error)
@@ -191,8 +196,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         async {
             let parent = parent_from_receipt(&access)?;
             self.ensure_parent(&parent).await?;
-            let state = self.active_thread(&parent, root_id).await?;
-            let root = self.active_message(&parent, root_id, true).await?;
+            let state = self.active_thread(access.auth(), &parent, root_id).await?;
+            let root = self
+                .active_message(access.auth(), &parent, root_id, true)
+                .await?;
             let replies = self.repo.replies(&parent, root_id).await?;
             Ok(MessageThread {
                 state,
@@ -214,8 +221,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<Vec<Message>, MessageError> {
         let parent = parent_from_receipt(&access)?;
         self.ensure_parent(&parent).await?;
-        self.active_message(&parent, id, false).await?;
-        self.repo.preceding(&parent, id, limit.clamp(1, 100)).await
+        self.active_message(access.auth(), &parent, id, false)
+            .await?;
+        self.repo
+            .preceding(
+                &parent,
+                id,
+                limit.clamp(1, 100),
+                privacy::principal(access.auth()).as_deref(),
+            )
+            .await
     }
 
     /// Publish transient typing for an existing discussion.
@@ -260,14 +275,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        if let Some(root_id) = root_id {
-            self.active_thread(&parent, root_id).await?;
-        }
+        let visibility = if let Some(root_id) = root_id {
+            self.active_thread(access.auth(), &parent, root_id)
+                .await?
+                .visibility
+        } else {
+            MessageVisibility::Public
+        };
         self.publish(MessageEvent {
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::Typing {
+                visibility,
                 thread_id: root_id,
                 active,
                 agent,
@@ -330,8 +350,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let thread_id = input.thread_id;
+        let auth = access.auth().clone();
         if let Some(message) = self.repo.get(&parent, event_id).await? {
-            return validate_event_message(message, &parent, &actor, thread_id);
+            return validate_event_message(message, &parent, &actor, thread_id, &auth);
         }
         input.id = Some(event_id);
         match self.post_validated(access, input).await {
@@ -341,7 +362,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .get(&parent, event_id)
                     .await?
                     .ok_or(MessageError::Conflict)?;
-                validate_event_message(message, &parent, &actor, thread_id)
+                validate_event_message(message, &parent, &actor, thread_id, &auth)
             }
             result => result,
         }
@@ -391,11 +412,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
             _ => {
                 if let Some(root) = input.thread_id {
-                    self.active_thread_or_call_root(&parent, root).await?;
+                    self.active_thread_or_call_root(access.auth(), &parent, root)
+                        .await?;
                 }
                 None
             }
         };
+        let visibility = self.post_visibility(&access, &mut input).await?;
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
@@ -403,6 +426,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .repo
             .create(CreateMessage {
                 canonical_root_id,
+                visibility,
                 parent: parent.clone(),
                 actor: actor.clone(),
                 guest_name: None,
@@ -521,7 +545,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        let current = self.active_message(&parent, id, false).await?;
+        let current = self
+            .active_message(access.auth(), &parent, id, false)
+            .await?;
         reject_call_root(&current)?;
         if current.sender_id != actor
             && !(matches!(parent, MessageParent::Channel(_))
@@ -564,6 +590,28 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         };
         if actor.as_bot().is_some() && input.mentions.is_empty() {
             input.mentions = self.mentions.extract(&input.content).await?;
+        }
+        // Editing a public thread cannot hide its existing history. Require a
+        // separate private exchange before introducing an ephemeral agent.
+        if current.visibility.is_public() {
+            let added: Vec<_> = input
+                .mentions
+                .iter()
+                .filter(|mention| !current.mentions.contains(mention))
+                .cloned()
+                .collect();
+            let bots = super::mentions::bot_mention_ids(&added);
+            if !bots.is_empty() {
+                let private = match &self.ephemeral_agents {
+                    Some(reader) => !reader.ephemeral_agents(&bots).await?.is_empty(),
+                    None => bots.iter().any(|bot| bot_id::system_bot(*bot).is_none()),
+                };
+                if private {
+                    return Err(MessageError::Invalid(
+                        "mention this agent in a new private thread",
+                    ));
+                }
+            }
         }
         let has_attachments = input
             .attachments
@@ -621,7 +669,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        let current = self.active_message(&parent, id, false).await?;
+        let current = self
+            .active_message(access.auth(), &parent, id, false)
+            .await?;
         reject_call_root(&current)?;
         // A comment's replies and its place in the document belong to the comment,
         // not to its first message, so the root carries the whole discussion with
@@ -667,7 +717,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        let current = self.active_message(&parent, id, false).await?;
+        let current = self
+            .active_message(access.auth(), &parent, id, false)
+            .await?;
         reject_call_root(&current)?;
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
@@ -711,7 +763,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             ));
         }
         self.ensure_parent(&parent).await?;
-        let thread = self.active_thread(&parent, root_id).await?;
+        let thread = self.active_thread(access.auth(), &parent, root_id).await?;
         if patch.resolved.is_none() && !patch.detach_anchor {
             return Err(MessageError::Invalid("thread update must change a field"));
         }
@@ -775,7 +827,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         root_id: Uuid,
         nonce: Option<String>,
     ) -> Result<ThreadState, MessageError> {
-        let thread = self.active_thread(parent, root_id).await?;
+        let thread = self.active_thread(access.auth(), parent, root_id).await?;
         if thread.user_id != actor.as_ref() && !can_moderate(access.entity_permission()) {
             return Err(MessageError::Forbidden);
         }
@@ -814,7 +866,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .resolve_legacy(&parent, id, is_thread)
             .await?
             .ok_or(MessageError::NotFound)?;
-        self.active_message(&parent, id, true).await
+        self.active_message(access.auth(), &parent, id, true).await
     }
 
     async fn resolve_mentions(
@@ -963,6 +1015,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
 
     async fn active_thread(
         &self,
+        auth: &EntityAccessAuth,
         parent: &MessageParent,
         root: Uuid,
     ) -> Result<ThreadState, MessageError> {
@@ -971,7 +1024,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .thread(parent, root)
             .await?
             .ok_or(MessageError::NotFound)?;
-        if thread.deleted_at.is_some() {
+        if thread.deleted_at.is_some() || !privacy::can_view(auth, &thread.visibility) {
             return Err(MessageError::NotFound);
         }
         Ok(thread)
@@ -981,10 +1034,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// the call started.
     async fn active_thread_or_call_root(
         &self,
+        auth: &EntityAccessAuth,
         parent: &MessageParent,
         root: Uuid,
     ) -> Result<ThreadState, MessageError> {
-        match self.active_thread(parent, root).await {
+        match self.active_thread(auth, parent, root).await {
             Err(MessageError::NotFound) => {
                 let facts = self.repo.call_thread_facts(root).await?;
                 let in_this_channel =
@@ -994,7 +1048,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 }
 
                 self.ensure_call_root(root).await?;
-                self.active_thread(parent, root).await
+                self.active_thread(auth, parent, root).await
             }
             result => result,
         }
@@ -1002,6 +1056,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
 
     async fn active_message(
         &self,
+        auth: &EntityAccessAuth,
         parent: &MessageParent,
         id: Uuid,
         tombstone: bool,
@@ -1011,10 +1066,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .get(parent, id)
             .await?
             .ok_or(MessageError::NotFound)?;
-        if message.parent != *parent || (!tombstone && message.deleted_at.is_some()) {
+        if message.parent != *parent
+            || (!tombstone && message.deleted_at.is_some())
+            || !privacy::can_view(auth, &message.visibility)
+        {
             return Err(MessageError::NotFound);
         }
-        self.active_thread(parent, message.root_id()).await?;
+        self.active_thread(auth, parent, message.root_id()).await?;
         Ok(message)
     }
 
@@ -1212,7 +1270,11 @@ fn validate_event_message(
     parent: &MessageParent,
     actor: &ChannelSender<'static>,
     thread_id: Option<Uuid>,
+    auth: &EntityAccessAuth,
 ) -> Result<Message, MessageError> {
+    if !privacy::can_view(auth, &message.visibility) {
+        return Err(MessageError::NotFound);
+    }
     if message.parent != *parent || message.sender_id != *actor || message.thread_id != thread_id {
         return Err(MessageError::Conflict);
     }

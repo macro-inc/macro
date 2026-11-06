@@ -61,6 +61,7 @@ fn private_agent(bot_id: BotId) -> Agent {
 
 fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) -> Agent {
     Agent {
+        is_ephemeral: false,
         bot: owned_bot(bot_id, owner),
         instructions: String::new(),
         harness: "in-memory".to_owned(),
@@ -93,6 +94,7 @@ fn system_bot(bot_id: BotId) -> Bot {
 
 fn message(mentions: Vec<SimpleMention>) -> MessagePostedMetadata {
     MessagePostedMetadata {
+        visibility: Default::default(),
         parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: Some(Uuid::from_u128(3)),
@@ -120,6 +122,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         ),
         thread_id: Some(Uuid::from_u128(3)),
         thread_parent: Some(MessageParent::Channel(Uuid::from_u128(1))),
+        thread_visibility: Some(Default::default()),
         originating_message_id: None,
         bot_id,
         model: "model".to_owned(),

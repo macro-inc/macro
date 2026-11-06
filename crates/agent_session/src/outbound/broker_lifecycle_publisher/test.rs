@@ -53,6 +53,7 @@ fn deleted() -> AgentSessionLifecycleEvent {
         identity: SessionIdentity {
             session_id: AgentSessionId::TEST_A,
             session_name: "Agent Session".to_owned(),
+            visibility: Default::default(),
             bot_id: BotId::TEST_A,
             bot_name: "Test Agent".to_owned(),
             owner_id: MacroUserIdStr::parse_from_str("macro|owner@example.com")

@@ -126,3 +126,5 @@ disconnect's `other_live_connections` above 0 is a stale close that changed noth
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
+
+Private-thread sessions must not grant access through prompt mentions or emit lifecycle notifications; preserve their root audience in lifecycle facts.

@@ -4,7 +4,7 @@
 
 pub mod search;
 
-use messages::domain::models::MessageParent;
+use messages::domain::models::{MessageParent, MessageVisibility};
 use sqlx::types::Json;
 #[cfg(test)]
 mod test;
@@ -302,6 +302,7 @@ struct AgentSessionRow {
     owner_id: String,
     thread_id: Option<Uuid>,
     thread_parent: Option<Json<MessageParent>>,
+    thread_visibility: Option<Json<MessageVisibility>>,
     originating_message_id: Option<Uuid>,
     bot_id: Uuid,
     model: String,
@@ -351,6 +352,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
             thread_parent: row.thread_parent.map(|parent| parent.0),
+            thread_visibility: row.thread_visibility.map(|visibility| visibility.0),
             originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
             model: row.model,
@@ -483,6 +485,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
                  WHERE origin_row.id = agent_session.source_id)
                     AS "source_row?: Json<source::SourceRow>",
+                message_visibility AS "thread_visibility?: Json<MessageVisibility>",
                 -- A row being created cannot have an external identity yet.
                 NULL::TEXT AS "external_provider?", NULL::TEXT AS "external_id?",
                 NULL::TEXT AS "external_name?", NULL::TEXT AS "external_url?",
@@ -545,7 +548,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         // directly, rather than from a channel - is its owner's alone.
         let origin_channel_id = match originating_message_id {
             Some(message_id) => sqlx::query_scalar!(
-                r#"SELECT parent_entity_id::uuid AS "channel_id!" FROM comms_messages WHERE parent_entity_type = 'channel' AND id = $1"#,
+                r#"SELECT parent_entity_id::uuid AS "channel_id!" FROM comms_messages WHERE parent_entity_type = 'channel' AND id = $1 AND visibility->>'type' = 'public'"#,
                 message_id,
             )
             .fetch_optional(&mut *transaction)
@@ -619,6 +622,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
                  WHERE origin_row.id = agent_session.source_id)
                     AS "source_row?: Json<source::SourceRow>",
+                message_visibility AS "thread_visibility?: Json<MessageVisibility>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -729,6 +733,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
                  WHERE origin_row.id = agent_session.source_id)
                     AS "source_row?: Json<source::SourceRow>",
+                message_visibility AS "thread_visibility?: Json<MessageVisibility>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -773,6 +778,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
                  WHERE origin_row.id = agent_session.source_id)
                     AS "source_row?: Json<source::SourceRow>",
+                message_visibility AS "thread_visibility?: Json<MessageVisibility>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -810,6 +816,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
                  WHERE origin_row.id = agent_session.source_id)
                     AS "source_row?: Json<source::SourceRow>",
+                message_visibility AS "thread_visibility?: Json<MessageVisibility>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -849,6 +856,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
                  WHERE origin_row.id = agent_session.source_id)
                     AS "source_row?: Json<source::SourceRow>",
+                message_visibility AS "thread_visibility?: Json<MessageVisibility>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"

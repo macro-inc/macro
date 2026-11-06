@@ -203,3 +203,5 @@ listener failure shuts down the process so ECS can replace the task.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
 
 - Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.
+
+Session and scheduling message writers resolve ephemeral agent settings through the same bots-owned reader as DSS. Private source threads must not share their sessions with the channel.

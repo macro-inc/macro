@@ -107,6 +107,9 @@ pub struct SessionIdentity {
     pub bot_name: String,
     /// User who owns the session.
     pub owner_id: MacroUserIdStr<'static>,
+    /// Immutable audience inherited from the originating message thread.
+    #[serde(default)]
+    pub visibility: messages::domain::models::MessageVisibility,
     /// Thread the session was opened from, when it was.
     pub origin: Option<ThreadOrigin>,
     /// Everyone with a stake in what happens next: the owner plus every user

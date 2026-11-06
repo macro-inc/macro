@@ -759,6 +759,7 @@ fn message_event_cases() -> Vec<EventCase> {
     let channel = MessageParent::Channel(channel_id);
     let document = MessageParent::parse("document", DOCUMENT_ID).unwrap();
     let posted = |parent: MessageParent| MessagePostedMetadata {
+        visibility: Default::default(),
         parent,
         message_id,
         thread_id: None,
@@ -1511,6 +1512,7 @@ fn agent_trigger_document_event()
         NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             message: messages::domain::events::MessagePostedMetadata {
+                visibility: Default::default(),
                 parent: messages::domain::models::MessageParent::parse("document", "doc-1")
                     .unwrap(),
                 message_id: uuid::Uuid::from_u128(2),
@@ -1772,7 +1774,7 @@ async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
 }
 
 fn agent_session_lifecycle_event(
-    event: fn(
+    event: impl FnOnce(
         agent_session::domain::events::SessionIdentity,
     ) -> agent_session::domain::events::AgentSessionLifecycleEvent,
 ) -> Event<agent_session::domain::events::AgentSessionLifecycleEvent> {
@@ -1782,6 +1784,7 @@ fn agent_session_lifecycle_event(
     Event::new(event(SessionIdentity {
         session_id: agent_session::domain::model::AgentSessionId::TEST_A,
         session_name: "Fix the flaky test".to_owned(),
+        visibility: Default::default(),
         bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
         bot_name: "Macro Coder".to_owned(),
         owner_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|asker@example.com")
@@ -1998,4 +2001,108 @@ fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
             },
         ]),
     );
+}
+
+#[tokio::test]
+async fn private_trigger_delivery_never_uses_the_parents_shared_audience() {
+    use agent_trigger::domain::broker_events::{AgentTriggerTopicEvent, NewAgentSessionEvent};
+    let access = MockAccessService::with_users(vec![user_id("macro|other@example.com")]);
+    let repository = MockRepository::new(
+        vec![
+            PERSONAL_WORKSPACE_ID.to_owned(),
+            "team-private-test".to_owned(),
+        ],
+        vec![webhook("wh_private", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let mut event = agent_trigger_document_event();
+    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::Mentioned(mention)) = &mut event.event
+    else {
+        panic!("expected mention fixture")
+    };
+    mention.message.visibility = messages::domain::models::MessageVisibility::Private {
+        user_id: PERSONAL_WORKSPACE_ID.into(),
+        bot_ids: vec![mention.bot_id.into_storage_id().to_string()],
+    };
+    mention.message.sender = sender(PERSONAL_WORKSPACE_ID);
+    let candidate = super::stream::agent_trigger_stream_candidate(&event).unwrap();
+    assert_eq!(
+        candidate.audience,
+        crate::domain::stream::StreamAudience::Workspace {
+            workspace_id: PERSONAL_WORKSPACE_ID.into(),
+        }
+    );
+    service.ingest_agent_trigger_event(event).await.unwrap();
+    assert!(lock(&access.calls).is_empty());
+    assert!(lock(&repository.state).workspace_calls.is_empty());
+    assert_eq!(
+        lock(&repository.state).match_calls[0].workspace_ids,
+        vec![PERSONAL_WORKSPACE_ID.to_owned()]
+    );
+    assert_eq!(lock(&enqueuer.state).attempted_messages.len(), 1);
+}
+
+#[test]
+fn private_posts_stream_only_to_the_initiating_personal_workspace() {
+    let TestBrokerEvent::Message(mut event) = message_event_cases().remove(0).event else {
+        panic!("expected message fixture")
+    };
+    let MessageTopicEvent::Posted(posted) = &mut event.event else {
+        panic!("expected posted fixture")
+    };
+    posted.visibility = messages::domain::models::MessageVisibility::Private {
+        user_id: PERSONAL_WORKSPACE_ID.into(),
+        bot_ids: vec![],
+    };
+    let candidate = super::stream::message_stream_candidate(&event).unwrap();
+    assert_eq!(
+        candidate.audience,
+        crate::domain::stream::StreamAudience::Workspace {
+            workspace_id: PERSONAL_WORKSPACE_ID.into(),
+        }
+    );
+}
+
+#[tokio::test]
+async fn private_lifecycle_events_never_expand_to_parent_or_team_workspaces() {
+    use agent_session::domain::events::{SessionDeletedMetadata, SessionRenamedMetadata};
+    for deleted in [false, true] {
+        let event = agent_session_lifecycle_event(|mut identity| {
+            identity.visibility = messages::domain::models::MessageVisibility::Private {
+                user_id: PERSONAL_WORKSPACE_ID.into(),
+                bot_ids: vec![],
+            };
+            if deleted {
+                AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+            } else {
+                AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata { identity })
+            }
+        });
+        let access = MockAccessService::with_users(vec![user_id("macro|other@example.com")]);
+        let repository = MockRepository::new(
+            vec!["shared-team".into()],
+            vec![webhook("wh_private", PERSONAL_WORKSPACE_ID)],
+        );
+        let enqueuer = MockEnqueuer::default();
+        let service = service(access.clone(), repository.clone(), enqueuer);
+        let candidate = super::stream::agent_session_lifecycle_stream_candidate(&event).unwrap();
+        assert_eq!(
+            candidate.audience,
+            crate::domain::stream::StreamAudience::Workspace {
+                workspace_id: PERSONAL_WORKSPACE_ID.into(),
+            }
+        );
+        service
+            .ingest_agent_session_lifecycle_event(event)
+            .await
+            .unwrap();
+        assert!(lock(&access.calls).is_empty());
+        let state = lock(&repository.state);
+        assert!(state.workspace_calls.is_empty());
+        assert_eq!(
+            state.match_calls[0].workspace_ids,
+            vec![PERSONAL_WORKSPACE_ID.to_owned()]
+        );
+    }
 }

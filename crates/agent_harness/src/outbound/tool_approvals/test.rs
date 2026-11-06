@@ -43,6 +43,7 @@ fn identity(session: AgentSessionId) -> SessionIdentity {
     SessionIdentity {
         session_id: session,
         session_name: "Session".to_owned(),
+        visibility: Default::default(),
         bot_id: BotId::new_from_uuid(Uuid::from_u128(1)),
         bot_name: "Macro".to_owned(),
         owner_id: MacroUserIdStr::try_from_email("owner@macro.com").unwrap(),

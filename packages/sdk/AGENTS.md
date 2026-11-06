@@ -178,3 +178,5 @@ the existing gateway prefixes.
   explicitly classified alongside the existing Notion routes in coverage skips.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
+
+- Preserve saved agent privacy when `isEphemeral` is omitted on update; private threads remain in the initiating user's history.

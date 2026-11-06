@@ -311,6 +311,9 @@ impl NewThreadAnchor {
 pub struct ThreadState {
     /// Root message UUID; there is no separate thread identity.
     pub root_id: Uuid,
+    /// Immutable audience inherited from the root message.
+    #[serde(default)]
+    pub visibility: MessageVisibility,
     /// User who owns this discussion, including imported discussions.
     pub user_id: String,
     /// Whether this discussion has been resolved.
@@ -444,6 +447,39 @@ pub enum MessageKind {
     /// The root of a channel call's thread. Its id is the call id, and it
     /// stands for the call rather than for anything the caller said.
     CallRoot,
+/// The immutable audience of a durable message thread.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub enum MessageVisibility {
+    /// Everyone with access to the conversation.
+    #[default]
+    Public,
+    /// Only the initiating user and explicitly invited agents.
+    Private {
+        /// Authenticated user who started the thread.
+        user_id: String,
+        /// Canonical bot principals invited when the thread was created.
+        bot_ids: Vec<String>,
+    },
+}
+
+impl MessageVisibility {
+    /// Whether a message is shared with its conversation.
+    pub fn is_public(&self) -> bool {
+        matches!(self, Self::Public)
+    }
+
+    /// Whether the verified user or bot principal belongs to this audience.
+    pub fn permits(&self, principal: &str) -> bool {
+        match self {
+            Self::Public => true,
+            Self::Private { user_id, bot_ids } => {
+                principal == user_id || bot_ids.iter().any(|bot| bot == principal)
+            }
+        }
+    }
 }
 
 /// Shared message representation for channel timelines and entity discussions.
@@ -467,6 +503,9 @@ pub struct Message {
     /// Display name of a verified call guest, retained after the call ends.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub guest_name: Option<String>,
+    /// Audience fixed when the thread was created.
+    #[serde(default)]
+    pub visibility: MessageVisibility,
     /// Original external author, when imported.
     pub imported_author: Option<ImportedAuthor>,
     /// Public bot name and avatar for rendering shared message authors.
@@ -575,6 +614,7 @@ impl MessageAttribution {
 
 /// Create a root or reply. Thread state may only be supplied on a root.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct PostMessage {

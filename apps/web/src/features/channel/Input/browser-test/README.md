@@ -40,3 +40,9 @@ Markdown used to lose its syntax.
 The CRM mention regression uses the real menu and contact query with controlled
 pages. It selects a CRM contact whose email also belongs to a Macro user,
 verifies the stored contact link, and pages CRM results on desktop and phone.
+
+Thread privacy is determined by the mentioned agent's settings on the server.
+The composer has no visibility controls or saved audience choice. Exercise
+agent mentions, inherited ephemeral-thread replies, and shared-thread forks
+against the isolated full stack with two users; see
+`docs/agent-guide/channels.md` at the repository root.

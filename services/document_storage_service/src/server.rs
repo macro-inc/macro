@@ -1353,6 +1353,7 @@ async fn run_server() -> anyhow::Result<()> {
         .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
             PgChannelsRepo::new(db.clone()),
         ))
+        .with_ephemeral_agents(bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()))
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
             lexical_client.clone(),
         ))

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 for (const mobile of [false, true]) {
-  test(`clears a pending send and restores a failed draft on ${mobile ? 'phone' : 'desktop'}`, async ({
+  test(`clears a pending shared send and restores a failed draft on ${mobile ? 'phone' : 'desktop'}`, async ({
     browser,
   }) => {
     const context = await browser.newContext({
@@ -30,6 +30,9 @@ for (const mobile of [false, true]) {
     await page.goto('/src/features/channel/Input/browser-test/draft.html');
     const editor = page.locator('[data-markdown-editable]');
     await expect(editor).toBeVisible({ timeout: 60_000 });
+    await expect(
+      page.getByRole('button', { name: 'Message visibility' })
+    ).toHaveCount(0);
     await editor.fill('pending message');
     await page
       .getByRole('button', { name: 'Send message', exact: true })
@@ -48,3 +51,32 @@ for (const mobile of [false, true]) {
     await context.close();
   });
 }
+
+test('custom composer actions read context after the input provider mounts', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      url.hostname === 'localhost' &&
+      !url.pathname.startsWith('/__macro_dev/')
+    )
+      await route.continue();
+    else
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: '{"responses":[]}',
+      });
+  });
+  await page.routeWebSocket('**/*', (socket) => socket.close());
+  await page.goto(
+    '/src/features/channel/Input/browser-test/draft.html?customActions'
+  );
+  await expect(
+    page.getByRole('button', { name: 'Send message', exact: true })
+  ).toHaveCount(2, { timeout: 60_000 });
+  expect(errors).toEqual([]);
+});

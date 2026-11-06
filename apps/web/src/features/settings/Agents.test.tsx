@@ -857,6 +857,7 @@ describe('Agents', () => {
           created_at: '2026-08-27T12:00:00Z',
           updated_at: '2026-08-27T12:00:00Z',
         },
+        is_ephemeral: true,
         instructions: 'Fix the root cause.',
         harness: 'in-memory',
         default_model: Model.sonnet55,
@@ -870,6 +871,10 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     expect(screen.getByRole('heading', { name: 'Edit agent' })).toBeTruthy();
+    expect(within(dialog).getByLabelText('Ephemeral agent')).toHaveProperty(
+      'checked',
+      true
+    );
     expect(within(dialog).getByLabelText('Name')).toHaveProperty(
       'value',
       'Bug fixer'
@@ -896,6 +901,7 @@ describe('Agents', () => {
         agentId: 'agent-1',
         autoAcceptPermissions: true,
         isCoding: false,
+        isEphemeral: true,
         avatarUrl: undefined,
         channelIds: ['channel-engineering'],
         channelScope: 'selected',
@@ -903,6 +909,7 @@ describe('Agents', () => {
         description: 'Finds and fixes bugs.',
         handle: 'bug-fixer',
         harness: 'in-memory',
+        harnessId: undefined,
         name: 'Bug resolver',
         instructions: 'Fix the root cause.',
         mcp: { scope: 'owner_connections' },
@@ -1262,6 +1269,11 @@ describe('Agents', () => {
       target: { value: 'Fix the **root cause** and add tests.' },
     });
     fireEvent.click(within(dialog).getByLabelText('Team'));
+    expect(within(dialog).getByLabelText('Ephemeral agent')).toHaveProperty(
+      'checked',
+      false
+    );
+    fireEvent.click(within(dialog).getByLabelText('Ephemeral agent'));
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Create agent' })
     );
@@ -1271,11 +1283,13 @@ describe('Agents', () => {
         autoAcceptPermissions: true,
         avatarUrl: undefined,
         isCoding: false,
+        isEphemeral: true,
         channelIds: [],
         channelScope: 'all',
         defaultModel: Model.sonnet55,
         handle: 'bug-fixer',
         harness: 'in-memory',
+        harnessId: undefined,
         name: 'Bug fixer',
         instructions: 'Fix the **root cause** and add tests.',
         mcp: { scope: 'owner_connections' },
@@ -1722,6 +1736,7 @@ describe('Agents', () => {
         autoAcceptPermissions: false,
         avatarUrl: undefined,
         isCoding: true,
+        isEphemeral: false,
         channelIds: [],
         channelScope: 'all',
         defaultModel: 'claude-code',

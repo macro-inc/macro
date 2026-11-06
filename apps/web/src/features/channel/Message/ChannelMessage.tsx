@@ -64,21 +64,23 @@ function MessageContentSlot(props: {
   };
 
   const content = (
-    <Switch>
-      <Match when={inlineEditing()}>
-        {(editing) => (
-          <MessageEditorContent
-            parent={editing().parent}
-            message={message()}
-            messageEditor={editing().messageEditor}
-            class={props.class}
-          />
-        )}
-      </Match>
-      <Match when={message().content.trim() !== ''}>
-        <Message.Content class={props.class} />
-      </Match>
-    </Switch>
+    <>
+      <Switch>
+        <Match when={inlineEditing()}>
+          {(editing) => (
+            <MessageEditorContent
+              parent={editing().parent}
+              message={message()}
+              messageEditor={editing().messageEditor}
+              class={props.class}
+            />
+          )}
+        </Match>
+        <Match when={message().content.trim() !== ''}>
+          <Message.Content class={props.class} />
+        </Match>
+      </Switch>
+    </>
   );
   return props.renderContent ? props.renderContent(content) : content;
 }

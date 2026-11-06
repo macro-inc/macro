@@ -42,6 +42,7 @@ fn sender() -> ChannelSender<'static> {
 #[test]
 fn the_message_source_carries_the_persisted_parent_through() {
     let posted = MessagePostedMetadata {
+        visibility: Default::default(),
         parent: MessageParent::parse("document", "doc-1").unwrap(),
         message_id: Uuid::from_u128(2),
         thread_id: None,

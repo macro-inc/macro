@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.root_id, to_jsonb(t) || jsonb_build_object('visibility', m.visibility) AS \"state!: Json<ThreadState>\",\n            (SELECT count(*) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS \"reply_count!\",\n            (SELECT max(created_at) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS latest_reply_at\n            FROM comms_message_threads t JOIN comms_messages m ON m.id = t.root_id WHERE root_id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "root_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "state!: Json<ThreadState>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "reply_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "latest_reply_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "57332dbc25ab71ca66916061085a20996575902109ba364fbff3708d602ed695"
+}

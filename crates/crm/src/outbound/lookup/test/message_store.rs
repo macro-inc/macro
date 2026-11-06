@@ -225,6 +225,7 @@ async fn crm_discussion_lifecycle_cascades_on_company_deletion(pool: PgPool) {
     );
     let late = CreateMessage {
         kind: messages::domain::models::MessageKind::Message,
+        visibility: Default::default(),
         guest_name: None,
         canonical_root_id: None,
         parent: company,

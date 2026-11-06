@@ -29,6 +29,8 @@ export type InputAttachmentData = {
 export type InputPersistenceKey = PersistenceKey;
 
 type InputDataBase = {
+  /** Audience inherited from the thread; private replies cannot become public. */
+  privateThread?: boolean;
   id?: string;
   placeholder?: string;
   value?: string;

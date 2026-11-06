@@ -186,3 +186,5 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `.agents/rules/rust/security.md` · Skill: `new-service`
 
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.
+
+The shared welcome-message writer supplies the bots-owned ephemeral settings reader, matching the other production message compositions.

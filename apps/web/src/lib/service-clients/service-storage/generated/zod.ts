@@ -355,6 +355,12 @@ export const listAgentsResponseItem = zod
       .describe(
         "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
       ),
+    is_ephemeral: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Mentions start a durable thread visible only to the invoking user.'
+      ),
     mcp: zod
       .union([
         zod
@@ -437,6 +443,12 @@ export const createAgentBody = zod
       .boolean()
       .describe(
         'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
+      ),
+    is_ephemeral: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Mentions start a durable thread visible only to the invoking user.'
       ),
     mcp: zod
       .union([
@@ -530,6 +542,10 @@ export const updateAgentBody = zod
       .describe(
         'Whether the agent is a coding agent: a mention is answered with a magic\nchip into its live session (`true`) or a reply in the thread (`false`).'
       ),
+    is_ephemeral: zod
+      .boolean()
+      .nullish()
+      .describe('New mention privacy. Omit to preserve the saved setting.'),
     mcp: zod
       .union([
         zod
@@ -655,6 +671,12 @@ export const updateAgentResponse = zod
       .boolean()
       .describe(
         "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
+      ),
+    is_ephemeral: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Mentions start a durable thread visible only to the invoking user.'
       ),
     mcp: zod
       .union([
@@ -53354,6 +53376,31 @@ export const messageTimelineResponse = zod
                 'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
               ),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+            visibility: zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['public']),
+                  })
+                  .describe('Everyone with access to the conversation.'),
+                zod
+                  .object({
+                    bot_ids: zod
+                      .array(zod.string())
+                      .describe(
+                        'Canonical bot principals invited when the thread was created.'
+                      ),
+                    type: zod.enum(['private']),
+                    user_id: zod
+                      .string()
+                      .describe('Authenticated user who started the thread.'),
+                  })
+                  .describe(
+                    'Only the initiating user and explicitly invited agents.'
+                  ),
+              ])
+              .optional()
+              .describe('The immutable audience of a durable message thread.'),
           })
           .describe(
             'Shared message representation for channel timelines and entity discussions.'
@@ -53489,6 +53536,35 @@ export const messageTimelineResponse = zod
                     .string()
                     .describe(
                       'User who owns this discussion, including imported discussions.'
+                    ),
+                  visibility: zod
+                    .union([
+                      zod
+                        .object({
+                          type: zod.enum(['public']),
+                        })
+                        .describe('Everyone with access to the conversation.'),
+                      zod
+                        .object({
+                          bot_ids: zod
+                            .array(zod.string())
+                            .describe(
+                              'Canonical bot principals invited when the thread was created.'
+                            ),
+                          type: zod.enum(['private']),
+                          user_id: zod
+                            .string()
+                            .describe(
+                              'Authenticated user who started the thread.'
+                            ),
+                        })
+                        .describe(
+                          'Only the initiating user and explicitly invited agents.'
+                        ),
+                    ])
+                    .optional()
+                    .describe(
+                      'The immutable audience of a durable message thread.'
                     ),
                 })
                 .describe(
@@ -53719,6 +53795,37 @@ export const messageTimelineResponse = zod
                           updated_at: zod.iso
                             .datetime({})
                             .describe('Last persisted update.'),
+                          visibility: zod
+                            .union([
+                              zod
+                                .object({
+                                  type: zod.enum(['public']),
+                                })
+                                .describe(
+                                  'Everyone with access to the conversation.'
+                                ),
+                              zod
+                                .object({
+                                  bot_ids: zod
+                                    .array(zod.string())
+                                    .describe(
+                                      'Canonical bot principals invited when the thread was created.'
+                                    ),
+                                  type: zod.enum(['private']),
+                                  user_id: zod
+                                    .string()
+                                    .describe(
+                                      'Authenticated user who started the thread.'
+                                    ),
+                                })
+                                .describe(
+                                  'Only the initiating user and explicitly invited agents.'
+                                ),
+                            ])
+                            .optional()
+                            .describe(
+                              'The immutable audience of a durable message thread.'
+                            ),
                         })
                         .describe(
                           'Shared message representation for channel timelines and entity discussions.'
@@ -54086,6 +54193,29 @@ export const entityMessageCreateResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -54260,6 +54390,29 @@ export const entityMessageGetMessageResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -54438,6 +54591,29 @@ export const entityMessageDeleteMessageResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -54712,6 +54888,29 @@ export const entityMessageEditResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -54894,6 +55093,29 @@ export const entityMessageReactResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -55075,6 +55297,29 @@ export const entityMessageLegacyResponse = zod
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
@@ -55276,6 +55521,31 @@ export const entityMessageGetThreadResponse = zod
                 'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
               ),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+            visibility: zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['public']),
+                  })
+                  .describe('Everyone with access to the conversation.'),
+                zod
+                  .object({
+                    bot_ids: zod
+                      .array(zod.string())
+                      .describe(
+                        'Canonical bot principals invited when the thread was created.'
+                      ),
+                    type: zod.enum(['private']),
+                    user_id: zod
+                      .string()
+                      .describe('Authenticated user who started the thread.'),
+                  })
+                  .describe(
+                    'Only the initiating user and explicitly invited agents.'
+                  ),
+              ])
+              .optional()
+              .describe('The immutable audience of a durable message thread.'),
           })
           .describe(
             'Shared message representation for channel timelines and entity discussions.'
@@ -55453,6 +55723,31 @@ export const entityMessageGetThreadResponse = zod
             'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
           ),
         updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+        visibility: zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['public']),
+              })
+              .describe('Everyone with access to the conversation.'),
+            zod
+              .object({
+                bot_ids: zod
+                  .array(zod.string())
+                  .describe(
+                    'Canonical bot principals invited when the thread was created.'
+                  ),
+                type: zod.enum(['private']),
+                user_id: zod
+                  .string()
+                  .describe('Authenticated user who started the thread.'),
+              })
+              .describe(
+                'Only the initiating user and explicitly invited agents.'
+              ),
+          ])
+          .optional()
+          .describe('The immutable audience of a durable message thread.'),
       })
       .describe(
         'Shared message representation for channel timelines and entity discussions.'
@@ -55571,6 +55866,31 @@ export const entityMessageGetThreadResponse = zod
           .describe(
             'User who owns this discussion, including imported discussions.'
           ),
+        visibility: zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['public']),
+              })
+              .describe('Everyone with access to the conversation.'),
+            zod
+              .object({
+                bot_ids: zod
+                  .array(zod.string())
+                  .describe(
+                    'Canonical bot principals invited when the thread was created.'
+                  ),
+                type: zod.enum(['private']),
+                user_id: zod
+                  .string()
+                  .describe('Authenticated user who started the thread.'),
+              })
+              .describe(
+                'Only the initiating user and explicitly invited agents.'
+              ),
+          ])
+          .optional()
+          .describe('The immutable audience of a durable message thread.'),
       })
       .describe(
         'State belonging to a whole thread, keyed by its root message.'
@@ -55697,6 +56017,29 @@ export const entityMessageDeleteThreadResponse = zod
       .describe(
         'User who owns this discussion, including imported discussions.'
       ),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe('State belonging to a whole thread, keyed by its root message.');
 
@@ -55836,6 +56179,29 @@ export const entityMessagePatchThreadResponse = zod
       .describe(
         'User who owns this discussion, including imported discussions.'
       ),
+    visibility: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['public']),
+          })
+          .describe('Everyone with access to the conversation.'),
+        zod
+          .object({
+            bot_ids: zod
+              .array(zod.string())
+              .describe(
+                'Canonical bot principals invited when the thread was created.'
+              ),
+            type: zod.enum(['private']),
+            user_id: zod
+              .string()
+              .describe('Authenticated user who started the thread.'),
+          })
+          .describe('Only the initiating user and explicitly invited agents.'),
+      ])
+      .optional()
+      .describe('The immutable audience of a durable message thread.'),
   })
   .describe('State belonging to a whole thread, keyed by its root message.');
 
@@ -56067,6 +56433,37 @@ export const messageTimelineEntriesResponse = zod
                     updated_at: zod.iso
                       .datetime({})
                       .describe('Last persisted update.'),
+                    visibility: zod
+                      .union([
+                        zod
+                          .object({
+                            type: zod.enum(['public']),
+                          })
+                          .describe(
+                            'Everyone with access to the conversation.'
+                          ),
+                        zod
+                          .object({
+                            bot_ids: zod
+                              .array(zod.string())
+                              .describe(
+                                'Canonical bot principals invited when the thread was created.'
+                              ),
+                            type: zod.enum(['private']),
+                            user_id: zod
+                              .string()
+                              .describe(
+                                'Authenticated user who started the thread.'
+                              ),
+                          })
+                          .describe(
+                            'Only the initiating user and explicitly invited agents.'
+                          ),
+                      ])
+                      .optional()
+                      .describe(
+                        'The immutable audience of a durable message thread.'
+                      ),
                   })
                   .describe(
                     'Shared message representation for channel timelines and entity discussions.'
@@ -56206,6 +56603,37 @@ export const messageTimelineEntriesResponse = zod
                             .string()
                             .describe(
                               'User who owns this discussion, including imported discussions.'
+                            ),
+                          visibility: zod
+                            .union([
+                              zod
+                                .object({
+                                  type: zod.enum(['public']),
+                                })
+                                .describe(
+                                  'Everyone with access to the conversation.'
+                                ),
+                              zod
+                                .object({
+                                  bot_ids: zod
+                                    .array(zod.string())
+                                    .describe(
+                                      'Canonical bot principals invited when the thread was created.'
+                                    ),
+                                  type: zod.enum(['private']),
+                                  user_id: zod
+                                    .string()
+                                    .describe(
+                                      'Authenticated user who started the thread.'
+                                    ),
+                                })
+                                .describe(
+                                  'Only the initiating user and explicitly invited agents.'
+                                ),
+                            ])
+                            .optional()
+                            .describe(
+                              'The immutable audience of a durable message thread.'
                             ),
                         })
                         .describe(
@@ -56454,6 +56882,37 @@ export const messageTimelineEntriesResponse = zod
                                   updated_at: zod.iso
                                     .datetime({})
                                     .describe('Last persisted update.'),
+                                  visibility: zod
+                                    .union([
+                                      zod
+                                        .object({
+                                          type: zod.enum(['public']),
+                                        })
+                                        .describe(
+                                          'Everyone with access to the conversation.'
+                                        ),
+                                      zod
+                                        .object({
+                                          bot_ids: zod
+                                            .array(zod.string())
+                                            .describe(
+                                              'Canonical bot principals invited when the thread was created.'
+                                            ),
+                                          type: zod.enum(['private']),
+                                          user_id: zod
+                                            .string()
+                                            .describe(
+                                              'Authenticated user who started the thread.'
+                                            ),
+                                        })
+                                        .describe(
+                                          'Only the initiating user and explicitly invited agents.'
+                                        ),
+                                    ])
+                                    .optional()
+                                    .describe(
+                                      'The immutable audience of a durable message thread.'
+                                    ),
                                 })
                                 .describe(
                                   'Shared message representation for channel timelines and entity discussions.'

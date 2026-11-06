@@ -346,6 +346,11 @@ The backend-free desktop/phone/tablet regression is
 
 ## Development Patterns
 
+Derive thread privacy only from the agent's **Ephemeral agent** setting and
+inherit the saved audience on replies; keep visibility controls, audience labels,
+and manual privacy state out of the composer. See
+`docs/architecture/private-message-threads.md` at the repo root.
+
 Route database row rename and delete through `renameDatabase` and
 `trashDatabase`; use the row grant for rename, delete, and sharing permissions.
 

@@ -266,6 +266,11 @@ where
         posted: &MessagePostedMetadata,
         bot_id: BotId,
     ) -> Result<bool> {
+        if !posted.visibility.is_public()
+            && !posted.visibility.permits(bot_id.into_storage_id().as_ref())
+        {
+            return Ok(false);
+        }
         let Some(caller) = posted.invoking_user() else {
             return Ok(false);
         };
@@ -449,7 +454,9 @@ where
         if posted.sender.as_bot().is_some() && !self.within_hop_limit(posted, &invocation).await {
             return Ok(Vec::new());
         }
-        if let Some(router) = &self.conversations {
+        if posted.visibility.is_public()
+            && let Some(router) = &self.conversations
+        {
             match router.evaluate(posted).await? {
                 ConversationDecision::NotConversation => {}
                 ConversationDecision::Unavailable => return Ok(Vec::new()),

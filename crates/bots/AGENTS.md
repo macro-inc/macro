@@ -53,3 +53,5 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
 - Docs: [`docs/guides/bots.md`](../../docs/guides/bots.md) (setting up a bot
   in the app and using it from the SDK)
+
+Persist ephemeral mention defaults in `agent_configs.is_ephemeral`; preserve omitted values in updates and unrelated patches. The bots-owned `EphemeralAgentReader` adapter supplies message audience facts.

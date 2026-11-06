@@ -163,3 +163,5 @@ through `set_name` clears it, so a name a person chose is never replaced.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
 - The activity route requires session view access, including for rows affecting other entities; its optional invocation filter stays scoped to the session.
+
+Copy the originating message's audience into immutable session storage at creation and retain it after root deletion. Use it for lifecycle delivery and sharing, keep it on identity when origin metadata is incomplete, and fail closed if it is unavailable. See `docs/architecture/private-message-threads.md`.

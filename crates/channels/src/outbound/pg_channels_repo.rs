@@ -226,7 +226,7 @@ async fn get_channel_participants_for_thread_id(
             FROM comms_messages m
             JOIN comms_channel_participants cp
               ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
-            WHERE (m.id = $1 OR m.thread_id = $1)
+            WHERE m.visibility->>'type' = 'public' AND (m.id = $1 OR m.thread_id = $1)
               AND m.deleted_at IS NULL
               AND m.kind = 'message'
               AND cp.left_at IS NULL
@@ -236,7 +236,7 @@ async fn get_channel_participants_for_thread_id(
             JOIN comms_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
               ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = em.entity_id
-            WHERE (m.id = $1 OR m.thread_id = $1)
+            WHERE m.visibility->>'type' = 'public' AND (m.id = $1 OR m.thread_id = $1)
               AND m.deleted_at IS NULL
               AND em.source_entity_type = 'message'
               AND em.entity_type = 'user'
@@ -867,7 +867,7 @@ fn push_channel_thread_filter_expr(
                 r#"(EXISTS (
                     SELECT 1
                     FROM comms_messages reply
-                    WHERE reply.thread_id = m.id
+                    WHERE reply.visibility->>'type' = 'public' AND reply.thread_id = m.id
                       AND reply.deleted_at IS NULL
                 ) = "#,
             );
@@ -926,14 +926,14 @@ fn push_channel_thread_participant_filter_expr(
     builder.push(
         r#"
               AND pcp.left_at IS NULL
-        ) AND ((m.deleted_at IS NULL AND "#,
+        ) AND ((m.visibility->>'type' = 'public' AND m.deleted_at IS NULL AND "#,
     );
     push_channel_message_participation_expr(builder, "m", &participant);
     builder.push(
         r#") OR EXISTS (
             SELECT 1
             FROM comms_messages tm
-            WHERE tm.thread_id = m.id
+            WHERE tm.visibility->>'type' = 'public' AND tm.thread_id = m.id
               AND tm.deleted_at IS NULL
               AND "#,
     );
@@ -1215,10 +1215,10 @@ fn build_channel_thread_notification_query(
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
             FROM comms_messages reply
-            WHERE reply.thread_id = m.id
+            WHERE reply.visibility->>'type' = 'public' AND reply.thread_id = m.id
               AND reply.deleted_at IS NULL
         ) thread_stats ON TRUE
-        WHERE m.thread_id IS NULL
+        WHERE m.visibility->>'type' = 'public' AND m.thread_id IS NULL
           AND m.deleted_at IS NULL
           AND m.parent_entity_type = 'channel'
           AND EXISTS (
@@ -1309,10 +1309,10 @@ fn build_channel_thread_rows_query(
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
             FROM comms_messages reply
-            WHERE reply.thread_id = m.id
+            WHERE reply.visibility->>'type' = 'public' AND reply.thread_id = m.id
               AND reply.deleted_at IS NULL
         ) thread_stats ON TRUE
-        WHERE m.thread_id IS NULL
+        WHERE m.visibility->>'type' = 'public' AND m.thread_id IS NULL
           AND m.deleted_at IS NULL
         "#,
     );
@@ -1461,7 +1461,7 @@ impl PgChannelsRepo {
                         ORDER BY r.created_at ASC, r.id ASC
                     ) AS rn
                 FROM comms_messages r
-                WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL
+                WHERE r.visibility->>'type' = 'public' AND r.thread_id = ANY($1) AND r.deleted_at IS NULL
             ) sub
             WHERE rn <= $2
             ORDER BY thread_id, created_at ASC, id ASC
@@ -1740,7 +1740,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     '{}'::text[]
                 ) AS mentions
             FROM comms_messages m
-            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
+            WHERE m.visibility->>'type' = 'public' AND m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
               AND m.deleted_at IS NULL
             ORDER BY m.created_at DESC
             LIMIT 1
@@ -1764,7 +1764,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     '{}'::text[]
                 ) AS mentions
             FROM comms_messages m
-            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
+            WHERE m.visibility->>'type' = 'public' AND m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
               AND m.deleted_at IS NULL
               AND m.thread_id IS NULL
             ORDER BY m.created_at DESC
@@ -2073,7 +2073,7 @@ impl ChannelAttachmentRepo for PgChannelsRepo {
                 '{}'::text[]
             ) AS "mentions!"
         FROM comms_messages m
-        WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
+        WHERE m.visibility->>'type' = 'public' AND m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
           AND m.deleted_at IS NULL
         ORDER BY m.created_at DESC
         LIMIT $2
@@ -2138,7 +2138,7 @@ impl ChannelRepo for PgChannelsRepo {
                 a.width AS "width?", a.height AS "height?", a.created_at
             FROM comms_attachments a
             JOIN comms_messages m ON m.id = a.message_id
-            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
+            WHERE m.visibility->>'type' = 'public' AND m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
               AND m.deleted_at IS NULL
               AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))
               AND ($5::bool IS NULL
@@ -2235,7 +2235,7 @@ impl ChannelRepo for PgChannelsRepo {
                 JOIN comms_messages m ON a.message_id = m.id
                 JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
-                WHERE a.entity_type = ANY($1)
+                WHERE m.visibility->>'type' = 'public' AND a.entity_type = ANY($1)
                   AND a.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
@@ -2268,7 +2268,7 @@ impl ChannelRepo for PgChannelsRepo {
                 JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
                 JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
-                WHERE em.entity_type = ANY($1)
+                WHERE m.visibility->>'type' = 'public' AND em.entity_type = ANY($1)
                   AND em.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
@@ -2339,7 +2339,7 @@ impl ChannelRepo for PgChannelsRepo {
                       AND a.entity_id  = $2
                 ) r
                 JOIN comms_messages m ON m.id = r.message_id
-                WHERE m.parent_entity_type <> 'channel'
+                WHERE m.visibility->>'type' = 'public' AND m.parent_entity_type <> 'channel'
                   AND m.deleted_at IS NULL
                 ORDER BY r.created_at DESC
                 "#,

@@ -2751,6 +2751,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
     let root = messages
         .create(CreateMessage {
             kind: messages::domain::models::MessageKind::Message,
+            visibility: Default::default(),
             guest_name: None,
             canonical_root_id: None,
             parent: parent.clone(),

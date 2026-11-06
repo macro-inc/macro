@@ -19,6 +19,7 @@ impl PgMessageRepository {
                    WHERE target.id = $3 AND target.parent_entity_type = $1 AND target.parent_entity_id = $2
                      AND root.parent_entity_type = $1 AND root.parent_entity_id = $2
                      AND (state.deleted_at IS NULL OR $4)
+                     AND (root.visibility->>'type' = 'public' OR root.visibility->>'user_id' = $5 OR (root.visibility->'bot_ids' ? $5 AND ($6::text IS NULL OR root.visibility->>'user_id' = $6)))
                      AND (root.deleted_at IS NULL OR $1 = 'document' OR ($4 AND state.deleted_at IS NOT NULL) OR EXISTS (
                          SELECT 1 FROM comms_messages reply
                          WHERE reply.thread_id = root.id AND reply.deleted_at IS NULL))"#,
@@ -26,6 +27,8 @@ impl PgMessageRepository {
                 parent.entity_id(),
                 id,
                 query.include_deleted_threads,
+                query.viewer.as_deref(),
+                query.viewer_user.as_deref(),
             )
             .fetch_optional(&self.pool)
             .await
@@ -97,7 +100,7 @@ impl PgMessageRepository {
     pub async fn hydrate_roots(&self, ids: &[Uuid]) -> Result<Vec<MessageListItem>, MessageError> {
         let rows = sqlx::query_scalar!(
             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>"
-            FROM comms_messages m WHERE id = ANY($1) AND thread_id IS NULL
+            FROM comms_messages m WHERE id = ANY($1) AND thread_id IS NULL AND visibility->>'type' = 'public'
             ORDER BY array_position($1, id)"#,
             ids
         )
@@ -111,10 +114,10 @@ impl PgMessageRepository {
         mut rows: Vec<Json<StoredMessage>>,
     ) -> Result<Vec<MessageListItem>, MessageError> {
         let roots: Vec<_> = rows.iter().map(|r| r.id).collect();
-        let states = sqlx::query!(r#"SELECT t.root_id, to_jsonb(t) AS "state!: Json<ThreadState>",
+        let states = sqlx::query!(r#"SELECT t.root_id, to_jsonb(t) || jsonb_build_object('visibility', m.visibility) AS "state!: Json<ThreadState>",
             (SELECT count(*) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS "reply_count!",
             (SELECT max(created_at) FROM comms_messages r WHERE r.thread_id = t.root_id AND r.deleted_at IS NULL) AS latest_reply_at
-            FROM comms_message_threads t WHERE root_id = ANY($1)"#, &roots)
+            FROM comms_message_threads t JOIN comms_messages m ON m.id = t.root_id WHERE root_id = ANY($1)"#, &roots)
             .fetch_all(&self.pool).await.map_err(database_error)?;
         let previews = sqlx::query_scalar!(r#"SELECT to_jsonb(preview) AS "message!: Json<StoredMessage>"
             FROM unnest($1::uuid[]) root(id) CROSS JOIN LATERAL (
@@ -166,6 +169,7 @@ impl PgMessageRepository {
             JOIN comms_message_threads t ON t.root_id = m.id
             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+                AND (m.visibility->>'type' = 'public' OR m.visibility->>'user_id' = $11 OR (m.visibility->'bot_ids' ? $11 AND ($12::text IS NULL OR m.visibility->>'user_id' = $12)))
                 AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS (
                     SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
                 AND ($6::uuid[] IS NULL OR m.id = ANY($6))
@@ -177,7 +181,7 @@ impl PgMessageRepository {
                 AND ($3::timestamptz IS NULL OR (m.created_at, m.id) < ($3, $4::uuid))
             ORDER BY m.created_at DESC, m.id DESC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
-            if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
+            if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads, query.viewer.as_deref(), query.viewer_user.as_deref())
             .fetch_all(&self.pool).await.map_err(database_error)
     }
     async fn newer(
@@ -191,6 +195,7 @@ impl PgMessageRepository {
             JOIN comms_message_threads t ON t.root_id = m.id
             WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
                 AND m.thread_id IS NULL AND (t.deleted_at IS NULL OR $10)
+                AND (m.visibility->>'type' = 'public' OR m.visibility->>'user_id' = $11 OR (m.visibility->'bot_ids' ? $11 AND ($12::text IS NULL OR m.visibility->>'user_id' = $12)))
                 AND (m.deleted_at IS NULL OR $1 = 'document' OR ($10 AND t.deleted_at IS NOT NULL) OR EXISTS (
                     SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
                 AND ($6::uuid[] IS NULL OR m.id = ANY($6))
@@ -202,7 +207,7 @@ impl PgMessageRepository {
                 AND ($3::timestamptz IS NULL OR (m.created_at, m.id) > ($3, $4::uuid))
             ORDER BY m.created_at ASC, m.id ASC LIMIT $5"#,
             parent.entity_type(), parent.entity_id(), cursor.map(|c| c.created_at), cursor.map(|c| c.id), limit,
-            if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads)
+            if query.ids.is_empty() { None } else { Some(query.ids.as_slice()) }, query.anchored, query.activity_after, query.activity_before, query.include_deleted_threads, query.viewer.as_deref(), query.viewer_user.as_deref())
             .fetch_all(&self.pool).await.map_err(database_error)
     }
 }

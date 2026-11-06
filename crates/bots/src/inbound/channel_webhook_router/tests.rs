@@ -570,6 +570,7 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
         match self.mode {
             TestPostMode::Ok => Ok(messages::domain::models::Message {
                 kind: messages::domain::models::MessageKind::Message,
+                visibility: Default::default(),
                 id: Uuid::new_v4(),
                 parent: messages::domain::models::MessageParent::Channel(channel_id),
                 thread_id: input.thread_id,

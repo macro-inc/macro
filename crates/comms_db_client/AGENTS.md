@@ -51,3 +51,5 @@ channel/document conversations.
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+Shared search/backfill reads exclude private message rows; private user history is served by the viewer-scoped `messages` domain.
