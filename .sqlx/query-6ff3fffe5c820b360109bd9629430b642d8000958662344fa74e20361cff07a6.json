@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM harnesses\n            WHERE id = $1\n              AND deleted_at IS NULL\n              AND owner_user_id IS NOT DISTINCT FROM $2\n              AND team_id IS NOT DISTINCT FROM $3\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6ff3fffe5c820b360109bd9629430b642d8000958662344fa74e20361cff07a6"
+}

@@ -9,6 +9,9 @@ use crate::domain::{
     ports::{OpenPairingCounts, PairingRow},
 };
 
+const TEAMMATE_ID: &str = "macro|teammate@example.com";
+const OTHER_TEAM_ID: Uuid = Uuid::from_u128(8);
+
 const OWNER_ID: &str = "macro|owner@example.com";
 const MEMBER_ID: &str = "macro|member@example.com";
 const CODE: &str = "KX7M-4QHD";
@@ -53,6 +56,7 @@ struct Calls {
     claimed: Vec<Uuid>,
     deleted: Vec<HarnessId>,
     updated: Vec<(HarnessId, HarnessChanges)>,
+    owner_checks: Vec<HarnessOwner>,
     team_lookups: Vec<(String, Uuid)>,
 }
 
@@ -68,6 +72,7 @@ struct FakeRepo {
     delete_result: bool,
     user_has_team: bool,
     user_owns_team: bool,
+    bound_agents: Vec<BoundAgentFacts>,
     calls: Arc<Mutex<Calls>>,
 }
 
@@ -144,19 +149,28 @@ impl HarnessRepo for FakeRepo {
 
     async fn update_harness(
         &self,
-        harness_id: HarnessId,
+        managed: &ManagedHarness,
         changes: HarnessChanges,
-    ) -> Result<Option<Harness>, Self::Err> {
+    ) -> Result<HarnessUpdate, Self::Err> {
+        if let Some(owner) = &changes.owner {
+            self.calls.lock().unwrap().owner_checks.push(owner.clone());
+            let stranded = agents_stranded_by(owner, self.bound_agents.clone());
+            if !stranded.is_empty() {
+                return Ok(HarnessUpdate::OwnerChangeBlocked(stranded));
+            }
+        }
         self.calls
             .lock()
             .unwrap()
             .updated
-            .push((harness_id, changes.clone()));
-        Ok(self.harness.clone().map(|harness| Harness {
+            .push((managed.harness().id, changes.clone()));
+        let harness = managed.harness().clone();
+        Ok(HarnessUpdate::Updated(Harness {
             name: changes.name.unwrap_or(harness.name),
             allow_permission_bypass: changes
                 .allow_permission_bypass
                 .unwrap_or(harness.allow_permission_bypass),
+            owner: changes.owner.unwrap_or(harness.owner),
             ..harness
         }))
     }
@@ -645,6 +659,7 @@ async fn a_manager_changes_bypass_and_name_on_the_web() {
             PatchHarnessRequest {
                 name: Some("  studio  ".to_owned()),
                 allow_permission_bypass: Some(true),
+                owner: None,
             },
         )
         .await
@@ -659,6 +674,7 @@ async fn a_manager_changes_bypass_and_name_on_the_web() {
             HarnessChanges {
                 name: Some("studio".to_owned()),
                 allow_permission_bypass: Some(true),
+                owner: None,
             }
         )]
     );
@@ -700,6 +716,7 @@ async fn a_patch_rejects_a_blank_name() {
             PatchHarnessRequest {
                 name: Some("   ".to_owned()),
                 allow_permission_bypass: None,
+                owner: None,
             },
         )
         .await;
@@ -732,6 +749,7 @@ async fn only_a_harness_manager_may_patch() {
                 PatchHarnessRequest {
                     name: None,
                     allow_permission_bypass: Some(true),
+                    owner: None,
                 },
             )
             .await;
@@ -754,8 +772,241 @@ async fn only_a_harness_manager_may_patch() {
             PatchHarnessRequest {
                 name: None,
                 allow_permission_bypass: Some(false),
+                owner: None,
             },
         )
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
+}
+
+fn bound_agent(name: &str, owner: HarnessAgentOwner, owner_in_new_team: bool) -> BoundAgentFacts {
+    BoundAgentFacts {
+        agent: BoundHarnessAgent {
+            bot_id: bot_id::BotId::new_from_uuid(Uuid::new_v4()),
+            name: name.to_owned(),
+            handle: name.to_lowercase(),
+            owner,
+        },
+        owner_in_new_team,
+    }
+}
+
+#[tokio::test]
+async fn a_private_harness_moves_to_a_team_its_owner_belongs_to() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        user_has_team: true,
+        // The owner's own private agent may use a harness of their team.
+        bound_agents: vec![bound_agent(
+            "Mine",
+            HarnessAgentOwner::User {
+                user_id: OWNER_ID.to_owned(),
+            },
+            true,
+        )],
+        ..FakeRepo::default()
+    };
+    let updated = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::Team { team_id: TEAM_ID }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(updated.owner, HarnessOwner::Team { team_id: TEAM_ID });
+    let calls = repo.calls.lock().unwrap();
+    assert_eq!(calls.team_lookups, [(OWNER_ID.to_owned(), TEAM_ID)]);
+    assert_eq!(calls.updated.len(), 1);
+}
+
+#[tokio::test]
+async fn moving_to_a_team_requires_membership() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        user_has_team: false,
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::Team { team_id: TEAM_ID }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+    assert!(repo.calls.lock().unwrap().owner_checks.is_empty());
+}
+
+#[tokio::test]
+async fn only_a_manager_may_change_the_owner() {
+    // A plain member of the team who did not register the harness.
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        user_has_team: true,
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(MEMBER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::User),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+    assert!(repo.calls.lock().unwrap().owner_checks.is_empty());
+}
+
+#[tokio::test]
+async fn making_a_team_harness_private_is_blocked_by_agents_others_own() {
+    let teammate_agent = bound_agent(
+        "Teammate's",
+        HarnessAgentOwner::User {
+            user_id: TEAMMATE_ID.to_owned(),
+        },
+        false,
+    );
+    let team_agent = bound_agent(
+        "Team's",
+        HarnessAgentOwner::Team { team_id: TEAM_ID },
+        false,
+    );
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        bound_agents: vec![
+            bound_agent(
+                "Mine",
+                HarnessAgentOwner::User {
+                    user_id: OWNER_ID.to_owned(),
+                },
+                false,
+            ),
+            teammate_agent.clone(),
+            team_agent.clone(),
+        ],
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::User),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+
+    let Err(HarnessError::OwnerChangeBlocked(blocking)) = result else {
+        panic!("expected the owner change to be blocked, got {result:?}");
+    };
+    assert_eq!(blocking, [teammate_agent.agent, team_agent.agent]);
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn a_team_owner_makes_a_team_harness_private_to_themselves() {
+    // The team owner did not register the harness; only their own private
+    // agent is bound, so nothing is stranded.
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        user_owns_team: true,
+        bound_agents: vec![bound_agent(
+            "Mine",
+            HarnessAgentOwner::User {
+                user_id: MEMBER_ID.to_owned(),
+            },
+            false,
+        )],
+        ..FakeRepo::default()
+    };
+    let updated = service(repo.clone())
+        .patch_harness(
+            caller(MEMBER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::User),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        updated.owner,
+        HarnessOwner::User {
+            user_id: MEMBER_ID.to_owned(),
+        }
+    );
+}
+
+#[tokio::test]
+async fn moving_between_teams_is_blocked_by_the_old_teams_agents() {
+    let team_agent = bound_agent(
+        "Team's",
+        HarnessAgentOwner::Team { team_id: TEAM_ID },
+        false,
+    );
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::Team { team_id: TEAM_ID })),
+        user_has_team: true,
+        bound_agents: vec![team_agent.clone()],
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::Team {
+                    team_id: OTHER_TEAM_ID,
+                }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+
+    let Err(HarnessError::OwnerChangeBlocked(blocking)) = result else {
+        panic!("expected the owner change to be blocked, got {result:?}");
+    };
+    assert_eq!(blocking, [team_agent.agent]);
+}
+
+#[tokio::test]
+async fn requesting_the_current_owner_writes_nothing() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::User),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
 }

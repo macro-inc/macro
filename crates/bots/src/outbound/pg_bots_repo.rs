@@ -14,7 +14,7 @@ use crate::domain::{
         CreateChannelScopedBotRequest, HarnessFacts, HarnessId, HarnessOwner, PatchBotRequest,
         UpdateAgentRequest,
     },
-    ports::BotRepo,
+    ports::{AgentWrite, BotRepo},
 };
 use anyhow::Context;
 use bot_token::{HashedBotToken, hash_token};
@@ -46,6 +46,54 @@ fn owner_columns(owner: BotOwner) -> (Option<String>, Option<Uuid>) {
         BotOwner::User { user_id } => (Some(user_id), None),
         BotOwner::Team { team_id } => (None, Some(team_id)),
     }
+}
+
+fn harness_owner(
+    harness_id: Uuid,
+    owner_user_id: Option<String>,
+    team_id: Option<Uuid>,
+) -> anyhow::Result<HarnessOwner> {
+    match (owner_user_id, team_id) {
+        (Some(user_id), None) => Ok(HarnessOwner::User { user_id }),
+        (None, Some(team_id)) => Ok(HarnessOwner::Team { team_id }),
+        // Unreachable: harnesses_owner_check enforces exactly one owner.
+        _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
+    }
+}
+
+/// Hold the agent's harness row FOR SHARE until the transaction ends and
+/// check it still has the owner the binding was validated against. A harness
+/// owner change takes the row FOR UPDATE, so the two serialize.
+async fn harness_still_owned_by(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    harness_id: Option<HarnessId>,
+    validated_owner: Option<HarnessOwner>,
+) -> anyhow::Result<bool> {
+    let (harness_id, validated_owner) = match (harness_id, validated_owner) {
+        (None, _) => return Ok(true),
+        (Some(harness_id), Some(owner)) => (harness_id, owner),
+        (Some(harness_id), None) => {
+            anyhow::bail!("agent bound to harness {harness_id} without a validated owner")
+        }
+    };
+
+    let row = sqlx::query!(
+        r#"
+        SELECT owner_user_id, team_id
+        FROM harnesses
+        WHERE id = $1 AND deleted_at IS NULL
+        FOR SHARE
+        "#,
+        harness_id.as_uuid(),
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .context("failed to lock agent harness")?;
+
+    let Some(row) = row else {
+        return Ok(false);
+    };
+    Ok(harness_owner(harness_id.as_uuid(), row.owner_user_id, row.team_id)? == validated_owner)
 }
 
 fn require_persisted_owner(
@@ -330,7 +378,8 @@ impl BotRepo for PgBotsRepo {
         owner: BotOwner,
         created_by: MacroUserIdStr<'static>,
         req: CreateAgentRequest,
-    ) -> Result<Agent, Self::Err> {
+        harness_owner: Option<HarnessOwner>,
+    ) -> Result<AgentWrite<Agent>, Self::Err> {
         let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
         let (owner_user_id, team_id) = owner_columns(owner);
         let mut tx = self
@@ -338,6 +387,10 @@ impl BotRepo for PgBotsRepo {
             .begin()
             .await
             .context("failed to begin agent creation transaction")?;
+
+        if !harness_still_owned_by(&mut tx, req.harness_id, harness_owner).await? {
+            return Ok(AgentWrite::HarnessChanged);
+        }
 
         let bot_row = sqlx::query_as!(
             BotRow,
@@ -418,7 +471,7 @@ impl BotRepo for PgBotsRepo {
             .await
             .context("failed to commit agent creation transaction")?;
 
-        Ok(Agent {
+        Ok(AgentWrite::Written(Agent {
             bot: map_bot_row(bot_row)?,
             instructions: req.instructions,
             harness: req.harness,
@@ -429,7 +482,7 @@ impl BotRepo for PgBotsRepo {
             is_coding: req.is_coding,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
-        })
+        }))
     }
 
     async fn update_agent(
@@ -437,13 +490,18 @@ impl BotRepo for PgBotsRepo {
         bot_id: BotId,
         owner: BotOwner,
         req: UpdateAgentRequest,
-    ) -> Result<Option<Agent>, Self::Err> {
+        harness_owner: Option<HarnessOwner>,
+    ) -> Result<AgentWrite<Option<Agent>>, Self::Err> {
         let (owner_user_id, team_id) = owner_columns(owner);
         let mut tx = self
             .pool
             .begin()
             .await
             .context("failed to begin agent update transaction")?;
+
+        if !harness_still_owned_by(&mut tx, req.harness_id, harness_owner).await? {
+            return Ok(AgentWrite::HarnessChanged);
+        }
 
         let Some(bot_row) = sqlx::query_as!(
             BotRow,
@@ -488,7 +546,7 @@ impl BotRepo for PgBotsRepo {
         .context("failed to update agent bot")?
         else {
             tx.rollback().await?;
-            return Ok(None);
+            return Ok(AgentWrite::Written(None));
         };
 
         sqlx::query!(
@@ -575,7 +633,7 @@ impl BotRepo for PgBotsRepo {
             .await
             .context("failed to commit agent update transaction")?;
 
-        Ok(Some(Agent {
+        Ok(AgentWrite::Written(Some(Agent {
             bot: map_bot_row(bot_row)?,
             instructions: req.instructions,
             harness: req.harness,
@@ -586,7 +644,7 @@ impl BotRepo for PgBotsRepo {
             mcp: req.mcp,
             auto_accept_permissions: req.auto_accept_permissions,
             is_coding: req.is_coding,
-        }))
+        })))
     }
 
     async fn list_manageable_agents(
@@ -1117,17 +1175,11 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to fetch harness owner")?;
 
-        row.map(|row| match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => Ok(HarnessFacts {
-                owner: HarnessOwner::User { user_id },
+        row.map(|row| {
+            Ok(HarnessFacts {
+                owner: harness_owner(harness_id.as_uuid(), row.owner_user_id, row.team_id)?,
                 allow_permission_bypass: row.allow_permission_bypass,
-            }),
-            (None, Some(team_id)) => Ok(HarnessFacts {
-                owner: HarnessOwner::Team { team_id },
-                allow_permission_bypass: row.allow_permission_bypass,
-            }),
-            // Unreachable: harnesses_owner_check enforces exactly one owner.
-            _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
+            })
         })
         .transpose()
     }

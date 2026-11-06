@@ -20,9 +20,9 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessSession,
-        PairingDetails, PatchHarnessRequest, RUNTIME_CONNECTED_HEADER,
+        ApprovePairingRequest, BoundHarnessAgent, ClaimOutcome, ClaimPairingRequest,
+        ClaimedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAgent,
+        HarnessSession, PairingDetails, PatchHarnessRequest, RUNTIME_CONNECTED_HEADER,
     },
     ports::{HarnessError, HarnessService},
 };
@@ -276,7 +276,20 @@ pub async fn list_harnesses_handler<S: HarnessService, Auth: MacroAuthorizationS
     ))
 }
 
+/// Body of a refused owner change.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct HarnessOwnerConflict {
+    /// Why the change was refused.
+    pub message: String,
+    /// The bound agents whose owners could no longer run them on the
+    /// harness. Move them to another runtime first.
+    pub blocking_agents: Vec<BoundHarnessAgent>,
+}
+
 /// Handler for `PATCH /harnesses/{harness_id}`.
+///
+/// An owner change is refused with 409 while it would leave bound agents
+/// their owners could no longer run on this harness.
 #[utoipa::path(
     patch,
     tag = "harnesses",
@@ -289,6 +302,7 @@ pub async fn list_harnesses_handler<S: HarnessService, Auth: MacroAuthorizationS
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = HarnessOwnerConflict),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -464,24 +478,41 @@ pub enum HarnessesHandlerErr {
 
 impl IntoResponse for HarnessesHandlerErr {
     fn into_response(self) -> Response {
-        let Self::Harness(error) = &self;
-        let status = match error {
+        let Self::Harness(error) = self;
+        let status = match &error {
             HarnessError::BadRequest(_) => StatusCode::BAD_REQUEST,
             HarnessError::NotFound(_) => StatusCode::NOT_FOUND,
             HarnessError::Gone(_) => StatusCode::GONE,
             HarnessError::Unauthorized => StatusCode::UNAUTHORIZED,
             HarnessError::Throttled => StatusCode::TOO_MANY_REQUESTS,
+            HarnessError::OwnerChangeBlocked(_) => StatusCode::CONFLICT,
             HarnessError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error=?self, "harnesses handler error");
+            tracing::error!(error=?error, "harnesses handler error");
         }
-        (
-            status,
-            Json(ErrorResponse {
-                message: self.to_string().into(),
-            }),
-        )
-            .into_response()
+        let message = error.to_string();
+        match error {
+            HarnessError::OwnerChangeBlocked(blocking_agents) => (
+                status,
+                Json(HarnessOwnerConflict {
+                    message,
+                    blocking_agents,
+                }),
+            )
+                .into_response(),
+            HarnessError::BadRequest(_)
+            | HarnessError::NotFound(_)
+            | HarnessError::Gone(_)
+            | HarnessError::Unauthorized
+            | HarnessError::Throttled
+            | HarnessError::Repo(_) => (
+                status,
+                Json(ErrorResponse {
+                    message: message.into(),
+                }),
+            )
+                .into_response(),
+        }
     }
 }

@@ -8,10 +8,13 @@ use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::models::{
-    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
-    Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-    PairingStatus, PatchHarnessRequest,
+use super::{
+    models::{
+        ApprovePairingRequest, BoundHarnessAgent, ClaimOutcome, ClaimPairingRequest,
+        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
+        PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
+    },
+    service::ManagedHarness,
 };
 
 /// A pairing row to persist.
@@ -38,6 +41,30 @@ pub struct HarnessChanges {
     pub name: Option<String>,
     /// New permission-bypass setting.
     pub allow_permission_bypass: Option<bool>,
+    /// New owner, already resolved for the caller and checked for membership.
+    pub owner: Option<HarnessOwner>,
+}
+
+/// An active agent bound to a harness, as an owner change judges it.
+#[derive(Debug, Clone)]
+pub struct BoundAgentFacts {
+    /// The agent.
+    pub agent: BoundHarnessAgent,
+    /// Whether a private agent's owner belongs to the team the harness moves
+    /// to. Always `false` when the new owner is not a team.
+    pub owner_in_new_team: bool,
+}
+
+/// Outcome of [`HarnessRepo::update_harness`].
+#[derive(Debug, Clone)]
+pub enum HarnessUpdate {
+    /// The harness was changed.
+    Updated(Harness),
+    /// The harness was deleted, or its owner changed after the caller's
+    /// manage check.
+    Missing,
+    /// The owner change would leave these bound agents unable to run.
+    OwnerChangeBlocked(Vec<BoundHarnessAgent>),
 }
 
 /// A harness row to create at approval.
@@ -140,12 +167,16 @@ pub trait HarnessRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
 
-    /// Apply a validated change to an active harness.
+    /// Apply a validated change to a harness the caller manages.
+    ///
+    /// Locks the harness row, so an owner change and a concurrent agent bind
+    /// serialize, and refuses an owner change while
+    /// [`super::service::agents_stranded_by`] reports any bound agent.
     fn update_harness(
         &self,
-        harness_id: HarnessId,
+        harness: &ManagedHarness,
         changes: HarnessChanges,
-    ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<HarnessUpdate, Self::Err>> + Send;
 
     /// Soft-delete a harness and revoke its tokens.
     fn delete_harness(
@@ -277,6 +308,9 @@ pub enum HarnessError {
     /// Pairing creation is throttled.
     #[error("too many open pairing requests")]
     Throttled,
+    /// An owner change would leave these bound agents unable to run.
+    #[error("agents on this runtime would lose access to it")]
+    OwnerChangeBlocked(Vec<BoundHarnessAgent>),
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

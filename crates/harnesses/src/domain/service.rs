@@ -12,11 +12,15 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
-        PairingDetails, PairingStatus, PatchHarnessRequest,
+        ApprovePairingRequest, BoundHarnessAgent, ClaimOutcome, ClaimPairingRequest,
+        ClaimedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAgent,
+        HarnessAgentOwner, HarnessOwner, HarnessSession, PairingDetails, PairingStatus,
+        PatchHarnessRequest, RequestedHarnessOwner,
     },
-    ports::{HarnessChanges, HarnessError, HarnessRepo, HarnessService, NewHarness, NewPairing},
+    ports::{
+        BoundAgentFacts, HarnessChanges, HarnessError, HarnessRepo, HarnessService, HarnessUpdate,
+        NewHarness, NewPairing,
+    },
     tokens,
 };
 
@@ -57,15 +61,72 @@ impl<R> HarnessServiceImpl<R> {
     }
 }
 
+/// Proof that a caller may manage a harness: only
+/// [`HarnessServiceImpl::ensure_may_manage`] constructs one, and every change
+/// to a registered harness takes one.
+#[derive(Debug, Clone)]
+pub struct ManagedHarness {
+    harness: Harness,
+    manager: MacroUserIdStr<'static>,
+}
+
+impl ManagedHarness {
+    /// The harness as it was when the check passed.
+    pub fn harness(&self) -> &Harness {
+        &self.harness
+    }
+
+    /// The user the check passed for.
+    pub fn manager(&self) -> &MacroUserIdStr<'static> {
+        &self.manager
+    }
+}
+
+/// The bound agents that could no longer run on a harness owned by
+/// `new_owner`, by the bots crate's binding rule: a team agent runs only on
+/// its own team's harness; a private agent runs on its owner's harness or on
+/// a harness of a team its owner belongs to.
+pub fn agents_stranded_by(
+    new_owner: &HarnessOwner,
+    bound: Vec<BoundAgentFacts>,
+) -> Vec<BoundHarnessAgent> {
+    bound
+        .into_iter()
+        .filter(|facts| {
+            let usable = match (&facts.agent.owner, new_owner) {
+                (HarnessAgentOwner::Team { team_id }, HarnessOwner::Team { team_id: new_team }) => {
+                    team_id == new_team
+                }
+                (HarnessAgentOwner::Team { .. }, HarnessOwner::User { .. }) => false,
+                (HarnessAgentOwner::User { user_id }, HarnessOwner::User { user_id: new_user }) => {
+                    user_id == new_user
+                }
+                (HarnessAgentOwner::User { .. }, HarnessOwner::Team { .. }) => {
+                    facts.owner_in_new_team
+                }
+            };
+            !usable
+        })
+        .map(|facts| facts.agent)
+        .collect()
+}
+
 impl<R> HarnessServiceImpl<R>
 where
     R: HarnessRepo,
 {
     async fn ensure_may_manage(
         &self,
-        caller: &MacroUserIdStr<'static>,
-        harness: &Harness,
-    ) -> Result<(), HarnessError> {
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+    ) -> Result<ManagedHarness, HarnessError> {
+        let harness = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+
         let may_manage = match &harness.owner {
             HarnessOwner::User { user_id } => user_id == caller.as_ref(),
             // Same rule as team bots: the registrant or the team owner.
@@ -80,6 +141,78 @@ where
         };
         if !may_manage {
             return Err(HarnessError::Unauthorized);
+        }
+        Ok(ManagedHarness {
+            harness,
+            manager: caller,
+        })
+    }
+
+    /// Resolve a requested owner for the manager: private means theirs, and a
+    /// team must be one they belong to, as at approval.
+    async fn resolve_owner(
+        &self,
+        managed: &ManagedHarness,
+        requested: RequestedHarnessOwner,
+    ) -> Result<HarnessOwner, HarnessError> {
+        match requested {
+            RequestedHarnessOwner::User => Ok(HarnessOwner::User {
+                user_id: managed.manager.as_ref().to_owned(),
+            }),
+            RequestedHarnessOwner::Team { team_id } => {
+                let is_member = self
+                    .repo
+                    .user_has_team(managed.manager.clone(), team_id)
+                    .await
+                    .map_err(Into::into)?;
+                if !is_member {
+                    return Err(HarnessError::Unauthorized);
+                }
+                Ok(HarnessOwner::Team { team_id })
+            }
+        }
+    }
+
+    async fn update(
+        &self,
+        managed: ManagedHarness,
+        req: PatchHarnessRequest,
+    ) -> Result<Harness, HarnessError> {
+        let owner = match req.owner {
+            Some(requested) => Some(self.resolve_owner(&managed, requested).await?),
+            None => None,
+        };
+        let changes = HarnessChanges {
+            name: req.name.as_deref().map(validated_name).transpose()?,
+            allow_permission_bypass: req.allow_permission_bypass,
+            owner: owner.filter(|owner| *owner != managed.harness.owner),
+        };
+        if changes == HarnessChanges::default() {
+            return Ok(managed.harness);
+        }
+
+        match self
+            .repo
+            .update_harness(&managed, changes)
+            .await
+            .map_err(Into::into)?
+        {
+            HarnessUpdate::Updated(harness) => Ok(harness),
+            HarnessUpdate::Missing => Err(HarnessError::NotFound("unknown harness".to_owned())),
+            HarnessUpdate::OwnerChangeBlocked(agents) => {
+                Err(HarnessError::OwnerChangeBlocked(agents))
+            }
+        }
+    }
+
+    async fn revoke(&self, managed: ManagedHarness) -> Result<(), HarnessError> {
+        if !self
+            .repo
+            .delete_harness(managed.harness.id)
+            .await
+            .map_err(Into::into)?
+        {
+            return Err(HarnessError::NotFound("unknown harness".to_owned()));
         }
         Ok(())
     }
@@ -300,26 +433,8 @@ where
         harness_id: HarnessId,
         req: PatchHarnessRequest,
     ) -> Result<Harness, HarnessError> {
-        let harness = self
-            .repo
-            .get_harness(harness_id)
-            .await
-            .map_err(Into::into)?
-            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
-        self.ensure_may_manage(&caller, &harness).await?;
-
-        let changes = HarnessChanges {
-            name: req.name.as_deref().map(validated_name).transpose()?,
-            allow_permission_bypass: req.allow_permission_bypass,
-        };
-        if changes == HarnessChanges::default() {
-            return Ok(harness);
-        }
-        self.repo
-            .update_harness(harness_id, changes)
-            .await
-            .map_err(Into::into)?
-            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))
+        let managed = self.ensure_may_manage(caller, harness_id).await?;
+        self.update(managed, req).await
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
@@ -328,24 +443,8 @@ where
         caller: MacroUserIdStr<'static>,
         harness_id: HarnessId,
     ) -> Result<(), HarnessError> {
-        let harness = self
-            .repo
-            .get_harness(harness_id)
-            .await
-            .map_err(Into::into)?
-            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
-
-        self.ensure_may_manage(&caller, &harness).await?;
-
-        if !self
-            .repo
-            .delete_harness(harness_id)
-            .await
-            .map_err(Into::into)?
-        {
-            return Err(HarnessError::NotFound("unknown harness".to_owned()));
-        }
-        Ok(())
+        let managed = self.ensure_may_manage(caller, harness_id).await?;
+        self.revoke(managed).await
     }
 
     #[tracing::instrument(skip(self), err)]

@@ -2,7 +2,12 @@ use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
-use crate::domain::tokens;
+use crate::domain::{
+    models::{PatchHarnessRequest, RequestedHarnessOwner},
+    ports::{HarnessError, HarnessService},
+    service::HarnessServiceImpl,
+    tokens,
+};
 
 const OWNER_ID: &str = "macro|harness-repo@example.com";
 
@@ -590,6 +595,112 @@ async fn permission_bypass_survives_registration_and_listing(pool: PgPool) {
     }
 }
 
+const TEAMMATE_ID: &str = "macro|teammate@example.com";
+const STRANGER_ID: &str = "macro|stranger@example.com";
+
+fn service(pool: &PgPool) -> HarnessServiceImpl<PgHarnessRepo> {
+    HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))
+}
+
+fn user(id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(id.to_string()).unwrap()
+}
+
+async fn insert_team(pool: &PgPool, members: &[&str]) -> Uuid {
+    let team_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)"#,
+        team_id,
+        members[0],
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for member in members {
+        sqlx::query!(
+            r#"
+            INSERT INTO team_user (user_id, team_id, team_role)
+            VALUES ($1, $2, 'member'::team_role)
+            "#,
+            member,
+            team_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    team_id
+}
+
+async fn insert_bound_agent(
+    pool: &PgPool,
+    name: &str,
+    owner_user_id: Option<&str>,
+    team_id: Option<Uuid>,
+    harness_id: Uuid,
+) -> Uuid {
+    let bot_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO bots (id, kind, owner_user_id, team_id, name, handle, has_agent)
+        VALUES ($1, 'owned', $2, $3, $4, $5, true)
+        "#,
+        bot_id,
+        owner_user_id,
+        team_id,
+        name,
+        format!("agent-{bot_id}"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)
+        "#,
+        bot_id,
+        harness_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    bot_id
+}
+
+async fn insert_harness_owned_by(
+    pool: &PgPool,
+    owner_user_id: Option<&str>,
+    team_id: Option<Uuid>,
+) -> Uuid {
+    let harness_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, team_id, created_by)
+        VALUES ($1, 'desk', $2, $3, $4)
+        "#,
+        harness_id,
+        owner_user_id,
+        team_id,
+        OWNER_ID,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    harness_id
+}
+
+async fn stored_owner(pool: &PgPool, harness_id: Uuid) -> (Option<String>, Option<Uuid>) {
+    let row = sqlx::query!(
+        "SELECT owner_user_id, team_id FROM harnesses WHERE id = $1",
+        harness_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    (row.owner_user_id, row.team_id)
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn update_harness_changes_only_the_named_columns(pool: PgPool) {
     let repo = PgHarnessRepo::new(pool.clone());
@@ -603,43 +714,239 @@ async fn update_harness_changes_only_the_named_columns(pool: PgPool) {
         .unwrap()
         .unwrap();
 
-    let bypassed = repo
-        .update_harness(
+    let bypassed = service(&pool)
+        .patch_harness(
+            caller(),
             harness.id,
-            HarnessChanges {
-                name: None,
+            PatchHarnessRequest {
                 allow_permission_bypass: Some(true),
+                ..PatchHarnessRequest::default()
             },
         )
         .await
-        .unwrap()
         .unwrap();
     assert!(bypassed.allow_permission_bypass);
     assert_eq!(bypassed.name, harness.name);
 
-    let renamed = repo
-        .update_harness(
+    let renamed = service(&pool)
+        .patch_harness(
+            caller(),
             harness.id,
-            HarnessChanges {
+            PatchHarnessRequest {
                 name: Some("studio".to_owned()),
-                allow_permission_bypass: None,
+                ..PatchHarnessRequest::default()
             },
         )
         .await
-        .unwrap()
         .unwrap();
     assert_eq!(renamed.name, "studio");
     assert!(renamed.allow_permission_bypass);
+    assert_eq!(renamed.owner, harness.owner);
     assert_eq!(
         repo.get_harness(harness.id).await.unwrap().unwrap().name,
         "studio"
     );
 
-    assert!(repo.delete_harness(harness.id).await.unwrap());
-    assert!(
-        repo.update_harness(harness.id, HarnessChanges::default())
-            .await
-            .unwrap()
-            .is_none()
+    service(&pool)
+        .delete_harness(caller(), harness.id)
+        .await
+        .unwrap();
+    let result = service(&pool)
+        .patch_harness(
+            caller(),
+            harness.id,
+            PatchHarnessRequest {
+                name: Some("gone".to_owned()),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(HarnessError::NotFound(_))));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_private_harness_moves_to_its_owners_team_with_their_agents(pool: PgPool) {
+    insert_user(&pool, OWNER_ID).await;
+    let team_id = insert_team(&pool, &[OWNER_ID]).await;
+    let harness_id = insert_harness_owned_by(&pool, Some(OWNER_ID), None).await;
+    insert_bound_agent(&pool, "Mine", Some(OWNER_ID), None, harness_id).await;
+
+    let updated = service(&pool)
+        .patch_harness(
+            caller(),
+            HarnessId::new_from_uuid(harness_id),
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::Team { team_id }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(updated.owner, HarnessOwner::Team { team_id });
+    assert_eq!(stored_owner(&pool, harness_id).await, (None, Some(team_id)));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_team_harness_stays_shared_while_others_agents_use_it(pool: PgPool) {
+    insert_user(&pool, OWNER_ID).await;
+    insert_user(&pool, TEAMMATE_ID).await;
+    let team_id = insert_team(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness_id = insert_harness_owned_by(&pool, None, Some(team_id)).await;
+    insert_bound_agent(&pool, "Mine", Some(OWNER_ID), None, harness_id).await;
+    let teammates =
+        insert_bound_agent(&pool, "Teammate's", Some(TEAMMATE_ID), None, harness_id).await;
+    let teams = insert_bound_agent(&pool, "Team's", None, Some(team_id), harness_id).await;
+
+    let result = service(&pool)
+        .patch_harness(
+            caller(),
+            HarnessId::new_from_uuid(harness_id),
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::User),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+
+    let Err(HarnessError::OwnerChangeBlocked(blocking)) = result else {
+        panic!("expected the owner change to be blocked, got {result:?}");
+    };
+    let blocking: Vec<_> = blocking
+        .into_iter()
+        .map(|agent| (agent.bot_id.as_uuid(), agent.name, agent.owner))
+        .collect();
+    assert_eq!(
+        blocking,
+        [
+            (
+                teammates,
+                "Teammate's".to_owned(),
+                HarnessAgentOwner::User {
+                    user_id: TEAMMATE_ID.to_owned()
+                }
+            ),
+            (
+                teams,
+                "Team's".to_owned(),
+                HarnessAgentOwner::Team { team_id }
+            ),
+        ]
     );
+    assert_eq!(stored_owner(&pool, harness_id).await, (None, Some(team_id)));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_team_harness_goes_private_when_only_the_callers_agents_use_it(pool: PgPool) {
+    insert_user(&pool, OWNER_ID).await;
+    insert_user(&pool, TEAMMATE_ID).await;
+    let team_id = insert_team(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let harness_id = insert_harness_owned_by(&pool, None, Some(team_id)).await;
+    insert_bound_agent(&pool, "Mine", Some(OWNER_ID), None, harness_id).await;
+    // A deleted teammate agent no longer binds anything.
+    let deleted = insert_bound_agent(&pool, "Gone", Some(TEAMMATE_ID), None, harness_id).await;
+    sqlx::query!("UPDATE bots SET deleted_at = now() WHERE id = $1", deleted)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let updated = service(&pool)
+        .patch_harness(
+            caller(),
+            HarnessId::new_from_uuid(harness_id),
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::User),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        updated.owner,
+        HarnessOwner::User {
+            user_id: OWNER_ID.to_owned()
+        }
+    );
+    assert_eq!(
+        stored_owner(&pool, harness_id).await,
+        (Some(OWNER_ID.to_owned()), None)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn moving_between_teams_is_blocked_by_the_old_teams_agents(pool: PgPool) {
+    // A user belongs to one team at a time: the registrant has left the
+    // harness's team for another one.
+    insert_user(&pool, OWNER_ID).await;
+    insert_user(&pool, TEAMMATE_ID).await;
+    let team_id = insert_team(&pool, &[TEAMMATE_ID]).await;
+    let other_team_id = insert_team(&pool, &[OWNER_ID]).await;
+    let harness_id = insert_harness_owned_by(&pool, None, Some(team_id)).await;
+    let teams = insert_bound_agent(&pool, "Team's", None, Some(team_id), harness_id).await;
+    // The caller's private agent may follow them to the other team.
+    insert_bound_agent(&pool, "Mine", Some(OWNER_ID), None, harness_id).await;
+
+    let result = service(&pool)
+        .patch_harness(
+            caller(),
+            HarnessId::new_from_uuid(harness_id),
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::Team {
+                    team_id: other_team_id,
+                }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+
+    let Err(HarnessError::OwnerChangeBlocked(blocking)) = result else {
+        panic!("expected the owner change to be blocked, got {result:?}");
+    };
+    let blocking: Vec<_> = blocking
+        .iter()
+        .map(|agent| agent.bot_id.as_uuid())
+        .collect();
+    assert_eq!(blocking, [teams]);
+    assert_eq!(stored_owner(&pool, harness_id).await, (None, Some(team_id)));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn owner_changes_need_a_manager_and_a_team_they_belong_to(pool: PgPool) {
+    insert_user(&pool, OWNER_ID).await;
+    insert_user(&pool, TEAMMATE_ID).await;
+    insert_user(&pool, STRANGER_ID).await;
+    let team_id = insert_team(&pool, &[OWNER_ID, TEAMMATE_ID]).await;
+    let foreign_team_id = insert_team(&pool, &[STRANGER_ID]).await;
+    let harness_id = insert_harness_owned_by(&pool, None, Some(team_id)).await;
+
+    // A plain member who neither registered it nor owns the team.
+    let result = service(&pool)
+        .patch_harness(
+            user(TEAMMATE_ID),
+            HarnessId::new_from_uuid(harness_id),
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::User),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+
+    // The registrant, moving it to a team they are not in.
+    let result = service(&pool)
+        .patch_harness(
+            caller(),
+            HarnessId::new_from_uuid(harness_id),
+            PatchHarnessRequest {
+                owner: Some(RequestedHarnessOwner::Team {
+                    team_id: foreign_team_id,
+                }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
+
+    assert_eq!(stored_owner(&pool, harness_id).await, (None, Some(team_id)));
 }
