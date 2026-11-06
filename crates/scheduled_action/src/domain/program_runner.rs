@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{
-    AgentStep, AgentTask, CodeStep, RoutineProgram, Step, StepPath, StepRecord, StepResult,
+    AgentStep, AgentTask, RoutineProgram, Step, StepPath, StepRecord, StepResult,
 };
 use serde_json::{Map, Value, json};
 use trigger_context::{
@@ -111,15 +111,18 @@ where
         let owner = action.owner_user()?;
         let program = program(action)?;
         program.validate()?;
+        let routine_id = action.id.context("persisted routine required")?;
         let has_code = !program.code_steps().is_empty();
+        let acts_as = program.code_identity();
         // Code gets the triggering item whenever there is one.
         let trigger = match firing {
             RoutineRun::Event(run) if has_code => Some(self.trigger(owner, run).await?),
             _ => None,
         };
-        let (info, code_context) = self
+        let (mut info, code_context) = self
             .run_context(action, handle, firing, trigger.as_ref(), has_code)
             .await?;
+        info.code_acts_as = has_code.then_some(acts_as);
         handle.run = Some(info);
         let program = current_code(
             self.code.as_ref(),
@@ -136,7 +139,20 @@ where
             let path = StepPath::root(index);
             match step {
                 Step::Code(step) => {
-                    let outcome = self.code(owner, step, &code_context, &mut outputs).await;
+                    let run = CodeRun {
+                        step,
+                        context: &code_context,
+                        steps: &outputs,
+                        dry_run: false,
+                        acts_as,
+                        routine_id,
+                    };
+                    let outcome = self.code(owner, run).await;
+                    if let (Ok(output), Some(id), Value::Object(outputs)) =
+                        (&outcome.result, &step.id, &mut outputs)
+                    {
+                        outputs.insert(id.to_string(), output.clone());
+                    }
                     let (output, error) = match outcome.result {
                         Ok(output) => (Some(output), None),
                         Err(error) => (None, Some(error)),
@@ -205,31 +221,15 @@ where
         Ok(content)
     }
 
-    /// Run one code step; its output becomes `steps.<id>` for later steps.
+    /// Run one code step.
     #[tracing::instrument(name = "routine.code_step", skip_all, fields(
+        acts_as = ?run.acts_as,
         calls = tracing::field::Empty,
         writes = tracing::field::Empty,
         failed = tracing::field::Empty,
     ))]
-    async fn code(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        step: &CodeStep,
-        code_context: &Value,
-        outputs: &mut Value,
-    ) -> CodeOutcome {
-        let outcome = self
-            .code
-            .run(
-                owner,
-                CodeRun {
-                    step,
-                    context: code_context,
-                    steps: outputs,
-                    dry_run: false,
-                },
-            )
-            .await;
+    async fn code(&self, owner: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
+        let outcome = self.code.run(owner, run).await;
         let span = tracing::Span::current();
         span.record("calls", outcome.calls.len());
         span.record(
@@ -237,14 +237,9 @@ where
             outcome.calls.iter().filter(|call| call.write).count(),
         );
         span.record("failed", outcome.result.is_err());
-        match &outcome.result {
-            Ok(output) => {
-                if let (Some(id), Value::Object(outputs)) = (&step.id, outputs) {
-                    outputs.insert(id.to_string(), output.clone());
-                }
-            }
-            // The message can quote the owner's data; it stays in history.
-            Err(_) => tracing::warn!("routine code step failed"),
+        // The message can quote the owner's data; it stays in history.
+        if outcome.result.is_err() {
+            tracing::warn!("routine code step failed");
         }
         outcome
     }
@@ -301,6 +296,7 @@ where
             timezone: timezone.clone(),
             started_by: started_by.clone(),
             previous_at: handle.history.previous.map(|(at, _)| at),
+            code_acts_as: None,
         };
         let trigger = match started_by {
             RunStart::Schedule { schedule, timezone } => {

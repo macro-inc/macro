@@ -32,6 +32,28 @@ pub struct RoutineProgram {
     /// before running them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sdk: Option<SdkFingerprint>,
+    /// Code steps write as the owner, with no agent badge: their posts,
+    /// comments and emails appear written by the owner. Set only when the
+    /// owner explicitly asked for the routine to act or send as them; by
+    /// default code steps' writes are attributed to Macro's agent acting for
+    /// the owner. Agent ("Ask AI") steps keep their own agent attribution
+    /// either way: an agent session speaking as a person is a different
+    /// change. A single agent task has no code steps, so it never applies.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dangerously_operate_as_user: bool,
+}
+
+/// Who a routine's code steps write as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CodeIdentity {
+    /// Macro's agent acting for the owner, with the owner's access: writes
+    /// show as the agent's, from the owner.
+    #[default]
+    Agent,
+    /// The owner: writes show as theirs, with no agent badge.
+    Owner,
 }
 
 /// One step of a routine.
@@ -272,6 +294,7 @@ impl RoutineProgram {
             mcp_servers: Vec::new(),
             single_agent_task: false,
             sdk: None,
+            dangerously_operate_as_user: false,
         }
     }
 
@@ -295,7 +318,17 @@ impl RoutineProgram {
             mcp_servers: legacy.mcp_servers,
             single_agent_task: true,
             sdk: None,
+            dangerously_operate_as_user: false,
         })
+    }
+
+    /// Who its code steps write as.
+    pub fn code_identity(&self) -> CodeIdentity {
+        if self.dangerously_operate_as_user {
+            CodeIdentity::Owner
+        } else {
+            CodeIdentity::Agent
+        }
     }
 
     /// Every code step, mutably, in program order.

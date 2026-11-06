@@ -18,6 +18,59 @@ const OWNER: &str = "macro|owner@example.com";
 /// company, and no reserved example domain is one.
 const PERSONAL_DOMAIN: &str = "gmail.com";
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn personal_sync_preserves_the_manually_selected_company(pool: PgPool) -> anyhow::Result<()> {
+    use crate::domain::contact_update::ContactFieldUpdate;
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, OWNER).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    let_personal_emails_in(&repo, team).await;
+    let email = personal("contact");
+    populate(&service, team, link, &email, true).await;
+    let contact = repo
+        .get_contact_by_email_for_team(&team, &email, true)
+        .await?
+        .unwrap();
+    let company = insert_company(&pool, team, true, &["example.com"]).await?;
+    repo.update_contact(
+        &team,
+        &contact.id,
+        &ContactFieldUpdate::Company(company),
+        true,
+    )
+    .await?;
+    for sent in [true, false] {
+        populate(&service, team, link, &email, sent).await;
+        let count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2",
+            team,
+            email
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(count, Some(1), "sync must reuse the assigned contact");
+        assert_eq!(
+            repo.get_contact_for_team(&team, &contact.id, true)
+                .await?
+                .unwrap()
+                .company_id,
+            Some(company)
+        );
+    }
+    let outcome = service.depopulate_contact(&team, &link, &email).await?;
+    assert!(outcome.source_deleted);
+    assert!(!outcome.contact_deleted && !outcome.company_deleted);
+    assert!(
+        repo.get_contact_for_team(&team, &contact.id, true)
+            .await?
+            .is_some()
+    );
+    Ok(())
+}
+
 fn personal(local: &str) -> String {
     format!("{local}@{PERSONAL_DOMAIN}")
 }
@@ -278,6 +331,372 @@ async fn manual_unfiled_contact_does_not_mask_synced_company_contact(
         repo.get_contact_for_team(&team_id, &manual.id, false)
             .await?
             .is_some()
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn assigned_personal_sync_keeps_admission_archive_and_team_boundaries(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::contact_update::ContactFieldUpdate;
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, OWNER).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    let_personal_emails_in(&repo, team).await;
+    let email = personal("contact");
+    let contact = repo
+        .create_contact_for_team(&team, Some(&email), "Manual name", Utc::now())
+        .await?;
+    let first = insert_company(&pool, team, true, &["example.com"]).await?;
+    let second = insert_company(&pool, team, false, &["example.org"]).await?;
+    let foreign = Uuid::now_v7();
+    seed_team(&pool, foreign, "macro|other@example.org").await?;
+    enable_crm_for_team(&pool, foreign).await?;
+    let foreign_contact = repo
+        .create_contact_for_team(&foreign, Some(&email), "Other", Utc::now())
+        .await?;
+    for company in [first, second] {
+        repo.update_contact(
+            &team,
+            &contact.id,
+            &ContactFieldUpdate::Company(company),
+            true,
+        )
+        .await?;
+        for sent in [false, true] {
+            service
+                .populate_contact(
+                    &team,
+                    &link,
+                    "owner@example.com",
+                    &email,
+                    Some("Sync name"),
+                    contact.first_interaction - Duration::days(10),
+                    contact.last_interaction + Duration::days(10),
+                    sent,
+                )
+                .await?;
+            let current = repo
+                .get_contact_for_team(&team, &contact.id, true)
+                .await?
+                .unwrap();
+            assert_eq!(current.company_id, Some(company));
+            assert_eq!(current.name.as_deref(), Some("Manual name"));
+            assert_eq!(
+                current.last_interaction,
+                contact.last_interaction + Duration::days(10)
+            );
+            if sent {
+                assert_eq!(
+                    current.first_interaction,
+                    contact.first_interaction - Duration::days(10)
+                );
+            }
+        }
+    }
+    repo.set_company_hidden(&team, &second, true).await?;
+    populate(&service, team, link, &email, true).await;
+    assert!(
+        repo.get_contact_for_team(&team, &contact.id, true)
+            .await?
+            .unwrap()
+            .hidden
+    );
+    assert_eq!(
+        repo.get_contact_for_team(&foreign, &foreign_contact.id, true)
+            .await?
+            .unwrap()
+            .last_interaction,
+        foreign_contact.last_interaction
+    );
+    repo.depopulate_link_in_team(&team, &link).await?;
+    let before = repo
+        .get_contact_for_team(&team, &contact.id, true)
+        .await?
+        .unwrap();
+    for gate in ["personal", "blocked", "disabled"] {
+        match gate {
+            "personal" => {
+                repo.update_team_settings(
+                    &team,
+                    &CrmTeamSettingsPatch {
+                        exclude_personal_emails: Some(true),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+            }
+            "blocked" => {
+                let_personal_emails_in(&repo, team).await;
+                repo.block_domain(&team, PERSONAL_DOMAIN).await?;
+            }
+            _ => {
+                repo.unblock_domain(&team, PERSONAL_DOMAIN).await?;
+                sqlx::query!(
+                    "UPDATE team_crm_settings SET crm_enabled = FALSE WHERE team_id = $1",
+                    team
+                )
+                .execute(&pool)
+                .await?;
+            }
+        }
+        for sent in [true, false] {
+            service
+                .populate_contact(
+                    &team,
+                    &link,
+                    "owner@example.com",
+                    &email,
+                    None,
+                    Utc::now(),
+                    before.last_interaction + Duration::days(20),
+                    sent,
+                )
+                .await?;
+        }
+        let after = repo
+            .get_contact_for_team(&team, &contact.id, true)
+            .await?
+            .unwrap();
+        assert_eq!(after.last_interaction, before.last_interaction);
+        assert_eq!(after.company_id, Some(second));
+        assert!(after.hidden);
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM crm_contact_sources WHERE contact_id = $1",
+                contact.id
+            )
+            .fetch_one(&pool)
+            .await?,
+            Some(0)
+        );
+    }
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2",
+            team,
+            email
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(1)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ambiguous_personal_matches_are_never_selected_by_sync_or_cleanup(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, OWNER).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    let_personal_emails_in(&repo, team).await;
+    let email = personal("ambiguous");
+    let standalone = repo
+        .create_contact_for_team(&team, Some(&email), "Standalone", Utc::now())
+        .await?;
+    let company = insert_company(&pool, team, true, &["example.com"]).await?;
+    let assigned = insert_contact_with_source(&pool, company, &email, link).await?;
+    repo.set_contact_hidden(&team, &assigned, true).await?;
+    for sent in [false, true] {
+        populate(&service, team, link, &email, sent).await;
+    }
+    assert_eq!(
+        repo.get_contact_for_team(&team, &standalone.id, true)
+            .await?
+            .unwrap()
+            .updated_at,
+        standalone.updated_at
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2",
+            team,
+            email
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(2)
+    );
+    assert!(
+        !repo
+            .has_depopulate_target(&team, PERSONAL_DOMAIN, &email)
+            .await?
+    );
+    let outcome = service.depopulate_contact(&team, &link, &email).await?;
+    assert!(!outcome.source_deleted && !outcome.contact_deleted && !outcome.company_deleted);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM crm_contact_sources WHERE contact_id = $1",
+            assigned
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(1)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn assigned_personal_population_locks_parent_before_bulk_cleanup(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::contact_update::ContactFieldUpdate;
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, OWNER).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let_personal_emails_in(&repo, team).await;
+    let email = personal("contact");
+    let contact = repo
+        .create_contact_for_team(&team, Some(&email), "Contact", Utc::now())
+        .await?;
+    let company = insert_company(&pool, team, true, &["example.com"]).await?;
+    repo.update_contact(
+        &team,
+        &contact.id,
+        &ContactFieldUpdate::Company(company),
+        true,
+    )
+    .await?;
+    let gate = std::sync::Arc::new(super::ContactWriteGate::default());
+    let mut gated = repo.clone();
+    gated.after_personal_company = Some(gate.clone());
+    let service = CrmServiceImpl::new(gated, NoOpCompanyMetadataResolver);
+    let sync = tokio::spawn(async move {
+        service
+            .populate_contact(
+                &team,
+                &link,
+                "owner@example.com",
+                &email,
+                None,
+                Utc::now(),
+                Utc::now(),
+                true,
+            )
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(10), gate.entered.notified()).await?;
+    let locked = sqlx::query!(
+        "SELECT id FROM crm_companies WHERE id = $1 FOR UPDATE NOWAIT",
+        company
+    )
+    .fetch_optional(&pool)
+    .await;
+    let parent_locked = locked.as_ref().is_err_and(|e| {
+        e.as_database_error()
+            .is_some_and(|e| e.code().as_deref() == Some("55P03"))
+    });
+    let cleanup_repo = repo.clone();
+    let cleanup =
+        tokio::spawn(async move { cleanup_repo.depopulate_link_in_team(&team, &link).await });
+    gate.resume.notify_one();
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        sync.await??;
+        cleanup.await??;
+        anyhow::Ok(())
+    })
+    .await??;
+    assert!(
+        parent_locked,
+        "assigned sync must take the parent before contact/source work"
+    );
+    assert_eq!(
+        repo.get_contact_for_team(&team, &contact.id, true)
+            .await?
+            .unwrap()
+            .company_id,
+        Some(company)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM crm_contact_sources WHERE contact_id = $1",
+            contact.id
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(0)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn personal_switch_survives_cleanup_after_admission_is_disabled(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::contact_update::ContactFieldUpdate;
+    let team = Uuid::now_v7();
+    seed_team(&pool, team, OWNER).await?;
+    enable_crm_for_team(&pool, team).await?;
+    let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let_personal_emails_in(&repo, team).await;
+    let email = personal("contact");
+    let first = insert_company(&pool, team, true, &["example.com"]).await?;
+    let second = insert_company(&pool, team, true, &["example.org"]).await?;
+    let contact = repo
+        .create_contact_for_team(&team, Some(&email), "Contact", Utc::now())
+        .await?;
+    repo.update_contact(
+        &team,
+        &contact.id,
+        &ContactFieldUpdate::Company(first),
+        true,
+    )
+    .await?;
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    populate(&service, team, link, &email, true).await;
+    repo.update_team_settings(
+        &team,
+        &CrmTeamSettingsPatch {
+            exclude_personal_emails: Some(true),
+            ..Default::default()
+        },
+    )
+    .await?;
+    repo.block_domain(&team, PERSONAL_DOMAIN).await?;
+    let gate = std::sync::Arc::new(super::ContactWriteGate::default());
+    let mut gated = repo.clone();
+    gated.after_depopulate_source = Some(gate.clone());
+    let cleanup = tokio::spawn(async move {
+        gated
+            .depopulate_contact(&team, &link, PERSONAL_DOMAIN, &email)
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(10), gate.entered.notified()).await?;
+    let switch_repo = repo.clone();
+    let id = contact.id;
+    let switch = tokio::spawn(async move {
+        switch_repo
+            .update_contact(&team, &id, &ContactFieldUpdate::Company(second), true)
+            .await
+    });
+    gate.resume.notify_one();
+    let (removed, changed) = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        anyhow::Ok((cleanup.await??, switch.await??))
+    })
+    .await??;
+    assert!(removed.source_deleted && !removed.contact_deleted && !removed.company_deleted);
+    assert_eq!(changed.company_id, Some(second));
+    assert_eq!(changed.id, contact.id);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM crm_contact_sources WHERE contact_id = $1",
+            contact.id
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(0)
     );
     Ok(())
 }

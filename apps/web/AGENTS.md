@@ -434,6 +434,17 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
+- Keep add-only email and personal-provider company edits in shared CRM field views, using Tasks
+  property primitives and committed-response/session-fenced cache updates. Close
+  direct cache-write admission on logout and login replacement, and drain admitted
+  durable writes before clearing storage, while starting independent local/server
+  sign-out immediately. Retain the exact physical cache owner through cleanup even
+  after its public wrapper retires. On login, remove only session-written contact
+  records before refetch; recover typed owner/bootstrap failures only through the
+  original backend/scope factory. Preserve queued offline edits, report failed
+  repair, release email verification's busy state on failure, and keep admission
+  closed until cleanup succeeds; serialize login behind every logout wipe;
+  `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -495,10 +506,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
-- Label the notification permission toast **Enable Desktop Notifications** in
-  the desktop app and **Enable Notifications** in the Android app, and keep
-  their Enable action on the native notification provider.
+- Label the notification permission toast **Enable notifications** on every
+  platform, and keep the desktop and Android Enable actions on the native
+  notification provider.
 - Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
+  Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed
@@ -507,13 +519,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Probe identity on deploy-preview origins even without a local login hint;
   shared HttpOnly dev cookies are not visible to JavaScript or localStorage.
 - Leave the login hint (`syncLoginStorage(true)`) before a full-page hosted
-  SSO redirect; the callback sets only HttpOnly cookies, and a load without the
-  hint never checks identity, so the returning user sees sign-in again.
+  SSO redirect, and as soon as a native sign-in redeems its session code; the
+  cookies are HttpOnly or in the native jar, and a load without the hint never
+  checks identity, so the user sees sign-in again over a valid session.
 - Hold automatic reloads (`holdAutomaticReload`) across anything a reload would
   lose. `createNativeAuthSession` holds them for the sheet: its result reaches
   only the JavaScript that opened it, and leaving the app for a sign-in code
-  hides the page, the moment OTA bundles apply. Holds also reach the native
-  updater, whose foreground handler never asks the page. See
+  hides the page, the moment OTA bundles apply. Native sign-in (`useSsoLogin`)
+  holds them on until the session code is redeemed and the login hint is down.
+  Holds also reach the native updater, whose foreground handler never asks the
+  page. See
   [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.

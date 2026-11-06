@@ -89,6 +89,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
+  the CRM domain owns authorization, normalization and relation invariants.
+
 - Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
   evaluation has a 300 ms timeout and keeps the call's own chat on failure.
 - The same flag client evaluates `enable-programmatic-calls` per caller for the

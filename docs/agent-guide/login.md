@@ -27,8 +27,7 @@
 the opening slides. The first slide of `/app/signup` links to it (`Sign up as
 agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
 notice pointing agents there. A new account made there, or by redeeming an invite
-sent with **Invite as agent** in Settings → Team → Members or
-`team.invite(email, { agent: true })`, is an agent. An existing account keeps its
+sent with `team.invite(email, { agent: true })`, is an agent. An existing account keeps its
 type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
 account that isn't a new agent continues to `/app/team-invite?id=<id>`.
 
@@ -190,6 +189,11 @@ passwords and verification codes only in that browser, never in agent messages.
 For browsers using the Custom Tabs fallback, verify that the callback returns to
 the original Macro task. A callback for another attempt must leave the current
 attempt pending; a callback after process death must not restore that attempt.
+The first Google sign-in after a fresh install must land in the app, even while
+an over-the-air update finishes downloading: an update reload during the sheet
+or the session-code redemption used to return the user to `Login`, with the
+second tap then signing straight in. Check that PostHog shows no
+`native_webview_started` reload onto `#/login` right after the `login` event.
 
 After signing in, test background/foreground, force-stop/relaunch, logout, and
 signing in as another account. An entity link opened while signed out should
@@ -296,10 +300,16 @@ then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
 When the server suggests a work domain, the create form has no Skip button and
-shows an **Allow @domain emails to join** switch, on by default. Creating the
-team with it on sets the team's auto-join domain and, after the invites, emails
-up to 25 of the creator's same-domain contacts who are not on Macro, invited,
-or already sent a notice (`POST /team/domain-notice`). Creating the team does not leave the step: it
+shows two switches, both on by default and marked recommended: **Allow @domain
+emails to join** and **Notify your team via email**. Creating the team with the
+first on sets the team's auto-join domain. With both on, it then, after the
+invites, emails up to 25 of the creator's same-domain contacts who are not on
+Macro, invited, or already sent a notice (`POST /team/domain-notice`). The
+notice switch is disabled and reads off while domain join is off, because the
+server sends nothing to a team without an auto-join domain; turning domain
+join back on restores its earlier setting. Each switch has an info button
+beside it that explains the setting in a tooltip on hover or focus, and in a
+popover on tap on touch devices; pressing it never toggles the switch. Creating the team does not leave the step: it
 switches to the **You're on <team>** confirmation, the same panel members who
 were already on a team (auto-joined or invite-accepted) see. That panel has
 **Copy invite link** beside **Continue**; it copies the team's
