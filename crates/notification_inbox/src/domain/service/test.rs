@@ -485,6 +485,136 @@ async fn done_on_a_notification_the_row_no_longer_shows_acknowledges_nothing() {
     assert!(outcome.receipt.notification_ids.is_empty());
 }
 
+fn clear_request(scope: InboxScope) -> InboxClearRequest {
+    InboxClearRequest {
+        scope,
+        unread_only: false,
+        since: None,
+        limit: 50,
+        after: None,
+    }
+}
+
+#[tokio::test]
+async fn clear_marks_every_row_done_without_archiving_mail() {
+    let harness = inbox();
+    let outcome = harness
+        .service
+        .clear(viewer(), clear_request(InboxScope::default()))
+        .await
+        .unwrap();
+
+    // The channel's thread and top level, and the inbox email thread.
+    assert_eq!(outcome.rows, 3);
+    let mut cleared = outcome.receipt.notification_ids.clone();
+    cleared.sort();
+    assert_eq!(cleared, vec![uuid(1), uuid(2), uuid(3), uuid(4), uuid(5)]);
+    assert!(outcome.receipt.archived_threads.is_empty());
+    assert!(harness.mail.calls.lock().unwrap().is_empty());
+    assert!(outcome.next.is_none());
+}
+
+#[tokio::test]
+async fn clear_takes_only_the_rows_the_request_names() {
+    let harness = inbox();
+    let outcome = harness
+        .service
+        .clear(
+            viewer(),
+            InboxClearRequest {
+                // Channel rows only, and only what arrived at minute 8 or later.
+                since: Some(at(8)),
+                ..clear_request(InboxScope {
+                    row_types: vec![InboxRowType::ChannelMention, InboxRowType::ChannelMessages],
+                })
+            },
+        )
+        .await
+        .unwrap();
+
+    // The mention thread, with the document chip it hides; not the
+    // top-level message from minute 2, nor the email.
+    assert_eq!(outcome.rows, 1);
+    let mut cleared = outcome.receipt.notification_ids.clone();
+    cleared.sort();
+    assert_eq!(cleared, vec![uuid(2), uuid(3), uuid(4)]);
+    assert_eq!(
+        harness.notifications.state_of(uuid(1)),
+        NotificationState::Unseen
+    );
+    assert_eq!(
+        harness.notifications.state_of(uuid(5)),
+        NotificationState::Unseen
+    );
+}
+
+#[tokio::test]
+async fn clear_of_unread_rows_leaves_read_ones() {
+    let harness = harness(
+        vec![
+            candidate("doc", entity(EntityType::Document, DOC), Some(9), None),
+            candidate("channel", channel().into_entity(), Some(5), None),
+        ],
+        vec![
+            notification(
+                1,
+                entity(EntityType::Document, DOC),
+                "task_assigned",
+                json!({ "taskId": "task-1", "assignedBy": "macro|other@example.com", "taskName": "Plan" }),
+                9,
+                NotificationState::Seen,
+            ),
+            channel_send(2, CHANNEL, 0x100, 5),
+        ],
+    );
+    let outcome = harness
+        .service
+        .clear(
+            viewer(),
+            InboxClearRequest {
+                unread_only: true,
+                ..clear_request(InboxScope::default())
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(2)]);
+}
+
+#[tokio::test]
+async fn clear_since_a_time_ends_at_the_first_older_group() {
+    let harness = inbox();
+    let request = InboxClearRequest {
+        since: Some(at(8)),
+        limit: 1,
+        ..clear_request(InboxScope::default())
+    };
+    let first = harness
+        .service
+        .clear(viewer(), request.clone())
+        .await
+        .unwrap();
+    assert_eq!(first.rows, 1);
+    assert!(first.next.is_some());
+
+    let second = harness
+        .service
+        .clear(
+            viewer(),
+            InboxClearRequest {
+                after: first.next,
+                ..request
+            },
+        )
+        .await
+        .unwrap();
+    // The email thread is older than the cutoff: nothing more to clear.
+    assert_eq!(second.rows, 0);
+    assert!(second.receipt.notification_ids.is_empty());
+    assert!(second.next.is_none());
+}
+
 #[tokio::test]
 async fn undo_restores_a_done_and_recomputes_its_groups() {
     let harness = inbox();

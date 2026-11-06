@@ -8,4 +8,4 @@
 /**
  * Root being replied to, or no root for the parent composer.
  */
-export type MessageChangeOneOfOneoneThreadId = string | null;
+export type MessageChangeOneOfOnethreeThreadId = string | null;

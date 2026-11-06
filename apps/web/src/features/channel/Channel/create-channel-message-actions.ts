@@ -124,7 +124,7 @@ export function createChannelMessageActions(
     return {
       onReply: canReply ? (options.onReply ?? emptyReplyHandler) : undefined,
       onReact:
-        writable && !isDeleted
+        writable && !isDeleted && message.kind !== 'call_root'
           ? (ctx) => {
               const userId = options.userId();
               if (!userId) return;

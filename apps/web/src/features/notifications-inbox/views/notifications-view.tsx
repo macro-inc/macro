@@ -62,6 +62,8 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { InboxClearDrawer } from '../components/inbox-clear-drawer';
+import { InboxClearMenu } from '../components/inbox-clear-menu';
 import { InboxDateHeader } from '../components/inbox-date-header';
 import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
@@ -78,7 +80,12 @@ import {
   type NotificationInboxRow,
   useNotificationsInboxContext,
 } from '../context/notifications-inbox-context';
-import type { InboxStatus } from '../core/inbox-filters';
+import {
+  clearFor,
+  clearIncludes,
+  type InboxClearChoice,
+  type InboxStatus,
+} from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
 import {
   describeInboxCard,
@@ -271,6 +278,25 @@ export function NotificationsView(props: NotificationsViewProps) {
             hideOnMobile: true,
           }
         );
+        return () => {
+          if (id !== undefined) toast.dismiss(id);
+        };
+      },
+      announceCleared: (count, undo) => {
+        const id =
+          count === 0
+            ? toast.success(t('notificationsInbox.clearedNothing'))
+            : toast.success(t('notificationsInbox.cleared', { count }), {
+                actions: [
+                  {
+                    label: t('notificationsInbox.undo'),
+                    icon: ArrowCounterClockwise,
+                    onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+                  },
+                ],
+                duration: 8_000,
+                stack: true,
+              });
         return () => {
           if (id !== undefined) toast.dismiss(id);
         };
@@ -485,6 +511,17 @@ export function NotificationsView(props: NotificationsViewProps) {
       inbox.markNotificationDone(row, notification),
       'notifications-inbox'
     );
+  };
+
+  /**
+   * Clear what the reader chose, under their filters. A preview of a row the
+   * clear takes closes, as the list leaves it.
+   */
+  const clear = (choice: InboxClearChoice) => {
+    const request = clearFor(choice, filters.filters(), new Date());
+    const shown = selection.selected();
+    if (shown && clearIncludes(request, shown)) closePreview();
+    fireAndForget(inbox.clear(request), 'notifications-inbox');
   };
 
   const markDone = (done: readonly NotificationInboxRow[]) => {
@@ -907,7 +944,16 @@ export function NotificationsView(props: NotificationsViewProps) {
             <InboxStatusPills
               status={filters.filters().status}
               onChange={filters.setStatus}
-              leading={<InboxFilterDrawer {...filterControls} />}
+              leading={
+                <>
+                  <InboxFilterDrawer {...filterControls} />
+                  <InboxClearDrawer
+                    unreadOnly={filters.filters().status === 'unread'}
+                    isShown={filters.isShown}
+                    onClear={clear}
+                  />
+                </>
+              }
             />
           </header>
           <PullToRefresh
@@ -977,6 +1023,11 @@ export function NotificationsView(props: NotificationsViewProps) {
                           {...filterControls}
                         />
                       </div>
+                      <InboxClearMenu
+                        unreadOnly={filters.filters().status === 'unread'}
+                        isShown={filters.isShown}
+                        onClear={clear}
+                      />
                       <Button
                         size="icon-md"
                         variant="ghost"

@@ -6,6 +6,8 @@ import type {
 } from '@service-storage/messages';
 
 export type MessageData = {
+  /** Set on a call's root, which stands for the call rather than a message. */
+  kind?: 'message' | 'call_root';
   parent?: MessageParent;
   imported_author?: { name: string } | null;
   guest_name?: string | null;

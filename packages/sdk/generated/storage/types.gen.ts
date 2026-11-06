@@ -2188,6 +2188,47 @@ export type CallActiveResponse = {
 };
 
 /**
+ * Where a call's discussion lives, decided once when the call is created.
+ * `channel_id` cannot decide this: past channel calls keep their own thread.
+ */
+export type CallDiscussion = {
+    /**
+     * The channel holding the thread.
+     */
+    channel_id: string;
+    kind: 'channel_thread';
+    /**
+     * The thread's root message.
+     */
+    root_id: string;
+} | {
+    /**
+     * The call owning the thread.
+     */
+    call_id: string;
+    kind: 'call_chat';
+};
+
+/**
+ * A channel call's life, as its timeline row shows it.
+ */
+export type CallEntryStatus = {
+    state: 'live';
+} | {
+    /**
+     * How long it lasted.
+     */
+    duration_ms: number;
+    /**
+     * When it ended.
+     */
+    ended_at: string;
+    state: 'ended';
+} | {
+    state: 'record_deleted';
+};
+
+/**
  * Filters for call records.
  */
 export type CallFilters = {
@@ -2244,6 +2285,10 @@ export type CallRecord = {
      * archived `call_records`; active calls always return `None`.
      */
     customName?: string | null;
+    /**
+     * Where this call's discussion lives.
+     */
+    discussion: CallDiscussion;
     /**
      * Call duration in milliseconds (None if still active).
      */
@@ -10475,6 +10520,10 @@ export type Message = {
     id: string;
     imported_author?: null | ImportedAuthor;
     /**
+     * What this message is.
+     */
+    kind?: MessageKind;
+    /**
      * Tracked mentions, retained when a caller changes attachments only.
      */
     mentions: Array<SimpleMention>;
@@ -10656,6 +10705,12 @@ export type MessageChange = {
     type: 'reaction_changed';
 } | {
     /**
+     * Persisted root.
+     */
+    message: Message;
+    type: 'call_root_posted';
+} | {
+    /**
      * Persisted thread state.
      */
     state: ThreadState;
@@ -10765,6 +10820,11 @@ export type MessageEventAttachment = {
      */
     entity_type: string;
 };
+
+/**
+ * What a persisted message is. Set by the server, never by a client.
+ */
+export type MessageKind = 'message' | 'call_root';
 
 /**
  * Root message with its small thread preview, independent of its parent type.
@@ -11030,6 +11090,16 @@ export type MessageTimelineEntry = {
      */
     activity: TimelineActivity;
     type: 'activity';
+} | {
+    /**
+     * The call's root message, its thread state and its reply preview.
+     */
+    message: MessageListItem;
+    /**
+     * Where the call is in its life.
+     */
+    status: CallEntryStatus;
+    type: 'call';
 };
 
 /**

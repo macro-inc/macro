@@ -11,8 +11,9 @@ use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification_inbox::domain::{
     models::{
-        InboxChange, InboxDoneOutcome, InboxNotificationDoneOutcome, InboxPage, InboxQuery,
-        InboxRowId, InboxRowTarget, InboxScope,
+        InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome,
+        InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRowId, InboxRowTarget,
+        InboxScope,
     },
     service::NotificationInboxService,
 };
@@ -55,6 +56,13 @@ pub trait NotificationInboxGraphqlService: Send + Sync + 'static {
         row: InboxRowId,
         notification: Uuid,
     ) -> BoxFuture<'_, Result<InboxNotificationDoneOutcome<SoupProjectionHydration>, FeedError>>;
+
+    /// See [`NotificationInboxService::clear`].
+    fn clear(
+        &self,
+        viewer: FeedViewer,
+        request: InboxClearRequest,
+    ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>>;
 
     /// See [`NotificationInboxService::undo_done`].
     fn undo_done(
@@ -119,6 +127,14 @@ where
             row,
             notification,
         ))
+    }
+
+    fn clear(
+        &self,
+        viewer: FeedViewer,
+        request: InboxClearRequest,
+    ) -> BoxFuture<'_, Result<InboxClearOutcome, FeedError>> {
+        Box::pin(NotificationInboxService::clear(self, viewer, request))
     }
 
     fn undo_done(

@@ -205,6 +205,8 @@ use user_api_key::{
 const SOUP_CONSUMER_RESTART_MAX_DELAY_SECS: u64 = 60;
 const SOUP_CONSUMER_RESTART_ALERT_THRESHOLD: u32 = 5;
 
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
 fn soup_consumer_restart_delay(consecutive_failures: u32) -> Duration {
     let exponent = consecutive_failures.saturating_sub(1).min(6);
     Duration::from_secs((1_u64 << exponent).min(SOUP_CONSUMER_RESTART_MAX_DELAY_SECS))
@@ -882,11 +884,24 @@ async fn run_server() -> anyhow::Result<()> {
     };
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
-    let call_service = Arc::new(
-        call_service_builder
-            .with_voice_repo(PgVoiceRepo::new(db.clone()))
-            .with_event_broker(macro_event_broker.clone()),
-    );
+    let call_root_poster = call::outbound::channel_threads::LateCallRootPoster::default();
+    let call_service_builder = call_service_builder
+        .with_voice_repo(PgVoiceRepo::new(db.clone()))
+        .with_event_broker(macro_event_broker.clone());
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        // Flag evaluation is on the call-start path; fall back promptly.
+        Duration::from_millis(300),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
+        call::outbound::channel_threads::FlaggedChannelThreads::new(
+            flags,
+            call_root_poster.clone(),
+        ),
+    ));
+    let call_service = Arc::new(call_service_builder);
 
     consumer_tracker.spawn({
         let service = call_service.clone();
@@ -1343,6 +1358,10 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    let call_roots: Arc<dyn messages::domain::api::CallRootPoster> = message_service.clone();
+    if call_root_poster.set(call_roots).is_err() {
+        tracing::error!("the call root poster was set twice");
+    }
     let guest_chat_service = Arc::new(
         messages::domain::service::guest_chat::GuestChatService::new(
             message_service.clone(),

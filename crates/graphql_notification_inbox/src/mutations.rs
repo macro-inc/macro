@@ -8,8 +8,9 @@ use graphql_soup::SoupEntityEdges;
 use crate::{
     context::{NotificationInboxGraphqlContext, to_graphql_error},
     inputs::{
-        MarkNotificationInboxNotificationDoneInput, MarkNotificationInboxRowsDoneInput,
-        MarkNotificationInboxRowsSeenInput, UndoNotificationInboxRowsDoneInput,
+        ClearNotificationInboxInput, MarkNotificationInboxNotificationDoneInput,
+        MarkNotificationInboxRowsDoneInput, MarkNotificationInboxRowsSeenInput,
+        UndoNotificationInboxRowsDoneInput,
     },
     objects::GraphqlNotificationInboxPatch,
 };
@@ -31,6 +32,18 @@ pub struct MarkNotificationInboxNotificationDonePayload<E: SoupEntityEdges> {
     patches: Vec<GraphqlNotificationInboxPatch<E>>,
     /// Opaque token that reverses exactly this operation.
     undo_token: String,
+}
+
+/// The result of one batch of clearing the inbox.
+#[derive(SimpleObject)]
+pub struct ClearNotificationInboxPayload {
+    /// How many rows the batch cleared.
+    row_count: i32,
+    /// Opaque token that reverses exactly this batch.
+    undo_token: String,
+    /// Send as the next batch's `cursor` to keep clearing; absent once
+    /// nothing is left.
+    next_cursor: Option<String>,
 }
 
 /// The result of undoing a mark-done.
@@ -109,6 +122,32 @@ impl<E: SoupEntityEdges> NotificationInboxMutationRoot<E> {
                 .map(GraphqlNotificationInboxPatch::from)
                 .collect(),
             undo_token: outcome.receipt.encode(),
+        })
+    }
+
+    /// Clear the authenticated user's notification inbox one batch at a time:
+    /// every matching row the batch reads is marked done, its shown and hidden
+    /// notifications. Email threads are not archived. Repeat with
+    /// `nextCursor` until it is absent; each batch's undo token reverses that
+    /// batch.
+    async fn clear_notification_inbox(
+        &self,
+        ctx: &Context<'_>,
+        input: ClearNotificationInboxInput,
+    ) -> async_graphql::Result<ClearNotificationInboxPayload> {
+        let user = require_authenticated_user(ctx)?;
+        let context = ctx.data::<NotificationInboxGraphqlContext>()?;
+        let request = input.into_request()?;
+        let viewer = context.viewer(user).await?;
+        let outcome = context
+            .service
+            .clear(viewer, request)
+            .await
+            .map_err(to_graphql_error)?;
+        Ok(ClearNotificationInboxPayload {
+            row_count: i32::try_from(outcome.rows).unwrap_or(i32::MAX),
+            undo_token: outcome.receipt.encode(),
+            next_cursor: outcome.next.as_ref().map(|next| next.encode()),
         })
     }
 
