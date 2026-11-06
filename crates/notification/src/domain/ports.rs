@@ -422,10 +422,12 @@ use crate::domain::models::queue_message::EmailContent;
 
 /// Port for email delivery.
 pub trait EmailSender: Send + Sync + 'static {
-    /// Send an email with pre-built content to a user.
+    /// Send an email with pre-built content to a user. `notification_type` is the type name
+    /// of the notification the email delivers.
     fn send_email(
         &self,
         recipient: MacroUserIdStr<'_>,
+        notification_type: &str,
         content: &EmailContent,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
