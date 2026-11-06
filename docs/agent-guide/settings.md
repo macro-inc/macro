@@ -321,12 +321,12 @@ shows **Included for Macro**, with no currency charge.
    retried and **Remove agent**. The same actions stay reachable on mobile.
    The roster polls every three seconds while any agent is
    provisioning, then every thirty seconds while the page is visible and the
-   roster is nonempty. **Unhealthy** means a ready computer's agent is
+   roster is nonempty. **Alive** means the agent is running. **Dead** means a ready computer's agent is
    disconnected, missing, stale, or unhealthy; its reason is in the status tooltip and row menu without
    a provisioning Retry action. Before the first connection, setup stays
    as **Setting up…**, with **Creating**, **Booting**, or **Connecting** when
    the server supplies a step. No payment stage is displayed; absent or retired
-   steps leave the generic setup label. Running, unhealthy, and failed rows keep refreshing, so
+   steps leave the generic setup label. Alive, Dead, and failed rows keep refreshing, so
    transient health failures can recover without a manual refresh. Billing
    shows the same live agent health without changing the subscription amounts.
 5. **Retry** appears only for terminal `failed` status when `retryable=true`

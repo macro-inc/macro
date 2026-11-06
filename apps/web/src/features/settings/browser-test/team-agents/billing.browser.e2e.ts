@@ -38,7 +38,7 @@ test('live unhealthy agent health overrides ready computer status without changi
   page,
 }) => {
   await page.goto('/?billing&unhealthy');
-  const status = page.getByText('Unhealthy', { exact: true });
+  const status = page.getByText('Dead', { exact: true });
   await expect(status).toBeVisible();
   await expect(status).toHaveClass(/text-failure/);
   await expect(page.getByText('$190.00', { exact: true })).toBeVisible();
@@ -46,7 +46,7 @@ test('live unhealthy agent health overrides ready computer status without changi
     .getByRole('button', { name: 'Restore agent health', exact: true })
     .click();
   await expect(status).toHaveCount(0);
-  await expect(page.getByText('Running', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('Alive', { exact: true })).toHaveCount(2);
   await expect(page.getByText('$190.00', { exact: true })).toBeVisible();
 });
 

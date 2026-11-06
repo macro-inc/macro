@@ -20,10 +20,10 @@ function sizeLabel(size: ComputerSize): string {
 
 function computerStatus(status: string | null | undefined): string {
   return match(status)
-    .with('running', 'ready', () => t('settingsBilling.running'))
+    .with('running', 'ready', () => t('settingsBilling.alive'))
     .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
     .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
-    .with('unhealthy', () => t('settingsBilling.unhealthy'))
+    .with('unhealthy', () => t('settingsBilling.dead'))
     .with('asleep', () => t('settingsBilling.asleep'))
     .with('waking', () => t('settingsBilling.waking'))
     .with('stopping', () => t('settingsBilling.stopping'))

@@ -1371,7 +1371,8 @@ desktop and phones; put the role below the name and keep failure details and
 Retry in the row menu. Leave human status empty when no activity field exists;
 do not invent activity timestamps or placeholder dashes. Keep billing labels out
 of the status column.
-Distinguish transient `unhealthy` agents on ready computers from
+Display running agents as Alive and unhealthy agents as Dead, preserving status
+colors and diagnostic reasons. Distinguish transient `unhealthy` agents on ready computers from
 terminal `failed` provisioning; only terminal failures can retry provisioning.
 The browser fixture covers header heights and invitation/row menus on desktop, phone,
 and tablet.

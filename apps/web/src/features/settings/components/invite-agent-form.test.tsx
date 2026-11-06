@@ -233,13 +233,13 @@ it('updates setup progress to health status without adding billing labels or row
   );
   setValue({ ...agent, status: 'running' });
   expect(screen.queryByRole('progressbar')).toBeNull();
-  expect(screen.getByRole('status').textContent).toBe('Running');
+  expect(screen.getByRole('status').textContent).toBe('Alive');
   setValue({
     ...agent,
     status: 'unhealthy',
     statusReason: 'Connection unavailable',
   });
-  expect(screen.getByRole('status').textContent).toBe('Unhealthy');
+  expect(screen.getByRole('status').textContent).toBe('Dead');
   setValue({ ...agent, status: 'failed', payment: 'comped', retryable: true });
   expect(screen.getByRole('status').textContent).toContain('Setting up…');
   expect(screen.queryByRole('button')).toBeNull();
