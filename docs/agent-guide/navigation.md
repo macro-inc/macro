@@ -1280,6 +1280,15 @@ of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
 pass before the run is queued. Steps that act on the triggering item can't run
 on GitHub triggers, which have no Macro item.
 
+Presets and **Any GitHub event** only receive events selected on the installed
+GitHub App. Account linking alone does not enable delivery. The
+[registration guide](../../crates/github/README.md) lists the reviewed
+subscriptions and manual permission approval steps; changing its checked-in
+specification does not change the live app. After adding subscriptions, verify
+a controlled repository's delivery and matching routine history. Wildcard
+routines can run more often, and manually redelivering a webhook from GitHub
+can run a routine again.
+
 When `enable-routine-conditions` is on, every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
