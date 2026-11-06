@@ -134,6 +134,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
         session_id: Some(uuid::Uuid::from_u128(1)),
         execution_id: Some(uuid::Uuid::from_u128(2)),
         hosts: BTreeMap::from([("cognition".into(), format!("http://{address}"))]),
+        unattended: None,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -216,6 +217,7 @@ async fn a_program_presents_a_view_through_its_session() {
         session_id: Some(uuid::Uuid::from_u128(1)),
         execution_id: Some(uuid::Uuid::from_u128(2)),
         hosts: BTreeMap::from([("agent-harness".into(), format!("http://{address}"))]),
+        unattended: None,
     };
     let source = r#"
 export async function main({execution}) {
@@ -608,5 +610,244 @@ async fn redacts_run_token_from_results_keys_console_stderr_and_errors() {
             unexpected => panic!("unexpected outcome: {unexpected:?}"),
         }
     }
+    service.shutdown().await;
+}
+
+fn unattended(
+    token: &str,
+    hosts: &[(&str, String)],
+    arguments: serde_json::Value,
+    dry_run: bool,
+) -> RunEnvironment {
+    RunEnvironment {
+        token: token.into(),
+        hosts: hosts
+            .iter()
+            .map(|(name, url)| ((*name).to_owned(), url.clone()))
+            .collect(),
+        unattended: Some(Unattended {
+            arguments: arguments.as_object().unwrap().clone(),
+            dry_run,
+        }),
+        ..RunEnvironment::default()
+    }
+}
+
+async fn run_unattended(
+    service: &ExecutionService,
+    source: &str,
+    environment: RunEnvironment,
+) -> (Vec<serde_json::Value>, Outcome) {
+    let (events, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let progress = events
+        .into_iter()
+        .filter_map(|event| match event.kind {
+            EventKind::Progress { value } => Some(value),
+            _ => None,
+        })
+        .collect();
+    (progress, outcome)
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_result_is_kept_whole_or_fails_over_the_limit() {
+    let (_root, service) = setup(Limits::default()).await;
+    let fits = "export function main() { return { items: Array.from({ length: 400 }, (_, id) => ({ id, name: 'x'.repeat(100) })) }; }";
+    let (_, outcome) = run_unattended(
+        &service,
+        fits,
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["items"].as_array().unwrap().len(), 400);
+
+    let (_, outcome) = run_unattended(
+        &service,
+        "export function main() { return 'x'.repeat(70 * 1024); }",
+        unattended("fixture-run-token", &[], serde_json::json!({}), true),
+    )
+    .await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        error.message,
+        "The step's output is 71 KB as JSON; a step's output can be at most 64 KB. Return only what later steps need."
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn unattended_typescript_gets_its_arguments_and_no_credential_or_raw_network() {
+    let (_root, service) = setup(Limits::default()).await;
+    let source = r#"
+type Context = { macro: object; trigger: { subject: string } };
+export async function main(context: Context): Promise<object> {
+  let net = "loaded";
+  try { await import("node:" + "net"); } catch { net = "unavailable"; }
+  return {
+    keys: Object.keys(context).sort(),
+    subject: context.trigger.subject,
+    connect: typeof Deno.connect,
+    worker: typeof Worker,
+    net,
+  };
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[],
+        serde_json::json!({"trigger": {"subject": "Invoice 7"}}),
+        true,
+    );
+    let (_, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "keys": ["macro", "trigger"],
+            "subject": "Invoice 7",
+            "connect": "undefined",
+            "worker": "undefined",
+            "net": "unavailable",
+        })
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_dry_run_reads_but_sends_no_writes() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("POST /decisions "), "{request}");
+        respond(&mut stream, r#"{"probabilities":{"yes":0.9}}"#).await;
+        // Nothing else reaches the API: the write is skipped and the raw
+        // request is stopped in the process.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let source = r#"
+export async function main({ macro, host }: { macro: any; host: string }) {
+  const decision = await macro.ai.decide({ input: "x", questions: { yes: "Yes?" } });
+  const archived = await macro._client.email.archiveThread({ path: { id: "thread-1" }, body: { archived: true } });
+  const token = macro._client.email.client.getConfig().auth;
+  let raw = "sent";
+  try {
+    await fetch(`${host}/email/labels`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+  } catch (error) {
+    raw = String(error);
+  }
+  return { yes: decision.probabilities.yes, archived: archived.data, raw };
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[("cognition", host.clone()), ("email", host.clone())],
+        serde_json::json!({ "host": host }),
+        true,
+    );
+    let (progress, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["yes"], 0.9);
+    assert_eq!(value["archived"], serde_json::json!({}));
+    assert!(
+        value["raw"]
+            .as_str()
+            .unwrap()
+            .contains("A dry run doesn't send changes."),
+        "{value}"
+    );
+    assert!(progress.iter().any(|event| event["service"] == "email"
+        && event["operation"] == "archiveThread"
+        && event["status"] == "skipped"));
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_real_run_sends_its_writes() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("DELETE "), "{request}");
+        respond(&mut stream, "{}").await;
+    });
+    let source = r#"
+export async function main({ macro }: { macro: any }) {
+  await macro._client.storage.deleteDocument({ path: { document_id: "document-1" } });
+  return { deleted: true };
+}
+"#;
+    let environment = unattended(
+        "fixture-run-token",
+        &[("storage", host.clone())],
+        serde_json::json!({}),
+        false,
+    );
+    let (progress, outcome) = run_unattended(&service, source, environment).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["deleted"], true);
+    assert!(
+        progress
+            .iter()
+            .any(|event| event["operation"] == "deleteDocument" && event["status"] == "completed")
+    );
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn the_cpu_limit_stops_a_busy_program() {
+    let (_root, service) = setup(Limits {
+        max_cpu: Some(Duration::from_secs(1)),
+        background: true,
+        ..Limits::default()
+    })
+    .await;
+    let (_, outcome) = run(
+        &service,
+        "export async function main() { for (;;) {} }",
+        10_000,
+    )
+    .await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Limit && error.message.contains("CPU")),
+        "{outcome:?}"
+    );
     service.shutdown().await;
 }

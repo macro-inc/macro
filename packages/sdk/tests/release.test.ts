@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { resolveRelease } from '../scripts/release';
+import {
+  callsPeerRange,
+  lockstepProblem,
+  readCallsManifest,
+  readManifest,
+  resolveRelease,
+} from '../scripts/release';
 
 const published = ['0.0.1', '0.0.2', '0.1.0'];
 
@@ -44,5 +50,47 @@ describe('resolveRelease', () => {
   test('compares numerically, not lexically', () => {
     expect(resolveRelease('0.10.0', ['0.9.0']).kind).toBe('release');
     expect(resolveRelease('0.9.0', ['0.10.0']).kind).toBe('rejected');
+  });
+});
+
+describe('lockstep with @macro-inc/sdk-calls', () => {
+  const sdk = { name: '@macro-inc/sdk', version: '0.4.0' };
+  const calls = (version: string, peer: string) => ({
+    name: '@macro-inc/sdk-calls',
+    version,
+    peerDependencies: { '@macro-inc/sdk': peer },
+  });
+
+  test('accepts matching versions and peer range', () => {
+    expect(lockstepProblem(sdk, calls('0.4.0', '^0.4.0'))).toBeUndefined();
+  });
+
+  test('rejects a version that drifted', () => {
+    expect(lockstepProblem(sdk, calls('0.3.0', '^0.4.0'))).toContain('0.3.0');
+  });
+
+  test('rejects a stale peer range', () => {
+    expect(lockstepProblem(sdk, calls('0.4.0', '^0.3.0'))).toContain('^0.3.0');
+  });
+
+  test('tags each package under its own prefix', () => {
+    expect(resolveRelease('0.4.0', [], 'sdk-calls')).toMatchObject({
+      tag: 'sdk-calls-v0.4.0',
+    });
+  });
+
+  test('a placeholder publish does not block the first real release', () => {
+    expect(
+      resolveRelease('0.4.0', ['0.0.0-bootstrap.0'], 'sdk-calls').kind,
+    ).toBe('release');
+  });
+
+  test('the committed manifests agree', async () => {
+    const sdkManifest = await readManifest();
+    const callsManifest = await readCallsManifest();
+    expect(lockstepProblem(sdkManifest, callsManifest)).toBeUndefined();
+    expect(callsManifest.peerDependencies?.['@macro-inc/sdk']).toBe(
+      callsPeerRange(sdkManifest.version),
+    );
   });
 });

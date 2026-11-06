@@ -14,6 +14,41 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
+- `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`)
+  in order: code steps through the `RoutineCode` port (the harness's Deno
+  executor, with the owner's access) and at most one agent ("Ask
+  AI") step through `target_runner.rs`. An old single-agent task runs as one
+  agent step. Event trigger conditions are answered before a run starts
+  (`event_runs/condition.rs`), not by the runner.
+  `run_context` builds what code receives: the trigger's time (not the
+  clock), the schedule's zone or else the owner's, and the previous run
+  (`ScheduledActionRepo::run_history`, skipped runs excluded). Every tool and
+  code step's output is recorded on its step and the run records its `run`
+  info, for the run page.
+- `src/domain/code_check.rs`: saving a routine gives its steps ids, type-checks
+  all its code steps together and stamps the task's `sdk` (the version from
+  `routine_program::code_version`); unchanged code already checked against the
+  current version isn't checked again. `GET /scheduled-actions/code/starters`
+  (the starter routines, none where code can't be saved) serves the
+  new-routine flow.
+- `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
+  /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
+  change to a code step from the person's words (Draft it and the step
+  boxes in the web editor). It admits the work as automation usage, writes
+  through the `DraftModel` port (the harness's `routine_drafts.rs`), checks
+  code steps together as saving does, and has the model fix failures up to
+  three times; what's left comes back on its step. Before writing code, the
+  model names the SDK symbols it will use from the entity indexes, and
+  `RoutineCode::symbol_references` adds their full reference (as code mode's
+  ReadCodeDocs reads it) and the types they name; without those, nearly
+  every first draft failed the type check. The caller sends the
+  names and ids the model may use (`Workspace`); saving checks every id.
+- `src/domain/code_upgrade.rs`: before a run uses code checked against an
+  older version (SDK or `StepContext`), it is checked again, and rewritten by
+  a model only if that fails (once per routine and version,
+  `scheduled_action_code_upgrade`); a
+  failed rewrite pauses the routine. `sweep` does the same for every
+  enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
@@ -74,10 +109,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 
 ## Gotchas
 
-- A task's `mcp_servers` are apps the routine requires. The owner must have
-  each connected: `TargetValidation` checks on save and
-  `RoutineSessions::prepare` checks again on every run, then adds them to an
-  agent limited to selected apps. An update that omits the key is rejected
+- A task's `mcp_servers` (beside a program's `steps`, or on an old
+  single-agent task) are apps the routine requires, handed to its agent step;
+  a program with apps needs one. The owner must have each connected:
+  `TargetValidation` checks on save and `RoutineSessions::prepare` checks
+  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - An agent target is any agent the owner may run: built in, their own, or
   one on a self-hosted runtime. `TargetValidation` authorizes it on save
@@ -117,8 +153,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names
   the field. Cron schedules have 6 or 7 fields.
-- The list response carries each routine's `last_run` (latest finished run)
-  so clients can flag failures; single reads omit it. Every finished run is
+- The list response carries each routine's `last_run`, its latest finished
+  run record (what each step did), so clients can flag failures and say what
+  it did; single reads omit it. Every finished run is
   reported to the owner by the host's `RoutineRunObserver`
   (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
   as an inbox-only `routine_run_finished` notification.

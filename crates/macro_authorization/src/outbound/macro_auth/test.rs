@@ -142,6 +142,8 @@ fn preserves_access_token_organization_id() {
 #[test]
 fn maps_macro_api_token_claims() {
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
+        agent_correlation_id: None,
+        agent_session_id: None,
         agent_id: None,
         agent_via: None,
         exp: unix_timestamp() + 3_600,
@@ -164,6 +166,8 @@ fn maps_macro_api_token_claims() {
 fn maps_signed_agent_without_changing_owner_identity() {
     let agent = bot_id::MACRO_NEW_BOT_ID;
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
+        agent_correlation_id: None,
+        agent_session_id: None,
         agent_id: Some(agent.as_uuid()),
         agent_via: Some("Claude Code".into()),
         exp: unix_timestamp() + 60,
@@ -183,6 +187,8 @@ fn maps_signed_agent_without_changing_owner_identity() {
 #[test]
 fn ignores_a_client_label_without_a_signed_agent() {
     let credential = identity_from_token(JwtToken::MacroApiToken(MacroApiToken {
+        agent_correlation_id: None,
+        agent_session_id: None,
         agent_id: None,
         agent_via: Some("Claude Code".into()),
         exp: unix_timestamp() + 60,

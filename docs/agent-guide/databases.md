@@ -871,6 +871,11 @@ opens the editor. **Collapse** returns it to a small mention. Cell and schema
 edits use the same database grid and authorization as the standalone app. The
 document stores only the database reference and selected table/view, never a
 copy of its rows. See [Databases in documents](documents.md#databases-in-documents).
+Opening a row there (its row-number button, **Open record**, a board card, or a
+timeline bar) opens the database in its own split at that table and view, with
+the row highlighted or its record panel open; the card shows no record panel of
+its own. A record just created in the card still opens in place, and so does
+every record where the card has no splits to open into (call chat).
 
 The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
 row queries and operation batches from that host's API. Verify cell edits and

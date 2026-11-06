@@ -43,11 +43,12 @@ outbound = [
 ]
 # OpenAPI schemas for the vocabulary that reaches an HTTP boundary: the
 # router's DTOs, and the lifecycle events the webhook union carries.
-schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
+schema = ["activity/schema", "dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema", "trigger_context/schema"]
 # Mock and in-memory port implementations, for crates that test against this one.
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 ai_billing = { path = "../ai_billing", optional = true }
 lazy-regex = { workspace = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
@@ -89,6 +90,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
+futures = { workspace = true }
 reqwest = { workspace = true, optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 uuid = { workspace = true }

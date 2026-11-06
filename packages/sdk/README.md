@@ -69,6 +69,27 @@ web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
+#### Account managers
+
+An agent account can manage a person's account: either side asks in their DM, and
+the other side approves. An agent account can't be managed.
+
+```ts
+// As the agent, ask to manage a person's account:
+const grant = await macro.accountManagers.askToManage(person);
+// Once the person approves, the agent gets the token, once:
+const token = await grant.claimToken();
+```
+
+A person can ask instead, with `macro.accountManagers.askToBeManagedBy(agent)`. Only the
+manager can claim, so the agent approves and claims with its own client, using the grant id
+from the card in the DM: `macro.accountManagers.byId(id)`.
+
+The token is an API key for the managed account, with full access except its
+managers, API keys and other credentials, sign-in, and deleting the account. It
+lasts until either side calls `grant.revoke()`, or the managed account revokes it
+in Settings → Account Managers.
+
 #### Bot token
 
 ```ts
@@ -550,6 +571,30 @@ when mutations invalidate metadata. `update`, `cancel`, `invite(email)`,
 `inviteUsers(users)`, `invitePermissions` and `webUrl` live on the meeting.
 `call.meeting()` creates or reads its shareable meeting; calls also expose
 `editTranscript(assignments)` and `toggleTeamShare()`.
+
+### Programmatic calls
+
+Use `macro.calls.active()` to find joinable live calls and reconcile missed
+`call.*` events. `macro.calls.summaries(calls)` previews live or archived call
+handles in one request. `channel.activeCall()` checks without starting a call; use
+`channel.startCall()` only when intending to ring channel members. A live
+`call.join()` never creates a replacement call. `meeting.join()` enters with
+an account and `meeting.joinAsGuest(name)` uses the invitation link.
+
+Each entry returns a `CallConnection` with the LiveKit URL, token, identity,
+room name, call handle, and `started` flag. Pass the token directly to a
+LiveKit client; it is omitted from JSON and console inspection. Call
+`connection.leave()` when finished. Joins default to `onOtherCall: 'fail'`;
+pass `{ onOtherCall: 'switch' }` to move intentionally, or `{ replace: true }`
+to take over an existing connection for the same identity. Branch on
+`InOtherCallError`, `AlreadyConnectedError`, and `CallEndedError`.
+
+`call.ringState()` reads this account's ring state, `call.participants()` reads
+the live roster with user handles, `call.decline()` declines its ring,
+`call.discussion()` returns the call chat or its channel thread, and
+`call.recording.bytes()` downloads through the Macro host. Historical
+participants remain available as `call.historicParticipants()`.
+
 
 `calendar.occurrences(viewport)` auto-paginates and seeds event handles.
 `calendar.teamPage(viewport)` includes the roster and an optional next cursor;

@@ -4,7 +4,7 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import type { SearchOpts } from '../search';
+import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { ChannelActivity } from './activity';
@@ -15,12 +15,12 @@ import { ChannelLabelsNamespace } from './labels';
 const CHANNEL_PAGE_SIZE = 100;
 
 /**
- * @routing Use when reading or sending channel and direct messages, posting a poll, reacting, managing members, or WhatsApp and external chats; not email.
+ * @routing Use when reading or sending channel and direct messages, posting a poll, reacting or managing members; not email, or WhatsApp and other external chats (`macro.externalChats`).
  *
  * @agent
  * ## Polls
  *
- * A form for a channel is a poll: one required single- or multi-select question (`widget: "choice"`, or `"checkboxes"` for several answers), `status: "open"`, `tallyVisible: true` unless asked to hide results, and `channelGrants: []`. Post it as one message with its live card on its own line:
+ * A form for a channel is a poll: one required single- or multi-select question (`widget: "choice"`, or `"checkboxes"` for several answers), `status: "open"`, `tallyVisible: true`, and `channelGrants: []`. Post it as one message with its live card on its own line:
  *
  * `<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>`
  *
