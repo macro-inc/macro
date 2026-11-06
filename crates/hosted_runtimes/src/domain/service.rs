@@ -327,8 +327,10 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             Err(ReserveError::Storage(error)) => return Err(internal(error)),
         }
 
-        self.confirm_payment(computer_id, &request.extra_items)
-            .await?;
+        if matches!(request.billing, PurchaseBilling::Stripe) {
+            self.confirm_payment(computer_id, &request.extra_items)
+                .await?;
+        }
 
         Ok(computer_id)
     }

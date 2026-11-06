@@ -183,6 +183,12 @@ impl ComputerRepo for FakeRepo {
         );
         computer.state = state;
         let mut outbox = self.effects.lock().unwrap();
+        if !matches!(computer.state.phase, Phase::PendingPayment { .. }) {
+            outbox.retain(|pending| {
+                pending.computer_id != computer_id
+                    || !matches!(pending.effect, Effect::ConfirmPayment { .. })
+            });
+        }
         for effect in effects {
             if let Effect::Create { generation, .. } = &effect {
                 computer.enrollment_generation = *generation;

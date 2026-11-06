@@ -222,6 +222,15 @@ impl PgComputerRepo {
             }
         }
 
+        if !matches!(state.phase, Phase::PendingPayment { .. }) {
+            sqlx::query!(
+                "DELETE FROM hosted_runtime_effect WHERE computer_id = $1 AND worker = 'billing' AND effect->>'effect' = 'confirm_payment'",
+                computer_id.as_uuid(),
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+
         let destroyed = state.phase == Phase::Destroyed;
         if destroyed {
             sqlx::query!(

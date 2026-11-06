@@ -86,9 +86,13 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: StripePriceId, quantity }`, quantity
   added to the item's current quantity), invoiced at once with proration. In-process
   in authentication_service, and on the internal route `POST /internal/computers`.
-  Persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect together
-  before billing. Serialize payment resolution through its lifecycle write with
-  the per-computer payment guard. Both the normal path and the two-minute safety net use
+  For Stripe, persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect
+  together before billing. Apply `PaymentConfirmed` in the purchase request as
+  soon as Stripe succeeds, atomically clearing the recovery effect. Only unknown
+  outcomes (provider errors or lost writes) wait for delayed confirmation;
+  confirmed computers make recovery a no-op. Serialize payment resolution through
+  its lifecycle write with the per-computer payment guard. Both the normal path
+  and the two-minute safety net use
   `computer-add:{computer_id}` and the same extra items. Unknown outcomes stay
   pending and retry indefinitely with capped backoff; definite refusals become
   `PaymentFailed`, visible without holding capacity and clearable by release.
@@ -109,10 +113,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `POST /internal/computers` requires explicit `billing: { "kind": "stripe" }`
   or `{ "kind": "comped", "reason": "..." }`; its quote route remains Stripe.
   Comped purchases reject nonempty `extraItems` and never call the Billing port.
-  Reservation persists `state.comp_reason` before the delayed confirmation effect;
-  normal purchase and crash recovery apply `Event::Comped { reason }` to begin
-  provisioning. `PaymentOutcome::Comped` serializes as `"comped"`, with the
-  reason exposed separately as `ComputerStatus.compReason: string | null`.
+  Reservation applies `Event::Comped { reason }` in the reservation transaction
+  to begin provisioning before commit; `PendingPayment` is never observable and
+  no `ConfirmPayment` effect is emitted. Legacy pending comps can still recover
+  through the billing worker. `PaymentOutcome::Comped` serializes as `"comped"`,
+  with the reason exposed separately as `ComputerStatus.compReason: string | null`.
   Payment and reason remain latched through release. The optional persisted reason
   is absent on legacy Stripe rows; no migration is required.
   Comped computers never carry a charged subscription item, emit

@@ -207,20 +207,11 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             .iter()
             .map(|pending| pending.effect.clone())
             .collect::<Vec<_>>(),
-        vec![
-            Effect::ConfirmPayment {
-                extra_items: vec![SubscriptionItem {
-                    price_id: crate::domain::models::StripePriceId::parse("price_agent_seat")
-                        .unwrap(),
-                    quantity: 1
-                }]
-            },
-            Effect::Create {
-                host: HOST,
-                start: true,
-                generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
-            }
-        ]
+        vec![Effect::Create {
+            host: HOST,
+            start: true,
+            generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
+        }]
     );
 }
 
@@ -267,7 +258,7 @@ async fn declined_payment_drops_the_reservation() {
         Phase::PaymentFailed
     );
     service.repo.effect_run_after.lock().unwrap().clear();
-    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+    assert_eq!(service.run_billing_effects().await.unwrap(), 0);
     assert_eq!(
         *service.billing.calls.lock().unwrap(),
         vec!["quote", "add_computer"]
@@ -827,7 +818,7 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
         FakeBilling::default(),
         FixedClock,
     );
-    service
+    let computer_id = service
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
@@ -839,6 +830,19 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
         })
         .await
         .unwrap();
+    service
+        .repo
+        .effects
+        .lock()
+        .unwrap()
+        .push(crate::domain::ports::PendingEffect {
+            id: 100,
+            computer_id,
+            effect: Effect::ConfirmPayment {
+                extra_items: vec![],
+            },
+            attempts: 0,
+        });
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
