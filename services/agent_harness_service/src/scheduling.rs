@@ -96,14 +96,20 @@ impl SchedulingRuntime {
     }
 }
 
+/// The models routines use: the drafter's, billed as automation, and the
+/// same model for suggestions, which aren't billed.
+pub struct RoutineModels {
+    pub drafts: crate::routine_drafts::ModelDrafts,
+    pub suggestions: crate::routine_drafts::ModelDrafts,
+}
+
 /// Compose routine scheduling and event workers alongside the harness API.
 pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
     code: Option<crate::routine_code::SdkRoutineCode>,
-    drafter: crate::routine_drafts::ModelDrafts,
-    suggester: crate::routine_drafts::ModelDrafts,
+    models: RoutineModels,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -308,7 +314,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 
     // AI drafts routines as their owner would save them, checking code
     // with the same checker.
-    let drafts = RoutineDrafts::new(Arc::clone(&code), Arc::new(drafter), ai_admission)
+    let drafts = RoutineDrafts::new(Arc::clone(&code), Arc::new(models.drafts), ai_admission)
         .with_conditions_enabled(conditions_enabled);
     let suggestion_code = Arc::clone(&code);
     let service = Arc::new(
@@ -353,7 +359,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 db: db.clone(),
             }),
             suggestion_code,
-            Arc::new(suggester),
+            Arc::new(models.suggestions),
             template_flags.clone(),
             conditions_enabled,
             lifecycle.workers.clone(),
