@@ -45,6 +45,20 @@ each run.
   ReadCodeDocs reads it) and the types they name; without those, nearly
   every first draft failed the type check. The caller sends the
   names and ids the model may use (`Workspace`); saving checks every id.
+- `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
+  suggestions, `GET /scheduled-actions/suggestions` (starts a generation
+  when due), `POST .../suggestions/refresh` and `.../suggestions/{id}/dismiss`.
+  A generation reads the person's newest mail from the provider and their
+  workspace (a fixed dry-run code step, `suggestions/signals.ts`) and has AI
+  pick catalog routines with knob values, or describe a request the
+  drafter writes on accept. `suggestions/decode.rs` is the trust boundary:
+  only offered catalog keys, bounded one-line knob values that fit their
+  knob, and one-line requests survive; `safeDefault` comes from the catalog,
+  never from AI. Generations rerun when inboxes, tools or routines change
+  (a fingerprint), weekly, or 15 minutes after a failure; one claims the
+  person's row, so a late result from an older one is dropped.
+  `pg_suggestion_repo.rs` keeps dismissed rows so "not interested" outlives
+  each generation.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,
@@ -161,6 +175,14 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   reported to the owner by the host's `RoutineRunObserver`
   (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
   as an inbox-only `routine_run_finished` notification.
+- Suggestions require the caller's `enable-routine-suggestions` PostHog flag
+  on every route, as templates require theirs; nothing is read or generated
+  without it. Generation is metered as the non-billable
+  `AiFeature::RoutineSuggestions`; drafting a request on accept stays
+  automation usage.
+- `suggestion_id` (create with `?suggestion_id=`) is a plain pointer like
+  `template_id`: it marks that suggestion taken only for the routine's own
+  owner, so a forged id hides nothing of anyone else's.
 - `template_id` is a plain pointer, not a foreign key: activated routines keep
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is

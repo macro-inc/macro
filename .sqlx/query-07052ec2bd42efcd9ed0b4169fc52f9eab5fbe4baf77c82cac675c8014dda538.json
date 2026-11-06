@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.surface, s.catalog_key, s.knob_values, s.title, s.request, s.reason,\n                   s.keep_probability\n            FROM routine_suggestion s\n            WHERE s.user_id = $1 AND s.state = 'open'\n              AND NOT EXISTS (SELECT 1 FROM scheduled_action a WHERE a.owner = s.user_id AND a.suggestion_id = s.id)\n            ORDER BY s.position\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "surface",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "catalog_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "knob_values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "request",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "keep_probability",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "07052ec2bd42efcd9ed0b4169fc52f9eab5fbe4baf77c82cac675c8014dda538"
+}

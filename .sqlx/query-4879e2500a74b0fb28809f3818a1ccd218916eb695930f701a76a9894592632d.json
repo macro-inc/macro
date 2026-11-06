@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,\n                   description\n            FROM scheduled_action\n            WHERE enabled AND trigger_type IN ('cron', 'multiple') AND next_run_at IS NOT NULL\n              AND (claimed IS NULL OR claimed < $1)\n            ORDER BY next_run_at ASC, id ASC\n            LIMIT $2\n            ",
+  "query": "\n            INSERT INTO scheduled_action\n                (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,\n                 trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,\n                 run_visibility, template_id, suggestion_id, description)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,\n                   description\n            ",
   "describe": {
     "columns": [
       {
@@ -100,14 +100,35 @@
       },
       {
         "ordinal": 19,
+        "name": "suggestion_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 20,
         "name": "description",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
         "Timestamptz",
-        "Int8"
+        "Bool",
+        "Text",
+        "Jsonb",
+        "Int8",
+        "Timestamptz",
+        "Jsonb",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
@@ -130,8 +151,9 @@
       true,
       false,
       true,
+      true,
       false
     ]
   },
-  "hash": "aac9a77951f06fc164c5ed1ec2b608b9691894b3003f854c9b9f139d0a0740bd"
+  "hash": "4879e2500a74b0fb28809f3818a1ccd218916eb695930f701a76a9894592632d"
 }

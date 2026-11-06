@@ -74,6 +74,11 @@ Pulumi stacks; they do not host extra agent processes.
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access attributed to Macro
   acting for them, so a step's writes don't start routines.
+  Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
+  newest mail through email_service's internal recent-messages route, the
+  person's inboxes from MacroDB, and no detected tools until onboarding's
+  tool suggestions land; the model is the drafter's, metered as the
+  non-billable `RoutineSuggestions`, gated on `enable-routine-suggestions`.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).

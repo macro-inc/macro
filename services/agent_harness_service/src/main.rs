@@ -724,6 +724,10 @@ async fn run() -> anyhow::Result<()> {
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         routine_code,
         routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
+        routine_drafts::ModelDrafts::for_feature(
+            Arc::clone(&recorder),
+            ai_usage::AiFeature::RoutineSuggestions,
+        ),
         http_ready,
         Arc::clone(&notifications),
     )

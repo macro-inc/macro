@@ -210,6 +210,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         template_id: Option<Uuid>,
+        suggestion_id: Option<Uuid>,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -251,6 +252,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
                 next_run_at,
                 claimed: None,
                 template_id,
+                suggestion_id,
                 description,
             })
             .await?;
@@ -503,7 +505,7 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, None).await
+        self.create(principal, input, None, None).await
     }
 
     async fn create_action_from_template(
@@ -512,7 +514,17 @@ where
         input: ActionConfiguration,
         template_id: Uuid,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, Some(template_id)).await
+        self.create(principal, input, Some(template_id), None).await
+    }
+
+    async fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
+    ) -> Result<ScheduledAction> {
+        self.create(principal, input, None, Some(suggestion_id))
+            .await
     }
 
     async fn get_actions(

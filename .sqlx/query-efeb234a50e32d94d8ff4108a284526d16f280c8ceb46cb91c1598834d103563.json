@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE routine_suggestion SET state = 'dismissed', updated_at = now()\n            WHERE id = $1 AND user_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "efeb234a50e32d94d8ff4108a284526d16f280c8ceb46cb91c1598834d103563"
+}

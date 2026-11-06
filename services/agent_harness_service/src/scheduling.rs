@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use email_service_client::EmailServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
@@ -14,10 +15,11 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;
+mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::drafts::RoutineDrafts;
@@ -28,6 +30,7 @@ use scheduled_action::domain::event_runs::{
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
+use scheduled_action::domain::suggestions::RoutineSuggestionService;
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
@@ -35,6 +38,9 @@ use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, schedul
 use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::inbound::suggestion_router::{
+    RoutineSuggestionRouterState, routine_suggestion_router,
+};
 use scheduled_action::inbound::template_router::{
     RoutineTemplateRouterState, routine_template_router,
 };
@@ -50,6 +56,7 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
@@ -96,6 +103,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     harness_address: std::net::SocketAddr,
     code: Option<crate::routine_code::SdkRoutineCode>,
     drafter: crate::routine_drafts::ModelDrafts,
+    suggester: crate::routine_drafts::ModelDrafts,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -302,6 +310,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // with the same checker.
     let drafts = RoutineDrafts::new(Arc::clone(&code), Arc::new(drafter), ai_admission)
         .with_conditions_enabled(conditions_enabled);
+    let suggestion_code = Arc::clone(&code);
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -330,6 +339,28 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         })
         .transpose()
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    // Suggestions read the newest mail through email_service, which reads it
+    // from the provider, and run in the background on the worker tracker.
+    let suggestion_state = RoutineSuggestionRouterState {
+        service: Arc::new(RoutineSuggestionService::new(
+            Arc::clone(&service),
+            Arc::new(PgSuggestionRepo::new(db.clone())),
+            Arc::new(routine_suggestions::HarnessSuggestionSources {
+                email: Arc::new(EmailServiceClient::new(
+                    config.internal_api_key.to_string(),
+                    EmailServiceUrl::new()?.to_string(),
+                )),
+                db: db.clone(),
+            }),
+            suggestion_code,
+            Arc::new(suggester),
+            template_flags.clone(),
+            conditions_enabled,
+            lifecycle.workers.clone(),
+            lifecycle.stop_workers.clone(),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
@@ -350,7 +381,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     };
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
-        .merge(routine_draft_router::<_, _, ()>(draft_state));
+        .merge(routine_draft_router::<_, _, ()>(draft_state))
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
