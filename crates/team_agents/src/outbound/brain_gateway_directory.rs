@@ -39,7 +39,7 @@ impl<Keys: UserApiKeyAuthorizer, Agents: TeamAgentRepository, Teams: TeamReposit
         let Ok(owner) = self.keys.authorize_user_api_key(key.expose()).await else {
             return Ok(None);
         };
-        let user_id = MacroUserIdStr::parse_from_str(&owner.user_id)
+        let user_id = MacroUserIdStr::parse_from_str(&owner.user_context.user_id)
             .map_err(|_| BrainGatewayError::Unauthorized)?
             .into_owned();
         let agent = self

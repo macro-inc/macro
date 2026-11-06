@@ -2200,3 +2200,53 @@ async fn included_seat_provenance_survives_removal_rollback(
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_user_display_name_joins_the_set_name_parts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    for statement in [
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
+            ('b1111111-1111-1111-1111-111111111111', 'full@example.com', 'full@example.com', 'cus_full'),
+            ('b2222222-2222-2222-2222-222222222222', 'first@example.com', 'first@example.com', 'cus_first'),
+            ('b3333333-3333-3333-3333-333333333333', 'unset@example.com', 'unset@example.com', 'cus_unset'),
+            ('b4444444-4444-4444-4444-444444444444', 'none@example.com', 'none@example.com', 'cus_none')"#,
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES
+            ('macro|full@example.com', 'full@example.com', 'b1111111-1111-1111-1111-111111111111'),
+            ('macro|first@example.com', 'first@example.com', 'b2222222-2222-2222-2222-222222222222'),
+            ('macro|unset@example.com', 'unset@example.com', 'b3333333-3333-3333-3333-333333333333'),
+            ('macro|none@example.com', 'none@example.com', 'b4444444-4444-4444-4444-444444444444')"#,
+        r#"INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES
+            ('b1111111-1111-1111-1111-111111111111', 'Ada', 'Lovelace'),
+            ('b2222222-2222-2222-2222-222222222222', 'Grace', 'N/A'),
+            ('b3333333-3333-3333-3333-333333333333', 'N/A', NULL)"#,
+    ] {
+        sqlx::query(statement).execute(&pool).await?;
+    }
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let mut names = Vec::new();
+    for user in [
+        "macro|full@example.com",
+        "macro|first@example.com",
+        "macro|unset@example.com",
+        "macro|none@example.com",
+        "macro|missing@example.com",
+    ] {
+        let user = MacroUserIdStr::parse_from_str(user)?;
+        names.push(team_repo.get_user_display_name(&user).await?);
+    }
+
+    assert_eq!(
+        names,
+        [
+            Some("Ada Lovelace".to_string()),
+            Some("Grace".to_string()),
+            None,
+            None,
+            None,
+        ]
+    );
+
+    Ok(())
+}

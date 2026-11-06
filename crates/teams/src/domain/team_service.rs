@@ -1379,6 +1379,17 @@ where
             .ok();
     }
 
+    /// The inviter's display name for invite emails. The email falls back to the
+    /// inviter's address, so a failed lookup is logged rather than failing the invite.
+    async fn inviter_name(&self, inviter: &MacroUserIdStr<'_>) -> Option<String> {
+        self.team_repository
+            .get_user_display_name(inviter)
+            .await
+            .inspect_err(|e| tracing::warn!(error=?e, "unable to look up the inviter's name"))
+            .ok()
+            .flatten()
+    }
+
     /// Sends an invite notification for a team invite
     #[tracing::instrument(skip(self), err)]
     async fn send_invite_notification(
@@ -1707,6 +1718,7 @@ where
             && let Some(team_name) = team_name.clone()
         {
             let invited_by_owned = invited_by.clone().into_owned();
+            let inviter_name = self.inviter_name(invited_by).await;
             let mut sent_invite_ids = Vec::new();
             for invite in &invited {
                 if self
@@ -1724,6 +1736,7 @@ where
                             invitee_plan,
                             reminder: false,
                             is_agent: invite.is_agent,
+                            inviter_name: inviter_name.clone(),
                         },
                     )
                     .await

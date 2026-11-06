@@ -1386,6 +1386,33 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_user_display_name(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<String>, TeamError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                NULLIF(mui.first_name,  'N/A') AS first_name,
+                NULLIF(mui.last_name,   'N/A') AS last_name
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = $1
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.and_then(|row| match (row.first_name, row.last_name) {
+            (None, None) => None,
+            (Some(name), None) | (None, Some(name)) => Some(name),
+            (Some(first), Some(last)) => Some(format!("{first} {last}")),
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn patch_team(
         &self,
         team_id: &uuid::Uuid,

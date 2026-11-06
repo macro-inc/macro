@@ -11,8 +11,8 @@ use axum::{
 };
 use harness_id::HarnessId;
 use macro_authorization::{
-    HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    AccountHolderOrInternal, HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use serde::Serialize;
@@ -205,7 +205,7 @@ pub async fn get_pairing_handler<S: HarnessService, Auth: MacroAuthorizationServ
 )]
 pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     Path(path): Path<PairingCodePath>,
     Json(req): Json<ApprovePairingRequest>,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {

@@ -9,7 +9,11 @@ email over `/team_agents` in the auth service.
 
 ## How it works
 
-`POST /team_agents` (team admins, `enable-team-agents`) → validate → mailbox
+Creation uses `AccountHolderOrInternal`: account-manager credentials may not
+provision lasting agent credentials. Retry reuses existing bootstrap credentials
+and never mints an API key.
+
+`POST /team_agents` (team admins using their own credential, `enable-team-agents`) → validate → mailbox
 → account rows + `team_agents` row (one transaction, `"User"."isAgent"`) →
 `TeamService::add_team_agent` (joins without a Stripe call; returns the seat
 item) → user API key → workspace repo (`agent_git`) → `Computers::purchase`

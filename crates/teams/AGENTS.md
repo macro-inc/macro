@@ -93,6 +93,10 @@ event contract (schema, sanitization, delivery semantics).
 - Legacy `POST /team/invite` with `is_agent: true` loads the same per-caller
   `enable-team-agents` snapshot through `AgentInviteRollout` and fails closed
   before any billing or invitation effects. Human invitations do not load flags.
+- Invite and reminder emails carry the inviter's display name
+  (`TeamRepository::get_user_display_name`). A failed lookup is logged and the
+  email falls back to the inviter's address, so it never blocks an invite.
+
 - `team_invite.is_agent` makes an address with no account sign up as an agent.
   `authentication_service`'s agent setup joins the team, so the seat is added
   without a separate acceptance. Existing accounts accept like any other invite.

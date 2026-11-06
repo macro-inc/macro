@@ -17,7 +17,8 @@ use entity_access::{
     inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOrInternal,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -332,6 +333,7 @@ where
 )]
 #[tracing::instrument(err, skip_all)]
 pub async fn create_team_agent_handler<S, Eas, Auth>(
+    _authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
     Json(body): Json<CreateTeamAgent>,
