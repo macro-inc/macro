@@ -69,6 +69,12 @@
       # the Rust source hash.
       routineStartersFilter =
         path: _type: builtins.match ".*/crates/routine_program/src/starters/[^/]*\\.ts$" (toString path) != null;
+      # `services/mcp_auth_proxy` includes this stylesheet from its Askama templates.
+      # Only this directory: matching every `.css` would pull the web app into the
+      # Rust source hash.
+      mcpAuthTemplatesFilter =
+        path: _type:
+        builtins.match ".*/services/mcp_auth_proxy/templates/[^/]*\\.css$" (toString path) != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       # xtask_local embeds the local stack's development API-token keys.
@@ -83,6 +89,7 @@
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (routineStartersFilter path type)
+        || (mcpAuthTemplatesFilter path type)
         || (binFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
