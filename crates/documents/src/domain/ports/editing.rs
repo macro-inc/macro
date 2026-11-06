@@ -13,6 +13,8 @@ pub struct EditResult {
     /// If set, the worker needs more information. Invoke again with the
     /// requested details appended to the instructions.
     pub clarification: Option<String>,
+    /// The document's version after the edit, as sync-service encodes it.
+    pub revision: Option<String>,
 }
 
 /// Token usage for one model used by the editing worker.
@@ -73,12 +75,14 @@ pub enum CommentMarkPlacement {
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
     /// Inspect or edit the live Canvas CRDT using a scoped permission token.
+    /// `artifacts` says whether the requesting user has the artifacts rollout.
     #[cfg(feature = "ai_tools")]
     fn canvas(
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
+        artifacts: bool,
     ) -> impl Future<Output = anyhow::Result<crate::domain::canvas::CanvasResult>> + Send;
 
     /// Run a deterministic spreadsheet operation with a scoped document token.

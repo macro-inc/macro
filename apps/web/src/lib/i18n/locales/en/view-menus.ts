@@ -1,4 +1,9 @@
 export default {
+  crmVisibility: 'Visibility',
+  crmVisible: 'Visible',
+  crmArchived: 'Archived',
+  crmArchive: 'Archive',
+  crmRestore: 'Restore',
   // View tabs
   favorites: 'Favorites',
   scheduled: 'Scheduled',
@@ -75,6 +80,7 @@ export default {
   groupList: 'Group list',
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
+  showHiddenRoutineRuns: 'Show hidden routine runs',
 
   // Filter menu
   filter: 'Filter',
@@ -117,6 +123,8 @@ export default {
   filterByTag: 'Filter by tag...',
   searchAssignees: 'Search assignees...',
   searchAssigneesLabel: 'Search assignees',
+  loadingTeamMembers: 'Loading team members…',
+  teamMembersUnavailable: 'Team members could not be loaded.',
   createdBy: 'Created by',
   searchCreators: 'Search creators...',
   searchCreatorsLabel: 'Search creators',

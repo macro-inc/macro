@@ -9,11 +9,16 @@ import { RoutineTriggers as TriggerList } from './components/routine-triggers';
 import {
   type EventTriggerDraft,
   eventScopeKind,
-  isGlobalEvent,
   type RoutineTriggerDraft,
+  taskTriggerProperty,
+  withPropertyValues,
 } from './core/routine-triggers';
 import { createGithubConnection } from './queries/github-link';
 import { createGithubRepositoryOptions } from './queries/github-repositories';
+import {
+  RoutineEventPropertyValues,
+  RoutineEventValueLabel,
+} from './routine-event-property';
 import {
   RoutineEventScope,
   RoutineEventScopeLabel,
@@ -38,6 +43,7 @@ function RepositoryScopeLabel(props: { trigger: EventTriggerDraft }) {
 export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
+  layout?: 'rows' | 'add' | 'inline';
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
   const github = createGithubConnection();
@@ -60,6 +66,7 @@ export function RoutineTriggers(props: {
     <TriggerList
       triggers={props.triggers}
       onChange={props.onChange}
+      layout={props.layout === 'add' ? 'add' : 'rows'}
       renderEventGroup={(group, options) => (
         <Show
           when={group !== 'GitHub' || github().linked !== false}
@@ -78,26 +85,45 @@ export function RoutineTriggers(props: {
           : undefined
       }
       renderEventSettings={(trigger, onChange) => (
-        <Show when={trigger().github}>
-          {(selector) => (
-            <Show
-              when={github().linked !== false}
-              fallback={connect(
-                'GitHub isn’t connected, so this trigger can’t run. Connect it to turn the routine on.'
-              )}
-            >
-              <RoutineGithubSettings
-                selector={selector()}
-                repositories={repositories()}
-                onChange={(github) => onChange({ github })}
+        <>
+          <Show when={taskTriggerProperty(trigger())}>
+            {(property) => (
+              <RoutineEventPropertyValues
+                property={property()}
+                values={trigger().property?.values ?? []}
+                onChange={(values) =>
+                  onChange({
+                    property: withPropertyValues(
+                      trigger(),
+                      property().definitionId,
+                      values
+                    ).property,
+                  })
+                }
               />
-              <RoutinePayloadTests
-                tests={trigger().match ?? []}
-                onChange={(match) => onChange({ match })}
-              />
-            </Show>
-          )}
-        </Show>
+            )}
+          </Show>
+          <Show when={trigger().github}>
+            {(selector) => (
+              <Show
+                when={github().linked !== false}
+                fallback={connect(
+                  'GitHub isn’t connected, so this trigger can’t run. Connect it to turn the routine on.'
+                )}
+              >
+                <RoutineGithubSettings
+                  selector={selector()}
+                  repositories={repositories()}
+                  onChange={(github) => onChange({ github })}
+                />
+                <RoutinePayloadTests
+                  tests={trigger().match ?? []}
+                  onChange={(match) => onChange({ match })}
+                />
+              </Show>
+            )}
+          </Show>
+        </>
       )}
       renderEventLabel={(trigger) => (
         <Show
@@ -106,6 +132,14 @@ export function RoutineTriggers(props: {
         >
           {(kind) => (
             <Suspense fallback={<span>Selected items</span>}>
+              <Show when={taskTriggerProperty(trigger())}>
+                {(property) => (
+                  <RoutineEventValueLabel
+                    property={property()}
+                    values={trigger().property?.values ?? []}
+                  />
+                )}
+              </Show>
               <RoutineEventScopeLabel
                 kind={kind()}
                 ids={trigger().ids}
@@ -118,17 +152,11 @@ export function RoutineTriggers(props: {
       renderEventScope={(trigger, onChange) => (
         <Show when={entityKind(trigger())}>
           {(kind) => (
-            <Show
-              when={
-                !isGlobalEvent(trigger().events) || trigger().ids !== undefined
-              }
-            >
-              <RoutineEventScope
-                kind={kind()}
-                ids={trigger().ids}
-                onChange={onChange}
-              />
-            </Show>
+            <RoutineEventScope
+              kind={kind()}
+              ids={trigger().ids}
+              onChange={onChange}
+            />
           )}
         </Show>
       )}

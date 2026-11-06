@@ -71,6 +71,7 @@ const snapshot: AgentActivityRow[] = [
 function reply(rows: ActivityRow[]): FoldedMessage {
   return {
     agentSessionId: 'session',
+    key: '2:agent',
     turn: 2,
     author: { kind: 'agent' },
     requestId: null,

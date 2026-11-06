@@ -44,6 +44,7 @@ function lunchPoll(access: FormDetail['access']): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -167,10 +168,7 @@ describe('FormCardView poll', () => {
 
   it('expands Results in place when the voters arrive after the card first renders', () => {
     const [loaded, setLoaded] = createSignal(false);
-    const named = tallyOf(namedVoters)(
-      () => 'poll-1',
-      () => true
-    );
+    const named = tallyOf(namedVoters)(() => 'poll-1');
     const late: FormContext['responses']['createTally'] = () => ({
       value: () => (loaded() ? named.value() : undefined),
       failure: () => undefined,

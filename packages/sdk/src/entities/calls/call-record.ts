@@ -12,7 +12,7 @@ import {
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
 import { CallMessage } from './message';
@@ -75,6 +75,16 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
     return unwrap(
       await this.client.storage.getCallRecord({ path: { call_id: this.id } }),
     );
+  }
+
+  /** The call's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/call/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to a call record by id. Details load on first access. */

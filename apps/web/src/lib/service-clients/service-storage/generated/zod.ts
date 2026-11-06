@@ -7,6 +7,273 @@
 import * as zod from 'zod';
 
 /**
+ * @summary List the managers of the caller's account.
+ */
+export const listAccountManagersResponse = zod
+  .object({
+    grants: zod
+      .array(
+        zod
+          .object({
+            claimedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the manager claimed the credential.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the request was made.'),
+            expiresAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the pending request or unclaimed approval stops being usable.'
+              ),
+            id: zod.uuid().describe('Grant id.'),
+            lastUsedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the credential was last used, to the minute.'),
+            managedUserId: zod.string().describe('The account being managed.'),
+            managerUserId: zod
+              .string()
+              .describe('The agent account doing the managing.'),
+            requestedBy: zod
+              .enum(['managed', 'manager'])
+              .describe('One side of a grant.'),
+            status: zod
+              .enum([
+                'pending',
+                'approved',
+                'declined',
+                'active',
+                'revoked',
+                'expired',
+              ])
+              .describe('Where a grant is in its lifecycle.'),
+          })
+          .describe('A request for manager access and what became of it.')
+      )
+      .describe("Approved and active grants on the caller's account."),
+  })
+  .describe("The managers of the caller's account.");
+
+/**
+ * @summary Ask another account for manager access, in your DM with them.
+ */
+export const requestAccountManagerBody = zod
+  .object({
+    callerRole: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    counterpartyId: zod.string().describe('The other account (`macro|...`).'),
+  })
+  .describe('Request body for asking for a grant.');
+
+export const requestAccountManagerResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Read a grant the caller is part of.
+ */
+export const getAccountManagerGrantParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const getAccountManagerGrantResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary End a grant. Either side may withdraw it.
+ */
+export const revokeAccountManagerGrantParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const revokeAccountManagerGrantResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Approve or decline a request the caller didn't make.
+ */
+export const respondToAccountManagerRequestParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const respondToAccountManagerRequestBody = zod
+  .object({
+    decision: zod
+      .enum(['approve', 'decline'])
+      .describe('A response to a request.'),
+  })
+  .describe('Request body for responding to a request.');
+
+export const respondToAccountManagerRequestResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Issue the credential to the manager. Works once. A POST, so link previews
+and crawlers can't use it up.
+ */
+export const claimAccountManagerTokenParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const claimAccountManagerTokenResponse = zod
+  .object({
+    grant: zod
+      .object({
+        claimedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the manager claimed the credential.'),
+        createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+        expiresAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'When the pending request or unclaimed approval stops being usable.'
+          ),
+        id: zod.uuid().describe('Grant id.'),
+        lastUsedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the credential was last used, to the minute.'),
+        managedUserId: zod.string().describe('The account being managed.'),
+        managerUserId: zod
+          .string()
+          .describe('The agent account doing the managing.'),
+        requestedBy: zod
+          .enum(['managed', 'manager'])
+          .describe('One side of a grant.'),
+        status: zod
+          .enum([
+            'pending',
+            'approved',
+            'declined',
+            'active',
+            'revoked',
+            'expired',
+          ])
+          .describe('Where a grant is in its lifecycle.'),
+      })
+      .describe('A request for manager access and what became of it.'),
+    token: zod.string().describe('The secret. Shown only once.'),
+  })
+  .describe('The credential, returned only by the claim that issued it.');
+
+/**
  * @summary Handler for `GET /agents`.
  */
 export const listAgentsResponseItem = zod
@@ -34,7 +301,7 @@ export const listAgentsResponseItem = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -335,7 +602,7 @@ export const updateAgentResponse = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -756,6 +1023,78 @@ export const createAnchorResponse = zod
   );
 
 /**
+ * @summary Handler for `GET /bots`: the bots the caller can manage.
+ */
+export const listBotsResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+export const listBotsResponse = zod.array(listBotsResponseItem);
+
+/**
+ * @summary Handler for `POST /bots`.
+ */
+export const createBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
+      ),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.'
+      ),
+  })
+  .describe('Request to create a bot.');
+
+/**
  * @summary Handler for `GET /bots/me`.
  */
 export const getSelfBotResponse = zod
@@ -772,7 +1111,7 @@ export const getSelfBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -859,6 +1198,130 @@ export const getBotOwnerProfilesResponse = zod.array(
 );
 
 /**
+ * @summary Handler for `GET /bots/{bot_id}`.
+ */
+export const getBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const getBotResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}`.
+ */
+export const deleteBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+/**
+ * @summary Handler for `PATCH /bots/{bot_id}`.
+ */
+export const patchBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const patchBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().nullish().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.'
+      ),
+    name: zod.string().nullish().describe('Display name.'),
+  })
+  .describe('Request to patch a bot.');
+
+export const patchBotResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+
+/**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
  */
 export const listBotChannelsParams = zod.object({
@@ -885,6 +1348,65 @@ export const listBotChannelsResponse = zod.array(listBotChannelsResponseItem);
 export const removeBotFromChannelByBotParams = zod.object({
   bot_id: zod.string().describe('Bot ID'),
   channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `GET /bots/{bot_id}/tokens`.
+ */
+export const listBotTokensParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const listBotTokensResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Expiration timestamp.'),
+    id: zod.uuid().describe('Token id.'),
+    label: zod.string().nullish().describe('Optional token label.'),
+    last_used_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last successful use.'),
+    revoked_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Revocation timestamp.'),
+    token_prefix: zod
+      .string()
+      .describe(
+        'Display prefix of the bearer token. The raw secret is never stored here.'
+      ),
+  })
+  .describe('Bot token metadata.');
+export const listBotTokensResponse = zod.array(listBotTokensResponseItem);
+
+/**
+ * @summary Handler for `POST /bots/{bot_id}/tokens`.
+ */
+export const createBotTokenParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const createBotTokenBody = zod
+  .object({
+    expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional expiration timestamp.'),
+    label: zod.string().nullish().describe('Token label.'),
+  })
+  .describe('Request to create a bot token.');
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.
+ */
+export const revokeBotTokenParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+  token_id: zod.uuid().describe('Token ID'),
 });
 
 /**
@@ -2557,6 +3079,27 @@ export const getCallRecordResponse = zod
       .describe(
         'User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`.'
       ),
+    discussion: zod
+      .union([
+        zod
+          .object({
+            channel_id: zod.uuid().describe('The channel holding the thread.'),
+            kind: zod.enum(['channel_thread']),
+            root_id: zod.uuid().describe("The thread's root message."),
+          })
+          .describe(
+            "A thread in the call's channel, rooted at the message with the call's id."
+          ),
+        zod
+          .object({
+            call_id: zod.uuid().describe('The call owning the thread.'),
+            kind: zod.enum(['call_chat']),
+          })
+          .describe("The call's own thread on the call parent."),
+      ])
+      .describe(
+        "Where a call's discussion lives, decided once when the call is created.\n`channel_id` cannot decide this: past channel calls keep their own thread."
+      ),
     durationMs: zod
       .number()
       .nullish()
@@ -3151,7 +3694,9 @@ export const listChannelLabelsResponse = zod
               .describe('Owning team, or `None` for account-private labels.'),
             updatedAt: zod.iso
               .datetime({})
-              .describe('When the label was last renamed or reordered.'),
+              .describe(
+                "When the label's name, rule, scope, or order last changed."
+              ),
           })
           .describe(
             'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -3258,7 +3803,7 @@ export const createChannelLabelResponse = zod
       .describe('Owning team, or `None` for account-private labels.'),
     updatedAt: zod.iso
       .datetime({})
-      .describe('When the label was last renamed or reordered.'),
+      .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
     'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -3354,7 +3899,7 @@ export const deleteChannelLabelQueryParams = zod.object({
 });
 
 /**
- * @summary Rename a label of the caller's authorized scope.
+ * @summary Update a label, optionally moving it to another authorized scope.
  */
 export const renameChannelLabelParams = zod.object({
   label_id: zod.uuid().describe('The label id.'),
@@ -3390,8 +3935,20 @@ export const renameChannelLabelBody = zod
           ),
       ])
       .optional(),
+    targetScope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['personal', 'team'])
+          .describe(
+            'Requested label namespace. Omission retains the deployed automatic selection.'
+          ),
+      ])
+      .optional(),
   })
-  .describe('Request body for renaming a label.');
+  .describe(
+    "Request body for updating a label's name, smart rule, or sharing scope."
+  );
 
 export const renameChannelLabelResponse = zod
   .object({
@@ -3437,7 +3994,7 @@ export const renameChannelLabelResponse = zod
       .describe('Owning team, or `None` for account-private labels.'),
     updatedAt: zod.iso
       .datetime({})
-      .describe('When the label was last renamed or reordered.'),
+      .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
     'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
@@ -3885,6 +4442,151 @@ export const patchChannelBody = zod
   .describe('Request to patch a channel.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}/access-requests/mine`.
+ */
+export const getMyChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getMyChannelAccessRequestResponse = zod
+  .object({
+    can_request: zod
+      .boolean()
+      .describe('Whether this channel accepts requests.'),
+    request: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            channel_id: zod
+              .uuid()
+              .describe('Channel the requester asked to join.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the requester asked.'),
+            id: zod.uuid().describe('Attempt id.'),
+            requester_id: zod.string(),
+            resolved_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the attempt stopped being pending.'),
+            resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+            status: zod
+              .enum(['pending', 'approved', 'denied', 'cancelled'])
+              .describe('Outcome of one attempt to join.'),
+          })
+          .describe(
+            'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+          ),
+      ])
+      .optional(),
+    retry_after: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'Earliest time the caller may ask again, while they must wait.'
+      ),
+  })
+  .describe(
+    "A requester's view of their access to a channel they cannot read."
+  );
+
+/**
+ * @summary Handler for `PUT /channels/{channel_id}/access-requests/mine`.
+ */
+export const requestChannelAccessParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const requestChannelAccessResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}/access-requests/mine`.
+ */
+export const cancelChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/access-requests/{request_id}`.
+ */
+export const getChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  request_id: zod.uuid().describe('Access request ID'),
+});
+
+export const getChannelAccessRequestResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/access-requests/{request_id}/resolve`.
+ */
+export const resolveChannelAccessRequestParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  request_id: zod.uuid().describe('Access request ID'),
+});
+
+export const resolveChannelAccessRequestBody = zod
+  .object({
+    decision: zod
+      .enum(['approve', 'deny'])
+      .describe("A participant's answer to a pending request."),
+  })
+  .describe("Body of a participant's answer.");
+
+export const resolveChannelAccessRequestResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel the requester asked to join.'),
+    created_at: zod.iso.datetime({}).describe('When the requester asked.'),
+    id: zod.uuid().describe('Attempt id.'),
+    requester_id: zod.string(),
+    resolved_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the attempt stopped being pending.'),
+    resolved_by: zod.union([zod.null(), zod.string()]).optional(),
+    status: zod
+      .enum(['pending', 'approved', 'denied', 'cancelled'])
+      .describe('Outcome of one attempt to join.'),
+  })
+  .describe(
+    'One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.'
+  );
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({
@@ -3943,6 +4645,71 @@ export const getChannelAttachmentsResponse = zod
   .describe('Paginated response of channel attachments.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}/bots`.
+ */
+export const listChannelBotsParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const listChannelBotsResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+export const listChannelBotsResponse = zod.array(listChannelBotsResponseItem);
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/bots`.
+ */
+export const addChannelBotParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const addChannelBotBody = zod
+  .object({
+    bot_id: zod.string(),
+  })
+  .describe('Request to add a bot to a channel.');
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/bots/scoped`.
  */
 export const createChannelScopedBotParams = zod.object({
@@ -3958,7 +4725,7 @@ export const createChannelScopedBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -5192,12 +5959,19 @@ export const listCrmPipelinesResponseItem = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5237,10 +6011,15 @@ export const createCrmPipelineBody = zod
   .object({
     name: zod.string().describe('Pipeline name.'),
     recordType: zod
-      .enum(['company', 'contact'])
-      .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
-      ),
+      .union([
+        zod.null(),
+        zod
+          .enum(['company', 'contact'])
+          .describe(
+            'Which CRM entity each row references. Fixed when a pipeline is created.'
+          ),
+      ])
+      .optional(),
     sharing: zod
       .enum(['private', 'team'])
       .optional()
@@ -5249,7 +6028,7 @@ export const createCrmPipelineBody = zod
       ),
   })
   .describe(
-    'Request to create an empty pipeline with the standard CRM columns.'
+    'Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.'
   );
 
 export const createCrmPipelineResponse = zod
@@ -5260,12 +6039,19 @@ export const createCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5312,12 +6098,19 @@ export const getCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -9526,6 +10319,67 @@ export const shareCrmPipelineBody = zod
       ),
   })
   .describe('Sharing input.');
+
+/**
+ * @summary Read requirements by stable stage and field identities.
+ */
+export const getCrmPipelineStageRequirementsParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getCrmPipelineStageRequirementsResponseItem = zod
+  .object({
+    requiredColumnIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Fields that must be present. Empty removes the rule for this stage.'
+      ),
+    stageColumnId: zod
+      .uuid()
+      .describe(
+        'Single-select column identifying the stage, independent of its name.'
+      ),
+    stageId: zod
+      .uuid()
+      .describe(
+        'Stable option identity; renaming the stage preserves the rule.'
+      ),
+  })
+  .describe(
+    'Fields required when a deal enters a particular option of a stage column.'
+  );
+export const getCrmPipelineStageRequirementsResponse = zod.array(
+  getCrmPipelineStageRequirementsResponseItem
+);
+
+/**
+ * @summary Replace the required fields for one stage. An empty list removes its rule.
+ */
+export const setCrmPipelineStageRequirementParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const setCrmPipelineStageRequirementBody = zod
+  .object({
+    requiredColumnIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Fields that must be present. Empty removes the rule for this stage.'
+      ),
+    stageColumnId: zod
+      .uuid()
+      .describe(
+        'Single-select column identifying the stage, independent of its name.'
+      ),
+    stageId: zod
+      .uuid()
+      .describe(
+        'Stable option identity; renaming the stage preserves the rule.'
+      ),
+  })
+  .describe(
+    'Fields required when a deal enters a particular option of a stage column.'
+  );
 
 /**
  * @summary Read the host-owned table schema.
@@ -17439,13 +18293,18 @@ export const createMarkdownHandlerResponse = zod
   .describe('Response for creating a markdown document.');
 
 /**
- * @summary Creates a skill document with initialized markdown content in one
-backend-owned lifecycle. Skills are markdown documents containing
+ * @summary Creates a skill document with initialized markdown content and its
+routing description in one backend-owned lifecycle. Skills are markdown documents containing
 instructions that AI reads and follows when the skill is referenced in an
 AI input.
  */
 export const createSkillHandlerBody = zod
   .object({
+    description: zod
+      .string()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it.'
+      ),
     markdown: zod
       .string()
       .nullish()
@@ -18283,6 +19142,37 @@ export const getSystemSkillsHandlerResponse = zod
   .describe('Response listing the built-in system skills.');
 
 /**
+ * The body is the raw file content. Preview generation and indexing may
+finish after the response.
+ * @summary Upload a file's bytes as a new document, up to 25 MiB.
+ */
+export const uploadFileQueryParams = zod.object({
+  fileName: zod
+    .string()
+    .describe(
+      'Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.'
+    ),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe(
+      'Destination project. Requires edit access; omit for top-level files.'
+    ),
+});
+
+export const uploadFileResponseSizeBytesMin = 0;
+
+export const uploadFileResponse = zod
+  .object({
+    documentId: zod.string().describe('The new document.'),
+    sizeBytes: zod
+      .number()
+      .min(uploadFileResponseSizeBytesMin)
+      .describe('Number of bytes stored.'),
+  })
+  .describe('The document created from the uploaded bytes.');
+
+/**
  * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/{document_id}`.
  */
@@ -19110,6 +20000,51 @@ export const editDocumentResponse = zod
     error: zod.boolean().describe('Whether an error occurred.'),
   })
   .describe('Edit document response.');
+
+/**
+ * A client that disconnects aborts the edit: axum drops this handler's
+future, which drops the in-flight request to the editing worker, and the
+worker aborts on its request signal. Steps already acknowledged stay.
+ * @summary Edit a markdown document or task by instructions with the caller's edit
+access. Runs EditDocument's pipeline as a live collaborator, with its AI
+admission and billing.
+ */
+export const editDocumentWithAiParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editDocumentWithAiBody = zod
+  .object({
+    fast: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Run the single-model fast pipeline, for one small, contained edit.'
+      ),
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.'
+      ),
+  })
+  .describe('What to change, in words.');
+
+export const editDocumentWithAiResponse = zod
+  .object({
+    clarification: zod
+      .string()
+      .nullish()
+      .describe(
+        'What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays.'
+      ),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version after the edit, as sync-service encodes it."
+      ),
+  })
+  .describe('A completed edit by instructions.');
 
 /**
  * Returns the short UUID and git branch name for a task document.
@@ -19992,6 +20927,54 @@ export const simpleSaveResponse = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary Gets when to use a skill. `description` is absent for a skill created
+before descriptions existed.
+ */
+export const getSkillDescriptionParams = zod.object({
+  document_id: zod.string().describe('Skill document ID'),
+});
+
+export const getSkillDescriptionResponse = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed.'
+      ),
+  })
+  .describe("A skill's routing description.");
+
+/**
+ * @summary Sets when to use a skill: one line starting "Use when", at most 300
+characters. Agents choose skills for a request by it.
+ */
+export const setSkillDescriptionParams = zod.object({
+  document_id: zod.string().describe('Skill document ID'),
+});
+
+export const setSkillDescriptionBody = zod
+  .object({
+    description: zod
+      .string()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\", at most 300\ncharacters.'
+      ),
+  })
+  .describe("Request body for setting a skill's routing description.");
+
+export const setSkillDescriptionResponse = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        'When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed.'
+      ),
+  })
+  .describe("A skill's routing description.");
 
 /**
  * @summary Gets the team-share state of a document. The team is resolved from the
@@ -23395,6 +24378,205 @@ export const getFormResponse = zod
                       .describe("A question with its column's facts.")
                   )
                   .describe('Its questions, in order.'),
+                showWhen: zod
+                  .object({
+                    conditions: zod
+                      .array(
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                column: zod
+                                  .uuid()
+                                  .describe('The column tested.'),
+                                test: zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['presence']),
+                                        operator: zod
+                                          .enum(['isEmpty', 'isNotEmpty'])
+                                          .describe('Whether a cell is empty.'),
+                                      })
+                                      .describe(
+                                        'Whether the cell is empty; fits a column of any type.'
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['text']),
+                                        operator: zod
+                                          .enum([
+                                            'is',
+                                            'isNot',
+                                            'contains',
+                                            'doesNotContain',
+                                            'startsWith',
+                                            'endsWith',
+                                          ])
+                                          .describe(
+                                            'How a text cell compares to a text.'
+                                          ),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'The text compared against, ignoring case for the containment\ntests.'
+                                          ),
+                                      })
+                                      .describe('A text or link column.'),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['number']),
+                                        operator: zod
+                                          .enum([
+                                            'is',
+                                            'isNot',
+                                            'greaterThan',
+                                            'greaterThanOrEqual',
+                                            'lessThan',
+                                            'lessThanOrEqual',
+                                          ])
+                                          .describe(
+                                            'How a number cell compares to a number.'
+                                          ),
+                                        value: zod
+                                          .number()
+                                          .describe(
+                                            'The number compared against; finite.'
+                                          ),
+                                      })
+                                      .describe('A number column.'),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['date']),
+                                        operator: zod
+                                          .enum([
+                                            'before',
+                                            'after',
+                                            'onOrBefore',
+                                            'onOrAfter',
+                                          ])
+                                          .describe(
+                                            'How a date cell compares to a date-time.'
+                                          ),
+                                        value: zod.iso
+                                          .datetime({})
+                                          .describe(
+                                            'The date-time compared against.'
+                                          ),
+                                      })
+                                      .describe('A date column.'),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['dateRange']),
+                                        operator: zod
+                                          .enum([
+                                            'contains',
+                                            'doesNotContain',
+                                            'endsBefore',
+                                            'endsOnOrAfter',
+                                            'startsAfter',
+                                            'startsOnOrBefore',
+                                          ])
+                                          .describe(
+                                            "How a date-range cell stands to a day: the whole day starting at the\ntest's date-time, so a range from 1 PM to 5 PM contains its day."
+                                          ),
+                                        value: zod.iso
+                                          .datetime({})
+                                          .describe(
+                                            'The start of the day compared against.'
+                                          ),
+                                      })
+                                      .describe('A date-range column.'),
+                                    zod
+                                      .object({
+                                        checked: zod
+                                          .boolean()
+                                          .describe(
+                                            'Whether the box is checked.'
+                                          ),
+                                        kind: zod.enum(['checkbox']),
+                                      })
+                                      .describe(
+                                        'A checkbox column. An unchecked box and an empty cell are the same.'
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['options']),
+                                        operator: zod
+                                          .enum([
+                                            'isAnyOf',
+                                            'isNoneOf',
+                                            'hasAny',
+                                            'hasAll',
+                                            'hasNone',
+                                          ])
+                                          .describe(
+                                            "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                          ),
+                                        options: zod
+                                          .array(zod.uuid())
+                                          .describe(
+                                            'Options of the column; at least one.'
+                                          ),
+                                      })
+                                      .describe('A select or tag column.'),
+                                    zod
+                                      .object({
+                                        entities: zod
+                                          .array(zod.string())
+                                          .describe(
+                                            "Entity ids, or for a relation the related rows' ids; at least\none."
+                                          ),
+                                        kind: zod.enum(['entities']),
+                                        operator: zod
+                                          .enum([
+                                            'isAnyOf',
+                                            'isNoneOf',
+                                            'hasAny',
+                                            'hasAll',
+                                            'hasNone',
+                                          ])
+                                          .describe(
+                                            "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                          ),
+                                      })
+                                      .describe(
+                                        'A reference or relation column.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "What a column's cell must be, by the kind of value the column holds."
+                                  ),
+                              })
+                              .describe("A test of one column's cells.")
+                              .and(
+                                zod.object({
+                                  kind: zod.enum(['condition']),
+                                })
+                              )
+                              .describe('A test of one column.'),
+                            zod
+                              .unknown()
+                              .and(
+                                zod.object({
+                                  kind: zod.enum(['group']),
+                                })
+                              )
+                              .describe('A nested group.'),
+                          ])
+                          .describe(
+                            'One entry of a group: a condition, or a group of its own.'
+                          )
+                      )
+                      .describe(
+                        'The conditions and nested groups. A group without any keeps every\nrow.'
+                      ),
+                    conjunction: zod
+                      .enum(['and', 'or'])
+                      .describe("How a group's conditions combine."),
+                  })
+                  .optional()
+                  .describe('Conditions joined by one conjunction.'),
                 title: zod.string().describe('Its title.'),
               })
               .describe('Questions asked together.'),
@@ -24098,6 +25280,207 @@ export const collaborateFormResponse = zod
                           .describe("A question with its column's facts.")
                       )
                       .describe('Its questions, in order.'),
+                    showWhen: zod
+                      .object({
+                        conditions: zod
+                          .array(
+                            zod
+                              .union([
+                                zod
+                                  .object({
+                                    column: zod
+                                      .uuid()
+                                      .describe('The column tested.'),
+                                    test: zod
+                                      .union([
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['presence']),
+                                            operator: zod
+                                              .enum(['isEmpty', 'isNotEmpty'])
+                                              .describe(
+                                                'Whether a cell is empty.'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Whether the cell is empty; fits a column of any type.'
+                                          ),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['text']),
+                                            operator: zod
+                                              .enum([
+                                                'is',
+                                                'isNot',
+                                                'contains',
+                                                'doesNotContain',
+                                                'startsWith',
+                                                'endsWith',
+                                              ])
+                                              .describe(
+                                                'How a text cell compares to a text.'
+                                              ),
+                                            value: zod
+                                              .string()
+                                              .describe(
+                                                'The text compared against, ignoring case for the containment\ntests.'
+                                              ),
+                                          })
+                                          .describe('A text or link column.'),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['number']),
+                                            operator: zod
+                                              .enum([
+                                                'is',
+                                                'isNot',
+                                                'greaterThan',
+                                                'greaterThanOrEqual',
+                                                'lessThan',
+                                                'lessThanOrEqual',
+                                              ])
+                                              .describe(
+                                                'How a number cell compares to a number.'
+                                              ),
+                                            value: zod
+                                              .number()
+                                              .describe(
+                                                'The number compared against; finite.'
+                                              ),
+                                          })
+                                          .describe('A number column.'),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['date']),
+                                            operator: zod
+                                              .enum([
+                                                'before',
+                                                'after',
+                                                'onOrBefore',
+                                                'onOrAfter',
+                                              ])
+                                              .describe(
+                                                'How a date cell compares to a date-time.'
+                                              ),
+                                            value: zod.iso
+                                              .datetime({})
+                                              .describe(
+                                                'The date-time compared against.'
+                                              ),
+                                          })
+                                          .describe('A date column.'),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['dateRange']),
+                                            operator: zod
+                                              .enum([
+                                                'contains',
+                                                'doesNotContain',
+                                                'endsBefore',
+                                                'endsOnOrAfter',
+                                                'startsAfter',
+                                                'startsOnOrBefore',
+                                              ])
+                                              .describe(
+                                                "How a date-range cell stands to a day: the whole day starting at the\ntest's date-time, so a range from 1 PM to 5 PM contains its day."
+                                              ),
+                                            value: zod.iso
+                                              .datetime({})
+                                              .describe(
+                                                'The start of the day compared against.'
+                                              ),
+                                          })
+                                          .describe('A date-range column.'),
+                                        zod
+                                          .object({
+                                            checked: zod
+                                              .boolean()
+                                              .describe(
+                                                'Whether the box is checked.'
+                                              ),
+                                            kind: zod.enum(['checkbox']),
+                                          })
+                                          .describe(
+                                            'A checkbox column. An unchecked box and an empty cell are the same.'
+                                          ),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['options']),
+                                            operator: zod
+                                              .enum([
+                                                'isAnyOf',
+                                                'isNoneOf',
+                                                'hasAny',
+                                                'hasAll',
+                                                'hasNone',
+                                              ])
+                                              .describe(
+                                                "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                              ),
+                                            options: zod
+                                              .array(zod.uuid())
+                                              .describe(
+                                                'Options of the column; at least one.'
+                                              ),
+                                          })
+                                          .describe('A select or tag column.'),
+                                        zod
+                                          .object({
+                                            entities: zod
+                                              .array(zod.string())
+                                              .describe(
+                                                "Entity ids, or for a relation the related rows' ids; at least\none."
+                                              ),
+                                            kind: zod.enum(['entities']),
+                                            operator: zod
+                                              .enum([
+                                                'isAnyOf',
+                                                'isNoneOf',
+                                                'hasAny',
+                                                'hasAll',
+                                                'hasNone',
+                                              ])
+                                              .describe(
+                                                "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                              ),
+                                          })
+                                          .describe(
+                                            'A reference or relation column.'
+                                          ),
+                                      ])
+                                      .describe(
+                                        "What a column's cell must be, by the kind of value the column holds."
+                                      ),
+                                  })
+                                  .describe("A test of one column's cells.")
+                                  .and(
+                                    zod.object({
+                                      kind: zod.enum(['condition']),
+                                    })
+                                  )
+                                  .describe('A test of one column.'),
+                                zod
+                                  .unknown()
+                                  .and(
+                                    zod.object({
+                                      kind: zod.enum(['group']),
+                                    })
+                                  )
+                                  .describe('A nested group.'),
+                              ])
+                              .describe(
+                                'One entry of a group: a condition, or a group of its own.'
+                              )
+                          )
+                          .describe(
+                            'The conditions and nested groups. A group without any keeps every\nrow.'
+                          ),
+                        conjunction: zod
+                          .enum(['and', 'or'])
+                          .describe("How a group's conditions combine."),
+                      })
+                      .optional()
+                      .describe('Conditions joined by one conjunction.'),
                     title: zod.string().describe('Its title.'),
                   })
                   .describe('Questions asked together.'),
@@ -24413,6 +25796,22 @@ export const collaborateFormResponse = zod
                   .describe("A gate's rule does not fit its column."),
                 zod
                   .object({
+                    column: zod.uuid().describe('The column.'),
+                    kind: zod.enum(['conditionNamesLaterColumn']),
+                  })
+                  .describe(
+                    "A section's show-when rules test a column no earlier section asks."
+                  ),
+                zod
+                  .object({
+                    kind: zod.enum(['conditionRule']),
+                    reason: zod.string().describe('Why.'),
+                  })
+                  .describe(
+                    "A section's show-when rule does not fit its column."
+                  ),
+                zod
+                  .object({
                     kind: zod.enum(['textTooLong']),
                     max: zod
                       .number()
@@ -24518,6 +25917,205 @@ export const putFormLayoutBody = zod
                       .describe('How one column of the table is asked.')
                   )
                   .describe('Its questions, in order.'),
+                showWhen: zod
+                  .object({
+                    conditions: zod
+                      .array(
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                column: zod
+                                  .uuid()
+                                  .describe('The column tested.'),
+                                test: zod
+                                  .union([
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['presence']),
+                                        operator: zod
+                                          .enum(['isEmpty', 'isNotEmpty'])
+                                          .describe('Whether a cell is empty.'),
+                                      })
+                                      .describe(
+                                        'Whether the cell is empty; fits a column of any type.'
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['text']),
+                                        operator: zod
+                                          .enum([
+                                            'is',
+                                            'isNot',
+                                            'contains',
+                                            'doesNotContain',
+                                            'startsWith',
+                                            'endsWith',
+                                          ])
+                                          .describe(
+                                            'How a text cell compares to a text.'
+                                          ),
+                                        value: zod
+                                          .string()
+                                          .describe(
+                                            'The text compared against, ignoring case for the containment\ntests.'
+                                          ),
+                                      })
+                                      .describe('A text or link column.'),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['number']),
+                                        operator: zod
+                                          .enum([
+                                            'is',
+                                            'isNot',
+                                            'greaterThan',
+                                            'greaterThanOrEqual',
+                                            'lessThan',
+                                            'lessThanOrEqual',
+                                          ])
+                                          .describe(
+                                            'How a number cell compares to a number.'
+                                          ),
+                                        value: zod
+                                          .number()
+                                          .describe(
+                                            'The number compared against; finite.'
+                                          ),
+                                      })
+                                      .describe('A number column.'),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['date']),
+                                        operator: zod
+                                          .enum([
+                                            'before',
+                                            'after',
+                                            'onOrBefore',
+                                            'onOrAfter',
+                                          ])
+                                          .describe(
+                                            'How a date cell compares to a date-time.'
+                                          ),
+                                        value: zod.iso
+                                          .datetime({})
+                                          .describe(
+                                            'The date-time compared against.'
+                                          ),
+                                      })
+                                      .describe('A date column.'),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['dateRange']),
+                                        operator: zod
+                                          .enum([
+                                            'contains',
+                                            'doesNotContain',
+                                            'endsBefore',
+                                            'endsOnOrAfter',
+                                            'startsAfter',
+                                            'startsOnOrBefore',
+                                          ])
+                                          .describe(
+                                            "How a date-range cell stands to a day: the whole day starting at the\ntest's date-time, so a range from 1 PM to 5 PM contains its day."
+                                          ),
+                                        value: zod.iso
+                                          .datetime({})
+                                          .describe(
+                                            'The start of the day compared against.'
+                                          ),
+                                      })
+                                      .describe('A date-range column.'),
+                                    zod
+                                      .object({
+                                        checked: zod
+                                          .boolean()
+                                          .describe(
+                                            'Whether the box is checked.'
+                                          ),
+                                        kind: zod.enum(['checkbox']),
+                                      })
+                                      .describe(
+                                        'A checkbox column. An unchecked box and an empty cell are the same.'
+                                      ),
+                                    zod
+                                      .object({
+                                        kind: zod.enum(['options']),
+                                        operator: zod
+                                          .enum([
+                                            'isAnyOf',
+                                            'isNoneOf',
+                                            'hasAny',
+                                            'hasAll',
+                                            'hasNone',
+                                          ])
+                                          .describe(
+                                            "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                          ),
+                                        options: zod
+                                          .array(zod.uuid())
+                                          .describe(
+                                            'Options of the column; at least one.'
+                                          ),
+                                      })
+                                      .describe('A select or tag column.'),
+                                    zod
+                                      .object({
+                                        entities: zod
+                                          .array(zod.string())
+                                          .describe(
+                                            "Entity ids, or for a relation the related rows' ids; at least\none."
+                                          ),
+                                        kind: zod.enum(['entities']),
+                                        operator: zod
+                                          .enum([
+                                            'isAnyOf',
+                                            'isNoneOf',
+                                            'hasAny',
+                                            'hasAll',
+                                            'hasNone',
+                                          ])
+                                          .describe(
+                                            "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                          ),
+                                      })
+                                      .describe(
+                                        'A reference or relation column.'
+                                      ),
+                                  ])
+                                  .describe(
+                                    "What a column's cell must be, by the kind of value the column holds."
+                                  ),
+                              })
+                              .describe("A test of one column's cells.")
+                              .and(
+                                zod.object({
+                                  kind: zod.enum(['condition']),
+                                })
+                              )
+                              .describe('A test of one column.'),
+                            zod
+                              .unknown()
+                              .and(
+                                zod.object({
+                                  kind: zod.enum(['group']),
+                                })
+                              )
+                              .describe('A nested group.'),
+                          ])
+                          .describe(
+                            'One entry of a group: a condition, or a group of its own.'
+                          )
+                      )
+                      .describe(
+                        'The conditions and nested groups. A group without any keeps every\nrow.'
+                      ),
+                    conjunction: zod
+                      .enum(['and', 'or'])
+                      .describe("How a group's conditions combine."),
+                  })
+                  .optional()
+                  .describe('Conditions joined by one conjunction.'),
                 title: zod.string().describe('Its title; may be empty.'),
               })
               .describe('Questions asked together.'),
@@ -25058,6 +26656,207 @@ export const putFormLayoutResponse = zod
                           .describe("A question with its column's facts.")
                       )
                       .describe('Its questions, in order.'),
+                    showWhen: zod
+                      .object({
+                        conditions: zod
+                          .array(
+                            zod
+                              .union([
+                                zod
+                                  .object({
+                                    column: zod
+                                      .uuid()
+                                      .describe('The column tested.'),
+                                    test: zod
+                                      .union([
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['presence']),
+                                            operator: zod
+                                              .enum(['isEmpty', 'isNotEmpty'])
+                                              .describe(
+                                                'Whether a cell is empty.'
+                                              ),
+                                          })
+                                          .describe(
+                                            'Whether the cell is empty; fits a column of any type.'
+                                          ),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['text']),
+                                            operator: zod
+                                              .enum([
+                                                'is',
+                                                'isNot',
+                                                'contains',
+                                                'doesNotContain',
+                                                'startsWith',
+                                                'endsWith',
+                                              ])
+                                              .describe(
+                                                'How a text cell compares to a text.'
+                                              ),
+                                            value: zod
+                                              .string()
+                                              .describe(
+                                                'The text compared against, ignoring case for the containment\ntests.'
+                                              ),
+                                          })
+                                          .describe('A text or link column.'),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['number']),
+                                            operator: zod
+                                              .enum([
+                                                'is',
+                                                'isNot',
+                                                'greaterThan',
+                                                'greaterThanOrEqual',
+                                                'lessThan',
+                                                'lessThanOrEqual',
+                                              ])
+                                              .describe(
+                                                'How a number cell compares to a number.'
+                                              ),
+                                            value: zod
+                                              .number()
+                                              .describe(
+                                                'The number compared against; finite.'
+                                              ),
+                                          })
+                                          .describe('A number column.'),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['date']),
+                                            operator: zod
+                                              .enum([
+                                                'before',
+                                                'after',
+                                                'onOrBefore',
+                                                'onOrAfter',
+                                              ])
+                                              .describe(
+                                                'How a date cell compares to a date-time.'
+                                              ),
+                                            value: zod.iso
+                                              .datetime({})
+                                              .describe(
+                                                'The date-time compared against.'
+                                              ),
+                                          })
+                                          .describe('A date column.'),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['dateRange']),
+                                            operator: zod
+                                              .enum([
+                                                'contains',
+                                                'doesNotContain',
+                                                'endsBefore',
+                                                'endsOnOrAfter',
+                                                'startsAfter',
+                                                'startsOnOrBefore',
+                                              ])
+                                              .describe(
+                                                "How a date-range cell stands to a day: the whole day starting at the\ntest's date-time, so a range from 1 PM to 5 PM contains its day."
+                                              ),
+                                            value: zod.iso
+                                              .datetime({})
+                                              .describe(
+                                                'The start of the day compared against.'
+                                              ),
+                                          })
+                                          .describe('A date-range column.'),
+                                        zod
+                                          .object({
+                                            checked: zod
+                                              .boolean()
+                                              .describe(
+                                                'Whether the box is checked.'
+                                              ),
+                                            kind: zod.enum(['checkbox']),
+                                          })
+                                          .describe(
+                                            'A checkbox column. An unchecked box and an empty cell are the same.'
+                                          ),
+                                        zod
+                                          .object({
+                                            kind: zod.enum(['options']),
+                                            operator: zod
+                                              .enum([
+                                                'isAnyOf',
+                                                'isNoneOf',
+                                                'hasAny',
+                                                'hasAll',
+                                                'hasNone',
+                                              ])
+                                              .describe(
+                                                "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                              ),
+                                            options: zod
+                                              .array(zod.uuid())
+                                              .describe(
+                                                'Options of the column; at least one.'
+                                              ),
+                                          })
+                                          .describe('A select or tag column.'),
+                                        zod
+                                          .object({
+                                            entities: zod
+                                              .array(zod.string())
+                                              .describe(
+                                                "Entity ids, or for a relation the related rows' ids; at least\none."
+                                              ),
+                                            kind: zod.enum(['entities']),
+                                            operator: zod
+                                              .enum([
+                                                'isAnyOf',
+                                                'isNoneOf',
+                                                'hasAny',
+                                                'hasAll',
+                                                'hasNone',
+                                              ])
+                                              .describe(
+                                                "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several."
+                                              ),
+                                          })
+                                          .describe(
+                                            'A reference or relation column.'
+                                          ),
+                                      ])
+                                      .describe(
+                                        "What a column's cell must be, by the kind of value the column holds."
+                                      ),
+                                  })
+                                  .describe("A test of one column's cells.")
+                                  .and(
+                                    zod.object({
+                                      kind: zod.enum(['condition']),
+                                    })
+                                  )
+                                  .describe('A test of one column.'),
+                                zod
+                                  .unknown()
+                                  .and(
+                                    zod.object({
+                                      kind: zod.enum(['group']),
+                                    })
+                                  )
+                                  .describe('A nested group.'),
+                              ])
+                              .describe(
+                                'One entry of a group: a condition, or a group of its own.'
+                              )
+                          )
+                          .describe(
+                            'The conditions and nested groups. A group without any keeps every\nrow.'
+                          ),
+                        conjunction: zod
+                          .enum(['and', 'or'])
+                          .describe("How a group's conditions combine."),
+                      })
+                      .optional()
+                      .describe('Conditions joined by one conjunction.'),
                     title: zod.string().describe('Its title.'),
                   })
                   .describe('Questions asked together.'),
@@ -25371,6 +27170,22 @@ export const putFormLayoutResponse = zod
                     reason: zod.string().describe('Why.'),
                   })
                   .describe("A gate's rule does not fit its column."),
+                zod
+                  .object({
+                    column: zod.uuid().describe('The column.'),
+                    kind: zod.enum(['conditionNamesLaterColumn']),
+                  })
+                  .describe(
+                    "A section's show-when rules test a column no earlier section asks."
+                  ),
+                zod
+                  .object({
+                    kind: zod.enum(['conditionRule']),
+                    reason: zod.string().describe('Why.'),
+                  })
+                  .describe(
+                    "A section's show-when rule does not fit its column."
+                  ),
                 zod
                   .object({
                     kind: zod.enum(['textTooLong']),
@@ -26931,12 +28746,6 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
-    allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
-      ),
     host: zod
       .string()
       .nullish()
@@ -26948,16 +28757,6 @@ export const createHarnessPairingBody = zod
       .describe(
         "Requested harness display name (typically the machine's hostname)."
       ),
-    scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe(
     'Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.'
@@ -26979,25 +28778,9 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
-    requested_allow_permission_bypass: zod
-      .boolean()
-      .nullish()
-      .describe(
-        'Daemon operator consent ceiling; false forbids bypass at approval.'
-      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
-    requested_scope: zod
-      .union([
-        zod.null(),
-        zod
-          .enum(['private', 'team'])
-          .describe(
-            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
-          ),
-      ])
-      .optional(),
   })
   .describe('A pending pairing, as shown to the approving user.');
 
@@ -27286,6 +29069,71 @@ export const listHarnessSessionsResponse = zod.array(
 export const deleteHarnessParams = zod.object({
   harness_id: zod.string().describe('Harness ID'),
 });
+
+/**
+ * @summary Handler for `PATCH /harnesses/{harness_id}`.
+ */
+export const patchHarnessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const patchHarnessBody = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn.'
+      ),
+    name: zod.string().nullish().describe('New display name.'),
+  })
+  .describe(
+    'Request to change a registered harness. Omitted fields stay as they are.'
+  );
+
+export const patchHarnessResponse = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Gets the users history
@@ -51145,6 +52993,12 @@ export const messageTimelineResponse = zod
                   ),
               ])
               .optional(),
+            kind: zod
+              .enum(['message', 'call_root'])
+              .optional()
+              .describe(
+                'What a persisted message is. Set by the server, never by a client.'
+              ),
             mentions: zod
               .array(
                 zod
@@ -51480,6 +53334,12 @@ export const messageTimelineResponse = zod
                                 ),
                             ])
                             .optional(),
+                          kind: zod
+                            .enum(['message', 'call_root'])
+                            .optional()
+                            .describe(
+                              'What a persisted message is. Set by the server, never by a client.'
+                            ),
                           mentions: zod
                             .array(
                               zod
@@ -51875,6 +53735,12 @@ export const entityMessageCreateResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -52043,6 +53909,12 @@ export const entityMessageGetMessageResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -52215,6 +54087,12 @@ export const entityMessageDeleteMessageResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -52483,6 +54361,12 @@ export const entityMessageEditResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -52659,6 +54543,12 @@ export const entityMessageReactResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -52834,6 +54724,12 @@ export const entityMessageLegacyResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -53019,6 +54915,12 @@ export const entityMessageGetThreadResponse = zod
                   ),
               ])
               .optional(),
+            kind: zod
+              .enum(['message', 'call_root'])
+              .optional()
+              .describe(
+                'What a persisted message is. Set by the server, never by a client.'
+              ),
             mentions: zod
               .array(
                 zod
@@ -53194,6 +55096,12 @@ export const entityMessageGetThreadResponse = zod
               ),
           ])
           .optional(),
+        kind: zod
+          .enum(['message', 'call_root'])
+          .optional()
+          .describe(
+            'What a persisted message is. Set by the server, never by a client.'
+          ),
         mentions: zod
           .array(
             zod
@@ -53782,6 +55690,12 @@ export const messageTimelineEntriesResponse = zod
                           ),
                       ])
                       .optional(),
+                    kind: zod
+                      .enum(['message', 'call_root'])
+                      .optional()
+                      .describe(
+                        'What a persisted message is. Set by the server, never by a client.'
+                      ),
                     mentions: zod
                       .array(
                         zod
@@ -54147,6 +56061,12 @@ export const messageTimelineEntriesResponse = zod
                                         ),
                                     ])
                                     .optional(),
+                                  kind: zod
+                                    .enum(['message', 'call_root'])
+                                    .optional()
+                                    .describe(
+                                      'What a persisted message is. Set by the server, never by a client.'
+                                    ),
                                   mentions: zod
                                     .array(
                                       zod
@@ -54336,6 +56256,652 @@ export const messageTimelineEntriesResponse = zod
               })
               .describe(
                 'A recorded fact about the parent, such as a rename or a finished call.'
+              ),
+            zod
+              .object({
+                message: zod
+                  .object({
+                    attachments: zod
+                      .array(
+                        zod
+                          .object({
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('When the attachment was added.'),
+                            entity_id: zod
+                              .string()
+                              .describe('Attached entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Attached entity type.'),
+                            height: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media height.'),
+                            id: zod.uuid().describe('Attachment UUID.'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media width.'),
+                          })
+                          .describe('An entity attached to a message.')
+                      )
+                      .describe('Attached entities.'),
+                    bot_profile: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Bot avatar URL.'),
+                            name: zod.string().describe('Bot display name.'),
+                          })
+                          .describe(
+                            'Public bot profile attached to bot-authored messages.'
+                          ),
+                      ])
+                      .optional(),
+                    content: zod.string().describe('Macro Markdown body.'),
+                    created_at: zod.iso.datetime({}).describe('Creation time.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Message tombstone, independent of thread deletion.'
+                      ),
+                    edited_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Last content edit, if any.'),
+                    guest_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name of a verified call guest, retained after the call ends.'
+                      ),
+                    id: zod.uuid().describe('Message UUID.'),
+                    imported_author: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Original author text; never interpreted as an authenticated principal.'
+                              ),
+                          })
+                          .describe(
+                            'Display attribution for a comment imported from an external document.'
+                          ),
+                      ])
+                      .optional(),
+                    kind: zod
+                      .enum(['message', 'call_root'])
+                      .optional()
+                      .describe(
+                        'What a persisted message is. Set by the server, never by a client.'
+                      ),
+                    mentions: zod
+                      .array(
+                        zod
+                          .object({
+                            entity_id: zod
+                              .string()
+                              .describe('Mentioned entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Mentioned entity type.'),
+                          })
+                          .describe('A mention tracked in a message body.')
+                      )
+                      .describe(
+                        'Tracked mentions, retained when a caller changes attachments only.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A channel, including direct messages.'
+                              ),
+                            type: zod.enum(['channel']),
+                          })
+                          .describe('A channel, including direct messages.'),
+                        zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'A validated document identifier. Historical document ids need not be UUIDs.'
+                              ),
+                            type: zod.enum(['document']),
+                          })
+                          .describe('A document, including tasks and PDFs.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'An initiative, presented as a project in the application.'
+                              ),
+                            type: zod.enum(['initiative']),
+                          })
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM company.'),
+                            type: zod.enum(['crm_company']),
+                          })
+                          .describe('A CRM company.'),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM contact.'),
+                            type: zod.enum(['crm_contact']),
+                          })
+                          .describe('A CRM contact.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A video call and its persistent chat thread.'
+                              ),
+                            type: zod.enum(['call']),
+                          })
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                      ])
+                      .describe(
+                        'The entity whose permissions and lifecycle govern a message.'
+                      ),
+                    reactions: zod
+                      .array(
+                        zod
+                          .object({
+                            emoji: zod
+                              .string()
+                              .describe('Emoji being reacted with.'),
+                            users: zod
+                              .array(zod.string())
+                              .describe('User identifiers.'),
+                          })
+                          .describe(
+                            'Reaction emoji and the users who added it.'
+                          )
+                      )
+                      .describe('Aggregated reactions.'),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Authenticated actor or owner of imported content.'
+                      ),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Root message UUID for replies; absent on roots.'
+                      ),
+                    triggered_by: zod
+                      .string()
+                      .nullish()
+                      .describe('User who triggered a bot-authored message.'),
+                    triggered_via: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                      ),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Last persisted update.'),
+                  })
+                  .describe(
+                    'Shared message representation for channel timelines and entity discussions.'
+                  )
+                  .and(
+                    zod.object({
+                      state: zod
+                        .object({
+                          anchor: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .union([
+                                  zod
+                                    .object({
+                                      mark_id: zod
+                                        .uuid()
+                                        .describe(
+                                          'Mark UUID serialized in the document.'
+                                        ),
+                                      marked_text: zod
+                                        .string()
+                                        .nullish()
+                                        .describe(
+                                          'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                                        ),
+                                      type: zod.enum(['markdown']),
+                                    })
+                                    .describe(
+                                      'Stable Lexical mark identity, independent of transient node keys.'
+                                    ),
+                                  zod
+                                    .object({
+                                      anchor_id: zod
+                                        .uuid()
+                                        .describe('Highlight annotation UUID.'),
+                                      marked_text: zod
+                                        .string()
+                                        .nullish()
+                                        .describe(
+                                          'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                                        ),
+                                      type: zod.enum(['pdf_highlight']),
+                                    })
+                                    .describe(
+                                      'An independently existing PDF highlight.'
+                                    ),
+                                  zod
+                                    .object({
+                                      anchor_id: zod
+                                        .uuid()
+                                        .describe('Placeable annotation UUID.'),
+                                      type: zod.enum(['pdf_placeable']),
+                                    })
+                                    .describe(
+                                      'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+                                    ),
+                                  zod
+                                    .object({
+                                      range: zod
+                                        .string()
+                                        .describe(
+                                          'A1 cell or range, such as B4 or B4:C9.'
+                                        ),
+                                      sheetId: zod
+                                        .string()
+                                        .describe(
+                                          'Stable sheet identity within the workbook.'
+                                        ),
+                                      sheetName: zod
+                                        .string()
+                                        .describe(
+                                          'Sheet name when the discussion was created.'
+                                        ),
+                                      type: zod.enum(['spreadsheet']),
+                                    })
+                                    .describe(
+                                      'A cell or rectangular range in a native spreadsheet.'
+                                    ),
+                                  zod
+                                    .object({
+                                      nodeId: zod
+                                        .string()
+                                        .nullish()
+                                        .describe(
+                                          'Layer the pin follows; absent for a pin on the bare canvas.'
+                                        ),
+                                      pageId: zod
+                                        .string()
+                                        .describe(
+                                          'Page (canvas) the pin is on.'
+                                        ),
+                                      type: zod.enum(['fig']),
+                                      x: zod
+                                        .number()
+                                        .describe(
+                                          "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                                        ),
+                                      y: zod
+                                        .number()
+                                        .describe(
+                                          'Vertical offset, measured like `x`.'
+                                        ),
+                                    })
+                                    .describe(
+                                      'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+                                    ),
+                                ])
+                                .describe(
+                                  "A thread's location within its document. PDF geometry remains annotation-owned."
+                                ),
+                            ])
+                            .optional(),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation time of the discussion.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Explicit deletion of the entire thread, distinct from root deletion.'
+                            ),
+                          resolved: zod
+                            .boolean()
+                            .describe(
+                              'Whether this discussion has been resolved.'
+                            ),
+                          root_id: zod
+                            .uuid()
+                            .describe(
+                              'Root message UUID; there is no separate thread identity.'
+                            ),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Last state change.'),
+                          user_id: zod
+                            .string()
+                            .describe(
+                              'User who owns this discussion, including imported discussions.'
+                            ),
+                        })
+                        .describe(
+                          'State belonging to a whole thread, keyed by its root message.'
+                        ),
+                      thread: zod
+                        .object({
+                          latest_reply_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Creation time of the latest live reply.'
+                            ),
+                          preview: zod
+                            .array(
+                              zod
+                                .object({
+                                  attachments: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          created_at: zod.iso
+                                            .datetime({})
+                                            .describe(
+                                              'When the attachment was added.'
+                                            ),
+                                          entity_id: zod
+                                            .string()
+                                            .describe(
+                                              'Attached entity identifier.'
+                                            ),
+                                          entity_type: zod
+                                            .string()
+                                            .describe('Attached entity type.'),
+                                          height: zod
+                                            .number()
+                                            .nullish()
+                                            .describe('Optional media height.'),
+                                          id: zod
+                                            .uuid()
+                                            .describe('Attachment UUID.'),
+                                          width: zod
+                                            .number()
+                                            .nullish()
+                                            .describe('Optional media width.'),
+                                        })
+                                        .describe(
+                                          'An entity attached to a message.'
+                                        )
+                                    )
+                                    .describe('Attached entities.'),
+                                  bot_profile: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .object({
+                                          avatar_url: zod
+                                            .string()
+                                            .nullish()
+                                            .describe('Bot avatar URL.'),
+                                          name: zod
+                                            .string()
+                                            .describe('Bot display name.'),
+                                        })
+                                        .describe(
+                                          'Public bot profile attached to bot-authored messages.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  content: zod
+                                    .string()
+                                    .describe('Macro Markdown body.'),
+                                  created_at: zod.iso
+                                    .datetime({})
+                                    .describe('Creation time.'),
+                                  deleted_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe(
+                                      'Message tombstone, independent of thread deletion.'
+                                    ),
+                                  edited_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe('Last content edit, if any.'),
+                                  guest_name: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Display name of a verified call guest, retained after the call ends.'
+                                    ),
+                                  id: zod.uuid().describe('Message UUID.'),
+                                  imported_author: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .object({
+                                          name: zod
+                                            .string()
+                                            .describe(
+                                              'Original author text; never interpreted as an authenticated principal.'
+                                            ),
+                                        })
+                                        .describe(
+                                          'Display attribution for a comment imported from an external document.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  kind: zod
+                                    .enum(['message', 'call_root'])
+                                    .optional()
+                                    .describe(
+                                      'What a persisted message is. Set by the server, never by a client.'
+                                    ),
+                                  mentions: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          entity_id: zod
+                                            .string()
+                                            .describe(
+                                              'Mentioned entity identifier.'
+                                            ),
+                                          entity_type: zod
+                                            .string()
+                                            .describe('Mentioned entity type.'),
+                                        })
+                                        .describe(
+                                          'A mention tracked in a message body.'
+                                        )
+                                    )
+                                    .describe(
+                                      'Tracked mentions, retained when a caller changes attachments only.'
+                                    ),
+                                  parent: zod
+                                    .union([
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe(
+                                              'A channel, including direct messages.'
+                                            ),
+                                          type: zod.enum(['channel']),
+                                        })
+                                        .describe(
+                                          'A channel, including direct messages.'
+                                        ),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .string()
+                                            .describe(
+                                              'A validated document identifier. Historical document ids need not be UUIDs.'
+                                            ),
+                                          type: zod.enum(['document']),
+                                        })
+                                        .describe(
+                                          'A document, including tasks and PDFs.'
+                                        ),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe(
+                                              'An initiative, presented as a project in the application.'
+                                            ),
+                                          type: zod.enum(['initiative']),
+                                        })
+                                        .describe(
+                                          'An initiative, presented as a project in the application.'
+                                        ),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe('A CRM company.'),
+                                          type: zod.enum(['crm_company']),
+                                        })
+                                        .describe('A CRM company.'),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe('A CRM contact.'),
+                                          type: zod.enum(['crm_contact']),
+                                        })
+                                        .describe('A CRM contact.'),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe(
+                                              'A video call and its persistent chat thread.'
+                                            ),
+                                          type: zod.enum(['call']),
+                                        })
+                                        .describe(
+                                          'A video call and its persistent chat thread.'
+                                        ),
+                                    ])
+                                    .describe(
+                                      'The entity whose permissions and lifecycle govern a message.'
+                                    ),
+                                  reactions: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          emoji: zod
+                                            .string()
+                                            .describe(
+                                              'Emoji being reacted with.'
+                                            ),
+                                          users: zod
+                                            .array(zod.string())
+                                            .describe('User identifiers.'),
+                                        })
+                                        .describe(
+                                          'Reaction emoji and the users who added it.'
+                                        )
+                                    )
+                                    .describe('Aggregated reactions.'),
+                                  sender_id: zod
+                                    .string()
+                                    .describe(
+                                      'Authenticated actor or owner of imported content.'
+                                    ),
+                                  thread_id: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'Root message UUID for replies; absent on roots.'
+                                    ),
+                                  triggered_by: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'User who triggered a bot-authored message.'
+                                    ),
+                                  triggered_via: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                                    ),
+                                  updated_at: zod.iso
+                                    .datetime({})
+                                    .describe('Last persisted update.'),
+                                })
+                                .describe(
+                                  'Shared message representation for channel timelines and entity discussions.'
+                                )
+                            )
+                            .describe(
+                              'Bounded preview using the canonical message shape.'
+                            ),
+                          reply_count: zod
+                            .number()
+                            .describe('Total live reply count.'),
+                        })
+                        .describe(
+                          'Thread counts and its oldest three live replies.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Root message with its small thread preview, independent of its parent type.'
+                  ),
+                status: zod
+                  .union([
+                    zod
+                      .object({
+                        state: zod.enum(['live']),
+                      })
+                      .describe('The call has not ended.'),
+                    zod
+                      .object({
+                        duration_ms: zod
+                          .number()
+                          .describe('How long it lasted.'),
+                        ended_at: zod.iso
+                          .datetime({})
+                          .describe('When it ended.'),
+                        state: zod.enum(['ended']),
+                      })
+                      .describe('The call ended.'),
+                    zod
+                      .object({
+                        state: zod.enum(['record_deleted']),
+                      })
+                      .describe(
+                        "The call's record was deleted; its discussion stays in the channel."
+                      ),
+                  ])
+                  .describe(
+                    "A channel call's life, as its timeline row shows it."
+                  ),
+                type: zod.enum(['call']),
+              })
+              .describe(
+                "A channel call and its thread. The root message's id is the call id."
               ),
           ])
           .describe("One chronological entry in a parent's timeline.")

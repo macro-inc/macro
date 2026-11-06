@@ -150,11 +150,49 @@ pub(super) async fn insert_user_mapping(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn a_calls_discussion_is_stored_with_it_and_outlives_archival(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let threaded = Uuid::now_v7();
+    repo.create_call(&threaded, &CH2, "room-ch2", USER_B.deref().copied(), true)
+        .await?
+        .expect("should create new call");
+
+    let live = repo.get_call_record_by_call_id(&threaded).await?.unwrap();
+    assert_eq!(
+        live.discussion,
+        crate::domain::models::CallDiscussion::ChannelThread {
+            channel_id: CH2,
+            root_id: threaded,
+        }
+    );
+
+    let archived = repo.archive_call(&threaded).await?;
+    assert!(archived.channel_thread);
+    let record = repo.get_call_record_by_call_id(&threaded).await?.unwrap();
+    assert_eq!(record.discussion, live.discussion);
+
+    let existing = repo
+        .get_call_record_by_call_id(&CALL1)
+        .await?
+        .expect("the fixture call exists");
+    assert_eq!(
+        existing.discussion,
+        crate::domain::models::CallDiscussion::CallChat { call_id: CALL1 }
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
     let id = Uuid::now_v7();
     let call = repo
-        .create_call(&id, &CH2, "room-ch2", USER_B.deref().copied())
+        .create_call(&id, &CH2, "room-ch2", USER_B.deref().copied(), false)
         .await?
         .expect("should create new call");
 
@@ -199,7 +237,13 @@ async fn create_call_returns_none_on_duplicate_channel(pool: Pool<Postgres>) -> 
     let repo = repo(pool);
     // CH1 already has an active call from the fixture.
     let result = repo
-        .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A.deref().copied())
+        .create_call(
+            &Uuid::now_v7(),
+            &CH1,
+            "room-dup",
+            USER_A.deref().copied(),
+            false,
+        )
         .await?;
 
     assert!(result.is_none(), "should return None on conflict");
@@ -501,7 +545,7 @@ async fn add_participant_rejects_user_already_active_in_other_call(
     let repo = repo(pool);
 
     // Seed a second active call in ch2 (the fixture leaves ch2 empty).
-    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied())
+    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied(), false)
         .await?
         .expect("should create call2 in ch2");
 
@@ -549,7 +593,7 @@ async fn add_participant_allows_join_other_call_after_leave(
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
 
-    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied())
+    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied(), false)
         .await?
         .expect("should create call2 in ch2");
 

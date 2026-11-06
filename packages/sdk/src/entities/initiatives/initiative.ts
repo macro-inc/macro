@@ -32,6 +32,16 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'initiative', this);
 
+  /** The initiative's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/initiative/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** Construct a lazy initiative handle. */
   static byId(client: MacroClient, id: string): Initiative {
     return new Initiative(client, id);

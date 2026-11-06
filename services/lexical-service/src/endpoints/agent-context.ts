@@ -347,6 +347,10 @@ const routineTrigger = z.discriminatedUnion('type', [
     timezone: z.string().min(1),
   }),
   z.object({
+    type: z.literal('once'),
+    at: z.string().min(1),
+  }),
+  z.object({
     type: z.literal('events'),
     events: z.array(z.string().min(1)),
     entity_ids: z.array(z.string().min(1)).optional(),
@@ -424,6 +428,13 @@ export const agentContextRequest = z
     instructions: z.string().optional(),
     owner: person.optional(),
     sender: person.optional(),
+    currentTime: z
+      .object({
+        iso: z.string().min(1),
+        local: z.string().min(1),
+        timeZone: z.string().min(1).optional(),
+      })
+      .optional(),
     trigger: triggerContext.optional(),
     // LEGACY conversation fields; remove once every caller sends `trigger`.
     parent: messageParent.optional(),
@@ -451,7 +462,7 @@ export class AgentContextEndpoint extends OpenAPIRoute {
   schema = {
     summary: 'Compose an agent prompt with conversation context',
     description:
-      'Builds internal markdown naming the session owner and the prompt sender, and containing trusted session instructions and the trigger that called the agent - a mention or follow-up with its discussion, a task assignment, a composer request, a dispatch, or a routine firing - followed by the user prompt. The legacy conversation fields (parent, anchor, replyTarget, promptMessageId, thread, channel) are still accepted, but not together with trigger.',
+      'Builds internal markdown naming the session owner and the prompt sender, stating the current time in the user time zone, and containing trusted session instructions and the trigger that called the agent - a mention or follow-up with its discussion, a task assignment, a composer request, a dispatch, or a routine firing - followed by the user prompt. The legacy conversation fields (parent, anchor, replyTarget, promptMessageId, thread, channel) are still accepted, but not together with trigger.',
     request: {
       body: {
         content: {

@@ -37,6 +37,12 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
 }));
+// These cases count the pending navigation's own acquisitions; holding the
+// session open after a view is `recently-viewed.test.ts`'s concern.
+vi.mock('@core/agent-session/recently-viewed', () => ({
+  isRecentlyViewed: () => false,
+  retainRecentlyViewed: () => {},
+}));
 vi.mock('@queries/soup/normalized-cache', () => ({
   refetchSoupEntity: vi.fn(async () => {}),
 }));
@@ -165,6 +171,7 @@ describe('pending navigation ownership', () => {
         kind: 'update',
         message: {
           agentSessionId: id,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'me' },
           requestId: request.actionId ?? null,
@@ -180,6 +187,7 @@ describe('pending navigation ownership', () => {
         kind: 'new',
         message: {
           agentSessionId: id,
+          key: '1:agent',
           turn: 1,
           author: { kind: 'agent' },
           requestId: null,
@@ -421,6 +429,7 @@ describe('first prompt on the create', () => {
         kind: 'update',
         message: {
           agentSessionId: id,
+          key: '1:user',
           turn: 1,
           author: { kind: 'user', userId: 'me' },
           requestId: actionId,
@@ -436,6 +445,7 @@ describe('first prompt on the create', () => {
         kind: 'new',
         message: {
           agentSessionId: id,
+          key: '1:agent',
           turn: 1,
           author: { kind: 'agent' },
           requestId: null,

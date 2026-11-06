@@ -82,6 +82,7 @@ import {
 
 type FakeExecution = {
   document: DocumentNode;
+  context: Partial<OperationContext>;
   variables: Record<string, unknown>;
   fail(error: CombinedError): void;
   next(
@@ -133,6 +134,7 @@ function makeFakeClient(): {
     } as Operation<unknown, Record<string, unknown>>;
     executions.push({
       document: _request.query,
+      context,
       variables: _request.variables,
       fail: (error) =>
         subject.next({ operation, error, stale: false, hasNext: false }),
@@ -203,6 +205,46 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     makeGraphqlSoupInputMock.mockReturnValue({
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
+  });
+
+  it('retains CRM dependency scope on opaque continuation pages', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createSoupLiveQuery(() => ({
+        sortMethod: 'UPDATED_AT',
+        filters: {
+          crmCompanyFilter: {
+            literal: { id: '00000000-0000-0000-0000-000000000000' },
+          },
+          crmContactFilter: { literal: { hidden: false } },
+        },
+      })),
+      dispose,
+    }));
+    try {
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+      expect(fake.executions[0].context.externalCacheWriteTypes).toEqual([
+        'GraphqlSoupCrmContact',
+      ]);
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'page-2' })
+      );
+      const more = query.fetchNextPage();
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+      expect(fake.executions[1].variables).toMatchObject({
+        input: { continuation: { cursor: 'page-2' } },
+      });
+      expect(fake.executions[1].context.externalCacheWriteTypes).toEqual([
+        'GraphqlSoupCrmContact',
+      ]);
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await more;
+    } finally {
+      dispose();
+    }
   });
 
   it.each([
@@ -4381,6 +4423,76 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
     expect(fake.executions).toHaveLength(1);
     dispose();
+  });
+
+  it('skips local evaluation on cache changes while hidden and catches up once', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let currentRevision = REVISION_1;
+    let notifyCacheChanged!: (revision: string) => void;
+    let notifyGenerationChanged!: () => void;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => currentRevision,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        notifyCacheChanged = callback;
+        return () => undefined;
+      },
+      onCacheGenerationChanged: (callback: () => void) => {
+        notifyGenerationChanged = callback;
+        return () => undefined;
+      },
+      entityFilter: entityFilterMock,
+    });
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'reconciled',
+      retainedKeys: [],
+      revision: currentRevision,
+      keys: [],
+      optimistic: false,
+    }));
+    readRecordsByKeysMock.mockImplementation(async () => ({
+      revision: currentRevision,
+      records: [],
+    }));
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    let dispose!: () => void;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      );
+    });
+    try {
+      fake.executions[0]?.next(
+        graphqlSoupPage({
+          items: [{ id: 'item-0', type: 'document', name: 'Network item' }],
+          next_cursor: null,
+        }),
+        { source: 'live-network', revision: REVISION_1 }
+      );
+      await Promise.resolve();
+      entityFilterMock.mockClear();
+
+      visibility.mockReturnValue('hidden');
+      currentRevision = REVISION_2;
+      notifyCacheChanged(REVISION_2);
+      currentRevision = '3';
+      notifyCacheChanged('3');
+      notifyGenerationChanged();
+      currentRevision = '4';
+      notifyCacheChanged('4');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(entityFilterMock).not.toHaveBeenCalled();
+
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(entityFilterMock).toHaveBeenCalledTimes(1));
+    } finally {
+      dispose();
+      visibility.mockRestore();
+    }
   });
 
   it('merges baseline survivors with candidates without resetting server pagination', async () => {

@@ -10,26 +10,31 @@
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::time::Duration;
 
 use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
-use harnesses::domain::models::HarnessAgent;
+use harnesses::domain::models::{Harness, HarnessAgent, HarnessOwner, RUNTIME_CONNECTED_HEADER};
 use rootcause::prelude::ResultExt as _;
 use serde::de::DeserializeOwned;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
 
-use crate::config::{HarnessCredentials, HarnessScope, MacroApi};
+use crate::config::{HarnessCredentials, MacroApi};
 
 #[cfg(test)]
 mod test;
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 
+/// Set on the presence request alone: a timeout on the client would also end the
+/// long-lived event stream.
+const PRESENCE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Map the harness's ownership onto the stream query's workspace scope.
-pub fn stream_scope(scope: HarnessScope) -> WebhookScope {
-    match scope {
-        HarnessScope::User => WebhookScope::User,
-        HarnessScope::Team => WebhookScope::Team,
+pub fn stream_scope(owner: &HarnessOwner) -> WebhookScope {
+    match owner {
+        HarnessOwner::User { .. } => WebhookScope::User,
+        HarnessOwner::Team { .. } => WebhookScope::Team,
     }
 }
 
@@ -38,7 +43,6 @@ pub struct EventStreamClient {
     http: reqwest::Client,
     base: String,
     token: String,
-    scope: WebhookScope,
 }
 
 impl EventStreamClient {
@@ -48,7 +52,6 @@ impl EventStreamClient {
             http: reqwest::Client::new(),
             base: config.storage_url.trim_end_matches('/').to_owned(),
             token: credentials.token.clone(),
-            scope: stream_scope(credentials.scope),
         }
     }
 
@@ -83,6 +86,34 @@ impl EventStreamClient {
             .context(format!("could not read the service's answer to {what}"))?)
     }
 
+    /// The workspace scope of this harness's owner, read from the server on
+    /// every connect so an ownership change on the web applies without
+    /// re-pairing.
+    async fn scope(&self) -> rootcause::Result<WebhookScope> {
+        let harness: Harness = self
+            .read(
+                "read this harness's owner",
+                self.http.get(format!("{}/harnesses/me", self.base)),
+            )
+            .await?;
+        Ok(stream_scope(&harness.owner))
+    }
+
+    /// Whether the service reports this harness connected, telling it that this
+    /// daemon holds a runtime connection so it can log any disagreement.
+    pub async fn service_reports_connected(&self) -> rootcause::Result<bool> {
+        let harness: Harness = self
+            .read(
+                "check this harness's presence",
+                self.http
+                    .get(format!("{}/harnesses/me", self.base))
+                    .header(RUNTIME_CONNECTED_HEADER, "true")
+                    .timeout(PRESENCE_CHECK_TIMEOUT),
+            )
+            .await?;
+        Ok(harness.connected)
+    }
+
     /// The agents currently bound to this harness, as sorted bot-id strings —
     /// the shape the stream filter carries.
     pub async fn bound_bot_ids(&self) -> rootcause::Result<Vec<String>> {
@@ -108,13 +139,14 @@ impl EventStreamClient {
     ) -> rootcause::Result<EventStream<E>> {
         let filters =
             serde_json::to_string(filters).context("could not encode the stream filters")?;
+        let scope = self.scope().await?;
         let response = self
             .credentialed(
                 self.http
                     .get(format!("{}/webhook/events/stream", self.base))
                     .header(reqwest::header::ACCEPT, "text/event-stream")
                     .query(&[
-                        ("scope", self.scope.to_string().as_str()),
+                        ("scope", scope.to_string().as_str()),
                         ("filters", filters.as_str()),
                     ]),
             )

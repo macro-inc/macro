@@ -53,6 +53,8 @@
       ingestion_rate_mb = 8;
       ingestion_burst_size_mb = 16;
       max_query_parallelism = 4;
+      # The CI dashboard groups PR steps by workflow, job and step: about 600 a day.
+      max_query_series = 2000;
     };
     querier.max_concurrent = 4;
     analytics.reporting_enabled = false;

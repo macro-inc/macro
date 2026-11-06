@@ -14,25 +14,40 @@ path = "src/doppler_config.rs"
 
 [dependencies]
 ai_usage = { path = "../../crates/ai_usage" }
+calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }
 chrono = { workspace = true }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 doppler-config = { workspace = true }
 email = { path = "../../crates/email", default-features = false, features = ["outbound", "ports"] }
 jev = { path = "../../crates/jev", features = ["outbound"] }
 kafka_util = { path = "../../crates/kafka_util" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = ["axum"] }
 macro_config = { path = "../../crates/macro_config" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 memory = { path = "../../crates/memory" }
+models_email = { path = "../../crates/models_email" }
+opentelemetry = { workspace = true, features = ["trace"] }
 rdkafka = { workspace = true }
+reqwest = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["signal", "time"] }
-tokio-util = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+universal_input = { path = "../../crates/universal_input" }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+wiremock = { workspace = true }

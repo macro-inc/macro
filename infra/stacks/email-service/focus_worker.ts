@@ -68,7 +68,8 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
     );
     this.ecr = image.ecr;
 
-    // The worker only calls out: Postgres, Kafka and the classifier API.
+    // The worker only calls out: Postgres, Kafka, the classifier API, the
+    // agent harness and the connection gateway.
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {

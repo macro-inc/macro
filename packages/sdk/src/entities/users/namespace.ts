@@ -2,6 +2,9 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { User } from './user';
 
+/**
+ * @routing Use when looking up people or their profiles; not team membership, or changing the user's own profile (`macro.me`).
+ */
 export class UserNamespace {
   constructor(private readonly client: MacroClient) {}
 

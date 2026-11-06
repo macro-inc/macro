@@ -44,6 +44,8 @@ export default {
   addToProject: 'Add to project…',
   openProjectNamed: 'Open project {{name}}',
   changeProject: 'Change project',
+  openSourceNamed: 'Open source {{name}}',
+  changeSource: 'Change source',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -64,6 +66,7 @@ export default {
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
   downloadEmlFailed: 'Failed to download email. Please try again.',
+  createEvent: 'Create event',
   senderToSignal: 'Sender → Signal',
   senderToNoise: 'Sender → Noise',
   blockSender: 'Block Sender',
@@ -98,6 +101,9 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastChannelAccessRequestFailed: 'Could not send your request to join',
+  toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
+  toastChannelAccessResolveFailed: 'Could not answer this request',
   toastAutoArchiveFailed: 'Could not update auto-archive',
   toastCopied: 'Copied',
   toastCopiedCount: {

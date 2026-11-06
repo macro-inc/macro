@@ -248,7 +248,8 @@ pub fn topic_events(event: &crate::domain::ports::MessageEvent) -> Vec<MessageMa
                 deleted_at: message.deleted_at,
             })]
         }
-        MessageChange::ReactionChanged { .. }
+        MessageChange::CallRootPosted { .. }
+        | MessageChange::ReactionChanged { .. }
         | MessageChange::ThreadUpdated { .. }
         | MessageChange::Typing { .. } => Vec::new(),
     }

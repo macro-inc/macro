@@ -127,8 +127,15 @@ call setup. Existing channel calls and the upcoming-events list remain available
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
-from its separate button at the far right of the bottom toolbar. Messages persist
-with that call session and are visible in its recording page after it ends.
+with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
+the bottom-left and becomes icon-only in narrow panes. Active phone calls fill
+the viewport, with persistent Back and Copy Meeting Url header islands. Media/chat
+controls sit below the video, hide after four idle seconds, and return on tap;
+chat and settings keep them visible. Back returns to the app without hanging up.
+Tap or click a participant to focus them; tap again to restore the grid.
+Talking participants have an accent-colored border.
+Desktop chat fills the call content height; phones use a bottom sheet. Messages
+persist with that call session and are visible in its recording page after it ends.
 Guests can open the same call discussion and read and send text while connected;
 their messages show their name with **(Guest)**. The signed-in composer’s `@` menu includes Macro and available agents;
 mentioning one invokes it in the call thread. Reply on any live message, including
@@ -231,7 +238,7 @@ show progress; the event summary and selected time stay visible. Choose another
 time preserves attendee input. Event booking pages do not show an All meetings
 link back to the profile chooser.
 The private confirmation shows the meeting, date, timezone, location, and guest.
-In the native iOS and Android apps, standalone booking and receipt pages keep a
+In the native desktop, iOS and Android apps, standalone booking and receipt pages keep a
 sticky **Back to Macro** button below the device's top safe-area inset. It returns to
 the app through the router without reloading, including while the page is loading
 or unavailable. Browser pages and embedded booking dialogs omit this button.
@@ -1391,7 +1398,10 @@ been checked. A series invitation shows its current or next live occurrence.
 Descriptions render sanitized rich text, including emphasis, links, and lists.
 Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
-description links use the host's normal link-opening behavior.
+description links use the host's normal link-opening behavior. Long unbroken text
+(Google's Meet separator, long links, forwarded mail) wraps inside the card in a narrow
+pane, and the guest names stay level with their icon beside `+N more`, which
+keeps a 44px tap target on touch.
 
 A published event file (`METHOD:PUBLISH`, what `Forward by email` and, for a Google
 organizer, `Forward invitation` attach) is a shared

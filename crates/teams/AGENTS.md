@@ -71,9 +71,14 @@ event contract (schema, sanitization, delivery semantics).
   409 in that same request when it is no longer the caller's team; without
   `team_id` the routes act on whatever team is current.
 
+- Invite and reminder emails carry the inviter's display name
+  (`TeamRepository::get_user_display_name`). A failed lookup is logged and the
+  email falls back to the inviter's address, so it never blocks an invite.
+
 - `team_invite.is_agent` makes an address with no account sign up as an agent.
   `authentication_service`'s agent setup joins the team, so the seat is added
   without a separate acceptance. Existing accounts accept like any other invite.
+  Its email links to the agent signup page (`/app/signup/agent?team_invite=<id>`).
 
 ## Checks
 

@@ -71,6 +71,8 @@ pub(crate) enum SessionMessage {
     Action(SessionCommand),
     /// Hand the agent these MCP servers from now on.
     ReplaceMcpServers(Vec<McpServer>),
+    /// Answer the agent's permission requests this way from now on.
+    SetPermissionPolicy(PermissionPolicy),
 }
 
 /// An actor-owned operation or an input to the runtime protocol machine.
@@ -265,6 +267,7 @@ where
                     return ActorInput::PresentTool { presentation, completed };
                 },
                 Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
+                Some(SessionMessage::SetPermissionPolicy(policy)) => Input::SetPermissionPolicy(policy),
                 Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",
@@ -320,7 +323,14 @@ where
                 let result = self
                     .logs
                     .present_tool(self.machine.id(), session_id, presentation)
-                    .await;
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist a tool presentation"
+                        );
+                    });
                 let failed = result.is_err();
                 let _ = completed.send(result);
                 if failed {
@@ -505,6 +515,11 @@ where
                         .await
                         .unwrap_or_else(|_| Err(AgentSessionError::LogTimedOut(self.machine.id())));
                     if let Err(error) = result {
+                        tracing::error!(
+                            error = ?error,
+                            id = %self.machine.id(),
+                            "agent session failed to persist its shared initialization"
+                        );
                         self.fail_remaining_completions(&mut effects, error);
                         effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
                     }

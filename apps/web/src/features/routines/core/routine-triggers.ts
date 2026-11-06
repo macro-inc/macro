@@ -1,8 +1,5 @@
-import {
-  describeCron,
-  formatTimeLabel,
-  getDefaultTimezone,
-} from '@core/util/cron';
+import { formatTimeLabel, getDefaultTimezone } from '@core/util/cron';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -46,6 +43,14 @@ export type GithubRepositoryOptions = {
   error: boolean;
 };
 
+/** One task property a trigger watches; empty values match any change to it. */
+export const propertySelectorSchema = z.object({
+  definitionId: z.guid(),
+  /** Option ids or referenced entity ids, one of which the change must add. */
+  values: z.array(z.string()),
+});
+export type PropertySelectorDraft = z.infer<typeof propertySelectorSchema>;
+
 export const routineTriggerSchema = z.discriminatedUnion('kind', [
   scheduleTriggerSchema,
   z.object({
@@ -78,6 +83,8 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
     github: githubSelectorSchema.optional(),
     /** Only for `github`: payload tests that must all pass. */
     match: z.array(payloadTestSchema).optional(),
+    /** Only for task property change events. */
+    property: propertySelectorSchema.optional(),
     /** Yes/no question the event's content must answer with yes. */
     condition: z.string().optional(),
   }),
@@ -95,17 +102,21 @@ export const routineEventGroups = [
   'GitHub',
 ] as const;
 export type RoutineEventGroup = (typeof routineEventGroups)[number];
-type ExternalPreset = Pick<EventTriggerDraft, 'github' | 'match'>;
+type TriggerPreset = Pick<EventTriggerDraft, 'github' | 'match' | 'property'>;
 
 function github(
   events: string[],
   actions: string[] = [],
   match?: PayloadTestDraft[]
-): ExternalPreset {
+): TriggerPreset {
   return {
     github: { events, actions, repositories: [], includeBots: false },
     ...(match ? { match } : {}),
   };
+}
+
+function taskProperty(definitionId: string): TriggerPreset {
+  return { property: { definitionId, values: [] } };
 }
 
 export const routineEvents: {
@@ -113,8 +124,8 @@ export const routineEvents: {
   label: string;
   group: RoutineEventGroup;
   description: string;
-  /** What choosing this item fills in, for events from outside Macro. */
-  preset?: ExternalPreset;
+  /** What choosing this item fills in. */
+  preset?: TriggerPreset;
 }[] = [
   {
     value: 'channel.created',
@@ -157,20 +168,50 @@ export const routineEvents: {
     value: 'task.status_changed',
     label: 'Status changed',
     group: 'Tasks',
-    description: 'The status of a selected task changes.',
+    description:
+      'A task’s status changes. Choose statuses like Completed to run only on those.',
   },
   {
     value: 'task.priority_changed',
     label: 'Priority changed',
     group: 'Tasks',
-    description: 'The priority of a selected task changes.',
+    description:
+      'A task’s priority changes. Choose priorities like Urgent to run only on those.',
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Assignees changed',
+    group: 'Tasks',
+    description: 'Someone is assigned to a task, or its assignees change.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES),
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Due date changed',
+    group: 'Tasks',
+    description: 'A task’s due date is set, moved, or cleared.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.DUE_DATE),
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Project changed',
+    group: 'Tasks',
+    description: 'A task moves to a project, or out of one.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.PROJECT),
+  },
+  {
+    value: 'task.property_changed',
+    label: 'Effort changed',
+    group: 'Tasks',
+    description: 'A task’s effort estimate changes.',
+    preset: taskProperty(SYSTEM_PROPERTY_IDS.EFFORT),
   },
   {
     value: 'task.property_changed',
     label: 'Any property changed',
     group: 'Tasks',
     description:
-      'Any property on a selected task changes, including status and priority.',
+      'Any property on a task changes, including status and priority.',
   },
   {
     value: 'email.message_received',
@@ -293,10 +334,97 @@ export const routineEvents: {
 // Preserve saved selectors while keeping the creation menu focused on the
 // supported product catalog. Editing another field must not drop old triggers.
 const legacyEventLabels: Partial<Record<RoutineEventName, string>> = {
+  'task.property_changed': 'Property changed',
   'document.updated': 'Document details changed',
   'channel.message_patched': 'Message edited',
   'channel.message_attachment_created': 'Attachment added',
 };
+
+/** How a trigger's panel offers the values of a task property. */
+export type TaskTriggerProperty = {
+  definitionId: string;
+  anyLabel: string;
+} & (
+  | { kind: 'options' }
+  | {
+      kind: 'entities';
+      entityType: 'USER' | 'INITIATIVE';
+      specificLabel: string;
+      placeholder: string;
+    }
+  | { kind: 'none' }
+);
+
+const TASK_TRIGGER_PROPERTIES: TaskTriggerProperty[] = [
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.STATUS,
+    anyLabel: 'Any status',
+    kind: 'options',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+    anyLabel: 'Any priority',
+    kind: 'options',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.EFFORT,
+    anyLabel: 'Any effort',
+    kind: 'options',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+    anyLabel: 'Anyone',
+    kind: 'entities',
+    entityType: 'USER',
+    specificLabel: 'Specific people',
+    placeholder: 'Search people…',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+    anyLabel: 'Any project',
+    kind: 'entities',
+    entityType: 'INITIATIVE',
+    specificLabel: 'Specific projects',
+    placeholder: 'Search projects…',
+  },
+  {
+    definitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+    anyLabel: 'Any date',
+    kind: 'none',
+  },
+];
+
+/** The property a status or priority event reports on its own. */
+function eventPropertyId(events: readonly RoutineEventName[]) {
+  if (events.length !== 1) return undefined;
+  return match(events[0])
+    .with('task.status_changed', () => SYSTEM_PROPERTY_IDS.STATUS)
+    .with('task.priority_changed', () => SYSTEM_PROPERTY_IDS.PRIORITY)
+    .otherwise(() => undefined);
+}
+
+export function taskTriggerProperty(
+  trigger: EventTriggerDraft
+): TaskTriggerProperty | undefined {
+  const definitionId =
+    trigger.property?.definitionId ?? eventPropertyId(trigger.events);
+  return TASK_TRIGGER_PROPERTIES.find(
+    (property) => property.definitionId === definitionId
+  );
+}
+
+/** The trigger narrowed to `values`, kept off the wire when its event already says it all. */
+export function withPropertyValues(
+  trigger: EventTriggerDraft,
+  definitionId: string,
+  values: string[]
+): EventTriggerDraft {
+  const implied = eventPropertyId(trigger.events) === definitionId;
+  return {
+    ...trigger,
+    property: implied && !values.length ? undefined : { definitionId, values },
+  };
+}
 
 export type EventScopeKind =
   | 'TASK'
@@ -373,6 +501,18 @@ function githubTriggerLabel(selector: GithubSelectorDraft | undefined) {
   return `GitHub ${selector.events.join(', ')}`;
 }
 
+/** The menu item for one of a Macro trigger's events. */
+function routineEventItem(trigger: EventTriggerDraft, name: RoutineEventName) {
+  const property =
+    name === 'task.property_changed'
+      ? trigger.property?.definitionId
+      : undefined;
+  return routineEvents.find(
+    (item) =>
+      item.value === name && item.preset?.property?.definitionId === property
+  );
+}
+
 /** What the trigger's events are, for its settings panel. */
 export function eventTriggerDescription(trigger: EventTriggerDraft) {
   if (trigger.events.includes('github')) {
@@ -384,10 +524,17 @@ export function eventTriggerDescription(trigger: EventTriggerDraft) {
     )?.description;
   }
   return trigger.events
-    .map(
-      (name) => routineEvents.find((item) => item.value === name)?.description
-    )
+    .map((name) => routineEventItem(trigger, name)?.description)
     .join(' ');
+}
+
+/** One event's name in words, such as "New email received". */
+export function eventLabel(event: string): string {
+  return (
+    routineEvents.find((item) => item.value === event)?.label ??
+    legacyEventLabels[event as RoutineEventName] ??
+    event
+  );
 }
 
 export function eventTriggerLabel(trigger: EventTriggerDraft) {
@@ -396,7 +543,7 @@ export function eventTriggerLabel(trigger: EventTriggerDraft) {
   return trigger.events
     .map(
       (event) =>
-        routineEvents.find((item) => item.value === event)?.label ??
+        routineEventItem(trigger, event)?.label ??
         legacyEventLabels[event] ??
         event
     )
@@ -436,6 +583,8 @@ function validateEventTrigger(
     return 'Choose at least one item for this event trigger.';
   if ((trigger.ids?.length ?? 0) > 100)
     return 'Choose up to 100 items per event trigger.';
+  if ((trigger.property?.values.length ?? 0) > 100)
+    return 'Choose up to 100 values per event trigger.';
   if ([...(trigger.condition?.trim() ?? '')].length > MAX_CONDITION_CHARS)
     return `Keep the condition under ${MAX_CONDITION_CHARS} characters.`;
   return (
@@ -552,23 +701,150 @@ export function validateTriggers(
   }
   return null;
 }
-/** One trigger as a sentence, such as "Every Monday at 9:00 AM", without its time zone. */
+/** Cron day numbers (1 is Sunday) in the order a week reads, Monday first. */
+const WEEK_ORDER = ['2', '3', '4', '5', '6', '7', '1'];
+const DAY_NAMES: Record<string, { short: string; plural: string }> = {
+  '1': { short: 'Sun', plural: 'Sundays' },
+  '2': { short: 'Mon', plural: 'Mondays' },
+  '3': { short: 'Tue', plural: 'Tuesdays' },
+  '4': { short: 'Wed', plural: 'Wednesdays' },
+  '5': { short: 'Thu', plural: 'Thursdays' },
+  '6': { short: 'Fri', plural: 'Fridays' },
+  '7': { short: 'Sat', plural: 'Saturdays' },
+};
+const CRON_DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+/** Weekly days in words: "Weekdays", "Mondays", "Mon, Wed and Fri". */
+function describeDays(days: readonly string[]): string {
+  const sorted = WEEK_ORDER.filter((day) => days.includes(day));
+  // No days chosen yet: the schedule is still being set up.
+  if (!sorted.length) return 'Weekly';
+  const key = sorted.join(',');
+  if (sorted.length === 7) return 'Every day';
+  if (key === '2,3,4,5,6') return 'Weekdays';
+  if (key === '7,1') return 'Weekends';
+  const [only] = sorted;
+  if (sorted.length === 1 && only) return DAY_NAMES[only]?.plural ?? '';
+  const names = sorted.map((day) => DAY_NAMES[day]?.short ?? day);
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+function ordinal(day: number): string {
+  const tens = day % 100;
+  if (tens >= 11 && tens <= 13) return `${day}th`;
+  return `${day}${match(day % 10)
+    .with(1, () => 'st')
+    .with(2, () => 'nd')
+    .with(3, () => 'rd')
+    .otherwise(() => 'th')}`;
+}
+
+/** A cron day-of-week field as day numbers, or undefined if it isn't one. */
+function cronDays(field: string): string[] | undefined {
+  if (field === '*' || field === '?') return [...WEEK_ORDER];
+  const value = (part: string) => {
+    const index = CRON_DAY_NAMES.indexOf(part.toUpperCase());
+    const day = index >= 0 ? index + 1 : Number(part);
+    return Number.isInteger(day) && day >= 1 && day <= 7 ? day : undefined;
+  };
+  const days = new Set<string>();
+  for (const part of field.split(',')) {
+    const [from, to = from] = part.split('-');
+    const start = value(from ?? '');
+    const end = value(to ?? '');
+    if (start === undefined || end === undefined || start > end) return;
+    for (let day = start; day <= end; day++) days.add(String(day));
+  }
+  return [...days];
+}
+
+const pad = (value: string) => value.padStart(2, '0');
+
+/**
+ * A cron expression in words when it is a plain daily, weekly or monthly
+ * schedule, such as one written with a day range ("2-6") through the API.
+ */
+export function describeCronExpression(cron: string): string | undefined {
+  const [second, minute, hour, day, month, weekday, year] = cron
+    .trim()
+    .split(/\s+/);
+  if (second !== '0' || month !== '*' || (year && year !== '*')) return;
+  if (!minute || !/^\d+$/.test(minute) || weekday === undefined) return;
+  if (hour === '*' && day === '*' && (weekday === '*' || weekday === '?'))
+    return minute === '0' ? 'Every hour' : `Every hour at :${pad(minute)}`;
+  if (!hour || !/^\d+$/.test(hour)) return;
+  const time = formatTimeLabel(`${pad(hour)}:${pad(minute)}`);
+  if (day && /^\d+$/.test(day) && (weekday === '*' || weekday === '?'))
+    return `Monthly on the ${ordinal(Number(day))} at ${time}`;
+  if (day !== '*' && day !== '?') return;
+  const days = cronDays(weekday);
+  return days?.length ? `${describeDays(days)} at ${time}` : undefined;
+}
+
+/** A one-off time in the viewer's words, such as "Oct 31 at 9:00 AM". */
+function describeOnce(onceAt: string): string {
+  const at = new Date(onceAt);
+  if (!onceAt || Number.isNaN(at.getTime())) return 'Once';
+  const sameYear = at.getFullYear() === new Date().getFullYear();
+  const date = at.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+  const time = at.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${date} at ${time}`;
+}
+
+/**
+ * One trigger as it reads in a list, such as "Weekdays at 9:00 AM" or "New
+ * email received", without its time zone.
+ */
 export function describeTrigger(trigger: RoutineTriggerDraft): string {
-  if (trigger.kind === 'event') return `When: ${eventTriggerLabel(trigger)}`;
+  if (trigger.kind === 'event') return eventTriggerLabel(trigger);
+  const time = formatTimeLabel(trigger.time);
   return match(trigger.frequency)
-    .with('week', 'month', (frequency) => {
-      const text = describeCron({
-        frequency,
-        time: trigger.time,
-        daysOfWeek: trigger.daysOfWeek,
-        dayOfMonth: trigger.dayOfMonth,
-      });
-      return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+    .with('week', () => `${describeDays(trigger.daysOfWeek)} at ${time}`)
+    .with('month', () => {
+      const day = Number(trigger.dayOfMonth);
+      return Number.isInteger(day) && day >= 1 && day <= 31
+        ? `Monthly on the ${ordinal(day)} at ${time}`
+        : `Monthly at ${time}`;
     })
-    .with('day', () => `Every day at ${formatTimeLabel(trigger.time)}`)
+    .with('day', () => `Every day at ${time}`)
     .with('hour', () => 'Every hour')
-    .with('once', () => 'Once')
-    .with('custom', () => `Custom schedule (${trigger.cron})`)
+    .with('once', () => describeOnce(trigger.onceAt))
+    .with(
+      'custom',
+      () =>
+        describeCronExpression(trigger.cron) ??
+        `Custom schedule (${trigger.cron.trim()})`
+    )
+    .exhaustive();
+}
+
+/** What kind of thing starts a trigger, for the icon beside it. */
+export type TriggerKind =
+  | 'schedule'
+  | 'email'
+  | 'task'
+  | 'document'
+  | 'channel'
+  | 'call'
+  | 'github';
+
+export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
+  if (trigger.kind === 'schedule') return 'schedule';
+  return match(eventScopeKind(trigger))
+    .returnType<TriggerKind>()
+    .with('THREAD', () => 'email')
+    .with('TASK', () => 'task')
+    .with('DOCUMENT', () => 'document')
+    .with('CALL_RECORD', () => 'call')
+    .with('CHANNEL', () => 'channel')
+    .with('GITHUB', () => 'github')
     .exhaustive();
 }
 

@@ -10,6 +10,444 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/account-managers": {
+      "get": {
+        "tags": ["account-managers"],
+        "summary": "List the managers of the caller's account.",
+        "operationId": "list_account_managers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagersList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Ask another account for manager access, in your DM with them.",
+        "operationId": "request_account_manager",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestAccountManagerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}": {
+      "get": {
+        "tags": ["account-managers"],
+        "summary": "Read a grant the caller is part of.",
+        "operationId": "get_account_manager_grant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["account-managers"],
+        "summary": "End a grant. Either side may withdraw it.",
+        "operationId": "revoke_account_manager_grant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}/response": {
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Approve or decline a request the caller didn't make.",
+        "operationId": "respond_to_account_manager_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondToAccountManagerRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountManagerGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/account-managers/{id}/token": {
+      "post": {
+        "tags": ["account-managers"],
+        "summary": "Issue the credential to the manager. Works once. A POST, so link previews\nand crawlers can't use it up.",
+        "operationId": "claim_account_manager_token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Grant id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimedAccountManagerToken"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agents": {
       "get": {
         "tags": ["agents"],
@@ -433,6 +871,105 @@
         }
       }
     },
+    "/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots`: the bots the caller can manage.",
+        "operationId": "list_bots",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots`.",
+        "operationId": "create_bot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/me": {
       "get": {
         "tags": ["bots"],
@@ -561,6 +1098,195 @@
         }
       }
     },
+    "/bots/{bot_id}": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}`.",
+        "operationId": "get_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}`.",
+        "operationId": "delete_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["bots"],
+        "summary": "Handler for `PATCH /bots/{bot_id}`.",
+        "operationId": "patch_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/bots/{bot_id}/channels": {
       "get": {
         "tags": ["bots"],
@@ -643,6 +1369,210 @@
             "name": "channel_id",
             "in": "path",
             "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}/tokens`.",
+        "operationId": "list_bot_tokens",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotToken"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /bots/{bot_id}/tokens`.",
+        "operationId": "create_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBotTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBotTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/tokens/{token_id}": {
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.",
+        "operationId": "revoke_bot_token",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "description": "Token ID",
             "required": true,
             "schema": {
               "type": "string",
@@ -3419,7 +4349,7 @@
       },
       "patch": {
         "tags": ["channel_labels"],
-        "summary": "Rename a label of the caller's authorized scope.",
+        "summary": "Update a label, optionally moving it to another authorized scope.",
         "operationId": "rename_channel_label",
         "parameters": [
           {
@@ -4423,6 +5353,360 @@
         }
       }
     },
+    "/channels/{channel_id}/access-requests/mine": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "get_my_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequestState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["channels"],
+        "summary": "Handler for `PUT /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "request_channel_access",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["channels"],
+        "summary": "Handler for `DELETE /channels/{channel_id}/access-requests/mine`.",
+        "operationId": "cancel_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/access-requests/{request_id}": {
+      "get": {
+        "tags": ["channels"],
+        "summary": "Handler for `GET /channels/{channel_id}/access-requests/{request_id}`.",
+        "operationId": "get_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Access request ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/access-requests/{request_id}/resolve": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/{channel_id}/access-requests/{request_id}/resolve`.",
+        "operationId": "resolve_channel_access_request",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Access request ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveChannelAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAccessRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/attachments": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -4476,6 +5760,132 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiChannelAttachmentsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/bots": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /channels/{channel_id}/bots`.",
+        "operationId": "list_channel_bots",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Bot"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/bots`.",
+        "operationId": "add_channel_bot",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChannelBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -7040,6 +8450,70 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SharePipeline"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/stage-requirements": {
+      "get": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Read requirements by stable stage and field identities.",
+        "operationId": "get_crm_pipeline_stage_requirements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StageRequirement"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::pipelines"],
+        "summary": "Replace the required fields for one stage. An empty list removes its rule.",
+        "operationId": "set_crm_pipeline_stage_requirement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRequirement"
               }
             }
           },
@@ -9742,7 +11216,7 @@
     "/documents/create_skill": {
       "post": {
         "tags": ["document"],
-        "summary": "Creates a skill document with initialized markdown content in one\nbackend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
+        "summary": "Creates a skill document with initialized markdown content and its\nrouting description in one backend-owned lifecycle. Skills are markdown documents containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
         "operationId": "create_skill_handler",
         "requestBody": {
           "content": {
@@ -9774,7 +11248,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "The description is blank, longer than one line or 300 characters, or does not start \"Use when\"",
             "content": {
               "application/json": {
                 "schema": {
@@ -10573,6 +12047,105 @@
         }
       }
     },
+    "/documents/upload": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Upload a file's bytes as a new document, up to 25 MiB.",
+        "description": "The body is the raw file content. Preview generation and indexing may\nfinish after the response.",
+        "operationId": "upload_file",
+        "parameters": [
+          {
+            "name": "fileName",
+            "in": "query",
+            "description": "Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "Destination project. Requires edit access; omit for top-level files.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The file's bytes, at most 25 MiB.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filename or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No edit access to the destination project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot create documents"
+          },
+          "413": {
+            "description": "The file exceeds 25 MiB"
+          },
+          "422": {
+            "description": "Document name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
@@ -10843,6 +12416,116 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a markdown document or task by instructions with the caller's edit\naccess. Runs EditDocument's pipeline as a live collaborator, with its AI\nadmission and billing.",
+        "description": "A client that disconnects aborts the edit: axum drops this handler's\nfuture, which drops the in-flight request to the editing worker, and the\nworker aborts on its request signal. Steps already acknowledged stay.",
+        "operationId": "edit_document_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The editor could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit could not start",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have partly applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditFailed"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -11705,6 +13388,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/skill_description": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Gets when to use a skill. `description` is absent for a skill created\nbefore descriptions existed.",
+        "operationId": "get_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Sets when to use a skill: one line starting \"Use when\", at most 300\ncharacters. Agents choose skills for a request by it.",
+        "operationId": "set_skill_description",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Skill document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillDescriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDescriptionBody"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The document is not a skill, or the description is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -15459,6 +17280,84 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PATCH /harnesses/{harness_id}`.",
+        "operationId": "patch_harness",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchHarnessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -20238,6 +22137,97 @@
         ],
         "description": "Metadata together with the caller's effective grant."
       },
+      "AccountManagerDecision": {
+        "type": "string",
+        "description": "A response to a request.",
+        "enum": ["approve", "decline"]
+      },
+      "AccountManagerGrant": {
+        "type": "object",
+        "description": "A request for manager access and what became of it.",
+        "required": [
+          "id",
+          "managedUserId",
+          "managerUserId",
+          "requestedBy",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "claimedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the manager claimed the credential."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made."
+          },
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the pending request or unclaimed approval stops being usable."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Grant id."
+          },
+          "lastUsedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the credential was last used, to the minute."
+          },
+          "managedUserId": {
+            "type": "string",
+            "description": "The account being managed."
+          },
+          "managerUserId": {
+            "type": "string",
+            "description": "The agent account doing the managing."
+          },
+          "requestedBy": {
+            "$ref": "#/components/schemas/AccountManagerRole",
+            "description": "The side that asked."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccountManagerGrantStatus",
+            "description": "Lifecycle status."
+          }
+        }
+      },
+      "AccountManagerGrantStatus": {
+        "type": "string",
+        "description": "Where a grant is in its lifecycle.",
+        "enum": [
+          "pending",
+          "approved",
+          "declined",
+          "active",
+          "revoked",
+          "expired"
+        ]
+      },
+      "AccountManagerRole": {
+        "type": "string",
+        "description": "One side of a grant.",
+        "enum": ["managed", "manager"]
+      },
+      "AccountManagersList": {
+        "type": "object",
+        "description": "The managers of the caller's account.",
+        "required": ["grants"],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountManagerGrant"
+            },
+            "description": "Approved and active grants on the caller's account."
+          }
+        }
+      },
       "ActiveCallSummary": {
         "type": "object",
         "description": "A currently active call, as returned by the batch active-calls listing.",
@@ -20326,6 +22316,17 @@
         "type": "string",
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
+      },
+      "AddChannelBotRequest": {
+        "type": "object",
+        "description": "Request to add a bot to a channel.",
+        "required": ["bot_id"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          }
+        }
       },
       "AddFavoriteRequest": {
         "type": "object",
@@ -20782,6 +22783,21 @@
         "type": "string",
         "description": "What a typing agent is doing.",
         "enum": ["thinking", "writing", "working", "waiting"]
+      },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
       },
       "Anchor": {
         "oneOf": [
@@ -22173,7 +24189,7 @@
           },
           "has_agent": {
             "type": "boolean",
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -23073,6 +25089,96 @@
           }
         }
       },
+      "CallDiscussion": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A thread in the call's channel, rooted at the message with the call's id.",
+            "required": ["channel_id", "root_id", "kind"],
+            "properties": {
+              "channel_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The channel holding the thread."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["channel_thread"]
+              },
+              "root_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The thread's root message."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call's own thread on the call parent.",
+            "required": ["call_id", "kind"],
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The call owning the thread."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["call_chat"]
+              }
+            }
+          }
+        ],
+        "description": "Where a call's discussion lives, decided once when the call is created.\n`channel_id` cannot decide this: past channel calls keep their own thread."
+      },
+      "CallEntryStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The call has not ended.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["live"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call ended.",
+            "required": ["ended_at", "duration_ms", "state"],
+            "properties": {
+              "duration_ms": {
+                "type": "integer",
+                "format": "int64",
+                "description": "How long it lasted."
+              },
+              "ended_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it ended."
+              },
+              "state": {
+                "type": "string",
+                "enum": ["ended"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The call's record was deleted; its discussion stays in the channel.",
+            "required": ["state"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["record_deleted"]
+              }
+            }
+          }
+        ],
+        "description": "A channel call's life, as its timeline row shows it."
+      },
       "CallFilters": {
         "type": "object",
         "description": "Filters for call records.",
@@ -23125,6 +25231,7 @@
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
         "required": [
           "callId",
+          "discussion",
           "createdBy",
           "startedAt",
           "shareWithTeam",
@@ -23155,6 +25262,10 @@
           "customName": {
             "type": ["string", "null"],
             "description": "User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`."
+          },
+          "discussion": {
+            "$ref": "#/components/schemas/CallDiscussion",
+            "description": "Where this call's discussion lives."
           },
           "durationMs": {
             "type": ["integer", "null"],
@@ -23893,6 +26004,116 @@
           }
         }
       },
+      "ChannelAccessDecision": {
+        "type": "string",
+        "description": "A participant's answer to a pending request.",
+        "enum": ["approve", "deny"]
+      },
+      "ChannelAccessRequest": {
+        "type": "object",
+        "description": "One attempt to join a channel. Attempts are never reused, so each timeline\nentry keeps showing the outcome of the attempt it announced.",
+        "required": [
+          "id",
+          "channel_id",
+          "requester_id",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the requester asked to join."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the requester asked."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attempt id."
+          },
+          "requester_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Person asking to join."
+          },
+          "resolved_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the attempt stopped being pending."
+          },
+          "resolved_by": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Participant who approved or denied it."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChannelAccessRequestStatus",
+            "description": "Current outcome."
+          }
+        }
+      },
+      "ChannelAccessRequestState": {
+        "type": "object",
+        "description": "A requester's view of their access to a channel they cannot read.",
+        "required": ["can_request"],
+        "properties": {
+          "can_request": {
+            "type": "boolean",
+            "description": "Whether this channel accepts requests."
+          },
+          "request": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelAccessRequest",
+                "description": "The caller's latest attempt, if any."
+              }
+            ]
+          },
+          "retry_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Earliest time the caller may ask again, while they must wait."
+          }
+        }
+      },
+      "ChannelAccessRequestStatus": {
+        "type": "string",
+        "description": "Outcome of one attempt to join.",
+        "enum": ["pending", "approved", "denied", "cancelled"]
+      },
+      "ChannelAccessRequestedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`ChannelTopicEvent::AccessRequested`].",
+        "required": ["channel_id", "request_id", "requester_id"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the requester asked to join."
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The attempt; channel participants read its current outcome by id."
+          },
+          "requester_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Person asking to join."
+          }
+        }
+      },
       "ChannelCreatedMetadata": {
         "type": "object",
         "description": "Metadata for [`ChannelTopicEvent::Created`].",
@@ -24094,7 +26315,7 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When the label was last renamed or reordered."
+            "description": "When the label's name, rule, scope, or order last changed."
           }
         }
       },
@@ -24539,6 +26760,21 @@
                 "description": "Participants were removed from a channel (admin removal or self-leave)."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Someone outside a channel asked to join it.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.access_requested"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelAccessRequestedMetadata",
+                "description": "Someone outside a channel asked to join it."
+              }
+            }
           }
         ],
         "description": "Events that can be published to [`MacroChannelsTopic`]."
@@ -24714,6 +26950,21 @@
           "device_secret": {
             "type": "string",
             "description": "The claim credential returned when the pairing was created."
+          }
+        }
+      },
+      "ClaimedAccountManagerToken": {
+        "type": "object",
+        "description": "The credential, returned only by the claim that issued it.",
+        "required": ["grant", "token"],
+        "properties": {
+          "grant": {
+            "$ref": "#/components/schemas/AccountManagerGrant",
+            "description": "The grant, now active."
+          },
+          "token": {
+            "type": "string",
+            "description": "The secret. Shown only once."
           }
         }
       },
@@ -25963,7 +28214,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -25973,6 +28224,36 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot."
+          }
+        }
+      },
+      "CreateBotTokenRequest": {
+        "type": "object",
+        "description": "Request to create a bot token.",
+        "properties": {
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional expiration timestamp."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Token label."
+          }
+        }
+      },
+      "CreateBotTokenResponse": {
+        "type": "object",
+        "description": "Response containing a newly minted token.",
+        "required": ["token", "bearer_token"],
+        "properties": {
+          "bearer_token": {
+            "type": "string",
+            "description": "Raw bearer token."
+          },
+          "token": {
+            "$ref": "#/components/schemas/BotToken",
+            "description": "Token metadata."
           }
         }
       },
@@ -26153,7 +28434,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false."
           },
           "name": {
             "type": "string",
@@ -26590,10 +28871,6 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
-          "allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
-          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -26601,32 +28878,28 @@
           "name": {
             "type": "string",
             "description": "Requested harness display name (typically the machine's hostname)."
-          },
-          "scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asks for; the approval dialog arrives\npreselected to it."
-              }
-            ]
           }
         }
       },
       "CreatePipeline": {
         "type": "object",
-        "description": "Request to create an empty pipeline with the standard CRM columns.",
-        "required": ["name", "recordType"],
+        "description": "Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.",
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
             "description": "Pipeline name."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Company or contact entries."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -26667,8 +28940,12 @@
       "CreateSkillRequest": {
         "type": "object",
         "description": "Request body for creating a skill — a markdown document containing\ninstructions that AI reads and follows when the skill is referenced in an\nAI input.",
-        "required": ["skillName"],
+        "required": ["skillName", "description"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", e.g. \"Use when\ndrafting release notes; not changelog entries\". Agents choose skills\nfor a request by it."
+          },
           "markdown": {
             "type": ["string", "null"],
             "description": "Markdown source text. Defaults to an empty skill document."
@@ -27918,6 +30195,77 @@
           }
         }
       },
+      "DocumentAiEditFailed": {
+        "type": "object",
+        "description": "The edit failed after it started, so it may have partly applied. Read the\ndocument before retrying.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditFailedCode",
+            "description": "Always `edit_failed`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What to do next; the cause is logged, never returned."
+          }
+        }
+      },
+      "DocumentAiEditFailedCode": {
+        "type": "string",
+        "description": "Error code of an edit that failed after it started.",
+        "enum": ["edit_failed"]
+      },
+      "DocumentAiEditRefused": {
+        "type": "object",
+        "description": "The editor could not do the edit; nothing changed.",
+        "required": ["error", "reason"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentAiEditRefusedCode",
+            "description": "Always `edit_refused`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in the editor's words: what it needs to know or cannot do."
+          }
+        }
+      },
+      "DocumentAiEditRefusedCode": {
+        "type": "string",
+        "description": "Error code of an edit the editor refused.",
+        "enum": ["edit_refused"]
+      },
+      "DocumentAiEditRequest": {
+        "type": "object",
+        "description": "What to change, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "fast": {
+            "type": "boolean",
+            "description": "Run the single-model fast pipeline, for one small, contained edit."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions. Name the section or quote the text to\nchange, describe the outcome, and say what must stay as it is.",
+            "minLength": 1
+          }
+        }
+      },
+      "DocumentAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["revision"],
+        "properties": {
+          "clarification": {
+            "type": ["string", "null"],
+            "description": "What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the edit, as sync-service encodes it."
+          }
+        }
+      },
       "DocumentBasic": {
         "type": "object",
         "description": "Returns basic information of a document used for some db queries",
@@ -28810,6 +31158,11 @@
           "actor": {
             "type": "string",
             "description": "User or bot that performed the edit."
+          },
+          "agent_correlation_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Invocation from the editor's signed document grant."
           },
           "on_behalf_of": {
             "oneOf": [
@@ -32625,6 +34978,10 @@
                 },
                 "description": "Its questions, in order."
               },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it: the rules answers of earlier shown sections must\npass, naming only their columns. A section whose rules fail is\nskipped: its questions are not required and their answers are\nnot written. Absent, it is always shown."
+              },
               "title": {
                 "type": "string",
                 "description": "Its title; may be empty."
@@ -32727,6 +35084,10 @@
                   "$ref": "#/components/schemas/FormQuestionDetail"
                 },
                 "description": "Its questions, in order."
+              },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it, from earlier shown sections' answers; absent,\nit is always shown. Sent to every caller so a respondent's page\ncan skip it."
               },
               "title": {
                 "type": "string",
@@ -35302,6 +37663,37 @@
           },
           {
             "type": "object",
+            "description": "A section's show-when rules test a column no earlier section asks.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["conditionNamesLaterColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rule does not fit its column.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["conditionRule"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A text is longer than allowed.",
             "required": ["max", "kind"],
             "properties": {
@@ -35704,6 +38096,10 @@
               }
             ]
           },
+          "kind": {
+            "$ref": "#/components/schemas/MessageKind",
+            "description": "What this message is."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -35962,6 +38358,21 @@
           },
           {
             "type": "object",
+            "description": "A channel call's thread root was created. It stands for the call, so it\nreaches viewers and moves the channel up without any of what a post\ncauses: no notifications, agents, routines, webhooks or search documents.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted root."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call_root_posted"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Thread resolution, placement, or deletion changed.",
             "required": ["state", "type"],
             "properties": {
@@ -36113,6 +38524,11 @@
             "description": "Referenced entity type."
           }
         }
+      },
+      "MessageKind": {
+        "type": "string",
+        "description": "What a persisted message is. Set by the server, never by a client.",
+        "enum": ["message", "call_root"]
       },
       "MessageListItem": {
         "allOf": [
@@ -36552,6 +38968,25 @@
               "type": {
                 "type": "string",
                 "enum": ["activity"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A channel call and its thread. The root message's id is the call id.",
+            "required": ["message", "status", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/MessageListItem",
+                "description": "The call's root message, its thread state and its reply preview."
+              },
+              "status": {
+                "$ref": "#/components/schemas/CallEntryStatus",
+                "description": "Where the call is in its life."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call"]
               }
             }
           }
@@ -37343,24 +39778,9 @@
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
           },
-          "requested_allow_permission_bypass": {
-            "type": ["boolean", "null"],
-            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
-          },
           "requested_name": {
             "type": "string",
             "description": "Harness display name the daemon asked for."
-          },
-          "requested_scope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RequestedHarnessScope",
-                "description": "The scope the daemon's config asked for, when it named one."
-              }
-            ]
           }
         }
       },
@@ -37430,7 +39850,7 @@
           },
           "has_agent": {
             "type": ["boolean", "null"],
-            "description": "Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged."
+            "description": "Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged."
           },
           "name": {
             "type": ["string", "null"],
@@ -37453,6 +39873,20 @@
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
+          }
+        }
+      },
+      "PatchHarnessRequest": {
+        "type": "object",
+        "description": "Request to change a registered harness. Omitted fields stay as they are.",
+        "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Whether agents may bypass ACP permission requests on this harness.\nLive sessions pick the change up at their next turn."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New display name."
           }
         }
       },
@@ -37973,11 +40407,18 @@
           "primaryColumnId": {
             "type": "string",
             "format": "uuid",
-            "description": "Protected primary column."
+            "description": "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
           },
           "recordType": {
-            "$ref": "#/components/schemas/PipelineRecordType",
-            "description": "Kind of the primary reference."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Kind of the primary reference; `None` for a generic pipeline, whose\nprimary column is plain text."
+              }
+            ]
           },
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
@@ -39088,7 +41529,7 @@
       },
       "RenameChannelLabelRequest": {
         "type": "object",
-        "description": "Request body for renaming a label.",
+        "description": "Request body for updating a label's name, smart rule, or sharing scope.",
         "required": ["name"],
         "properties": {
           "name": {
@@ -39103,6 +41544,17 @@
               {
                 "$ref": "#/components/schemas/ChannelLabelRule",
                 "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
+          },
+          "targetScope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+                "description": "Destination namespace; omitted to preserve the current scope."
               }
             ]
           }
@@ -39183,15 +41635,25 @@
           }
         }
       },
+      "RequestAccountManagerBody": {
+        "type": "object",
+        "description": "Request body for asking for a grant.",
+        "required": ["counterpartyId", "callerRole"],
+        "properties": {
+          "callerRole": {
+            "$ref": "#/components/schemas/AccountManagerRole",
+            "description": "The side the caller takes."
+          },
+          "counterpartyId": {
+            "type": "string",
+            "description": "The other account (`macro|...`)."
+          }
+        }
+      },
       "RequestStatus": {
         "type": "string",
         "description": "Durable outcome; reading a notification never changes it.",
         "enum": ["pending", "granted", "denied", "cancelled"]
-      },
-      "RequestedHarnessScope": {
-        "type": "string",
-        "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
-        "enum": ["private", "team"]
       },
       "RequestedLayout": {
         "oneOf": [
@@ -39301,6 +41763,17 @@
         ],
         "description": "A layout as an op asks for it: a board or timeline may leave its title\nout."
       },
+      "ResolveChannelAccessRequest": {
+        "type": "object",
+        "description": "Body of a participant's answer.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/ChannelAccessDecision",
+            "description": "The answer."
+          }
+        }
+      },
       "ResolveRequest": {
         "type": "object",
         "description": "Owner's decision; omission of a granted level means deny.",
@@ -39321,6 +41794,17 @@
             "type": "integer",
             "format": "int32",
             "description": "Request revision being reviewed."
+          }
+        }
+      },
+      "RespondToAccountManagerRequestBody": {
+        "type": "object",
+        "description": "Request body for responding to a request.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/AccountManagerDecision",
+            "description": "The response."
           }
         }
       },
@@ -40444,6 +42928,17 @@
         ],
         "description": "Type-safe enum for setting entity property values - provides compile-time validation."
       },
+      "SetSkillDescriptionRequest": {
+        "type": "object",
+        "description": "Request body for setting a skill's routing description.",
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "When to use the skill, in one line starting \"Use when\", at most 300\ncharacters."
+          }
+        }
+      },
       "Sha256Digest": {
         "type": "string",
         "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
@@ -40593,6 +43088,16 @@
           "entity_type": {
             "type": "string",
             "description": "Mentioned entity type."
+          }
+        }
+      },
+      "SkillDescriptionBody": {
+        "type": "object",
+        "description": "A skill's routing description.",
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, in one line starting \"Use when\". Absent for a\nskill created before descriptions existed."
           }
         }
       },
@@ -43167,6 +45672,32 @@
         ],
         "description": "The statement that ran: a read, or the table (and for a type change, the\ncolumn) it wrote."
       },
+      "StageRequirement": {
+        "type": "object",
+        "description": "Fields required when a deal enters a particular option of a stage column.",
+        "required": ["stageColumnId", "stageId", "requiredColumnIds"],
+        "properties": {
+          "requiredColumnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Fields that must be present. Empty removes the rule for this stage."
+          },
+          "stageColumnId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Single-select column identifying the stage, independent of its name."
+          },
+          "stageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable option identity; renaming the stage preserves the rule."
+          }
+        },
+        "additionalProperties": false
+      },
       "StarterDatabase": {
         "type": "object",
         "description": "Starter result. A missing database means the user already started or removed it.",
@@ -45301,6 +47832,22 @@
           },
           "sha": {
             "type": "string"
+          }
+        }
+      },
+      "UploadFileResponse": {
+        "type": "object",
+        "description": "The document created from the uploaded bytes.",
+        "required": ["documentId", "sizeBytes"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The new document."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "description": "Number of bytes stored.",
+            "minimum": 0
           }
         }
       },

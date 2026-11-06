@@ -173,6 +173,7 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
     if (props.group === 'channels') {
       return t('channelSections.allChannels');
     }
+
     return t(`channelSections.${props.group}`);
   };
 
@@ -372,9 +373,11 @@ function BrowseSection(props: {
       ],
       () => {
         if (!outerScroll()) return;
+
         const frame = requestAnimationFrame(() => {
           let element: HTMLElement | undefined = scrollRoot();
           let offset = 0;
+
           while (element && element !== props.outerScrollRoot) {
             offset += element.offsetTop;
             element =
@@ -382,6 +385,7 @@ function BrowseSection(props: {
                 ? element.offsetParent
                 : undefined;
           }
+
           setStartMargin(offset);
         });
         onCleanup(() => cancelAnimationFrame(frame));
@@ -413,9 +417,11 @@ function BrowseSection(props: {
 
   const label = () => {
     const row = heading();
+
     if (row.kind === 'section' && row.group === 'channels') {
       return t('channelSections.allChannels');
     }
+
     return row.kind === 'label'
       ? row.label.name
       : t(`channelSections.${row.group}`);
@@ -509,6 +515,7 @@ function BrowseSection(props: {
       maxHeight={props.maxHeight}
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
+      outerScrollRoot={props.outerScrollRoot}
       itemCount={itemCount()}
       onResizingChange={setResizing}
       rootRef={(element) => {
@@ -553,9 +560,14 @@ function BrowseSection(props: {
         <ChannelRailVirtualizer
           ref={(current) => {
             handle.virtualizer = current;
-            handle.outerScroll = outerScroll();
             setVirtualizer(current);
-            if (current) props.onReady();
+            // The virtualizer clears its ref while the rail is disposed. A
+            // reactive read then can rerun the owner being disposed, so keep
+            // the last snapshot.
+            if (!current) return;
+
+            handle.outerScroll = outerScroll();
+            props.onReady();
           }}
           keys={rowIds()}
           scrollRoot={rowsScrollRoot()}

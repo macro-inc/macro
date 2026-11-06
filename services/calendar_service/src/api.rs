@@ -25,12 +25,19 @@ const GATEWAY_PATH_PREFIX: &str = "/calendar";
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;
     let port = state.config.port;
-    let traced_api = api_router(state.clone()).with_state(state).layer(
-        ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
-            .layer(macro_cors::cors_layer())
-            .layer(CompressionLayer::new().gzip(true)),
-    );
+    let correlation = state.correlation.clone();
+    let traced_api = api_router(state.clone())
+        .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(macro_cors::cors_layer())
+                .layer(CompressionLayer::new().gzip(true)),
+        );
     let health = crate::health::router();
     let app = mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui());
 

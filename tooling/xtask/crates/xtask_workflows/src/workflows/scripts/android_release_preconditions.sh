@@ -47,8 +47,12 @@ fi
 echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
 echo "Releasing Android version code ${version_code}."
 
-# (`gh pr checks` names are job names, not workflow names.)
-ours='^(Android Native Check|Android Play Release|Re-run the native check|Web App Status Check|Android Release Drift|iOS Native Check)'
+# (`gh pr checks` names are job names, not workflow names, plus the contexts
+# of commit statuses, such as the android-play/* ones Android Play Publish
+# and Android Release Watch set. PR CI prefixes the jobs it calls with
+# `Web App / `. The CI gate status aggregates every check, and stays pending
+# on a head no one has run PR CI on.)
+ours='^((Web App / )?(Android Native Check|Web App Status Check|iOS Native Check)|Android Play Release|Re-run the native check|Android Release Drift|android-play/|CI gate$)'
 deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
 while true; do
   checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \

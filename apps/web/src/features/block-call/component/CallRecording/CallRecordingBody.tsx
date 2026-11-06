@@ -1,6 +1,6 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { CallChatHistory } from '@channel/Call/chat/CallChatHistory';
+import { CallDiscussionHistory } from '@channel/Call/chat/CallChatHistory';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -267,7 +267,8 @@ export function CallRecordingBody(props: {
                 </div>
               </section>
             </Show>
-            <CallChatHistory
+            <CallDiscussionHistory
+              discussion={record().discussion}
               callId={props.callId}
               targetId={props.messageTarget}
               targetRequestKey={props.messageTargetRequestKey}

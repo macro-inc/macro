@@ -32,6 +32,40 @@ pub struct Call {
     pub egress_id: Option<String>,
 }
 
+/// Where a call's discussion lives, decided once when the call is created.
+/// `channel_id` cannot decide this: past channel calls keep their own thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CallDiscussion {
+    /// A thread in the call's channel, rooted at the message with the call's id.
+    ChannelThread {
+        /// The channel holding the thread.
+        channel_id: Uuid,
+        /// The thread's root message.
+        root_id: Uuid,
+    },
+    /// The call's own thread on the call parent.
+    CallChat {
+        /// The call owning the thread.
+        call_id: Uuid,
+    },
+}
+
+impl CallDiscussion {
+    /// Read the stored value. A channel thread whose channel is gone has nothing
+    /// left to show, and reads as a call with no chat.
+    pub fn from_stored(stored: &str, call_id: Uuid, channel_id: Option<Uuid>) -> Self {
+        match (stored, channel_id) {
+            ("channel_thread", Some(channel_id)) => Self::ChannelThread {
+                channel_id,
+                root_id: call_id,
+            },
+            _ => Self::CallChat { call_id },
+        }
+    }
+}
+
 /// Facts committed when an active call is archived.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchivedCall {
@@ -51,6 +85,8 @@ pub struct ArchivedCall {
     pub has_recording: bool,
     /// Macro accounts that joined the call over its lifetime, once each.
     pub participants: Vec<String>,
+    /// Whether the call's discussion is a thread in its channel.
+    pub channel_thread: bool,
 }
 
 /// The people known to have been on, or invited to, an archived call.
@@ -480,6 +516,8 @@ pub struct CallRecord {
     pub call_id: Uuid,
     /// The channel this call belongs to.
     pub channel_id: Option<Uuid>,
+    /// Where this call's discussion lives.
+    pub discussion: CallDiscussion,
     /// The RTC room name. `None` for imported calls, which never had a room.
     pub room_name: Option<String>,
     /// User who created the call.

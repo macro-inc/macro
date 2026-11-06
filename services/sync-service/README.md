@@ -33,6 +33,10 @@ When a client updates a document via a WebSocket message, we apply the update to
 Unfortunately, query params are the best way to authenticate a websocket connection. Since we use tls, query params should be encrypted in transit.
 the `sync-service` will verify the jwt and ensure that the user has the correct permissions to access the document.
 
+Document grants may also carry signed `agent_correlation_id` attribution. The
+worker preserves it through editor metadata and pending activity batches so
+separate code-mode invocations remain distinct, without changing permissions.
+
 HTTP routes use Axum `FromRequestParts` extractors to authenticate before the
 handler runs. Document view/edit/admin routes declare their minimum grant;
 atomic state/update routes require an exact signed document grant, and internal
@@ -54,6 +58,9 @@ for this message before deploying clients that send it; the dev push and
 production release workflows enforce this order while building the web app in
 parallel. The worker deployment job waits 300 seconds after deployment for
 [active Durable Objects to adopt the new code](https://developers.cloudflare.com/durable-objects/deployments/durable-objects-code-updates/).
+When the live version was built from the same inputs, recorded in its deployment
+message, the job skips migrations and deployment and waits only for what remains
+of those 300 seconds.
 Manual deployments must preserve the same order and wait at least five minutes
 before publishing clients. Keep the workflow wait aligned with any future
 `code_update_strategy` change. Older workers refuse

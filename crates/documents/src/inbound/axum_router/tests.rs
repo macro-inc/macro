@@ -54,6 +54,7 @@ use super::{
 };
 
 mod sync_content;
+mod upload_file;
 use crate::{
     domain::{
         content::DocumentContent,
@@ -147,6 +148,15 @@ struct FakeDocumentService {
     get_text_calls: Mutex<Vec<String>>,
     document_owner: Mutex<Option<Owner>>,
     copy_calls: Mutex<Vec<CreationPrincipal>>,
+    created_documents: Mutex<Vec<CreatedDocumentCall>>,
+    upload_url: Mutex<Option<String>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CreatedDocumentCall {
+    document_name: String,
+    file_type: Option<FileType>,
+    project_id: Option<Uuid>,
 }
 
 impl FakeDocumentService {
@@ -329,7 +339,7 @@ impl DocumentService for FakeDocumentService {
     async fn create_document(
         &self,
         principal: &CreationPrincipal,
-        _document: NewDocument,
+        document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         self.create_calls
@@ -338,8 +348,22 @@ impl DocumentService for FakeDocumentService {
             .push(CreateDocumentCall {
                 principal: principal.clone(),
             });
+        self.created_documents
+            .lock()
+            .expect("created documents lock poisoned")
+            .push(CreatedDocumentCall {
+                document_name: document.document_name,
+                file_type: document.file_type,
+                project_id: document.project_id,
+            });
 
-        Ok(create_document_response(principal.owner()))
+        let mut response = create_document_response(principal.owner());
+        response.document_response.presigned_url = self
+            .upload_url
+            .lock()
+            .expect("upload url lock poisoned")
+            .clone();
+        Ok(response)
     }
 
     async fn import_email_attachment(
@@ -494,6 +518,34 @@ impl DocumentService for FakeDocumentService {
         _share: bool,
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         panic!("unexpected set_team_share call")
+    }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
     }
 }
 
@@ -1015,6 +1067,16 @@ fn test_router_with(
         task_dedup_service,
         lexical_client,
         creator,
+        #[cfg(feature = "ai_tools")]
+        ai_editing: Arc::new(crate::domain::ai_editing::AiEditingService::new(
+            Arc::new(
+                crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                    "http://localhost/unused-editing-worker".to_string(),
+                ),
+            ),
+            Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        )),
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
         non_user_owners,
     };
@@ -1540,6 +1602,7 @@ async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body
         "/create_snippet",
         "/create_skill",
         "/copy-source/copy",
+        "/upload?fileName=notes.txt",
     ] {
         for authenticate in callers {
             let (router, document_service, _access_service, _authorization_service) = test_router();
@@ -1767,4 +1830,24 @@ async fn canvas_creation_requires_project_edit_access_before_metadata_creation()
         access.document_access_calls()[0].entity_type,
         EntityType::Project
     );
+}
+
+#[tokio::test]
+async fn a_skill_without_a_use_when_description_is_rejected_before_it_is_created() {
+    for description in ["", "Drafts release notes", "Use when one\nand two"] {
+        let (router, document_service, _access_service, _authorization_service) = test_router();
+        let request =
+            with_jwt(Request::post("/create_skill").header("content-type", "application/json"))
+                .body(Body::from(
+                    json!({ "skillName": "Release notes", "description": description }).to_string(),
+                ))
+                .expect("request should build");
+
+        assert_eq!(
+            send_status(&router, request).await,
+            StatusCode::BAD_REQUEST,
+            "{description:?}"
+        );
+        assert!(document_service.create_calls().is_empty());
+    }
 }

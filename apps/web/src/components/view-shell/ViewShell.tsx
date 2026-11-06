@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import {
   type BreakpointAccessors,
@@ -10,6 +11,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
@@ -23,6 +25,7 @@ import {
   type ComponentProps,
   createComputed,
   createContext,
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -85,6 +88,10 @@ type ViewShellInternal = ViewShellLayout & {
   id: string;
   atLayoutBreakpoint: Accessor<boolean>;
   asideHost: Accessor<'docked' | 'closing' | 'overlay'>;
+  /** Which of a list aside and Main fills a narrow shell; undefined otherwise. */
+  narrowList: Accessor<'list' | 'main' | undefined>;
+  returnToList: () => void;
+  chooseAsideWidth: (width: number) => void;
 };
 
 const RESIZE_GUTTER = 1;
@@ -134,8 +141,10 @@ export type ViewShellRootProps = Omit<
   /** Set to false when the workspace has no navigation region. */
   aside?: false | Partial<AsideLayout>;
   /**
-   * Sticky navigation visibility, scoped to this app type rather than an entry.
-   * Only the first split uses it; other splits start collapsed.
+   * Sticky navigation visibility and width, scoped to this app type rather
+   * than an entry. Only the first split follows the saved visibility; other
+   * splits start collapsed. Every split opens at the last saved width; a drag
+   * in one split leaves the others' current widths alone.
    */
   asidePreferenceKey?: string;
   /**
@@ -152,6 +161,13 @@ export type ViewShellRootProps = Omit<
    * overlay closed.
    */
   asidePinned?: boolean;
+  /**
+   * For a view whose aside holds its entity list and whose Main shows the
+   * entity open from it. Narrow layouts then show one of them at full width
+   * instead of the navigation overlay: the list until `open`, then Main, with
+   * a back button that calls `onBack` in place of Show navigation.
+   */
+  asideList?: { open: boolean; onBack: () => void };
   main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
@@ -177,6 +193,7 @@ function Root(props: ViewShellRootProps) {
     'asidePreferenceKey',
     'asideRequired',
     'asidePinned',
+    'asideList',
     'main',
     'detail',
     'detailOpen',
@@ -200,6 +217,13 @@ function Root(props: ViewShellRootProps) {
           { default: false }
         )
       : createSignal(false);
+  // A width the user dragged to wins over the configured default.
+  const [chosenAsideWidth, setChosenAsideWidth] = local.asidePreferenceKey
+    ? usePreference<number | undefined>(
+        `macro:pref:view-sidebar:width:${local.asidePreferenceKey}`,
+        { default: undefined }
+      )
+    : createSignal<number>();
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const animateSidebar = createSidebarMotion(root);
@@ -217,10 +241,17 @@ function Root(props: ViewShellRootProps) {
     return key;
   };
 
-  const asideLayout = (): AsideLayout => ({
-    ...DEFAULT_ASIDE_LAYOUT,
-    ...(local.aside || {}),
-  });
+  const asideLayout = (): AsideLayout => {
+    const layout = { ...DEFAULT_ASIDE_LAYOUT, ...(local.aside || {}) };
+    const chosen = chosenAsideWidth();
+    // A saved width from older bounds still fits the current ones.
+    if (chosen === undefined || !Number.isFinite(chosen)) return layout;
+
+    return {
+      ...layout,
+      width: Math.min(layout.max, Math.max(layout.min, chosen)),
+    };
+  };
 
   const mainLayout = (): MainLayout => ({
     ...DEFAULT_MAIN_LAYOUT,
@@ -268,17 +299,31 @@ function Root(props: ViewShellRootProps) {
   // behind a backdrop with no way to dismiss it.
   const asidePinned = () =>
     (asideRequired() || (local.asidePinned ?? false)) && !atLayoutBreakpoint();
+  // A list aside takes turns with Main in narrow layouts rather than
+  // overlaying it, so the overlay and its open state don't apply there.
+  const narrowList = (): 'list' | 'main' | undefined => {
+    if (!local.asideList || local.aside === false || !atLayoutBreakpoint()) {
+      return undefined;
+    }
+    return local.asideList.open ? 'main' : 'list';
+  };
 
-  const asideMode = (): AsideMode =>
-    local.aside === false ||
-    (atLayoutBreakpoint()
-      ? !narrowAsideOpen()
-      : wideAsideCollapsed() && !asidePinned())
+  const asideMode = (): AsideMode => {
+    const list = narrowList();
+    if (list) return list === 'list' ? 'docked' : 'collapsed';
+
+    return local.aside === false ||
+      (atLayoutBreakpoint()
+        ? !narrowAsideOpen()
+        : wideAsideCollapsed() && !asidePinned())
       ? 'collapsed'
       : 'docked';
-  const asideOverlay = () => atLayoutBreakpoint() && asideMode() === 'docked';
+  };
+  const asideOverlay = () =>
+    atLayoutBreakpoint() && !narrowList() && asideMode() === 'docked';
 
   const setAsideOpen = (open: boolean) => {
+    if (narrowList()) return;
     if (!open && asidePinned()) return;
     // Repeated requests must not cancel an exit that still owns host cleanup.
     if (open === (asideMode() === 'docked')) return;
@@ -315,6 +360,7 @@ function Root(props: ViewShellRootProps) {
       ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
       const retain =
         narrow &&
+        !local.asideList &&
         !asideRequired() &&
         !!docked &&
         !docked.classList.contains('hidden');
@@ -372,6 +418,9 @@ function Root(props: ViewShellRootProps) {
     breakpoints,
     atLayoutBreakpoint,
     asideHost,
+    narrowList,
+    returnToList: () => local.asideList?.onBack(),
+    chooseAsideWidth: setChosenAsideWidth,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -379,7 +428,8 @@ function Root(props: ViewShellRootProps) {
       canCollapse: () =>
         local.asidePreferenceKey !== undefined &&
         local.aside !== false &&
-        !asidePinned(),
+        !asidePinned() &&
+        !narrowList(),
       isOverlay: asideOverlay,
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
@@ -412,7 +462,7 @@ function Root(props: ViewShellRootProps) {
       hotkey: 'cmd+.',
       hotkeyToken: TOKENS.workspace.toggleNavigation,
       scopeId: panel.splitHotkeyScope,
-      description: 'Toggle workspace navigation',
+      description: 'Toggle navigation',
       condition: () => panel.isPanelActive() && value.aside.canCollapse(),
       runWithInputFocused: true,
       keyDownHandler: () => {
@@ -450,33 +500,77 @@ function Root(props: ViewShellRootProps) {
  * Sizing region for navigation. Renders a div, not aside.
  * ViewSidebar.Root inside keeps the landmark.
  */
-type ViewShellAsideProps = JSX.HTMLAttributes<HTMLDivElement> & {
-  /** Called with the solved aside width after a drag or keyboard resize. */
-  onWidthChangeEnd?: (width: number) => void;
-};
+function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const ws = useViewShellInternal();
+  return (
+    <Show when={ws.narrowList()} fallback={<AsideHost {...props} />}>
+      <NarrowListAside {...props} />
+    </Show>
+  );
+}
 
-function Aside(props: ViewShellAsideProps) {
-  const [local, rest] = splitProps(props, [
-    'children',
-    'class',
-    'onWidthChangeEnd',
-  ]);
+/**
+ * A narrow list fills the shell over Main, which waits beneath it. While an
+ * entity is open the list stays mounted but hidden, so it keeps its scroll.
+ */
+function NarrowListAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
   const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
-  const [resizedWidth, setResizedWidth] = createSignal<{
-    configuredWidth: number;
-    width: number;
-    mainWidth?: number;
-  }>();
-  const resizePreference = () => {
-    const resized = resizedWidth();
-    return resized?.configuredWidth === ws.aside.layout().width
-      ? resized
-      : undefined;
-  };
-  const preferredWidth = () => {
-    return resizePreference()?.width ?? ws.aside.layout().width;
-  };
+  const hidden = () => ws.narrowList() === 'main';
+  let list: HTMLDivElement | undefined;
+
+  // Back leaves with the entity it was on; hand focus to the list, unless
+  // the user has already moved it outside this view.
+  createEffect(
+    on(
+      hidden,
+      (isHidden) => {
+        if (isHidden || !list) return;
+        const active = document.activeElement;
+        const shell = list.closest('[data-view-shell]');
+        // Removing a focused scope hands focus to the pane around this view.
+        const focusLost =
+          !active || active === document.body || active.contains(shell);
+        if (!focusLost && !shell?.contains(active)) return;
+        if (list.contains(active)) return;
+
+        list.focus({ preventScroll: true });
+      },
+      { defer: true }
+    )
+  );
+
+  return (
+    <div
+      {...rest}
+      ref={(element) => {
+        list = element;
+        asideTarget(element);
+      }}
+      tabIndex={-1}
+      class={cn(
+        'absolute inset-0 z-20 min-h-0 bg-panel outline-none',
+        hidden() && 'invisible',
+        local.class
+      )}
+      data-view-shell-aside=""
+      inert={hidden()}
+      aria-hidden={hidden()}
+    >
+      {local.children}
+    </div>
+  );
+}
+
+/** Docked or overlay navigation, whichever the layout hosts. */
+function AsideHost(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  const ws = useViewShellInternal();
+  const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
+  // Main's width after this mount's last drag; only the aside width is saved.
+  const [resizedMainWidth, setResizedMainWidth] = createSignal<number>();
+  const preferredWidth = () => ws.aside.layout().width;
   const onWidthChangeEnd = (width: number) => {
     const shellWidth = ws.width();
     // A drag also chooses how much space Main gives up. Keeping its old soft
@@ -486,13 +580,8 @@ function Aside(props: ViewShellAsideProps) {
         ? shellWidth - RESIZE_GUTTER - width
         : undefined;
     batch(() => {
-      local.onWidthChangeEnd?.(width);
-      // A consumer may persist the width back into the layout in this callback.
-      setResizedWidth({
-        configuredWidth: ws.aside.layout().width,
-        width,
-        mainWidth,
-      });
+      ws.chooseAsideWidth(width);
+      setResizedMainWidth(mainWidth);
     });
   };
   const redistributionPreferredSize = () => {
@@ -514,10 +603,7 @@ function Aside(props: ViewShellAsideProps) {
       shellWidth -
       RESIZE_GUTTER -
       Math.max(
-        Math.min(
-          mainLayout.preferredWidth,
-          resizePreference()?.mainWidth ?? Infinity
-        ),
+        Math.min(mainLayout.preferredWidth, resizedMainWidth() ?? Infinity),
         mainLayout.min
       );
 
@@ -681,6 +767,24 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
   );
 }
 
+/** Takes a narrow list view from the open entity back to its list. */
+function ViewListBackButton(props: { onClick: () => void }) {
+  return (
+    <Button
+      aria-label={t('common.back')}
+      tooltip={t('common.back')}
+      variant="ghost"
+      size="icon-xs"
+      class="shrink-0"
+      // The way out of an inline preview is reachable before it is used.
+      data-allow-focus-in-preview
+      onClick={() => props.onClick()}
+    >
+      <ArrowLeftIcon class="size-4" />
+    </Button>
+  );
+}
+
 /** Shared leading controls, kept in place beneath navigation overlays. */
 export function ViewNavigationControls() {
   const ws = useContext(ViewShellContext);
@@ -691,7 +795,12 @@ export function ViewNavigationControls() {
         aria-hidden={ws?.aside.isOverlay()}
       >
         <SplitPanel.CloseButton />
-        <ViewSidebarToggle action="expand" />
+        <Show
+          when={ws?.narrowList() === 'main'}
+          fallback={<ViewSidebarToggle action="expand" />}
+        >
+          <ViewListBackButton onClick={() => ws?.returnToList()} />
+        </Show>
       </SplitPanel.ControlGroup>
     </Show>
   );
@@ -733,6 +842,8 @@ function Main(props: ViewShellMainProps) {
         ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.main))}
         class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
         data-view-shell-main=""
+        inert={ws.narrowList() === 'list'}
+        aria-hidden={ws.narrowList() === 'list'}
       >
         {local.children}
       </main>

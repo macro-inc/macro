@@ -46,7 +46,11 @@ function saveSignatureErrorMessage(error: Error): string {
  * patches `email_settings` on save. The "replies & forwards" toggle patches
  * immediately (the backend patch is partial, so it leaves the signature alone).
  */
-export function SignatureSection(props: { link: EmailLink }) {
+export function SignatureSection(props: {
+  link: EmailLink;
+  /** The inbox belongs to another account; its one signature is everyone's. */
+  shared?: boolean;
+}) {
   const signature = useEmailSignature(() => props.link.id);
   // Draft lives in the module-level store (keyed by link id) so it survives the
   // settings tab unmounting; `null` means "no unsaved edit".
@@ -174,6 +178,7 @@ export function SignatureSection(props: { link: EmailLink }) {
   return (
     <SignatureForm
       email={props.link.email_address}
+      shared={props.shared}
       value={isMobile() ? persisted() : (draft() ?? persisted())}
       onInput={(html) => {
         setDraft(html);

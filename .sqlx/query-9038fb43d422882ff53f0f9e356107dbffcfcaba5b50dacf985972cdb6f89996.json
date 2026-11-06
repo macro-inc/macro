@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE account_manager_grants\n            SET status = 'revoked', key_hash = NULL\n            WHERE managed_user_id = $1\n              AND manager_user_id = $2\n              AND status = 'active'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9038fb43d422882ff53f0f9e356107dbffcfcaba5b50dacf985972cdb6f89996"
+}

@@ -15,7 +15,7 @@ export type AuthSession =
   | { t: 'signed-in'; user: AuthUser };
 
 export type SsoProvider = 'google' | 'apple';
-export type AuthIntent = 'login' | 'signup';
+export type AuthIntent = 'login' | 'signup' | 'agent-signup';
 
 export type SendCodeResult =
   /** `autoCode`: local backends return the code so dev logins are one click. */
@@ -51,8 +51,6 @@ export type AuthContext = {
   session: Accessor<AuthSession>;
   /** Leaves for the identity provider; on web the page navigates away. */
   startSso(provider: SsoProvider, intent: AuthIntent): Promise<void>;
-  /** Whether the email step offers the "I'm an agent" toggle. */
-  agentSignupEnabled: Accessor<boolean>;
   sendEmailCode(input: {
     email: string;
     password?: string;
@@ -75,7 +73,7 @@ export type AuthContext = {
   }): void;
   /** Ad conversions for a mobile-web lead, deduplicated by email. */
   trackMobileSignupLead(email: string): void;
-  pageView(name: 'login' | 'signup'): void;
+  pageView(name: AuthIntent): void;
   track: TrackAuth;
   notifyFailure(message: string): void;
 };

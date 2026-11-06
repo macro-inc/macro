@@ -18,7 +18,13 @@ import {
   toBody,
   wrapXml,
 } from '../../mentions';
-import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
+import {
+  MacroApiError,
+  MacroError,
+  mapConcurrently,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import {
@@ -27,9 +33,14 @@ import {
   timeline,
 } from '../messages/thread';
 import { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
+import {
+  type DocumentEditOptions,
+  type DocumentEditResult,
+  editWithInstructions,
+} from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
 import { DocumentVersion } from './version';
@@ -38,6 +49,9 @@ type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
 
 /** Thread reads in flight at once while `comments()` expands a document's roots. */
 const THREAD_FETCH_CONCURRENCY = 8;
+
+/** File types whose content lives in Macro's editors, not in a stored file. */
+const NATIVE_FILE_TYPES = new Set(['md', 'canvas', 'spreadsheet']);
 
 /** One of a document's comment threads: its state and its comments. */
 export interface CommentThread {
@@ -103,7 +117,7 @@ export class Document
     ).token;
   }
 
-  /** Prepare multipart content saving and return the service's upload instructions. */
+  /** Prepare a multipart file upload; to change a markdown document's text, use `edit`. */
   async prepareSave(parts: PreSaveDocumentRequest['newBom']) {
     return unwrap(
       await this.client.storage.presaveDocumentHandler({
@@ -113,7 +127,7 @@ export class Document
     ).data;
   }
 
-  /** Commit uploaded content. Does not retry uncertain writes. */
+  /** Commit an uploaded file; to change a markdown document's text, use `edit`. Does not retry uncertain writes. */
   async save(options: SaveDocumentRequest) {
     return (
       await this.mutate((c) =>
@@ -125,7 +139,7 @@ export class Document
     ).data;
   }
 
-  /** Commit a simple document save. */
+  /** Commit a simple file save; to change a markdown document's text, use `edit`. */
   async simpleSave() {
     return (
       await this.mutate((c) =>
@@ -209,16 +223,23 @@ export class Document
 
   /**
    * Create a skill: a markdown document containing instructions that AI reads
-   * and follows when the skill is referenced in an AI input.
+   * and follows when the skill is referenced in an AI input, or when a request
+   * matches its `description`.
    */
   static async createSkill(
     client: MacroClient,
-    opts: { name: string; markdown?: string; project?: Project },
+    opts: {
+      name: string;
+      description: string;
+      markdown?: string;
+      project?: Project;
+    },
   ): Promise<Document> {
     const { documentId } = unwrap(
       await client.storage.createSkillHandler({
         body: {
           skillName: opts.name,
+          description: opts.description,
           markdown: opts.markdown ?? null,
           projectId: opts.project?.id ?? null,
         },
@@ -313,6 +334,37 @@ export class Document
       }),
     );
     if (text !== null) return text;
+    return (await this.download()).text();
+  }
+
+  /**
+   * The stored file's raw bytes: an uploaded PDF, image, Office file, CSV or
+   * any other file, such as an email attachment's `toDocument()`. Use
+   * `content()` for text; native Markdown, Canvas and spreadsheet documents
+   * have no stored file and throw here.
+   *
+   * @example Read an email attachment and re-upload it into a project.
+   * ```js
+   * const file = await attachment.toDocument();
+   * const bytes = await file.bytes();
+   * const copy = await macro.documents.upload({
+   *   name: await attachment.filename(),
+   *   content: bytes,
+   *   project,
+   * });
+   * ```
+   */
+  async bytes(): Promise<Uint8Array<ArrayBuffer>> {
+    const fileType = await this.fileType();
+    if (fileType && NATIVE_FILE_TYPES.has(fileType))
+      throw new MacroError(
+        `a native ${fileType} document has no stored file; read it with content()`,
+      );
+    return new Uint8Array(await (await this.download()).arrayBuffer());
+  }
+
+  /** Fetch the stored file through its signed export URL, without the user's token. */
+  private async download(): Promise<Response> {
     const { presigned_url } = unwrap(
       await this.client.storage.exportDocument({
         path: { document_id: this.id },
@@ -323,7 +375,83 @@ export class Document
       throw new MacroApiError(res.status, {
         message: 'failed to download document content',
       });
-    return res.text();
+    return res;
+  }
+
+  /**
+   * Change a markdown document's or task body's text in place: pass
+   * natural-language instructions and an AI editor applies them, merging with
+   * concurrent edits.
+   *
+   * Write instructions like a precise request to a careful editor:
+   * - Say where: name the section or heading, or quote the text to change.
+   * - Describe the outcome, not keystrokes: "make the steps a numbered list",
+   *   not "add a 1. before each line".
+   * - Say what must stay as it is ("keep the headings").
+   * - One coherent edit per call; split unrelated changes into separate calls.
+   *
+   * It can rewrite, insert, delete, move and format text, headings, lists,
+   * tables, links, mentions and dates. It cannot read or write other
+   * documents or see comments or history. It returns the new revision, not a
+   * diff: read `content()` afterwards to see what changed.
+   *
+   * Throws `DocumentEditRefusedError` with the editor's reason when it can't do
+   * the edit (nothing changed), `EditOutcomeUnknownError` when the outcome is
+   * unknown (read before retrying), and `AbortError` when `options.signal`
+   * aborts: what the editor applied before the abort stays, nothing after it.
+   * When it applies part of the edit and then needs more information, it
+   * resolves with `clarification` set; send only the rest.
+   *
+   * AI usage is billed as for any AI edit. A full edit can take tens of
+   * seconds: pass `fast: true` for small edits, and keep one edit per call
+   * within the run's deadline.
+   *
+   * @example Rewrite a section.
+   * ```js
+   * const { webUrl } = await document.edit(
+   *   'Rewrite the "Summary" section as three short bullet points covering ' +
+   *     'scope, timeline and owners. Keep the "Summary" heading.',
+   * );
+   * return { data: { markdown: await document.content(), url: webUrl } };
+   * ```
+   *
+   * @example Fix formatting.
+   * ```js
+   * try {
+   *   await task.edit(
+   *     'Make every line under "Steps" a checklist item, and bold the word "blocked" wherever it appears.',
+   *     { fast: true },
+   *   );
+   * } catch (error) {
+   *   if (error.name === 'DocumentEditRefusedError') return { data: { refused: error.reason } };
+   *   throw error;
+   * }
+   * ```
+   *
+   * @example Cancel the other edits once one fails.
+   * ```js
+   * const controller = new AbortController();
+   * const results = await Promise.allSettled(
+   *   tasks.map((task) =>
+   *     task
+   *       .edit('Replace "Q3" with "Q4" in the "Timeline" section.', {
+   *         fast: true,
+   *         signal: controller.signal,
+   *       })
+   *       .catch((error) => {
+   *         controller.abort();
+   *         throw error;
+   *       }),
+   *   ),
+   * );
+   * // Edits still running reject with AbortError, keeping what they applied.
+   * ```
+   */
+  edit(
+    instructions: string,
+    options: DocumentEditOptions = {},
+  ): Promise<DocumentEditResult> {
+    return editWithInstructions(this.client, this, instructions, options);
   }
 
   /** Rename the document. */
@@ -462,6 +590,33 @@ export class Document
     );
   }
 
+  /**
+   * When to use this skill: one line starting "Use when". `undefined` for a
+   * skill created before descriptions existed.
+   */
+  async skillDescription(): Promise<string | undefined> {
+    const { description } = unwrap(
+      await this.client.storage.getSkillDescription({
+        path: { document_id: this.id },
+      }),
+    );
+    return description ?? undefined;
+  }
+
+  /**
+   * Set when to use this skill: one line starting "Use when", at most 300
+   * characters, e.g. "Use when drafting release notes; not changelogs".
+   * Agents load the skill for requests it describes.
+   */
+  async setSkillDescription(description: string): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setSkillDescription({
+        path: { document_id: this.id },
+        body: { description },
+      }),
+    );
+  }
+
   /** GitHub pull requests associated with the document. */
   async githubPullRequests(): Promise<GithubPullRequest[]> {
     const { pullRequests } = unwrap(
@@ -485,6 +640,11 @@ export class Document
   /** The document's URL in the Macro web app. */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/md/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** Search documents by name and content, most relevant first, auto-paginated. */

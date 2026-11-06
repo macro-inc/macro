@@ -49,6 +49,8 @@ pub struct UserCodeModeToolContext {
     /// Who the authenticated request came from; the adapter builds a context
     /// per call, so there is no default.
     pub caller: ai_toolset::ToolCaller,
+    /// Session provenance verified by the managed MCP bearer middleware.
+    pub session: Option<uuid::Uuid>,
 }
 
 /// Code mode for clients outside agent sessions, such as the public MCP.
@@ -188,6 +190,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
             .execute(
                 &request.user_id,
                 &context.caller,
+                context.session,
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
@@ -241,7 +244,8 @@ pub enum CodeGuideTopic {
 impl CodeGuideTopic {
     fn markdown(self) -> &'static str {
         match self {
-            Self::Search => include_str!("toolset/guides/search.md"),
+            // The search guide is the `core` entity's `@agent` guidance.
+            Self::Search => crate::domain::search_guide(),
             Self::Ai => include_str!("toolset/guides/ai.md"),
             Self::Templates => include_str!("toolset/guides/templates.md"),
             Self::Examples => include_str!("../../SKILL.md"),
@@ -380,6 +384,7 @@ impl DescribeCodeTools {
                 .iter()
                 .map(|doc| CodeToolDescription {
                     index: None,
+                    guide: None,
                     ..doc.clone()
                 })
                 .collect()

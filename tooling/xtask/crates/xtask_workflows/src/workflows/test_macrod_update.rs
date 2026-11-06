@@ -7,7 +7,8 @@
 //! and macOS, and the launcher layout plus `install.ps1` on Windows. Nothing
 //! is published. Runs on pull requests that touch macrod, and on demand.
 
-use gh_workflow::{Event, Job, Level, Permissions, PullRequest, Run, Step, Workflow};
+use gh_workflow::{Event, Job, Level, Permissions, PullRequest, Run, Step, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
 
@@ -18,8 +19,16 @@ const E2E: &str = "crates/coding_agent_worker/e2e";
 const V1: &str = "v2000.1.1.1";
 const V2: &str = "v2000.1.1.2";
 
+/// Files whose change runs the workflow, on a push and in `PR CI`.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("crates/coding_agent_worker/**"),
+    xtask_paths::repo_glob!(".github/workflows/test_macrod_update.yml"),
+];
+
 /// Build the workflow.
 pub fn test_macrod_update() -> Workflow {
+    let pull_request = PullRequest::default().add_branch("main");
+
     Workflow::new("Test macrod update")
         .permissions(Permissions {
             contents: Some(Level::Read),
@@ -27,14 +36,12 @@ pub fn test_macrod_update() -> Workflow {
         })
         .on(Event::default()
             .pull_request(
-                PullRequest::default()
-                    .add_branch("main")
-                    .add_path(xtask_paths::repo_glob!("crates/coding_agent_worker/**"))
-                    .add_path(xtask_paths::repo_glob!(
-                        ".github/workflows/test_macrod_update.yml"
-                    )),
+                PATHS
+                    .iter()
+                    .fold(pull_request, |trigger, path| trigger.add_path(*path)),
             )
-            .workflow_dispatch(gh_workflow::WorkflowDispatch::default()))
+            .workflow_dispatch(gh_workflow::WorkflowDispatch::default())
+            .workflow_call(WorkflowCall::default()))
         .add_job("linux", linux_job())
         .add_job("macos", macos_job())
         .add_job("windows", windows_job())
@@ -70,6 +77,9 @@ fn linux_job() -> Job {
 fn macos_job() -> Job {
     Job::default()
         .name("macrod update (macos)")
+        // These runners have no compiler cache, and the test only needs a working
+        // binary, so debug info is pure cost.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
         .runs_on(runners::Runner::MacOsArm.to_string())
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_rust_light())
@@ -91,6 +101,9 @@ fn macos_job() -> Job {
 fn windows_job() -> Job {
     Job::default()
         .name("macrod update (windows)")
+        // These runners have no compiler cache, and the test only needs a working
+        // binary, so debug info is pure cost.
+        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
         .runs_on(runners::Runner::Windows.to_string())
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_rust_light())

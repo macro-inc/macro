@@ -157,6 +157,115 @@
         }
       }
     },
+    "/scheduled-actions/code/starters": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "routine_code_starters",
+        "responses": {
+          "200": {
+            "description": "Starter routines whose step is code; empty where code steps aren't available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StarterRoutine"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/drafts": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "draft_routine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftRoutineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "A routine or step to review before saving, with any code problems AI couldn't fix, or why AI couldn't draft it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "AI usage limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}": {
       "get": {
         "tags": ["scheduled actions"],
@@ -319,6 +428,68 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}/code-upgrades": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_scheduled_action_code_upgrades",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How the routine's code steps were brought to new SDKs, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CodeUpgrade"
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -886,6 +1057,10 @@
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "What the routine is for, in the owner's words; empty when unset."
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -910,9 +1085,13 @@
       },
       "ActionConfigurationUpdate": {
         "type": "object",
-        "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` keeps\nit too, so clients that predate the setting do not reset it.",
+        "description": "Configuration replacement, the update body. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "An empty string clears it."
+          },
           "enabled": {
             "type": ["boolean", "null"],
             "description": "Still sent by clients deployed before the activation endpoint.",
@@ -1023,6 +1202,21 @@
           },
           {
             "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "required": ["triggers", "type"],
             "properties": {
               "triggers": {
@@ -1054,6 +1248,7 @@
       },
       "AgentTask": {
         "type": "object",
+        "description": "The single agent task: how routines were stored before they had steps,\nand still how a routine that is only an agent is saved.",
         "required": ["prompt", "user_prompt"],
         "properties": {
           "agent": {
@@ -1086,10 +1281,12 @@
             ]
           },
           "prompt": {
-            "type": "string"
+            "type": "string",
+            "description": "Instructions placed before the user's."
           },
           "user_prompt": {
-            "type": "string"
+            "type": "string",
+            "description": "What the agent should do."
           }
         }
       },
@@ -1100,9 +1297,11 @@
         "properties": {
           "bot_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "The agent's bot id."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "AiAdmissionErrorBody": {
         "type": "object",
@@ -1116,6 +1315,55 @@
           "error": {
             "type": "string",
             "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
+      "CodeUpgrade": {
+        "type": "object",
+        "description": "One time a routine's code was brought to a new SDK.",
+        "required": [
+          "id",
+          "toSdk",
+          "outcome",
+          "previousTask",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fromSdk": {
+            "type": ["string", "null"],
+            "description": "The SDK the code was checked against before; none when it never was."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/UpgradeOutcome"
+          },
+          "previousTask": {
+            "type": "object",
+            "description": "The task before."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why the routine needs its owner."
+          },
+          "task": {
+            "type": ["object", "null"],
+            "description": "The saved rewrite, or the rewrite that failed its checks."
+          },
+          "toSdk": {
+            "type": "string",
+            "description": "The SDK it was brought to."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -1150,6 +1398,228 @@
           }
         ],
         "description": "Why an event-triggered run was skipped before it started."
+      },
+      "Draft": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DraftedRoutine",
+                "description": "A routine to review before saving."
+              },
+              {
+                "type": "object",
+                "required": ["outcome"],
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["routine"]
+                  }
+                }
+              }
+            ],
+            "description": "A routine to review before saving."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DraftedStep",
+                "description": "A step to add, or to put in place of the one changed."
+              },
+              {
+                "type": "object",
+                "required": ["outcome"],
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": ["step"]
+                  }
+                }
+              }
+            ],
+            "description": "A step to add, or to put in place of the one changed."
+          },
+          {
+            "type": "object",
+            "description": "Why there's no draft, for the person.",
+            "required": ["message", "outcome"],
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ],
+        "description": "What AI drafted, or why it couldn't."
+      },
+      "DraftContext": {
+        "type": "object",
+        "description": "What the drafter may write, and the person's workspace by name and id.",
+        "required": ["timezone", "agentModel"],
+        "properties": {
+          "agentModel": {
+            "type": "string",
+            "description": "The model Ask AI steps it writes run on."
+          },
+          "code": {
+            "type": "boolean",
+            "description": "Whether it may write code steps; otherwise it writes Ask AI steps.\nChanging a code step needs no permission."
+          },
+          "conditions": {
+            "type": "boolean",
+            "description": "Whether triggers may ask AI a yes/no question before a run. This host\nmust also be able to answer it."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA time zone schedules are written in, e.g. `America/New_York`."
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DraftRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A new routine, from what it should do and when.",
+            "required": ["description", "type"],
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["routine"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One step to add at the end of `routine`. `kind` makes it code or Ask\nAI; without it, AI makes it code whenever code can do the job.",
+            "required": ["description", "routine", "type"],
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "kind": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StepKind"
+                  }
+                ]
+              },
+              "routine": {
+                "$ref": "#/components/schemas/RoutineSoFar"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["add_step"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The code step at `index` in `routine`'s steps, rewritten as\n`instruction` says. It keeps its place and output name.",
+            "required": ["instruction", "routine", "index", "type"],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "instruction": {
+                "type": "string"
+              },
+              "routine": {
+                "$ref": "#/components/schemas/RoutineSoFar"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["change_step"]
+              }
+            }
+          }
+        ],
+        "description": "What to draft."
+      },
+      "DraftRoutineRequest": {
+        "type": "object",
+        "description": "What to draft, and what the drafter may write and name.",
+        "required": ["draft", "context"],
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/DraftContext"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/DraftRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DraftedRoutine": {
+        "type": "object",
+        "description": "A drafted routine.",
+        "required": ["name", "steps", "problems"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepProblem"
+            },
+            "description": "Steps whose code still fails the type checker."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "What it does, in the shape a routine's task holds steps, each code\nstep named as saving names it."
+          },
+          "trigger": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActionTrigger",
+                "description": "When it runs; absent when AI found no trigger it could use."
+              }
+            ]
+          }
+        }
+      },
+      "DraftedStep": {
+        "type": "object",
+        "description": "A drafted step.",
+        "required": ["step", "reason", "problems"],
+        "properties": {
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the type checker still finds in its code."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why AI made a step it chose code or Ask AI, in a few words; empty\nwhen it gave no short reason or didn't choose."
+          },
+          "step": {
+            "type": "object",
+            "description": "The step, in the shape a routine's task holds it."
+          }
+        }
       },
       "EmptyResponse": {
         "type": "object",
@@ -1194,6 +1664,17 @@
               "$ref": "#/components/schemas/PayloadCondition"
             },
             "description": "Exact tests on the payload, all of which must pass."
+          },
+          "property": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertySelector",
+                "description": "The task property that must have changed, and the values it must gain."
+              }
+            ]
           }
         }
       },
@@ -1260,6 +1741,11 @@
               }
             ]
           },
+          "configuration_revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The routine configuration the run used. Step paths only name the same\nsteps in that configuration; a later edit can put another step there."
+          },
           "error": {
             "type": ["string", "null"]
           },
@@ -1272,6 +1758,24 @@
                 "$ref": "#/components/schemas/ExecutionResource"
               }
             ]
+          },
+          "run": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunInfo",
+                "description": "What started the run and when, for runs of programs."
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "What each step that ran did, in order: decisions, tool calls, the agent."
           },
           "version": {
             "type": "integer",
@@ -1336,19 +1840,19 @@
           }
         }
       },
-      "LastRun": {
+      "NamedItem": {
         "type": "object",
-        "description": "How a routine's most recent finished run went, so lists can flag failures.",
-        "required": ["end_time", "is_success"],
+        "description": "An item and its name.",
+        "required": ["name", "id"],
         "properties": {
-          "end_time": {
-            "type": "string",
-            "format": "date-time"
+          "id": {
+            "type": "string"
           },
-          "is_success": {
-            "type": "boolean"
+          "name": {
+            "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "PayloadCondition": {
         "type": "object",
@@ -1417,9 +1921,47 @@
         ],
         "description": "A JSON text, number, boolean or null that payload values are compared with."
       },
+      "PropertySelector": {
+        "type": "object",
+        "description": "Narrows a task property change filter to one property and, optionally, the\nvalues it must gain.",
+        "required": ["definitionId"],
+        "properties": {
+          "definitionId": {
+            "type": "string",
+            "description": "The property definition that must have changed."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Select option ids or referenced entity ids, one of which the change must\nadd. Any change to the property matches when empty."
+          }
+        },
+        "additionalProperties": false
+      },
       "RoutineModelId": {
         "type": "string",
         "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
+      },
+      "RoutineSoFar": {
+        "type": "object",
+        "description": "The routine a step is added to or changed in.",
+        "required": ["steps"],
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Its steps, in the shape a routine's task holds them."
+          },
+          "trigger": {
+            "type": ["object", "null"],
+            "description": "Its trigger as it would be saved, for AI to read; absent while it has none."
+          }
+        },
+        "additionalProperties": false
       },
       "RoutineTemplate": {
         "type": "object",
@@ -1510,6 +2052,21 @@
                 "enum": ["events"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Fires once at `at`, or as soon as it is saved when `at` has passed.",
+            "required": ["at", "type"],
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["once"]
+              }
+            }
           }
         ],
         "description": "An individual trigger in a routine's trigger list."
@@ -1520,6 +2077,89 @@
           "$ref": "#/components/schemas/RoutineTrigger"
         },
         "description": "Bounded schedules and one combined set of event filters."
+      },
+      "RunInfo": {
+        "type": "object",
+        "description": "What the run page says about a run: what started it, when it counts as\nhappening, and since when.",
+        "required": ["at", "started_by"],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the run counts as happening: its trigger's time."
+          },
+          "previous_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the routine's previous finished run started."
+          },
+          "started_by": {
+            "$ref": "#/components/schemas/RunStart",
+            "description": "What started it."
+          },
+          "timezone": {
+            "type": ["string", "null"],
+            "description": "The IANA time zone code reads `at` in, when the run had one."
+          }
+        }
+      },
+      "RunStart": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One of its schedules came due.",
+            "required": ["schedule", "timezone", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["schedule"]
+              },
+              "schedule": {
+                "type": "string",
+                "description": "The cron expression."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "Its IANA time zone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An event it watches happened.",
+            "required": ["event", "kind"],
+            "properties": {
+              "entity_id": {
+                "type": ["string", "null"],
+                "description": "The item the event is about."
+              },
+              "event": {
+                "type": "string",
+                "description": "The event's name, e.g. `email.message_received`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["event"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its owner started it by hand.",
+            "required": ["by", "kind"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "description": "Who started it."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["manual"]
+              }
+            }
+          }
+        ],
+        "description": "What started a run, for its page."
       },
       "RunVisibility": {
         "type": "string",
@@ -1556,6 +2196,10 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "description": {
+            "type": "string",
+            "description": "What the routine is for, in the owner's words; empty when unset."
           },
           "enabled": {
             "type": "boolean",
@@ -1620,8 +2264,8 @@
                     "type": "null"
                   },
                   {
-                    "$ref": "#/components/schemas/LastRun",
-                    "description": "The latest finished run. Present only in lists, and only once the\nroutine has finished a run."
+                    "$ref": "#/components/schemas/ActionExecutionRecord",
+                    "description": "The latest finished run, with what each step did. Present only in\nlists, and only once the routine has finished a run."
                   }
                 ]
               },
@@ -1735,6 +2379,51 @@
         },
         "additionalProperties": false
       },
+      "StarterRoutine": {
+        "type": "object",
+        "description": "A starter routine whose step is code: offered when a routine is created,\nand shown to the drafter as a worked example.",
+        "required": ["key", "request", "steps"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names it, e.g. `inbox`."
+          },
+          "request": {
+            "type": "string",
+            "description": "What someone asks for, with when it runs."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Its steps, in the shape a routine's task holds them."
+          }
+        }
+      },
+      "StepKind": {
+        "type": "string",
+        "description": "Code written once, or Ask AI each run.",
+        "enum": ["code", "agent"]
+      },
+      "StepProblem": {
+        "type": "object",
+        "description": "A drafted step whose code still fails the type checker.",
+        "required": ["index", "problems"],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Its place among the steps, from zero.",
+            "minimum": 0
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "TemplateVariable": {
         "oneOf": [
           {
@@ -1801,10 +2490,93 @@
         ],
         "description": "A user-specific part of a shared routine."
       },
+      "UpgradeOutcome": {
+        "type": "string",
+        "description": "How an upgrade went.",
+        "enum": ["running", "checked", "rewritten", "needs_update"]
+      },
       "VariableFill": {
         "type": "string",
         "description": "How a variable is filled when someone activates the template.",
         "enum": ["activator", "shared", "choice"]
+      },
+      "Workspace": {
+        "type": "object",
+        "description": "The items AI may name in a draft. They are data for the model; saving\nchecks every id the draft uses.",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceAgent"
+            },
+            "description": "Agents a step may hand the run to."
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            }
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            },
+            "description": "Projects."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email label names."
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamedItem"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceTag"
+            },
+            "description": "Tag options, by the property definition they belong to."
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkspaceAgent": {
+        "type": "object",
+        "description": "An agent and its bot id.",
+        "required": ["name", "botId"],
+        "properties": {
+          "botId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkspaceTag": {
+        "type": "object",
+        "description": "A tag: one option of a property.",
+        "required": ["label", "definitionId", "optionId"],
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "optionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       }
     }
   },

@@ -13,7 +13,7 @@ import type { Calendar } from '../calendar/calendar';
 import { CalendarEvent } from '../calendar/event';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import {
   type SharePermissionOptions,
@@ -179,6 +179,16 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     return thread;
   }
 
+  /** The thread's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/mail/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** A handle to a thread by id. Details load on first access. */
   static byId(client: MacroClient, id: string): EmailThread {
     return new EmailThread(client, id);
@@ -268,7 +278,12 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Send a reply within this thread. Returns a handle when the API reports the created message's id. */
+  /**
+   * Send a plain-text reply in this thread; an agent's program is refused
+   * (403) and replies through a review or `email.sendConfirmed` with
+   * `replyingTo` instead. Returns a handle when the API reports the created
+   * message's id.
+   */
   async reply(opts: ReplyEmailOptions): Promise<EmailMessage | undefined> {
     const subject = opts.subject ?? (await this.subject()) ?? '';
     const { message } = await this.mutate((c) =>

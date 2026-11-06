@@ -14,6 +14,7 @@ name: SDK Check
     paths:
     - packages/sdk/**
     - '.github/workflows/sdk-check.yml'
+  workflow_call: {}
 jobs:
   check-package:
     name: SDK Package Check
@@ -41,5 +42,5 @@ jobs:
       run: bun run coverage
       working-directory: packages/sdk
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-check
+  group: sdk-check-${{ github.event.action == 'labeled' && github.run_id || github.ref }}
   cancel-in-progress: true

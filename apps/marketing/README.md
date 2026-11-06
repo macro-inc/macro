@@ -15,9 +15,15 @@ Cream slab typography adds 45 to the base font weight; utility-class slab text
 uses weight 360, and the Tasks founder heading uses 445.
 Slab display copy uses warm near-black (`#1d1c1a`) in the cream palette.
 
+Every page's HTML starts with a visually hidden notice telling AI agents to use
+`/app/signup/agent` (`#agent-signup-notice`, in both `index.html` and `start.html`,
+which builds the homepage). It stays in the
+accessibility tree and page text, because that is what agents read; do not hide it
+with `display: none`.
+
 Public calls to action use the shared `site-nav-start` treatment: warm white,
 soft pill corners, a fine border, and a 2px arrow shift on hover. `Book a demo` is a
-soft grey secondary action; the header's `Open app` uses a warm-white fill with
+soft grey secondary action; the header's `Sign Up` uses a warm-white fill with
 near-black text, a fine border, and no arrow. Its fill fades with the header label during
 the footer transition. As it lands in the footer, the same link reveals the
 original wider white pill, glass rim, and arrow. It follows the existing scroll
@@ -224,7 +230,7 @@ Verified direct installer URLs remain usable while loading and if the API fails;
 update these fallbacks in `desktopDownloads.ts` when retiring older installers.
 The separate “All releases” link opens GitHub, with the selected installer's
 release version displayed beneath it.
-The page hides the header's Open app action, has no web-app download option,
+The page hides the header's Sign Up action, has no web-app download option,
 and has no header/footer navigation entry.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
@@ -465,6 +471,22 @@ and check the record interactions at both desktop and mobile widths.
 FAQ answers and the always-visible comparison are rendered in the initial HTML.
 The CRM comparison appears above the FAQ, using the shared product table styling.
 Retain FAQ class markers so prerendering emits matching FAQPage structured data.
+
+## Tutorial videos
+
+Product heroes put **Watch demo** beside Get started (`ProductHero`'s
+`tutorial`, and the Email hero). It opens `TutorialVideoDialog`: the app's
+Block tutorial, paused behind the app's play pill (play disc, presenter, "Watch
+demo · m:ss") until the visitor presses it. Escape and the backdrop close it,
+and focus returns to the button. Titles and lengths in
+`core/tutorial-videos.ts` copy the app's `tutorials` messages; change both
+together.
+
+The videos and posters live once, in `public/video/tutorials/` (mp4s through
+Git LFS), and deploy to `macro.com/video/tutorials/`. docs.macro.com embeds
+them from there, including Blocks without a page here (Home, Drive, Calendar,
+Scheduling). Replacing a video keeps its name; the deploy's `--size-only` sync
+skips a same-size file, and CloudFront caches videos for a day.
 
 ## Paid-social landing page
 
@@ -994,7 +1016,7 @@ mounted. Chat and Docs retain equal-width source panes; when a pane would be
 narrower than 240px, they use the existing single-pane navigation. Verify opening
 and closing sources at desktop and phone widths, without remounting the original
 conversation or document. Display names use first names. All product pages use
-`HomepageClosing` for the bottom Open app CTA and the shared feature heading styles.
+`HomepageClosing` for the bottom Sign Up CTA and the shared feature heading styles.
 
 Chat sidebar demo: `workspace/ChatSidebar.tsx` retains the earlier
 All/Recent/Threads layout with local fixtures, shared Tabs and ViewSidebar
@@ -1061,7 +1083,7 @@ footer rule. The homepage document frame is 420px tall below 700px because its
 version-history band is hidden there; avoid retaining empty desktop fade space
 between the document and its Learn more links.
 
-The travelling Open app CTA switches to native footer dimensions, text, and SVG
+The travelling Sign Up CTA switches to native footer dimensions, text, and SVG
 sizes after its landing transition settles, removing the compositor scale to
 avoid Safari retaining an enlarged low-resolution text layer. Reverse scrolling
 restores compact dimensions before the header reappears; keep one app link.

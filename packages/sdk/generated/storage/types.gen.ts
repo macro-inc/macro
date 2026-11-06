@@ -101,6 +101,73 @@ export type AccessiblePipeline = Pipeline & {
 };
 
 /**
+ * A response to a request.
+ */
+export type AccountManagerDecision = 'approve' | 'decline';
+
+/**
+ * A request for manager access and what became of it.
+ */
+export type AccountManagerGrant = {
+    /**
+     * When the manager claimed the credential.
+     */
+    claimedAt?: string | null;
+    /**
+     * When the request was made.
+     */
+    createdAt: string;
+    /**
+     * When the pending request or unclaimed approval stops being usable.
+     */
+    expiresAt?: string | null;
+    /**
+     * Grant id.
+     */
+    id: string;
+    /**
+     * When the credential was last used, to the minute.
+     */
+    lastUsedAt?: string | null;
+    /**
+     * The account being managed.
+     */
+    managedUserId: string;
+    /**
+     * The agent account doing the managing.
+     */
+    managerUserId: string;
+    /**
+     * The side that asked.
+     */
+    requestedBy: AccountManagerRole;
+    /**
+     * Lifecycle status.
+     */
+    status: AccountManagerGrantStatus;
+};
+
+/**
+ * Where a grant is in its lifecycle.
+ */
+export type AccountManagerGrantStatus = 'pending' | 'approved' | 'declined' | 'active' | 'revoked' | 'expired';
+
+/**
+ * One side of a grant.
+ */
+export type AccountManagerRole = 'managed' | 'manager';
+
+/**
+ * The managers of the caller's account.
+ */
+export type AccountManagersList = {
+    /**
+     * Approved and active grants on the caller's account.
+     */
+    grants: Array<AccountManagerGrant>;
+};
+
+/**
  * A currently active call, as returned by the batch active-calls listing.
  */
 export type ActiveCallSummary = {
@@ -161,6 +228,16 @@ export type ActiveMeetingsResponse = {
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
+
+/**
+ * Request to add a bot to a channel.
+ */
+export type AddChannelBotRequest = {
+    /**
+     * Bot id.
+     */
+    bot_id: BotId;
+};
 
 /**
  * Request body for favoriting an entity.
@@ -456,6 +533,21 @@ export type AgentTyping = {
  * What a typing agent is doing.
  */
 export type AgentTypingPhase = 'thinking' | 'writing' | 'working' | 'waiting';
+
+/**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
 
 export type Anchor = PdfAnchor;
 
@@ -1394,7 +1486,7 @@ export type Bot = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session.
      */
     has_agent: boolean;
     /**
@@ -2096,6 +2188,47 @@ export type CallActiveResponse = {
 };
 
 /**
+ * Where a call's discussion lives, decided once when the call is created.
+ * `channel_id` cannot decide this: past channel calls keep their own thread.
+ */
+export type CallDiscussion = {
+    /**
+     * The channel holding the thread.
+     */
+    channel_id: string;
+    kind: 'channel_thread';
+    /**
+     * The thread's root message.
+     */
+    root_id: string;
+} | {
+    /**
+     * The call owning the thread.
+     */
+    call_id: string;
+    kind: 'call_chat';
+};
+
+/**
+ * A channel call's life, as its timeline row shows it.
+ */
+export type CallEntryStatus = {
+    state: 'live';
+} | {
+    /**
+     * How long it lasted.
+     */
+    duration_ms: number;
+    /**
+     * When it ended.
+     */
+    ended_at: string;
+    state: 'ended';
+} | {
+    state: 'record_deleted';
+};
+
+/**
  * Filters for call records.
  */
 export type CallFilters = {
@@ -2152,6 +2285,10 @@ export type CallRecord = {
      * archived `call_records`; active calls always return `None`.
      */
     customName?: string | null;
+    /**
+     * Where this call's discussion lives.
+     */
+    discussion: CallDiscussion;
     /**
      * Call duration in milliseconds (None if still active).
      */
@@ -2641,6 +2778,81 @@ export type Channel = {
 };
 
 /**
+ * A participant's answer to a pending request.
+ */
+export type ChannelAccessDecision = 'approve' | 'deny';
+
+/**
+ * One attempt to join a channel. Attempts are never reused, so each timeline
+ * entry keeps showing the outcome of the attempt it announced.
+ */
+export type ChannelAccessRequest = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * When the requester asked.
+     */
+    created_at: string;
+    /**
+     * Attempt id.
+     */
+    id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
+    /**
+     * When the attempt stopped being pending.
+     */
+    resolved_at?: string | null;
+    resolved_by?: null | MacroUserIdStr;
+    /**
+     * Current outcome.
+     */
+    status: ChannelAccessRequestStatus;
+};
+
+/**
+ * A requester's view of their access to a channel they cannot read.
+ */
+export type ChannelAccessRequestState = {
+    /**
+     * Whether this channel accepts requests.
+     */
+    can_request: boolean;
+    request?: null | ChannelAccessRequest;
+    /**
+     * Earliest time the caller may ask again, while they must wait.
+     */
+    retry_after?: string | null;
+};
+
+/**
+ * Outcome of one attempt to join.
+ */
+export type ChannelAccessRequestStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
+
+/**
+ * Metadata for [`ChannelTopicEvent::AccessRequested`].
+ */
+export type ChannelAccessRequestedMetadata = {
+    /**
+     * Channel the requester asked to join.
+     */
+    channel_id: string;
+    /**
+     * The attempt; channel participants read its current outcome by id.
+     */
+    request_id: string;
+    /**
+     * Person asking to join.
+     */
+    requester_id: MacroUserIdStr;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -2778,7 +2990,7 @@ export type ChannelLabel = {
      */
     teamId?: string | null;
     /**
-     * When the label was last renamed or reordered.
+     * When the label's name, rule, scope, or order last changed.
      */
     updatedAt: string;
 };
@@ -3054,6 +3266,12 @@ export type ChannelTopicEvent = {
      * Participants were removed from a channel (admin removal or self-leave).
      */
     metadata: ChannelParticipantRemovedMetadata;
+} | {
+    event_type: 'channel.access_requested';
+    /**
+     * Someone outside a channel asked to join it.
+     */
+    metadata: ChannelAccessRequestedMetadata;
 };
 
 /**
@@ -3202,6 +3420,20 @@ export type ClaimPairingRequest = {
      * The claim credential returned when the pairing was created.
      */
     device_secret: string;
+};
+
+/**
+ * The credential, returned only by the claim that issued it.
+ */
+export type ClaimedAccountManagerToken = {
+    /**
+     * The grant, now active.
+     */
+    grant: AccountManagerGrant;
+    /**
+     * The secret. Shown only once.
+     */
+    token: string;
 };
 
 /**
@@ -3929,7 +4161,7 @@ export type CreateBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -3940,6 +4172,34 @@ export type CreateBotRequest = {
      * Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.
      */
     team_id?: string | null;
+};
+
+/**
+ * Request to create a bot token.
+ */
+export type CreateBotTokenRequest = {
+    /**
+     * Optional expiration timestamp.
+     */
+    expires_at?: string | null;
+    /**
+     * Token label.
+     */
+    label?: string | null;
+};
+
+/**
+ * Response containing a newly minted token.
+ */
+export type CreateBotTokenResponse = {
+    /**
+     * Raw bearer token.
+     */
+    bearer_token: string;
+    /**
+     * Token metadata.
+     */
+    token: BotToken;
 };
 
 export type CreateBulkDocumentResponse = {
@@ -4062,7 +4322,7 @@ export type CreateChannelScopedBotRequest = {
      */
     handle: string;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.
      */
     has_agent?: boolean | null;
     /**
@@ -4441,10 +4701,6 @@ export type CreateMeetingRequest = {
  */
 export type CreatePairingRequest = {
     /**
-     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
-     */
-    allow_permission_bypass?: boolean | null;
-    /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
     host?: string | null;
@@ -4452,21 +4708,18 @@ export type CreatePairingRequest = {
      * Requested harness display name (typically the machine's hostname).
      */
     name: string;
-    scope?: null | RequestedHarnessScope;
 };
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+ * record, or one Name column, like a new database, for a generic pipeline.
  */
 export type CreatePipeline = {
     /**
      * Pipeline name.
      */
     name: string;
-    /**
-     * Company or contact entries.
-     */
-    recordType: PipelineRecordType;
+    recordType?: null | PipelineRecordType;
     /**
      * Defaults to private.
      */
@@ -4501,6 +4754,12 @@ export type CreateProjectResponse = {
  * AI input.
  */
 export type CreateSkillRequest = {
+    /**
+     * When to use the skill, in one line starting "Use when", e.g. "Use when
+     * drafting release notes; not changelog entries". Agents choose skills
+     * for a request by it.
+     */
+    description: string;
     /**
      * Markdown source text. Defaults to an empty skill document.
      */
@@ -5414,6 +5673,75 @@ export type DirectAccess = {
 };
 
 /**
+ * The edit failed after it started, so it may have partly applied. Read the
+ * document before retrying.
+ */
+export type DocumentAiEditFailed = {
+    /**
+     * Always `edit_failed`.
+     */
+    error: DocumentAiEditFailedCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of an edit that failed after it started.
+ */
+export type DocumentAiEditFailedCode = 'edit_failed';
+
+/**
+ * The editor could not do the edit; nothing changed.
+ */
+export type DocumentAiEditRefused = {
+    /**
+     * Always `edit_refused`.
+     */
+    error: DocumentAiEditRefusedCode;
+    /**
+     * Why, in the editor's words: what it needs to know or cannot do.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of an edit the editor refused.
+ */
+export type DocumentAiEditRefusedCode = 'edit_refused';
+
+/**
+ * What to change, in words.
+ */
+export type DocumentAiEditRequest = {
+    /**
+     * Run the single-model fast pipeline, for one small, contained edit.
+     */
+    fast?: boolean;
+    /**
+     * Natural-language instructions. Name the section or quote the text to
+     * change, describe the outcome, and say what must stay as it is.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type DocumentAiEdited = {
+    /**
+     * What the editor needs to know to finish, when it applied part of the
+     * edit and stopped; the applied part stays.
+     */
+    clarification?: string | null;
+    /**
+     * The document's version after the edit, as sync-service encodes it.
+     */
+    revision: string;
+};
+
+/**
  * Returns basic information of a document used for some db queries
  */
 export type DocumentBasic = {
@@ -5961,6 +6289,10 @@ export type DocumentSyncEditor = {
      * User or bot that performed the edit.
      */
     actor: string;
+    /**
+     * Invocation from the editor's signed document grant.
+     */
+    agent_correlation_id?: string | null;
     on_behalf_of?: null | MacroUserIdStr;
 };
 
@@ -8103,6 +8435,13 @@ export type FormSection = {
      */
     questions: Array<QuestionLayout>;
     /**
+     * When to show it: the rules answers of earlier shown sections must
+     * pass, naming only their columns. A section whose rules fail is
+     * skipped: its questions are not required and their answers are
+     * not written. Absent, it is always shown.
+     */
+    showWhen?: FilterGroup;
+    /**
      * Its title; may be empty.
      */
     title: string;
@@ -8165,6 +8504,12 @@ export type FormSectionDetail = {
      * Its questions, in order.
      */
     questions: Array<FormQuestionDetail>;
+    /**
+     * When to show it, from earlier shown sections' answers; absent,
+     * it is always shown. Sent to every caller so a respondent's page
+     * can skip it.
+     */
+    showWhen?: FilterGroup;
     /**
      * Its title.
      */
@@ -9885,6 +10230,18 @@ export type LayoutProblem = {
      */
     reason: string;
 } | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'conditionNamesLaterColumn';
+} | {
+    kind: 'conditionRule';
+    /**
+     * Why.
+     */
+    reason: string;
+} | {
     kind: 'textTooLong';
     /**
      * The longest allowed.
@@ -10163,6 +10520,10 @@ export type Message = {
     id: string;
     imported_author?: null | ImportedAuthor;
     /**
+     * What this message is.
+     */
+    kind?: MessageKind;
+    /**
      * Tracked mentions, retained when a caller changes attachments only.
      */
     mentions: Array<SimpleMention>;
@@ -10344,6 +10705,12 @@ export type MessageChange = {
     type: 'reaction_changed';
 } | {
     /**
+     * Persisted root.
+     */
+    message: Message;
+    type: 'call_root_posted';
+} | {
+    /**
      * Persisted thread state.
      */
     state: ThreadState;
@@ -10453,6 +10820,11 @@ export type MessageEventAttachment = {
      */
     entity_type: string;
 };
+
+/**
+ * What a persisted message is. Set by the server, never by a client.
+ */
+export type MessageKind = 'message' | 'call_root';
 
 /**
  * Root message with its small thread preview, independent of its parent type.
@@ -10718,6 +11090,16 @@ export type MessageTimelineEntry = {
      */
     activity: TimelineActivity;
     type: 'activity';
+} | {
+    /**
+     * The call's root message, its thread state and its reply preview.
+     */
+    message: MessageListItem;
+    /**
+     * Where the call is in its life.
+     */
+    status: CallEntryStatus;
+    type: 'call';
 };
 
 /**
@@ -11207,14 +11589,9 @@ export type PairingDetails = {
      */
     host?: string | null;
     /**
-     * Daemon operator consent ceiling; false forbids bypass at approval.
-     */
-    requested_allow_permission_bypass?: boolean | null;
-    /**
      * Harness display name the daemon asked for.
      */
     requested_name: string;
-    requested_scope?: null | RequestedHarnessScope;
 };
 
 /**
@@ -11259,7 +11636,7 @@ export type PatchBotRequest = {
      */
     handle?: string | null;
     /**
-     * Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+     * Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.
      */
     has_agent?: boolean | null;
     /**
@@ -11287,6 +11664,21 @@ export type PatchChannelRequest = {
      * converts a team channel to a private channel.
      */
     convert_to_team_channel?: boolean | null;
+};
+
+/**
+ * Request to change a registered harness. Omitted fields stay as they are.
+ */
+export type PatchHarnessRequest = {
+    /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     * Live sessions pick the change up at their next turn.
+     */
+    allow_permission_bypass?: boolean | null;
+    /**
+     * New display name.
+     */
+    name?: string | null;
 };
 
 /**
@@ -11467,13 +11859,11 @@ export type Pipeline = {
      */
     name: string;
     /**
-     * Protected primary column.
+     * A tracked pipeline's protected record reference. A generic pipeline's
+     * Name, which names no column once someone deletes it.
      */
     primaryColumnId: string;
-    /**
-     * Kind of the primary reference.
-     */
-    recordType: PipelineRecordType;
+    recordType: null | PipelineRecordType;
     /**
      * Whether the pipeline has a team grant.
      */
@@ -12096,7 +12486,7 @@ export type RemoveParticipantsRequest = {
 };
 
 /**
- * Request body for renaming a label.
+ * Request body for updating a label's name, smart rule, or sharing scope.
  */
 export type RenameChannelLabelRequest = {
     /**
@@ -12104,6 +12494,7 @@ export type RenameChannelLabelRequest = {
      */
     name: string;
     rule?: null | ChannelLabelRule;
+    targetScope?: null | ChannelLabelScopeSelection;
 };
 
 /**
@@ -12166,17 +12557,23 @@ export type RequestAccess = {
 };
 
 /**
+ * Request body for asking for a grant.
+ */
+export type RequestAccountManagerBody = {
+    /**
+     * The side the caller takes.
+     */
+    callerRole: AccountManagerRole;
+    /**
+     * The other account (`macro|...`).
+     */
+    counterpartyId: string;
+};
+
+/**
  * Durable outcome; reading a notification never changes it.
  */
 export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
-
-/**
- * The ownership scope a daemon's config asks for.
- *
- * Advisory, not binding: the approving user confirms it in the dialog, which
- * arrives preselected to this. Approval is what actually sets ownership.
- */
-export type RequestedHarnessScope = 'private' | 'team';
 
 /**
  * A layout as an op asks for it: a board or timeline may leave its title
@@ -12240,6 +12637,16 @@ export type RequestedLayout = {
 };
 
 /**
+ * Body of a participant's answer.
+ */
+export type ResolveChannelAccessRequest = {
+    /**
+     * The answer.
+     */
+    decision: ChannelAccessDecision;
+};
+
+/**
  * Owner's decision; omission of a granted level means deny.
  */
 export type ResolveRequest = {
@@ -12248,6 +12655,16 @@ export type ResolveRequest = {
      * Request revision being reviewed.
      */
     revision: number;
+};
+
+/**
+ * Request body for responding to a request.
+ */
+export type RespondToAccountManagerRequestBody = {
+    /**
+     * The response.
+     */
+    decision: AccountManagerDecision;
 };
 
 /**
@@ -12916,6 +13333,17 @@ export type SetPropertyValue = {
 };
 
 /**
+ * Request body for setting a skill's routing description.
+ */
+export type SetSkillDescriptionRequest = {
+    /**
+     * When to use the skill, in one line starting "Use when", at most 300
+     * characters.
+     */
+    description: string;
+};
+
+/**
  * SHA-256 encoded as exactly 64 lowercase hexadecimal characters.
  */
 export type Sha256Digest = string;
@@ -13012,6 +13440,17 @@ export type SimpleMention = {
      * Mentioned entity type.
      */
     entity_type: string;
+};
+
+/**
+ * A skill's routing description.
+ */
+export type SkillDescriptionBody = {
+    /**
+     * When to use the skill, in one line starting "Use when". Absent for a
+     * skill created before descriptions existed.
+     */
+    description?: string | null;
 };
 
 /**
@@ -14685,6 +15124,24 @@ export type SqlStatement = {
 };
 
 /**
+ * Fields required when a deal enters a particular option of a stage column.
+ */
+export type StageRequirement = {
+    /**
+     * Fields that must be present. Empty removes the rule for this stage.
+     */
+    requiredColumnIds: Array<string>;
+    /**
+     * Single-select column identifying the stage, independent of its name.
+     */
+    stageColumnId: string;
+    /**
+     * Stable option identity; renaming the stage preserves the rule.
+     */
+    stageId: string;
+};
+
+/**
  * Starter result. A missing database means the user already started or removed it.
  */
 export type StarterDatabase = {
@@ -16123,6 +16580,20 @@ export type UploadExtractFolderRequest = {
     sha: string;
 };
 
+/**
+ * The document created from the uploaded bytes.
+ */
+export type UploadFileResponse = {
+    /**
+     * The new document.
+     */
+    documentId: string;
+    /**
+     * Number of bytes stored.
+     */
+    sizeBytes: number;
+};
+
 export type UploadFolderRequest = {
     /**
      * The content of the folder
@@ -16985,6 +17456,160 @@ export type WithProjectId = {
     id: string;
 };
 
+export type ListAccountManagersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type ListAccountManagersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListAccountManagersError = ListAccountManagersErrors[keyof ListAccountManagersErrors];
+
+export type ListAccountManagersResponses = {
+    200: AccountManagersList;
+};
+
+export type ListAccountManagersResponse = ListAccountManagersResponses[keyof ListAccountManagersResponses];
+
+export type RequestAccountManagerData = {
+    body: RequestAccountManagerBody;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type RequestAccountManagerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestAccountManagerError = RequestAccountManagerErrors[keyof RequestAccountManagerErrors];
+
+export type RequestAccountManagerResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RequestAccountManagerResponse = RequestAccountManagerResponses[keyof RequestAccountManagerResponses];
+
+export type RevokeAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type RevokeAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeAccountManagerGrantError = RevokeAccountManagerGrantErrors[keyof RevokeAccountManagerGrantErrors];
+
+export type RevokeAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RevokeAccountManagerGrantResponse = RevokeAccountManagerGrantResponses[keyof RevokeAccountManagerGrantResponses];
+
+export type GetAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type GetAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetAccountManagerGrantError = GetAccountManagerGrantErrors[keyof GetAccountManagerGrantErrors];
+
+export type GetAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type GetAccountManagerGrantResponse = GetAccountManagerGrantResponses[keyof GetAccountManagerGrantResponses];
+
+export type RespondToAccountManagerRequestData = {
+    body: RespondToAccountManagerRequestBody;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/response';
+};
+
+export type RespondToAccountManagerRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RespondToAccountManagerRequestError = RespondToAccountManagerRequestErrors[keyof RespondToAccountManagerRequestErrors];
+
+export type RespondToAccountManagerRequestResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RespondToAccountManagerRequestResponse = RespondToAccountManagerRequestResponses[keyof RespondToAccountManagerRequestResponses];
+
+export type ClaimAccountManagerTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/token';
+};
+
+export type ClaimAccountManagerTokenErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimAccountManagerTokenError = ClaimAccountManagerTokenErrors[keyof ClaimAccountManagerTokenErrors];
+
+export type ClaimAccountManagerTokenResponses = {
+    200: ClaimedAccountManagerToken;
+};
+
+export type ClaimAccountManagerTokenResponse = ClaimAccountManagerTokenResponses[keyof ClaimAccountManagerTokenResponses];
+
 export type ListAgentsData = {
     body?: never;
     path?: never;
@@ -17147,6 +17772,47 @@ export type CreateAnchorResponses = {
 
 export type CreateAnchorResponse = CreateAnchorResponses[keyof CreateAnchorResponses];
 
+export type ListBotsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type ListBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotsError = ListBotsErrors[keyof ListBotsErrors];
+
+export type ListBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListBotsResponse = ListBotsResponses[keyof ListBotsResponses];
+
+export type CreateBotData = {
+    body: CreateBotRequest;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type CreateBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotError = CreateBotErrors[keyof CreateBotErrors];
+
+export type CreateBotResponses = {
+    201: Bot;
+};
+
+export type CreateBotResponse = CreateBotResponses[keyof CreateBotResponses];
+
 export type GetSelfBotData = {
     body?: never;
     path?: never;
@@ -17194,6 +17860,85 @@ export type GetBotOwnerProfilesResponses = {
 };
 
 export type GetBotOwnerProfilesResponse = GetBotOwnerProfilesResponses[keyof GetBotOwnerProfilesResponses];
+
+export type DeleteBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type DeleteBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteBotError = DeleteBotErrors[keyof DeleteBotErrors];
+
+export type DeleteBotResponses = {
+    204: void;
+};
+
+export type DeleteBotResponse = DeleteBotResponses[keyof DeleteBotResponses];
+
+export type GetBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type GetBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetBotError = GetBotErrors[keyof GetBotErrors];
+
+export type GetBotResponses = {
+    200: Bot;
+};
+
+export type GetBotResponse = GetBotResponses[keyof GetBotResponses];
+
+export type PatchBotData = {
+    body: PatchBotRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type PatchBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchBotError = PatchBotErrors[keyof PatchBotErrors];
+
+export type PatchBotResponses = {
+    200: Bot;
+};
+
+export type PatchBotResponse = PatchBotResponses[keyof PatchBotResponses];
 
 export type ListBotChannelsData = {
     body?: never;
@@ -17250,6 +17995,89 @@ export type RemoveBotFromChannelByBotResponses = {
 };
 
 export type RemoveBotFromChannelByBotResponse = RemoveBotFromChannelByBotResponses[keyof RemoveBotFromChannelByBotResponses];
+
+export type ListBotTokensData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type ListBotTokensErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotTokensError = ListBotTokensErrors[keyof ListBotTokensErrors];
+
+export type ListBotTokensResponses = {
+    200: Array<BotToken>;
+};
+
+export type ListBotTokensResponse = ListBotTokensResponses[keyof ListBotTokensResponses];
+
+export type CreateBotTokenData = {
+    body: CreateBotTokenRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type CreateBotTokenErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotTokenError = CreateBotTokenErrors[keyof CreateBotTokenErrors];
+
+export type CreateBotTokenResponses = {
+    201: CreateBotTokenResponse;
+};
+
+export type CreateBotTokenResponse2 = CreateBotTokenResponses[keyof CreateBotTokenResponses];
+
+export type RevokeBotTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+        /**
+         * Token ID
+         */
+        token_id: string;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens/{token_id}';
+};
+
+export type RevokeBotTokenErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeBotTokenError = RevokeBotTokenErrors[keyof RevokeBotTokenErrors];
+
+export type RevokeBotTokenResponses = {
+    204: void;
+};
+
+export type RevokeBotTokenResponse = RevokeBotTokenResponses[keyof RevokeBotTokenResponses];
 
 export type ListOccurrencesData = {
     body?: never;
@@ -18887,6 +19715,145 @@ export type PatchChannelResponses = {
 
 export type PatchChannelResponse = PatchChannelResponses[keyof PatchChannelResponses];
 
+export type CancelChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type CancelChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CancelChannelAccessRequestError = CancelChannelAccessRequestErrors[keyof CancelChannelAccessRequestErrors];
+
+export type CancelChannelAccessRequestResponses = {
+    200: unknown;
+};
+
+export type GetMyChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type GetMyChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyChannelAccessRequestError = GetMyChannelAccessRequestErrors[keyof GetMyChannelAccessRequestErrors];
+
+export type GetMyChannelAccessRequestResponses = {
+    200: ChannelAccessRequestState;
+};
+
+export type GetMyChannelAccessRequestResponse = GetMyChannelAccessRequestResponses[keyof GetMyChannelAccessRequestResponses];
+
+export type RequestChannelAccessData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/mine';
+};
+
+export type RequestChannelAccessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestChannelAccessError = RequestChannelAccessErrors[keyof RequestChannelAccessErrors];
+
+export type RequestChannelAccessResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type RequestChannelAccessResponse = RequestChannelAccessResponses[keyof RequestChannelAccessResponses];
+
+export type GetChannelAccessRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}';
+};
+
+export type GetChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelAccessRequestError = GetChannelAccessRequestErrors[keyof GetChannelAccessRequestErrors];
+
+export type GetChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type GetChannelAccessRequestResponse = GetChannelAccessRequestResponses[keyof GetChannelAccessRequestResponses];
+
+export type ResolveChannelAccessRequestData = {
+    body: ResolveChannelAccessRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+        /**
+         * Access request ID
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/access-requests/{request_id}/resolve';
+};
+
+export type ResolveChannelAccessRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResolveChannelAccessRequestError = ResolveChannelAccessRequestErrors[keyof ResolveChannelAccessRequestErrors];
+
+export type ResolveChannelAccessRequestResponses = {
+    200: ChannelAccessRequest;
+};
+
+export type ResolveChannelAccessRequestResponse = ResolveChannelAccessRequestResponses[keyof ResolveChannelAccessRequestResponses];
+
 export type GetChannelAttachmentsData = {
     body?: never;
     path: {
@@ -18925,6 +19892,58 @@ export type GetChannelAttachmentsResponses = {
 };
 
 export type GetChannelAttachmentsResponse = GetChannelAttachmentsResponses[keyof GetChannelAttachmentsResponses];
+
+export type ListChannelBotsData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type ListChannelBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelBotsError = ListChannelBotsErrors[keyof ListChannelBotsErrors];
+
+export type ListChannelBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListChannelBotsResponse = ListChannelBotsResponses[keyof ListChannelBotsResponses];
+
+export type AddChannelBotData = {
+    body: AddChannelBotRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type AddChannelBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddChannelBotError = AddChannelBotErrors[keyof AddChannelBotErrors];
+
+export type AddChannelBotResponses = {
+    204: void;
+};
+
+export type AddChannelBotResponse = AddChannelBotResponses[keyof AddChannelBotResponses];
 
 export type CreateChannelScopedBotData = {
     body: CreateChannelScopedBotRequest;
@@ -19933,6 +20952,36 @@ export type ShareCrmPipelineResponses = {
 };
 
 export type ShareCrmPipelineResponse = ShareCrmPipelineResponses[keyof ShareCrmPipelineResponses];
+
+export type GetCrmPipelineStageRequirementsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type GetCrmPipelineStageRequirementsResponses = {
+    200: Array<StageRequirement>;
+};
+
+export type GetCrmPipelineStageRequirementsResponse = GetCrmPipelineStageRequirementsResponses[keyof GetCrmPipelineStageRequirementsResponses];
+
+export type SetCrmPipelineStageRequirementData = {
+    body: StageRequirement;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/stage-requirements';
+};
+
+export type SetCrmPipelineStageRequirementResponses = {
+    204: void;
+};
+
+export type SetCrmPipelineStageRequirementResponse = SetCrmPipelineStageRequirementResponses[keyof SetCrmPipelineStageRequirementResponses];
 
 export type GetCrmPipelineTableData = {
     body?: never;
@@ -21053,6 +22102,9 @@ export type CreateSkillHandlerData = {
 };
 
 export type CreateSkillHandlerErrors = {
+    /**
+     * The description is blank, longer than one line or 300 characters, or does not start "Use when"
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -21410,6 +22462,58 @@ export type GetSystemSkillsHandlerResponses = {
 
 export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
 
+export type UploadFileData = {
+    /**
+     * The file's bytes, at most 25 MiB.
+     */
+    body: Blob | File;
+    path?: never;
+    query: {
+        /**
+         * Filename including its extension, such as `report.pdf`; the extension
+         * sets the file type. No directory components.
+         */
+        fileName: string;
+        /**
+         * Destination project. Requires edit access; omit for top-level files.
+         */
+        projectId?: string;
+    };
+    url: '/documents/upload';
+};
+
+export type UploadFileErrors = {
+    /**
+     * Invalid filename or content
+     */
+    400: ErrorResponse;
+    /**
+     * No edit access to the destination project
+     */
+    401: ErrorResponse;
+    /**
+     * The caller cannot create documents
+     */
+    403: unknown;
+    /**
+     * The file exceeds 25 MiB
+     */
+    413: unknown;
+    /**
+     * Document name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UploadFileError = UploadFileErrors[keyof UploadFileErrors];
+
+export type UploadFileResponses = {
+    200: UploadFileResponse;
+};
+
+export type UploadFileResponse2 = UploadFileResponses[keyof UploadFileResponses];
+
 export type DeleteDocumentData = {
     body?: never;
     path: {
@@ -21514,6 +22618,65 @@ export type SaveDocumentHandlerResponses = {
 };
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
+
+export type EditDocumentWithAiData = {
+    body: DocumentAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/ai-edit';
+};
+
+export type EditDocumentWithAiErrors = {
+    /**
+     * Not a markdown document, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The editor could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit could not start
+     */
+    500: ErrorResponse;
+    /**
+     * The edit failed and may have partly applied
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditDocumentWithAiError = EditDocumentWithAiErrors[keyof EditDocumentWithAiErrors];
+
+export type EditDocumentWithAiResponses = {
+    200: DocumentAiEdited;
+};
+
+export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
 
 export type GetDocumentBranchNameData = {
     body?: never;
@@ -21862,6 +23025,62 @@ export type SimpleSaveResponses = {
 };
 
 export type SimpleSaveResponse = SimpleSaveResponses[keyof SimpleSaveResponses];
+
+export type GetSkillDescriptionData = {
+    body?: never;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type GetSkillDescriptionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSkillDescriptionError = GetSkillDescriptionErrors[keyof GetSkillDescriptionErrors];
+
+export type GetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type GetSkillDescriptionResponse = GetSkillDescriptionResponses[keyof GetSkillDescriptionResponses];
+
+export type SetSkillDescriptionData = {
+    body: SetSkillDescriptionRequest;
+    path: {
+        /**
+         * Skill document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/skill_description';
+};
+
+export type SetSkillDescriptionErrors = {
+    /**
+     * The document is not a skill, or the description is invalid
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetSkillDescriptionError = SetSkillDescriptionErrors[keyof SetSkillDescriptionErrors];
+
+export type SetSkillDescriptionResponses = {
+    200: SkillDescriptionBody;
+};
+
+export type SetSkillDescriptionResponse = SetSkillDescriptionResponses[keyof SetSkillDescriptionResponses];
 
 export type GetDocumentTeamShareData = {
     body?: never;
@@ -23346,6 +24565,33 @@ export type DeleteHarnessResponses = {
 };
 
 export type DeleteHarnessResponse = DeleteHarnessResponses[keyof DeleteHarnessResponses];
+
+export type PatchHarnessData = {
+    body: PatchHarnessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}';
+};
+
+export type PatchHarnessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchHarnessError = PatchHarnessErrors[keyof PatchHarnessErrors];
+
+export type PatchHarnessResponses = {
+    200: Harness;
+};
+
+export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
 
 export type HealthHandlerData = {
     body?: never;

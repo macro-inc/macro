@@ -150,6 +150,8 @@ export function createCompanyImport(
     try {
       target ??= await targetPipeline(span, data.name);
       span.setAttr('crm.pipeline_id', target.id);
+      // Only company pipelines are offered as this import's destination.
+      if (!target.recordType) return false;
       const transfer = pipelines.transfer(target);
       const table = await span.span('crm.pipeline.read_table', () =>
         transfer.readTable(signal)

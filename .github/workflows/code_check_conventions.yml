@@ -10,6 +10,7 @@ name: conventions code check
     - ready_for_review
     branches:
     - main
+  workflow_call: {}
 permissions:
   contents: read
 jobs:
@@ -41,7 +42,7 @@ jobs:
   ast-grep:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled')
     name: ast-grep Conventions
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
@@ -89,5 +90,5 @@ jobs:
 
         echo "✅ All jobs passed or were skipped"
 concurrency:
-  group: code-check-conventions-${{ github.ref }}
+  group: code-check-conventions-${{ github.event.action == 'labeled' && github.run_id || github.ref }}
   cancel-in-progress: true
