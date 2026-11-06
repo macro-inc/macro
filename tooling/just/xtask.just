@@ -2,13 +2,15 @@
 # thin delegates. They target xtask_local directly (rather than the `cargo x`
 # launcher) so the `local-stack` feature — off by default so bare CI builds
 # skip librdkafka — can be enabled to turn on the Kafka topic provisioning that
-# run-local needs.
-xtask := "cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack --"
+# run-local needs. Its own target dir, so `just run_local status` answers at once
+# while a service build holds the main one's lock (the flag rather than
+# CARGO_TARGET_DIR, which xtask's own child cargo builds would inherit).
+xtask := "cargo run --quiet --manifest-path Cargo.toml --target-dir target/xtask -p xtask_local --features local-stack --"
 
 # Short name for the fully local development stack.
 alias local := run_local
 
-# Start a fully local stack (xtask: zigbuild + runtime image + infra + proxy + frontend).
+# Start a fully local stack (xtask: native build + runtime image + infra + proxy + frontend).
 #   just run_local                      # default instance
 #   just run_local --instance agent-a   # isolated, concurrent instance
 #   just run_local --no-doppler --env-file ./local.env --no-frontend --no-build

@@ -20,6 +20,7 @@ use docker_compose_types as dct;
 use indexmap::IndexMap;
 use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
+use sha2::{Digest, Sha256};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
@@ -37,7 +38,7 @@ const EGRESS_CONTAINER_PORT: u16 = 8102;
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
 pub const CADDY_IMAGE: &str = "caddy:2-alpine";
-pub const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay:dev";
+const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay";
 
 /// Base-compose services that bind fixed host ports but aren't in our inventory
 /// (reached via the proxy / container network, not the host). For named
@@ -204,17 +205,17 @@ fn add_sdk_webhook_relay(
     instance: &Instance,
 ) -> Result<()> {
     super::sdk_webhook::ensure_keys(instance)?;
+    let context = repo_root().join("infra/local/sdk-webhook-relay");
+    let dockerfile = std::fs::read(context.join("Dockerfile"))
+        .with_context(|| format!("reading {}/Dockerfile", context.display()))?;
     let build = dct::BuildStep::Advanced(dct::AdvancedBuildStep {
-        context: repo_root()
-            .join("infra/local/sdk-webhook-relay")
-            .display()
-            .to_string(),
+        context: context.display().to_string(),
         ..Default::default()
     });
     services.insert(
         "sdk-webhook-relay".to_string(),
         Some(dct::Service {
-            image: Some(SDK_WEBHOOK_RELAY_IMAGE.to_string()),
+            image: Some(sdk_webhook_relay_image(&dockerfile)),
             build_: Some(build),
             ports: dct::Ports::Short(vec![format!(
                 "127.0.0.1:{}:22",
@@ -232,6 +233,13 @@ fn add_sdk_webhook_relay(
         }),
     );
     Ok(())
+}
+
+/// The relay's image tag, keyed on its Dockerfile. Compose only builds a tag that
+/// is missing, so a fixed tag keeps serving an image older than the Dockerfile.
+fn sdk_webhook_relay_image(dockerfile: &[u8]) -> String {
+    let digest = format!("{:x}", Sha256::digest(dockerfile));
+    format!("{SDK_WEBHOOK_RELAY_IMAGE}:{}", &digest[..12])
 }
 
 /// LocalStack (S3/SQS/DynamoDB), reachable as `localstack` on both networks.
