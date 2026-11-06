@@ -111,6 +111,9 @@ pub enum PersonaFieldError {
     /// Config and environment keys must be environment variable names.
     #[error("persona config key must match ^[A-Za-z_][A-Za-z0-9_]*$")]
     ConfigKey,
+    /// Bootstrap secrets must arrive through one-time enrollment only.
+    #[error("persona config must not contain reserved credential keys")]
+    ReservedConfigKey,
 }
 
 /// A validated, non-reserved Linux user name for a persona.
@@ -228,6 +231,14 @@ impl PersonaConfigKey {
         Ok(Self(value.to_owned()))
     }
 
+    /// Reject credential names in persisted persona configuration.
+    pub fn validate_non_secret(&self) -> Result<(), PersonaFieldError> {
+        if lazy_regex::regex_is_match!(r"(?i)_(TOKEN|KEY|SECRET)$", self.as_str()) {
+            return Err(PersonaFieldError::ReservedConfigKey);
+        }
+        Ok(())
+    }
+
     /// Borrow the validated value.
     pub fn as_str(&self) -> &str {
         &self.0
@@ -328,6 +339,10 @@ fn deserialize_persona_values<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<BTreeMap<PersonaConfigKey, String>, D::Error> {
     let values = BTreeMap::<PersonaConfigKey, String>::deserialize(deserializer)?;
+    for key in values.keys() {
+        key.validate_non_secret()
+            .map_err(serde::de::Error::custom)?;
+    }
     if values.values().any(|value| value.contains(['\n', '\r'])) {
         return Err(serde::de::Error::custom(
             "persona values must be single lines",

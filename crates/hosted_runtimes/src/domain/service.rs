@@ -649,6 +649,14 @@ pub fn validate_persona(persona: &Persona) -> Result<(), ComputerError> {
             "persona exec must not be empty".to_owned(),
         ));
     }
+    for key in persona
+        .config
+        .keys()
+        .chain(persona.extra_service.env.keys())
+    {
+        key.validate_non_secret()
+            .map_err(|error| ComputerError::BadRequest(error.to_string()))?;
+    }
     let values = persona
         .config
         .values()

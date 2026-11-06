@@ -25,7 +25,7 @@ const ENROLLMENT_JSON: &str = r#"{
             "exec": "/usr/local/bin/brain --persona ada",
             "env": { "BRAIN_MODE": "say \"hi\" 50%" }
         },
-        "config": { "MACRO_TOKEN": "a$b\"c", "PERSONA": "ada" }
+        "config": { "PERSONA_LABEL": "a$b\"c", "PERSONA": "ada" }
     }
 }"#;
 
@@ -134,7 +134,7 @@ fn persona_installs_its_user_environment_and_unit() {
     let env_path = root.path().join("etc/macro/personas/agent-ada.env");
     assert_eq!(
         std::fs::read_to_string(&env_path).unwrap(),
-        "MACRO_TOKEN=\"a\\$b\\\"c\"\nPERSONA=\"ada\"\n"
+        "PERSONA_LABEL=\"a\\$b\\\"c\"\nPERSONA=\"ada\"\n"
     );
     assert_eq!(
         std::fs::metadata(&env_path).unwrap().permissions().mode() & 0o777,

@@ -133,7 +133,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `PersonaOsUser` requires `^[a-z_][a-z0-9_-]{0,30}$`, excluding root, macro and macrod*;
   `PersonaConfigKey` supports borrowed string map lookups. `Persona` and
   `PersonaService` Debug redact config and env values.
-  `service::validate_persona` checks commands and values.
+  `service::validate_persona` checks commands and values. Persisted config and
+  service env reject credential names ending in `_TOKEN`, `_KEY`, or `_SECRET`
+  (case-insensitive) with `PersonaFieldError::ReservedConfigKey`.
 - Persona computers are never idle-frozen; they run until powered off or canceled.
 - Fleet host discovery must not abort harness startup: report unhealthy and retry
   registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers
