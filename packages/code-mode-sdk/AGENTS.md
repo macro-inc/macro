@@ -14,7 +14,7 @@ HTML worker belong to `packages/sdk-docs`.
   per-symbol references (classes, methods, types).
 - `scripts/catalog.ts`: the entity directories agents discover; agent and
   harness docs share a topic, as do native channels, external chats and
-  WhatsApp.
+  WhatsApp, and users with `me`, `memory` and `activity`.
 - Each entity's description is its one `@routing` sentence ("Use when …; not
   …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
   collected by `packages/sdk-docs/src/render.ts`. Generation fails for an

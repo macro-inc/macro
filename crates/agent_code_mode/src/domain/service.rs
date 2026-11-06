@@ -260,6 +260,13 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // macro.agents.list() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                // macro.memory.read() and macro.memory.edit().
+                | "ReadMemory"
+                | "UpdateMemory"
+                // User.activity(), macro.activity.mine() and Initiative.activity().
+                | "GetUserActivity"
+                | "ReadActivity"
+                | "ReadInitiativeActivity"
         )
 }
 

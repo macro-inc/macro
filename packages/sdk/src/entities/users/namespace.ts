@@ -3,7 +3,7 @@ import type { MacroClient } from '../../utils/client';
 import { User } from './user';
 
 /**
- * @routing Use when looking up people or their profiles, or changing the user's own name or picture; not team membership.
+ * @routing Use when looking up people or their profiles, changing the user's own name or picture, reading or editing what AI remembers about the user, or reading what the user, a teammate or a project did; not team membership or everything that changed in the workspace.
  */
 export class UserNamespace {
   constructor(private readonly client: MacroClient) {}

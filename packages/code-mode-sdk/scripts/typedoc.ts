@@ -110,7 +110,7 @@ export function packageEntityDocs(
               letter.toUpperCase()
             ),
       // Agent and host setup share one discovery topic, as do AI calls and
-      // image generation, keeping the classifier request within its
+      // image generation, and people with their memory and activity, keeping the classifier request within its
       // 32-question contract as the public API grows.
       prefixes: (directory === 'agents'
         ? ['agents', 'harnesses']
@@ -119,7 +119,7 @@ export function packageEntityDocs(
           : directory === 'ai'
             ? ['ai', 'images']
             : directory === 'users'
-              ? ['users', 'me']
+              ? ['users', 'me', 'memory', 'activity']
               : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),

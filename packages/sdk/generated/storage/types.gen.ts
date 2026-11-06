@@ -9782,6 +9782,61 @@ export type InitialPropertyValue = {
 };
 
 /**
+ * Stable cursor for project history.
+ */
+export type InitiativeActivityCursor = {
+    /**
+     * Tie-breaker within the same timestamp.
+     */
+    id: string;
+    /**
+     * Time of the last scanned activity.
+     */
+    occurredAt: string;
+};
+
+/**
+ * History page. Access filtering can shorten records; follow nextCursor until exhausted.
+ */
+export type InitiativeActivityPage = {
+    nextCursor?: null | InitiativeActivityCursor;
+    /**
+     * Visible changes in newest-first order.
+     */
+    records: Array<InitiativeActivityRecord>;
+};
+
+/**
+ * One authorized activity row; task names are hydrated through existing authorized task reads.
+ */
+export type InitiativeActivityRecord = {
+    /**
+     * Durable activity action tag.
+     */
+    action: string;
+    /**
+     * Typed payload for known actions. Absent for unknown actions.
+     */
+    actionPayload?: unknown;
+    /**
+     * Principal who acted.
+     */
+    actorId: string;
+    /**
+     * Stable record identifier, also used for realtime deduplication.
+     */
+    id: string;
+    /**
+     * Time of the change.
+     */
+    occurredAt: string;
+    /**
+     * Acting user's feed identity when a bot acted on their behalf.
+     */
+    subjectId: string;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -24147,6 +24202,57 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type GetInitiativeActivityData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: {
+        /**
+         * Only changes at or after this time.
+         */
+        after?: string;
+        /**
+         * Only changes before this time.
+         */
+        before?: string;
+        /**
+         * `occurredAt` of the previous page's `nextCursor`; send with `cursorId`.
+         */
+        cursorOccurredAt?: string;
+        /**
+         * `id` of the previous page's `nextCursor`; send with `cursorOccurredAt`.
+         */
+        cursorId?: string;
+        /**
+         * Events to scan, 1 through 100; defaults to 100.
+         */
+        limit?: number;
+    };
+    url: '/initiatives/{initiative_id}/activity';
+};
+
+export type GetInitiativeActivityErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeActivityError = GetInitiativeActivityErrors[keyof GetInitiativeActivityErrors];
+
+export type GetInitiativeActivityResponses = {
+    200: InitiativeActivityPage;
+};
+
+export type GetInitiativeActivityResponse = GetInitiativeActivityResponses[keyof GetInitiativeActivityResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;

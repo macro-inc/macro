@@ -37,6 +37,10 @@ enforced by the ordinary backend APIs.
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
+- `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
+  `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
+  `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
+  `/initiatives/{id}/activity`. Code mode hides the matching direct tools.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
