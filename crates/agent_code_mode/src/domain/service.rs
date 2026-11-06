@@ -220,6 +220,11 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // macro.properties.tags() and createTag(); PropertyOption edits.
+                | "ListTags"
+                | "CreateTag"
+                | "EditTag"
+                | "DeleteTag"
                 | "ListInboxes"
                 | "ListLabels"
                 | "GetThread"
@@ -237,6 +242,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadChannelThread"
                 | "RenameChannel"
                 | "ManageChannelParticipants"
+                // macro.channels.dm() and macro.channels.private().
+                | "OpenDirectMessage"
                 | "ReadCallRecord"
                 | "UpdateCallRecord"
                 | "DeleteCallRecord"
@@ -246,9 +253,13 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
+                // macro.calendar.teamAvailability().
+                | "GetTeamAvailability"
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
+                // muteNotifications()/unmuteNotifications() on item handles.
+                | "MuteNotifications"
                 | "ListTeamMembers"
                 | "CreateForm"
                 | "EditForm"
