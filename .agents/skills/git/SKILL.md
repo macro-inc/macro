@@ -140,9 +140,8 @@ when available). Do not commit verification captures unless explicitly requested
 ## Handing off a PR
 
 Open PRs ready for review, not as drafts; if one was created as a draft, mark it
-ready. The `CI gate` passes only after a run requested with the `run-ci` label,
-so open with `gh pr create ... --label run-ci` and add the label again after each
-push you want tested (see the [`run-ci` skill](../run-ci/SKILL.md)). A PR whose
+ready. The `CI gate` passes only after a run requested with the `run-ci` label;
+the [`run-ci` skill](../run-ci/SKILL.md) says when to request one. A PR whose
 `CI gate` is failing, still running, or not run on the latest commit is not done:
 wait on it and fix failures before handing off.
 
