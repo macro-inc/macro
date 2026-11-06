@@ -4,6 +4,7 @@ import {
   createCallWork,
 } from '@app/features/agent-work/views/call-work';
 import { t } from '@app/lib/i18n';
+import { beginInteraction } from '@app/observability/flow';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { DEFAULT_SIDE_PANEL_WIDTH } from '@components/app/side-panel/sizing';
 import { Resize } from '@core/component/Resize';
@@ -16,12 +17,11 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import CornersInIcon from '@icon/system/regular/corners-in.svg';
-import CornersOutIcon from '@icon/system/regular/corners-out.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import { Badge, Button, cn } from '@ui';
-import type { RemoteParticipant, Track } from 'livekit-client';
+import { makePersisted } from '@solid-primitives/storage';
+import { Avatar, Button, cn } from '@ui';
+import type { RemoteParticipant } from 'livekit-client';
 import {
   createEffect,
   createSignal,
@@ -37,8 +37,20 @@ import {
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
+import { CallMoreMenu } from './CallControls/CallMoreMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
 import { CallParticipantsList } from './CallParticipantsList';
+import {
+  LocalParticipantTile,
+  ParticipantTile,
+  ScreenShareTile,
+} from './CallParticipantTiles';
+import { CallWaveform } from './CallWaveform';
+import {
+  type CallLayout,
+  normalizeCallLayout,
+  selectCallStageParticipant,
+} from './call-layout';
 import {
   CallChatPanel,
   type CallPanelTab,
@@ -47,312 +59,10 @@ import { createControlsVisibility } from './create-controls-visibility';
 import type { CallPanelState } from './discussion/CallDiscussionContent';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
-import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
-import { TrackView } from './TrackView';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
 const CallChat = lazy(() => import('./chat/CallChat'));
 const GuestCallChat = lazy(() => import('./chat/GuestCallChat'));
-
-function VideoTag(props: {
-  children: JSXElement;
-  class?: string;
-  variant?: 'default' | 'truncated';
-  isProgram?: boolean;
-  muted?: boolean;
-  mutedLabel?: string;
-  sharing?: boolean;
-}) {
-  return (
-    <div
-      class={cn(
-        'absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-surface/70 px-1.5 py-0.5 text-ink text-xs',
-        props.variant === 'truncated' && 'max-w-[80%]',
-        props.class
-      )}
-    >
-      <Show when={props.sharing}>
-        <Screencast class="size-3 shrink-0" />
-      </Show>
-      <MutedMicrophoneBadge
-        muted={props.muted ?? false}
-        label={props.mutedLabel ?? ''}
-        inline
-      />
-      <span class="min-w-0 truncate">{props.children}</span>
-      <Show when={props.isProgram}>
-        <Badge variant="secondary" size="xs">
-          {t('calls.agent')}
-        </Badge>
-      </Show>
-    </div>
-  );
-}
-
-function ParticipantTileWrapper(props: {
-  isSpeaking: boolean;
-  children: JSXElement;
-  isConnecting?: boolean;
-  isFocused?: boolean;
-  onToggleFocus?: () => void;
-  focusLabel?: string;
-  hidden?: boolean;
-  class?: string;
-}) {
-  // Fills its cell, but never wider than 16:9: on a wide panel a full-width
-  // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
-  // grids) still fill, so portrait video keeps the space.
-  // Cells can shrink to fit the screen-share strip and picture-in-picture grid.
-  return (
-    <div
-      hidden={props.hidden}
-      class={cn(
-        'flex size-full min-h-0 items-center justify-center [container-type:size]',
-        props.class
-      )}
-    >
-      <div
-        data-call-tile=""
-        class={cn(
-          'relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
-          props.isConnecting && 'animate-pulse'
-        )}
-      >
-        {props.children}
-        <Show when={props.isSpeaking}>
-          <div
-            aria-hidden="true"
-            class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-success"
-          />
-        </Show>
-        <Show when={props.onToggleFocus}>
-          <button
-            type="button"
-            class="absolute inset-0 z-30 rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent"
-            aria-label={props.focusLabel}
-            aria-pressed={props.isFocused ?? false}
-            onClick={props.onToggleFocus}
-          />
-        </Show>
-        <Show when={props.isFocused && props.onToggleFocus}>
-          <Button
-            variant="primary"
-            size="sm"
-            class="absolute right-2 top-2 z-40"
-            onClick={props.onToggleFocus}
-          >
-            Back to grid
-          </Button>
-        </Show>
-      </div>
-    </div>
-  );
-}
-
-function ParticipantAvatar(props: {
-  userId: string | undefined;
-  fallbackName: string | undefined;
-  avatarSize?: 'sm' | 'md';
-}) {
-  const avatarClass = () =>
-    cn(
-      'overflow-hidden rounded-full',
-      props.avatarSize === 'sm' ? 'size-12' : 'size-20 sm:size-24'
-    );
-
-  const fallbackInitial = () => {
-    const name = props.fallbackName?.trim();
-    return (name ? name.charAt(0) : 'Y').toUpperCase();
-  };
-
-  return (
-    <div class="relative flex items-center justify-center size-full p-4">
-      <div class={cn('relative', avatarClass())}>
-        <div
-          class={cn(
-            'flex size-full items-center justify-center rounded-full bg-ink-extra-muted text-surface font-semibold',
-            props.avatarSize === 'sm' ? 'text-xl' : 'text-4xl'
-          )}
-        >
-          {fallbackInitial()}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LocalParticipantTile(props: {
-  isSpeaking: boolean;
-  isConnecting: boolean;
-  isAudioMuted: boolean;
-  isVideoMuted: boolean;
-  track: Track | undefined;
-  userId: string | undefined;
-  fallbackName: string | undefined;
-  isProgram: boolean;
-  avatarSize?: 'sm' | 'md';
-  class?: string;
-  isFocused?: boolean;
-  onToggleFocus?: () => void;
-}) {
-  return (
-    <ParticipantTileWrapper
-      isSpeaking={props.isSpeaking}
-      isConnecting={props.isConnecting}
-      class={props.class}
-      isFocused={props.isFocused}
-      onToggleFocus={props.onToggleFocus}
-      focusLabel={props.isFocused ? 'Unfocus yourself' : 'Focus yourself'}
-    >
-      <Show
-        when={!props.isConnecting && !props.isVideoMuted}
-        fallback={
-          <ParticipantAvatar
-            userId={props.userId}
-            fallbackName={props.fallbackName}
-            avatarSize={props.avatarSize}
-          />
-        }
-      >
-        <TrackView track={props.track} mirror />
-      </Show>
-
-      <Show
-        when={props.isConnecting}
-        fallback={
-          <VideoTag
-            isProgram={props.isProgram}
-            muted={props.isAudioMuted}
-            mutedLabel="You are muted"
-          >
-            You
-          </VideoTag>
-        }
-      >
-        <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink-muted text-xs">
-          Connecting...
-        </div>
-      </Show>
-    </ParticipantTileWrapper>
-  );
-}
-
-function ParticipantTile(props: {
-  participant: RemoteParticipant;
-  avatarSize?: 'sm' | 'md';
-  filmstrip?: boolean;
-  isFocused: boolean;
-  hidden: boolean;
-  onToggleFocus: () => void;
-}) {
-  const callCtx = useCallContext();
-  const macroId = () => tryMacroId(props.participant.identity);
-  const displayName = () =>
-    props.participant.name?.trim() ||
-    (macroId() ? getDisplayName(macroId()) : 'Guest');
-
-  const cameraTrack = () => {
-    callCtx.trackVersion();
-    const pub = props.participant.getTrackPublication(LK_TRACK_SOURCE.Camera);
-    return pub?.isSubscribed && !pub.isMuted ? pub.track : undefined;
-  };
-
-  const isAudioMuted = () => {
-    callCtx.trackVersion();
-    const publication = props.participant.getTrackPublication(
-      LK_TRACK_SOURCE.Microphone
-    );
-    return publication?.isMuted ?? true;
-  };
-
-  const isSpeaking = () => callCtx.isParticipantSpeaking(props.participant);
-
-  return (
-    <ParticipantTileWrapper
-      isSpeaking={isSpeaking()}
-      isFocused={props.isFocused}
-      onToggleFocus={props.onToggleFocus}
-      focusLabel={`${props.isFocused ? 'Unfocus' : 'Focus'} ${displayName()}`}
-      hidden={props.hidden}
-      class={cn(
-        'min-w-0',
-        props.filmstrip && 'max-w-36',
-        props.hidden && 'hidden'
-      )}
-    >
-      <Show
-        when={cameraTrack()}
-        fallback={
-          <ParticipantAvatar
-            userId={macroId()}
-            fallbackName={displayName()}
-            avatarSize={props.avatarSize}
-          />
-        }
-      >
-        <TrackView track={cameraTrack()} />
-      </Show>
-
-      <VideoTag
-        variant="truncated"
-        isProgram={isProgramParticipant(props.participant.attributes)}
-        muted={isAudioMuted()}
-        mutedLabel={`${displayName()} is muted`}
-        sharing={(() => {
-          callCtx.trackVersion();
-          const publication = props.participant.getTrackPublication(
-            LK_TRACK_SOURCE.ScreenShare
-          );
-          return publication?.isMuted === false;
-        })()}
-      >
-        {displayName()}
-      </VideoTag>
-    </ParticipantTileWrapper>
-  );
-}
-
-function ScreenShareTile(props: { participant: RemoteParticipant }) {
-  const callCtx = useCallContext();
-  const macroId = () => tryMacroId(props.participant.identity);
-  const displayName = () =>
-    props.participant.name?.trim() ||
-    (macroId() ? getDisplayName(macroId()) : 'Guest');
-  const screenTrack = () => {
-    callCtx.trackVersion();
-    return props.participant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)
-      ?.track;
-  };
-
-  return (
-    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted">
-      <TrackView track={screenTrack()} fit="contain" />
-
-      <VideoTag
-        variant="truncated"
-        isProgram={isProgramParticipant(props.participant.attributes)}
-      >
-        <span class="flex items-center gap-1.5">
-          <Show when={macroId()}>
-            {(id) => (
-              <span
-                class={cn(
-                  'size-5 shrink-0 rounded-full',
-                  callCtx.isParticipantSpeaking(props.participant) &&
-                    'outline-2 -outline-offset-2 outline-success'
-                )}
-              >
-                <UserIcon id={id()} size="fill" suppressClick />
-              </span>
-            )}
-          </Show>
-          <Screencast class="size-3.5" />
-          {t('calls.presenterSharing', { name: displayName() })}
-        </span>
-      </VideoTag>
-    </div>
-  );
-}
 
 export function CallOverlay(props: {
   onLeave: () => void;
@@ -564,22 +274,102 @@ export function CallOverlay(props: {
   const hasAnyScreenShare = () =>
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;
 
-  const [screenShareMaximized, setScreenShareMaximized] = createSignal(false);
-  const showScreenShare = () => hasAnyScreenShare() && !focusedParticipant();
+  const [savedLayout, setSavedLayout] = makePersisted(
+    createSignal<CallLayout>('auto'),
+    {
+      name: 'call.layout',
+      deserialize: (value) => {
+        try {
+          return normalizeCallLayout(JSON.parse(value));
+        } catch {
+          return 'auto';
+        }
+      },
+    }
+  );
+  const layout = () => (isMobile() ? 'auto' : savedLayout());
+  const [hideParticipants, setHideParticipants] = createSignal(false);
+  createEffect(
+    on(hasAnyScreenShare, (sharing) => {
+      if (!sharing) setHideParticipants(false);
+    })
+  );
+  const showScreenShare = () =>
+    hasAnyScreenShare() && (hideParticipants() || !focusedParticipant());
+  const speakerLayout = () => layout() === 'speaker' || layout() === 'sidebar';
+  const primary = () =>
+    selectCallStageParticipant(
+      participants(),
+      (participant) => callCtx.isParticipantSpeaking(participant),
+      isLocalSpeaking()
+    );
+  const remotePrimary = () => {
+    const participant = primary();
+    return participant === 'local' ? undefined : participant;
+  };
+  const spotlight = () =>
+    speakerLayout() && !showScreenShare() && !focusedParticipant();
+  const sideStrip = () =>
+    layout() === 'sidebar' && !focusedParticipant() && !hideParticipants();
   const selfInGrid = () =>
-    (isMobile() || compactControls()) &&
+    (layout() === 'grid' ||
+      ((isMobile() || compactControls()) && !hasAnyScreenShare())) &&
     participants().length > 0 &&
-    !hasAnyScreenShare() &&
     !focusedParticipant();
-  const maximizeLabel = () =>
-    screenShareMaximized()
-      ? t('calls.restoreScreenShare')
-      : t('calls.maximizeScreenShare');
+  const talking = () =>
+    participants().find((participant) =>
+      callCtx.isParticipantSpeaking(participant)
+    ) ?? (isLocalSpeaking() ? 'local' : undefined);
+  const talkingId = () => {
+    const participant = talking();
+    return participant === 'local'
+      ? localUserId()
+      : participant
+        ? tryMacroId(participant.identity)
+        : undefined;
+  };
+  const talkingName = () => {
+    const participant = talking();
+    return participant === 'local'
+      ? t('calls.you')
+      : participant?.name ||
+          (participant ? getDisplayName(tryMacroId(participant.identity)) : '');
+  };
+  const LocalTile = (tile: {
+    class?: string;
+    avatarSize?: 'sm' | 'md';
+    focusable?: boolean;
+  }) => (
+    <LocalParticipantTile
+      class={tile.class}
+      isSpeaking={isLocalSpeaking()}
+      isConnecting={isConnecting()}
+      isAudioMuted={callCtx.isAudioMuted()}
+      isVideoMuted={callCtx.isVideoMuted()}
+      track={localVideoTrack()}
+      userId={localUserId()}
+      fallbackName={
+        props.localName ||
+        callCtx.room()?.localParticipant.name ||
+        currentUserName()
+      }
+      isProgram={isProgramParticipant(
+        callCtx.room()?.localParticipant.attributes
+      )}
+      avatarSize={tile.avatarSize}
+      isFocused={focusedParticipant() === 'local'}
+      onToggleFocus={
+        tile.focusable === false
+          ? undefined
+          : () => toggleParticipantFocus('local')
+      }
+    />
+  );
 
   const gridCols = () => {
     if (focusedParticipant() && focusedParticipant() !== 'local')
       return 'grid-cols-1';
-    const count = participants().length;
+    const count = participants().length + (selfInGrid() ? 1 : 0);
     if (count <= 1) return 'grid-cols-1';
     if (count <= 4) return 'grid-cols-2';
     return 'grid-cols-3';
@@ -588,6 +378,7 @@ export function CallOverlay(props: {
   return (
     <div
       class="relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0"
+      data-call-layout={layout()}
       data-call-fullscreen={isMobile() ? '' : undefined}
       onPointerDown={() => {
         setKeyboardFocus(false);
@@ -638,167 +429,188 @@ export function CallOverlay(props: {
         >
           <Resize.Panel id="call-stage" minSize={widePanel() ? 320 : 0}>
             <div class="relative flex h-full min-h-0 min-w-0 flex-col @container/call-stage">
-              {/* Screen share area */}
-              <Show when={hasAnyScreenShare()}>
-                <div
-                  class="flex-1 min-h-0 pt-2"
-                  classList={{ hidden: !!focusedParticipant() }}
-                >
-                  <div class="relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
-                    <Button
-                      class="absolute right-2 top-2 z-10"
-                      variant="secondary"
-                      size="icon-sm"
-                      aria-label={maximizeLabel()}
-                      tooltip={{ content: maximizeLabel(), placement: 'left' }}
-                      onClick={() => setScreenShareMaximized((value) => !value)}
-                    >
-                      <Show
-                        when={screenShareMaximized()}
-                        fallback={<CornersOutIcon class="size-4" />}
-                      >
-                        <CornersInIcon class="size-4" />
-                      </Show>
-                    </Button>
-                    <Show when={callCtx.isScreenSharing()}>
-                      <div class="flex size-full flex-col items-center justify-center gap-3 p-4">
-                        <Screencast class="size-10 text-accent" />
-                        <p class="font-semibold">{t('calls.youAreSharing')}</p>
-                        <p class="text-sm text-ink-muted">
-                          {t('calls.everyoneCanSee')}
-                        </p>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() =>
-                            fireAndForget(
-                              callCtx.toggleScreenShare(),
-                              'channel-call'
-                            )
-                          }
-                        >
-                          <Screencast class="size-4" />
-                          {t('calls.stopSharing')}
-                        </Button>
-                      </div>
-                    </Show>
-                    <For each={remoteScreenShares()}>
-                      {(participant) => (
-                        <ScreenShareTile participant={participant} />
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-
-              {/* Participants area; stays mounted while the screen share is maximized. */}
               <div
-                hidden={showScreenShare() && screenShareMaximized()}
-                class={`${showScreenShare() ? 'h-24 shrink-0' : 'flex-1 min-h-0'} ${focusedParticipant() === 'local' ? 'relative' : ''} ${selfInGrid() ? 'grid grid-cols-2 auto-rows-fr gap-2' : ''} pt-2 mobile:pt-0`}
+                class={cn(
+                  'relative flex min-h-0 flex-1',
+                  sideStrip() ? 'flex-row gap-2' : 'flex-col'
+                )}
               >
-                <Show
-                  when={participants().length > 0}
-                  fallback={
-                    <LocalParticipantTile
-                      class="size-full"
-                      isSpeaking={isLocalSpeaking()}
-                      isConnecting={isConnecting()}
-                      isAudioMuted={callCtx.isAudioMuted()}
-                      isVideoMuted={callCtx.isVideoMuted()}
-                      track={localVideoTrack()}
-                      userId={localUserId()}
-                      fallbackName={
-                        props.localName ||
-                        callCtx.room()?.localParticipant.name ||
-                        currentUserName()
-                      }
-                      isProgram={isProgramParticipant(
-                        callCtx.room()?.localParticipant.attributes
-                      )}
-                      isFocused={focusedParticipant() === 'local'}
-                    />
-                  }
-                >
-                  {/* Remote participants grid */}
+                {/* Screen share area */}
+                <Show when={hasAnyScreenShare()}>
                   <div
-                    class={
-                      selfInGrid()
-                        ? 'contents'
-                        : cn(
-                            showScreenShare()
-                              ? 'flex h-full justify-center gap-2 overflow-hidden'
-                              : `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
-                            focusedParticipant() === 'local'
-                              ? 'absolute bottom-4 right-4 z-20 w-40 aspect-video shadow-lg sm:w-48'
-                              : 'size-full'
-                          )
-                    }
+                    class="flex-1 min-h-0 pt-2"
+                    classList={{ hidden: !showScreenShare() }}
                   >
-                    <For each={participants()}>
+                    <div class="relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                      <Show when={callCtx.isScreenSharing()}>
+                        <div class="flex size-full flex-col items-center justify-center gap-3 p-4">
+                          <Screencast class="size-10 text-accent" />
+                          <p class="font-semibold">
+                            {t('calls.youAreSharing')}
+                          </p>
+                          <p class="text-sm text-ink-muted">
+                            {t('calls.everyoneCanSee')}
+                          </p>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() =>
+                              fireAndForget(
+                                callCtx.toggleScreenShare(),
+                                'channel-call'
+                              )
+                            }
+                          >
+                            <Screencast class="size-4" />
+                            {t('calls.stopSharing')}
+                          </Button>
+                        </div>
+                      </Show>
+                      <For each={remoteScreenShares()}>
+                        {(participant) => (
+                          <ScreenShareTile participant={participant} />
+                        )}
+                      </For>
+                      <Show when={hideParticipants() && talking()}>
+                        <div class="absolute bottom-2 right-2 z-10 flex items-center gap-2 rounded-full bg-surface/90 px-2 py-1 text-sm">
+                          <span class="size-6 shrink-0 rounded-full outline-2 -outline-offset-2 outline-success">
+                            <Show
+                              when={talkingId()}
+                              fallback={
+                                <Avatar size="fill">
+                                  <Avatar.Fallback>
+                                    {talkingName().charAt(0)}
+                                  </Avatar.Fallback>
+                                </Avatar>
+                              }
+                            >
+                              {(id) => (
+                                <UserIcon id={id()} size="fill" suppressClick />
+                              )}
+                            </Show>
+                          </span>
+                          <span>{talkingName()}</span>
+                          <CallWaveform class="size-4" />
+                        </div>
+                      </Show>
+                    </div>
+                  </div>
+                </Show>
+                <Show when={spotlight()}>
+                  <div class="min-h-0 flex-1 pt-2">
+                    <Show
+                      when={remotePrimary()}
+                      fallback={<LocalTile class="size-full" />}
+                    >
                       {(participant) => (
                         <ParticipantTile
-                          participant={participant}
-                          filmstrip={showScreenShare()}
-                          avatarSize={
-                            focusedParticipant() === 'local' ||
-                            showScreenShare()
-                              ? 'sm'
-                              : 'md'
-                          }
-                          isFocused={focusedParticipant() === participant}
-                          hidden={
-                            !!focusedParticipant() &&
-                            focusedParticipant() !== 'local' &&
-                            focusedParticipant() !== participant
-                          }
+                          participant={participant()}
+                          isFocused={false}
+                          hidden={false}
                           onToggleFocus={() =>
-                            toggleParticipantFocus(participant)
+                            toggleParticipantFocus(participant())
                           }
                         />
                       )}
-                    </For>
-                  </div>
-
-                  <Show when={callWork.showPrompt()}>
-                    <CallWorkPrompt
-                      accounts={work.accountsWithWork()}
-                      onView={openWork}
-                      onDismiss={workArrivals.dismiss}
-                    />
-                  </Show>
-
-                  {/* Local participant PIP (Google Meet style: small, bottom-right) */}
-                  <div
-                    class={cn(
-                      selfInGrid() ? 'relative min-h-0' : 'absolute z-10',
-                      !selfInGrid() &&
-                        (focusedParticipant() === 'local'
-                          ? 'inset-0'
-                          : `right-4 w-48 aspect-video shadow-lg ${(panelOpen() && widePanel()) || stageWidth() < 980 ? 'bottom-24' : 'bottom-4'}`)
-                    )}
-                  >
-                    <LocalParticipantTile
-                      class="size-full min-h-0"
-                      isSpeaking={isLocalSpeaking()}
-                      isConnecting={isConnecting()}
-                      isAudioMuted={callCtx.isAudioMuted()}
-                      isVideoMuted={callCtx.isVideoMuted()}
-                      track={localVideoTrack()}
-                      userId={localUserId()}
-                      fallbackName={
-                        props.localName ||
-                        callCtx.room()?.localParticipant.name ||
-                        currentUserName()
-                      }
-                      isProgram={isProgramParticipant(
-                        callCtx.room()?.localParticipant.attributes
-                      )}
-                      avatarSize="sm"
-                      isFocused={focusedParticipant() === 'local'}
-                      onToggleFocus={() => toggleParticipantFocus('local')}
-                    />
+                    </Show>
                   </div>
                 </Show>
+
+                {/* Participants area; stays mounted while the screen share is maximized. */}
+                <div
+                  hidden={
+                    (showScreenShare() && hideParticipants()) ||
+                    (spotlight() && participants().length === 0)
+                  }
+                  class={cn(
+                    sideStrip() && (showScreenShare() || spotlight())
+                      ? 'w-48 shrink-0 min-h-0 overflow-y-auto'
+                      : showScreenShare() || spotlight()
+                        ? layout() === 'grid'
+                          ? 'h-48 shrink-0'
+                          : 'h-24 shrink-0'
+                        : 'flex-1 min-h-0',
+                    focusedParticipant() === 'local' && 'relative',
+                    selfInGrid() && `grid ${gridCols()} auto-rows-fr gap-2`,
+                    'pt-2 mobile:pt-0'
+                  )}
+                >
+                  <Show
+                    when={participants().length > 0}
+                    fallback={<LocalTile class="size-full" focusable={false} />}
+                  >
+                    {/* Remote participants grid */}
+                    <div
+                      class={
+                        selfInGrid()
+                          ? 'contents'
+                          : cn(
+                              sideStrip() && (showScreenShare() || spotlight())
+                                ? 'flex flex-col gap-2'
+                                : showScreenShare() || spotlight()
+                                  ? 'flex h-full justify-center gap-2 overflow-hidden'
+                                  : `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
+                              focusedParticipant() === 'local'
+                                ? 'absolute bottom-4 right-4 z-20 w-40 aspect-video shadow-lg sm:w-48'
+                                : 'size-full'
+                            )
+                      }
+                    >
+                      <For each={participants()}>
+                        {(participant) => (
+                          <ParticipantTile
+                            participant={participant}
+                            sidebar={
+                              sideStrip() && (showScreenShare() || spotlight())
+                            }
+                            filmstrip={
+                              (showScreenShare() || spotlight()) && !sideStrip()
+                            }
+                            avatarSize={
+                              focusedParticipant() === 'local' ||
+                              showScreenShare() ||
+                              spotlight()
+                                ? 'sm'
+                                : 'md'
+                            }
+                            isFocused={focusedParticipant() === participant}
+                            hidden={
+                              (spotlight() && primary() === participant) ||
+                              (!!focusedParticipant() &&
+                                focusedParticipant() !== 'local' &&
+                                focusedParticipant() !== participant)
+                            }
+                            onToggleFocus={() =>
+                              toggleParticipantFocus(participant)
+                            }
+                          />
+                        )}
+                      </For>
+                    </div>
+
+                    <Show when={callWork.showPrompt()}>
+                      <CallWorkPrompt
+                        accounts={work.accountsWithWork()}
+                        onView={openWork}
+                        onDismiss={workArrivals.dismiss}
+                      />
+                    </Show>
+
+                    {/* Local participant PIP (Google Meet style: small, bottom-right) */}
+                    <div
+                      hidden={spotlight() && primary() === 'local'}
+                      class={cn(
+                        selfInGrid() ? 'relative min-h-0' : 'absolute z-10',
+                        !selfInGrid() &&
+                          (focusedParticipant() === 'local'
+                            ? 'inset-0'
+                            : `right-4 w-48 aspect-video shadow-lg ${(panelOpen() && widePanel()) || stageWidth() < 980 ? 'bottom-24' : 'bottom-4'}`)
+                      )}
+                    >
+                      <LocalTile class="size-full min-h-0" avatarSize="sm" />
+                    </div>
+                  </Show>
+                </div>
               </div>
               {/* Settings expand over the tiles; the chat keeps its own full-height column. */}
               <div
@@ -837,6 +649,34 @@ export function CallOverlay(props: {
                             fireAndForget(teamShare.toggle(), 'channel-call')
                           }
                           onOpenChange={setSharingOpen}
+                        />
+                      </Show>
+                      <Show when={!isMobile()}>
+                        <CallMoreMenu
+                          compact={compactControls()}
+                          layout={layout()}
+                          onLayoutChange={(value) => {
+                            const interaction =
+                              beginInteraction('call.layout.change');
+                            try {
+                              setSavedLayout(value);
+                            } finally {
+                              interaction.end();
+                            }
+                          }}
+                          hasScreenShare={hasAnyScreenShare()}
+                          hideParticipants={hideParticipants()}
+                          onHideParticipantsChange={(value) => {
+                            const interaction = beginInteraction(
+                              'call.participants.visibility'
+                            );
+                            try {
+                              setHideParticipants(value);
+                            } finally {
+                              interaction.end();
+                            }
+                          }}
+                          onOpenChange={setSettingsOpen}
                         />
                       </Show>
                     </CallControls>

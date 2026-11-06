@@ -85,6 +85,7 @@ vi.mock('@ui', async () => ({
     classes.filter(Boolean).join(' '),
   Tabs: (await import('@ui/components/Tabs')).Tabs,
   Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
+  ToggleSwitch: (await import('@ui/components/ToggleSwitch')).ToggleSwitch,
   SingleSelectCheck: (await import('@ui/components/Checkbox'))
     .SingleSelectCheck,
   Tooltip: (props: { children: unknown }) => props.children,
@@ -210,6 +211,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 beforeEach(() => {
   mocks.mobile = false;
+  localStorage.removeItem('call.layout');
   mocks.displayNames.clear();
   vi.stubGlobal(
     'ResizeObserver',
@@ -222,7 +224,7 @@ beforeEach(() => {
 });
 
 describe('CallOverlay screen share', () => {
-  it('hides participant tiles without remounting them while maximized', () => {
+  it('hides participants without remounting tracks and resets when sharing ends', async () => {
     const screenShare: MockTrackPublication = {
       isMuted: false,
       isSubscribed: true,
@@ -243,35 +245,34 @@ describe('CallOverlay screen share', () => {
     const controls = setUpCallState([sharer]);
     render(() => <CallOverlay onLeave={() => undefined} />);
     const camera = screen.getByTestId('track-remote-camera');
-    expect(
-      screen.getByRole('button', { name: 'Focus Sam Sharer' })
-    ).toBeTruthy();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Maximize screen share' })
+    const more = screen.getByRole('button', { name: 'More' });
+    more.focus();
+    fireEvent.keyDown(more, { key: 'ArrowDown' });
+    const toggle = await screen.findByRole('menuitemcheckbox', {
+      name: /Hide participants/,
+    });
+    toggle.focus();
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
     );
-    expect(
-      screen.queryByRole('button', { name: 'Focus Sam Sharer' })
-    ).toBeNull();
+    expect(camera.closest('[hidden]')).not.toBeNull();
     expect(screen.getByTestId('track-remote-camera')).toBe(camera);
     expect(screen.getByTestId('track-remote-screen')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show participants' }));
-    expect(
-      screen.getByRole('button', { name: 'Focus Sam Sharer' })
-    ).toBeTruthy();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Maximize screen share' })
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toggle.getAttribute('aria-checked')).toBe('false')
+    );
+    expect(camera.closest('[hidden]')).toBeNull();
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
     );
     screenShare.track = undefined;
     controls.setTrackVersion((version) => version + 1);
-    expect(
-      screen.getByRole('button', { name: 'Focus Sam Sharer' })
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole('button', { name: 'Show participants' })
-    ).toBeNull();
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(camera.closest('[hidden]')).toBeNull();
   });
 });
 

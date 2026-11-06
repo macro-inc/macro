@@ -656,6 +656,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
+- Keep call layout and participant visibility in the desktop `CallMoreMenu`; phones stay on Auto, and sharing visibility resets when the share ends. Do not add layout controls over the stage.
 - Use `CallWaveform` for live-call indicators; provide the call/channel identity so it animates only for speech in the joined room and respects reduced motion. Without speaking data, keep it still; use the matching room's speaker identity for participant rings, preserving AvatarGroup separator rings with inset outlines. Keep phone icons for call actions. Keep live state on Chat conversation rows, not a separate Live section.
 - Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
 - Keep desktop OAuth consent in the system browser with a `macro://` return:

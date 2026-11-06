@@ -343,11 +343,14 @@ them while chat is docked. Muted icons sit beside the participant name.
 A shared screen identifies its presenter with an avatar and screen icon; the
 presenter's tile also carries a screen icon. Local sharing shows **You're sharing
 your screen** and **Stop sharing** instead of recursively playing your own display.
-While someone shares their screen, **Maximize screen share** at the share's
-top-right hides the participant strip so the share fills the call area, and
-**Show participants** brings it back. Video tiles stay mounted and audio keeps
-playing. The choice lasts while the call view is open, so a later share also
-opens maximized; check it on desktop and at phone width, and when the share stops.
+Desktop **More → Layout** offers Auto, Grid, Speaker and Sidebar and remembers
+the choice for later calls. Auto keeps the existing behavior; Grid gives people
+equal tiles; Speaker puts the active person or share above a filmstrip; Sidebar
+puts that strip on the right. Phones always use Auto.
+**More → Hide participants** hides the strip and self view during screen sharing,
+leaving a speaking-person chip on the share. It resets when sharing stops and is
+disabled without a share. Tracks stay mounted and audio continues; the old
+maximize/restore button no longer appears over the share.
 
 Open **Chat** and **People** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
