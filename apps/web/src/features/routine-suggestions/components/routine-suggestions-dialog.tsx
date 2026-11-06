@@ -32,8 +32,8 @@ export function RoutineSuggestionsDialog(props: {
                   {props.title}
                 </Dialog.Title>
                 <Dialog.Description class="mt-0.5 text-sm text-ink-muted">
-                  Picked by AI from your workspace. Enable one in a click, or
-                  open it to edit first.
+                  Picked by AI from your workspace. Review one to see and
+                  change it before it’s saved.
                 </Dialog.Description>
               </div>
               <Dialog.CloseButton
