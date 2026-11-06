@@ -448,6 +448,8 @@ type SearchableMultiSelectInlineProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  /** Offers typed text as an option, such as an address no suggestion lists. */
+  createOption?: (query: string) => SearchableOption | undefined;
 };
 
 /**
@@ -463,7 +465,6 @@ export const SearchableMultiSelectInline = (
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
-  const hasMatches = useHasMatches(props.options, searchQuery);
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
@@ -475,6 +476,16 @@ export const SearchableMultiSelectInline = (
   });
   const sortedOptions = () =>
     props.preserveOrder ? props.options() : selectedFirstOptions();
+  // Typed text that is a value but no option leads the list, ready for Enter.
+  const displayOptions = createMemo(() => {
+    const query = searchQuery().trim();
+    const created = query ? props.createOption?.(query) : undefined;
+    const options = sortedOptions();
+    return created && !options.some((option) => option.id === created.id)
+      ? [created, ...options]
+      : options;
+  });
+  const hasMatches = useHasMatches(displayOptions, searchQuery);
 
   const handleChange = (selected: SearchableOption[]) => {
     const id =
@@ -532,7 +543,7 @@ export const SearchableMultiSelectInline = (
       selectionBehavior="toggle"
       closeOnSelection={false}
       open
-      options={sortedOptions()}
+      options={displayOptions()}
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={setSearchQuery}

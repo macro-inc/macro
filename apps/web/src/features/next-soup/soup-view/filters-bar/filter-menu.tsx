@@ -372,29 +372,14 @@ export function FilterSubmenu<TId extends string>(props: {
   );
 }
 
-/** Searchable submenu for filters with many options like assignees */
-export const SearchableFilterSubmenu = (props: {
-  label: string;
-  active?: boolean;
-  options: Accessor<SearchableOption[]>;
-  activeIds: Accessor<string[]>;
-  onChange: (ids: string[]) => void;
-  onSelectionComplete?: () => void;
-  placeholder?: string;
-  open?: Accessor<boolean>;
-  onOpenChange?: (v: boolean) => void;
-  /** Keep `options` in their given order instead of pinning selected first. */
-  preserveOrder?: boolean;
-}) => {
-  const submenu = createFilterSubmenuHover({
-    open: props.open,
-    onOpenChange: props.onOpenChange,
-  });
-  const isOpen = submenu.open;
-  const setIsOpen = submenu.setOpen;
-  const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
-
-  // Focus the search input while the sub is open.
+/**
+ * Keeps focus in a submenu's text field while the submenu is open.
+ */
+function focusSubmenuInput(
+  isOpen: Accessor<boolean>,
+  inputRef: Accessor<HTMLInputElement | undefined>
+) {
+  // Focus the field while the sub is open.
   //
   // Two issues conspire:
   //   1. Initial focus has to wait for Kobalte's DismissableLayer to register
@@ -427,6 +412,32 @@ export const SearchableFilterSubmenu = (props: {
       el.removeEventListener('blur', onBlur);
     });
   });
+}
+
+/** Searchable submenu for filters with many options like assignees */
+export const SearchableFilterSubmenu = (props: {
+  label: string;
+  active?: boolean;
+  options: Accessor<SearchableOption[]>;
+  activeIds: Accessor<string[]>;
+  onChange: (ids: string[]) => void;
+  onSelectionComplete?: () => void;
+  placeholder?: string;
+  open?: Accessor<boolean>;
+  onOpenChange?: (v: boolean) => void;
+  /** Keep `options` in their given order instead of pinning selected first. */
+  preserveOrder?: boolean;
+  /** Offers typed text as an option, such as an address no suggestion lists. */
+  createOption?: (query: string) => SearchableOption | undefined;
+}) => {
+  const submenu = createFilterSubmenuHover({
+    open: props.open,
+    onOpenChange: props.onOpenChange,
+  });
+  const isOpen = submenu.open;
+  const setIsOpen = submenu.setOpen;
+  const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+  focusSubmenuInput(isOpen, inputRef);
 
   return (
     <Dropdown.Sub open={isOpen()} onOpenChange={setIsOpen}>
@@ -450,9 +461,100 @@ export const SearchableFilterSubmenu = (props: {
             options={props.options}
             inputRef={setInputRef}
             preserveOrder={props.preserveOrder}
+            createOption={props.createOption}
           />
         </Dropdown.Group>
       </Dropdown.SubContent>
     </Dropdown.Sub>
   );
 };
+
+/** Commits typed text after a pause, on Enter, and as the field closes. */
+function FilterTextField(props: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+  inputRef: (element: HTMLInputElement) => void;
+  onRequestClose: () => void;
+}) {
+  const [text, setText] = createSignal(props.value);
+  const commit = () => {
+    commitSoon.clear();
+    if (text() !== props.value) props.onChange(text());
+  };
+  const commitSoon = debounce(commit, 400);
+  onCleanup(commit);
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    const input = event.currentTarget as HTMLInputElement;
+    if (event.key === 'Escape') return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commit();
+      props.onRequestClose();
+    }
+    // At the start of the field, ArrowLeft returns to the parent menu.
+    if (
+      event.key === 'ArrowLeft' &&
+      input.selectionStart === 0 &&
+      input.selectionEnd === 0
+    ) {
+      props.onRequestClose();
+      return;
+    }
+    // Keep the outer menu's typeahead and arrow keys out of the field.
+    event.stopPropagation();
+  };
+
+  return (
+    <input
+      ref={props.inputRef}
+      aria-label={props.label}
+      value={text()}
+      placeholder={props.placeholder}
+      onInput={(event) => {
+        setText(event.currentTarget.value);
+        commitSoon();
+      }}
+      onKeyDown={onKeyDown}
+      class="w-full min-w-0 bg-transparent px-3 py-2 text-sm outline-none caret-accent placeholder:text-ink-placeholder"
+    />
+  );
+}
+
+/** A submenu holding one text field, such as words a subject must contain. */
+export function FilterTextSubmenu(props: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+  active?: boolean;
+}) {
+  const submenu = createFilterSubmenuHover();
+  const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+  focusSubmenuInput(submenu.open, inputRef);
+
+  return (
+    <Dropdown.Sub open={submenu.open()} onOpenChange={submenu.setOpen}>
+      <Dropdown.SubTrigger {...submenu.triggerProps}>
+        <FilterCategoryLabel
+          label={props.label}
+          active={props.active ?? props.value.trim().length > 0}
+        />
+      </Dropdown.SubTrigger>
+      <Dropdown.SubContent {...submenu.contentProps} class="w-65 max-w-[90vw]">
+        <Dropdown.Group class="p-0 gap-0">
+          <FilterTextField
+            label={props.label}
+            value={props.value}
+            placeholder={props.placeholder}
+            onChange={props.onChange}
+            inputRef={setInputRef}
+            onRequestClose={() => submenu.setOpen(false)}
+          />
+        </Dropdown.Group>
+      </Dropdown.SubContent>
+    </Dropdown.Sub>
+  );
+}

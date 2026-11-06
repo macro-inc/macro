@@ -8,6 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { FilterTextSubmenu } from '../../features/next-soup/soup-view/filters-bar/filter-menu';
 import { SearchableMultiSelect } from '../../features/next-soup/soup-view/filters-bar/searchable-multi-select';
 import { Dropdown } from '../ui/components/Dropdown';
 import type { AiFilterOutcome } from './AiFilterInput';
@@ -972,3 +973,78 @@ it('shows the applied filter count only while filters are active', () => {
   setCount(0);
   expect(container.textContent).toBe('');
 });
+
+it('offers typed text no option lists and adds it to the selection', async () => {
+  const [selected, setSelected] = createSignal<string[]>(['alice']);
+  render(() => (
+    <ListFilterDropdown
+      label="Filter email"
+      open
+      groups={[
+        {
+          id: 'people',
+          label: 'Assignee',
+          searchPlaceholder: 'Search people...',
+          options: [{ id: 'alice', label: 'Alice' }],
+          createOption: (query) =>
+            query.includes('@')
+              ? { id: query, label: `Add “${query}”` }
+              : undefined,
+        },
+      ]}
+      isSelected={(_, id) => selected().includes(id)}
+      selectedIds={() => selected()}
+      onSelectionChange={() => {}}
+      onGroupSelectionChange={(_, ids) => setSelected([...ids])}
+    />
+  ));
+  await openSubmenu();
+  const input = await screen.findByPlaceholderText('Search people...');
+  fireEvent.input(input, { target: { value: 'ada' } });
+  expect(screen.queryByRole('option', { name: /Add/ })).toBeNull();
+
+  fireEvent.input(input, { target: { value: 'ada@example.com' } });
+  clickSearchOption(
+    await screen.findByRole('option', { name: 'Add “ada@example.com”' }),
+    false
+  );
+
+  expect(selected()).toEqual(['alice', 'ada@example.com']);
+});
+
+it('draws a group’s own submenu, committing its text on Enter', async () => {
+  const [subject, setSubject] = createSignal('');
+  render(() => (
+    <ListFilterDropdown
+      label="Filter email"
+      open
+      groups={[
+        {
+          id: 'subject',
+          label: 'Assignee',
+          options: [],
+          submenu: () => (
+            <FilterTextSubmenu
+              label="Assignee"
+              value={subject()}
+              placeholder="Words or phrases"
+              onChange={setSubject}
+            />
+          ),
+        },
+      ]}
+      isSelected={() => false}
+      onSelectionChange={() => {}}
+    />
+  ));
+  await openSubmenu();
+  const input = await screen.findByPlaceholderText('Words or phrases');
+  await waitFor(() => expect(document.activeElement).toBe(input));
+
+  fireEvent.input(input, { target: { value: 'invoice, receipt' } });
+  expect(subject()).toBe('');
+  fireEvent.keyDown(input, { key: 'Enter' });
+
+  expect(subject()).toBe('invoice, receipt');
+});
+
