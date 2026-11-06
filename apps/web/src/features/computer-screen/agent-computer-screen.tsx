@@ -36,7 +36,7 @@ export function AgentComputerScreen(
     sessionId: () => props.sessionId,
     harnessId: () => harness()?.id,
     canEdit: () => props.canEdit,
-    mobile: isTouchDevice,
+    touch: isTouchDevice,
     resolveUrl: resolveScreenUrl,
   };
   return (

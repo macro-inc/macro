@@ -24,7 +24,7 @@ function Fixture() {
             sessionId: () => 'session',
             harnessId: () => 'computer',
             canEdit: edit,
-            mobile: isTouchDevice,
+            touch: isTouchDevice,
             resolveUrl: async (_id, control) =>
               control ? 'wss://screen?control=true' : 'wss://screen',
           },

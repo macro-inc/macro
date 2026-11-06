@@ -4,7 +4,7 @@ export type ScreenHost = {
   sessionId: Accessor<string | undefined>;
   harnessId: Accessor<string | undefined>;
   canEdit: Accessor<boolean>;
-  mobile: Accessor<boolean>;
+  touch: Accessor<boolean>;
   resolveUrl: (harnessId: string, control: boolean) => Promise<string>;
 };
 export type ScreenController = {

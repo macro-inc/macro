@@ -5,9 +5,9 @@ import { ScreenProvider } from '../context/screen-context';
 import { ScreenPane } from './screen-pane';
 
 it.each([
-  { edit: false, mobile: false },
-  { edit: true, mobile: true },
-])('hides Take control for %j', ({ edit, mobile }) => {
+  { edit: false, touch: false },
+  { edit: true, touch: true },
+])('hides Take control for %j', ({ edit, touch }) => {
   render(() => (
     <ScreenProvider
       value={{
@@ -15,7 +15,7 @@ it.each([
           sessionId: () => 'session',
           harnessId: () => undefined,
           canEdit: () => edit,
-          mobile: () => mobile,
+          touch: () => touch,
           resolveUrl: async () => '',
         },
         available: () => true,
