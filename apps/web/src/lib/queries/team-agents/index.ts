@@ -52,6 +52,30 @@ export function useTeamAgentSizesQuery(teamId: Accessor<string>) {
   return useQuery(() => teamAgentSizesQueryOptions(teamId()));
 }
 
+function teamAgentComputerQueryOptions(userId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: teamAgentKeys.computer(userId).queryKey,
+    enabled: enabled && !!userId,
+    queryFn: () =>
+      Telemetry.span('team-agent.computer.load', () =>
+        throwOnErr(() => authServiceClient.getTeamAgentComputer(userId))
+      ),
+    staleTime: 15000,
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/** Portrait cards discover the target's computer only while an agent card is open. */
+export function useTeamAgentComputerQuery(
+  userId: Accessor<string | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() =>
+    teamAgentComputerQueryOptions(userId() ?? '', enabled())
+  );
+}
+
 /** A click-only lookup; keep discovery out of component transport code. */
 export function useTeamAgentComputerMutation() {
   return useMutation(() => ({

@@ -986,8 +986,15 @@ as the main Settings content at every width. Runtime cards outside Settings
 open the Runtimes settings page with that pane. Settings stays mounted underneath;
 **Close screen** restores the previous form or member list. Agent-session screens
 keep their desktop split beside the conversation.
+With **enable-macro-computers** enabled, an agent's portrait card also offers
+**Show screen** when its paired computer supports screens. Open the card by
+hovering or right-clicking on desktop, or tapping or long-pressing on a phone.
+**Show screen** opens the pane in watch mode. Desktop viewers with User or owner
+access also get **Take control**, which opens directly in control mode. Phone
+cards offer only **Show screen** and remain watch-only.
+
 The header names the computer and shows a small **Watching** or **In control**
-pill; the back icon closes the screen. The pane starts in **Watching** mode. Read and Resident access stay watch-only;
+pill; the back icon closes the screen. **Show screen** starts in **Watching** mode. Read and Resident access stay watch-only;
 User and owner access offer **Take control** on desktop. Phones remain watch-only.
 Taking control focuses the remote screen so typing, including complete URLs,
 goes to the computer. Tab from the toolbar can return to the screen; clicking

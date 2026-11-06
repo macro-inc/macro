@@ -1,3 +1,4 @@
+import { AgentPortraitScreenActions } from '@app/features/computer-screen/agent-portrait-screen-actions';
 import { AgentRuntime } from '@app/features/runtime-sharing/views/AgentRuntime';
 import { UserRuntimes } from '@app/features/runtime-sharing/views/UserRuntimes';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
@@ -75,6 +76,12 @@ export function UserTooltip(props: UserTooltipProps) {
             </Show>
           )}
         </Show>
+
+        <AgentPortraitScreenActions
+          userId={props.id}
+          isDeleted={props.isDeleted}
+          onSelect={props.onClose}
+        />
 
         <Show when={actions().length > 0}>
           <div class="border-t border-edge"></div>

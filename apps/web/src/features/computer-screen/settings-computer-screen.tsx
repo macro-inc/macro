@@ -6,7 +6,10 @@ import {
   usePending,
 } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
-import { enableTeamAgents } from '@core/constant/featureFlags';
+import {
+  enableMacroComputers,
+  enableTeamAgents,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Span } from '@macro-inc/observability';
@@ -27,6 +30,7 @@ import { ScreenToolbar } from './components/screen-toolbar';
 import { type ScreenHost, ScreenProvider } from './context/screen-context';
 import { SettingsComputerScreenContext } from './context/settings-screen-context';
 import { useOptionalSettingsScreenNavigation } from './context/settings-screen-navigation';
+import { hasHarnessEditAccess } from './harness-access';
 import { connectScreen } from './queries/novnc';
 import { resolveScreenUrl } from './queries/screen-url';
 import { ScreenPane } from './views/screen-pane';
@@ -35,8 +39,12 @@ import { ScreenSplit } from './views/screen-split';
 /** Settings reuses the screen pane as its main content at every width. */
 export function SettingsComputerScreen(props: ParentProps) {
   const flag = useFeatureFlag(enableTeamAgents);
+  const computers = useFeatureFlag(enableMacroComputers);
+  const enabled = () =>
+    (!flag().loading && flag().enabled) ||
+    (!computers().loading && computers().enabled);
   return (
-    <Show when={!flag().loading && flag().enabled} fallback={props.children}>
+    <Show when={enabled()} fallback={props.children}>
       <Suspense
         fallback={
           <p role="status">{t('runtimeSharing.loadingComputerAccess')}</p>
@@ -58,6 +66,7 @@ function ConnectedSettingsComputerScreen(props: ParentProps) {
   const [harnessId, setHarnessId] = createSignal<string>();
   const [agentComputer, setAgentComputer] = createSignal(false);
   const [open, setOpen] = createSignal(false);
+  const [startControlling, setStartControlling] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let request = 0;
@@ -88,15 +97,15 @@ function ConnectedSettingsComputerScreen(props: ParentProps) {
     sessionId: () => undefined,
     harnessId,
     title: () => harness()?.name,
-    canEdit: () =>
-      harness()?.access === 'user' || harness()?.access === 'owner',
+    startControlling,
+    canEdit: () => hasHarnessEditAccess(harness()),
     mobile: isTouchDevice,
     resolveUrl: (id, control) =>
       operationSpan
         ? operationSpan.run(() => resolveScreenUrl(id, control))
         : resolveScreenUrl(id, control),
   };
-  const openHarness = (id: string) => {
+  const openHarness = (id: string, control = false) => {
     if (disposed) return;
     const interaction = beginInteraction('computer.screen.open', {
       attributes: { 'harness.id': id },
@@ -108,6 +117,7 @@ function ConnectedSettingsComputerScreen(props: ParentProps) {
       setLoading(false);
       setError(undefined);
       setAgentComputer(false);
+      setStartControlling(control);
       setHarnessId(id);
       setOpen(true);
       fireAndForget(directory.refetch(), 'computer-screen.access.refresh');
@@ -118,7 +128,7 @@ function ConnectedSettingsComputerScreen(props: ParentProps) {
   createEffect(() => {
     const id = navigation?.requestedHarness();
     if (!id) return;
-    openHarness(id);
+    openHarness(id, navigation?.requestedControl?.() ?? false);
     navigation?.consume(id);
   });
   const openAgentComputer = (userId: string) => {
@@ -128,6 +138,7 @@ function ConnectedSettingsComputerScreen(props: ParentProps) {
     const current = ++request;
     setFlowVersion(current);
     setAgentComputer(true);
+    setStartControlling(false);
     setHarnessId(undefined);
     setError(undefined);
     setLoading(true);

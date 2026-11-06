@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,11 @@ import { UserCardTrigger } from './UserCardTrigger';
 const mocks = vi.hoisted(() => ({
   isTouchDevice: false,
   openUserCard: vi.fn(),
+}));
+
+vi.mock('@core/user', () => ({
+  tryMacroId: (id: string | undefined) => id,
+  isAgentAccount: (id: string | undefined) => id === 'macro|agent@example.com',
 }));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -28,8 +33,16 @@ vi.mock('./UserTooltip', () => ({
 }));
 
 vi.mock('./HoverCard', () => ({
-  HoverCard: (props: { trigger: JSX.Element }) => (
-    <span data-testid="hover-card">{props.trigger}</span>
+  HoverCard: (props: {
+    trigger: JSX.Element;
+    triggerOnContextMenu?: (event: MouseEvent) => void;
+    content?: JSX.Element;
+    open?: boolean;
+  }) => (
+    <span data-testid="hover-card" onContextMenu={props.triggerOnContextMenu}>
+      {props.trigger}
+      {props.open && props.content}
+    </span>
   ),
 }));
 
@@ -113,3 +126,44 @@ describe('UserCardTrigger', () => {
     expect(screen.getByRole('button').tabIndex).toBe(-1);
   });
 });
+
+it('opens an agent card on right-click without opening the phone drawer', () => {
+  render(() => (
+    <UserCardTrigger
+      user={{ displayName: 'Assistant', id: 'macro|agent@example.com' }}
+      trigger={<span>Agent portrait</span>}
+    />
+  ));
+  fireEvent.contextMenu(screen.getByText('Agent portrait'));
+  expect(screen.getByTestId('user-tooltip').textContent).toBe('Assistant');
+  expect(mocks.openUserCard).not.toHaveBeenCalled();
+});
+
+it.each([true, false])(
+  'reserves long-press only for agents (agent=%s)',
+  (agent) => {
+    mocks.isTouchDevice = true;
+    vi.useFakeTimers();
+    try {
+      render(() => (
+        <UserCardTrigger
+          user={
+            agent
+              ? { displayName: 'Assistant', id: 'macro|agent@example.com' }
+              : jane
+          }
+          trigger={<span>Portrait</span>}
+        />
+      ));
+      const trigger = screen.getByRole('button');
+      fireEvent.touchStart(trigger, {
+        touches: [{ clientX: 10, clientY: 10 }],
+      });
+      vi.advanceTimersByTime(500);
+      expect(mocks.openUserCard).toHaveBeenCalledTimes(agent ? 1 : 0);
+      expect(fireEvent.touchEnd(trigger, { touches: [] })).toBe(!agent);
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+);

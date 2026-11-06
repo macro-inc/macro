@@ -30,6 +30,10 @@ const mocks = vi.hoisted(() => ({
   bots: [] as Array<{ id: string }>,
 }));
 
+vi.mock('@app/features/computer-screen/agent-portrait-screen-actions', () => ({
+  AgentPortraitScreenActions: () => null,
+}));
+
 vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
   AgentRuntime: () => null,
 }));

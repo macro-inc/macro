@@ -1375,3 +1375,9 @@ roster-check warning.
 
 Team-agent telemetry uses opaque team/computer IDs. The API's `userId` may
 contain an email address; do not attach it to browser spans.
+
+For agent portrait cards, gate Show screen on enable-macro-computers and a
+paired screen-capable harness. Reuse harness User/owner access for desktop
+Take control; keep touch devices watch-only. Bind long-press handlers to the
+underlying DOM element when using Dynamic. The desktop/phone regression is
+`src/features/computer-screen/browser-test/portrait/playwright.config.ts`.

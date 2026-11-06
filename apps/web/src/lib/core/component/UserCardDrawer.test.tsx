@@ -18,6 +18,10 @@ const mocks = vi.hoisted(() => ({
   toastFailure: vi.fn(),
 }));
 
+vi.mock('@app/features/computer-screen/agent-portrait-screen-actions', () => ({
+  AgentPortraitScreenActions: () => null,
+}));
+
 vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
   AgentRuntime: () => null,
 }));

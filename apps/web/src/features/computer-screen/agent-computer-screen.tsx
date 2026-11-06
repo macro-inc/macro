@@ -12,6 +12,7 @@ import { createMemo, type ParentProps, Show, Suspense } from 'solid-js';
 import { RuntimeAccessAction } from '../runtime-sharing/components/RuntimeAccessAction';
 import { ScreenToolbar } from './components/screen-toolbar';
 import { type ScreenHost, ScreenProvider } from './context/screen-context';
+import { hasHarnessEditAccess } from './harness-access';
 import { createScreenPaneState } from './pane-state';
 import { connectScreen } from './queries/novnc';
 import { resolveScreenUrl } from './queries/screen-url';
@@ -62,7 +63,7 @@ function ConnectedAgentComputerScreen(
   const canControl = () => {
     if (flag().loading) return false;
     if (!flag().enabled) return props.canEdit;
-    return harness()?.access === 'user' || harness()?.access === 'owner';
+    return hasHarnessEditAccess(harness());
   };
   const canView = () => {
     if (!sharingEnabled()) return !flag().loading;

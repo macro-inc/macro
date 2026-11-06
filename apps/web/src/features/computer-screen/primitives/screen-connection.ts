@@ -30,8 +30,9 @@ export function createScreenConnection(
   // Losing permission or changing the computer always resets the request.
   createEffect(
     on(
-      () => [sessionId(), harnessId()],
-      () => setRequestedControl(false)
+      () => [sessionId(), harnessId(), host.startControlling?.()],
+      () =>
+        setRequestedControl(host.startControlling?.() === true && canControl())
     )
   );
   createEffect(() => {

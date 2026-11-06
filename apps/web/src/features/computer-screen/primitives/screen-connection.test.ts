@@ -118,3 +118,31 @@ it('keeps control and its connection when polling refreshes the same harness', a
   expect(connect).toHaveBeenCalledTimes(2);
   cleanup();
 });
+
+it.each([
+  { edit: true, mobile: false, control: true },
+  { edit: false, mobile: false, control: false },
+  { edit: true, mobile: true, control: false },
+])(
+  'honors an explicit launch request only when control is allowed: %j',
+  async ({ edit, mobile, control }) => {
+    const connect = vi.fn<ConnectScreen>(async () => ({ disconnect: vi.fn() }));
+    const { result } = renderHook(() =>
+      createScreenConnection(
+        {
+          sessionId: () => undefined,
+          harnessId: () => 'computer',
+          canEdit: () => edit,
+          mobile: () => mobile,
+          startControlling: () => true,
+          resolveUrl: async () => 'wss://screen',
+        },
+        () => document.createElement('div'),
+        connect
+      )
+    );
+    await waitFor(() => expect(connect).toHaveBeenCalled());
+    expect(result.controlling()).toBe(control);
+    expect(connect.mock.calls.at(-1)?.[2]).toBe(control);
+  }
+);

@@ -1,3 +1,4 @@
+import { AgentPortraitScreenActions } from '@app/features/computer-screen/agent-portrait-screen-actions';
 import { AgentRuntime } from '@app/features/runtime-sharing/views/AgentRuntime';
 import { UserRuntimes } from '@app/features/runtime-sharing/views/UserRuntimes';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -57,6 +58,7 @@ export function UserCardDrawer() {
             {(user) => (
               <UserCardBody
                 user={user()}
+                onNavigate={() => close(false)}
                 // Navigation owns focus in its destination; copying stays here.
                 onAction={(action) => close(action.copies === true)}
               />
@@ -70,6 +72,7 @@ export function UserCardDrawer() {
 
 function UserCardBody(props: {
   user: UserCardTarget;
+  onNavigate(): void;
   onAction: (action: UserCardAction) => void;
 }) {
   const actions = useUserCardActions(() => props.user);
@@ -129,6 +132,12 @@ function UserCardBody(props: {
           </Show>
         )}
       </Show>
+
+      <AgentPortraitScreenActions
+        userId={props.user.id}
+        isDeleted={props.user.isDeleted}
+        onSelect={props.onNavigate}
+      />
 
       <Show when={actions().length > 0}>
         <MobileDrawer.ScrollBody>

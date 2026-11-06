@@ -28,6 +28,12 @@ function Selection(props: { label: string }) {
         View computer
       </button>
       <p role="status">{navigation.requestedHarness() ?? 'No selection'}</p>
+      <p aria-label="Requested mode">
+        {navigation.requestedControl?.() ? 'control' : 'watch'}
+      </p>
+      <button onClick={() => navigation.request('runtime', true)}>
+        Control computer
+      </button>
       <button onClick={() => navigation.consume('runtime')}>Consume</button>
     </section>
   );
@@ -75,3 +81,15 @@ it.each([
     expect(screen.getByRole('status').textContent).toBe('No selection');
   }
 );
+
+it('keeps watch and explicit control requests distinct', () => {
+  render(() => (
+    <SettingsScreenNavigationProvider>
+      <Selection label="App" />
+    </SettingsScreenNavigationProvider>
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Control computer' }));
+  expect(screen.getByLabelText('Requested mode').textContent).toBe('control');
+  fireEvent.click(screen.getByRole('button', { name: 'View computer' }));
+  expect(screen.getByLabelText('Requested mode').textContent).toBe('watch');
+});

@@ -1,5 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableTeamAgents } from '@core/constant/featureFlags';
+import {
+  enableMacroComputers,
+  enableTeamAgents,
+} from '@core/constant/featureFlags';
 import {
   createContext,
   createEffect,
@@ -11,16 +14,24 @@ import {
 /** Carries a runtime-card selection to Settings within one application frame. */
 export function SettingsScreenNavigationProvider(props: ParentProps) {
   const flag = useFeatureFlag(enableTeamAgents);
+  const computers = useFeatureFlag(enableMacroComputers);
+  const enabled = () =>
+    (!flag().loading && flag().enabled) ||
+    (!computers().loading && computers().enabled);
+  const [requestedControl, setRequestedControl] = createSignal(false);
   const [requestedHarness, setRequestedHarness] = createSignal<string>();
   createEffect(() => {
-    if (flag().loading || !flag().enabled) setRequestedHarness(undefined);
+    if (!enabled()) setRequestedHarness(undefined);
   });
   return (
     <SettingsScreenNavigationContext.Provider
       value={{
         requestedHarness,
-        request: (harnessId: string) => {
-          if (!flag().loading && flag().enabled) setRequestedHarness(harnessId);
+        requestedControl,
+        request: (harnessId: string, control = false) => {
+          if (!enabled()) return;
+          setRequestedControl(control);
+          setRequestedHarness(harnessId);
         },
         consume: (harnessId: string) => {
           if (requestedHarness() === harnessId) setRequestedHarness(undefined);
@@ -34,7 +45,8 @@ export function SettingsScreenNavigationProvider(props: ParentProps) {
 
 const SettingsScreenNavigationContext = createContext<{
   requestedHarness(): string | undefined;
-  request(harnessId: string): void;
+  requestedControl?(): boolean;
+  request(harnessId: string, control?: boolean): void;
   consume(harnessId: string): void;
 }>();
 export function useOptionalSettingsScreenNavigation() {

@@ -1,4 +1,5 @@
 export default {
+  showScreen: 'Show screen',
   viewComputer: 'View computer',
   closeScreen: 'Close screen',
   screenWatching: 'Watching',
