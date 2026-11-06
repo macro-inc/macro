@@ -23,6 +23,8 @@ struct Model {
     asked: Mutex<Vec<(String, String, Value)>>,
     symbols: Vec<String>,
     symbol_requests: Mutex<Vec<String>>,
+    /// The names it lists for lookup.
+    lookups: Vec<Value>,
 }
 
 impl Model {
@@ -44,6 +46,9 @@ impl DraftModel for Model {
         _: &MacroUserIdStr<'static>,
         completion: DraftCompletion<'_>,
     ) -> Option<Value> {
+        if completion.schema.name == "lookups" {
+            return Some(json!({ "lookups": self.lookups }));
+        }
         if completion.schema.name == "symbols" {
             self.symbol_requests
                 .lock()
@@ -638,4 +643,63 @@ fn keeps_one_short_reason_and_drops_the_model_thinking_aloud() {
     assert_eq!(short_reason("v1.2 changes nothing"), "v1.2 changes nothing");
     let rambling = "Let me think about whether this should be code or not because the person said they want to send something and it could be either";
     assert_eq!(short_reason(rambling), "");
+}
+
+const BUG_REPORTS: &str = "every time a message gets sent in bug-reports make a task";
+
+#[tokio::test]
+async fn a_large_workspace_drafts_the_channel_the_description_names() {
+    // The channel the person named is far past what any list sent with the
+    // request could show the model.
+    let bug_reports = Uuid::from_u128(4_000);
+    let channels: Vec<Value> = (0..5_000u128)
+        .map(|n| {
+            let name = if n == 4_000 { "bug-reports".to_owned() } else { format!("channel-{n}") };
+            json!({ "name": name, "id": Uuid::from_u128(n).to_string() })
+        })
+        .collect();
+    let context: DraftContext = serde_json::from_value(json!({
+        "timezone": "America/New_York",
+        "agentModel": "anthropic/claude-sonnet-5-5",
+        "code": true,
+        "conditions": true,
+        "workspace": { "channels": channels },
+    }))
+    .unwrap();
+    let model = Arc::new(Model {
+        answers: Mutex::new(VecDeque::from([answer(
+            json!([{ "type": "event", "events": ["channel.message_posted"], "ids": [bug_reports] }]),
+            json!([code_step("Make a task", "export async function main() {}")]),
+        )])),
+        lookups: vec![json!({ "kind": "channel", "name": "bug-reports" })],
+        ..Default::default()
+    });
+    let checker = Checker {
+        runs: Some(json!([{
+            "kind": "channel",
+            "name": "bug-reports",
+            "matches": [
+                { "name": "bug-reports-archive", "id": Uuid::from_u128(4_001).to_string() },
+                { "name": "bug-reports", "id": bug_reports.to_string() },
+            ],
+        }])),
+        ..Default::default()
+    };
+    let drafts = drafts(checker, &model);
+
+    let routine = drafted_routine(
+        drafts
+            .draft(owner(), routine(BUG_REPORTS), context)
+            .await
+            .unwrap(),
+    );
+
+    let asked = model.asked();
+    let (instructions, _, _) = &asked[0];
+    assert!(instructions.contains(&format!(r#"{{"name":"bug-reports","id":"{bug_reports}"}}"#)));
+    assert!(!instructions.contains("channel-0"));
+    assert_eq!(
+        serde_json::to_value(&routine.trigger).unwrap(),
+        json!({ "type": "events", "filters": [{ "events": ["channel.message_posted"], "ids": [bug_reports] }] })
+    );
 }

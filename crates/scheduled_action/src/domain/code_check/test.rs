@@ -14,6 +14,10 @@ const VERSION: &str = "0.3.0+current+ctx.0000";
 pub(crate) struct Checker {
     pub checked: Mutex<Vec<Vec<String>>>,
     pub unavailable: bool,
+    /// What a run returns; saving never runs code, drafting looks up names.
+    pub runs: Option<serde_json::Value>,
+    /// The context each run was given.
+    pub ran: Mutex<Vec<serde_json::Value>>,
 }
 
 impl RoutineCode for Checker {
@@ -51,8 +55,15 @@ impl RoutineCode for Checker {
         None
     }
 
-    async fn run(&self, _: &MacroUserIdStr<'static>, _: CodeRun<'_>) -> CodeOutcome {
-        unreachable!("saving never runs code")
+    async fn run(&self, _: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
+        assert!(run.dry_run, "only dry runs here");
+        self.ran.lock().unwrap().push(run.context.clone());
+        CodeOutcome {
+            result: self.runs.clone().ok_or_else(|| "no code runs here".to_owned()),
+            calls: Vec::new(),
+            calls_truncated: false,
+            waited_ms: None,
+        }
     }
 
     async fn reference(
