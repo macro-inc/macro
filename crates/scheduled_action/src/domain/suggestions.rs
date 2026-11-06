@@ -11,7 +11,6 @@ pub mod model;
 pub mod ports;
 pub mod prompt;
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
@@ -435,14 +434,8 @@ where
             .await
             .ok_or_else(|| anyhow::anyhow!("the model gave no answer"))?;
         let raw: RawAnswer = serde_json::from_value(answer)?;
-        let dismissed_keys: HashSet<String> = dismissed
-            .iter()
-            .filter_map(|pick| match pick {
-                SuggestionPick::Starter { key, .. } => Some(key.clone()),
-                SuggestionPick::Request { .. } => None,
-            })
-            .collect();
-        let (suggestions, dropped) = decode::decode(raw, &offered, &dismissed_keys);
+        let (suggestions, dropped) =
+            decode::decode(raw, &offered, &decode::Dismissed::new(&dismissed));
         span.record("suggestions", suggestions.len());
         span.record("dropped_suggestions", dropped.suggestions);
         span.record("dropped_knob_values", dropped.knob_values);

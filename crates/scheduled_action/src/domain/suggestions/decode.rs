@@ -108,13 +108,38 @@ pub struct Dropped {
     pub knob_values: usize,
 }
 
+/// What the person said they're not interested in: catalog keys, and
+/// requests by their text, compared without case.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Dismissed {
+    keys: HashSet<String>,
+    requests: HashSet<String>,
+}
+
+impl Dismissed {
+    pub fn new(picks: &[SuggestionPick]) -> Self {
+        let mut dismissed = Self::default();
+        for pick in picks {
+            match pick {
+                SuggestionPick::Starter { key, .. } => {
+                    dismissed.keys.insert(key.clone());
+                }
+                SuggestionPick::Request { request, .. } => {
+                    dismissed.requests.insert(request.to_lowercase());
+                }
+            }
+        }
+        dismissed
+    }
+}
+
 /// The usable suggestions in `answer`, best first per surface, from
-/// `offered` catalog routines only. `dismissed` keys are never suggested
+/// `offered` catalog routines only. What was `dismissed` is never suggested
 /// again.
 pub fn decode(
     answer: RawAnswer,
     offered: &[&CatalogRoutine],
-    dismissed: &HashSet<String>,
+    dismissed: &Dismissed,
 ) -> (Vec<CheckedSuggestion>, Dropped) {
     let offered: HashMap<&str, &CatalogRoutine> = offered
         .iter()
@@ -123,7 +148,7 @@ pub fn decode(
     let mut dropped = Dropped::default();
     let mut per_surface: HashMap<Surface, usize> = HashMap::new();
     let mut seen_keys = HashSet::new();
-    let mut seen_requests = HashSet::new();
+    let mut seen_requests = dismissed.requests.clone();
     let mut checked = Vec::new();
     for value in answer.suggestions {
         let suggestion = serde_json::from_value::<RawSuggestion>(value)
@@ -135,7 +160,7 @@ pub fn decode(
         };
         let fresh = match &suggestion.pick {
             SuggestionPick::Starter { key, .. } => {
-                !dismissed.contains(key) && seen_keys.insert(key.clone())
+                !dismissed.keys.contains(key) && seen_keys.insert(key.clone())
             }
             SuggestionPick::Request { request, .. } => seen_requests.insert(request.to_lowercase()),
         };

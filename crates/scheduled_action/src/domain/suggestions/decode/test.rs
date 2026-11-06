@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use routine_program::{CATALOG, catalog_routine};
 use serde_json::json;
 
@@ -10,7 +8,7 @@ fn decode_all(answer: Value) -> (Vec<CheckedSuggestion>, Dropped) {
     decode(
         serde_json::from_value(answer).unwrap(),
         &offered,
-        &HashSet::new(),
+        &Dismissed::default(),
     )
 }
 
@@ -133,8 +131,10 @@ fn a_request_is_one_bounded_line_on_a_known_surface() {
 #[test]
 fn each_surface_keeps_its_best_three_and_dismissed_routines_stay_away() {
     let offered: Vec<_> = CATALOG.iter().collect();
-    let mut dismissed = HashSet::new();
-    dismissed.insert("inbox".to_owned());
+    let dismissed = Dismissed::new(&[SuggestionPick::Starter {
+        key: "inbox".to_owned(),
+        knobs: Map::new(),
+    }]);
     let (checked, _) = decode(
         serde_json::from_value(json!({ "suggestions": [
             starter("inbox", json!([])),
@@ -218,4 +218,25 @@ fn the_schema_asks_for_nothing_but_picks_knobs_and_requests() {
             "title"
         ]
     );
+}
+
+#[test]
+fn a_dismissed_request_is_not_suggested_again() {
+    let offered: Vec<_> = CATALOG.iter().collect();
+    let dismissed = Dismissed::new(&[SuggestionPick::Request {
+        title: "Receipts".to_owned(),
+        request: "When a receipt arrives, tag it Receipts.".to_owned(),
+    }]);
+    let (checked, dropped) = decode(
+        serde_json::from_value(json!({ "suggestions": [{
+            "kind": "request", "key": "", "knobs": [], "surface": "email", "title": "Tag receipts",
+            "request": "when a receipt arrives, tag it receipts.", "reason": "Many receipts.",
+            "keepProbability": 0.9,
+        }] }))
+        .unwrap(),
+        &offered,
+        &dismissed,
+    );
+    assert_eq!(checked, []);
+    assert_eq!(dropped.suggestions, 1);
 }
