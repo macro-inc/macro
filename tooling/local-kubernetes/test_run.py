@@ -43,6 +43,20 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(deployment['spec']['template']['spec']['terminationGracePeriodSeconds'], 120)
         self.assertEqual(deployment['spec']['template']['spec']['volumes'][0]['persistentVolumeClaim'], {'claimName': 'db-data'})
 
+    def test_worker_state_is_namespaced_despite_shared_source_mounts(self):
+        config = {'name': 'macro-example', 'services': {
+            'ai_editing_worker': {'image': 'worker:dev'},
+            'analytics_proxy': {'image': 'analytics:dev'},
+        }}
+        for namespace in ['macro-kube-one', 'macro-kube-two']:
+            objects = manifests(config, namespace, 0)
+            claims = [o for o in objects if o['kind'] == 'PersistentVolumeClaim']
+            self.assertEqual(len(claims), 2)
+            self.assertEqual({o['metadata']['namespace'] for o in claims}, {namespace})
+            deployments = [o for o in objects if o['kind'] == 'Deployment']
+            paths = {o['spec']['template']['spec']['containers'][0]['volumeMounts'][0]['mountPath'] for o in deployments}
+            self.assertEqual(paths, {'/app/services/ai-editing-worker/.wrangler', '/app/services/analytics-proxy/.wrangler'})
+
 
 if __name__ == '__main__':
     unittest.main()

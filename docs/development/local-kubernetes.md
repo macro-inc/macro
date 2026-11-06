@@ -55,6 +55,8 @@ topics, local AWS resources, auth and search indices using the existing xtask
 initialization functions. Initialization uses temporary loopback port forwards;
 run initial bring-ups sequentially. Subsequent instances share the node but have
 independent databases, local AWS emulators, volumes and service discovery.
+Local Wrangler workers get namespace-specific state volumes even where their
+Compose definitions bind-mount the shared worktree.
 
 The node mounts this worktree and the Nix store. Binaries and source mounts
 remain identical to Compose. Auxiliary images are loaded into kind's containerd.

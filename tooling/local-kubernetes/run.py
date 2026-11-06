@@ -124,7 +124,11 @@ def manifests(config, namespace, slot):
             if value.get(source):
                 container[target] = value[source] if isinstance(value[source], list) else ['/bin/sh', '-c', value[source]]
         mounts, volumes = [], []
-        for index, mount in enumerate(value.get('volumes', [])):
+        service_mounts = list(value.get('volumes', []))
+        if key in ['ai_editing_worker', 'analytics_proxy']:
+            service_mounts.append({'type': 'volume', 'source': name + '-wrangler',
+                                   'target': '/app/services/' + name + '/.wrangler'})
+        for index, mount in enumerate(service_mounts):
             volume_name = f'v{index}'
             target = mount['target']
             volume = {'name': volume_name}
