@@ -1,4 +1,5 @@
 import type {
+  AgentMemory as AgentMemoryRecord,
   Agent as AgentRecord,
   CreateAgentRequest,
 } from '../../../generated/storage/types.gen';
@@ -37,6 +38,16 @@ export type AgentOptions = Omit<
   defaultModel: string;
   /** Whether this is a coding agent. */
   isCoding: boolean;
+};
+
+/** What an agent remembers across its sessions, whoever starts them. */
+export type AgentMemory = {
+  /** The remembered markdown; empty before anything is remembered. */
+  content: string;
+  /** The revision to pass to the next {@link Agent.updateMemory}; 0 before the first write. */
+  revision: number;
+  /** When the memory last changed; undefined before the first write. */
+  updatedAt: string | undefined;
 };
 
 /** A configurable agent backed by a bot identity. */
@@ -79,6 +90,33 @@ export class Agent extends MacroEntity<AgentRecord> {
     id ? Harness.byId(this.client, id) : undefined,
   );
 
+  /** What the agent remembers across its sessions, and its revision. */
+  async memory(): Promise<AgentMemory> {
+    return agentMemory(
+      unwrap(
+        await this.client.storage.getAgentMemory({
+          path: { agent_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Replace what the agent remembers, whole. Fails without changing anything
+   * when the memory is no longer at `revision`, as when the agent remembered
+   * something since it was read: read it again and reconcile.
+   */
+  async updateMemory(content: string, revision: number): Promise<AgentMemory> {
+    return agentMemory(
+      unwrap(
+        await this.client.storage.updateAgentMemory({
+          path: { agent_id: this.id },
+          body: { content, revision },
+        }),
+      ),
+    );
+  }
+
   /** Replace agent settings. */
   async update(options: AgentOptions): Promise<void> {
     await this.mutate((c) =>
@@ -88,6 +126,14 @@ export class Agent extends MacroEntity<AgentRecord> {
       }),
     );
   }
+}
+
+function agentMemory(record: AgentMemoryRecord): AgentMemory {
+  return {
+    content: record.content,
+    revision: record.revision,
+    updatedAt: record.updated_at ?? undefined,
+  };
 }
 
 /** Convert entity references into the generated agent request. */

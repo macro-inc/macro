@@ -50,6 +50,11 @@ use axum::{
     body::{Body, to_bytes},
     http::Request,
 };
+use bot_id::BotId;
+use bots::domain::{
+    models::{AgentMemory, UpdateAgentMemoryRequest},
+    ports::BotError,
+};
 use tower::ServiceExt;
 
 type BoxFuture<'a, T> = std::pin::Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -106,6 +111,153 @@ impl SessionTasks for FixedTasks {
     ) -> BoxFuture<'a, Result<(), SessionTaskError>> {
         Box::pin(async { Ok(()) })
     }
+}
+
+/// Each agent's memory, kept in process, compare-and-swapped on revision.
+#[derive(Clone, Default)]
+struct FakeAgentMemory {
+    memories: Arc<std::sync::Mutex<std::collections::HashMap<BotId, AgentMemory>>>,
+}
+
+#[async_trait::async_trait]
+impl OwnAgentMemory for FakeAgentMemory {
+    async fn read(&self, bot: BotId) -> Result<AgentMemory, BotError> {
+        Ok(self
+            .memories
+            .lock()
+            .unwrap()
+            .get(&bot)
+            .cloned()
+            .unwrap_or_else(AgentMemory::empty))
+    }
+
+    async fn write(
+        &self,
+        bot: BotId,
+        req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        let mut memories = self.memories.lock().unwrap();
+        let current = memories.get(&bot).map_or(0, |memory| memory.revision);
+        if current != req.revision {
+            return Err(BotError::Conflict("stale".to_owned()));
+        }
+        let memory = AgentMemory {
+            content: req.content,
+            revision: current + 1,
+            updated_at: None,
+        };
+        memories.insert(bot, memory.clone());
+        Ok(memory)
+    }
+}
+
+fn memory_app(repo: InMemoryAgentSessionRepo, memory: FakeAgentMemory) -> Router {
+    let tasks = FixedTasks::default();
+    router(
+        Arc::new(repo.clone()),
+        "localhost".into(),
+        InternalTools {
+            service: Arc::new(SessionPullRequestService::new(
+                repo,
+                RecordingRealtime::new(),
+                Arc::new(tasks.clone()),
+            )),
+            tasks: Arc::new(tasks),
+            code_mode: None,
+            cognition: None,
+            reviews: Arc::new(OnceLock::new()),
+            gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            agent_memory: Arc::new(memory),
+            app_url: "https://macro.com".into(),
+        },
+    )
+}
+
+#[tokio::test]
+async fn memory_tools_change_only_the_calling_sessions_agent() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_agent_session(AgentSessionId::new());
+    repo.insert_session(session.clone());
+    repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+        .await
+        .unwrap();
+    let memory = FakeAgentMemory::default();
+    let app = memory_app(repo, memory.clone());
+
+    let (_, updated) = rpc(
+        app.clone(),
+        Some("secret"),
+        "tools/call",
+        serde_json::json!({
+            "name": "UpdateAgentMemory",
+            "arguments": {"revision": 0, "content": "- The team ships on Thursdays."},
+        }),
+    )
+    .await;
+    assert_ne!(updated["result"]["isError"], true, "{updated}");
+    assert_eq!(updated["result"]["structuredContent"]["revision"], 1);
+    assert_eq!(
+        memory.memories.lock().unwrap().keys().collect::<Vec<_>>(),
+        [&session.bot_id]
+    );
+
+    let (_, read) = rpc(
+        app.clone(),
+        Some("secret"),
+        "tools/call",
+        serde_json::json!({"name": "ReadAgentMemory", "arguments": {}}),
+    )
+    .await;
+    assert_eq!(
+        read["result"]["structuredContent"],
+        serde_json::json!({
+            "content": "- The team ships on Thursdays.",
+            "revision": 1,
+            "updated_at": null,
+        })
+    );
+
+    let (_, stale) = rpc(
+        app,
+        Some("secret"),
+        "tools/call",
+        serde_json::json!({
+            "name": "UpdateAgentMemory",
+            "arguments": {"revision": 0, "content": "- Overwritten."},
+        }),
+    )
+    .await;
+    assert_eq!(stale["result"]["isError"], true, "{stale}");
+    assert_eq!(
+        memory.memories.lock().unwrap()[&session.bot_id].content,
+        "- The team ships on Thursdays."
+    );
+}
+
+#[tokio::test]
+async fn a_system_bot_session_is_not_offered_memory_tools() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let mut session = test_agent_session(AgentSessionId::new());
+    session.bot_id = bot_id::MACRO_AI_BOT_ID;
+    repo.insert_session(session.clone());
+    repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+        .await
+        .unwrap();
+    let (_, listed) = rpc(
+        memory_app(repo, FakeAgentMemory::default()),
+        Some("secret"),
+        "tools/list",
+        serde_json::json!({}),
+    )
+    .await;
+    let names: Vec<&str> = listed["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap())
+        .collect();
+    assert!(!names.contains(&"ReadAgentMemory"), "{names:?}");
+    assert!(!names.contains(&"UpdateAgentMemory"), "{names:?}");
 }
 
 async fn rpc(
@@ -177,6 +329,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 cognition: None,
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                agent_memory: Arc::new(FakeAgentMemory::default()),
                 app_url: "https://macro.com".into(),
             },
         );
@@ -236,6 +389,8 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 "DecideReview",
                 "GetReview",
                 "PresentReview",
+                "ReadAgentMemory",
+                "UpdateAgentMemory",
                 "link_task",
                 "set_pull_request",
                 "task_pull_requests"

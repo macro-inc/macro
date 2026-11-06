@@ -4,6 +4,7 @@ use crate::domain::models::{
     BotOwnerProfile, CreateAgentRequest, CreateChannelScopedBotRequest,
     CreateChannelScopedBotResponse, PatchAgentRequest,
 };
+use crate::domain::models::{AgentMemory, UpdateAgentMemoryRequest};
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
     body::Body,
@@ -187,6 +188,35 @@ impl BotService for TestBotService {
                     .cloned()
             })
             .collect())
+    }
+
+    async fn agent_memory(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<AgentMemory, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent_memory(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        unimplemented!()
+    }
+
+    async fn own_memory(&self, _bot_id: BotId) -> Result<AgentMemory, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_own_memory(
+        &self,
+        _bot_id: BotId,
+        _req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        unimplemented!()
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
@@ -1228,5 +1258,76 @@ async fn bot_owner_can_create_and_patch_has_agent_via_http(pool: PgPool) -> anyh
     assert_eq!(disable_response.status(), StatusCode::OK);
     assert!(!read_bot(disable_response).await.has_agent);
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_agents_owner_edits_its_memory_and_a_stale_edit_conflicts(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    const AGENT_OWNER_ID: &str = "macro|agent-memory-owner@example.com";
+    insert_user(&pool, AGENT_OWNER_ID).await?;
+    let agent = BotServiceImpl::new(PgBotsRepo::new(pool.clone()), NoopMacroEventBroker)
+        .create_agent(
+            macro_user_id(AGENT_OWNER_ID),
+            CreateAgentRequest {
+                team_id: None,
+                name: "Release helper".to_string(),
+                handle: "release-helper".to_string(),
+                description: None,
+                avatar_url: None,
+                instructions: "Help ship releases.".to_string(),
+                harness: "in-memory".to_string(),
+                harness_id: None,
+                default_model: "claude".to_string(),
+                channel_scope: crate::domain::models::AgentChannelScope::All,
+                channel_ids: Vec::new(),
+                mcp: crate::domain::models::AgentMcpServers::OwnerConnections,
+                auto_accept_permissions: None,
+                is_coding: false,
+            },
+        )
+        .await?;
+    let router = real_router(pool, AGENT_OWNER_ID);
+    let put = |revision: i64, content: &str| {
+        Request::builder()
+            .method("PUT")
+            .uri(format!("/agents/{}/memory", agent.bot.id))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                serde_json::json!({ "revision": revision, "content": content }).to_string(),
+            ))
+            .unwrap()
+    };
+
+    let saved = router
+        .clone()
+        .oneshot(put(0, "- Ship on Thursdays."))
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), StatusCode::OK);
+
+    let stale = router
+        .clone()
+        .oneshot(put(0, "- Ship on Fridays."))
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+
+    let read = router
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/agents/{}/memory", agent.bot.id))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(read.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(read.into_body(), usize::MAX).await?;
+    let memory: AgentMemory = serde_json::from_slice(&body)?;
+    assert_eq!(memory.content, "- Ship on Thursdays.");
+    assert_eq!(memory.revision, 1);
     Ok(())
 }

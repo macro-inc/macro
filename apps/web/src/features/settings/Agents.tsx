@@ -34,6 +34,10 @@ import {
   useAgentApiKeyQuery,
 } from '@queries/agents/agent-api-key';
 import {
+  saveAgentMemory,
+  useAgentMemoryQuery,
+} from '@queries/agents/agent-memory';
+import {
   type AgentWithHarnessId,
   type CreateAgentParams,
   useAgentsQuery,
@@ -918,6 +922,30 @@ function AgentEditorPage(props: {
   );
   const modelField = () => <div class="max-w-[280px]">{modelPicker()}</div>;
 
+  // What the agent remembers across conversations: it writes here when asked
+  // to remember something, and its owners can correct it. Edited against the
+  // revision it was loaded at, so a memory the agent changed meanwhile is
+  // never overwritten unseen.
+  const memory = useAgentMemoryQuery(() => props.agent?.bot.id);
+  const loadedMemory = () => (memory.isSuccess ? memory.data : undefined);
+  const [memoryDraft, setMemoryDraft] = createSignal<string>();
+  const saveMemory = async (agentId: string) => {
+    const loaded = loadedMemory();
+    const draft = memoryDraft()?.trim();
+    if (!loaded || draft === undefined || draft === loaded.content) return;
+    try {
+      await saveAgentMemory(agentId, loaded.revision, draft);
+    } catch (error) {
+      toast.failure(
+        `The agent was saved, but not its memory: ${
+          error instanceof Error && error.message
+            ? error.message
+            : 'something went wrong'
+        }`
+      );
+    }
+  };
+
   // An agent that runs in Macro on an Anthropic or OpenAI model can run on
   // its own API key instead of Macro usage. The key is write-only: a saved
   // one shows masked, and is replaced by typing a new one.
@@ -1132,7 +1160,7 @@ function AgentEditorPage(props: {
       isCoding: isCoding(),
     });
     if (!saved) return;
-    await saveApiKey(saved);
+    await Promise.all([saveApiKey(saved), saveMemory(saved)]);
     close();
   };
 
@@ -1264,6 +1292,7 @@ function AgentEditorPage(props: {
                 description="Instructions the agent receives at the start of every conversation."
               >
                 <AgentInstructionsEditor
+                  label="Instructions"
                   markdown={instructions()}
                   onChange={setInstructions}
                   disabled={props.pending}
@@ -1271,6 +1300,35 @@ function AgentEditorPage(props: {
                   placeholder="Describe your agent’s role, how it should work, and what a good result looks like…"
                 />
               </AgentFormSection>
+
+              <Show when={props.agent}>
+                <AgentFormSection
+                  title="Memory"
+                  description="What this agent remembers across conversations. It adds to this when someone asks it to remember something; everyone who uses it shares it."
+                >
+                  <Show
+                    when={loadedMemory()}
+                    fallback={
+                      <p class="text-xs text-ink-extra-muted">
+                        {memory.isError
+                          ? 'Memory couldn’t be loaded.'
+                          : 'Loading memory…'}
+                      </p>
+                    }
+                  >
+                    {(loaded) => (
+                      <AgentInstructionsEditor
+                        label="Memory"
+                        markdown={memoryDraft() ?? loaded().content}
+                        onChange={setMemoryDraft}
+                        disabled={busy()}
+                        class="rounded-lg border border-edge-muted bg-input px-3 py-2.5 focus-within:border-accent"
+                        placeholder="Nothing yet. Ask the agent to remember something, or write what it should keep in mind…"
+                      />
+                    )}
+                  </Show>
+                </AgentFormSection>
+              </Show>
 
               <AgentFormSection
                 title="Where it runs"

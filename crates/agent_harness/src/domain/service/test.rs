@@ -340,8 +340,12 @@ impl crate::domain::ports::PermissionPolicySource for KindDefaultPolicies {
 /// nature says.
 struct HarnessDefaultCodingAgents;
 
-impl crate::domain::ports::CodingAgentSource for HarnessDefaultCodingAgents {
+impl crate::domain::ports::PersonaSource for HarnessDefaultCodingAgents {
     async fn coding_agent_choice(&self, _: BotId) -> anyhow::Result<Option<bool>> {
+        Ok(None)
+    }
+
+    async fn memory(&self, _: BotId) -> anyhow::Result<Option<String>> {
         Ok(None)
     }
 }
@@ -349,9 +353,13 @@ impl crate::domain::ports::CodingAgentSource for HarnessDefaultCodingAgents {
 /// Every persona made the same choice, whatever its runtime.
 struct ChosenCodingAgents(bool);
 
-impl crate::domain::ports::CodingAgentSource for ChosenCodingAgents {
+impl crate::domain::ports::PersonaSource for ChosenCodingAgents {
     async fn coding_agent_choice(&self, _: BotId) -> anyhow::Result<Option<bool>> {
         Ok(Some(self.0))
+    }
+
+    async fn memory(&self, _: BotId) -> anyhow::Result<Option<String>> {
+        Ok(None)
     }
 }
 
@@ -519,7 +527,7 @@ fn harness_with_ports(
     prompt_context: PromptContextMock,
     prompt_composer: PromptComposerMock,
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
-    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    personas: impl crate::domain::ports::PersonaSource,
     mentions: PromptMentionsMock,
     egress: EgressProvisionerMock,
 ) -> (TestBench, TurnSignals) {
@@ -527,7 +535,7 @@ fn harness_with_ports(
         prompt_context,
         prompt_composer,
         permission_policies,
-        coding_agents,
+        personas,
         mentions,
         egress,
         None,
@@ -538,7 +546,7 @@ fn harness_with_ports_and_journal(
     prompt_context: PromptContextMock,
     prompt_composer: PromptComposerMock,
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
-    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    personas: impl crate::domain::ports::PersonaSource,
     mentions: PromptMentionsMock,
     egress: EgressProvisionerMock,
     journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
@@ -547,7 +555,7 @@ fn harness_with_ports_and_journal(
         prompt_context,
         prompt_composer,
         permission_policies,
-        coding_agents,
+        personas,
         mentions,
         egress,
         journal,
@@ -564,7 +572,7 @@ fn harness_with_journal_and_policy(
     prompt_context: PromptContextMock,
     prompt_composer: PromptComposerMock,
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
-    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    personas: impl crate::domain::ports::PersonaSource,
     mentions: PromptMentionsMock,
     egress: EgressProvisionerMock,
     journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
@@ -601,7 +609,7 @@ fn harness_with_journal_and_policy(
         egress,
         NoPeers,
         permission_policies,
-        coding_agents,
+        personas,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1375,6 +1383,71 @@ async fn only_the_first_prompt_carries_the_agent_instructions() {
     assert_eq!(
         instructions,
         [Some("Always speak in all caps.".to_owned()), None]
+    );
+}
+
+/// A persona that remembers `0` and has made no coding choice.
+struct RememberingPersona(&'static str);
+
+impl crate::domain::ports::PersonaSource for RememberingPersona {
+    async fn coding_agent_choice(&self, _: BotId) -> anyhow::Result<Option<bool>> {
+        Ok(None)
+    }
+
+    async fn memory(&self, _: BotId) -> anyhow::Result<Option<String>> {
+        Ok(Some(self.0.to_owned()))
+    }
+}
+
+/// What the persona remembers opens its session, after its instructions, and
+/// is stated once, like them.
+#[tokio::test]
+async fn only_the_first_prompt_carries_the_persona_memory() {
+    let composer = PromptComposerMock::default();
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) = harness_with_ports(
+        PromptContextMock::default(),
+        composer.clone(),
+        KindDefaultPolicies,
+        RememberingPersona("- The team ships on Thursdays."),
+        PromptMentionsMock::new(),
+        EgressProvisionerMock::new(),
+    );
+    let id = AgentSessionId::new();
+    let mut command = open_command();
+    command.runtime.instructions = "Always speak in all caps.".to_owned();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        let container = containers.wait_for_spawn(id).await;
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+    turns.settled(id).await;
+
+    service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("and add a regression test")),
+        )
+        .await
+        .expect("forward to a live session should succeed");
+    container.agent().wait_for_requests(4).await;
+
+    let instructions: Vec<_> = composer
+        .calls()
+        .into_iter()
+        .map(|(_, instructions, _)| instructions)
+        .collect();
+    assert_eq!(
+        instructions,
+        [
+            Some(format!(
+                "Always speak in all caps.\n\n{}\n\n- The team ships on Thursdays.",
+                crate::domain::model::PERSONA_MEMORY_HEADING.trim()
+            )),
+            None
+        ]
     );
 }
 
