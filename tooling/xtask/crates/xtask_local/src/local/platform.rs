@@ -749,7 +749,13 @@ fn e2e(args: &E2eArgs) -> Result<()> {
     }
     let endpoints = super::e2e::Endpoints {
         proxy_url: name.origin(),
-        frontend_url: frontend::url(&instance),
+        // The web app calls the backend on its page's hostname (`resolveProxyOrigin`), and
+        // the ingress routes only an instance's own host.
+        frontend_url: format!(
+            "http://{}:{}/app",
+            name.host(),
+            instance.port(Port::Frontend)
+        ),
         postgres_url: format!(
             "postgres://user:{}@localhost:{}/macrodb",
             read_state(&instance)
