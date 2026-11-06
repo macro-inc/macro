@@ -15,6 +15,19 @@ Return to the [repository guide](../../AGENTS.md) for other task guides.
   bypass the owning domain's APIs with direct database access.
 - For queries, migrations, or SQLx failures, use [database development](database.md).
 
+## Crates and dependencies
+
+- Add a new crate to the root `Cargo.toml` `members` list (one per line, sorted),
+  then run `just hakari` (`cargo x deps`). It gives every member a root
+  `[workspace.dependencies]` entry at its current path and rewrites relative
+  `path = "../x"` dependencies between members to `x = { workspace = true }`.
+  Moving a crate needs only its `members` line changed; the same command updates
+  the root entry. CI fails when the manifests drift from that.
+- hakari owns the `workspace-hack = { version = "0.1", path = "../workspace-hack" }`
+  lines; leave them as it writes them.
+- A root entry with `default-features = false` turns defaults off for every
+  dependent; dependents that need them say `default-features = true`.
+
 ## Environment
 
 Run commands from the repository root inside `nix develop`, unless a guide says
