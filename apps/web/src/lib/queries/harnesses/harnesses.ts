@@ -12,6 +12,7 @@ import {
 } from '@service-storage/client';
 import type { BoundHarnessAgent } from '@service-storage/generated/schemas/boundHarnessAgent';
 import type { RequestedHarnessOwner } from '@service-storage/generated/schemas/requestedHarnessOwner';
+import type { RequestedHarnessWorkspace } from '@service-storage/generated/schemas/requestedHarnessWorkspace';
 import { blockingAgentsOf } from '@service-storage/harness-errors';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { harnessKeys } from './keys';
@@ -28,6 +29,7 @@ export type PatchHarnessParams = {
   name?: string;
   allowPermissionBypass?: boolean;
   owner?: RequestedHarnessOwner;
+  workspace?: RequestedHarnessWorkspace;
 };
 
 /** An owner change was refused while these agents still run on the harness. */
@@ -144,6 +146,7 @@ export async function patchHarness(vars: PatchHarnessParams) {
     name: vars.name,
     allow_permission_bypass: vars.allowPermissionBypass,
     owner: vars.owner,
+    workspace: vars.workspace,
   });
   if (result.isErr()) {
     const blockingAgents = result.error.flatMap(blockingAgentsOf);

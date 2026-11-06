@@ -17,8 +17,16 @@ import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction, StatusDot } from '../integration-ui';
 import { ChoiceRow, SettingsCard } from '../primitives';
+import {
+  DEFAULT_WORKSPACE_OPTION,
+  workspaceOptions,
+  workspacePathFor,
+} from './runtime-workspaces';
+import { SettingsSelect } from './settings-select';
 
 type HarnessShare = 'Private' | 'Team';
+
+const MACHINE_DEFAULT_WORKSPACE = 'Machine default (macrod.toml)';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
@@ -83,8 +91,9 @@ export function ConnectedRuntimesSection(props: {
 }
 
 /**
- * One paired macrod runtime. Its name, owner and permission bypass live here
- * on the web; macrod.toml on the machine holds only machine-local config.
+ * One paired macrod runtime. Its name, owner, permission bypass and workspace
+ * live here on the web; macrod.toml on the machine holds only machine-local
+ * config, including the allowed roots the workspace is picked from.
  */
 function PairedRuntimeRow(props: {
   harness: RegisteredHarness;
@@ -189,6 +198,21 @@ function PairedRuntimeRow(props: {
     }
   };
 
+  const setWorkspace = async (optionId: string) => {
+    const path = workspacePathFor(optionId);
+    try {
+      await patchHarness.mutateAsync({
+        harnessId: props.harness.id,
+        workspace: path ? { type: 'path', path } : { type: 'local' },
+      });
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to change the workspace'));
+    }
+  };
+
+  const hasReportedWorkspaces = () =>
+    props.harness.reported_workspaces.length > 0;
+
   return (
     <div class="flex flex-col gap-3 px-4 py-3">
       <div class="flex items-center justify-between gap-4">
@@ -237,6 +261,37 @@ function PairedRuntimeRow(props: {
           {props.harness.allow_permission_bypass
             ? 'Agents set to Always bypass approve tool calls without asking, from their next turn.'
             : 'Every agent on this runtime must ask for permission.'}
+        </p>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="text-xs text-ink">Workspace</span>
+        <Show
+          when={canManage()}
+          fallback={
+            <p class="truncate text-xs text-ink-muted">
+              {props.harness.workspace_path ?? MACHINE_DEFAULT_WORKSPACE}
+            </p>
+          }
+        >
+          <SettingsSelect
+            label="Workspace"
+            class="w-full min-w-0 @min-[440px]:max-w-[420px]"
+            options={workspaceOptions(
+              props.harness.reported_workspaces,
+              props.harness.workspace_path,
+              MACHINE_DEFAULT_WORKSPACE
+            )}
+            value={props.harness.workspace_path ?? DEFAULT_WORKSPACE_OPTION}
+            disabled={patchHarness.isPending || !hasReportedWorkspaces()}
+            onChange={(optionId) =>
+              fireAndForget(setWorkspace(optionId), 'harness-settings')
+            }
+          />
+        </Show>
+        <p class="text-xs text-ink-extra-muted">
+          {hasReportedWorkspaces()
+            ? 'New sessions start here unless their agent picks its own. Running sessions keep theirs.'
+            : 'Choices appear once this machine reports the allowed roots in its macrod.toml.'}
         </p>
       </div>
       <Show when={canManage()}>

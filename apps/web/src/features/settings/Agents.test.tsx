@@ -365,6 +365,11 @@ const MACROD_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
+  workspace_path: null,
+  reported_workspaces: [
+    { path: '/home/dev/code', kind: 'allowed_root' },
+    { path: '/home/dev/code/api', kind: 'repository' },
+  ],
 } satisfies Harness;
 
 describe('Agents', () => {
@@ -1733,6 +1738,42 @@ describe('Agents', () => {
         mcp: { scope: 'owner_connections' },
         teamId: undefined,
       });
+    });
+  });
+
+  it('submits the workspace picked for a macrod agent', async () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [{ id: 'claude-code', name: 'Claude Code' }],
+      'claude-code'
+    );
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Api fixer' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('radio', { name: 'In your harness' })
+    );
+    chooseSelectOption(
+      within(dialog).getByLabelText('Workspace'),
+      '/home/dev/code/api'
+    );
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          harness: 'macrod',
+          harnessId: MACROD_HARNESS.id,
+          workspacePath: '/home/dev/code/api',
+        })
+      );
     });
   });
 

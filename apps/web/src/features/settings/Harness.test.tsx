@@ -24,7 +24,11 @@ import {
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
-import { chooseModelOption } from './tests/select-helpers';
+import {
+  chooseModelOption,
+  chooseSelectOption,
+  selectOptions,
+} from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
@@ -193,6 +197,11 @@ const REGISTERED_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
+  workspace_path: null,
+  reported_workspaces: [
+    { path: '/home/dev/code', kind: 'allowed_root' },
+    { path: '/home/dev/code/macro', kind: 'repository' },
+  ],
 };
 
 beforeAll(() => {
@@ -545,6 +554,64 @@ describe('Harness', () => {
       })
     );
     expect(confirmDialog).not.toHaveBeenCalled();
+  });
+
+  it('sets the runtime workspace from the reported directories', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    const workspace = screen.getByLabelText('Workspace');
+    expect(
+      selectOptions(workspace)
+        .getAllByRole('option')
+        .map((option) => option.textContent)
+    ).toEqual([
+      'Machine default (macrod.toml)',
+      '/home/dev/code (allowed root)',
+      '/home/dev/code/macro',
+    ]);
+    chooseSelectOption(workspace, '/home/dev/code/macro');
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        workspace: { type: 'path', path: '/home/dev/code/macro' },
+      })
+    );
+  });
+
+  it('goes back to the machine default workspace', async () => {
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, workspace_path: '/home/dev/code/macro' },
+    ];
+
+    render(() => <Harness />);
+    chooseSelectOption(
+      screen.getByLabelText('Workspace'),
+      'Machine default (macrod.toml)'
+    );
+
+    await waitFor(() =>
+      expect(harnessMocks.patchHarness).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        workspace: { type: 'local' },
+      })
+    );
+  });
+
+  it('waits for the daemon to report workspaces before offering any', () => {
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, reported_workspaces: [] },
+    ];
+
+    render(() => <Harness />);
+
+    expect(screen.getByLabelText('Workspace')).toHaveProperty('disabled', true);
+    expect(
+      screen.getByText(
+        'Choices appear once this machine reports the allowed roots in its macrod.toml.'
+      )
+    ).toBeTruthy();
   });
 
   it('renames a paired runtime', async () => {

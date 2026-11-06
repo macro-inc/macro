@@ -57,6 +57,7 @@ import {
 } from '@queries/team/teams';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
+import type { ReportedWorkspace } from '@service-storage/generated/schemas/reportedWorkspace';
 import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Avatar, Button, Dialog, Panel } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -83,6 +84,11 @@ import { AgentSetupStrips } from './components/agent-setup-strips';
 import { AutoArchiveSetting } from './components/auto-archive-setting';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import { AgentInstructionsEditor } from './components/instructions-editor';
+import {
+  DEFAULT_WORKSPACE_OPTION,
+  workspaceOptions,
+  workspacePathFor,
+} from './components/runtime-workspaces';
 import { SettingsSelect } from './components/settings-select';
 import { WhereItRunsOption } from './components/where-it-runs-option';
 import {
@@ -125,6 +131,8 @@ type ConnectedHarness = {
   allowPermissionBypass: boolean;
   target: AgentModelTarget;
   connected?: boolean;
+  /** The directories a macrod runtime reported; built-ins have none. */
+  workspaces: readonly ReportedWorkspace[];
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
@@ -135,6 +143,7 @@ const IN_MEMORY_HARNESS: ConnectedHarness = {
   kind: 'builtin',
   allowPermissionBypass: true,
   target: { harness: 'in-memory' },
+  workspaces: [],
 };
 
 const MACRO_AGENT: AgentSummary = {
@@ -199,6 +208,7 @@ export function Agents(props: {
             kind: 'builtin',
             allowPermissionBypass: true,
             target,
+            workspaces: [],
           };
         }
 
@@ -220,6 +230,7 @@ export function Agents(props: {
           allowPermissionBypass: harness?.allow_permission_bypass ?? false,
           target,
           connected: harness?.connected,
+          workspaces: harness?.reported_workspaces ?? [],
         };
       }
     );
@@ -679,11 +690,19 @@ function AgentEditorPage(props: {
       props.connectedHarnesses[0]?.id ??
       ''
   );
+  // Per harness: changing runtime drops the workspace, as the server does.
+  const [workspaceOption, setWorkspaceOption] = createSignal(
+    props.agent?.workspace_path ?? DEFAULT_WORKSPACE_OPTION
+  );
   const modelQueries = useAgentModelsQueries(() =>
     props.connectedHarnesses.map((harness) => harness.target)
   );
   const selectedHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === harnessId());
+  const savedWorkspaceOnSelectedHarness = () =>
+    props.agent?.harness_id === harnessId()
+      ? props.agent.workspace_path
+      : undefined;
   const modelQueryForHarness = (id: string) => {
     const index = props.connectedHarnesses.findIndex(
       (harness) => harness.id === id
@@ -1069,6 +1088,7 @@ function AgentEditorPage(props: {
   };
 
   const handleHarnessChange = (id: string) => {
+    if (id !== harnessId()) setWorkspaceOption(DEFAULT_WORKSPACE_OPTION);
     setHarnessId(id);
     setDefaultModelId(preferredModelId(id));
     setAutoAcceptChoice(false);
@@ -1122,6 +1142,10 @@ function AgentEditorPage(props: {
       // built-ins keep sending their own slug with no harness id.
       harness: harness?.kind === 'macrod' ? 'macrod' : (harness?.id ?? ''),
       harnessId: harness?.kind === 'macrod' ? harness.id : undefined,
+      workspacePath:
+        harness?.kind === 'macrod'
+          ? workspacePathFor(workspaceOption())
+          : undefined,
       name: name().trim(),
       instructions: instructions().trim(),
       // Always sent, flag or no flag, so an editor without the Connections
@@ -1361,6 +1385,27 @@ function AgentEditorPage(props: {
                         />
                       </div>
                       {modelPicker()}
+                      <div class="flex min-w-0 flex-col gap-1.5 @min-[440px]:col-span-2">
+                        <span class="text-xs font-medium text-ink-muted">
+                          Workspace
+                        </span>
+                        <SettingsSelect
+                          label="Workspace"
+                          options={workspaceOptions(
+                            selectedHarness()?.workspaces ?? [],
+                            savedWorkspaceOnSelectedHarness(),
+                            'Runtime default'
+                          )}
+                          value={workspaceOption()}
+                          disabled={
+                            (selectedHarness()?.workspaces.length ?? 0) === 0
+                          }
+                          onChange={setWorkspaceOption}
+                        />
+                        <span class="text-xs text-ink-extra-muted">
+                          Where new sessions of this agent start on the runtime.
+                        </span>
+                      </div>
                     </div>
                   </WhereItRunsOption>
                 </fieldset>

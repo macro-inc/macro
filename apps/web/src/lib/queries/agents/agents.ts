@@ -26,6 +26,11 @@ export type CreateAgentParams = {
   harness: string;
   /** The registered macrod harness to run on; omit for built-in harnesses. */
   harnessId?: string;
+  /**
+   * The directory on `harnessId` new sessions use, one the harness reported.
+   * Omit to use the harness's workspace.
+   */
+  workspacePath?: string;
   name: string;
   instructions: string;
   /** Which Pipedream MCP servers the agent's sessions are handed. */
@@ -102,6 +107,7 @@ export function useCreateAgentMutation() {
           handle: vars.handle,
           harness: vars.harness,
           harness_id: vars.harnessId,
+          workspace_path: vars.workspacePath ?? null,
           name: vars.name,
           instructions: vars.instructions,
           mcp: vars.mcp,
@@ -143,6 +149,7 @@ export function useUpdateAgentMutation() {
           handle: vars.handle,
           harness: vars.harness,
           harness_id: vars.harnessId,
+          workspace_path: vars.workspacePath ?? null,
           name: vars.name,
           instructions: vars.instructions,
           mcp: vars.mcp,
