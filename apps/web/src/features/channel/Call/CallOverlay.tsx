@@ -505,7 +505,11 @@ export function CallOverlay(props: {
                         )}
                       </For>
                       <Show when={hideParticipants() && talking()}>
-                        <div class="absolute bottom-2 right-2 z-10 flex items-center gap-2 rounded-full bg-surface/90 px-2 py-1 text-sm">
+                        <div
+                          data-call-stage-chip="speaker"
+                          class="absolute bottom-2 right-2 z-10 flex items-center gap-2 rounded-full bg-surface/90 px-2 py-1 text-sm"
+                        >
+                          <CallWaveform class="size-4 shrink-0" />
                           <span class="size-6 shrink-0 rounded-full outline-2 -outline-offset-2 outline-success">
                             <Show
                               when={talkingId()}
@@ -523,7 +527,6 @@ export function CallOverlay(props: {
                             </Show>
                           </span>
                           <span>{talkingName()}</span>
-                          <CallWaveform class="size-4" />
                         </div>
                       </Show>
                       <Show when={!isMobile() && layout() !== 'grid'}>

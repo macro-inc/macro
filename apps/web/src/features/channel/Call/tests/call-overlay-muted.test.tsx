@@ -94,6 +94,7 @@ vi.mock('@ui', async () => ({
 
 vi.mock('../CallContext', () => ({
   useCallContext: () => mocks.callContext,
+  useCallContextOptional: () => mocks.callContext,
 }));
 
 vi.mock('../CallControls/CallControls', () => ({
@@ -822,3 +823,36 @@ it.each(['auto', 'speaker', 'sidebar', 'grid'] as const)(
     ).toBeTruthy();
   }
 );
+
+it('leads shared-screen and speaking chips with their action icon before the avatar', () => {
+  const participant = createRemoteParticipant(
+    'presenter',
+    {
+      screen_share: {
+        isMuted: false,
+        isSubscribed: true,
+        track: createTrack('screen'),
+      },
+    },
+    'Presenter'
+  );
+  setUpCallState([participant]);
+  mocks.callContext.isParticipantSpeaking = () => true;
+  const { container } = render(() => <CallOverlay onLeave={() => {}} />);
+  const share = container.querySelector('[data-call-stage-chip="share"]');
+  expect(share?.firstElementChild?.getAttribute('data-macro-icon')).toBe(
+    'screencast'
+  );
+  expect(
+    share?.children[1].querySelector('[data-testid="user-avatar"]')
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide participants' }));
+  const speaker = container.querySelector('[data-call-stage-chip="speaker"]');
+  expect(speaker?.firstElementChild?.getAttribute('data-macro-icon')).toBe(
+    'waveform'
+  );
+  expect(
+    speaker?.children[1].querySelector('[data-testid="user-avatar"]')
+  ).toBeTruthy();
+  expect(speaker?.textContent).toContain('Presenter');
+});

@@ -296,7 +296,8 @@ export function ScreenShareTile(props: { participant: RemoteParticipant }) {
         variant="truncated"
         isProgram={isProgramParticipant(props.participant.attributes)}
       >
-        <span class="flex items-center gap-1.5">
+        <span data-call-stage-chip="share" class="flex items-center gap-1.5">
+          <Screencast class="size-3.5 shrink-0" />
           <Show when={macroId()}>
             {(id) => (
               <span
@@ -310,7 +311,6 @@ export function ScreenShareTile(props: { participant: RemoteParticipant }) {
               </span>
             )}
           </Show>
-          <Screencast class="size-3.5" />
           {t('calls.presenterSharing', { name: displayName() })}
         </span>
       </VideoTag>

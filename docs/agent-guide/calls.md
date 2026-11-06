@@ -342,7 +342,8 @@ Camera-off tiles are flat and show a neutral initial, never a profile-color grad
 On desktop the self view sits at the bottom-right beside the controls, or above
 them while chat is docked. Muted icons sit beside the participant name.
 
-A shared screen identifies its presenter with an avatar and screen icon; the
+A shared-screen chip leads with its screen icon, then the presenter's avatar
+and name. A hidden-participant speaking chip uses the same order with a waveform; the
 presenter's tile also carries a screen icon. Local sharing shows **You're sharing
 your screen** and **Stop sharing** instead of recursively playing your own display.
 Desktop **More → Layout** offers Auto, Grid, Speaker and Sidebar and remembers
