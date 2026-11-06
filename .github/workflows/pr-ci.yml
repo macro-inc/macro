@@ -489,6 +489,7 @@ jobs:
             - 'tooling/xtask/**/Cargo.toml'
             - 'Cargo.lock'
             - '.config/hakari.toml'
+            - '.config/layers.toml'
             - 'crates/workspace-hack/**'
             - 'tooling/xtask/src/**'
             - 'tooling/xtask/crates/xtask_deps/**'
