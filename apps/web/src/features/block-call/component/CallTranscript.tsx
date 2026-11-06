@@ -306,7 +306,7 @@ export function CallTranscript(props: {
           !following() && !activeVisible() && props.activeSequenceNum != null
         }
       >
-        <div class="pointer-events-none sticky bottom-24 z-20 flex justify-center py-2">
+        <div class="pointer-events-none sticky bottom-4 mobile:bottom-[calc(var(--mobile-content-inset-bottom,0px)+12px)] z-20 flex justify-center py-2">
           <Button
             class="pointer-events-auto"
             variant="secondary"

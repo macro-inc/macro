@@ -7,6 +7,7 @@ import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { createScrollIntentTracker } from '@core/util/scroll-intent';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button, Tabs } from '@ui';
@@ -34,6 +35,7 @@ import {
 import { useCallAgain } from '../use-call-again';
 import { CallRecordingChat } from './CallRecordingChat';
 import { CallRecordingMobileActions } from './CallRecordingMobileActions';
+import { CallRecordingMobilePlayback } from './CallRecordingMobilePlayback';
 import { CallRecordingPinnedPlayer } from './CallRecordingPinnedPlayer';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingTitle } from './CallRecordingTitle';
@@ -67,6 +69,11 @@ export function CallRecordingBody(props: {
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
   const playback = createRecordingPlayback(videoRef);
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
+  const [scrollingDown, setScrollingDown] = createSignal(false);
+  const scrollIntent = createScrollIntentTracker(() => {
+    const direction = scrollIntent.lastDirection();
+    if (direction) setScrollingDown(direction === 'down');
+  });
   const [playerRef, setPlayerRef] = createSignal<HTMLElement>();
   const [playerOffscreen, setPlayerOffscreen] = createSignal(false);
   createEffect(
@@ -257,6 +264,8 @@ export function CallRecordingBody(props: {
                 </SidePanel.HeaderActions>
                 <div
                   data-channel-scroll
+                  {...scrollIntent.handlers}
+                  onScroll={() => scrollIntent.observeScroll()}
                   class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hidden"
                   ref={setScrollRef}
                 >
@@ -393,7 +402,30 @@ export function CallRecordingBody(props: {
                   />
                 </Show>
                 <CustomScrollbar scrollContainer={scrollRef} />
-                <Show when={playerOffscreen() && record().recordingUrl}>
+                <Show when={isMobile()}>
+                  <CallRecordingMobilePlayback
+                    playback={playback}
+                    speaker={currentSpeaker()}
+                    active={
+                      selectedTab() === 'transcript' &&
+                      playerOffscreen() &&
+                      !!record().recordingUrl &&
+                      !panel?.isOpen()
+                    }
+                    scrollingDown={scrollingDown()}
+                    onShowVideo={() =>
+                      playerRef()?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      })
+                    }
+                  />
+                </Show>
+                <Show
+                  when={
+                    !isMobile() && playerOffscreen() && record().recordingUrl
+                  }
+                >
                   <div class="absolute inset-x-4 bottom-4 z-20">
                     <CallRecordingPinnedPlayer
                       playback={playback}

@@ -4,7 +4,7 @@ import BackIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import FullscreenIcon from '@icon/system/regular/corners-out.svg';
 import PauseIcon from '@icon/system/regular/pause.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { ProgressRing } from '@ui/components/ProgressPill';
 import { Show } from 'solid-js';
 import type { RecordingPlayback } from '../../primitives/recording-playback';
@@ -18,7 +18,10 @@ export function CallRecordingPinnedPlayer(props: {
   const state = () => props.playback;
   return (
     <div
-      class="menu-surface pointer-events-auto flex min-w-0 items-center gap-1 rounded-2xl p-2"
+      class={cn(
+        'pointer-events-auto flex min-w-0 items-center gap-1 p-2',
+        props.mobile ? 'island rounded-full' : 'menu-surface rounded-2xl'
+      )}
       role="group"
       aria-label="Recording playback"
     >
