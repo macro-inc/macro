@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::enrollment::{Persona, PersonaService};
+use crate::domain::enrollment::{
+    Persona, PersonaConfigKey, PersonaOsUser, PersonaService, SystemdUnitName,
+};
 use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
 use crate::domain::models::{ControlPlaneId, HostRegistration, NewComputer};
@@ -293,9 +295,9 @@ impl SessionActivity for IdleSessions {
 async fn idle_sleep_keeps_personas_running_and_freezes_session_only_computers() {
     let persona = Persona {
         name: "Agent".to_owned(),
-        os_user: "agent".to_owned(),
+        os_user: PersonaOsUser::parse("agent-worker").unwrap(),
         extra_service: PersonaService {
-            unit_name: "macro-agent".to_owned(),
+            unit_name: SystemdUnitName::parse("macro-agent").unwrap(),
             exec: "/usr/local/bin/agent".to_owned(),
             env: BTreeMap::new(),
         },
@@ -562,18 +564,24 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
     let id = paid_computer(&operator).await;
     let first_persona = Persona {
         name: "Agent".to_owned(),
-        os_user: "agent".to_owned(),
+        os_user: PersonaOsUser::parse("agent-worker").unwrap(),
         extra_service: PersonaService {
-            unit_name: "macro-agent".to_owned(),
+            unit_name: SystemdUnitName::parse("macro-agent").unwrap(),
             exec: "/usr/local/bin/agent".to_owned(),
-            env: BTreeMap::from([("AGENT_MODE".to_owned(), "hosted".to_owned())]),
+            env: BTreeMap::from([(
+                PersonaConfigKey::parse("AGENT_MODE").unwrap(),
+                "hosted".to_owned(),
+            )]),
         },
         config: BTreeMap::from([
             (
-                "REPO_URL".to_owned(),
+                PersonaConfigKey::parse("REPO_URL").unwrap(),
                 "https://example.com/initial.git".to_owned(),
             ),
-            ("AGENT_ID".to_owned(), "initial-agent".to_owned()),
+            (
+                PersonaConfigKey::parse("AGENT_ID").unwrap(),
+                "initial-agent".to_owned(),
+            ),
         ]),
     };
     operator
@@ -592,10 +600,13 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
     let saved_persona = Persona {
         config: BTreeMap::from([
             (
-                "REPO_URL".to_owned(),
+                PersonaConfigKey::parse("REPO_URL").unwrap(),
                 "https://example.com/saved.git".to_owned(),
             ),
-            ("AGENT_ID".to_owned(), "saved-agent".to_owned()),
+            (
+                PersonaConfigKey::parse("AGENT_ID").unwrap(),
+                "saved-agent".to_owned(),
+            ),
         ]),
         ..first_persona.clone()
     };
@@ -625,12 +636,14 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
     let mut first_persona = first_persona;
     let mut saved_persona = saved_persona;
     for persona in [&mut first_persona, &mut saved_persona] {
-        persona
-            .config
-            .insert("MACRO_COMPUTER_ID".to_owned(), id.to_string());
-        persona
-            .config
-            .insert("MACRO_TEAM_ID".to_owned(), recreated.team_id.to_string());
+        persona.config.insert(
+            PersonaConfigKey::parse("MACRO_COMPUTER_ID").expect("valid config key"),
+            id.to_string(),
+        );
+        persona.config.insert(
+            PersonaConfigKey::parse("MACRO_TEAM_ID").expect("valid config key"),
+            recreated.team_id.to_string(),
+        );
     }
     assert_eq!(first.persona, Some(first_persona));
     assert_eq!(replacement.persona, Some(saved_persona));

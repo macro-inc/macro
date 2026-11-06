@@ -9,6 +9,7 @@ use crate::error::ResultExt;
 
 #[derive(Deserialize)]
 struct DocumentClaims {
+    agent_correlation_id: Option<uuid::Uuid>,
     user_id: Option<String>,
     document_id: String,
     access_level: AccessLevel,
@@ -33,6 +34,7 @@ pub(crate) fn decode_document_token(token: &str, secret: &str) -> worker::Result
         return Err(Error::from("surface grant cannot authorize a document"));
     }
     Ok(AuthToken {
+        agent_correlation_id: claims.agent_correlation_id,
         user_id: claims.user_id,
         document_id: claims.document_id,
         access_level: claims.access_level,
@@ -58,6 +60,7 @@ pub(crate) fn decode_surface_token(
         SurfaceAccessLevel::Owner => AccessLevel::Owner,
     };
     Ok(AuthToken {
+        agent_correlation_id: None,
         user_id: claims.user_id,
         document_id: identity.storage_key(),
         access_level,

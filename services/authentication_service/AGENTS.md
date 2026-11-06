@@ -238,3 +238,5 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   the computer-facing remote while retaining the internal API address for create.
   Brain Anthropic credentials reuse that agent's revocable Macro API key on the
   dedicated `/brain/anthropic` gateway path.
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

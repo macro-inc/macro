@@ -15,7 +15,6 @@ export interface Quote {
   amount: number;
   currency: string;
   interval: BillingInterval;
-  /** Empty for a comped team without a subscription. */
   priceId: string;
   size: ComputerSize;
 }

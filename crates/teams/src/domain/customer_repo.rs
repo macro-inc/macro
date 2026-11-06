@@ -65,7 +65,10 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
 
     /// The Stripe price a seat on `plan` is billed at. Reads configuration
     /// only.
-    fn seat_price_id(&self, plan: SeatPlan) -> Result<String, CustomerError>;
+    fn seat_price_id(
+        &self,
+        plan: SeatPlan,
+    ) -> Result<stripe_price_id::StripePriceId, CustomerError>;
 
     /// What one seat on `plan` costs per billing interval.
     fn seat_quote(

@@ -45,3 +45,5 @@ producers leave both absent.
 ## Related
 
 - Rules: `.agents/rules/rust/security.md`
+
+- SDK JWTs optionally carry signed `agent_correlation_id` and managed-MCP `agent_session_id`; these are attribution, never additional authorization.

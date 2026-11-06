@@ -251,6 +251,53 @@ input ChannelSharePolicyInput {
 }
 
 """
+One batch of clearing the viewer's notification inbox.
+"""
+input ClearNotificationInboxInput {
+	"""
+	Which rows are cleared; the inbox the caller shows.
+	"""
+	scope: NotificationInboxScopeInput
+	"""
+	Clear only unread rows.
+	"""
+	unreadOnly: Boolean
+	"""
+	RFC 3339 time; clear only rows whose newest notification arrived at or
+	after it.
+	"""
+	since: String
+	"""
+	Groups read in this batch; defaults to 100, capped at 200.
+	"""
+	limit: Int
+	"""
+	Opaque cursor from the previous batch's `nextCursor`; absent for the
+	first. Send it with the same scope, filters and `since`.
+	"""
+	cursor: String
+}
+
+"""
+The result of one batch of clearing the inbox.
+"""
+type ClearNotificationInboxPayload {
+	"""
+	How many rows the batch cleared.
+	"""
+	rowCount: Int!
+	"""
+	Opaque token that reverses exactly this batch.
+	"""
+	undoToken: String!
+	"""
+	Send as the next batch's `cursor` to keep clearing; absent once
+	nothing is left.
+	"""
+	nextCursor: String
+}
+
+"""
 Mutation root combining independent domain GraphQL adapters.
 """
 type CompleteMutationRoot {
@@ -438,6 +485,21 @@ type CompleteMutationRoot {
 	are not completed.
 	"""
 	markNotificationInboxRowsDone(input: MarkNotificationInboxRowsDoneInput!): MarkNotificationInboxRowsDonePayload!
+	"""
+	Mark one notification of a row done for the authenticated user, with
+	the hidden notifications about the same message or comment. A row's last
+	shown notification completes the row, as marking the row done does.
+	Returns the row's group's place in the requested inbox.
+	"""
+	markNotificationInboxNotificationDone(input: MarkNotificationInboxNotificationDoneInput!): MarkNotificationInboxNotificationDonePayload!
+	"""
+	Clear the authenticated user's notification inbox one batch at a time:
+	every matching row the batch reads is marked done, its shown and hidden
+	notifications. Email threads are not archived. Repeat with
+	`nextCursor` until it is absent; each batch's undo token reverses that
+	batch.
+	"""
+	clearNotificationInbox(input: ClearNotificationInboxInput!): ClearNotificationInboxPayload!
 	"""
 	Reverse one mark-done for the authenticated user without overwriting
 	anything that happened since, and return the restored groups' places
@@ -10764,6 +10826,38 @@ input MarkEmailThreadUnreadInput {
 	Email thread to mark unread; its inbox determines the UNREAD label.
 	"""
 	threadId: ID!
+}
+
+"""
+Input for marking one notification of a row done.
+"""
+input MarkNotificationInboxNotificationDoneInput {
+	"""
+	The row showing the notification.
+	"""
+	rowId: ID!
+	"""
+	The notification, as the row lists it.
+	"""
+	notificationId: ID!
+	"""
+	The inbox the row's group is placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of marking one notification of a row done.
+"""
+type MarkNotificationInboxNotificationDonePayload {
+	"""
+	The row's group's place in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
+	"""
+	Opaque token that reverses exactly this operation.
+	"""
+	undoToken: String!
 }
 
 """

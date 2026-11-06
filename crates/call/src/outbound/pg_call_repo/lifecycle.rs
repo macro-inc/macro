@@ -196,6 +196,14 @@ impl PgCallRepo {
         .execute(tx.as_mut())
         .await?;
 
+        let channel_thread = sqlx::query_scalar!(
+            r#"SELECT discussion = 'channel_thread' AS "channel_thread!" FROM call_entities WHERE id = $1"#,
+            call_id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?
+        .unwrap_or(false);
+
         // Delete the ephemeral call (cascades to call_participants and call_transcripts).
         sqlx::query!(
             r#"
@@ -215,6 +223,7 @@ impl PgCallRepo {
             duration_ms,
             has_recording,
             participants,
+            channel_thread,
         };
 
         tx.commit().await?;

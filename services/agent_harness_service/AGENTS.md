@@ -275,6 +275,8 @@ bridge hostname, preserving Host validation for other origins.
 The Anthropic brain gateway records hashed agent identity, team/computer IDs,
 validated model, numeric tokens/status and explicit admission category.
 
+- Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.
+
 ## Speech gateway and voice catalog
 
 The computer egress listener proxies `/brain/inference/stt` and

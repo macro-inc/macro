@@ -175,3 +175,5 @@ the existing gateway prefixes.
 
 `MacroOpts.fetch` supplies the HTTP transport for all generated service clients;
 brain tracing uses it to inject W3C context without modifying SDK operations.
+
+- `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.

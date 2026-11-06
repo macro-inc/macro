@@ -113,7 +113,7 @@ async fn a_quote_is_the_size_price_at_the_subscription_interval() {
         quote,
         Quote {
             size: ComputerSize::Standard,
-            price_id: "price_standard_year".into(),
+            price_id: StripePriceId::parse("price_standard_year").unwrap(),
             amount: 20000,
             currency: "usd".into(),
             interval: BillingInterval::Year,
@@ -147,7 +147,7 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
             team_id,
             ComputerSize::Standard,
             &[SubscriptionItem {
-                price_id: "price_pro".into(),
+                price_id: StripePriceId::parse("price_pro").unwrap(),
                 quantity: 2,
             }],
             "computer-1",

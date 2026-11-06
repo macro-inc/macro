@@ -158,17 +158,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         match billing {
             PurchaseBilling::Stripe => Ok(quote?),
             PurchaseBilling::Comped { .. } => {
-                let mut quote = match quote {
-                    Ok(quote) => quote,
-                    Err(BillingError::NoSubscription) => Quote {
-                        size,
-                        price_id: String::new(),
-                        amount: 0,
-                        currency: "usd".to_owned(),
-                        interval: crate::domain::models::BillingInterval::Month,
-                    },
-                    Err(error) => return Err(error.into()),
-                };
+                let mut quote = quote?;
                 quote.amount = 0;
                 Ok(quote)
             }
@@ -633,39 +623,12 @@ fn computer_name(request: &PurchaseRequest) -> Result<String, ComputerError> {
     Ok(name.to_owned())
 }
 
-/// Reject personas the computer could not install: the OS user and unit
-/// name become paths and systemd names on the guest.
+/// Reject empty commands and multiline persona values before purchase.
 pub fn validate_persona(persona: &Persona) -> Result<(), ComputerError> {
-    let reserved_users = ["root", "macro", "macrod"];
-    if !lazy_regex::regex_is_match!(r"^[a-z_][a-z0-9_-]{0,30}$", &persona.os_user)
-        || reserved_users.contains(&persona.os_user.as_str())
-    {
-        return Err(ComputerError::BadRequest(
-            "persona os_user must be a new lowercase Linux user name".to_owned(),
-        ));
-    }
-    if !lazy_regex::regex_is_match!(r"^[A-Za-z0-9_.@-]{1,64}$", &persona.extra_service.unit_name)
-        || persona.extra_service.unit_name.starts_with("macrod")
-    {
-        return Err(ComputerError::BadRequest(
-            "persona unit_name must be a plain systemd unit name".to_owned(),
-        ));
-    }
     if persona.extra_service.exec.trim().is_empty() {
         return Err(ComputerError::BadRequest(
             "persona exec must not be empty".to_owned(),
         ));
-    }
-    let env_keys = persona
-        .config
-        .keys()
-        .chain(persona.extra_service.env.keys());
-    for key in env_keys {
-        if !lazy_regex::regex_is_match!(r"^[A-Za-z_][A-Za-z0-9_]*$", key) {
-            return Err(ComputerError::BadRequest(format!(
-                "persona variable {key:?} is not a valid environment name"
-            )));
-        }
     }
     let values = persona
         .config

@@ -6,11 +6,10 @@ underscore keeps `import-tree` from loading them as flake-parts modules).
 
 | File | Contents |
 | --- | --- |
-| `_nixos/incus-host.nix` | Incus (preseed: ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), control-plane cert trust, box filter/NAT nftables, fallback sshd reverse-tunnel settings, `zfs_arc_max` 8 GiB. |
-| `_nixos/gcp.nix` | GCE guest: guest agent, OS Login, metadata, serial console, admin root key `keys/admin.pub`. |
+| `_nixos/incus-host.nix` | Incus (preseed: ZFS pool `default` on `tank/incus`, bridge `boxbr0` 10.210.0.1/24, profile `macro-box`), control-plane cert trust, box filter/NAT nftables, `zfs_arc_max` 8 GiB. |
+| `_nixos/gcp.nix` | GCE boot modules, MTU, metadata NTP, and serial console. |
 | `_nixos/runtime-dev-1.nix` | Tailscale, control-plane address/ports, hostname, `hostId`, GRUB (UEFI removable + BIOS), disko for `sda` (boot) and `sdb` (zpool `tank`). |
 | `_nixos/certs/control-plane-dev.crt` | Public client cert the dev control plane uses for the Incus API. |
-| `computers-tunnels.sh` | Fallback supervised SSH-over-IAP tunnels. |
 
 ## Hosts
 
@@ -22,54 +21,64 @@ underscore keeps `import-tree` from loading them as flake-parts modules).
 
 ## Access
 
-The control plane uses Tailscale with a pinned Incus server certificate and
-a trusted client certificate. IAP SSH remains the break-glass/admin path:
+The demo uses Wolf's personal tailnet; production must use the company tailnet.
+The control plane uses Tailscale with a pinned Incus server certificate and a
+trusted client certificate. Administration uses Tailscale SSH (`--ssh`) at
+`root@runtime-dev-1` through MagicDNS; no plain sshd or OS Login remains.
+Allow the administrator to SSH as root to `tag:runtime-host` in the tailnet SSH
+policy, and allow the control plane to reach that tag on TCP/8443. Use a
+pre-authorized auth key carrying `tag:runtime-host`. Do not advertise the box
+subnet or accept routes.
+
+Serial console is the break-glass path (serial-getty remains enabled; provision
+recovery credentials separately):
 
 ```sh
-gcloud compute ssh runtime-dev-1 --project macro-435922 --zone us-east4-b --tunnel-through-iap   # OS Login user, sudo
-ssh -o ProxyCommand='gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b' root@runtime-dev-1
+gcloud compute connect-to-serial-port runtime-dev-1 --project macro-435922 --zone us-east4-b
 ```
 
-Recovery: `gcloud compute connect-to-serial-port runtime-dev-1 --project macro-435922 --zone us-east4-b`.
+## Deploy: last IAP use
 
-## Rebuild
+Run from the checkout on the coordinator. This switches the existing host; it
+never runs disko or wipes disks. Copy the key before switching, while the old
+IAP/root-key access is still available. The option
+`macro.runtimeHost.tailscaleAuthKeyFile` defaults to null; this host passes
+`/var/lib/macro/tskey`. It is a string path, never a Nix path or key contents.
+The key stays root-only outside the Nix store, repository, and deploy command line.
 
-```sh
+Use bash for the deploy commands (the SSH option array preserves quoting):
+
+```bash
+iap=( -o 'ProxyCommand=gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b'
+      -o HostKeyAlias=runtime-dev-1
+      -o "UserKnownHostsFile=$HOME/.config/macro-computers/known_hosts" )
+ssh "${iap[@]}" root@runtime-dev-1 'install -d -m 0700 /var/lib/macro; umask 077; cat > /var/lib/macro/tskey; chmod 0600 /var/lib/macro/tskey' < ~/.config/macro/runtime-host-tskey
 export NIX_SSHOPTS="-o ProxyCommand='gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin --project macro-435922 --zone us-east4-b' -o HostKeyAlias=runtime-dev-1 -o UserKnownHostsFile=$HOME/.config/macro-computers/known_hosts"
 nixos-rebuild switch --flake .#runtime-dev-1 --target-host root@runtime-dev-1
+unset NIX_SSHOPTS
+ssh root@runtime-dev-1 'tailscale status; incus config get core.https_address'
 ```
 
-Fresh install (wipes both disks) from a running Linux with root SSH.
-nixos-anywhere splits `--ssh-option` values on spaces, so put the IAP
-command in a wrapper script (`iap-proxy.sh` below just `exec`s
-`gcloud compute start-iap-tunnel runtime-dev-1 22 --listen-on-stdin ...`):
+The switching IAP session may close when sshd stops. Verify the new generation
+via Tailscale SSH before treating the switch as complete. Activation starts
+`tailscaled-autoconnect`, reading the root-only key file at runtime; state
+persists under `/var/lib/tailscale`. Tailscale owns its packet filtering;
+`macro-boxes` still restricts forwarded box traffic independently.
+
+Fresh installation is destructive and needs separate approval. For
+`nixos-anywhere`, prepare a temporary extra-files tree with
+`install -Dm0600 ~/.config/macro/runtime-host-tskey "$extra/var/lib/macro/tskey"`
+and `chmod 0700 "$extra/var/lib/macro"`, then pass `--extra-files "$extra"`.
+Never copy the key into the checkout or use `builtins.readFile` for it.
+
+## Subsequent deploys
+
+MagicDNS resolves `runtime-dev-1` on the tailnet; no IAP proxy is used:
 
 ```sh
-nix run github:nix-community/nixos-anywhere -- --flake .#runtime-dev-1 \
-  --ssh-option ProxyCommand=$PWD/iap-proxy.sh \
-  --ssh-option UserKnownHostsFile=/dev/null --ssh-option StrictHostKeyChecking=no \
-  root@runtime-dev-1
+unset NIX_SSHOPTS
+nixos-rebuild switch --flake .#runtime-dev-1 --target-host root@runtime-dev-1
 ```
-
-Disks are addressed as `/dev/disk/by-id/scsi-0Google_PersistentDisk_<device-name>`;
-the `google-*` links need GCE udev rules the installer lacks.
-`gcp.nix` exempts uid 0 from `pam_oslogin_login`'s account check, which
-otherwise denies every non-OS-Login user, including root.
-
-## Tailscale enrollment
-
-After the first rebuild, use IAP SSH to run this interactively on the runtime:
-
-```sh
-sudo tailscale up --hostname=runtime-dev-1 --accept-routes=false --netfilter-mode=off
-```
-
-Print the login URL and have the tailnet owner approve it in the same personal
-tailnet as the devbox. No auth key belongs in Nix, git, or shell history.
-The node uses hostname `runtime-dev-1`; no ACL tag is required in this personal
-tailnet. The runtime's nftables owns filtering and masquerading, so leave
-Tailscale's netfilter mode off. Do not advertise the box subnet or accept routes.
-The login persists in `/var/lib/tailscale` across rebuilds.
 
 On the devbox, `tailscale ip -4 runtime-dev-1` must return exactly one IPv4
 address. xtask resolves this at stack start and emits
@@ -79,8 +88,9 @@ Compose. Override host-side discovery with `COMPUTERS_INCUS_ADDRESS=<IPv4>`.
 runtime's `macro.computers.controlPlaneAddress` option. These are xtask inputs,
 not service/Doppler secrets.
 
-Incus listens on IPv4 `0.0.0.0:8443` (including loopback for recovery); nftables
-admits that port only from `tailscale0` and `lo`. The client pins certificate
+Incus starts on `127.0.0.1:8443`; `incus-tailnet.service` binds it exclusively
+to the enrolled tailnet IPv4 address. Local tooling uses the Unix socket.
+Nftables admits TCP/8443 only from `tailscale0` and `lo`. The client pins certificate
 bytes, so the tailnet IP/name need not be in the certificate's SANs. The
 existing SHA-256 pin is checked before caching a newly fetched certificate.
 
@@ -121,38 +131,17 @@ From the runtime, check `curl -v http://100.116.73.13:<harness>/health`.
 From the devbox, test Incus with the client identity and pinned certificate
 using the control plane; a TLS SAN mismatch in ordinary curl is expected.
 
-## IAP tunnel fallback
-
-Keep IAP SSH available even after enrollment. Run these on the devbox only
-when diagnosing/recovering the tailnet path; `GCLOUD` can name a binary outside
-PATH. They are no longer required or started by xtask's Incus mode.
-
-```sh
-nix/hosts/computers-tunnels.sh incus               # https://localhost:18443 -> Incus API
-nix/hosts/computers-tunnels.sh reverse 4000 4001   # boxes -> 10.210.0.1:<port> -> devbox localhost:<port>
-nix/hosts/computers-tunnels.sh all 4000 4001       # both
-```
-
-Reverse ports come from the local stack's
-`infra/local/generated/<instance>/portmap.json`. The supervisor refreshes
-`@tunnel_ports`; entries expire 90 s after it stops. This is a manual transport
-fallback: an existing tailnet-configured stack does not automatically switch to
-it. For a manual recovery client, use `https://localhost:18443` and override box
-service URLs to `http://10.210.0.1:<host port>`; Compose containers need their own
-explicit route/relay to that host-local endpoint.
-
-Check the fallback tunnel (diagnostic only; the control plane still pins TLS):
-
-```sh
-curl -sk --cert ~/.config/macro-computers/dev-client.crt --key ~/.config/macro-computers/dev-client.key \
-  https://localhost:18443/1.0 | jq .metadata.auth   # "trusted"
-```
-
 ## Control-plane client cert
 
 - Private key and cert: `~/.config/macro-computers/dev-client.{key,crt}` on the devbox (never in git).
 - Public cert in the repo: `_nixos/certs/control-plane-dev.crt`; `incus-trust-control-plane.service` adds it to the Incus trust store at boot.
 - Rotate: generate a new pair, replace the repo cert, rebuild, then remove the old one with `incus config trust remove <fingerprint>`.
+
+## Configuration formats
+
+Use NixOS structured options for host config (including Incus preseed, sysctl,
+networking, and systemd). The `macro-boxes` filter and `macro-boxes-nat` rules
+remain nftables text because nixpkgs has no nftables ruleset format generator.
 
 ## Box network policy
 
@@ -167,7 +156,7 @@ window (20000–31999). The fixed default-stack ports are 8080, 8086, 8101, 8102
 8111 (agent git), and 8112 (computer gateway); custom `--port-base` values need
 an explicit option update.
 Replies are stateful; unsolicited inbound to boxes is dropped. Boxes cannot
-reach the host except DNS/DHCP and fallback `@tunnel_ports` on 10.210.0.1.
+reach the host except DNS/DHCP on 10.210.0.1.
 Box-to-box traffic on the bridge is layer 2 and not filtered.
 
 Stateful stop of a VM needs room for its memory on the root volume: set

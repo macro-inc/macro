@@ -1,11 +1,14 @@
 //! Domain models for team agents.
 
-use std::collections::BTreeMap;
-
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+pub use hosted_runtimes::domain::enrollment::{
+    Persona, PersonaConfigKey, PersonaOsUser, PersonaService, SystemdUnitName,
+};
+pub use stripe_price_id::StripePriceId;
 
 pub use super::mail::{MailMessageId, MailThreadId, MailboxId};
 
@@ -188,7 +191,7 @@ pub struct ComputerQuote {
     /// Disk capacity in GB, from the computer size catalog.
     pub disk_gb: u32,
     /// The computer's Stripe price.
-    pub price_id: String,
+    pub price_id: StripePriceId,
     /// Price per interval, in the currency's smallest unit.
     pub amount: i64,
     /// ISO currency code, lowercase.
@@ -203,48 +206,9 @@ pub struct ComputerQuote {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubscriptionItem {
     /// Stripe price.
-    pub price_id: String,
+    pub price_id: StripePriceId,
     /// Added to the item's current quantity.
     pub quantity: u32,
-}
-
-/// The long-lived service a persona runs next to macrod
-/// (`hosted_runtimes::PersonaService`).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PersonaService {
-    /// systemd unit name, without the `.service` suffix.
-    pub unit_name: String,
-    /// `ExecStart` command line, run as the persona's OS user.
-    pub exec: String,
-    /// Extra `Environment=` values, on top of the persona's environment file.
-    pub env: BTreeMap<String, String>,
-}
-
-/// Who a computer runs for: an OS user, its service, and the values written
-/// to `/etc/macro/personas/<os_user>.env`, the unit's `EnvironmentFile`
-/// (`hosted_runtimes::Persona`).
-#[derive(Clone, PartialEq, Eq)]
-pub struct Persona {
-    /// Display name.
-    pub name: String,
-    /// OS user the service runs as.
-    pub os_user: String,
-    /// The service.
-    pub extra_service: PersonaService,
-    /// Config drive values. Carries the agent's bootstrap credentials.
-    pub config: BTreeMap<String, String>,
-}
-
-impl std::fmt::Debug for Persona {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("Persona")
-            .field("name", &self.name)
-            .field("os_user", &self.os_user)
-            .field("extra_service", &self.extra_service)
-            .field("config_keys", &self.config.keys().collect::<Vec<_>>())
-            .finish()
-    }
 }
 
 /// A computer to buy for a team (`hosted_runtimes::PurchaseRequest`).

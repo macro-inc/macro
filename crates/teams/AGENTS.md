@@ -72,6 +72,10 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- Agent seat quotes and deferred seat items carry the shared
+  `stripe_price_id::StripePriceId`; validate configured seat prices before
+  returning deferred items or requesting a provider quote.
+
 - A trialing subscription that gains its first Max seat ends the trial and
   starts a new billing cycle immediately. Every other seat change keeps the
   trial, including on a subscription already trialing on Max, so its scheduled
