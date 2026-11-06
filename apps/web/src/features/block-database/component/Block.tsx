@@ -452,6 +452,7 @@ const Block: Component = () => {
                           </Show>
                           <DatabaseGrid
                             host="block"
+                            schema="opened"
                             databaseId={databaseId}
                             table={table()}
                             canEdit={canEdit() && !activeCreation()}
