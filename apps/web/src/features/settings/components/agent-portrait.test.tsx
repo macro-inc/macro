@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AgentPortrait } from './agent-portrait';
@@ -8,7 +14,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('debounces the first portrait, uses current profile and never regenerates for draft edits', async () => {
+it('generates only on click using the current profile and leaves draft edits alone', async () => {
   vi.useFakeTimers();
   const generate = vi
     .fn()
@@ -33,7 +39,11 @@ it('debounces the first portrait, uses current profile and never regenerates for
   await vi.advanceTimersByTimeAsync(700);
   expect(generate).not.toHaveBeenCalled();
   setRole('Designer');
-  await vi.advanceTimersByTimeAsync(300);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(generate).not.toHaveBeenCalled();
+  expect(screen.queryByRole('status')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Generate portrait' }));
+  await Promise.resolve();
   expect(generate).toHaveBeenCalledExactlyOnceWith({
     name: 'Assistant',
     role: 'Designer',
@@ -78,7 +88,7 @@ it('keeps an uploaded photo and ignores a generated result for an old name', asy
       source={{ generate, upload }}
     />
   ));
-  await vi.advanceTimersByTimeAsync(1000);
+  fireEvent.click(screen.getByRole('button', { name: 'Generate portrait' }));
   setName('Different');
   finish('https://static.example/old.png');
   await Promise.resolve();
@@ -99,7 +109,7 @@ it('keeps an uploaded photo and ignores a generated result for an old name', asy
   expect(generate).toHaveBeenCalledTimes(1);
 });
 
-it('cancels the scheduled request after a manual generation or upload', async () => {
+it('uploads without triggering generation', async () => {
   vi.useFakeTimers();
   const generate = vi
     .fn()
@@ -118,7 +128,7 @@ it('cancels the scheduled request after a manual generation or upload', async ()
       source={{ generate, upload }}
     />
   ));
-  fireEvent.click(screen.getByRole('button', { name: 'Generate another' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Generate portrait' }));
   await vi.advanceTimersByTimeAsync(1200);
   expect(generate).toHaveBeenCalledTimes(1);
   cleanup();
@@ -146,4 +156,39 @@ it('cancels the scheduled request after a manual generation or upload', async ()
   expect(screen.getByRole('img').getAttribute('src')).toBe(
     'https://static.example/upload.png'
   );
+});
+
+it('keeps the previous portrait after failure and offers explicit Retry', async () => {
+  const generate = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('Generation failed'))
+    .mockResolvedValueOnce('https://static.example/retry.png');
+  const [avatar, setAvatar] = createSignal(
+    'https://static.example/previous.png'
+  );
+  render(() => (
+    <AgentPortrait
+      name="Assistant"
+      role="Engineer"
+      personality="Calm"
+      avatar={avatar()}
+      onChange={setAvatar}
+      onPendingChange={() => {}}
+      source={{ generate, upload: vi.fn() }}
+    />
+  ));
+  expect(generate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Generate portrait' }));
+  await screen.findByRole('alert');
+  expect(screen.getByRole('img').getAttribute('src')).toBe(
+    'https://static.example/previous.png'
+  );
+  expect(generate).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() =>
+    expect(screen.getByRole('img').getAttribute('src')).toBe(
+      'https://static.example/retry.png'
+    )
+  );
+  expect(generate).toHaveBeenCalledTimes(2);
 });

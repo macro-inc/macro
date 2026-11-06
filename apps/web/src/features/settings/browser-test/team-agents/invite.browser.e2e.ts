@@ -231,7 +231,7 @@ test('requires a fresh review before billing when included eligibility changes',
   await expect(page.getByText('Purchases: 1')).toBeVisible();
 });
 
-test('debounces portrait creation, regenerates deliberately and saves uploads', async ({
+test('generates portraits only on explicit request and saves uploads', async ({
   page,
 }) => {
   await page.goto('/');
@@ -242,6 +242,12 @@ test('debounces portrait creation, regenerates deliberately and saves uploads', 
   await expect(
     page.getByText('Portrait generations: 0', { exact: true })
   ).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Agent portrait' })).toHaveCount(
+    0
+  );
+  await page
+    .getByRole('button', { name: 'Generate portrait', exact: true })
+    .click();
   await expect(page.getByRole('img', { name: 'Agent portrait' })).toBeVisible();
   await expect(
     page.getByText('Portrait generations: 1', { exact: true })
@@ -320,15 +326,15 @@ test('portrait failure offers an explicit retry without discarding profile field
   await page.goto('/?portrait-error');
   await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill('Assistant');
-  await expect(
-    page.getByRole('status', { name: 'Generating agent photo' })
-  ).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Generate portrait', exact: true })
+    .click();
   await page.getByLabel('Role / job description').fill('Maintain projects');
   await page.getByLabel('Personality').fill('Concise');
   await expect(page.getByRole('alert')).toContainText(
     "Couldn't prepare the photo"
   );
-  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('img', { name: 'Agent portrait' })).toBeVisible();
   await expect(
     page.getByText('Portrait generations: 2', { exact: true })

@@ -5,6 +5,7 @@ export default {
   generatingPhoto: 'Generating agent photo',
   portrait: 'Agent portrait',
   fictionalFace: "A fictional face, generated from your agent's profile.",
+  generatePortrait: 'Generate portrait',
   generateAnother: 'Generate another',
   uploadPhoto: 'Upload photo',
   uploadAgentPhoto: 'Upload agent photo',

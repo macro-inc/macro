@@ -1329,8 +1329,8 @@ Agent self-service and the separate Runtimes rollout keep their existing gates.
 
 Use the shared `Dialog` and `Panel` header/body/footer for agent invitations,
 including the standard phone sheet. `AgentPortrait` generates a fictional face
-once after a debounced name entry, supports regeneration and the existing avatar
-uploader, and stores the selected static-file URL; keep prompts and profiles out
+only on Generate portrait, then offers Generate another; typing never starts a
+request. Preserve the existing avatar uploader and selected static-file URL; keep prompts and profiles out
 of telemetry attributes. Keep the face beside the identity fields at the top;
 show a shimmer while a named portrait is pending and an inline retry on failure.
 Render setup as compact five-step progress from server

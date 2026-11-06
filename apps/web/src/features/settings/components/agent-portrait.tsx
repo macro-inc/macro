@@ -1,17 +1,8 @@
 import { t } from '@app/lib/i18n';
-import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import UserIcon from '@icon/system/regular/user.svg';
 import { Button, Spinner } from '@ui';
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  on,
-  onCleanup,
-  Show,
-  untrack,
-} from 'solid-js';
+import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 
 export type AgentPortraitSource = {
   generate(profile: {
@@ -38,7 +29,7 @@ export function AgentPortrait(props: {
   >();
   let revision = 0;
   let disposed = false;
-  let generated = false;
+  const [generated, setGenerated] = createSignal(false);
   let picker: HTMLInputElement | undefined;
   onCleanup(() => {
     disposed = true;
@@ -71,9 +62,8 @@ export function AgentPortrait(props: {
     }
   };
   const generate = () => {
-    scheduleGeneration.clear();
     if (!props.name.trim() || pending()) return;
-    generated = true;
+    setGenerated(true);
     const profile = {
       name: props.name.trim(),
       role: props.role.trim(),
@@ -84,28 +74,11 @@ export function AgentPortrait(props: {
       'team-agent.portrait.generate'
     );
   };
-  const scheduleGeneration = debounce(generate, 1000);
-  onCleanup(() => scheduleGeneration.clear());
-  createEffect(
-    on(
-      () => props.name.trim(),
-      (name) => {
-        scheduleGeneration.clear();
-        if (!name || generated || untrack(() => !!props.avatar)) {
-          props.onPendingChange(untrack(pending));
-          return;
-        }
-        props.onPendingChange(true);
-        scheduleGeneration();
-      }
-    )
-  );
   const errorText = () => {
     const key = error();
     return key ? t(key) : undefined;
   };
-  const waitingForPhoto = () =>
-    pending() || (!!props.name.trim() && !props.avatar && !error());
+  const waitingForPhoto = pending;
 
   return (
     <div class="space-y-2">
@@ -148,7 +121,9 @@ export function AgentPortrait(props: {
           disabled={pending() || !props.name.trim()}
           onClick={generate}
         >
-          {t('agentInvite.generateAnother')}
+          {generated()
+            ? t('agentInvite.generateAnother')
+            : t('agentInvite.generatePortrait')}
         </Button>
         <Button
           variant="secondary"
@@ -169,8 +144,6 @@ export function AgentPortrait(props: {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = '';
           if (!file) return;
-          scheduleGeneration.clear();
-          generated = true;
           fireAndForget(
             save(() => props.source.upload(file)),
             'team-agent.portrait.upload'
@@ -194,7 +167,7 @@ export function AgentPortrait(props: {
             disabled={pending() || !props.name.trim()}
             onClick={generate}
           >
-            {t('agentInvite.tryAgain')}
+            {t('common.retry')}
           </Button>
         </div>
       </Show>

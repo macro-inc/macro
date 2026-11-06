@@ -281,10 +281,12 @@ shows **Included for Macro**, with no currency charge.
    a paid plan). Specs wrap only between complete items on narrow phones, and
    computer prices align with the size titles. Specs come from the size catalog
    (Standard: 4 vCPUs, 8 GB RAM, 100 GB disk).
-   A fictional photographic portrait generates once after the name has been idle
-   for a second, using the role and personality entered so far. The face sits beside
-   Name and Role at the top of the form, with a shimmer while generation waits
-   and an inline retry action after a failure. **Generate another**
+   A fictional photographic portrait is generated only after choosing
+   **Generate portrait**, using the current name, role, and personality.
+   Typing or changing the profile never starts generation. The face sits beside
+   Name and Role at the top of the form, with a shimmer only while a request is
+   running. A failure keeps the previous portrait or placeholder and shows an
+   inline error with **Retry**. After the first request, **Generate another**
    uses the current profile; **Upload photo** uses the existing avatar uploader.
    Both store a permanent static-file URL. Generation uses the same metered
    image-generation service as the AI tool. A failure leaves both actions available.
