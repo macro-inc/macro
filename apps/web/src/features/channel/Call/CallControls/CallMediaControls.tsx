@@ -1,5 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { BlurIcon } from '@core/component/media/media-background-picker';
+import { BackgroundPreview } from '@core/component/media/media-background-picker';
 import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker';
 import {
   RecentBackgroundImages,
@@ -8,7 +8,6 @@ import {
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Prohibit from '@icon/system/regular/prohibit.svg';
 import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import type { CallState } from '../CallContext';
@@ -260,7 +259,7 @@ export function CallMediaControls(props: {
                     label="None"
                     disabled={backgroundDisabled()}
                   >
-                    <Prohibit class="size-4" />
+                    <BackgroundPreview />
                   </BackgroundTile>
                   <BackgroundTile
                     value="light"
@@ -268,7 +267,7 @@ export function CallMediaControls(props: {
                     caption="Light"
                     disabled={backgroundDisabled()}
                   >
-                    <BlurIcon />
+                    <BackgroundPreview blur={2} />
                   </BackgroundTile>
                   <BackgroundTile
                     value="heavy"
@@ -276,7 +275,7 @@ export function CallMediaControls(props: {
                     caption="Strong"
                     disabled={backgroundDisabled()}
                   >
-                    <BlurIcon strong />
+                    <BackgroundPreview blur={5} />
                   </BackgroundTile>
                 </Dropdown.RadioGroup>
               </div>
@@ -347,17 +346,28 @@ export function CallMediaControls(props: {
             </div>
             <div>
               <MobileDrawer.Label>Background</MobileDrawer.Label>
-              <MobileDrawer.Section role="radiogroup" aria-label="Background">
+              <MobileDrawer.Section
+                role="radiogroup"
+                aria-label="Background"
+                class="grid grid-cols-3 gap-2 p-2"
+              >
                 <For
                   each={[
-                    { value: 'none', label: 'None' },
-                    { value: 'light', label: 'Light blur' },
-                    { value: 'heavy', label: 'Strong blur' },
+                    { value: 'none', label: 'None', blur: 0 },
+                    { value: 'light', label: 'Light', blur: 2 },
+                    { value: 'heavy', label: 'Strong', blur: 5 },
                   ]}
                 >
                   {(option) => (
                     <MobileDrawer.Item
                       role="radio"
+                      class="group flex-col gap-1 p-0 text-center text-xs"
+                      data-checked={
+                        backgroundChoice(call.backgroundEffect()) ===
+                        option.value
+                          ? ''
+                          : undefined
+                      }
                       aria-checked={
                         backgroundChoice(call.backgroundEffect()) ===
                         option.value
@@ -370,13 +380,8 @@ export function CallMediaControls(props: {
                         )
                       }
                     >
-                      <span class="flex-1">{option.label}</span>
-                      <SingleSelectCheck
-                        active={
-                          backgroundChoice(call.backgroundEffect()) ===
-                          option.value
-                        }
-                      />
+                      <BackgroundPreview blur={option.blur} />
+                      <span>{option.label}</span>
                     </MobileDrawer.Item>
                   )}
                 </For>
@@ -458,7 +463,7 @@ function BackgroundTile(props: {
     <Dropdown.RadioItem
       value={props.value}
       disabled={props.disabled}
-      class="aspect-[4/3] flex-col justify-center gap-1 border border-edge-muted p-1 text-center text-xs text-ink-muted data-checked:overlay-active data-checked:text-ink"
+      class="group flex-col justify-center gap-1 p-0 text-center text-xs text-ink-muted data-checked:text-ink"
     >
       {props.children}
       <Dropdown.ItemLabel class="sr-only">{props.label}</Dropdown.ItemLabel>

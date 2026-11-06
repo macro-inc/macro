@@ -294,7 +294,8 @@ preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
 off and back on; when no effect has been selected, it enables Strong blur.
 Backgrounds use a simple menu with None, Light blur, Strong blur, and image upload
-(JPG, PNG, or WebP, up to 10 MB). Dot icons distinguish the two blur strengths.
+(JPG, PNG, or WebP, up to 10 MB). None, Light and Strong show the same room
+illustration, with only the room blurred and the person kept sharp.
 Background pickers share five device-local recent uploaded images. Selecting one
 moves it first; hover/focus Remove or press Delete/Backspace to remove an inactive
 image. The current image cannot be removed. Uploads stay usable if optional
