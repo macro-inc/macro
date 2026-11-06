@@ -2502,8 +2502,9 @@ Invalid drafts remain editable; navigation opens the first draft needing attenti
 
 Each saved change to a review (presentation, edits, decisions, finished sends)
 logs a `_macro/review_updated` frame in its session, so in the session view the
-card refetches only when a newer revision is announced and statuses set by the
-agent or another editor appear in place. Cards shown outside the session view
+card refetches only when a newer revision is announced, and statuses and drafts
+set by the agent or another editor appear in place. A card with unsaved local
+edits keeps them and offers **Reload saved review** instead. Cards shown outside the session view
 (DM and channel activity) still poll while the review is preparing or has
 pending drafts. A fetch that returns the card's own in-flight save is not a
 conflict and leaves the editor focused.
