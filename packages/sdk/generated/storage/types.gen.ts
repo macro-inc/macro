@@ -14221,6 +14221,343 @@ export type Params = {
 export type ParticipantRole = 'owner' | 'admin' | 'member';
 
 /**
+ * Only fixed event names enter the audit index.
+ */
+export type PasswordAction = 'create' | 'update' | 'delete' | 'reveal' | 'copy' | 'share' | 'totp_setup' | 'totp_remove' | 'totp_code';
+
+/**
+ * Bounded audit entry, correlated by opaque item/event IDs.
+ */
+export type PasswordActivity = {
+    /**
+     * Fixed operation category; never derived from secret contents.
+     */
+    action: PasswordAction;
+    /**
+     * Identity of this resource within its team.
+     */
+    id: string;
+    /**
+     * Item associated with this activity.
+     */
+    itemId: PasswordItemId;
+    /**
+     * Time this activity was recorded.
+     */
+    occurredAt: string;
+    /**
+     * Authenticated Macro user identity; never a provider credential.
+     */
+    userId: string;
+};
+
+/**
+ * Folder names are metadata only.
+ */
+export type PasswordFolder = {
+    /**
+     * Identity of this resource within its team.
+     */
+    id: string;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    /**
+     * Team namespace and authorization boundary.
+     */
+    teamId: PasswordTeamId;
+};
+
+/**
+ * Validated folder display-name request.
+ */
+export type PasswordFolderBody = {
+    /**
+     * Folder display name.
+     */
+    name: string;
+};
+
+/**
+ * Explicit grant within a team vault.
+ */
+export type PasswordGrant = {
+    /**
+     * Identity of this resource within its team.
+     */
+    id: string;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordGranteeKind;
+    /**
+     * Maximum capability granted to the named recipient.
+     */
+    permission: PasswordPermission;
+};
+
+/**
+ * Future principals can extend this without exposing agent controls in v1.
+ */
+export type PasswordGranteeKind = 'user' | 'team';
+
+/**
+ * Vault item identity, UUIDv7 for new items.
+ */
+export type PasswordItemId = string;
+
+/**
+ * Product template. Values use the same protected representation for every template.
+ */
+export type PasswordItemKind = 'login' | 'card' | 'note' | 'identity' | 'api';
+
+/**
+ * Searchable display fields, without any credential values.
+ */
+export type PasswordItemMetadata = {
+    /**
+     * Resource creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Whether the item is marked as a favorite.
+     */
+    favorite: boolean;
+    /**
+     * Optional folder belonging to this same team.
+     */
+    folderId?: string | null;
+    /**
+     * Whether the item has an enrolled verification-code seed.
+     */
+    hasTotp: boolean;
+    /**
+     * Identity of this resource within its team.
+     */
+    id: PasswordItemId;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Most recent protected disclosure timestamp, when available.
+     */
+    lastUsedAt?: string | null;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    /**
+     * Whether the item currently has explicit grants.
+     */
+    shared: boolean;
+    /**
+     * Team namespace and authorization boundary.
+     */
+    teamId: PasswordTeamId;
+    /**
+     * Most recent metadata modification timestamp.
+     */
+    updatedAt: string;
+    url?: null | PasswordLoginUrl;
+    /**
+     * Committed provider value version.
+     */
+    version: number;
+};
+
+/**
+ * A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.
+ */
+export type PasswordLoginUrl = string;
+
+/**
+ * A metadata-only change never reads or writes a secret value.
+ */
+export type PasswordPatchItem = {
+    /**
+     * Version observed by the editor; absent only for creation.
+     */
+    expectedVersion: number;
+    /**
+     * Whether the item is marked as a favorite.
+     */
+    favorite: boolean;
+    /**
+     * Optional folder belonging to this same team.
+     */
+    folderId?: string | null;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    url?: null | PasswordLoginUrl;
+};
+
+/**
+ * Grant capability.
+ */
+export type PasswordPermission = 'view' | 'edit';
+
+/**
+ * Explicit historical version selection for protected disclosure.
+ */
+export type PasswordRevealBody = {
+    /**
+     * Requested historic version, or the currently committed version.
+     */
+    version?: number | null;
+};
+
+/**
+ * Secret response used only by explicit reveal/copy routes.
+ */
+export type PasswordRevealed = {
+    /**
+     * Private payload; never serialize into the metadata repository.
+     */
+    values: PasswordSecretValues;
+    /**
+     * Committed provider value version.
+     */
+    version: number;
+};
+
+/**
+ * One private custom field.
+ */
+export type PasswordSecretField = {
+    /**
+     * Private field label, stored alongside its value in OpenBao.
+     */
+    label: string;
+    /**
+     * Private field content.
+     */
+    value: PasswordSecretString;
+};
+
+/**
+ * Owned sensitive text. Deliberately does not implement Debug or Display.
+ */
+export type PasswordSecretString = string;
+
+/**
+ * Secret payload; never persisted in the metadata database or traced.
+ */
+export type PasswordSecretValues = {
+    /**
+     * Additional private fields, including their labels.
+     */
+    fields: Array<PasswordSecretField>;
+    /**
+     * Private free-form notes, stored only by the secret provider.
+     */
+    notes: PasswordSecretString;
+    /**
+     * Private credential, zeroized when the owned buffer is dropped.
+     */
+    password: PasswordSecretString;
+    /**
+     * Private account identifier, disclosed only through protected value reads.
+     */
+    username: PasswordSecretString;
+};
+
+/**
+ * Owner-requested replacement of the explicit grant set.
+ */
+export type PasswordShareBody = {
+    /**
+     * Complete desired recipient set; an empty list revokes sharing.
+     */
+    grants: Array<PasswordGrant>;
+};
+
+/**
+ * Team isolation boundary.
+ */
+export type PasswordTeamId = string;
+
+/**
+ * Private seed submitted only to the verification-code provider.
+ */
+export type PasswordTotpBody = {
+    /**
+     * Confidential base32 verification-code seed.
+     */
+    key: PasswordSecretString;
+};
+
+/**
+ * Current TOTP output is confidential, just like a password.
+ */
+export type PasswordTotpCode = {
+    /**
+     * Current confidential verification code.
+     */
+    code: PasswordSecretString;
+    /**
+     * Verification-code period in seconds.
+     */
+    period: number;
+};
+
+/**
+ * Immutable provider version metadata, without historic values.
+ */
+export type PasswordVersion = {
+    /**
+     * Resource creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Committed provider value version.
+     */
+    version: number;
+};
+
+/**
+ * Mutation without provider-specific representations.
+ */
+export type PasswordWriteItem = {
+    /**
+     * Version observed by the editor; absent only for creation.
+     */
+    expectedVersion?: number | null;
+    /**
+     * Whether the item is marked as a favorite.
+     */
+    favorite: boolean;
+    /**
+     * Optional folder belonging to this same team.
+     */
+    folderId?: string | null;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    /**
+     * UUIDv7 identifying one logical save across uncertain retries.
+     */
+    operationId: string;
+    url?: null | PasswordLoginUrl;
+    /**
+     * Private payload; never serialize into the metadata repository.
+     */
+    values: PasswordSecretValues;
+};
+
+/**
  * Request to change part of a persisted agent's instructions or settings.
  *
  * Every field is optional; an absent field keeps the agent's current value.
@@ -30279,6 +30616,402 @@ export type EntityMessageTypingResponses = {
 };
 
 export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
+
+export type PasswordsTeamsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/passwords/teams';
+};
+
+export type PasswordsTeamsResponses = {
+    200: Array<PasswordTeamId>;
+};
+
+export type PasswordsTeamsResponse = PasswordsTeamsResponses[keyof PasswordsTeamsResponses];
+
+export type PasswordsFoldersData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders';
+};
+
+export type PasswordsFoldersResponses = {
+    200: Array<PasswordFolder>;
+};
+
+export type PasswordsFoldersResponse = PasswordsFoldersResponses[keyof PasswordsFoldersResponses];
+
+export type PasswordsCreateFolderData = {
+    body: PasswordFolderBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders';
+};
+
+export type PasswordsCreateFolderResponses = {
+    200: PasswordFolder;
+};
+
+export type PasswordsCreateFolderResponse = PasswordsCreateFolderResponses[keyof PasswordsCreateFolderResponses];
+
+export type PasswordsRemoveFolderData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        folder: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders/{folder}';
+};
+
+export type PasswordsRemoveFolderResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveFolderResponse = PasswordsRemoveFolderResponses[keyof PasswordsRemoveFolderResponses];
+
+export type PasswordsRenameFolderData = {
+    body: PasswordFolderBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        folder: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders/{folder}';
+};
+
+export type PasswordsRenameFolderResponses = {
+    200: PasswordFolder;
+};
+
+export type PasswordsRenameFolderResponse = PasswordsRenameFolderResponses[keyof PasswordsRenameFolderResponses];
+
+export type PasswordsListData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Optional metadata search text; never a value search.
+         */
+        search?: string | null;
+    };
+    url: '/passwords/teams/{team}/items';
+};
+
+export type PasswordsListResponses = {
+    200: Array<PasswordItemMetadata>;
+};
+
+export type PasswordsListResponse = PasswordsListResponses[keyof PasswordsListResponses];
+
+export type PasswordsCreateData = {
+    body: PasswordWriteItem;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items';
+};
+
+export type PasswordsCreateResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsCreateResponse = PasswordsCreateResponses[keyof PasswordsCreateResponses];
+
+export type PasswordsRemoveData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsRemoveResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveResponse = PasswordsRemoveResponses[keyof PasswordsRemoveResponses];
+
+export type PasswordsDetailData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsDetailResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsDetailResponse = PasswordsDetailResponses[keyof PasswordsDetailResponses];
+
+export type PasswordsPatchData = {
+    body: PasswordPatchItem;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsPatchResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsPatchResponse = PasswordsPatchResponses[keyof PasswordsPatchResponses];
+
+export type PasswordsUpdateData = {
+    body: PasswordWriteItem;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsUpdateResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsUpdateResponse = PasswordsUpdateResponses[keyof PasswordsUpdateResponses];
+
+export type PasswordsActivityData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/activity';
+};
+
+export type PasswordsActivityResponses = {
+    200: Array<PasswordActivity>;
+};
+
+export type PasswordsActivityResponse = PasswordsActivityResponses[keyof PasswordsActivityResponses];
+
+export type PasswordsCopyData = {
+    body: PasswordRevealBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/copy';
+};
+
+export type PasswordsCopyResponses = {
+    200: PasswordRevealed;
+};
+
+export type PasswordsCopyResponse = PasswordsCopyResponses[keyof PasswordsCopyResponses];
+
+export type PasswordsHistoryData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/history';
+};
+
+export type PasswordsHistoryResponses = {
+    200: Array<PasswordVersion>;
+};
+
+export type PasswordsHistoryResponse = PasswordsHistoryResponses[keyof PasswordsHistoryResponses];
+
+export type PasswordsRevealData = {
+    body: PasswordRevealBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/reveal';
+};
+
+export type PasswordsRevealResponses = {
+    200: PasswordRevealed;
+};
+
+export type PasswordsRevealResponse = PasswordsRevealResponses[keyof PasswordsRevealResponses];
+
+export type PasswordsGrantsData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/share';
+};
+
+export type PasswordsGrantsResponses = {
+    200: Array<PasswordGrant>;
+};
+
+export type PasswordsGrantsResponse = PasswordsGrantsResponses[keyof PasswordsGrantsResponses];
+
+export type PasswordsShareData = {
+    body: PasswordShareBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/share';
+};
+
+export type PasswordsShareResponses = {
+    204: void;
+};
+
+export type PasswordsShareResponse = PasswordsShareResponses[keyof PasswordsShareResponses];
+
+export type PasswordsRemoveTotpData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/totp';
+};
+
+export type PasswordsRemoveTotpResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveTotpResponse = PasswordsRemoveTotpResponses[keyof PasswordsRemoveTotpResponses];
+
+export type PasswordsSetTotpData = {
+    body: PasswordTotpBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/totp';
+};
+
+export type PasswordsSetTotpResponses = {
+    204: void;
+};
+
+export type PasswordsSetTotpResponse = PasswordsSetTotpResponses[keyof PasswordsSetTotpResponses];
+
+export type PasswordsTotpData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/totp/code';
+};
+
+export type PasswordsTotpResponses = {
+    200: PasswordTotpCode;
+};
+
+export type PasswordsTotpResponse = PasswordsTotpResponses[keyof PasswordsTotpResponses];
 
 export type GetPinsHandlerData = {
     body?: never;

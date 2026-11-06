@@ -1262,3 +1262,12 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   dynamic object spread); a spread makes a selection change revisit every
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
+
+### Passwords
+
+The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
+source. Keep secret values outside query caches and browser storage; reveal, copy
+and history remain explicitly gated by server reauthentication. The responsive
+vault fixture is exercised with
+`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
+See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

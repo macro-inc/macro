@@ -10,7 +10,7 @@
 //! enforced at the exact moment reqwest is about to connect — no window for
 //! the answer to change between check and use.
 //!
-//! [`assert_not_internal`]: super::assert_not_internal
+//! [`assert_not_internal`]: super::remote_image::assert_not_internal
 
 use std::net::SocketAddr;
 

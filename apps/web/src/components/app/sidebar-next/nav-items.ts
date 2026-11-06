@@ -25,6 +25,7 @@ import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PasswordIcon from '@icon/system/regular/lock.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
@@ -84,6 +85,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: BellFillIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.notifications,
+  },
+  {
+    id: 'passwords',
+    get label() {
+      return t('passwords.title');
+    },
+    href: '/passwords',
+    icon: PasswordIcon,
+    iconActive: PasswordIcon,
   },
   {
     id: 'documents',
@@ -225,6 +235,7 @@ export type NavItemGates = {
   showReviews: boolean;
   showActivity: boolean;
   showExternal: boolean;
+  showPasswords: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -241,6 +252,7 @@ export const isNavItemAvailable = (
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
+  if (item.id === 'passwords') return gates.showPasswords;
   if (item.id === 'external') return gates.showExternal;
   return true;
 };

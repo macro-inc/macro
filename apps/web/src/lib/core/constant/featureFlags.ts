@@ -1059,3 +1059,9 @@ export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
 });
+
+export const enablePasswords = defineFlag({
+  key: 'enable-passwords',
+  env: 'ENABLE_PASSWORDS',
+  default: onInDev,
+});
