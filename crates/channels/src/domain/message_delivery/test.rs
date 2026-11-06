@@ -178,6 +178,7 @@ fn repo() -> MockChannelRepo {
 
 fn message() -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::from_u128(1),
         parent: MessageParent::Channel(CHANNEL),
         thread_id: None,

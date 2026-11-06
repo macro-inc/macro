@@ -1,6 +1,3 @@
-import type { EntityData } from '@entity';
-import { getChannelNotificationParams } from '@notifications/notification-navigation';
-import type { UnifiedNotification } from '@notifications/types';
 import { attentionFeedSoupItem } from '@queries/attention-feed/attention-feed-entity';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type {
@@ -11,7 +8,6 @@ import type {
 import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { match } from 'ts-pattern';
 import type {
-  InboxRowContent,
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
@@ -113,60 +109,23 @@ export function encodeInboxScope(
 }
 
 /**
- * The entity one row opens: it carries only the row's notifications, and a
- * channel row names the message its newest notification is about, since a
- * thread row's channel entity would otherwise open at the channel's latest.
- */
-function rowEntity(
-  entity: EntityData,
-  notifications: UnifiedNotification[]
-): InboxRowContent['entity'] {
-  const read = () => notifications;
-  const [newest] = notifications;
-  if (!newest || entity.type !== 'channel') {
-    return { ...entity, notifications: read };
-  }
-  const { messageId, threadId } = getChannelNotificationParams(newest);
-  return messageId
-    ? { ...entity, notifications: read, target: { messageId, threadId } }
-    : { ...entity, notifications: read };
-}
-
-/** Rows decoded by an earlier read, with the wire data each came from. */
-export type InboxRowMemo = {
-  previous: ReadonlyMap<string, { wire: string; row: NotificationInboxRow }>;
-  next: Map<string, { wire: string; row: NotificationInboxRow }>;
-};
-
-/**
- * Project one inbox entry into rows. Each row's entity carries only that
- * row's notifications, so entity-based helpers (icons, preview targets) see
- * what the row shows. An entity the app does not list, or an entry without a
- * valid place, is dropped. With a memo, a row that did not change keeps its
- * object.
+ * Project one inbox entry into rows, as plain data the source reconciles
+ * into its store. An entity the app does not list, or an entry without a
+ * valid place, is dropped.
  */
 export function toInboxGroup(
-  entry: NotificationInboxEntryFieldsFragment,
-  memo?: InboxRowMemo
+  entry: NotificationInboxEntryFieldsFragment
 ): NotificationInboxGroup | null {
   const sortAt = Date.parse(entry.sortAt);
   const soupItem = attentionFeedSoupItem(entry.entity);
   if (!soupItem || Number.isNaN(sortAt)) return null;
   const entity = mapApiSoupItemToEntity(soupItem);
-  const entityWire = memo ? JSON.stringify(entry.entity) : '';
   return {
     groupId: entry.groupId,
     sortAt,
     rows: entry.rows.flatMap((row) => {
       const latestAt = Date.parse(row.latestAt);
       if (Number.isNaN(latestAt)) return [];
-      const wire = memo ? `${entityWire}${JSON.stringify(row)}` : '';
-      const known = memo?.previous.get(row.id);
-      if (memo && known?.wire === wire) {
-        memo.next.set(row.id, known);
-        return [known.row];
-      }
-      const notifications = row.notifications.map(mapGraphqlNotification);
       const decoded: NotificationInboxRow = {
         id: row.id,
         type: toRowType(row.rowType),
@@ -178,12 +137,10 @@ export function toInboxGroup(
         unseen: row.unseen,
         count: row.count,
         content: {
-          entity: rowEntity(entity, notifications),
-          notifications,
-          entityAt: (notification) => rowEntity(entity, [notification]),
+          entity,
+          notifications: row.notifications.map(mapGraphqlNotification),
         },
       };
-      memo?.next.set(row.id, { wire, row: decoded });
       return [decoded];
     }),
   };

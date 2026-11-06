@@ -25,6 +25,7 @@ outbound = [
   "dep:cloudfront_sign",
   "channels/outbound",
   "dep:entity_access_db_utils",
+  "dep:feature_flags",
   "dep:futures",
   "dep:livekit-api",
   "dep:livekit-protocol",
@@ -75,6 +76,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false 
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+feature_flags = { path = "../feature_flags", optional = true }
 messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }

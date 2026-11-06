@@ -10,6 +10,7 @@ import {
   setActiveCallEndedCache,
   setActiveCallStartedCache,
 } from '@queries/call/call';
+import { invalidateMessageTimeline } from '@queries/messages/timeline';
 import { useCallContext } from './CallContext';
 import { createCallEventsEffect } from './call-events';
 import {
@@ -274,6 +275,11 @@ export function CallStartedNotifier() {
     // and clicking it deep-links into a join, which for a call that is over
     // means get-or-create starts a brand-new one in the channel.
     closeCallNotification(resolution.callId);
+    // A channel call's row says how long it lasted once it ends.
+    fireAndForget(
+      invalidateMessageTimeline({ type: 'channel', id: resolution.channelId }),
+      'channel-call'
+    );
     setActiveCallEndedCache({
       channelId: resolution.channelId,
       callId: resolution.callId,

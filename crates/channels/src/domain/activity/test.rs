@@ -1,6 +1,7 @@
 use ::activity::Action;
 use ::activity::Actor;
 use ::activity::EntityType;
+use bot_id::BotId;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -28,7 +29,7 @@ fn posted(parent: MessageParent, created_at: chrono::DateTime<Utc>) -> MessagePo
         message_id: Uuid::from_u128(8),
         thread_id: None,
         root_id: Uuid::from_u128(8),
-        sender: Actor::new_from_user(user("macro|bot-like@example.com")),
+        sender: Actor::new_from_bot(BotId::new_from_uuid(Uuid::from_u128(9))),
         triggered_by: Some("macro|teo@example.com".to_string()),
         content: "hi".to_string(),
         mentions: vec![],
@@ -96,10 +97,28 @@ fn message_posted_maps_to_messaged_with_triggered_by_as_subject() {
     assert_eq!(activities[0].action, Action::Messaged);
     // Delegation: the triggering user is the subject; the sender the actor.
     assert_eq!(activities[0].subject_id, "macro|teo@example.com");
-    assert_eq!(activities[0].actor.as_ref(), "macro|bot-like@example.com");
+    assert_eq!(
+        activities[0].actor.as_ref(),
+        Actor::new_from_bot(BotId::new_from_uuid(Uuid::from_u128(9))).as_ref()
+    );
     assert_eq!(activities[0].occurred_at, created_at);
     assert_eq!(activities[0].entity_id, CHANNEL_ID.to_string());
     assert_eq!(activities[0].entity_type, EntityType::Channel);
+}
+
+#[test]
+fn a_message_from_an_account_manager_stays_the_senders_activity() {
+    let mut posted = posted(MessageParent::Channel(CHANNEL_ID), Utc::now());
+    posted.sender = Actor::new_from_user(user("macro|managed@example.com"));
+    posted.triggered_by = Some("macro|manager@example.com".to_string());
+
+    let Ingest::Insert(activities) =
+        ingest_message_event(Uuid::now_v7(), &MessageTopicEvent::Posted(posted))
+    else {
+        panic!("expected activities");
+    };
+
+    assert_eq!(activities[0].subject_id, "macro|managed@example.com");
 }
 
 #[test]

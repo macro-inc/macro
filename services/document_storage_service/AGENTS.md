@@ -86,6 +86,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
+  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
+
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
@@ -108,3 +111,5 @@ threads, pins, recents, notifications, folders, activity.
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/observability.md`
 
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
+
+- The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
