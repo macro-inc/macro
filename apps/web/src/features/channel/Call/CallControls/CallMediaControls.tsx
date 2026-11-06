@@ -221,7 +221,7 @@ export function CallMediaControls(props: {
             <Dropdown.Separator />
             <Dropdown.Group>
               <Dropdown.GroupLabel>Background</Dropdown.GroupLabel>
-              <div class="grid grid-cols-4 gap-1">
+              <div class="grid grid-cols-3 gap-2">
                 <Dropdown.RadioGroup
                   class="contents"
                   value={backgroundChoice(call.backgroundEffect())}
