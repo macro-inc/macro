@@ -6,6 +6,7 @@ import { MacroNotFoundError } from '../../utils';
 import { DatabaseColumn } from './column';
 import type { AddColumnOptions, Database } from './database';
 import { DatabaseRow } from './row';
+import type { SavedQuery, SaveQueryOptions } from './saved-query';
 import { DatabaseView } from './view';
 import type { DatabaseWebhook } from './webhook';
 
@@ -101,6 +102,11 @@ export class DatabaseTable {
   /** Create a webhook that inserts rows here. See {@link Database.createWebhook}. */
   createWebhook(): Promise<{ webhook: DatabaseWebhook; token: string }> {
     return this.database.createWebhook(this);
+  }
+
+  /** Save a `SELECT` about this table as a live question. See {@link Database.saveQuery}. */
+  saveQuery(options: SaveQueryOptions): Promise<SavedQuery> {
+    return this.database.saveQuery({ ...options, table: this });
   }
 
   /** Delete this table. See {@link Database.deleteTable}. */

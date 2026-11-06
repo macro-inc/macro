@@ -111,11 +111,15 @@ function fetchCached<Data>(options: {
   return new ResultAsync(catchToResult(() => queryClient.fetchQuery(options)));
 }
 
-/** Share the initial block load with the mounted view's schema query. */
+/**
+ * Read a database's schema as it opens, sharing the read with the mounted
+ * view's query. A cached copy may predate the gateway tracking it, so an open
+ * always reads; its grids then skip the catch-up read on subscription.
+ */
 export function fetchDatabaseDetail(
   id: string
 ): ResultAsync<DatabaseDetail, ResultError[]> {
-  return fetchCached(databaseDetailQueryOptions(id));
+  return fetchCached({ ...databaseDetailQueryOptions(id), staleTime: 0 });
 }
 
 /** {@link useViewerDatabases}, read once. */
