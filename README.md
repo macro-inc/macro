@@ -2,7 +2,7 @@
   <a href="https://macro.com">
     <img width="256" height="35" alt="Macro" src=".github/readme/logo.png" />
   </a>
-  <p><strong>The unified workspace for your team</strong></p>
+  <p>The unified workspace for your team</p>
   <a target="_blank" href="https://macro.com">
     <img width="2400" height="1000" alt="Macro — a launch document beside its linked team discussion and an agent scheduling request" src=".github/readme/header.png" />
   </a>

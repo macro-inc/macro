@@ -4,7 +4,7 @@
 
 `logo.png` centers the supplied Frame 10 full lockup above a compact native
 README title. The white logo is downscaled to 480 pixels wide on a dark backing;
-the 512×70 asset displays at 256×35. A bold paragraph avoids heading margins
+the 512×70 asset displays at 256×35. A regular-weight paragraph avoids heading margins
 and GitHub’s horizontal divider.
 
 `header.png` is a 2400×1000 continuous desktop capture of a launch document
