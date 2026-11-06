@@ -338,6 +338,17 @@ pub enum RoutineRun<'a> {
 }
 
 impl RoutineRun<'_> {
+    pub fn cause(&self) -> trigger_context::origin::RoutineCause {
+        use trigger_context::origin::RoutineCause;
+        match self {
+            Self::Scheduled { .. } => RoutineCause::Scheduled,
+            Self::Manual { .. } => RoutineCause::Manual,
+            Self::Event(run) => RoutineCause::Event {
+                event_id: run.pending.event.event_id().into(),
+            },
+        }
+    }
+
     pub fn event(&self) -> Option<&EventReference> {
         match self {
             Self::Event(run) => Some(&run.pending.event),

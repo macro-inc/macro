@@ -16,6 +16,7 @@ import {
   createComputed,
   createMemo,
   createSignal,
+  on,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import type {
@@ -25,6 +26,7 @@ import type {
 } from '../context/notifications-inbox-context';
 import { clearIncludes, type InboxClear } from '../core/inbox-filters';
 import {
+  compareInboxRows,
   markRows,
   type RowMarks,
   settleRowMarks,
@@ -197,12 +199,25 @@ export function createNotificationInboxSource(
     surface: 'notifications-inbox',
   });
 
+  // Under Unread the server drops a row once it is read. One the reader read
+  // here stays listed, read, until the scope changes, so it doesn't vanish
+  // while they are on it; a newer copy from the server replaces it.
+  const [kept, setKept] = createSignal<readonly NotificationInboxRow[]>([]);
+  createComputed(on(scopeInput, () => setKept([])));
+  const listed = () => {
+    const present = new Set(ordered.map((row) => row.id));
+    const extra = kept().filter((row) => !present.has(row.id));
+    return extra.length === 0
+      ? ordered
+      : [...ordered, ...extra].sort(compareInboxRows);
+  };
+
   const rows = createMemo(() =>
     query.data === undefined
       ? undefined
       : withSeenRows(
           withoutDoneNotifications(
-            withoutDoneRows(ordered, done()),
+            withoutDoneRows(listed(), done()),
             doneNotifications()
           ),
           seen()
@@ -303,8 +318,10 @@ export function createNotificationInboxSource(
     const hiddenIds = hidden.map((row) => row.id);
     setDone((current) => markRows(current, hidden));
     const input = {
-      scope: encodeInboxScope({ rowTypes: request.rowTypes }),
-      unreadOnly: request.unreadOnly,
+      scope: encodeInboxScope({
+        rowTypes: request.rowTypes,
+        unreadOnly: request.unreadOnly,
+      }),
       since:
         request.since === undefined
           ? null
@@ -352,12 +369,19 @@ export function createNotificationInboxSource(
     const client = options.client();
     const ids = unseen.map((row) => row.id);
     setSeen((current) => markRows(current, unseen));
+    if (options.scope().unreadOnly) {
+      setKept((current) => [
+        ...current.filter((row) => !ids.includes(row.id)),
+        ...unseen.map((row) => ({ ...row, unseen: false })),
+      ]);
+    }
     try {
       const scope = scopeInput();
       const patches = await markInboxRowsSeen(client, ids, scope);
       applyIfCurrent(scope, patches);
     } catch (error) {
       setSeen((current) => unmarkRows(current, ids));
+      setKept((current) => current.filter((row) => !ids.includes(row.id)));
       throw error;
     }
     revalidate(client);

@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use cloudfront_sign::{SignedOptions, get_signed_url};
 
-use crate::domain::ports::RecordingStorage;
+use crate::domain::ports::{RecordingDownload, RecordingStorage};
 
 /// CloudFront settings used to sign recording GET URLs.
 pub struct RecordingCloudFrontConfig {
@@ -108,6 +108,51 @@ fn cloudfront_signed_url(
 }
 
 impl RecordingStorage for S3RecordingStorage {
+    async fn open_recording(
+        &self,
+        recording_key: &str,
+    ) -> anyhow::Result<Option<RecordingDownload>> {
+        let response = match self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(recording_object_key(recording_key))
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(error)
+                if error
+                    .as_service_error()
+                    .is_some_and(|error| error.is_no_such_key()) =>
+            {
+                return Ok(None);
+            }
+            Err(error) => return Err(error.into()),
+        };
+
+        let content_length = response
+            .content_length()
+            .and_then(|length| u64::try_from(length).ok())
+            .ok_or_else(|| anyhow::anyhow!("recording has no valid content length"))?;
+        let content_type = response.content_type().unwrap_or("video/mp4").to_owned();
+        let chunks = futures::stream::unfold(response.body, |mut body| async move {
+            body.next().await.map(|part| {
+                (
+                    part.map(|bytes| bytes.to_vec())
+                        .map_err(anyhow::Error::from),
+                    body,
+                )
+            })
+        });
+
+        Ok(Some(RecordingDownload {
+            content_type,
+            content_length,
+            chunks: Box::pin(chunks),
+        }))
+    }
+
     async fn presign_recording_url(&self, recording_key: &str) -> anyhow::Result<String> {
         let object_key = recording_object_key(recording_key);
         if macro_aws_config::is_local_aws() {

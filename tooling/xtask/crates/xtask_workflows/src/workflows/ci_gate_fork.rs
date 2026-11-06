@@ -61,6 +61,7 @@ fn request() -> Job {
                 .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
                 .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
                 .add_env(("BASE_REF", "${{ github.event.pull_request.base.ref }}"))
+                .add_env(("CI_GATE_DOCS_URL", pr_ci::GATE_DOCS_URL))
                 .add_env((
                     "PR_CHECKS_URL",
                     "${{ github.event.pull_request.html_url }}/checks",

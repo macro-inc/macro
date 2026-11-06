@@ -72,6 +72,7 @@ async fn setup(pool: PgPool) -> (PgConversationTurnStore, AgentSessionId, Uuid, 
             mcp_servers: agent_session::domain::model::AgentMcpServers::OwnerConnections,
         },
         origin: crate::domain::model::SessionOrigin::Mention(MentionOrigin {
+            trigger_origin: trigger_context::TriggerOrigin::Unknown,
             reply_placement: ReplyPlacement::Timeline,
             parent: messages::domain::models::MessageParent::Channel(channel),
             thread_id: source,

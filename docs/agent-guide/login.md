@@ -296,10 +296,16 @@ then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
 When the server suggests a work domain, the create form has no Skip button and
-shows an **Allow @domain emails to join** switch, on by default. Creating the
-team with it on sets the team's auto-join domain and, after the invites, emails
-up to 25 of the creator's same-domain contacts who are not on Macro, invited,
-or already sent a notice (`POST /team/domain-notice`). Creating the team does not leave the step: it
+shows two switches, both on by default and marked recommended: **Allow @domain
+emails to join** and **Notify your team via email**. Creating the team with the
+first on sets the team's auto-join domain. With both on, it then, after the
+invites, emails up to 25 of the creator's same-domain contacts who are not on
+Macro, invited, or already sent a notice (`POST /team/domain-notice`). The
+notice switch is disabled and reads off while domain join is off, because the
+server sends nothing to a team without an auto-join domain; turning domain
+join back on restores its earlier setting. Each switch has an info button
+beside it that explains the setting in a tooltip on hover or focus, and in a
+popover on tap on touch devices; pressing it never toggles the switch. Creating the team does not leave the step: it
 switches to the **You're on <team>** confirmation, the same panel members who
 were already on a team (auto-joined or invite-accepted) see. That panel has
 **Copy invite link** beside **Continue**; it copies the team's

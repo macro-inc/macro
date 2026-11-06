@@ -7,6 +7,7 @@ name: SDK Check
     - main
     paths:
     - packages/sdk/**
+    - packages/sdk-calls/**
     - '.github/workflows/sdk-check.yml'
   workflow_call: {}
 jobs:
@@ -35,6 +36,15 @@ jobs:
     - name: Check endpoint coverage
       run: bun run coverage
       working-directory: packages/sdk
+    - name: Build SDK
+      run: bun run build
+      working-directory: packages/sdk
+    - name: Install sdk-calls dependencies
+      run: bun install --frozen-lockfile
+      working-directory: packages/sdk-calls
+    - name: Check sdk-calls
+      run: bun run check && bun test && bun run build && bun run check:pack
+      working-directory: packages/sdk-calls
 concurrency:
   group: sdk-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
   cancel-in-progress: true

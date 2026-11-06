@@ -897,11 +897,21 @@ async fn run_server() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
-            flags,
+            flags.clone(),
             call_root_poster.clone(),
         ),
     ));
-    let call_service = Arc::new(call_service_builder);
+    let call_service_builder = call_service_builder.with_programmatic_call_gate(
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+    );
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
+    let call_service = Arc::new(call_service_builder.with_start_limiter(
+        call::inbound::axum_router::RateLimitedCallStarts(call_public_rate_limiter.clone()),
+    ));
 
     consumer_tracker.spawn({
         let service = call_service.clone();
@@ -922,11 +932,6 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
-    let call_public_rate_limiter = RateLimitServiceImpl {
-        repo: RedisRateLimitAdapter {
-            redis: redis_client.clone(),
-        },
-    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
@@ -1467,15 +1472,33 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let admission = macro_agent_tool_context.admission.clone();
     // Document AI edits over HTTP share the channel agent's admission.
-    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
-        Arc::new(
-            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
-                AiEditingWorkerUrl::new()?.to_string(),
-            ),
+    let document_editing_worker = Arc::new(
+        documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            AiEditingWorkerUrl::new()?.to_string(),
         ),
+    );
+    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
+        document_editing_worker.clone(),
         admission.clone(),
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
     ));
+    // The file-document routes read and write what the matching AI tools do.
+    let document_files = Arc::new(
+        documents_hex::outbound::s3_document_files::S3DocumentFiles::new(
+            db.clone(),
+            macro_aws_config::s3_client().await,
+            config.document_storage_bucket.to_string(),
+        ),
+    );
+    let word_documents = Arc::new(
+        documents_hex::domain::word_document::WordDocumentService::new(
+            document_service.clone(),
+            document_editing_worker,
+            sync_service_client.clone(),
+            document_files.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        ),
+    );
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
@@ -2451,6 +2474,21 @@ async fn run_server() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            presentations: Arc::new(
+                documents_hex::domain::presentation::PresentationService::new(
+                    document_files.clone(),
+                ),
+            ),
+            word_documents,
+            designs: Arc::new(documents_hex::domain::design::DesignService::new(
+                document_files.clone(),
+            )),
+            photoshop_documents: Arc::new(documents_hex::domain::photoshop::PhotoshopService::new(
+                document_files.clone(),
+            )),
+            illustrator_documents: Arc::new(
+                documents_hex::domain::illustrator::IllustratorService::new(document_files),
+            ),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

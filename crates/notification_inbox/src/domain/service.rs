@@ -178,7 +178,7 @@ impl<E> Group<E> {
         let rows: Vec<InboxRow> = self
             .rows
             .into_iter()
-            .filter(|row| scope.admits(row.row_type))
+            .filter(|row| scope.admits(row))
             .collect();
         (!rows.is_empty()).then_some(InboxEntry {
             group: self.key,
@@ -221,8 +221,7 @@ struct ClearedGroup {
 impl InboxClearRequest {
     /// Whether the request clears `row`.
     fn clears(&self, row: &InboxRow) -> bool {
-        self.scope.admits(row.row_type)
-            && (!self.unread_only || row.unseen)
+        self.scope.admits(row)
             && self
                 .since
                 .is_none_or(|since| row.latest().created_at >= since)
@@ -307,6 +306,7 @@ where
             user = %viewer.user,
             limit = query.limit,
             row_types = query.scope.row_types.len(),
+            unread_only = query.scope.unread_only,
             groups = tracing::field::Empty,
             rows = tracing::field::Empty,
         ),
@@ -477,7 +477,7 @@ where
         fields(
             user = %viewer.user,
             row_types = request.scope.row_types.len(),
-            unread_only = request.unread_only,
+            unread_only = request.scope.unread_only,
             since = request.since.is_some(),
             rows = tracing::field::Empty,
             notifications = tracing::field::Empty,
