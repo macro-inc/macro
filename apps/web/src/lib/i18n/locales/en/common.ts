@@ -24,6 +24,8 @@ export default {
   dismiss: 'Dismiss',
   notNow: 'Not now',
   maybeLater: 'Maybe later',
+  retry: 'Retry',
+  pleaseTryAgain: 'Please try again',
   loading: 'Loading…',
   loadingConversation: 'Loading conversation',
   delete: 'Delete',

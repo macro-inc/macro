@@ -30,11 +30,12 @@ async function settleFolderSubmission(
 ) {
   const outcome = await submission.result;
   if (outcome.type === 'failed') {
-    toast.failure('Folder creation failed', {
-      subtext: outcome.draft.error ?? 'Please try again',
+    toast.failure(t('entityActions.toastFolderCreateFailed'), {
+      subtext: outcome.draft.error ?? t('common.pleaseTryAgain'),
+      stack: true,
       actions: [
         {
-          label: 'Retry',
+          label: t('common.retry'),
           icon: ArrowCounterClockwise,
           onClick: () => {
             layout.popoverSplit({
@@ -48,7 +49,7 @@ async function settleFolderSubmission(
     });
     return;
   }
-  toast.success(`${outcome.name} created`, {
+  toast.success(t('entityActions.toastFolderCreated', { name: outcome.name }), {
     titleIcon: FolderIcon,
     dismissStyle: 'icon',
     stack: true,

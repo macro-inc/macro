@@ -382,6 +382,8 @@ dialog with `Untitled folder` preselected; creating keeps Drive where it is and 
 the folder to the open folder's list. Creation and completed folder uploads show
 a compact toast with a success check, a folder icon beside **&lt;folder name&gt;
 created/uploaded**, and **Open**, without a separate description.
+Failed folder submissions retain separate **Retry** actions on desktop, even when
+their failure titles match; each action restores its own unfinished draft.
 Every other item opens as an inline detail in the open folder or tab once created
 (`/app/drive/folder/<uuid>/spreadsheet/<uuid>`, `/app/drive/database/<uuid>`),
 the same as opening an existing file: the Drive sidebar stays mounted and no
