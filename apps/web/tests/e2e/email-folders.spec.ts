@@ -5,7 +5,12 @@ async function mockFolderApi(page: Page, fail = false) {
   const writes: { field: string; value: boolean; id: string }[] = [];
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
-    return url.hostname === '127.0.0.1' || url.hostname === 'localhost'
+    // The app's own origin: any `*.localhost` alias, as an instance's page uses.
+    const local =
+      url.hostname === '127.0.0.1' ||
+      url.hostname === 'localhost' ||
+      url.hostname.endsWith('.localhost');
+    return local
       ? route.continue()
       : route.fulfill({ status: 404, json: {} });
   });

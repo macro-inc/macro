@@ -385,10 +385,15 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
 - **Two instances:** `demo` and `demo-2` ran side by side with separate credentials, and
   neither could reach the other's services or see its mail. Removing one left the other
   running untouched.
-- **Web E2E, not passing:** the Playwright suite signs in and loads real data from an
-  instance, with 8 of 48 passing, 38 failing, and 2 skipped. No workflow runs this suite,
-  and whether the failures come from the platform or from tests that have drifted is
-  unknown until the same commit runs on compose.
+- **Web E2E:** the Playwright suite signs in and loads real data from an instance. The
+  same commit gives the same 8 passes on the instance and on compose. Every test that
+  fails on the instance also fails on compose, so those come from the tests or the shared
+  harness, not the platform; four channel tests pass on the instance and fail on compose.
+  No workflow runs this suite.
+- **Bucket events:** a document written to `doc-storage` reaches `search_upload_handler`
+  through the bridge, scaling it from zero, and it relays the upload for indexing; a file
+  in bulk-upload staging reaches its trigger. The hourly cleanup CronJob runs to
+  completion.
 - **Queue scaling:** KEDA takes a queue worker from zero to its maximum as messages
   arrive and back to zero after they drain, on the local cluster.
 - **Generated credentials:** a new instance bootstraps from nothing with its own, reaches
