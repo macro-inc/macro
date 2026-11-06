@@ -223,17 +223,16 @@ fn arrays_follow_each_querys_fixed_binds() {
             )));
             assert!(!sql.contains(&format!("${}", first + 2)));
             assert!(!sql.contains("sort_parameters"));
-            assert!(sql.contains(&format!("ea.source_id = ANY(${}::text[])", first - 1)));
         }
         assert!(grouped.contains("ep.entity_type = $10::property_entity_type"));
         if matches!(sort, DynamicSort::Property { .. }) {
-            assert_eq!((flat_first, grouped_first), (12, 14));
+            assert_eq!((flat_first, grouped_first), (11, 13));
             assert!(flat.contains("WHERE id = $9::uuid"));
             assert!(flat.contains("$10::double precision"));
             assert!(grouped.contains("WHERE id = $11::uuid"));
             assert!(grouped.contains("$12::double precision"));
         } else {
-            assert_eq!((flat_first, grouped_first), (10, 12));
+            assert_eq!((flat_first, grouped_first), (9, 11));
             assert!(!flat.contains("property_sort"));
             assert!(!grouped.contains("property_sort"));
         }
@@ -400,7 +399,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
     };
     let by_status = vec![(IN_PROGRESS, IN_C), ("", IN_A)];
     for (label, field, filter, arrays, expected) in [
-        // The entity type takes `$10`, the source ids `$11`, the arrays `$12` and `$13`.
+        // The entity type takes `$10`, the arrays `$11` and `$12`.
         (
             "status of tasks",
             status(Some("TASK")),
@@ -408,7 +407,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
             2,
             by_status.clone(),
         ),
-        // `$10` is NULL and unreferenced before the source ids.
+        // `$10` is NULL and unreferenced before the arrays.
         ("status", status(None), associated(), 2, by_status.clone()),
         (
             "entity type",
@@ -417,7 +416,7 @@ async fn grouped_pages_match_bound_id_sets(pool: PgPool) -> anyhow::Result<()> {
             2,
             vec![("document", IN_C), ("document", IN_A)],
         ),
-        // `$10` is NULL and unreferenced; the source ids are the last bind.
+        // `$10` is NULL, unreferenced, and the last bind.
         (
             "status without arrays",
             status(None),
