@@ -52,10 +52,20 @@ const AUX_HOST_PORT_SERVICES: &[&str] = &[
     "analytics_proxy",
 ];
 
+/// Base-compose services that bind-mount the whole checkout and write into it
+/// (wrangler state and caches, `.dev.vars`), so they run as its owner.
+const CHECKOUT_WRITERS: &[&str] = &["ai_editing_worker", "analytics_proxy"];
+
 /// The host directory bind-mounted into FusionAuth at
 /// `/usr/local/fusionauth/kickstart`. The kickstart writer fills it.
 pub fn kickstart_dir(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("kickstart")
+}
+
+/// The host directory bind-mounted into the proxy at `/data`, where Caddy keeps
+/// the internal CA that signs `*.preview.localhost`.
+pub fn preview_caddy_data_dir(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("preview-caddy-data")
 }
 
 /// The generated Caddyfile path for this instance's reverse proxy.
@@ -79,6 +89,7 @@ pub fn generate(
     gmail_forwarder: bool,
 ) -> Result<PathBuf> {
     super::tls::issue(instance)?;
+    let checkout_user = super::docker::checkout_user()?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
@@ -100,13 +111,23 @@ pub fn generate(
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
     // lives there too).
+    let previews = mode.spec().runs_local_infra;
+    if previews {
+        // Docker creates a missing bind-mount source as root.
+        let dir = preview_caddy_data_dir(instance);
+        std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
     add_proxy_service(
         &mut services,
         instance,
         static_frontend,
-        mode.spec().runs_local_infra,
+        previews,
+        checkout_user.as_deref(),
     );
     add_localstack_service(&mut services, instance);
+    if let Some(user) = &checkout_user {
+        add_checkout_writer_users(&mut services, user);
+    }
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
@@ -281,15 +302,33 @@ fn add_localstack_service(
     );
 }
 
+/// Run the [`CHECKOUT_WRITERS`] as the checkout owner (see
+/// [`super::docker::checkout_user`]). `HOME` gives npm and wrangler a writable
+/// home, since the uid may have no account in the image.
+fn add_checkout_writer_users(services: &mut IndexMap<String, Option<dct::Service>>, user: &str) {
+    for name in CHECKOUT_WRITERS {
+        services.insert(
+            name.to_string(),
+            Some(dct::Service {
+                user: Some(user.to_string()),
+                environment: kv(&[("HOME", "/tmp")]),
+                ..Default::default()
+            }),
+        );
+    }
+}
+
 /// The single-origin reverse proxy (Caddy). Added in every mode — it's how the
 /// frontend reaches the local service containers. Headless stacks also mount
 /// the staged app bundle so Caddy serves the frontend itself (see
-/// `proxy::FRONTEND_STATIC`).
+/// `proxy::FRONTEND_STATIC`). With previews, Caddy writes its CA into the
+/// checkout, so it runs as `checkout_user`.
 fn add_proxy_service(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
     static_frontend: bool,
     previews: bool,
+    checkout_user: Option<&str>,
 ) {
     let proxy_port = instance.port(Port::Proxy);
     let mut volumes = vec![
@@ -309,12 +348,14 @@ fn add_proxy_service(
         )));
     }
     let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
+    let mut user = None;
     if previews {
         ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
         volumes.push(dct::Volumes::Simple(format!(
             "{}:/data",
-            instance.artifact_dir().join("preview-caddy-data").display()
+            preview_caddy_data_dir(instance).display()
         )));
+        user = checkout_user.map(str::to_string);
     }
     services.insert(
         "proxy".to_string(),
@@ -327,6 +368,7 @@ fn add_proxy_service(
             extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
             ports: dct::Ports::Short(ports),
             volumes,
+            user,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
             ..Default::default()
         }),

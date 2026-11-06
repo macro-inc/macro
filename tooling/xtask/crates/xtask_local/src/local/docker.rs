@@ -3,6 +3,8 @@
 //! per-instance external networks/volumes. (Compose orchestration itself stays
 //! on the CLI; bollard has no compose support.)
 
+use std::os::unix::fs::MetadataExt;
+
 use anyhow::{Context, Result};
 use bollard::Docker;
 use bollard::models::{NetworkCreateRequest, VolumeCreateRequest};
@@ -65,6 +67,37 @@ pub fn ensure_volume(name: &str) -> Result<()> {
             Err(e) => Err(e).with_context(|| format!("creating volume {name}")),
         }
     })
+}
+
+/// The `uid:gid` that containers writing into the checkout run as, so what they
+/// leave behind stays the checkout owner's and `git worktree remove` works
+/// without sudo. Only a rootful Linux daemon writes container ids to the host
+/// unchanged. Docker Desktop, rootless Docker or Podman, and the macOS runtimes
+/// already map container root to the host user, and would map a host uid to a
+/// subordinate id instead, so they keep the image's user (`None`).
+pub fn checkout_user() -> Result<Option<String>> {
+    if !cfg!(target_os = "linux") {
+        return Ok(None);
+    }
+
+    let info = block_on(async {
+        connect()?
+            .info()
+            .await
+            .context("reading Docker daemon info")
+    })?;
+    let rootless = info
+        .security_options
+        .unwrap_or_default()
+        .iter()
+        .any(|option| option.contains("rootless"));
+    let desktop = info.operating_system.as_deref() == Some("Docker Desktop");
+    if rootless || desktop {
+        return Ok(None);
+    }
+
+    let checkout = std::fs::metadata(super::repo_root()).context("reading the checkout owner")?;
+    Ok(Some(format!("{}:{}", checkout.uid(), checkout.gid())))
 }
 
 fn already_exists(e: &bollard::errors::Error) -> bool {

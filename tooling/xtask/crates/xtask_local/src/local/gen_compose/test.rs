@@ -10,7 +10,7 @@ fn generated_services_have_bounded_console_logs_in_every_mode() {
                 services.insert(svc.compose_name.to_string(), Some(dct::Service::default()));
             }
             add_localstack_service(&mut services, &instance);
-            add_proxy_service(&mut services, &instance, false, false);
+            add_proxy_service(&mut services, &instance, false, false, None);
             let compose = dct::Compose {
                 services: dct::Services(services),
                 ..Default::default()
@@ -73,4 +73,39 @@ fn every_local_harness_publishes_the_api_port_used_by_the_sdk() {
         )));
         assert!(ports.contains(&format!("{}:2222", instance.port(Port::PreviewSsh))));
     }
+}
+
+#[test]
+fn checkout_writers_keep_the_checkout_owner_after_named_instance_tags() {
+    let instance = Instance::derive(Some("owner-test"), None).unwrap();
+    let mut services = IndexMap::new();
+    add_proxy_service(&mut services, &instance, false, true, Some("1000:1000"));
+    add_checkout_writer_users(&mut services, "1000:1000");
+    let compose = dct::Compose {
+        services: dct::Services(services),
+        ..Default::default()
+    };
+    let mut value = serde_yaml::to_value(compose).unwrap();
+    apply_tags(&mut value, Mode::Local, &instance);
+
+    for name in ["proxy", "ai_editing_worker", "analytics_proxy"] {
+        assert_eq!(value["services"][name]["user"], "1000:1000", "{name}");
+    }
+    for name in CHECKOUT_WRITERS {
+        assert_eq!(value["services"][name]["environment"]["HOME"], "/tmp");
+        let Value::Tagged(ports) = &value["services"][name]["ports"] else {
+            panic!("{name} must still drop its fixed host ports");
+        };
+        assert_eq!(ports.tag, Tag::new("!override"));
+    }
+}
+
+#[test]
+fn proxy_without_previews_keeps_the_image_user() {
+    let instance = Instance::derive(None, None).unwrap();
+    let mut services = IndexMap::new();
+    add_proxy_service(&mut services, &instance, false, false, Some("1000:1000"));
+
+    let proxy = services["proxy"].as_ref().unwrap();
+    assert_eq!(proxy.user, None);
 }
