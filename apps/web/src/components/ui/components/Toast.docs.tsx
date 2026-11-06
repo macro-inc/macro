@@ -3,6 +3,7 @@ import {
   type ToastInventoryEntry,
 } from '@app/features/ui-gallery/toast-inventory';
 import { defineDoc } from '@app/features/ui-gallery/types';
+import { t } from '@app/lib/i18n';
 import { createMobileToastSwipe } from '@core/component/Toast/create-mobile-toast-swipe';
 import { ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
