@@ -30,19 +30,19 @@ export function CallRecordingSummarySection(props: {
   return (
     <Show when={shouldShow()}>
       <section class="flex flex-col gap-5">
-        <Show when={!props.hideHeading}>
-          <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <Show when={!props.hideHeading}>
             <h3 class="text-base font-semibold text-ink">
               {t('calls.detailSummary')}
             </h3>
-            <Show when={summary()}>
-              <span class="flex items-center gap-1 text-xs text-ink-muted">
-                <SparkleIcon class="size-3.5" />
-                {t('calls.detailAttribution')}
-              </span>
-            </Show>
-          </div>
-        </Show>
+          </Show>
+          <Show when={summary()}>
+            <span class="ml-auto flex items-center gap-1 text-xs text-ink-muted">
+              <SparkleIcon class="size-3.5" />
+              {t('calls.detailAttribution')}
+            </span>
+          </Show>
+        </div>
         <Show
           when={summary()}
           fallback={
