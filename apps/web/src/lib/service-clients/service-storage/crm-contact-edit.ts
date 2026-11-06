@@ -37,6 +37,10 @@ export function prepareCrmContactEdit() {
         if (!host || host.disabled || !isCurrent()) return;
         recordExternalWrite(host, ['GraphqlSoupCrmContact']);
         try {
+          // A rejected bootstrap cannot have written this record. Prove storage
+          // readiness before creating a cleanup obligation for the mutation.
+          await host.currentRevision();
+          if (host.disabled || !isCurrent()) return;
           recordSessionCacheWrite(host, `GraphqlSoupCrmContact:${contact.id}`);
           await host.writeQuery({
             query: stringifyDocument(CrmContactCacheWriteDocument),

@@ -1,4 +1,5 @@
 import { syncPushRegistrations } from '@core/auth/push-registration-lifecycle';
+import { toast } from '@core/component/Toast/Toast';
 import {
   enableUserInfoQuery,
   shouldQueryUserInfo,
@@ -79,11 +80,19 @@ export function invalidateAllAfterLogin() {
   resetGraphqlSoupDoneSession();
   resetGraphqlPresenceRequests();
   resetTeamCalendarSession();
-  const invalidated = cacheSession.ready.then(() => {
-    if (!cacheSession.isCurrent()) return;
-    enableUserInfoQuery();
-    return queryClient.invalidateQueries();
-  });
+  const invalidated = cacheSession.ready
+    .catch((error: unknown) => {
+      toast.failure('Sign-in could not finish', {
+        subtext:
+          'Local storage cleanup failed. Your queued changes are preserved. Try signing in again.',
+      });
+      throw error;
+    })
+    .then(() => {
+      if (!cacheSession.isCurrent()) return;
+      enableUserInfoQuery();
+      return queryClient.invalidateQueries();
+    });
   // Rebind this device's push registrations once the refetches above have
   // exercised the fresh session — registering earlier can race auth state
   // that is still settling. Fire-and-forget so login isn't blocked on the

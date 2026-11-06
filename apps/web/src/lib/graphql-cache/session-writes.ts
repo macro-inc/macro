@@ -27,15 +27,23 @@ export function captureCacheWriteSession() {
 }
 
 function transitionCacheWrites(
-  finish: (current: () => boolean) => Promise<void>
+  finish: (current: () => boolean, drained: Promise<void>) => Promise<void>
 ) {
   const captured = Symbol();
   transition = captured;
   session = undefined;
   const drained = Promise.allSettled([...pending]);
-  const completed = transitions.then(async () => {
+  const ready = transitions.then(async () => {
     await drained;
-    await finish(() => transition === captured);
+  });
+  // Independent sign-out work starts immediately. Even if it fails, the tail
+  // cannot release a replacement session before older storage work settles.
+  const finishing = Promise.resolve().then(() =>
+    finish(() => transition === captured, ready)
+  );
+  const completed = Promise.allSettled([ready, finishing]).then((results) => {
+    const result = results[1];
+    if (result.status === 'rejected') throw result.reason;
   });
   // A failed wipe must leave admission closed without poisoning future login.
   transitions = completed.catch(() => {});
@@ -43,14 +51,17 @@ function transitionCacheWrites(
 }
 
 /** Close admission immediately and drain durable writes before clearing storage. */
-export function endCacheWriteSession(clear: () => Promise<void>) {
-  return transitionCacheWrites(clear);
+export function endCacheWriteSession(
+  clear: (drained: Promise<void>) => Promise<void>
+) {
+  return transitionCacheWrites((_current, drained) => clear(drained));
 }
 
 /** A successful login may replace an account without changing host identity. */
 export function beginCacheWriteSession(clear: () => Promise<void>) {
   const next = Symbol();
-  const ready = transitionCacheWrites(async (isCurrent) => {
+  const ready = transitionCacheWrites(async (isCurrent, drained) => {
+    await drained;
     await clear();
     if (isCurrent()) session = next;
   });

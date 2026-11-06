@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import {
   beginCacheWriteSession,
   captureCacheWriteSession,
@@ -41,5 +41,31 @@ it('keeps failed clearing closed without poisoning a later login', async () => {
   expect(captureCacheWriteSession().isCurrent()).toBe(false);
   const next = beginCacheWriteSession(async () => {});
   await next.ready;
+  expect(next.isCurrent()).toBe(true);
+});
+
+it('starts sign-out immediately but keeps a rejected callback behind the pending write drain', async () => {
+  await beginCacheWriteSession(async () => {}).ready;
+  const started = Promise.withResolvers<void>();
+  const held = Promise.withResolvers<void>();
+  const signout = Promise.withResolvers<void>();
+  const writing = captureCacheWriteSession().run(async () => {
+    started.resolve();
+    await held.promise;
+  });
+  await started.promise;
+  const ending = endCacheWriteSession(async () => {
+    signout.resolve();
+    throw new Error('Independent cleanup failed');
+  });
+  const rejected = expect(ending).rejects.toThrow('Independent cleanup failed');
+  await signout.promise;
+  const cleanup = vi.fn(async () => {});
+  const next = beginCacheWriteSession(cleanup);
+  expect(next.isCurrent()).toBe(false);
+  expect(cleanup).not.toHaveBeenCalled();
+  held.resolve();
+  await Promise.all([writing, rejected, next.ready]);
+  expect(cleanup).toHaveBeenCalledOnce();
   expect(next.isCurrent()).toBe(true);
 });

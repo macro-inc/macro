@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
   client: {},
   nativeHost: undefined as CacheHost | undefined,
   invoke: vi.fn(),
-  host: { writeQuery: vi.fn(), deleteRecords: vi.fn() },
+  host: {
+    currentRevision: vi.fn(),
+    writeQuery: vi.fn(),
+    deleteRecords: vi.fn(),
+  },
   error: vi.fn(),
 }));
 vi.mock('./graphql-soup', () => ({
@@ -40,6 +44,7 @@ beforeEach(async () => {
   mocks.invoke.mockReset().mockResolvedValue(null);
   mocks.client = {};
   mocks.host = {
+    currentRevision: vi.fn(async () => '0'),
     writeQuery: vi.fn(async () => undefined),
     deleteRecords: vi.fn(async () => undefined),
   };
@@ -135,6 +140,7 @@ it.each(['write', 'delete', 'repair'] as const)(
       stored = '';
     });
     mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_current_revision') return '0';
       if (command === 'graphql_cache_write' && operation === 'repair') {
         throw new Error('write failed');
       }
@@ -208,6 +214,20 @@ it('does not retain cleanup obligations for a disabled storage-free host', async
   const writer = prepareCrmContactEdit();
   await writer.commit(contact, null);
   await writer.invalidate(contact.id);
+  const replacement = replaceCacheWriteSession();
+  await replacement.ready;
+  expect(replacement.isCurrent()).toBe(true);
+});
+
+it('does not strand login on a failed bootstrap that never dispatched a contact write', async () => {
+  const failure = new Error('Cache initialization failed');
+  mocks.host.currentRevision.mockRejectedValueOnce(failure);
+  mocks.host.deleteRecords.mockRejectedValue(failure);
+  await expect(
+    prepareCrmContactEdit().commit(contact, null)
+  ).resolves.toBeUndefined();
+  expect(mocks.host.writeQuery).not.toHaveBeenCalled();
+  // No record reached storage, so a recovered login has no phantom repair work.
   const replacement = replaceCacheWriteSession();
   await replacement.ready;
   expect(replacement.isCurrent()).toBe(true);

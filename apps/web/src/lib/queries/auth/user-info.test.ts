@@ -1,4 +1,6 @@
+import { toast } from '@core/component/Toast/Toast';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import { createTauriCacheHost } from '@graphql-cache/host/tauri-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
@@ -19,6 +21,7 @@ const soup = vi.hoisted(() => ({
   host: undefined as CacheHost | undefined,
   invoke: vi.fn(),
 }));
+vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: soup.invoke }));
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(async () => () => {}),
@@ -238,6 +241,7 @@ it.each(['same-viewer', 'new-viewer'])(
             initialClaim: { kind: 'not-runnable' },
           };
         }
+        if (command === 'graphql_cache_current_revision') return '0';
         if (command === 'graphql_cache_write') {
           started();
           await gate;
@@ -341,9 +345,57 @@ it('keeps replacement admission and refetch closed when contact repair fails', a
     expect(old.isCurrent()).toBe(false);
     expect(prepareCrmContactEdit().isCurrent()).toBe(false);
     expect(refetch).not.toHaveBeenCalled();
+    expect(toast.failure).toHaveBeenCalledWith(
+      'Sign-in could not finish',
+      expect.objectContaining({
+        subtext: expect.stringContaining('queued changes are preserved'),
+      })
+    );
   } finally {
     await clearRegisteredCaches();
     unregister();
+    soup.host = undefined;
+  }
+});
+
+it('retries failed readiness on the retained owner before refetching a new identity', async () => {
+  client.current = new QueryClient();
+  await beginCacheWriteSession(async () => {}).ready;
+  const stored = new Set(['GraphqlSoupCrmContact:old-contact', 'queued-draft']);
+  const inner = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    deleteRecords: vi
+      .fn(async (keys: string[]) => {
+        for (const key of keys) stored.delete(key);
+        return createNoopCacheHost().deleteRecords(keys);
+      })
+      .mockRejectedValueOnce(new Error('Storage temporarily unavailable')),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  };
+  const host = createRetirableCacheHost(inner);
+  recordSessionCacheWrite(host, 'GraphqlSoupCrmContact:old-contact');
+  soup.host = host;
+  host.dispose();
+  const refetch = vi
+    .spyOn(client.current, 'invalidateQueries')
+    .mockImplementation(async () => {
+      expect(stored).toEqual(new Set(['queued-draft']));
+    });
+  try {
+    await expect(invalidateAllAfterLogin()).rejects.toThrow(
+      'Storage temporarily unavailable'
+    );
+    expect(refetch).not.toHaveBeenCalled();
+    expect(captureCacheWriteSession().isCurrent()).toBe(false);
+    expect(inner.dispose).not.toHaveBeenCalled();
+    await invalidateAllAfterLogin();
+    expect(refetch).toHaveBeenCalledOnce();
+    expect(inner.clear).not.toHaveBeenCalled();
+    expect(inner.dispose).toHaveBeenCalledOnce();
+    expect(captureCacheWriteSession().isCurrent()).toBe(true);
+  } finally {
     soup.host = undefined;
   }
 });
