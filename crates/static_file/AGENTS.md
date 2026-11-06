@@ -19,7 +19,7 @@ depending on `attachment` directly.
 - Owns: the port abstraction between "something references a static file" and
   "static file service resolves/serves it."
 - Not here: the static file service's HTTP client itself →
-  `crates/static_file_service_client`; attachment storage/lifecycle →
+  `crates/clients/static_file_service_client`; attachment storage/lifecycle →
   `crates/attachment`.
 
 ## Boundaries

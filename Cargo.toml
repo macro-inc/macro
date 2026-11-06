@@ -37,6 +37,9 @@ members = [
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
+  "crates/clients/connect_client",
+  "crates/clients/gmail_client",
+  "crates/clients/loops_client",
   "crates/code_execution",
   "crates/code_mode_assets",
   "crates/codex_cloud_agents",
@@ -44,7 +47,6 @@ members = [
   "crates/coding_agent_worker",
   "crates/cognition",
   "crates/collab_surface",
-  "crates/connect_client",
   "crates/cowlike",
   "crates/crm",
   "crates/cursor_api_key",
@@ -74,7 +76,6 @@ members = [
   "crates/genai_telemetry",
   "crates/generic_email_domains",
   "crates/git_patch",
-  "crates/gmail_client",
   "crates/google_token",
   "crates/granola_sync",
   "crates/graphql/complete_graph",
@@ -112,7 +113,6 @@ members = [
   "crates/integration_tests/local_e2e",
   "crates/item_filter_index",
   "crates/jev",
-  "crates/loops_client",
   "crates/macro_authorization",
   "crates/macro_config",
   "crates/macro_event_broker",
@@ -559,11 +559,11 @@ ai_projections = { path = "crates/ai_projections" }
 ai_tools = { path = "crates/ai_tools" }
 ai_toolset = { path = "crates/ai_toolset" }
 ai_usage = { path = "crates/ai_usage" }
-analytics_client = { path = "crates/analytics_client" }
-anthropic = { path = "crates/anthropic" }
+analytics_client = { path = "crates/clients/analytics_client" }
+anthropic = { path = "crates/clients/anthropic" }
 attachment = { path = "crates/attachment" }
 attention_feed = { path = "crates/attention_feed" }
-authentication_service_client = { path = "crates/authentication_service_client" }
+authentication_service_client = { path = "crates/clients/authentication_service_client" }
 bot_id = { path = "crates/bot_id" }
 bot_token = { path = "crates/bot_token" }
 bots = { path = "crates/bots", default-features = false }
@@ -589,10 +589,10 @@ cognition = { path = "crates/cognition" }
 collab_surface = { path = "crates/collab_surface" }
 comms_db_client = { path = "crates/comms_db_client" }
 complete_graph = { path = "crates/graphql/complete_graph" }
-connect_client = { path = "crates/connect_client" }
+connect_client = { path = "crates/clients/connect_client" }
 connection = { path = "crates/connection", default-features = false }
 connection_gateway = { path = "services/connection_gateway" }
-connection_gateway_client = { path = "crates/connection_gateway_client" }
+connection_gateway_client = { path = "crates/clients/connection_gateway_client" }
 connection_gateway_models = { path = "crates/connection_gateway_models" }
 contacts = { path = "crates/contacts", default-features = false }
 cowlike = { path = "crates/cowlike" }
@@ -606,7 +606,7 @@ databases = { path = "crates/databases" }
 databases_sql = { path = "crates/databases_sql" }
 decode_jwt = { path = "crates/decode_jwt" }
 dictation = { path = "crates/dictation" }
-document_storage_service_client = { path = "crates/document_storage_service_client" }
+document_storage_service_client = { path = "crates/clients/document_storage_service_client" }
 document_sub_type = { path = "crates/document_sub_type", default-features = false }
 documents = { path = "crates/documents", default-features = false }
 documents_hex = { package = "documents", path = "crates/documents" }
@@ -617,7 +617,7 @@ email = { path = "crates/email" }
 email_api_client = { path = "crates/email_api_client" }
 email_db_client = { path = "crates/email_db_client" }
 email_formatting = { path = "crates/email_formatting" }
-email_service_client = { path = "crates/email_service_client" }
+email_service_client = { path = "crates/clients/email_service_client" }
 email_utils = { path = "crates/email_utils" }
 email_validator = { path = "crates/email_validator" }
 embedding = { path = "crates/embedding" }
@@ -636,13 +636,13 @@ filter_ast = { path = "crates/filter_ast" }
 foreign_entity = { path = "crates/foreign_entity", default-features = false }
 forms = { path = "crates/forms" }
 frecency = { path = "crates/frecency" }
-fusionauth = { path = "crates/fusionauth" }
+fusionauth = { path = "crates/clients/fusionauth" }
 genai_telemetry = { path = "crates/genai_telemetry" }
 generic_email_domains = { path = "crates/generic_email_domains" }
 git_patch = { path = "crates/git_patch" }
 github = { path = "crates/github", default-features = false }
 github_pull_requests = { path = "crates/github_pull_requests", default-features = false }
-gmail_client = { path = "crates/gmail_client" }
+gmail_client = { path = "crates/clients/gmail_client" }
 google_token = { path = "crates/google_token" }
 granola_sync = { path = "crates/granola_sync" }
 graphql_activity = { path = "crates/graphql/graphql_activity" }
@@ -684,15 +684,15 @@ jev = { path = "crates/jev" }
 kafka_util = { path = "crates/kafka_util" }
 lambda_client = { path = "crates/aws/lambda_client" }
 last_online_tracker = { path = "crates/last_online_tracker" }
-lexical_client = { path = "crates/lexical_client" }
+lexical_client = { path = "crates/clients/lexical_client" }
 lexical_mention_extractor = { path = "crates/lexical_mention_extractor" }
 local_e2e_test_support = { path = "crates/local_e2e_test_support" }
-loops_client = { path = "crates/loops_client" }
+loops_client = { path = "crates/clients/loops_client" }
 macro_auth = { path = "crates/macro_auth" }
 macro_authorization = { path = "crates/macro_authorization", default-features = false }
 macro_aws_config = { path = "crates/aws/macro_aws_config" }
 macro_axum_utils = { path = "crates/macro_axum_utils" }
-macro_cache_client = { path = "crates/macro_cache_client", default-features = false }
+macro_cache_client = { path = "crates/clients/macro_cache_client", default-features = false }
 macro_config = { path = "crates/macro_config" }
 macro_config_derive = { path = "crates/macro_config_derive" }
 macro_cors = { path = "crates/macro_cors" }
@@ -705,16 +705,16 @@ macro_event_broker = { path = "crates/macro_event_broker", default-features = fa
 macro_event_topics = { path = "crates/macro_event_topics" }
 macro_middleware = { path = "crates/macro_middleware", default-features = false }
 macro_queues = { path = "crates/macro_queues" }
-macro_redis = { path = "crates/macro_redis" }
+macro_redis = { path = "crates/clients/macro_redis" }
 macro_service_urls = { path = "crates/macro_service_urls" }
-macro_sha_count_client = { path = "crates/macro_sha_count_client" }
+macro_sha_count_client = { path = "crates/clients/macro_sha_count_client" }
 macro_sync_service_jwt = { path = "crates/macro_sync_service_jwt" }
 macro_tower_layers = { path = "crates/macro_tower_layers" }
 macro_user_id = { path = "crates/macro_user_id" }
 macro_uuid = { path = "crates/macro_uuid" }
 maybe_send = { path = "crates/maybe_send" }
 mcp_auth_proxy = { path = "services/mcp_auth_proxy" }
-mcp_client = { path = "crates/mcp_client" }
+mcp_client = { path = "crates/clients/mcp_client" }
 mcp_select = { path = "crates/mcp_select" }
 mcp_toolset = { path = "crates/mcp_toolset" }
 memory = { path = "crates/memory" }
@@ -754,8 +754,8 @@ notification_hex = { package = "notification", path = "crates/notification" }
 notification_inbox = { path = "crates/notification_inbox" }
 notification_state = { path = "crates/notification_state" }
 onboarding = { path = "crates/onboarding" }
-opensearch_client = { path = "crates/opensearch_client" }
-opensearch_query_builder = { path = "crates/opensearch_query_builder" }
+opensearch_client = { path = "crates/clients/opensearch_client" }
+opensearch_query_builder = { path = "crates/clients/opensearch_query_builder" }
 pipedream_mcp = { path = "crates/pipedream_mcp" }
 pptx_engine = { path = "crates/pptx_engine", default-features = false }
 predicate-index = { path = "crates/predicate_index" }
@@ -777,7 +777,7 @@ s3_key = { path = "crates/s3_key" }
 saved_views = { path = "crates/saved_views" }
 scheduled_action = { path = "crates/scheduled_action" }
 search_service = { path = "crates/search_service" }
-search_service_client = { path = "crates/search_service_client" }
+search_service_client = { path = "crates/clients/search_service_client" }
 secretsmanager_client = { path = "crates/aws/secretsmanager_client" }
 serde_utils = { path = "crates/serde_utils" }
 ses_client = { path = "crates/aws/ses_client" }
@@ -793,11 +793,11 @@ soup_realtime = { path = "crates/soup_realtime", default-features = false }
 sqs_client = { path = "crates/aws/sqs_client", default-features = false }
 sqs_worker = { path = "crates/aws/sqs_worker" }
 static_file = { path = "crates/static_file", default-features = false }
-static_file_service_client = { path = "crates/static_file_service_client" }
+static_file_service_client = { path = "crates/clients/static_file_service_client" }
 stream = { path = "crates/stream" }
 sync_router = { path = "crates/sync_router" }
 sync_service_bebop_schema = { path = "services/sync-service/bebop-schema" }
-sync_service_client = { path = "crates/sync_service_client" }
+sync_service_client = { path = "crates/clients/sync_service_client" }
 sync_service_hex = { path = "crates/sync_service" }
 system_properties = { path = "crates/system_properties" }
 system_skills = { path = "crates/system_skills" }

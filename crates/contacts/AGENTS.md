@@ -20,7 +20,7 @@ and kept in sync via the connection gateway.
 - Owns: the contact graph (who a user has an explicit or inferred
   relationship with) and its HTTP/queue surface.
 - Not here: CRM companies/contacts (external organizations) → `crates/crm`;
-  connection-level presence/relay → `crates/connection_gateway_client`.
+  connection-level presence/relay → `crates/clients/connection_gateway_client`.
 
 ## Boundaries
 

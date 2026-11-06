@@ -29,7 +29,7 @@ with an `UpstreamErrorResponse { message, code }` body.
 ## Boundaries
 
 - Depends on: `http`; `reqwest` and `axum` behind features of the same name.
-- Used by: `crates/fusionauth`, `crates/github`, `services/authentication_service`.
+- Used by: `crates/clients/fusionauth`, `crates/github`, `services/authentication_service`.
 
 ## Recipes
 
