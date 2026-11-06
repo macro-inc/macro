@@ -24,6 +24,9 @@ pub const WORKSPACE_TEMPLATE: WorkspaceTemplate = WorkspaceTemplate {
     files: include!(concat!(env!("OUT_DIR"), "/workspace_template.rs")),
 };
 
+/// Initial call voice when the creator has not selected one.
+pub const DEFAULT_VOICE_MODEL: &str = "aura-2-arcas-en";
+
 /// Who the agent is, written into its charter when the repo is created.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,7 +76,10 @@ impl WorkspaceTemplate {
                                 .unwrap_or("the team owner"),
                         )
                 } else if file.path == "config/voice.json" {
-                    let model = seed.voice.as_deref().unwrap_or("aura-2-arcas-en");
+                    let model = match seed.voice.as_deref() {
+                        Some(model) => model,
+                        None => DEFAULT_VOICE_MODEL,
+                    };
                     format!(
                         "{}\n",
                         serde_json::to_string_pretty(&crate::domain::voice::VoiceConfig {

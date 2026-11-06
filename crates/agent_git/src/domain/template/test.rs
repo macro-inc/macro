@@ -55,3 +55,28 @@ fn every_canonical_file_is_seeded_with_its_contents() {
         }
     }
 }
+
+#[test]
+fn voice_selection_preserves_an_explicit_choice_and_defaults_only_when_absent() {
+    for (voice, expected) in [
+        (None, super::DEFAULT_VOICE_MODEL),
+        (Some("aura-2-thalia-en".to_owned()), "aura-2-thalia-en"),
+    ] {
+        let files = WORKSPACE_TEMPLATE
+            .render(&PersonaSeed {
+                voice,
+                name: "Example".into(),
+                job_description: "Help with operations".into(),
+                personality: "Thoughtful".into(),
+                creator_id: None,
+            })
+            .unwrap();
+        let file = files
+            .iter()
+            .find(|file| file.path == "config/voice.json")
+            .unwrap();
+        let config: crate::domain::voice::VoiceConfig =
+            serde_json::from_str(&file.contents).unwrap();
+        assert_eq!(config.model, expected);
+    }
+}
