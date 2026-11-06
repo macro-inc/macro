@@ -18,12 +18,6 @@ vi.mock('@core/constant/allBlocks', () => ({
 const context = {
   timezone: 'UTC',
   defaultModel: 'claude',
-  labels: [],
-  tags: [],
-  channels: [],
-  folders: [],
-  people: [],
-  agents: [],
   decisions: true,
   codeSteps: true,
 };

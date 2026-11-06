@@ -18,15 +18,11 @@ vi.mock('@core/constant/allBlocks', () => ({
 const context = {
   timezone: 'America/New_York',
   defaultModel: 'claude',
-  labels: ['Finance'],
-  tags: [],
-  channels: [{ name: 'eng', id: 'channel-1' }],
-  folders: [],
-  people: [],
-  agents: [{ name: 'Researcher', botId: 'bot-1' }],
   decisions: true,
   codeSteps: true,
 };
+
+const BUG_REPORTS = 'every time a message gets sent in bug-reports make a task';
 
 const labelStep = {
   type: 'code',
@@ -53,26 +49,20 @@ beforeEach(() => {
 });
 
 describe('composeRoutine', () => {
-  it('asks the scheduler to draft it with what the drafter may write and name', async () => {
+  it('sends only the description and settings, never the workspace', async () => {
     draftRoutine.mockResolvedValue(ok(routine()));
 
-    const draft = await composeRoutine('triage my inbox', context);
+    const draft = await composeRoutine(BUG_REPORTS, context);
 
+    // The drafter looks up bug-reports itself, so a workspace of any size
+    // sends the same small body.
     expect(draftRoutine).toHaveBeenCalledWith({
-      draft: { type: 'routine', description: 'triage my inbox' },
+      draft: { type: 'routine', description: BUG_REPORTS },
       context: {
         timezone: 'America/New_York',
         agentModel: 'claude',
         code: true,
         conditions: true,
-        workspace: {
-          labels: ['Finance'],
-          tags: [],
-          channels: [{ name: 'eng', id: 'channel-1' }],
-          folders: [],
-          people: [],
-          agents: [{ name: 'Researcher', botId: 'bot-1' }],
-        },
       },
     });
     if (typeof draft === 'string') throw new Error(draft);
@@ -99,6 +89,33 @@ describe('composeRoutine', () => {
     expect(await composeRoutine('x', context)).toBe(
       'Couldn’t draft that routine. Please try again.'
     );
+  });
+
+  it('says when the request was too large, timed out or hit the usage limit', async () => {
+    const generic = 'Couldn’t draft that routine. Please try again.';
+    draftRoutine.mockResolvedValueOnce(
+      err([{ code: 'PAYLOAD_TOO_LARGE', message: 'Request too large' }])
+    );
+    const tooLarge = await composeRoutine(BUG_REPORTS, context);
+    draftRoutine.mockResolvedValueOnce(
+      err([{ code: 'TIMEOUT', message: 'Request timed out' }])
+    );
+    const timedOut = await composeRoutine(BUG_REPORTS, context);
+    draftRoutine.mockResolvedValueOnce(
+      err([
+        {
+          code: 'AI_USAGE_LIMIT',
+          reason: 'ai_free_allowance_exhausted',
+          message: 'You’ve used this month’s free AI.',
+        },
+      ])
+    );
+    const limited = await composeRoutine(BUG_REPORTS, context);
+
+    expect(tooLarge).toMatch(/too long/);
+    expect(timedOut).toMatch(/too long|took/);
+    expect(new Set([tooLarge, timedOut, generic]).size).toBe(3);
+    expect(limited).toBe('You’ve used this month’s free AI.');
   });
 });
 
