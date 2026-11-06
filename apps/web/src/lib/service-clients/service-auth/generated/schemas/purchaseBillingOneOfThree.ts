@@ -6,7 +6,11 @@
  */
 import type { PurchaseBillingOneOfThreeKind } from './purchaseBillingOneOfThreeKind';
 
+/**
+ * Provide the computer without a charge.
+ */
 export type PurchaseBillingOneOfThree = {
   kind: PurchaseBillingOneOfThreeKind;
+  /** Reason for this decision or failure. */
   reason: string;
 };

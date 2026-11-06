@@ -194,8 +194,8 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         status.setup,
         Some(crate::domain::models::SetupProgress {
             step: crate::domain::models::SetupStep::Creating,
-            position: 2,
-            total: 5,
+            position: 1,
+            total: 4,
         })
     );
     assert_eq!(
@@ -715,7 +715,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
     );
     assert_eq!(
         computer.status().setup.unwrap().step,
-        crate::domain::models::SetupStep::Paying
+        crate::domain::models::SetupStep::Creating
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);
     service.repo.effect_run_after.lock().unwrap().clear();

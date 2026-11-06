@@ -13,8 +13,12 @@ import type { ComputerSize } from './computerSize';
 export interface Quote {
   /** In the currency's smallest unit. */
   amount: number;
+  /** Billing currency code. */
   currency: string;
+  /** Subscription billing interval. */
   interval: BillingInterval;
+  /** Stripe price saved for billing replay. */
   priceId: string;
+  /** Purchased catalog size. */
   size: ComputerSize;
 }

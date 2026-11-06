@@ -15,7 +15,9 @@ export interface Persona {
   /** Written to `/etc/macro/personas/<os_user>.env` and loaded by the
 persona's unit as its `EnvironmentFile`. */
   config: PersonaConfig;
+  /** Service installed for the persona. */
   extra_service: PersonaService;
+  /** Display name. */
   name: string;
   /** Linux user created for the persona; its service runs as this user. */
   os_user: string;

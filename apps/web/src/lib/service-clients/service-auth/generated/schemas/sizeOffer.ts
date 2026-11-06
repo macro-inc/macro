@@ -12,15 +12,27 @@ import type { Quote } from './quote';
  * A size with its resources, price and whether it can be bought now.
  */
 export interface SizeOffer {
-  /** @minimum 0 */
+  /**
+   * Root disk size in GiB.
+   * @minimum 0
+   */
   diskGb: number;
-  /** @minimum 0 */
+  /**
+   * Memory in GiB.
+   * @minimum 0
+   */
   memoryGb: number;
   /** The caller asked to hear when this size is back. */
   notifyRequested: boolean;
+  /** Price for one computer. */
   quote: Quote;
+  /** Purchased catalog size. */
   size: ComputerSize;
+  /** Whether no host can currently sell this size. */
   soldOut: boolean;
-  /** @minimum 0 */
+  /**
+   * Virtual CPU count.
+   * @minimum 0
+   */
   vcpus: number;
 }

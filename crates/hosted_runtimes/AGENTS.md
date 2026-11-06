@@ -129,8 +129,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   price id, currency and interval. Without a subscription the quote returns
   `NoSubscription`; billing errors propagate.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
-  `ComputerStatus` with `setup: Option<SetupProgress>` (Paying → Creating → Booting →
-  Connecting → Ready) until macrod first connects. Readable by any team member.
+  `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
+  Connecting → Ready, positions 1–4) until macrod first connects. Pending payment
+  reports Creating (1 of 4); setup never exposes a payment phase. Payment outcomes
+  remain in the billing fields `payment` and `compReason`. Readable by any team member.
 - **Retry/reprovision**: `ComputerService::retry(team_id, computer_id)` → `ComputerStatus`,
   exposed to team admins at `POST /team/computers/{computer_id}/retry`. Only
   `Failed` computers can be retried; other phases return `NotFailed` (409).

@@ -15,7 +15,11 @@ export interface SetupProgress {
    * @minimum 0
    */
   position: number;
+  /** Current setup stage. */
   step: SetupStep;
-  /** @minimum 0 */
+  /**
+   * Number of setup stages.
+   * @minimum 0
+   */
   total: number;
 }

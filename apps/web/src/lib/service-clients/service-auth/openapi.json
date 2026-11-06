@@ -2096,11 +2096,13 @@
     "/internal/computers/quote": {
       "get": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Quote a computer for an authenticated internal caller.",
         "operationId": "internal_quote_computer",
         "parameters": [
           {
             "name": "teamId",
             "in": "query",
+            "description": "Team that owns the computer.",
             "required": true,
             "schema": {
               "type": "string",
@@ -2110,6 +2112,7 @@
           {
             "name": "size",
             "in": "query",
+            "description": "Purchased catalog size.",
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/ComputerSize"
@@ -2143,6 +2146,7 @@
     "/internal/computers/{computer_id}": {
       "get": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Read computer status for an authenticated internal caller.",
         "operationId": "internal_get_computer",
         "parameters": [
           {
@@ -2157,6 +2161,7 @@
           {
             "name": "teamId",
             "in": "query",
+            "description": "Team that owns the computer.",
             "required": true,
             "schema": {
               "type": "string",
@@ -4414,6 +4419,7 @@
           {
             "name": "size",
             "in": "query",
+            "description": "Purchased catalog size.",
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/ComputerSize"
@@ -7416,7 +7422,8 @@
             "description": "When billing stops, for a computer canceled at period end."
           },
           "catalogEntry": {
-            "$ref": "#/components/schemas/CatalogEntryId"
+            "$ref": "#/components/schemas/CatalogEntryId",
+            "description": "Versioned catalog entry saved at purchase."
           },
           "compReason": {
             "type": ["string", "null"],
@@ -7424,33 +7431,42 @@
           },
           "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Time the computer was reserved."
           },
           "diskGib": {
-            "$ref": "#/components/schemas/DiskGib"
+            "$ref": "#/components/schemas/DiskGib",
+            "description": "Root disk limit saved at purchase."
           },
           "harnessId": {
             "type": ["string", "null"],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Harness claimed by this guest."
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Stable resource identity."
           },
           "memoryGib": {
-            "$ref": "#/components/schemas/MemoryGib"
+            "$ref": "#/components/schemas/MemoryGib",
+            "description": "Memory limit saved at purchase."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Display name."
           },
           "payment": {
-            "$ref": "#/components/schemas/PaymentOutcome"
+            "$ref": "#/components/schemas/PaymentOutcome",
+            "description": "Latched purchase outcome."
           },
           "personaName": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Display name of the installed persona."
           },
           "poweredOn": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether power is requested on."
           },
           "retainedUntil": {
             "type": ["string", "null"],
@@ -7469,13 +7485,16 @@
             ]
           },
           "size": {
-            "$ref": "#/components/schemas/ComputerSize"
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
           },
           "status": {
-            "$ref": "#/components/schemas/ComputerStatusKind"
+            "$ref": "#/components/schemas/ComputerStatusKind",
+            "description": "Observed guest status."
           },
           "vcpus": {
-            "$ref": "#/components/schemas/Vcpus"
+            "$ref": "#/components/schemas/Vcpus",
+            "description": "Virtual CPU count."
           }
         }
       },
@@ -8708,7 +8727,8 @@
         "required": ["billing", "teamId", "createdBy", "size"],
         "properties": {
           "billing": {
-            "$ref": "#/components/schemas/PurchaseBilling"
+            "$ref": "#/components/schemas/PurchaseBilling",
+            "description": "Purchase funding or billing state."
           },
           "createdBy": {
             "type": "string",
@@ -8722,7 +8742,8 @@
             "description": "Joined into the same subscription update, e.g. an agent seat."
           },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Display name."
           },
           "persona": {
             "oneOf": [
@@ -8730,16 +8751,19 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/Persona"
+                "$ref": "#/components/schemas/Persona",
+                "description": "Optional guest persona configuration."
               }
             ]
           },
           "size": {
-            "$ref": "#/components/schemas/ComputerSize"
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
           },
           "teamId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Team that owns the computer."
           }
         }
       },
@@ -8905,7 +8929,8 @@
         "required": ["size"],
         "properties": {
           "size": {
-            "$ref": "#/components/schemas/ComputerSize"
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
           }
         }
       },
@@ -9146,10 +9171,12 @@
             }
           },
           "extra_service": {
-            "$ref": "#/components/schemas/PersonaService"
+            "$ref": "#/components/schemas/PersonaService",
+            "description": "Service installed for the persona."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Display name."
           },
           "os_user": {
             "type": "string",
@@ -9289,7 +9316,8 @@
         "required": ["on"],
         "properties": {
           "on": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Requested power state."
           }
         }
       },
@@ -9354,6 +9382,7 @@
         "oneOf": [
           {
             "type": "object",
+            "description": "Charge the team subscription.",
             "required": ["kind"],
             "properties": {
               "kind": {
@@ -9364,6 +9393,7 @@
           },
           {
             "type": "object",
+            "description": "Provide the computer without a charge.",
             "required": ["reason", "kind"],
             "properties": {
               "kind": {
@@ -9371,7 +9401,8 @@
                 "enum": ["comped"]
               },
               "reason": {
-                "type": "string"
+                "type": "string",
+                "description": "Reason for this decision or failure."
               }
             }
           }
@@ -9384,10 +9415,12 @@
         "required": ["size"],
         "properties": {
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Display name."
           },
           "size": {
-            "$ref": "#/components/schemas/ComputerSize"
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
           }
         },
         "additionalProperties": false
@@ -9399,7 +9432,8 @@
         "properties": {
           "computerId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Computer this operation addresses."
           }
         }
       },
@@ -9469,16 +9503,20 @@
             "description": "In the currency's smallest unit."
           },
           "currency": {
-            "type": "string"
+            "type": "string",
+            "description": "Billing currency code."
           },
           "interval": {
-            "$ref": "#/components/schemas/BillingInterval"
+            "$ref": "#/components/schemas/BillingInterval",
+            "description": "Subscription billing interval."
           },
           "priceId": {
-            "type": "string"
+            "type": "string",
+            "description": "Stripe price saved for billing replay."
           },
           "size": {
-            "$ref": "#/components/schemas/ComputerSize"
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
           }
         }
       },
@@ -9701,11 +9739,13 @@
             "minimum": 0
           },
           "step": {
-            "$ref": "#/components/schemas/SetupStep"
+            "$ref": "#/components/schemas/SetupStep",
+            "description": "Current setup stage."
           },
           "total": {
             "type": "integer",
             "format": "int32",
+            "description": "Number of setup stages.",
             "minimum": 0
           }
         }
@@ -9713,7 +9753,7 @@
       "SetupStep": {
         "type": "string",
         "description": "Steps a new computer goes through, in order.",
-        "enum": ["paying", "creating", "booting", "connecting", "ready"]
+        "enum": ["creating", "booting", "connecting", "ready"]
       },
       "SizeOffer": {
         "type": "object",
@@ -9731,11 +9771,13 @@
           "diskGb": {
             "type": "integer",
             "format": "int32",
+            "description": "Root disk size in GiB.",
             "minimum": 0
           },
           "memoryGb": {
             "type": "integer",
             "format": "int32",
+            "description": "Memory in GiB.",
             "minimum": 0
           },
           "notifyRequested": {
@@ -9743,17 +9785,21 @@
             "description": "The caller asked to hear when this size is back."
           },
           "quote": {
-            "$ref": "#/components/schemas/Quote"
+            "$ref": "#/components/schemas/Quote",
+            "description": "Price for one computer."
           },
           "size": {
-            "$ref": "#/components/schemas/ComputerSize"
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
           },
           "soldOut": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether no host can currently sell this size."
           },
           "vcpus": {
             "type": "integer",
             "format": "int32",
+            "description": "Virtual CPU count.",
             "minimum": 0
           }
         }
@@ -9814,7 +9860,8 @@
         "required": ["priceId", "quantity"],
         "properties": {
           "priceId": {
-            "type": "string"
+            "type": "string",
+            "description": "Stripe price saved for billing replay."
           },
           "quantity": {
             "type": "integer",

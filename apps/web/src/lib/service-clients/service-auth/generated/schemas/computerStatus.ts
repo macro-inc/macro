@@ -25,22 +25,35 @@ import type { Vcpus } from './vcpus';
 export interface ComputerStatus {
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
+  /** Versioned catalog entry saved at purchase. */
   catalogEntry: CatalogEntryId;
   /** Present for a comped purchase, including after release. */
   compReason?: ComputerStatusCompReason;
+  /** Time the computer was reserved. */
   createdAt: string;
+  /** Root disk limit saved at purchase. */
   diskGib: DiskGib;
+  /** Harness claimed by this guest. */
   harnessId?: ComputerStatusHarnessId;
+  /** Stable resource identity. */
   id: string;
+  /** Memory limit saved at purchase. */
   memoryGib: MemoryGib;
+  /** Display name. */
   name: string;
+  /** Latched purchase outcome. */
   payment: PaymentOutcome;
+  /** Display name of the installed persona. */
   personaName?: ComputerStatusPersonaName;
+  /** Whether power is requested on. */
   poweredOn: boolean;
   /** When the disk is destroyed, for a canceled computer. */
   retainedUntil?: ComputerStatusRetainedUntil;
   setup?: ComputerStatusSetup;
+  /** Purchased catalog size. */
   size: ComputerSize;
+  /** Observed guest status. */
   status: ComputerStatusKind;
+  /** Virtual CPU count. */
   vcpus: Vcpus;
 }

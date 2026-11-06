@@ -7,5 +7,8 @@
 import type { ComputerSize } from './computerSize';
 
 export type QuoteTeamComputerParams = {
+  /**
+   * Purchased catalog size.
+   */
   size: ComputerSize;
 };

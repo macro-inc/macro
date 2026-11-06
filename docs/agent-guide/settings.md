@@ -801,8 +801,9 @@ To buy one as a team admin:
    payment declined (402), or a subscription that can't add computers (422).
    On success the dialog closes with "Computer purchased. Setting it up now."
 
-The new row reads **Setting up** with its step (confirming payment, creating,
-starting up, connecting; "step N of 5") and the list polls every 3 seconds
+The new row reads **Setting up** with its step (creating, starting up,
+connecting, ready; "step N of 4"). Payment recovery also reports creating;
+no payment stage is shown. The list polls every 3 seconds
 while any computer is setting up, waking or stopping. Once ready a row shows
 its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
 **Stopped**, **Failed**), its Claude access mode, and the runtime it

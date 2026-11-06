@@ -9,5 +9,6 @@
  * Answer of a purchase.
  */
 export interface Purchased {
+  /** Computer this operation addresses. */
   computerId: string;
 }

@@ -12,7 +12,6 @@ export type SetupStep = (typeof SetupStep)[keyof typeof SetupStep];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SetupStep = {
-  paying: 'paying',
   creating: 'creating',
   booting: 'booting',
   connecting: 'connecting',

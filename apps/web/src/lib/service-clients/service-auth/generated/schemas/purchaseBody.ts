@@ -12,6 +12,8 @@ import type { PurchaseBodyName } from './purchaseBodyName';
  * Body of a team purchase.
  */
 export interface PurchaseBody {
+  /** Display name. */
   name?: PurchaseBodyName;
+  /** Purchased catalog size. */
   size: ComputerSize;
 }

@@ -271,8 +271,6 @@ pub enum ComputerStatusKind {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SetupStep {
-    /// Resolving the purchase payment.
-    Paying,
     /// Creating the guest.
     Creating,
     /// Starting the guest operating system.
@@ -345,7 +343,7 @@ impl Computer {
     pub fn status(&self) -> ComputerStatus {
         let setup_step = match self.state.phase {
             _ if self.enrolled_at.is_some() => None,
-            Phase::PendingPayment { .. } => Some(SetupStep::Paying),
+            Phase::PendingPayment { .. } => Some(SetupStep::Creating),
             Phase::Provisioning { .. } if self.harness_id.is_none() => Some(SetupStep::Creating),
             Phase::Provisioning { .. } => Some(SetupStep::Booting),
             Phase::Booting { .. } | Phase::Restarting { .. } => Some(SetupStep::Connecting),

@@ -59,7 +59,6 @@ export function formatComputerDate(value: string): string {
 
 function setupStepLabel(step: SetupStep): string {
   return match(step)
-    .with('paying', () => t('computers.stepPaying'))
     .with('creating', () => t('computers.stepCreating'))
     .with('booting', () => t('computers.stepBooting'))
     .with('connecting', () => t('computers.stepConnecting'))
