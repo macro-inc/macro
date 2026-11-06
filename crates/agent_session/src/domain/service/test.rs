@@ -24,6 +24,83 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tracing::instrument::WithSubscriber as _;
 
+const CREDENTIAL: &str = "Bearer placeholder-session-credential";
+
+#[tokio::test]
+async fn actor_session_opening_log_shape_omits_server_headers() {
+    use agent_client_protocol::RawJsonRpcMessage;
+    use agent_client_protocol::schema::v1::{
+        HttpHeader, InitializeResponse, McpServer, McpServerHttp,
+    };
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = AgentSessionId::new();
+    repo.insert_session(test_agent_session(session));
+    let claim = claim_for_test(&repo, session).await;
+    let (outbound, mut received) = mpsc::channel(8);
+    let (_inbound_sender, inbound) = mpsc::channel(8);
+    let (_commands_sender, commands) = mpsc::channel(8);
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let server = McpServer::Http(
+        McpServerHttp::new("macro", "https://egress.example.test/mcp-macro")
+            .headers(vec![HttpHeader::new("Authorization", CREDENTIAL)]),
+    );
+    let mut actor = SessionActor::new(
+        session,
+        None,
+        "/workspace".to_owned(),
+        vec![server],
+        PermissionPolicy::AutoAccept,
+        RecordingTransport { outbound, inbound },
+        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        commands,
+        handshake,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::AcpReady,
+        }))
+        .await;
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(initialize))) =
+        received.recv().await.unwrap()
+    else {
+        panic!("expected initialize request")
+    };
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::response(
+                initialize.id,
+                Ok(serde_json::to_value(InitializeResponse::new(PROTOCOL_VERSION)).unwrap()),
+            ),
+        ))))
+        .await;
+
+    let opening = received.recv().await.unwrap();
+    assert!(
+        serde_json::to_string(&opening)
+            .unwrap()
+            .contains(CREDENTIAL)
+    );
+    let history = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .unwrap();
+    let logged_opening = history
+        .iter()
+        .find(|entry| matches!(&entry.entry.content,
+            Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))))
+                if request.method.as_ref() == "session/new"
+        ))
+        .expect("session/new logged");
+    let encoded = serde_json::to_value(&logged_opening.entry.content).unwrap();
+    assert!(!encoded.to_string().contains(CREDENTIAL));
+    assert_eq!(
+        encoded["content"]["params"]["mcpServers"],
+        serde_json::json!([])
+    );
+}
+
 mod first_output;
 mod presentation;
 

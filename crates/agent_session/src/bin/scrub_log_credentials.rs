@@ -57,6 +57,7 @@ async fn run(args: Args) -> Result<(), rootcause::Report> {
     let span = tracing::Span::current();
     let mut examined = 0;
     let mut changed = 0;
+    let mut skipped = 0;
     let mut last_id = args.after_id;
 
     loop {
@@ -65,11 +66,14 @@ async fn run(args: Args) -> Result<(), rootcause::Report> {
             .map_err(rootcause::Report::new)?;
         examined += batch.examined;
         changed += batch.changed;
+        skipped += batch.skipped;
         last_id = batch.last_id.or(last_id);
         span.record("examined", examined);
         span.record("changed", changed);
         if let Some(id) = last_id {
             span.record("last_id", tracing::field::display(id));
+            // Each batch, so a run that stops still says where to resume.
+            println!("examined={examined} changed={changed} skipped={skipped} last_id={id}");
         }
         if batch.examined < args.limit.get() {
             break;
@@ -77,7 +81,6 @@ async fn run(args: Args) -> Result<(), rootcause::Report> {
         tokio::time::sleep(Duration::from_millis(args.pause_ms)).await;
     }
 
-    let last_id = last_id.map_or_else(|| "none".to_owned(), |id| id.to_string());
-    println!("examined={examined} changed={changed} last_id={last_id}");
+    println!("done apply={}", args.apply);
     Ok(())
 }

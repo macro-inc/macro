@@ -7,6 +7,8 @@ use agent_client_protocol::schema::v1::{
     ResumeSessionResponse, SelectedPermissionOutcome, SessionCapabilities,
     SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
+
+const CREDENTIAL: &str = "Bearer placeholder-session-credential";
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::{
     AgentAction, AgentActionId, AgentPermissionAction, PermissionAnswer,
@@ -282,6 +284,48 @@ fn initialize_success_sends_session_new() {
     assert!(matches!(effects[0], Effect::Log { .. }));
     assert_eq!(sent_request_ids(&effects), [request_id(1)]);
     assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+}
+
+#[test]
+fn session_opening_sends_servers_while_its_log_shape_removes_credentials() {
+    use crate::domain::model::Message;
+    use agent_client_protocol::schema::v1::HttpHeader;
+
+    let server = McpServer::Http(
+        McpServerHttp::new("macro", "https://egress.example.test/mcp-macro")
+            .headers(vec![HttpHeader::new("Authorization", CREDENTIAL)]),
+    );
+    let mut machine = SessionMachine::new(
+        AgentSessionId::TEST_A,
+        "/workspace".to_owned(),
+        vec![server],
+        PermissionPolicy::AutoAccept,
+    );
+    machine.handle(acp_ready());
+    let effects = machine.handle(initialized());
+    let opening = effects
+        .iter()
+        .find_map(|effect| match effect {
+            Effect::Send { message, .. } => match message {
+                ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request)))
+                    if request.method.as_ref() == "session/new" =>
+                {
+                    Some(message)
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .expect("session/new sent");
+
+    let wire = serde_json::to_string(opening).unwrap();
+    assert!(wire.contains(CREDENTIAL));
+    let logged = serde_json::to_value(Message::ToRuntime(opening.clone())).unwrap();
+    assert!(!logged.to_string().contains(CREDENTIAL));
+    assert_eq!(
+        logged["content"]["params"]["mcpServers"],
+        serde_json::json!([])
+    );
 }
 
 #[test]
