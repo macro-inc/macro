@@ -53,6 +53,11 @@ export type {
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
 export type { CallMessage } from './entities/calls/message';
+export { CallRecord } from './entities/calls/call-record';
+export { CallConnection, type JoinOptions } from './entities/calls/connection';
+export { CallParticipant } from './entities/calls/participant';
+export type { CallSummary } from './entities/calls/namespace';
+export { InOtherCallError, AlreadyConnectedError, CallEndedError } from './entities/calls/errors';
 export {
   ConnectedApp,
   ConnectedTool,
