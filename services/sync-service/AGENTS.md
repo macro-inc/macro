@@ -92,6 +92,7 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 - Deploy `PeerCommentUpdate` support before clients send it; validate these frames as comment-only for editors as well as commenters, and reject viewers.
 - Never run `just deploy-dev` / `just deploy-prod` without explicit approval.
 - Wait at least five minutes after a manual worker deployment before publishing clients that require its new protocol; the CI worker job waits out Durable Objects' default 300-second code-update deferral.
+- A new input to the worker's bundle that lives outside its workspace closure must be added to `.github/scripts/sync-worker-key.sh`, or CI can skip deploying a changed worker.
 
 ## Related
 
@@ -101,3 +102,5 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   connection. To regress connect-before-initialize, build without
   `create-default-state` and run `SYNC_TEST_UNINITIALIZED_ROOMS=true npx vitest run
   tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
+
+- Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.

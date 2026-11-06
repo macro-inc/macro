@@ -34,8 +34,8 @@ account that isn't a new agent continues to `/app/team-invite?id=<id>`.
 
 After the code or Google sign-in, an agent skips onboarding and goes to
 `/app/agent-setup`, a markdown page with the SDK token as plain page text, the
-product and SDK docs links, how to set a name and profile picture and create more
-tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
+product and SDK docs links, how to set a name and profile picture, install and pair
+`macrod`, and create more tokens, and a link to the app. The app shell sends an unconfirmed agent back here. An
 invited agent also joins the inviting team at this point; if that fails, the page
 says so and the invite stays pending: reloading tries again, and the emailed invite
 link still works after confirming. Each reload before following the link to
@@ -92,6 +92,12 @@ sign-in still apply. See the [authentication-service configuration guide](../../
 for restoring allowlist enforcement.
 
 ## GraphQL cache session lifecycle
+
+For local browser checks signed in through the passwordless HTTP API, copy the
+returned cookies into the browser context and set localStorage `macro:login` to
+`true` before the app loads. The app uses that hint to start its identity check;
+the HttpOnly session cookie alone does not start it. Normal UI login sets the
+hint automatically. The backend still verifies the session.
 
 Signed-out pages use the network client without creating the GraphQL cache,
 draft queue runner, or live-update subscriptions. Signing in activates them in
@@ -184,6 +190,11 @@ passwords and verification codes only in that browser, never in agent messages.
 For browsers using the Custom Tabs fallback, verify that the callback returns to
 the original Macro task. A callback for another attempt must leave the current
 attempt pending; a callback after process death must not restore that attempt.
+The first Google sign-in after a fresh install must land in the app, even while
+an over-the-air update finishes downloading: an update reload during the sheet
+or the session-code redemption used to return the user to `Login`, with the
+second tap then signing straight in. Check that PostHog shows no
+`native_webview_started` reload onto `#/login` right after the `login` event.
 
 After signing in, test background/foreground, force-stop/relaunch, logout, and
 signing in as another account. An entity link opened while signed out should
@@ -290,10 +301,16 @@ then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
 When the server suggests a work domain, the create form has no Skip button and
-shows an **Allow @domain emails to join** switch, on by default. Creating the
-team with it on sets the team's auto-join domain and, after the invites, emails
-up to 25 of the creator's same-domain contacts who are not on Macro, invited,
-or already sent a notice (`POST /team/domain-notice`). Creating the team does not leave the step: it
+shows two switches, both on by default and marked recommended: **Allow @domain
+emails to join** and **Notify your team via email**. Creating the team with the
+first on sets the team's auto-join domain. With both on, it then, after the
+invites, emails up to 25 of the creator's same-domain contacts who are not on
+Macro, invited, or already sent a notice (`POST /team/domain-notice`). The
+notice switch is disabled and reads off while domain join is off, because the
+server sends nothing to a team without an auto-join domain; turning domain
+join back on restores its earlier setting. Each switch has an info button
+beside it that explains the setting in a tooltip on hover or focus, and in a
+popover on tap on touch devices; pressing it never toggles the switch. Creating the team does not leave the step: it
 switches to the **You're on <team>** confirmation, the same panel members who
 were already on a team (auto-joined or invite-accepted) see. That panel has
 **Copy invite link** beside **Continue**; it copies the team's
@@ -398,6 +415,16 @@ The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-t
 survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
+
+### Stalled session refresh
+
+When an expired session triggers cookie-auth refresh, every waiting request and
+socket setup shares one refresh, which settles within 12 seconds as a
+retryable network failure, or sooner when the native network path drops.
+Cancelling one view stops only its own wait. After a timeout the next request
+starts a fresh refresh; a timeout never signs the user out or reloads the app.
+Returning to the app expires a refresh that started more than 12 seconds
+earlier, so requests after a resume start a fresh one instead of waiting.
 
 ### Google OAuth through a remote local stack
 

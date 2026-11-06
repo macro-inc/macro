@@ -83,6 +83,7 @@ impl AgentSessionRepo for StubSessions {
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
+            origin: Default::default(),
             repo_branch: self.repo_branch.clone(),
             id,
             owner_id: model_owner::Owner::User(

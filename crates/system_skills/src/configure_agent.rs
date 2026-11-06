@@ -35,7 +35,7 @@ Pass only the fields that should change; `ConfigureAgent` keeps the others.
 - **Permissions (`autoAcceptPermissions`)**: `true` lets sessions approve tool permission requests without asking, `false` makes them ask. Self-hosted harnesses only honor `true` when their operator allows bypass; the tool reports the refusal.
 - **Coding mode (`isCoding`)**: a coding agent works in a repository and answers a mention with a live session; a chat agent replies in the thread.
 
-Profile changes - display name, handle, description, picture - go through `ConfigureBot` instead.
+Profile changes - display name, handle, description, picture - go through `ConfigureBot` instead (in code mode, `Bot.update` on `macro.bots.byId`).
 
 ## Report
 

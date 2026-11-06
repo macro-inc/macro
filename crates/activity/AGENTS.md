@@ -39,7 +39,7 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `work_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
 
 ## Recipes
 
@@ -59,3 +59,5 @@ distribution.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- Session activity reads preserve `agent_correlation_id` and use session visibility; entity and subject feeds retain their existing authorization.

@@ -165,3 +165,145 @@ describe('skipped runs', () => {
     });
   });
 });
+
+describe('code steps in run history', () => {
+  it('decodes each SDK call a code step made', () => {
+    const record = toHistoryRecord({
+      id: 'record',
+      result: {
+        version: 1,
+        steps: [
+          {
+            path: '0',
+            kind: 'code',
+            calls: [
+              {
+                operation: 'cognition.decisions',
+                label: 'Classify content',
+                status: 'completed',
+                started_ms: 3,
+                duration_ms: 240,
+              },
+              {
+                operation: 'email.archiveThread',
+                label: 'Archive Thread',
+                write: true,
+                status: 'refused',
+                started_ms: 250,
+                duration_ms: 0,
+              },
+            ],
+            calls_truncated: true,
+            error: 'Error: can’t make changes in email',
+          },
+        ],
+      },
+      resource_id: null,
+      start_time: '2026-11-01T09:00:00Z',
+      end_time: '2026-11-01T09:00:01Z',
+      is_success: false,
+    });
+    expect(record.steps).toEqual([
+      {
+        path: '0',
+        kind: 'code',
+        calls: [
+          {
+            operation: 'cognition.decisions',
+            label: 'Classify content',
+            write: false,
+            status: 'completed',
+            startedMs: 3,
+            durationMs: 240,
+          },
+          {
+            operation: 'email.archiveThread',
+            label: 'Archive Thread',
+            write: true,
+            status: 'refused',
+            startedMs: 250,
+            durationMs: 0,
+          },
+        ],
+        callsTruncated: true,
+        error: 'Error: can’t make changes in email',
+      },
+    ]);
+  });
+});
+
+describe('step outputs and run starts in run history', () => {
+  const run = (startedBy: unknown, extra: object = {}) =>
+    toHistoryRecord({
+      id: 'record',
+      result: {
+        version: 1,
+        steps: [
+          {
+            path: '0',
+            kind: 'code',
+            output: { count: 2, ids: ['a', 'b'] },
+          },
+          {
+            path: '1',
+            kind: 'code',
+            output: { documentId: 'doc-1' },
+          },
+          { path: '2', kind: 'agent' },
+        ],
+        run: {
+          at: '2026-11-01T08:00:00Z',
+          started_by: startedBy,
+          ...extra,
+        },
+      },
+      start_time: '2026-11-01T08:00:01Z',
+      is_success: true,
+    });
+
+  it('keeps what each step returned', () => {
+    const steps = run({ kind: 'manual', by: 'macro|owner@example.com' }).steps;
+    expect(
+      steps?.map((step) => (step.kind === 'code' ? step.output : null))
+    ).toEqual([{ count: 2, ids: ['a', 'b'] }, { documentId: 'doc-1' }, null]);
+  });
+
+  it('decodes what started the run, when it counts as happening, and the run before', () => {
+    expect(
+      run(
+        {
+          kind: 'schedule',
+          schedule: '0 0 9 * * *',
+          timezone: 'Europe/Paris',
+        },
+        {
+          timezone: 'Europe/Paris',
+          previous_at: '2026-10-31T08:00:00Z',
+        }
+      ).run
+    ).toEqual({
+      at: '2026-11-01T08:00:00Z',
+      timezone: 'Europe/Paris',
+      previousAt: '2026-10-31T08:00:00Z',
+      start: {
+        kind: 'schedule',
+        schedule: '0 0 9 * * *',
+        timezone: 'Europe/Paris',
+      },
+    });
+    expect(
+      run({ kind: 'event', event: 'email.message_received', entity_id: 't-1' })
+        .run?.start
+    ).toEqual({
+      kind: 'event',
+      event: 'email.message_received',
+      entityId: 't-1',
+    });
+    expect(
+      run({ kind: 'event', event: 'channel.mentioned', entity_id: null }).run
+        ?.start
+    ).toEqual({ kind: 'event', event: 'channel.mentioned' });
+    // Runs recorded before runs kept what started them have none.
+    expect(run({ kind: 'unknown' }).run).toBeUndefined();
+  });
+});

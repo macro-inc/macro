@@ -28,7 +28,8 @@ belong to `features/external-view`. Architecture:
 - `context/`: source and action contracts; no production imports.
 - `primitives/conversation.ts`: optimistic sends, idempotency keys, quiet
   retries, reply/edit targets, uploads and read state.
-- `components/`: supplied values and callbacks only.
+- `components/`: supplied values and callbacks only; `message-media.tsx`
+  holds a row's inline media.
 - `views/`: conversation composition, scroll and read lifecycle.
 - `queries/`: generated wire decoding, write-failure classification and
   production source construction (spans live here).
@@ -43,6 +44,9 @@ belong to `features/external-view`. Architecture:
 
 ## Gotchas
 
+- Refetch a timeline through `invalidateExternalChatMessages`. A plain refetch
+  cancels an older page that is loading, and the page is lost. It waits at most
+  10 s, so a hung older page can't block refreshes; past that it cancels the page.
 - `kind` is `group` or `direct`. A direct chat has no members list (header
   shows the person) and only its owner sends; shared viewers see "Only
   <owner> can reply in this chat" (`sendReason: 'not_added'`).
@@ -65,6 +69,9 @@ belong to `features/external-view`. Architecture:
 - Refusals (`{code,message}` from DSS) remove the pending row, toast the
   reason and restore the draft only if the composer is empty.
 - Row actions are getters: `ChannelMessage` reads them once per row.
+  Create task (`core/task.ts`) needs only view access; it sets no Source,
+  because property entity references have no `external_chat` type, and its
+  content mentions the chat (no message-level link exists).
 - Reads do not poll; DSS pushes `external_chat_changed`, with one fallback
   re-fetch 3 s after opening. Only in-flight sends poll their progress.
 - History imported after adding (`backfill` on the detail) lands older than

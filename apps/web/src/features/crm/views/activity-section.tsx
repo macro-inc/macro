@@ -18,6 +18,7 @@ import { useCrmWorkspace } from '../context/workspace-context';
 export function ActivitySection(
   props: ParentProps<{
     label: string;
+    searchLabel: string;
     title?: JSX.Element;
     search: string;
     onSearchChange: (value: string) => void;
@@ -28,12 +29,11 @@ export function ActivitySection(
 ) {
   const view = useCrmWorkspace();
   let focusSearch: (() => void) | undefined;
-  const searchLabel = () => `Search ${props.label.toLowerCase()}`;
   useViewControlHotkeys({
     scopeId: view.host.scopeId,
     enabled: view.host.isActive,
     search: {
-      description: searchLabel(),
+      description: props.searchLabel,
       run: () => {
         focusSearch?.();
         return true;
@@ -60,7 +60,7 @@ export function ActivitySection(
                   };
                 }}
                 size="sm"
-                label={searchLabel()}
+                label={props.searchLabel}
                 value={props.search}
                 onValueChange={props.onSearchChange}
                 onEscape={view.host.focus}
@@ -82,7 +82,7 @@ export function ActivitySection(
             onClick={props.onCreate}
           />
           <ListHeaderSearch
-            label={searchLabel()}
+            label={props.searchLabel}
             value={props.search}
             onValueChange={props.onSearchChange}
             onEscape={view.host.focus}

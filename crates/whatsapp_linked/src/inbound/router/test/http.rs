@@ -25,9 +25,9 @@ use external_chat::{
     outbound::pg::PgExternalChatRepository,
 };
 use macro_authorization::{
-    BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin, HarnessAuthentication,
-    HarnessAuthorizationOwner, InternalIdentityClaims, MacroAuthorizationError,
-    MacroUserAuthentication, ValidatedCredential, ValidatedIdentity,
+    AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin,
+    HarnessAuthentication, HarnessAuthorizationOwner, InternalIdentityClaims,
+    MacroAuthorizationError, MacroUserAuthentication, ValidatedCredential, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_user::UserContext;
@@ -115,9 +115,12 @@ impl MacroAuthorizationService for Credentials {
     async fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
         match api_key {
-            ALICE_API_KEY => Ok(context(ALICE)),
+            ALICE_API_KEY => Ok(AuthorizedUserApiKey {
+                user_context: context(ALICE),
+                account_manager: None,
+            }),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
     }

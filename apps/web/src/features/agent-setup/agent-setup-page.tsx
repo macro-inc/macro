@@ -40,35 +40,37 @@ function useSetupStatus() {
 
 function PageFrame(props: ParentProps) {
   return (
-    <main class="h-full min-h-0 flex-1 overflow-y-auto bg-page text-ink">
-      <div class="mx-auto flex max-w-3xl flex-col gap-4 p-6">
-        {props.children}
-      </div>
-    </main>
+    <div class="h-full overflow-y-auto bg-page p-6 text-ink">
+      {props.children}
+    </div>
   );
 }
 
 /** Markdown source with its links left clickable, so its text is the page. */
 function MarkdownSource(props: { markdown: string }) {
   return (
-    <pre class="whitespace-pre-wrap break-words font-mono text-sm leading-6">
-      <For each={markdownParts(props.markdown)}>
-        {(part) =>
-          match(part)
-            .with({ t: 'text' }, ({ text }) => text)
-            .with({ t: 'link' }, ({ label, url }) => (
-              <>
-                [{label}](
-                <a href={url} target="_self" class="underline">
-                  {url}
-                </a>
-                )
-              </>
-            ))
-            .exhaustive()
-        }
-      </For>
-    </pre>
+    <For each={props.markdown.split('\n\n')}>
+      {(block) => (
+        <p class="mb-4 select-text whitespace-pre-wrap wrap-break-word font-mono text-sm">
+          <For each={markdownParts(block)}>
+            {(part) =>
+              match(part)
+                .with({ t: 'text' }, ({ text }) => text)
+                .with({ t: 'link' }, ({ label, url }) => (
+                  <>
+                    [{label}](
+                    <a href={url} target="_self" class="underline">
+                      {url}
+                    </a>
+                    )
+                  </>
+                ))
+                .exhaustive()
+            }
+          </For>
+        </p>
+      )}
+    </For>
   );
 }
 
@@ -101,6 +103,13 @@ export function AgentSetupPage() {
         productDocs: t('agentSetup.productDocs'),
         sdkDocs: t('agentSetup.sdkDocs'),
         setProfile: t('agentSetup.setProfile'),
+        macrod: t('agentSetup.macrod'),
+        macrodInstall: t('agentSetup.macrodInstall'),
+        macrodStart: t('agentSetup.macrodStart'),
+        macrodApprove: t('agentSetup.macrodApprove'),
+        macrodNext: t('agentSetup.macrodNext'),
+        macrodDocs: t('agentSetup.macrodDocs'),
+        macrodSource: t('agentSetup.macrodSource'),
         anotherToken: t('agentSetup.anotherToken'),
         anotherTokenSettings: t('agentSetup.anotherTokenSettings'),
         openApp: t('agentSetup.openApp'),

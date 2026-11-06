@@ -357,6 +357,9 @@ pub struct CreateAgentSessionParams {
     /// replayed from a recording, or created without a sandbox, has nothing to
     /// store here.
     pub egress_token_hash: Option<String>,
+    /// What opened the session, written with the session's row. `Unknown`
+    /// writes nothing: an unclaimed warm session has no cause yet.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Who or what archived a session.
@@ -428,6 +431,8 @@ pub struct AgentSession {
     pub task_id: Option<String>,
     /// Who started the session.
     pub source: SessionSource,
+    /// What opened the session. `Unknown` when nothing recorded it.
+    pub origin: trigger_context::TriggerOrigin,
     /// Where the session is shown.
     pub visibility: SessionVisibility,
     /// Directory the harness runs in, snapshotted at creation. The session

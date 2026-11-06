@@ -221,6 +221,7 @@ impl SessionOpener for RecordingOpener {
     ) -> crate::domain::error::Result<AgentSession> {
         session_owner_user(&request.owner)?;
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
@@ -261,6 +262,7 @@ impl SessionOpener for RecordingOpener {
             .as_ref()
             .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
@@ -480,6 +482,7 @@ impl ExternalSessionRequester for RecordingRequester {
             ));
         }
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
