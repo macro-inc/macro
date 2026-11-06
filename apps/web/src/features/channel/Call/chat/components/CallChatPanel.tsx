@@ -101,7 +101,7 @@ export function CallChatPanel(props: {
           forceMount
           aria-hidden={!sheetOpen()}
           inert={!sheetOpen()}
-          targetHeight={80}
+          targetHeight={64}
           class="data-closed:hidden motion-reduce:duration-0!"
         >
           <MobileDrawer.Handle />
@@ -119,12 +119,15 @@ export function CallChatPanel(props: {
         <div class="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
           <Tabs<CallPanelTab>
             aria-label={t('calls.panel')}
+            fullWidth={isMobile()}
+            size={isMobile() ? 'lg' : 'md'}
+            touch="inset"
             value={props.activeTab}
             onChange={props.onTabChange}
             options={[
               {
                 value: 'chat',
-                label: props.discussionLabel ?? t('calls.chat'),
+                label: t('calls.chat'),
                 disabled: !props.chatAvailable,
               },
               {

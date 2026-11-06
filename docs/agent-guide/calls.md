@@ -99,8 +99,8 @@ avatars and **Join** for viewers outside the call, with the thread collapsed und
 When it ends the line says how long it lasted. The join card remains above the
 composer while the viewer is outside the call, independent of scroll position.
 
-In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is the channel's
-name. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
+In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is **Chat**.
+On phones, Chat and People fill the shared sheet's tab row; the sheet opens at 64% height. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
 and at the newest message otherwise. The composer is pinned to the call thread and returns there
 after replying elsewhere; nothing posts top-level from the panel. A popup counts top-level messages
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
