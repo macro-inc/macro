@@ -259,6 +259,12 @@ button on the focused tile to restore the grid. If that participant leaves, the 
 returns automatically. Focus changes keep the existing video tracks mounted.
 A talking participant has an accent-colored border above their video or avatar.
 
+While someone shares their screen, **Maximize screen share** at the share's
+top-right hides the participant strip so the share fills the call area, and
+**Show participants** brings it back. Video tiles stay mounted and audio keeps
+playing. The choice lasts while the call view is open, so a later share also
+opens maximized; check it on desktop and at phone width, and when the share stops.
+
 Open **Chat** and **Participants** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
 **Participants** shows the live attendee count and a scrollable roster, including
@@ -314,6 +320,20 @@ and macOS shows its prompt; the user reopens Macro after allowing it. A refused
 or failed capture shows its reason under the call controls. Browsers
 and older desktop builds keep the browser's own picker. Verify on a Mac by
 sharing a display and a window, stopping, and cancelling the picker.
+
+### Work in a call
+
+Behind `enable-agent-work`, the call panel gains a **Work** tab, after Chat and
+Participants, while any other participant has registered work you can open.
+Chat stays the default tab. Each participant with work gets a section; rows keep
+their order, and clicking one opens the session in a new split so the call stays
+live. Registering is SDK-only (`session.registerAsWork()`).
+
+A dot marks the Work tab while you're elsewhere and the panel button while the
+panel is closed. A **View active work** prompt with the participants' pictures
+appears above your video tile when someone's work first shows, for eight seconds
+or until dismissed; clicking it opens the tab. It belongs to the call rather than
+the toast system.
 
 ### Browser call diagnostics
 

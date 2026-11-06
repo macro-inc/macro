@@ -4,6 +4,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::domain::models::RepoToken;
 use crate::domain::template::PersonaSeed;
 
 /// Team-qualified management request for the voice setting.
@@ -36,7 +37,7 @@ pub struct EnsureRepoRequest {
     #[serde(flatten)]
     pub repo: CreateRepoRequest,
     /// Original token; never replaces a live token.
-    pub token: String,
+    pub token: RepoToken,
 }
 
 impl std::fmt::Debug for EnsureRepoRequest {
@@ -54,7 +55,7 @@ pub struct CreatedRepoResponse {
     /// The agent's Macro user.
     pub agent_user_id: MacroUserIdStr<'static>,
     /// Repo token: the HTTP Basic password for clone and push.
-    pub token: String,
+    pub token: RepoToken,
     /// Smart-HTTP clone URL.
     pub clone_url: String,
 }

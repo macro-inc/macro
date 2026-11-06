@@ -1,4 +1,6 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableTeamAgents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -462,6 +464,8 @@ export function InviteToTeamDialog(props: {
   const inviteToTeamMutation = useInviteToTeamMutation();
   const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
   const [inviteAsAgent, setInviteAsAgent] = createSignal(false);
+  const agentFlag = useFeatureFlag(enableTeamAgents);
+  const canInviteAgents = () => !agentFlag().loading && agentFlag().enabled;
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -497,7 +501,10 @@ export function InviteToTeamDialog(props: {
     inviteToTeamMutation.mutate(
       {
         teamId: props.teamId,
-        request: { invites: inviteEntries, is_agent: inviteAsAgent() },
+        request: {
+          invites: inviteEntries,
+          is_agent: canInviteAgents() && inviteAsAgent(),
+        },
       },
       { onSuccess: close }
     );
@@ -528,12 +535,19 @@ export function InviteToTeamDialog(props: {
             errors={inviteErrors()}
             onErrorsChange={setInviteErrors}
           />
-          <Checkbox checked={inviteAsAgent()} onChange={setInviteAsAgent}>
-            <Checkbox.Control />
-            <Checkbox.Label class="text-sm text-ink">
-              Invite as agent
-            </Checkbox.Label>
-          </Checkbox>
+          <Show when={canInviteAgents()}>
+            <Checkbox
+              checked={inviteAsAgent()}
+              onChange={(checked) =>
+                setInviteAsAgent(canInviteAgents() && checked)
+              }
+            >
+              <Checkbox.Control />
+              <Checkbox.Label class="text-sm text-ink">
+                Invite as agent
+              </Checkbox.Label>
+            </Checkbox>
+          </Show>
           <div class="flex justify-end gap-1 pt-2">
             <Button
               variant="ghost"

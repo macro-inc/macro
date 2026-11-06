@@ -1,3 +1,6 @@
+use agent_credentials::RepoToken;
+
+use crate::domain::mail::{MailMessageId, MailboxId};
 use std::sync::{Arc, Mutex};
 
 use chrono::{TimeZone, Utc};
@@ -160,7 +163,10 @@ impl TeamAgentRepository for FakeRepository {
             .map(|agent| agent.account.persona_seed.clone()))
     }
 
-    async fn mailbox_id(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<String>, Self::Err> {
+    async fn mailbox_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<MailboxId>, Self::Err> {
         Ok(self
             .agents
             .lock()
@@ -266,9 +272,9 @@ impl AgentApiKeys for FakeApiKeys {
     async fn mint(
         &self,
         _agent_user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Credential, TeamAgentError> {
+    ) -> Result<AgentApiKey, TeamAgentError> {
         self.journal.record("api_key.mint")?;
-        Ok(Credential::new("mak_secret".to_string()))
+        Ok(AgentApiKey::parse(format!("mak_{}", "a".repeat(64))).expect("test API key"))
     }
 }
 
@@ -285,34 +291,42 @@ impl Mailboxes for FakeMailboxes {
     ) -> Result<Mailbox, TeamAgentError> {
         self.journal.record("mailbox.create")?;
         Ok(Mailbox {
-            mailbox_id: Some("inbox-1".to_string()),
+            mailbox_id: Some(MailboxId::parse("inbox-1".to_string()).expect("mailbox id")),
             email: "Sam@Agents.Example.com".to_string(),
         })
     }
 
-    async fn delete(&self, _mailbox_id: &str) -> Result<(), TeamAgentError> {
+    async fn delete(&self, _mailbox_id: &MailboxId) -> Result<(), TeamAgentError> {
         self.journal.record("mailbox.delete")
     }
 
-    async fn list(&self, _mailbox_id: &str, _limit: u8) -> Result<EmailMessages, TeamAgentError> {
+    async fn list(
+        &self,
+        _mailbox_id: &MailboxId,
+        _limit: u8,
+    ) -> Result<EmailMessages, TeamAgentError> {
         Ok(EmailMessages { messages: vec![] })
     }
 
     async fn get(
         &self,
-        _mailbox_id: &str,
-        _message_id: &str,
+        _mailbox_id: &MailboxId,
+        _message_id: &MailMessageId,
     ) -> Result<EmailMessage, TeamAgentError> {
         Err(TeamAgentError::EmailUnavailable)
     }
 
-    async fn send(&self, mailbox_id: &str, email: &SendEmail) -> Result<SentEmail, TeamAgentError> {
+    async fn send(
+        &self,
+        mailbox_id: &MailboxId,
+        email: &SendEmail,
+    ) -> Result<SentEmail, TeamAgentError> {
         self.sent
             .lock()
             .expect("lock")
             .push((mailbox_id.to_string(), email.clone()));
         Ok(SentEmail {
-            message_id: "sent-1".to_string(),
+            message_id: MailMessageId::parse("sent-1".to_string()).expect("message id"),
         })
     }
 }
@@ -452,7 +466,7 @@ impl AgentRepos for FakeRepos {
         self.seeds.lock().expect("lock").push(seed.clone());
         Ok(AgentRepo {
             url: "https://git.example.com/sam".to_string(),
-            token: Credential::new("mrt_token".to_string()),
+            token: RepoToken::parse(format!("mrt_{}", "b".repeat(64))).expect("test repo token"),
         })
     }
 
@@ -461,10 +475,15 @@ impl AgentRepos for FakeRepos {
         _agent_user_id: &MacroUserIdStr<'_>,
         _team_id: Uuid,
         seed: &PersonaSeed,
-        token: &Credential,
+        token: &RepoToken,
     ) -> Result<(), TeamAgentError> {
         self.journal.record("repo.ensure")?;
-        assert_eq!(token.expose(), "mrt_token");
+        assert_eq!(
+            token.hash(),
+            RepoToken::parse(format!("mrt_{}", "b".repeat(64)))
+                .expect("expected token")
+                .hash()
+        );
         assert_eq!(self.seeds.lock().unwrap().first(), Some(seed));
         Ok(())
     }
@@ -500,7 +519,17 @@ impl Default for Setup {
             owner_verified_email: None,
             admin_verified_email: None,
             fail_at: None,
-            flags: None,
+            flags: Some({
+                let mut flags = FakeFeatureFlags::default();
+                flags.set(
+                    user(ADMIN),
+                    Ok(FlagSnapshot::new([(
+                        TEAM_AGENTS_FLAG.to_owned(),
+                        FlagValue::Boolean(true),
+                    )])),
+                );
+                flags
+            }),
             seat: Some(SeatQuote {
                 amount: 4000,
                 currency: "usd".to_string(),
@@ -634,7 +663,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
         *service.repos.seeds.lock().expect("lock"),
         vec![PersonaSeed {
             voice: None,
-            creator_id: Some(ADMIN.to_string()),
+            creator_id: Some(user(ADMIN)),
             name: "Sam Rivera".to_string(),
             job_description: "Runs vendor relations.".to_string(),
             personality: "Dry, direct, kind.".to_string(),
@@ -644,14 +673,14 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
         *service.computers.purchases.lock().expect("lock"),
         vec![ComputerPurchase {
             team_id: Uuid::parse_str(TEAM_ID).expect("uuid"),
-            created_by: "macro|admin@example.com".to_string(),
+            created_by: user(ADMIN),
             size: ComputerSize::Large,
             name: Some("Sam Rivera".to_string()),
             persona: Some(Persona {
                 name: "Sam Rivera".to_string(),
-                os_user: "sam-rivera".to_string(),
+                os_user: "agent-sam-rivera".to_string(),
                 extra_service: PersonaService {
-                    unit_name: "brain@sam-rivera".to_string(),
+                    unit_name: "brain@agent-sam-rivera".to_string(),
                     exec: "/opt/macro/brain run".to_string(),
                     env: BTreeMap::new(),
                 },
@@ -661,7 +690,10 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                         "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic"
                             .to_string()
                     ),
-                    ("ANTHROPIC_AUTH_TOKEN".to_string(), "mak_secret".to_string()),
+                    (
+                        "ANTHROPIC_AUTH_TOKEN".to_string(),
+                        format!("mak_{}", "a".repeat(64))
+                    ),
                     (
                         "MACRO_AGENT_USER_ID".to_string(),
                         "macro|sam@agents.example.com".to_string(),
@@ -676,11 +708,17 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                     ),
                     (
                         "BRAIN_WORKSPACE".to_string(),
-                        "/home/sam-rivera/workspace".to_string()
+                        "/home/agent-sam-rivera/workspace".to_string()
                     ),
                     ("BRAIN_HEALTH_PORT".to_string(), "7801".to_string()),
-                    ("MACRO_REPO_TOKEN".to_string(), "mrt_token".to_string()),
-                    ("MACRO_API_KEY".to_string(), "mak_secret".to_string()),
+                    (
+                        "MACRO_REPO_TOKEN".to_string(),
+                        format!("mrt_{}", "b".repeat(64))
+                    ),
+                    (
+                        "MACRO_API_KEY".to_string(),
+                        format!("mak_{}", "a".repeat(64))
+                    ),
                 ]),
             }),
             extra_items: vec![SubscriptionItem {
@@ -869,7 +907,10 @@ async fn create_and_quote_need_the_flag_on_for_the_admin() {
             .await,
         Err(TeamAgentError::NotEnabled)
     ));
-    assert!(service.sizes(receipt(TEAM_ID)).await.is_ok());
+    assert!(matches!(
+        service.sizes(receipt(TEAM_ID)).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
     assert_eq!(journal.steps(), Vec::<&str>::new());
 
     let mut on = FakeFeatureFlags::default();
@@ -1147,7 +1188,7 @@ async fn only_agents_can_send_email() {
         .expect("create succeeds");
     let sent = service.send_email(&user(AGENT), email).await.expect("sent");
 
-    assert_eq!(sent.message_id, "sent-1");
+    assert_eq!(sent.message_id.as_str(), "sent-1");
     assert_eq!(service.mailboxes.sent.lock().expect("lock")[0].0, "inbox-1");
 }
 
@@ -1838,7 +1879,15 @@ async fn purchase_status_outage_stays_provisioning_and_recovers() {
 #[tokio::test]
 async fn voice_changes_require_same_team_and_either_creator_or_admin() {
     use entity_access::domain::models::{Entity, EntityPermission, MemberTeamRole, TeamRole};
-    let (service, _) = build(Setup::default());
+    let mut setup = Setup::default();
+    setup.flags.as_mut().expect("flags").set(
+        user("macro|other@example.com"),
+        Ok(FlagSnapshot::new([(
+            TEAM_AGENTS_FLAG.to_owned(),
+            FlagValue::Boolean(true),
+        )])),
+    );
+    let (service, _) = build(setup);
     service
         .create(receipt(TEAM_ID), request())
         .await
@@ -1906,3 +1955,5 @@ async fn voice_changes_require_same_team_and_either_creator_or_admin() {
             .is_ok()
     );
 }
+
+mod rollout;

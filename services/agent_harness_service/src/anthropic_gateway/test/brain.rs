@@ -7,7 +7,7 @@ use team_agents::domain::{
         BrainComputerPhase, BrainGatewayAccount, BrainGatewayAuthorizer, BrainGatewayComputer,
         BrainGatewayComputers, BrainGatewayDirectory, BrainGatewayError,
     },
-    models::{Credential, TeamAgent, TeamAgentStatus},
+    models::{AgentApiKey, TeamAgent, TeamAgentStatus},
 };
 use uuid::Uuid;
 
@@ -27,20 +27,24 @@ struct Directory;
 impl BrainGatewayDirectory for Directory {
     async fn lookup(
         &self,
-        key: &Credential,
+        key: &AgentApiKey,
     ) -> Result<Option<BrainGatewayAccount>, BrainGatewayError> {
-        if !matches!(
-            key.expose(),
-            "brain-key" | "ordinary-key" | "wrong-membership-key" | "wrong-computer-team-key"
-        ) {
+        let Some(kind) = [
+            "brain-key",
+            "ordinary-key",
+            "wrong-membership-key",
+            "wrong-computer-team-key",
+        ]
+        .into_iter()
+        .find(|kind| key.expose() == fixture_key(kind)) else {
             return Ok(None);
-        }
-        let agent_team = if key.expose() == "wrong-computer-team-key" {
+        };
+        let agent_team = if kind == "wrong-computer-team-key" {
             Uuid::nil()
         } else {
             TEAM
         };
-        let agent = (key.expose() != "ordinary-key").then(|| TeamAgent {
+        let agent = (kind != "ordinary-key").then(|| TeamAgent {
             user_id: agent_user(),
             team_id: agent_team,
             name: "Brain".to_string(),
@@ -58,7 +62,7 @@ impl BrainGatewayDirectory for Directory {
         Ok(Some(BrainGatewayAccount {
             user_id: agent_user(),
             agent,
-            teams: if key.expose() == "wrong-membership-key" {
+            teams: if kind == "wrong-membership-key" {
                 vec![]
             } else {
                 vec![agent_team]
@@ -139,9 +143,21 @@ fn brain_gateway(
     (router(state), usage, wakes)
 }
 
+fn fixture_key(kind: &str) -> String {
+    let digit = match kind {
+        "brain-key" => "a",
+        "ordinary-key" => "b",
+        "wrong-membership-key" => "c",
+        "wrong-computer-team-key" => "d",
+        "revoked-key" => "e",
+        _ => return kind.to_owned(),
+    };
+    format!("mak_{}", digit.repeat(64))
+}
+
 fn request(key: &str, model: &str) -> HttpRequest<Body> {
     HttpRequest::post("/brain/anthropic/v1/messages")
-        .header("authorization", format!("Bearer {key}"))
+        .header("authorization", format!("Bearer {}", fixture_key(key)))
         .body(Body::from(
             serde_json::json!({"model": model, "max_tokens": 16, "messages": []}).to_string(),
         ))
@@ -309,4 +325,22 @@ async fn agent_membership_and_computer_team_must_match_before_spending() {
         assert_eq!(wakes.load(Ordering::SeqCst), 0);
     }
     assert!(seen.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn malformed_brain_key_is_rejected_before_admission_or_forwarding() {
+    let (upstream, seen) = fake_anthropic().await;
+    let admission = Arc::new(Admission::default());
+    let (app, usage, wakes) =
+        brain_gateway(&upstream, BrainComputerPhase::Running, admission.clone());
+    let response = app
+        .oneshot(request("mak_short", "claude-sonnet-5"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(admission.users.lock().unwrap().is_empty());
+    assert!(seen.lock().unwrap().is_empty());
+    assert_eq!(wakes.load(Ordering::SeqCst), 0);
+    // No model invocation means no usage settlement.
+    assert!(usage.0.lock().unwrap().is_empty());
 }

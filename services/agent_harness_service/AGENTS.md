@@ -23,7 +23,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
-  linked pull requests finished (`agent_session::domain::auto_archive`).
+  linked pull requests finished (`agent_session::domain::auto_archive`), and
+  ends their work registrations first
+  (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
@@ -50,7 +52,9 @@ Pulumi stacks; they do not host extra agent processes.
   to the standalone-brain Anthropic gateway authorization boundary in
   `team_agents::domain::gateway`. `/brain/anthropic/v1/messages` and
   `/brain/anthropic/v1/messages/count_tokens` accept only a revocable API key
-  for a registered agent on its current team with a Running computer (Frozen
+  parsed as a validated `AgentApiKey` (`mak_` + 64 hex) before directory or
+  admission calls. Keys remain redacted in Debug. The key must belong to a
+  registered agent on its current team with a Running computer (Frozen
   computers are woken). These routes share the session gateway's model allowlist,
   budgets, forwarding and meter; `ai_usage.user_id` is the agent and `entity` is
   its team. See `hosted_runtimes/AGENTS.md` Contracts for the credential contract.
@@ -222,6 +226,11 @@ is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
+Computer lifecycle observations use one additional dedicated lock connection per
+replica. Serialize connect/disconnect effects by harness across replicas and check
+durable live connections before emitting a disconnect, so an old socket cannot
+mark its replacement offline. Keep this lock pool separate from repository pools
+to avoid exhausting the connections needed inside the guarded operation.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 projection workers before draining sessions and pending publishes. Preview
@@ -284,7 +293,8 @@ Meter forwarded PCM seconds and synthesis characters with the shared recorder
 and the `livekit-inference-deepgram-*` pricing rows. The model rates use the
 LiveKit Build/Ship baseline and preserve administrator-configured prices.
 
-Authenticated team members can query `/voices` and `/voices/{model}/sample`.
+Authenticated team members with the agent-management rollout enabled can query
+`/voices` and `/voices/{model}/sample`. Runtime speech remains independent of it.
 Catalog metadata is cached for a day; fixed-line WAV previews are cached by model.
 The owning creator/admin settings policy lives in team_agents, and agent_git
 commits the selected model. Spans never include transcripts, synthesis text or keys.

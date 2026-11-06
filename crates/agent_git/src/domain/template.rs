@@ -1,5 +1,6 @@
 //! The workspace every new repo starts from.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 
 /// One file of the template.
@@ -38,7 +39,7 @@ pub struct PersonaSeed {
     pub personality: String,
     /// Creating admin's Macro user ID; older saved seeds may omit it.
     #[serde(default)]
-    pub creator_id: Option<String>,
+    pub creator_id: Option<MacroUserIdStr<'static>>,
 }
 
 /// One file of a new repo's initial commit, rendered for one agent.
@@ -66,7 +67,10 @@ impl WorkspaceTemplate {
                         .replace("{{personality}}", &seed.personality)
                         .replace(
                             "{{creator}}",
-                            seed.creator_id.as_deref().unwrap_or("the team owner"),
+                            seed.creator_id
+                                .as_ref()
+                                .map(|creator| creator.as_ref())
+                                .unwrap_or("the team owner"),
                         )
                 } else if file.path == "config/voice.json" {
                     let model = seed.voice.as_deref().unwrap_or("aura-2-arcas-en");

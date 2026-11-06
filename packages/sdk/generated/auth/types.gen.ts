@@ -5021,6 +5021,7 @@ export type InviteToTeamData = {
 export type InviteToTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
     /**
      * `team_id` names a team other than the caller's current team

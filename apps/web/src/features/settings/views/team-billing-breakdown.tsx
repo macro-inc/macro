@@ -4,20 +4,29 @@ import { enableTeamAgents } from '@core/constant/featureFlags';
 import { queryReadyGate } from '@queries/gate';
 import { useTeamAgentsQuery } from '@queries/team-agents';
 import type { SubscriptionBilling } from '@service-auth/generated/schemas';
+import { Show } from 'solid-js';
 import { TeamBillingBreakdown } from '../components/team-billing-breakdown';
+import { BillingComputers } from '../computers/views/BillingComputers';
 
 export function ConnectedTeamBillingBreakdown(props: {
   teamId?: string;
   billing: SubscriptionBilling;
 }) {
   const flag = useFeatureFlag(enableTeamAgents);
-  const enabled = () => flag().enabled && !!props.teamId;
+  const enabled = () => !flag().loading && flag().enabled && !!props.teamId;
   const agents = useTeamAgentsQuery(() => props.teamId ?? '', enabled);
   usePending('team-agent.billing-roster', () => enabled() && agents.isLoading);
   return (
-    <TeamBillingBreakdown
-      billing={props.billing}
-      agents={queryReadyGate(agents) ? agents.data.agents : []}
-    />
+    <Show
+      when={!flag().loading}
+      fallback={<p role="status">Loading agent features…</p>}
+    >
+      <Show when={flag().enabled} fallback={<BillingComputers />}>
+        <TeamBillingBreakdown
+          billing={props.billing}
+          agents={queryReadyGate(agents) ? agents.data.agents : []}
+        />
+      </Show>
+    </Show>
   );
 }

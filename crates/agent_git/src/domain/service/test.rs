@@ -1,3 +1,5 @@
+use macro_user_id::cowlike::CowLike;
+
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
@@ -190,6 +192,7 @@ impl PushRateLimiter for FakeLimiter {
 #[derive(Clone, Default)]
 struct EchoBackend {
     served: Arc<Mutex<Vec<(String, GitAccess)>>>,
+    input_limits: Arc<Mutex<Vec<Option<u64>>>>,
 }
 
 impl GitBackend for EchoBackend {
@@ -200,6 +203,10 @@ impl GitBackend for EchoBackend {
         repo: &AuthorizedRepo,
         request: GitRequest,
     ) -> Result<GitResponse, std::io::Error> {
+        self.input_limits
+            .lock()
+            .unwrap()
+            .push(repo.max_input_size());
         self.served
             .lock()
             .unwrap()
@@ -268,12 +275,18 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
 
     service
         .serve_git(
-            GitCredential::RepoToken(RepoToken::presented(created.token.expose())),
+            GitCredential::RepoToken(
+                RepoToken::parse(created.token.expose().to_owned()).expect("minted token"),
+            ),
             &agent,
             request(GitEndpoint::Rpc(GitService::ReceivePack), b"pack"),
         )
         .await
         .unwrap();
+    assert_eq!(
+        *backend.input_limits.lock().unwrap(),
+        vec![Some(500_000_000 - 1_000)]
+    );
     assert_eq!(
         *repos.pushes.lock().unwrap(),
         vec![(AGENT.to_owned(), 1_000)]
@@ -513,7 +526,7 @@ async fn deleting_removes_the_repo_and_the_row() {
             request(GitEndpoint::InfoRefs(GitService::UploadPack), b""),
         )
         .await;
-    assert!(matches!(missing, Err(AgentGitError::NotFound)));
+    assert!(matches!(missing, Err(AgentGitError::InvalidToken)));
 }
 
 fn seed() -> PersonaSeed {
@@ -522,7 +535,11 @@ fn seed() -> PersonaSeed {
         name: "Sam".to_owned(),
         job_description: "Books venues.".to_owned(),
         personality: "Warm and direct.".to_owned(),
-        creator_id: Some("macro|admin@example.com".to_owned()),
+        creator_id: Some(
+            MacroUserIdStr::parse_from_str("macro|admin@example.com")
+                .expect("creator id")
+                .into_owned(),
+        ),
     }
 }
 
@@ -570,7 +587,13 @@ fn relevance_questions_render_json_text_and_bound_long_personas() {
             persona.name = persona.name.repeat(100);
             persona.job_description = persona.job_description.repeat(100);
         }
-        let files = WORKSPACE_TEMPLATE.render(&persona).unwrap();
+        let template = WorkspaceTemplate {
+            files: &[crate::domain::template::TemplateFile {
+                path: "config/jev.json",
+                contents: include_str!("test/jev.json"),
+            }],
+        };
+        let files = template.render(&persona).unwrap();
         let config = files
             .iter()
             .find(|file| file.path == "config/jev.json")
@@ -617,7 +640,7 @@ async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
         .ensure_repo(agent.clone(), TEAM, &seed(), original.token.clone())
         .await
         .unwrap();
-    assert_eq!(recovered.token, original.token);
+    assert_eq!(recovered.token.hash(), original.token.hash());
     assert!(matches!(
         service
             .ensure_repo(agent.clone(), TEAM, &seed(), RepoToken::generate())
@@ -662,12 +685,6 @@ async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
         .unwrap()
         .unwrap();
     assert!(row.token_hash.matches(&original.token.hash()));
-    assert!(matches!(
-        service
-            .ensure_repo(agent, TEAM, &seed(), RepoToken::presented("weak"))
-            .await,
-        Err(AgentGitError::InvalidToken)
-    ));
 }
 
 /// Pause recovery immediately before it publishes storage to overlap deletion.

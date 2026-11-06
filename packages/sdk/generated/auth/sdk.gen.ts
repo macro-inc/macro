@@ -1203,7 +1203,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Computer specifications for team admins, independent of billing or rollout.
+     * Computer specifications for rollout-enabled team admins, independent of billing.
      */
     public getTeamAgentSizes<ThrowOnError extends boolean = false>(options?: Options<GetTeamAgentSizesData, ThrowOnError>): RequestResult<GetTeamAgentSizesResponses, GetTeamAgentSizesErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetTeamAgentSizesResponses, GetTeamAgentSizesErrors, ThrowOnError>({ url: '/team_agents/sizes', ...options });

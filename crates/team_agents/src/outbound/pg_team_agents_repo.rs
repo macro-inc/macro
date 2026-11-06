@@ -1,5 +1,6 @@
 //! Postgres adapter for team agent accounts.
 
+use crate::domain::mail::{InvalidMailId, MailboxId};
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -26,6 +27,9 @@ pub enum PgTeamAgentsError {
     /// A stored user id is malformed.
     #[error("stored user id {0} is malformed")]
     MalformedUserId(String),
+    /// A stored mailbox identifier is malformed.
+    #[error(transparent)]
+    MailboxId(#[from] InvalidMailId),
     /// A stored status is not one this build knows.
     #[error("stored status {0} is unknown")]
     UnknownStatus(String),
@@ -187,7 +191,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
             account.user_id.as_ref(),
             account.team_id,
             account.created_by.as_ref(),
-            account.mailbox_id,
+            account.mailbox_id.as_ref().map(MailboxId::as_str),
             sqlx::types::Json(&account.persona_seed) as _,
         )
         .execute(&mut *transaction)
@@ -289,7 +293,10 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
     }
 
     #[tracing::instrument(skip_all, err)]
-    async fn mailbox_id(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<String>, Self::Err> {
+    async fn mailbox_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<MailboxId>, Self::Err> {
         let mailbox_id = sqlx::query_scalar!(
             r#"SELECT mailbox_id FROM team_agents WHERE user_id = $1"#,
             user_id.as_ref(),
@@ -298,7 +305,10 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         .await?
         .flatten();
 
-        Ok(mailbox_id)
+        mailbox_id
+            .map(MailboxId::parse)
+            .transpose()
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip_all, err)]

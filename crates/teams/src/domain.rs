@@ -1,3 +1,4 @@
+pub mod agent_invites;
 pub mod contacts_enqueuer;
 pub mod crm_enqueuer;
 pub mod customer_repo;

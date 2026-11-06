@@ -282,7 +282,7 @@ async fn deletion_soft_deletes_and_revokes_tokens(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn connected_state_follows_the_presence_timestamps(pool: PgPool) {
+async fn connected_state_falls_back_to_timestamps_without_connection_rows(pool: PgPool) {
     let repo = PgHarnessRepo::new(pool.clone());
     let harness_id = Uuid::new_v4();
     sqlx::query!(
@@ -307,6 +307,62 @@ async fn connected_state_follows_the_presence_timestamps(pool: PgPool) {
         .unwrap();
     let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
     assert!(!harness.connected);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn connected_state_follows_connection_leases_over_timestamps(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let harness_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by, last_connected_at, last_disconnected_at)
+        VALUES ($1, 'mine', $2, $2, now(), now() + interval '1 hour')
+        "#,
+        harness_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let connection_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harness_runtime_connection (harness_id, id, replica_id, lease_expires_at)
+        VALUES ($1, $2, $3, now() + interval '30 seconds')
+        "#,
+        harness_id,
+        connection_id,
+        Uuid::new_v4(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let harness_id = HarnessId::new_from_uuid(harness_id);
+
+    // A live lease wins over a later disconnect stamp.
+    let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert!(harness.connected);
+
+    sqlx::query!(
+        r#"
+        UPDATE harnesses SET last_disconnected_at = NULL;
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A crashed replica writes no disconnect; the lapsed lease is what ends it.
+    let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert!(!harness.connected);
+    let listed = repo.list_visible_harnesses(caller()).await.unwrap();
+    assert!(!listed.iter().any(|harness| harness.connected));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

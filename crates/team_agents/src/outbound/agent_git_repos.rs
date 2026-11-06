@@ -6,7 +6,9 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::domain::models::{AgentRepo, Credential, PersonaSeed, TeamAgentError};
+use agent_credentials::RepoToken;
+
+use crate::domain::models::{AgentRepo, PersonaSeed, TeamAgentError};
 use crate::domain::ports::AgentRepos;
 
 /// Creates and deletes agents' repos with the agent git client.
@@ -99,7 +101,7 @@ impl AgentRepos for AgentGitRepos {
 
         Ok(AgentRepo {
             url: clone_url.to_string(),
-            token: Credential::new(created.token),
+            token: created.token,
         })
     }
 
@@ -109,7 +111,7 @@ impl AgentRepos for AgentGitRepos {
         agent_user_id: &MacroUserIdStr<'_>,
         team_id: Uuid,
         seed: &PersonaSeed,
-        token: &Credential,
+        token: &RepoToken,
     ) -> Result<(), TeamAgentError> {
         self.client
             .ensure_repo(
@@ -122,7 +124,7 @@ impl AgentRepos for AgentGitRepos {
                     job_description: seed.job_description.clone(),
                     personality: seed.personality.clone(),
                 },
-                token.expose(),
+                token,
             )
             .await
             .map_err(|error| {

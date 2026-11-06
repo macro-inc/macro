@@ -5,7 +5,7 @@ use std::{future::Future, pin::Pin};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::models::{Credential, TeamAgent};
+use super::models::{AgentApiKey, TeamAgent};
 
 /// Facts resolved from a valid, revocable user API key.
 pub struct BrainGatewayAccount {
@@ -45,7 +45,7 @@ pub trait BrainGatewayDirectory: Send + Sync + 'static {
     /// None for an invalid or revoked API key.
     fn lookup(
         &self,
-        key: &Credential,
+        key: &AgentApiKey,
     ) -> impl Future<Output = Result<Option<BrainGatewayAccount>, BrainGatewayError>> + Send;
 }
 
@@ -95,7 +95,7 @@ pub type BrainGatewayFuture<'a> =
 /// Access boundary for the standalone-brain gateway route.
 pub trait BrainGatewayAccess: Send + Sync + 'static {
     /// Authenticate a key and authorize its agent's running computer.
-    fn authorize<'a>(&'a self, key: &'a Credential) -> BrainGatewayFuture<'a>;
+    fn authorize<'a>(&'a self, key: &'a AgentApiKey) -> BrainGatewayFuture<'a>;
 }
 
 /// Keeps key, team and computer access policy in the team-agent domain.
@@ -117,7 +117,7 @@ impl<Directory, Computers> BrainGatewayAuthorizer<Directory, Computers> {
 impl<Directory: BrainGatewayDirectory, Computers: BrainGatewayComputers> BrainGatewayAccess
     for BrainGatewayAuthorizer<Directory, Computers>
 {
-    fn authorize<'a>(&'a self, key: &'a Credential) -> BrainGatewayFuture<'a> {
+    fn authorize<'a>(&'a self, key: &'a AgentApiKey) -> BrainGatewayFuture<'a> {
         Box::pin(async move {
             let account = self
                 .directory

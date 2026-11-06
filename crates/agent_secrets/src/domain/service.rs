@@ -4,6 +4,7 @@ use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use super::admin::AgentAdminRollout;
 use super::models::{
     AgentSecret, AgentSecretError, AgentSecretSummaries, AgentSecretSummary, SecretName,
     SecretValue,
@@ -14,26 +15,37 @@ use super::ports::{AgentSecretRepository, AgentSecretService, SecretCipher, Team
 mod test;
 
 /// Agent secret service backed by its ports.
-pub struct AgentSecretServiceImpl<Repository, Cipher, Directory> {
+pub struct AgentSecretServiceImpl<Repository, Cipher, Directory, Rollout> {
     repository: Repository,
     cipher: Cipher,
     directory: Directory,
+    rollout: Rollout,
 }
 
-impl<Repository, Cipher, Directory> AgentSecretServiceImpl<Repository, Cipher, Directory> {
+impl<Repository, Cipher, Directory, Rollout>
+    AgentSecretServiceImpl<Repository, Cipher, Directory, Rollout>
+{
     /// Builds the service.
-    pub fn new(repository: Repository, cipher: Cipher, directory: Directory) -> Self {
+    pub fn new(
+        repository: Repository,
+        cipher: Cipher,
+        directory: Directory,
+        rollout: Rollout,
+    ) -> Self {
         Self {
             repository,
             cipher,
             directory,
+            rollout,
         }
     }
 }
 
-impl<Repository, Cipher, Directory> AgentSecretServiceImpl<Repository, Cipher, Directory>
+impl<Repository, Cipher, Directory, Rollout>
+    AgentSecretServiceImpl<Repository, Cipher, Directory, Rollout>
 where
     Directory: TeamAgentDirectory,
+    Rollout: AgentAdminRollout,
 {
     /// Only team agents keep secrets.
     async fn ensure_agent(&self, caller: &MacroUserIdStr<'_>) -> Result<(), AgentSecretError> {
@@ -42,6 +54,20 @@ where
             .await?
             .map(|_| ())
             .ok_or(AgentSecretError::NotAnAgent)
+    }
+
+    async fn ensure_admin_enabled(
+        &self,
+        receipt: &EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<(), AgentSecretError> {
+        let caller = receipt
+            .acting_user_id()
+            .ok_or(AgentSecretError::NotEnabled)?;
+        if self.rollout.enabled(caller).await {
+            Ok(())
+        } else {
+            Err(AgentSecretError::NotEnabled)
+        }
     }
 
     /// Admins reach only their own team's agents.
@@ -60,12 +86,13 @@ where
     }
 }
 
-impl<Repository, Cipher, Directory> AgentSecretService
-    for AgentSecretServiceImpl<Repository, Cipher, Directory>
+impl<Repository, Cipher, Directory, Rollout> AgentSecretService
+    for AgentSecretServiceImpl<Repository, Cipher, Directory, Rollout>
 where
     Repository: AgentSecretRepository,
     Cipher: SecretCipher,
     Directory: TeamAgentDirectory,
+    Rollout: AgentAdminRollout,
 {
     #[tracing::instrument(skip(self, value), err)]
     async fn put(
@@ -103,7 +130,7 @@ where
 
         Ok(AgentSecret {
             name: stored.name,
-            value: value.expose().to_string(),
+            value,
             updated_at: stored.updated_at,
         })
     }
@@ -127,6 +154,7 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<AgentSecretSummaries, AgentSecretError> {
+        self.ensure_admin_enabled(&receipt).await?;
         self.ensure_on_team(&receipt, agent_user_id).await?;
 
         let secrets = self.repository.list(agent_user_id).await?;
@@ -140,6 +168,7 @@ where
         agent_user_id: &MacroUserIdStr<'_>,
         name: &str,
     ) -> Result<(), AgentSecretError> {
+        self.ensure_admin_enabled(&receipt).await?;
         let name = SecretName::parse(name)?;
         self.ensure_on_team(&receipt, agent_user_id).await?;
 

@@ -11,7 +11,8 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
                 agent_user_id: MacroUserIdStr::parse_from_str("macro|brain@example.com")
                     .unwrap()
                     .into_owned(),
-                token: "repo-bootstrap-token".into(),
+                token: agent_credentials::RepoToken::parse(format!("mrt_{}", "b".repeat(64)))
+                    .expect("test token"),
                 clone_url: "http://agent-git-service:8080/host-only.git".into(),
             })
         }),
@@ -27,7 +28,13 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
             Uuid::from_u128(1),
             &PersonaSeed {
                 voice: None,
-                creator_id: Some("macro|admin@example.com".to_string()),
+                creator_id: Some(
+                    macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                        "macro|admin@example.com",
+                    )
+                    .expect("admin id")
+                    .into_owned(),
+                ),
                 name: "Brain".into(),
                 job_description: "Help".into(),
                 personality: "Careful".into(),
@@ -41,7 +48,12 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
     assert!(url.path().starts_with("/git/"));
     assert_eq!(url.path_segments().unwrap().count(), 2);
     assert!(url.path().ends_with(".git"));
-    assert_eq!(repo.token.expose(), "repo-bootstrap-token");
+    assert_eq!(
+        repo.token.hash(),
+        agent_credentials::RepoToken::parse(format!("mrt_{}", "b".repeat(64)))
+            .expect("expected token")
+            .hash()
+    );
     server.abort();
 }
 

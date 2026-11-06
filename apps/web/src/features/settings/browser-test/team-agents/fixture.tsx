@@ -9,9 +9,11 @@ import type {
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
 import { AgentVoiceForm } from '../../components/agent-voice-form';
 import { InviteAgentForm } from '../../components/invite-agent-form';
+import { MemberInviteActions } from '../../components/member-invite-actions';
 import {
   AgentStatusPill,
   TeamAgentMenu,
@@ -19,11 +21,15 @@ import {
 import { BillingFixture } from './billing-fixture';
 import { MembersFixture } from './members-fixture';
 
-for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
+const dark = new URLSearchParams(location.search).has('dark');
+const theme = dark ? macroDarkTheme : macroLightTheme;
+for (const [token, value] of Object.entries(theme.colorTokens)) {
   document.documentElement.style.setProperty(`--color-${token}`, value);
 }
-document.documentElement.dataset.themeLight = 'true';
+document.documentElement.dataset.themeLight = String(!dark);
 const [open, setOpen] = createSignal(false);
+const [personInvites, setPersonInvites] = createSignal(0);
+const menuDialog = new URLSearchParams(location.search).has('menu-dialog');
 const [size, setSize] = createSignal<ComputerSize>('standard');
 const [requests, setRequests] = createSignal(0);
 const voiceEnabled = new URLSearchParams(location.search).has('voices');
@@ -55,6 +61,12 @@ const voices = {
   retry: () => {},
   sample: async () => new Uint8Array(44),
 };
+const [portraits, setPortraits] = createSignal(0);
+const [uploads, setUploads] = createSignal(0);
+const [savedAvatar, setSavedAvatar] = createSignal('');
+let portraitFailure = new URLSearchParams(location.search).has(
+  'portrait-error'
+);
 const [failed, setFailed] = createSignal(
   new URLSearchParams(location.search).has('quote-error')
 );
@@ -73,9 +85,9 @@ const quote = (value: ComputerSize = size()): TeamAgentQuote => ({
   computer: included() ? 0 : value === 'standard' ? 3000 : 6000,
   total: included() ? 0 : value === 'standard' ? 5000 : 8000,
   currency: 'usd',
-  vcpus: value === 'standard' ? 2 : 4,
-  memoryGb: value === 'standard' ? 8 : 16,
-  diskGb: 100,
+  vcpus: value === 'standard' ? 4 : value === 'large' ? 8 : 16,
+  memoryGb: value === 'standard' ? 8 : value === 'large' ? 16 : 32,
+  diskGb: value === 'standard' ? 100 : value === 'large' ? 200 : 400,
   interval: 'month',
 });
 const noSubscription = new URLSearchParams(location.search).has(
@@ -107,7 +119,20 @@ render(
         fallback={<MembersFixture />}
       >
         <div class="p-6 bg-panel min-h-screen text-ink">
-          <Button onClick={() => setOpen(true)}>Invite agent</Button>
+          <Show
+            when={menuDialog}
+            fallback={
+              <Button onClick={() => setOpen(true)}>Invite agent</Button>
+            }
+          >
+            <MemberInviteActions
+              canInvitePeople
+              canInviteAgents
+              onInvitePerson={() => setPersonInvites((count) => count + 1)}
+              onInviteAgent={() => setOpen(true)}
+            />
+            <p>Person invitations: {personInvites()}</p>
+          </Show>
           <p>Purchases: {requests()}</p>
           <Show when={voiceEnabled}>
             <Button onClick={() => setSettingsOpen(true)}>Change voice</Button>
@@ -137,6 +162,9 @@ render(
               />
             </Show>
           </Show>
+          <p>Portrait generations: {portraits()}</p>
+          <p>Photo uploads: {uploads()}</p>
+          <p>Saved avatar: {savedAvatar()}</p>
           <Show when={showPayments}>
             <div class="space-y-4 py-5">
               <Button
@@ -164,7 +192,8 @@ render(
               >
                 Set paid failure
               </Button>
-              <AgentStatusPill
+              <AgentStatusPill agent={agent()} />
+              <TeamAgentMenu
                 agent={agent()}
                 onRetry={() => {
                   setRetryRequests((count) => count + 1);
@@ -175,9 +204,6 @@ render(
                     setup: { step: 'booting', position: 3, total: 5 },
                   });
                 }}
-              />
-              <TeamAgentMenu
-                agent={agent()}
                 onRemove={() => setRemovals((count) => count + 1)}
               />
               <p>Retry requests: {retryRequests()}</p>
@@ -192,7 +218,22 @@ render(
               onClose={() => setOpen(false)}
               size={size()}
               setSize={setSize}
+              portrait={{
+                generate: async () => {
+                  setPortraits((count) => count + 1);
+                  if (portraitFailure) {
+                    portraitFailure = false;
+                    throw new Error('Portrait service unavailable');
+                  }
+                  return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="%23888"/></svg>';
+                },
+                upload: async () => {
+                  setUploads((count) => count + 1);
+                  return 'https://fixture.invalid/uploaded-avatar.png';
+                },
+              }}
               source={{
+                quoteForSize: (value) => quote(value),
                 specsForSize: (value) => ({ ...quote(value), size: value }),
                 needsSubscription: () => noSubscription && !included(),
                 quote: () =>
@@ -227,6 +268,7 @@ render(
                       },
                     ]);
                   }
+                  setSavedAvatar(request.avatarUrl ?? '');
                   setRequests((count) => count + 1);
                 },
               }}

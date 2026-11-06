@@ -241,7 +241,7 @@ impl IntoResponse for TeamAgentError {
     }
 }
 
-/// Computer specifications for team admins, independent of billing or rollout.
+/// Computer specifications for rollout-enabled team admins, independent of billing.
 #[utoipa::path(
     get, tag = "team-agents", operation_id = "get_team_agent_sizes",
     path = "/team_agents/sizes",
@@ -549,7 +549,8 @@ where
 #[into_params(parameter_in = Path)]
 pub struct EmailPath {
     /// Provider message id.
-    pub message_id: String,
+    #[param(value_type = String)]
+    pub message_id: crate::domain::mail::MailMessageId,
 }
 
 /// One of the calling team agent's emails, with its body.

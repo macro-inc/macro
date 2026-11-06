@@ -175,6 +175,18 @@ export class Brain implements Control {
   }
   private previousHealth: string | undefined;
   private log(line: object) {
+    if (
+      'batch_failed' in line ||
+      'handle_failed' in line ||
+      'heartbeat_failed' in line
+    )
+      this.problems.add('event handling failed');
+    if ('turn' in line && 'status' in line) {
+      if (line.status === 'success') {
+        this.problems.delete('turn execution failed');
+        this.problems.delete('event handling failed');
+      } else this.problems.add('turn execution failed');
+    }
     this.deps.log(line);
   }
   private async appendLog(name: string, line: object) {
@@ -363,12 +375,27 @@ export class Brain implements Control {
         if (!this.markSeen(`event:${event.eventId}`)) continue;
         await this.wiring.onEvent?.(event, this);
         if (event.type === MESSAGE_POSTED) {
-          await this.onMessage(event.metadata).catch((error) =>
+          try {
+            if (
+              this.wiring.learning &&
+              event.metadata.parent.type !== 'channel'
+            ) {
+              if (event.metadata.sender === this.me) continue;
+              await this.onGenericEvent(
+                event.eventId,
+                MESSAGE_POSTED,
+                event.metadata,
+                event.metadata
+              );
+              continue;
+            }
+            await this.onMessage(event.metadata);
+          } catch (error) {
             this.log({
-              message_id: event.metadata.message_id,
+              message_id: event.metadata?.message_id,
               handle_failed: String(error),
-            })
-          );
+            });
+          }
         } else if (event.type === AGENT_SESSION_OPENED) {
           const wake = await this.scheduleBook.wakeFor(event.metadata, this.me);
           if (wake) {
@@ -377,6 +404,12 @@ export class Brain implements Control {
               ? `schedule: ${wake.schedule.note}`
               : `a routine run with no schedule record: ${wake.sessionName}`;
             queueHeartbeat(reason);
+          } else if (this.wiring.learning) {
+            await this.onGenericEvent(
+              event.eventId,
+              AGENT_SESSION_OPENED,
+              event.metadata
+            );
           }
         } else {
           const metadata = event.metadata;
@@ -476,7 +509,7 @@ export class Brain implements Control {
       RELEVANCE_CONTEXT
     );
     await this.history.append(entry);
-    if (entry.from === this.me || entry.from.startsWith('bot|')) return;
+    if (entry.from === this.me) return;
     const key = conversationKey({
       channel: entry.channelId,
       root: dm ? null : entry.root,
@@ -503,15 +536,16 @@ export class Brain implements Control {
     const decision = await this.evaluate(candidate);
     await this.learning.decided(candidate, decision);
     const referenced =
-      recent.find(
-        (message) => message.id === (posted.thread_id ?? posted.root_id)
-      ) ??
-      recent
-        .filter(
-          (message) => message.from !== this.creator && message.from !== this.me
-        )
-        .at(-1);
-    await this.learning.feedback(candidate, referenced?.id);
+      posted.thread_id ??
+      (posted.root_id !== posted.message_id
+        ? posted.root_id
+        : recent
+            .filter(
+              (message) =>
+                message.from !== this.creator && message.from !== this.me
+            )
+            .at(-1)?.id);
+    await this.learning.feedback(candidate, referenced);
     if (this.work.inject(key, [entry])) {
       await this.learning.woke([entry.id]);
       await this.learning.record({
@@ -536,37 +570,40 @@ export class Brain implements Control {
   private async onGenericEvent(
     id: string,
     type: string,
-    metadata: unknown
+    metadata: unknown,
+    posted?: MessagePosted
   ): Promise<void> {
-    const channel =
-      typeof metadata === 'object' &&
-      metadata !== null &&
-      'channel_id' in metadata &&
-      typeof metadata.channel_id === 'string'
+    const channel = posted
+      ? `event:${posted.parent.type}:${posted.parent.id}`
+      : typeof metadata === 'object' &&
+          metadata !== null &&
+          'channel_id' in metadata &&
+          typeof metadata.channel_id === 'string'
         ? metadata.channel_id
         : `event:${type}`;
     const entry: Entry = {
-      id,
+      id: posted?.message_id ?? id,
       eventType: type,
       channelId: channel,
       channel: channel,
       root: id,
       thread: null,
       dm: false,
-      from: 'event',
+      from: posted?.sender ?? 'event',
       at: new Date().toISOString(),
       text: JSON.stringify({ event_type: type, metadata }),
-      mentionsMe: false,
+      mentionsMe: posted ? this.mentionsMe(posted) : false,
     };
     const candidate: Candidate = {
-      messageId: id,
+      messageId: entry.id,
       eventType: type,
       channel,
       directMessage: false,
-      mentionsMe: false,
+      mentionsMe: entry.mentionsMe,
+      fromCreator: entry.from === this.creator,
       inMyThread: false,
       message: {
-        id,
+        id: entry.id,
         text: entry.text,
         at: entry.at,
         from: entry.from,
@@ -576,6 +613,12 @@ export class Brain implements Control {
     };
     const decision = await this.evaluate(candidate);
     await this.learning.decided(candidate, decision, type);
+    if (posted)
+      await this.learning.feedback(
+        candidate,
+        posted.thread_id ??
+          (posted.root_id !== posted.message_id ? posted.root_id : undefined)
+      );
     if (decision.relevant) await this.lanes.push(channel, entry);
   }
   /** A normal work-tier task owns its branch and checks before merging any narrowing. */
@@ -701,8 +744,25 @@ export class Brain implements Control {
       () => handle.abort(),
       persona.events.respondTimeoutMinutes * 60000
     );
-    await this.learning.woke(batch.map((entry) => entry.id));
-    const outcome = await handle.done;
+    let outcome: Awaited<RunHandle['done']>;
+    try {
+      await this.learning.woke(batch.map((entry) => entry.id));
+      outcome = await handle.done;
+    } catch (error) {
+      await this.learning.outcome(
+        batch.map((entry) => entry.id),
+        turnId,
+        'error',
+        this.postedTurns.delete(turnId),
+        this.reactedTurns.delete(turnId)
+      );
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+      await stopTyping();
+      this.typing.delete(turnId);
+      this.turnSources.delete(turnId);
+    }
     await this.learning.outcome(
       batch.map((entry) => entry.id),
       turnId,
@@ -718,9 +778,6 @@ export class Brain implements Control {
       await this.tune().catch((error) =>
         this.log({ tune_failed: String(error) })
       );
-    clearTimeout(timeout);
-    await stopTyping();
-    this.typing.delete(turnId);
     for (const item of batch)
       await this.appendLog('handled.jsonl', {
         message_id: item.id,

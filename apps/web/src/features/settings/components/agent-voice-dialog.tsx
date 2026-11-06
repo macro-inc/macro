@@ -5,7 +5,7 @@ import {
   useVoicePickerSource,
 } from '@queries/team-agents/voices';
 import type { TeamAgent } from '@service-auth/generated/schemas';
-import { Show, Suspense } from 'solid-js';
+import { onCleanup, Show, Suspense } from 'solid-js';
 import { AgentVoiceForm } from './agent-voice-form';
 
 function ConnectedVoiceSettings(props: {
@@ -13,6 +13,10 @@ function ConnectedVoiceSettings(props: {
   agent: TeamAgent;
   onClose(): void;
 }) {
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
   const source = useVoicePickerSource(() => props.teamId);
   const { query, update } = useAgentVoice(
     () => props.teamId,
@@ -28,7 +32,13 @@ function ConnectedVoiceSettings(props: {
       saving={update.isPending}
       saveError={update.isError}
       onRetry={() => fireAndForget(query.refetch(), 'team-agent.voice.retry')}
-      onSave={(model) => update.mutate(model, { onSuccess: props.onClose })}
+      onSave={(model) =>
+        update.mutate(model, {
+          onSuccess: () => {
+            if (active) props.onClose();
+          },
+        })
+      }
       onClose={props.onClose}
     />
   );

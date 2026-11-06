@@ -1,7 +1,8 @@
 // Trusted Node supervisor. Persona OS identity and systemd provide isolation.
 import { spawn } from 'node:child_process';
 import * as nodeFs from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { abortableSleep } from './events.ts';
 import { initTelemetry, shutdownTelemetry, withSpan } from './telemetry.ts';
@@ -148,13 +149,40 @@ export async function checkWorkspace(
       tests.push(file);
     if (tests.length)
       await runCheck(workspace, ['--test', '--test-timeout=60000', ...tests]);
-    await runCheck(workspace, [
-      join(installed.root, 'src/host.ts'),
-      'check',
-      join(workspace, 'brain.ts'),
-      workspace,
-      regressionRoot,
+    const boot = await nodeFs.mkdtemp(join(tmpdir(), 'brain-check-'));
+    const excluded = new Set([
+      '.git',
+      'node_modules',
+      'cache',
+      'history',
+      'log',
+      'work',
     ]);
+    try {
+      await nodeFs.cp(workspace, boot, {
+        recursive: true,
+        filter: (path) => {
+          const first = relative(workspace, path).split(sep)[0];
+          const name = basename(path);
+          return (
+            !excluded.has(first) &&
+            name !== 'secrets' &&
+            !name.startsWith('secrets.') &&
+            !name.endsWith('.secret')
+          );
+        },
+      });
+      await configuration(boot, installed);
+      await runCheck(boot, [
+        join(installed.root, 'src/host.ts'),
+        'check',
+        join(boot, 'brain.ts'),
+        boot,
+        regressionRoot,
+      ]);
+    } finally {
+      await nodeFs.rm(boot, { recursive: true, force: true });
+    }
   });
 }
 

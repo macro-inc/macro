@@ -159,6 +159,13 @@ above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
 so they never overflow, never flip, and squeeze the chosen people to nothing.
 
+Email invitation cards have a backend-free desktop/phone regression for long
+descriptions wrapping inside the card, collapsed and expanded, the guest row
+lining up with its icon, and `+N more` keeping a 44px tap target on touch:
+`bunx playwright test --config src/features/email-message/browser-test/playwright.config.ts`.
+Use `wrap-anywhere` alone on wrapping text: `break-words` is emitted later and
+overrides `[overflow-wrap:anywhere]`, which then no longer shrinks min-content.
+
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
@@ -210,7 +217,8 @@ ranking and insertion on desktop and phone.
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It checks draft blank lines across remounts, that a sent message renders its
-lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
+lines with the spacing the draft showed, that the one-line composer centers its
+buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
@@ -1255,11 +1263,36 @@ agents query. A null breakdown keeps the existing plan and computers UI. Its bro
 covers interval/currency, distinct upcoming invoice amounts, included computers
 and narrow layouts.
 
+Gate teammate invitation, management and billing details with `enableTeamAgents`;
+wait for flag loading before choosing an off path, and disable feature queries
+until enabled. Keep the data-derived Agent chip when off; use confirmed human
+identity for generic member controls so an agent cannot be managed through them.
+Agent self-service and the separate Runtimes rollout keep their existing gates.
+
+Use the shared `Dialog` and `Panel` header/body/footer for agent invitations,
+including the standard phone sheet. `AgentPortrait` generates a fictional face
+once after a debounced name entry, supports regeneration and the existing avatar
+uploader, and stores the selected static-file URL; keep prompts and profiles out
+of telemetry attributes. Keep the face beside the identity fields at the top;
+show a shimmer while a named portrait is pending and an inline retry on failure.
+Render setup as compact five-step progress from server
+Paying/Creating/Booting/Connecting/Ready data, never a client timer. Keep size
+specification items atomic and prices aligned with titles at 390px and 320px.
+
+Use the provider-backed `VoicePicker` in invitations and creator/admin voice
+settings; stop and revoke samples when selection changes or the dialog closes.
+Keep a chosen voice through review and retries, and apply saved voices on the
+next call. With the rollout enabled, non-admin creators see only their own agents
+and their voice action; computer and invitation controls remain administrative.
+
 Keep Members invitation actions in `MemberInviteActions`; the split Invite action
 opens the existing person dialog, with person/agent choices in its dropdown.
 People and managed agents share the filtered roster; agent activity comes from
 `lastTurnAt`, and Retry uses `canRetryTeamAgent` at each entry point. The Members
-status distinguishes transient `unhealthy` agents on ready computers from
+rows share `MemberRowLayout` for height and identity/status/action columns on
+desktop and phones; put the role below the name and keep failure details and
+Retry in the row menu. Keep billing labels out of the status column.
+Distinguish transient `unhealthy` agents on ready computers from
 terminal `failed` provisioning; only terminal failures can retry provisioning.
 The browser fixture covers header heights and invitation/row menus on desktop, phone,
 and tablet.

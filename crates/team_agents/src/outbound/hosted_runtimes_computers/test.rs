@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use macro_user_id::cowlike::CowLike;
+
 use chrono::{DateTime, TimeZone, Utc};
 use hosted_runtimes::domain::{
     lifecycle::{ComputerState, Context, EffectWorker, Event, HostId, Phase, transition},
@@ -360,7 +362,11 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     let id = service
         .purchase(agent::ComputerPurchase {
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_string(),
+            created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                "macro|admin@example.com",
+            )
+            .expect("admin id")
+            .into_owned(),
             size: agent::ComputerSize::Large,
             name: Some("Agent".to_string()),
             persona: Some(persona.clone()),
@@ -493,7 +499,11 @@ async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() 
         service
             .purchase(agent::ComputerPurchase {
                 team_id: TEAM,
-                created_by: "macro|admin@example.com".to_string(),
+                created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                    "macro|admin@example.com"
+                )
+                .expect("admin id")
+                .into_owned(),
                 size: agent::ComputerSize::Standard,
                 name: None,
                 persona: None,
@@ -558,7 +568,11 @@ async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
         let result = computers
             .purchase(agent::ComputerPurchase {
                 team_id: TEAM,
-                created_by: "macro|admin@example.com".to_string(),
+                created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                    "macro|admin@example.com",
+                )
+                .expect("admin id")
+                .into_owned(),
                 size: agent::ComputerSize::Standard,
                 name: Some("Agent".to_string()),
                 persona: Some(agent::Persona {
@@ -804,7 +818,11 @@ async fn comped_purchase_and_release_never_consult_billing() {
     let id = adapter
         .provision_comped(agent::ComputerPurchase {
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                "macro|admin@example.com",
+            )
+            .expect("admin id")
+            .into_owned(),
             size: agent::ComputerSize::Standard,
             name: Some("Agent".to_owned()),
             persona: None,

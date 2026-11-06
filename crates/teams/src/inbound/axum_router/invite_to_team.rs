@@ -86,6 +86,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
         (status = 304),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 409, body = ErrorResponse, description = "`team_id` names a team other than the caller's current team"),
         (status = 500, body = ErrorResponse),

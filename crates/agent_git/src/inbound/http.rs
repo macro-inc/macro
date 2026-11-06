@@ -21,7 +21,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 
 use crate::api::{CreateRepoRequest, CreatedRepoResponse, EnsureRepoRequest};
-use crate::domain::models::{AgentGitError, GitEndpoint, GitRequest, GitService, RepoToken};
+use crate::domain::models::{AgentGitError, GitEndpoint, GitRequest, GitService};
 use crate::domain::ports::AgentGitService;
 use credential::{BASIC_CHALLENGE, GitCredentialExtractor};
 
@@ -141,6 +141,7 @@ impl IntoResponse for AgentGitHttpError {
             )
                 .into_response(),
             AgentGitError::NotFound => text(StatusCode::NOT_FOUND, message),
+            AgentGitError::EncodedPush => text(StatusCode::UNSUPPORTED_MEDIA_TYPE, message),
             AgentGitError::Forbidden(_) => text(StatusCode::FORBIDDEN, message),
             AgentGitError::TeamMismatch => text(StatusCode::CONFLICT, message),
             AgentGitError::RepoTooLarge { .. } => text(StatusCode::PAYLOAD_TOO_LARGE, message),
@@ -207,7 +208,9 @@ async fn serve<Service: AgentGitService>(
     let request = GitRequest {
         endpoint,
         content_type: header_string(headers, header::CONTENT_TYPE),
-        content_encoding: header_string(headers, header::CONTENT_ENCODING),
+        content_encoding: headers
+            .get(header::CONTENT_ENCODING)
+            .map(|value| value.to_str().unwrap_or("invalid").to_owned()),
         git_protocol: header_string(headers, GIT_PROTOCOL_HEADER),
         body: Box::pin(body.into_data_stream().map_err(std::io::Error::other)),
     };
@@ -372,7 +375,7 @@ async fn create_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
 
     Ok(Json(CreatedRepoResponse {
         agent_user_id: created.agent_user_id,
-        token: created.token.expose().to_owned(),
+        token: created.token,
         clone_url,
     }))
 }
@@ -383,7 +386,7 @@ async fn ensure_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
     Json(request): Json<EnsureRepoRequest>,
 ) -> Result<Json<CreatedRepoResponse>, AgentGitHttpError> {
-    let token = RepoToken::recovery(request.token)?;
+    let token = request.token;
     let created = state
         .service
         .ensure_repo(
@@ -400,7 +403,7 @@ async fn ensure_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     );
     Ok(Json(CreatedRepoResponse {
         agent_user_id: created.agent_user_id,
-        token: created.token.expose().to_owned(),
+        token: created.token,
         clone_url,
     }))
 }

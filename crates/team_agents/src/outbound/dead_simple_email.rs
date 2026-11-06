@@ -3,6 +3,7 @@
 //! API reference: <https://deadsimple.email/openapi.yaml>. Every response is
 //! wrapped as `{"data": ..., "meta": ...}`.
 
+use crate::domain::mail::{MailMessageId, MailboxId};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -26,7 +27,7 @@ const PLACEHOLDER_DOMAIN: &str = "agents.macro.invalid";
 #[derive(Clone)]
 pub struct DeadSimpleEmail {
     client: reqwest::Client,
-    api_key: Option<String>,
+    api_key: Option<reqwest::header::HeaderValue>,
 }
 
 /// Errors talking to Dead Simple Email.
@@ -35,6 +36,9 @@ pub enum DeadSimpleEmailError {
     /// The request failed to send or decode.
     #[error(transparent)]
     Http(#[from] reqwest::Error),
+    /// A configured provider credential is empty or invalid as an HTTP header.
+    #[error("the email provider credential is invalid")]
+    InvalidCredential,
     /// Dead Simple Email answered with an error status.
     #[error("dead simple email answered {status}: {body}")]
     Status {
@@ -64,14 +68,14 @@ struct CreateInbox<'a> {
 
 #[derive(Deserialize)]
 struct Inbox {
-    inbox_id: String,
+    inbox_id: MailboxId,
     email: String,
 }
 
 #[derive(Deserialize)]
 struct Message {
-    message_id: String,
-    thread_id: String,
+    message_id: MailMessageId,
+    thread_id: crate::domain::mail::MailThreadId,
     from_email: String,
     from_name: Option<String>,
     #[serde(default)]
@@ -119,12 +123,23 @@ struct Send<'a> {
 
 #[derive(Deserialize)]
 struct Sent {
-    message_id: String,
+    message_id: MailMessageId,
 }
 
 impl DeadSimpleEmail {
     /// Builds the adapter; no API key turns email off.
     pub fn new(api_key: Option<String>) -> Result<Self, DeadSimpleEmailError> {
+        let api_key = api_key
+            .map(|raw| {
+                if raw.is_empty() {
+                    return Err(DeadSimpleEmailError::InvalidCredential);
+                }
+                let mut header = reqwest::header::HeaderValue::from_str(&format!("Bearer {raw}"))
+                    .map_err(|_| DeadSimpleEmailError::InvalidCredential)?;
+                header.set_sensitive(true);
+                Ok(header)
+            })
+            .transpose()?;
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()?;
@@ -132,9 +147,9 @@ impl DeadSimpleEmail {
         Ok(Self { client, api_key })
     }
 
-    fn api_key(&self) -> Result<&str, TeamAgentError> {
+    fn api_key(&self) -> Result<&reqwest::header::HeaderValue, TeamAgentError> {
         self.api_key
-            .as_deref()
+            .as_ref()
             .ok_or(TeamAgentError::EmailUnavailable)
     }
 
@@ -143,7 +158,7 @@ impl DeadSimpleEmail {
         request: reqwest::RequestBuilder,
     ) -> Result<T, TeamAgentError> {
         let response = request
-            .bearer_auth(self.api_key()?)
+            .header(reqwest::header::AUTHORIZATION, self.api_key()?)
             .send()
             .await
             .map_err(DeadSimpleEmailError::from)?;
@@ -187,11 +202,11 @@ impl Mailboxes for DeadSimpleEmail {
     }
 
     #[tracing::instrument(name = "team_agents.mailbox.delete", skip_all, err)]
-    async fn delete(&self, mailbox_id: &str) -> Result<(), TeamAgentError> {
+    async fn delete(&self, mailbox_id: &MailboxId) -> Result<(), TeamAgentError> {
         let response = self
             .client
             .delete(format!("{DEAD_SIMPLE_EMAIL_API}/inboxes/{mailbox_id}"))
-            .bearer_auth(self.api_key()?)
+            .header(reqwest::header::AUTHORIZATION, self.api_key()?)
             .send()
             .await
             .map_err(DeadSimpleEmailError::from)?;
@@ -206,7 +221,11 @@ impl Mailboxes for DeadSimpleEmail {
     }
 
     #[tracing::instrument(name = "team_agents.mailbox.list", skip_all, err)]
-    async fn list(&self, mailbox_id: &str, limit: u8) -> Result<EmailMessages, TeamAgentError> {
+    async fn list(
+        &self,
+        mailbox_id: &MailboxId,
+        limit: u8,
+    ) -> Result<EmailMessages, TeamAgentError> {
         let list: MessageList = self
             .call(
                 self.client
@@ -225,8 +244,8 @@ impl Mailboxes for DeadSimpleEmail {
     #[tracing::instrument(name = "team_agents.mailbox.get", skip_all, err)]
     async fn get(
         &self,
-        mailbox_id: &str,
-        message_id: &str,
+        mailbox_id: &MailboxId,
+        message_id: &MailMessageId,
     ) -> Result<EmailMessage, TeamAgentError> {
         let message: Message = self
             .call(self.client.get(format!(
@@ -238,7 +257,11 @@ impl Mailboxes for DeadSimpleEmail {
     }
 
     #[tracing::instrument(name = "team_agents.mailbox.send", skip_all, err)]
-    async fn send(&self, mailbox_id: &str, email: &SendEmail) -> Result<SentEmail, TeamAgentError> {
+    async fn send(
+        &self,
+        mailbox_id: &MailboxId,
+        email: &SendEmail,
+    ) -> Result<SentEmail, TeamAgentError> {
         let sent: Sent = self
             .call(
                 self.client

@@ -60,7 +60,7 @@ async fn a_secret_decrypts_only_for_its_agent_and_name() {
         .await
         .expect("encrypted");
     assert_eq!(encrypted.encryption_version, 1);
-    assert_eq!(encrypted.kms_key_id, "fake-kms-key");
+    assert_eq!(encrypted.kms_key_id.as_str(), "fake-kms-key");
 
     let decrypted = cipher
         .decrypt(&sam, &github, &encrypted)

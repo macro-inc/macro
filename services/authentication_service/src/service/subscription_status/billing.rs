@@ -1,6 +1,8 @@
 //! Provider-backed recurring subscription and upcoming invoice presentation.
 
 use chrono::{DateTime, Utc};
+use hosted_runtimes::domain::models::ComputerStatusKind;
+use macro_user_id::user_id::MacroUserIdStr;
 use team_agents::domain::models::{BillingInterval, ComputerSize};
 use teams::domain::model::SeatPlan;
 
@@ -65,13 +67,15 @@ pub struct SubscriptionBillingLineItem {
     /// Identified computer, absent for aggregate or unattributed items.
     pub computer_id: Option<uuid::Uuid>,
     /// Agent account associated with this computer, if known.
-    pub agent_user_id: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub agent_user_id: Option<MacroUserIdStr<'static>>,
     /// Entity name or provider item description.
     pub name: String,
     /// Identified computer's catalog size.
     pub size: Option<ComputerSize>,
     /// Computer status supplied by its owning service.
-    pub status: Option<String>,
+    #[schema(value_type = Option<String>)]
+    pub status: Option<ComputerStatusKind>,
     /// Included without a subscription charge.
     pub included: bool,
 }

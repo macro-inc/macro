@@ -9,11 +9,13 @@ test('reviews the price and confirms once with reachable actions', async ({
   await page.getByLabel('Role / job description').fill('Maintain projects');
   await page.getByLabel('Personality').fill('Concise and helpful');
   const review = page.getByRole('button', { name: 'Review price' });
-  const bounds = await review.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(
-    page.viewportSize()!.height
-  );
+  await expect(review).toBeInViewport();
+  await expect
+    .poll(async () => {
+      const bounds = await review.boundingBox();
+      return bounds ? bounds.y + bounds.height : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThanOrEqual(page.viewportSize()!.height);
   await review.click();
   await expect(page.getByText('Total per month')).toBeVisible();
   await expect(page.getByText('$50.00')).toBeVisible();
@@ -82,7 +84,7 @@ test('blocks pending payment actions and permits unbilled removal and paid provi
 }) => {
   await page.goto('/?payments');
   await expect(
-    page.getByText('Confirming payment', { exact: true })
+    page.getByRole('progressbar', { name: 'Agent setup' })
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Retry', exact: true })
@@ -93,10 +95,8 @@ test('blocks pending payment actions and permits unbilled removal and paid provi
   ).toBeDisabled();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Set payment failure' }).click();
-  await expect(
-    page.getByText('Payment failed / not billed', { exact: true })
-  ).toBeVisible();
-  await expect(page.getByText('payment failed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payment failed', { exact: true })).toBeVisible();
+
   await expect(
     page.getByRole('button', { name: 'Retry', exact: true })
   ).toHaveCount(0);
@@ -104,12 +104,13 @@ test('blocks pending payment actions and permits unbilled removal and paid provi
   await page.getByRole('menuitem', { name: 'Remove agent' }).click();
   await expect(page.getByText('Removals: 1')).toBeVisible();
   await page.getByRole('button', { name: 'Set paid failure' }).click();
-  await expect(page.getByText('Billed', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await expect(page.getByRole('note')).toHaveText('Brain unavailable');
+  await page.getByRole('menuitem', { name: 'Retry', exact: true }).click();
   await expect(page.getByText('Retry requests: 1')).toBeVisible();
   await expect(
-    page.getByText('Starting computer (3/5)', { exact: true })
-  ).toBeVisible();
+    page.getByRole('progressbar', { name: 'Agent setup' })
+  ).toHaveAttribute('aria-valuetext', 'Booting — step 3 of 5');
   await expect(
     page.getByRole('button', { name: 'Retry', exact: true })
   ).toHaveCount(0);
@@ -120,12 +121,8 @@ test('shows catalog specs and billing action without an active plan', async ({
 }) => {
   await page.goto('/?no-subscription');
   await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
-  await expect(
-    page.getByText('2 vCPUs · 8 GB RAM · 100 GB disk')
-  ).toBeVisible();
-  await expect(page.getByText('4 vCPUs · 16 GB RAM · 100 GB disk')).toHaveCount(
-    2
-  );
+  await expect(page.getByText('4 vCPUs', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^(?:·\s*)?16 GB RAM$/)).toHaveCount(1);
   await expect(page.getByText('Specifications unavailable')).toHaveCount(0);
   await expect(page.getByText(/Your team needs an active plan/)).toBeVisible();
   await expect(
@@ -166,7 +163,6 @@ test('typing keeps fields and the invitation surface mounted with bounded DOM wo
     'Assistant',
     'Maintain projects',
     'Concise and helpful',
-    'https://example.com/avatar.png',
   ].entries()) {
     await fields.nth(index).pressSequentially(text);
     expect(
@@ -233,4 +229,114 @@ test('requires a fresh review before billing when included eligibility changes',
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Confirm and invite' }).click();
   await expect(page.getByText('Purchases: 1')).toBeVisible();
+});
+
+test('debounces portrait creation, regenerates deliberately and saves uploads', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
+  await page
+    .getByLabel('Name', { exact: true })
+    .pressSequentially('Assistant', { delay: 80 });
+  await expect(
+    page.getByText('Portrait generations: 0', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Agent portrait' })).toBeVisible();
+  await expect(
+    page.getByText('Portrait generations: 1', { exact: true })
+  ).toBeVisible();
+  await page.getByLabel('Role / job description').fill('Maintain projects');
+  await page.getByLabel('Personality').fill('Concise');
+  await page
+    .getByRole('button', { name: 'Generate another', exact: true })
+    .click();
+  await expect(
+    page.getByText('Portrait generations: 2', { exact: true })
+  ).toBeVisible();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Upload photo', exact: true }).click();
+  await (await chooser).setFiles({
+    name: 'portrait.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('fixture photo'),
+  });
+  await expect(
+    page.getByText('Photo uploads: 1', { exact: true })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Review price' }).click();
+  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await expect(
+    page.getByText(
+      'Saved avatar: https://fixture.invalid/uploaded-avatar.png',
+      { exact: true }
+    )
+  ).toBeVisible();
+});
+
+for (const width of [390, 320]) {
+  test(`size specifications preserve units at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    await page
+      .getByRole('button', { name: 'Invite agent', exact: true })
+      .click();
+    for (const spec of [
+      '4 vCPUs',
+      '8 GB RAM',
+      '100 GB disk',
+      '8 vCPUs',
+      '16 GB RAM',
+      '200 GB disk',
+      '16 vCPUs',
+      '32 GB RAM',
+      '400 GB disk',
+    ]) {
+      const item = page.getByText(new RegExp(`^(?:·\\s*)?${spec}$`));
+      await item.scrollIntoViewIfNeeded();
+      expect(
+        await item.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return new Set(
+            Array.from(range.getClientRects(), (rect) => Math.round(rect.y))
+          ).size;
+        })
+      ).toBe(1);
+    }
+    await page.getByText('XL', { exact: true }).click();
+    await expect(page.getByRole('radio', { name: /XL/ })).toBeChecked();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth
+      )
+    ).toBe(true);
+  });
+}
+
+test('portrait failure offers an explicit retry without discarding profile fields', async ({
+  page,
+}) => {
+  await page.goto('/?portrait-error');
+  await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Assistant');
+  await expect(
+    page.getByRole('status', { name: 'Generating agent photo' })
+  ).toBeVisible();
+  await page.getByLabel('Role / job description').fill('Maintain projects');
+  await page.getByLabel('Personality').fill('Concise');
+  await expect(page.getByRole('alert')).toContainText(
+    "Couldn't prepare the photo"
+  );
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'Agent portrait' })).toBeVisible();
+  await expect(
+    page.getByText('Portrait generations: 2', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+    'Assistant'
+  );
+  await page.getByRole('button', { name: 'Review price' }).click();
+  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await expect(page.getByText('Purchases: 1', { exact: true })).toBeVisible();
 });

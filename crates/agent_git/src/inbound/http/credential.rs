@@ -57,7 +57,10 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &State) -> Result<Self, Self::Rejection> {
         if let Some(Authorization(basic)) = parts.headers.typed_get::<Authorization<Basic>>() {
             return Ok(Self {
-                credential: GitCredential::RepoToken(RepoToken::presented(basic.password())),
+                credential: GitCredential::RepoToken(
+                    RepoToken::parse(basic.password().to_owned())
+                        .map_err(|_| GitCredentialRejection::Missing)?,
+                ),
                 _authorization: std::marker::PhantomData,
             });
         }

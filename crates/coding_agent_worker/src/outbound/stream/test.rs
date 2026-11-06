@@ -31,6 +31,33 @@ struct Envelope {
 }
 
 #[tokio::test]
+async fn presence_check_tells_the_service_a_connection_is_held() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind test listener");
+    let url = format!(
+        "http://{}",
+        listener.local_addr().expect("listener address")
+    );
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.expect("accept");
+        let mut buf = vec![0u8; 4096];
+        let read = socket.read(&mut buf).await.unwrap_or(0);
+        let _ = socket.write_all(TEAM_HARNESS.as_bytes()).await;
+        let _ = socket.shutdown().await;
+        String::from_utf8_lossy(&buf[..read]).to_lowercase()
+    });
+
+    assert!(test_client(&url).service_reports_connected().await.unwrap());
+
+    let request = server.await.unwrap();
+    assert!(request.starts_with("get /harnesses/me "));
+    assert!(request.contains("x-macro-harness-runtime-connected: true"));
+}
+
+#[tokio::test]
 async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
     let (url, requests) = serve(vec![
         TEAM_HARNESS,

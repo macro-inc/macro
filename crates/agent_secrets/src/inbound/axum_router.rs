@@ -99,6 +99,7 @@ where
 impl IntoResponse for AgentSecretError {
     fn into_response(self) -> Response {
         let status = match &self {
+            AgentSecretError::NotEnabled => StatusCode::FORBIDDEN,
             AgentSecretError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AgentSecretError::NotAnAgent | AgentSecretError::NotFound => StatusCode::NOT_FOUND,
             AgentSecretError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,

@@ -53,6 +53,10 @@ both full and per-service filtered Nix sources, including `brain.lock`.
 
 ## Gotchas
 
+- Repo tokens and stored SHA-256 digests use `agent_credentials` newtypes.
+  Parse at HTTP/client/database boundaries; Debug redacts both, and ordinary
+  equality compares fixed-length secrets and digests in constant time. Wire
+  tokens remain strings.
 - Credentials: HTTP Basic password = repo token (read and push, own repo
   only); otherwise a Macro user credential (cookie, bearer, or
   `x-macro-user-api-key`, e.g. via `git -c http.extraHeader=...`) of a team
@@ -64,6 +68,10 @@ both full and per-service filtered Nix sources, including `brain.lock`.
 - Push limits: size is measured before each push (refused at the cap, and one
   push may not carry more than the remaining room); the rate limit is
   in-memory per process, so the service runs one task.
+- Receive-pack rejects every Content-Encoding with 415; the remaining quota is
+  also passed to git as `receive.maxInputSize`. Both receive/transfer object
+  fsck checks are enabled through process config. Missing repos and bad tokens
+  share the same 401 response.
 - git runs with a cleared environment so `APP_SECRETS_JSON` never reaches it.
 
 - `POST /internal/repos/ensure` is internal-only recovery: supply the original

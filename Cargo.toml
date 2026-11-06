@@ -6,6 +6,7 @@ exclude = ["vendor"]
 members = [
   "crates/access_requests",
   "crates/agent_git",
+  "crates/agent_credentials",
   "crates/agent_api_keys",
   "crates/agent_secrets",
   "crates/team_agents",
@@ -93,6 +94,7 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/harness_id",

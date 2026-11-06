@@ -76,6 +76,7 @@ import type {
   Voice,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
+  WorkRegistrationResponse,
 } from './schemas';
 
 /**
@@ -3881,6 +3882,194 @@ export const presentSessionView = async (
     status: res.status,
     headers: res.headers,
   } as presentSessionViewResponse;
+};
+
+/**
+ * @summary Register a session as the caller's work. Requires edit access. Repeating returns the active
+registration. Registering does not share the session: viewers who cannot open it do not see
+it, so share it too.
+ */
+export type registerAgentSessionWorkResponse200 = {
+  data: WorkRegistrationResponse;
+  status: 200;
+};
+
+export type registerAgentSessionWorkResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type registerAgentSessionWorkResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type registerAgentSessionWorkResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type registerAgentSessionWorkResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type registerAgentSessionWorkResponseSuccess =
+  registerAgentSessionWorkResponse200 & {
+    headers: Headers;
+  };
+export type registerAgentSessionWorkResponseError = (
+  | registerAgentSessionWorkResponse401
+  | registerAgentSessionWorkResponse403
+  | registerAgentSessionWorkResponse409
+  | registerAgentSessionWorkResponse500
+) & {
+  headers: Headers;
+};
+
+export type registerAgentSessionWorkResponse =
+  | registerAgentSessionWorkResponseSuccess
+  | registerAgentSessionWorkResponseError;
+
+export const getRegisterAgentSessionWorkUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/work-registration`;
+};
+
+export const registerAgentSessionWork = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<registerAgentSessionWorkResponse> => {
+  const res = await fetch(getRegisterAgentSessionWorkUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerAgentSessionWorkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as registerAgentSessionWorkResponse;
+};
+
+/**
+ * @summary End the caller's own registration of a session. Repeating does nothing. It touches only the
+caller's own row, so it needs no access to the session: losing access must not strand it.
+ */
+export type unregisterAgentSessionWorkResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type unregisterAgentSessionWorkResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type unregisterAgentSessionWorkResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type unregisterAgentSessionWorkResponseSuccess =
+  unregisterAgentSessionWorkResponse204 & {
+    headers: Headers;
+  };
+export type unregisterAgentSessionWorkResponseError = (
+  | unregisterAgentSessionWorkResponse401
+  | unregisterAgentSessionWorkResponse500
+) & {
+  headers: Headers;
+};
+
+export type unregisterAgentSessionWorkResponse =
+  | unregisterAgentSessionWorkResponseSuccess
+  | unregisterAgentSessionWorkResponseError;
+
+export const getUnregisterAgentSessionWorkUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/work-registration`;
+};
+
+export const unregisterAgentSessionWork = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<unregisterAgentSessionWorkResponse> => {
+  const res = await fetch(getUnregisterAgentSessionWorkUrl(sessionId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unregisterAgentSessionWorkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unregisterAgentSessionWorkResponse;
+};
+
+/**
+ * @summary List the caller's active registrations of sessions they can still view, newest first.
+ */
+export type listAgentWorkRegistrationsResponse200 = {
+  data: WorkRegistrationResponse[];
+  status: 200;
+};
+
+export type listAgentWorkRegistrationsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentWorkRegistrationsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentWorkRegistrationsResponseSuccess =
+  listAgentWorkRegistrationsResponse200 & {
+    headers: Headers;
+  };
+export type listAgentWorkRegistrationsResponseError = (
+  | listAgentWorkRegistrationsResponse401
+  | listAgentWorkRegistrationsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentWorkRegistrationsResponse =
+  | listAgentWorkRegistrationsResponseSuccess
+  | listAgentWorkRegistrationsResponseError;
+
+export const getListAgentWorkRegistrationsUrl = () => {
+  return `/agent-work-registrations`;
+};
+
+export const listAgentWorkRegistrations = async (
+  options?: RequestInit
+): Promise<listAgentWorkRegistrationsResponse> => {
+  const res = await fetch(getListAgentWorkRegistrationsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentWorkRegistrationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentWorkRegistrationsResponse;
 };
 
 /**

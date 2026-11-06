@@ -1,5 +1,8 @@
 //! Ports for the team agents domain.
 
+use agent_credentials::RepoToken;
+
+use crate::domain::mail::{MailMessageId, MailboxId};
 use std::future::Future;
 
 use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt, MemberTeamRole};
@@ -7,10 +10,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentRepo, ComputerPurchase, ComputerQuote, ComputerSize, ComputerSizeSpec, ComputerStatus,
-    CreateTeamAgent, Credential, EmailMessage, EmailMessages, Mailbox, NewAgentAccount, Persona,
-    PersonaSeed, SeatQuote, SendEmail, SentEmail, SubscriptionItem, TeamAgent, TeamAgentError,
-    TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
+    AgentApiKey, AgentRepo, ComputerPurchase, ComputerQuote, ComputerSize, ComputerSizeSpec,
+    ComputerStatus, CreateTeamAgent, EmailMessage, EmailMessages, Mailbox, NewAgentAccount,
+    Persona, PersonaSeed, SeatQuote, SendEmail, SentEmail, SubscriptionItem, TeamAgent,
+    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 
 /// Storage for agent accounts and their provisioning status.
@@ -59,7 +62,7 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
     fn mailbox_id(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<MailboxId>, Self::Err>> + Send;
 
     /// Records the computer bought for the agent.
     fn set_computer(
@@ -125,7 +128,7 @@ pub trait AgentApiKeys: Send + Sync + 'static {
     fn mint(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Credential, TeamAgentError>> + Send;
+    ) -> impl Future<Output = Result<AgentApiKey, TeamAgentError>> + Send;
 }
 
 /// The agents' email provider.
@@ -138,26 +141,29 @@ pub trait Mailboxes: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Mailbox, TeamAgentError>> + Send;
 
     /// Deletes a mailbox. A missing mailbox counts as deleted.
-    fn delete(&self, mailbox_id: &str) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+    fn delete(
+        &self,
+        mailbox_id: &MailboxId,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 
     /// Lists a mailbox's newest emails.
     fn list(
         &self,
-        mailbox_id: &str,
+        mailbox_id: &MailboxId,
         limit: u8,
     ) -> impl Future<Output = Result<EmailMessages, TeamAgentError>> + Send;
 
     /// Reads one email with its body.
     fn get(
         &self,
-        mailbox_id: &str,
-        message_id: &str,
+        mailbox_id: &MailboxId,
+        message_id: &MailMessageId,
     ) -> impl Future<Output = Result<EmailMessage, TeamAgentError>> + Send;
 
     /// Sends an email from a mailbox.
     fn send(
         &self,
-        mailbox_id: &str,
+        mailbox_id: &MailboxId,
         email: &SendEmail,
     ) -> impl Future<Output = Result<SentEmail, TeamAgentError>> + Send;
 }
@@ -249,7 +255,7 @@ pub trait AgentRepos: Send + Sync + 'static {
         agent_user_id: &MacroUserIdStr<'_>,
         team_id: Uuid,
         seed: &PersonaSeed,
-        token: &Credential,
+        token: &RepoToken,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 
     /// Deletes the agent's repo. A missing repo counts as deleted.
@@ -331,7 +337,7 @@ pub trait TeamAgentService: Send + Sync + 'static {
     fn get_email(
         &self,
         caller: &MacroUserIdStr<'_>,
-        message_id: &str,
+        message_id: &MailMessageId,
     ) -> impl Future<Output = Result<EmailMessage, TeamAgentError>> + Send;
 
     /// Sends an email as the calling agent.

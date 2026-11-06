@@ -100,6 +100,16 @@ wakes; interrupted quiet batches return to the next real prompt.
 local live connection, returning `None` when another replica owns it. The
 service composition owns cross-replica carriage and request deadlines.
 
+Harness presence is per connection, because a runtime's redial can land on a
+different replica than the socket it replaced, and a stalled replica can notice
+that socket's end long after. `RuntimeRegistry` mints a `RuntimeConnectionId` per
+dial and reports it to `HarnessPresence`; a close removes only its own row, and
+each replica renews the leases of what it holds, so a crash reads offline within
+the lease. To debug a harness in Datadog, search `@harness:<id>` for
+`@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
+harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
+disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
+
 ## Checks
 
 - `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`

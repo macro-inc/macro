@@ -1,6 +1,12 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { TraceFlow, usePending } from '@app/observability/flow';
+import { enableTeamAgents } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import {
+  generateAgentAvatar,
+  useUploadAgentAvatarMutation,
+} from '@queries/agents/avatar';
 import { queryReadyGate } from '@queries/gate';
 import {
   useCreateTeamAgentMutation,
@@ -20,8 +26,24 @@ function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
     size,
     () => true
   );
+  const standardQuote = useTeamAgentQuoteQuery(
+    () => props.teamId,
+    () => 'standard',
+    () => true
+  );
+  const largeQuote = useTeamAgentQuoteQuery(
+    () => props.teamId,
+    () => 'large',
+    () => true
+  );
+  const xlQuote = useTeamAgentQuoteQuery(
+    () => props.teamId,
+    () => 'xl',
+    () => true
+  );
   const create = useCreateTeamAgentMutation();
   const voices = useVoicePickerSource(() => props.teamId);
+  const upload = useUploadAgentAvatarMutation();
   usePending('team-agent.sizes', () => sizes.isLoading);
   usePending('team-agent.quote', () => quote.isLoading);
   return (
@@ -32,7 +54,20 @@ function ConnectedInviteAgentForm(props: { teamId: string; onClose(): void }) {
       size={size()}
       setSize={setSize}
       voices={voices}
+      portrait={{
+        upload: (file) => upload.mutateAsync(file),
+        generate: generateAgentAvatar,
+      }}
       source={{
+        quoteForSize: (value) => {
+          const quotes = {
+            standard: standardQuote,
+            large: largeQuote,
+            xl: xlQuote,
+          };
+          const query = quotes[value];
+          return queryReadyGate(query) ? query.data : undefined;
+        },
         specsForSize: (value) =>
           queryReadyGate(sizes)
             ? sizes.data.sizes.find((spec) => spec.size === value)
@@ -58,19 +93,30 @@ export function InviteAgentDialog(props: {
   open: boolean;
   onClose(): void;
 }) {
+  const flag = useFeatureFlag(enableTeamAgents);
   return (
     <Show when={props.open}>
-      <Suspense fallback={<p role="status">Loading invitation…</p>}>
-        <TraceFlow
-          name="team-agent.invite.open"
-          attributes={{ 'team.id': props.teamId, 'computer.size': 'standard' }}
-        >
-          <ConnectedInviteAgentForm
-            teamId={props.teamId}
-            onClose={props.onClose}
-          />
-        </TraceFlow>
-      </Suspense>
+      <Show
+        when={!flag().loading}
+        fallback={<p role="status">Loading agent features…</p>}
+      >
+        <Show when={flag().enabled}>
+          <Suspense fallback={<p role="status">Loading invitation…</p>}>
+            <TraceFlow
+              name="team-agent.invite.open"
+              attributes={{
+                'team.id': props.teamId,
+                'computer.size': 'standard',
+              }}
+            >
+              <ConnectedInviteAgentForm
+                teamId={props.teamId}
+                onClose={props.onClose}
+              />
+            </TraceFlow>
+          </Suspense>
+        </Show>
+      </Show>
     </Show>
   );
 }

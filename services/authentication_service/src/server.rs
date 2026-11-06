@@ -697,7 +697,10 @@ async fn run_server() -> anyhow::Result<()> {
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
-    .with_invite_rewarder(Arc::new(invite_rewards));
+    .with_invite_rewarder(Arc::new(invite_rewards))
+    .with_agent_invite_rollout(Arc::new(
+        team_agents::domain::rollout::TeamAgentRollout::new(feature_flags.clone()),
+    ));
     let computer_prices = config.computer_prices();
     let computer_repo = hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone());
     let teams_service = Arc::new(teams_service_impl);
@@ -756,8 +759,8 @@ async fn run_server() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("{error:?}"))?,
             computer_urls.git,
         ),
-        // Gates quoting and creating agents per admin (`enable-team-agents`).
-        // Without a PostHog key (local, tests) the feature is open.
+        // Gates every administrator operation per user (`enable-team-agents`).
+        // Missing PostHog configuration closes administrator operations.
         feature_flags.clone(),
         // The brain runs on its own computer, so it reaches Macro through the
         // computer-facing gateway, never this container's in-network addresses.
@@ -772,6 +775,7 @@ async fn run_server() -> anyhow::Result<()> {
             team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory::new(
                 team_agents_repository,
             ),
+            team_agents::domain::rollout::TeamAgentRollout::new(feature_flags.clone()),
         ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(

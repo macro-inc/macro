@@ -40,7 +40,7 @@ impl AgentSecretRepository for FakeRepository {
         );
 
         Ok(AgentSecretSummary {
-            name: name.as_str().to_string(),
+            name: name.clone(),
             created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         })
@@ -60,7 +60,7 @@ impl AgentSecretRepository for FakeRepository {
                 name.as_str().to_string(),
             ))
             .map(|encrypted| StoredSecret {
-                name: name.as_str().to_string(),
+                name: name.clone(),
                 encrypted: encrypted.clone(),
                 created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
                 updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
@@ -84,7 +84,7 @@ impl AgentSecretRepository for FakeRepository {
         Ok(names
             .into_iter()
             .map(|name| AgentSecretSummary {
-                name,
+                name: SecretName::parse(&name).unwrap(),
                 created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
                 updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             })
@@ -122,7 +122,7 @@ impl SecretCipher for FakeCipher {
             ciphertext: format!("{agent_user_id}/{}:{}", name.as_str(), value.expose())
                 .into_bytes(),
             encryption_version: 1,
-            kms_key_id: "key".to_string(),
+            kms_key_id: crate::domain::models::KmsKeyId::parse("key".to_string()).expect("key id"),
         })
     }
 
@@ -152,8 +152,31 @@ impl TeamAgentDirectory for FakeDirectory {
     }
 }
 
-fn service() -> AgentSecretServiceImpl<FakeRepository, FakeCipher, FakeDirectory> {
-    AgentSecretServiceImpl::new(FakeRepository::default(), FakeCipher, FakeDirectory)
+struct FakeRollout {
+    enabled: bool,
+    calls: Mutex<Vec<MacroUserIdStr<'static>>>,
+}
+
+impl crate::domain::admin::AgentAdminRollout for FakeRollout {
+    async fn enabled(&self, caller: &MacroUserIdStr<'_>) -> bool {
+        self.calls
+            .lock()
+            .expect("lock")
+            .push(caller.clone().into_owned());
+        self.enabled
+    }
+}
+
+fn service() -> AgentSecretServiceImpl<FakeRepository, FakeCipher, FakeDirectory, FakeRollout> {
+    AgentSecretServiceImpl::new(
+        FakeRepository::default(),
+        FakeCipher,
+        FakeDirectory,
+        FakeRollout {
+            enabled: true,
+            calls: Mutex::new(vec![]),
+        },
+    )
 }
 
 fn admin_of(team: &str) -> EntityAccessReceipt<AdminTeamRole> {
@@ -168,14 +191,14 @@ async fn an_agent_stores_reads_and_deletes_its_own_secret() {
         .put(&user(AGENT), "github-token", "ghp_abc".to_string())
         .await
         .expect("stored");
-    assert_eq!(summary.name, "github-token");
+    assert_eq!(summary.name.as_str(), "github-token");
 
     let secret = service
         .get(&user(AGENT), "github-token")
         .await
         .expect("read");
-    assert_eq!(secret.name, "github-token");
-    assert_eq!(secret.value, "ghp_abc");
+    assert_eq!(secret.name.as_str(), "github-token");
+    assert_eq!(secret.value.expose(), "ghp_abc");
 
     service
         .delete(&user(AGENT), "github-token")
@@ -277,4 +300,44 @@ async fn an_admin_lists_and_deletes_secrets_only_on_their_team() {
         service.get(&user(AGENT), "github-token").await,
         Err(AgentSecretError::NotFound)
     ));
+}
+
+#[tokio::test]
+async fn disabled_rollout_blocks_only_admin_secrets_and_loads_for_the_admin() {
+    let mut service = service();
+    service.rollout.enabled = false;
+    service
+        .put(&user(AGENT), "api-token", "test-secret".to_owned())
+        .await
+        .expect("self put");
+    assert_eq!(
+        service
+            .get(&user(AGENT), "api-token")
+            .await
+            .expect("self get")
+            .value
+            .expose(),
+        "test-secret"
+    );
+    assert!(service.rollout.calls.lock().expect("lock").is_empty());
+    assert!(matches!(
+        service.list_for_admin(admin_of(TEAM), &user(AGENT)).await,
+        Err(AgentSecretError::NotEnabled)
+    ));
+    assert!(matches!(
+        service
+            .delete_for_admin(admin_of(TEAM), &user(AGENT), "api-token")
+            .await,
+        Err(AgentSecretError::NotEnabled)
+    ));
+    assert_eq!(
+        *service.rollout.calls.lock().expect("lock"),
+        vec![user(HUMAN), user(HUMAN)]
+    );
+    assert!(service.get(&user(AGENT), "api-token").await.is_ok());
+    service
+        .delete(&user(AGENT), "api-token")
+        .await
+        .expect("self delete");
+    assert_eq!(service.rollout.calls.lock().expect("lock").len(), 2);
 }

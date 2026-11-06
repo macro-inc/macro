@@ -7,6 +7,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use super::mail::{MailMessageId, MailThreadId, MailboxId};
+
 /// Longest agent name, in characters.
 pub const MAX_NAME_CHARS: usize = 64;
 
@@ -251,7 +253,7 @@ pub struct ComputerPurchase {
     /// The team whose subscription pays.
     pub team_id: Uuid,
     /// The admin or owner buying it.
-    pub created_by: String,
+    pub created_by: MacroUserIdStr<'static>,
     /// The computer's size.
     pub size: ComputerSize,
     /// Display name.
@@ -366,7 +368,7 @@ pub struct PersonaSeed {
     pub voice: Option<String>,
     /// Admin the brain should recognize as its creator; absent on older seeds.
     #[serde(default)]
-    pub creator_id: Option<String>,
+    pub creator_id: Option<MacroUserIdStr<'static>>,
     /// Display name.
     pub name: String,
     /// What the agent is responsible for.
@@ -375,29 +377,7 @@ pub struct PersonaSeed {
     pub personality: String,
 }
 
-/// A secret the caller must never log: an API key or repo token.
-///
-/// [`Debug`] redacts it.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Credential(String);
-
-impl Credential {
-    /// Wrap a freshly minted secret.
-    pub fn new(secret: String) -> Self {
-        Self(secret)
-    }
-
-    /// The secret, for the config drive only.
-    pub fn expose(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Debug for Credential {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("Credential(redacted)")
-    }
-}
+pub use agent_credentials::{AgentApiKey, RepoToken};
 
 /// The agent's workspace repo.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -405,7 +385,7 @@ pub struct AgentRepo {
     /// Smart-HTTP clone URL.
     pub url: String,
     /// The agent's token for clone and push.
-    pub token: Credential,
+    pub token: RepoToken,
 }
 
 /// A new agent account to store.
@@ -426,14 +406,14 @@ pub struct NewAgentAccount {
     /// Profile picture URL.
     pub avatar_url: Option<String>,
     /// The agent's mailbox at the email provider, when one was created.
-    pub mailbox_id: Option<String>,
+    pub mailbox_id: Option<MailboxId>,
 }
 
 /// A mailbox created for an agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mailbox {
     /// Provider id of the mailbox; `None` when no email provider is set up.
-    pub mailbox_id: Option<String>,
+    pub mailbox_id: Option<MailboxId>,
     /// The mailbox's address.
     pub email: String,
 }
@@ -444,9 +424,11 @@ pub struct Mailbox {
 #[serde(rename_all = "camelCase")]
 pub struct EmailMessage {
     /// Provider message id.
-    pub message_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub message_id: MailMessageId,
     /// Provider thread id.
-    pub thread_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub thread_id: MailThreadId,
     /// Sender.
     pub from: String,
     /// Recipients.
@@ -491,7 +473,8 @@ pub struct SendEmail {
 #[serde(rename_all = "camelCase")]
 pub struct SentEmail {
     /// Provider message id.
-    pub message_id: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub message_id: MailMessageId,
 }
 
 /// Computer specifications, available independently of subscription pricing.

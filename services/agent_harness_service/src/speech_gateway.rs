@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 use team_agents::domain::{
     gateway::{BrainGatewayAccess, BrainGatewayError, BrainGatewayIdentity},
-    models::Credential,
+    models::AgentApiKey,
     voice::{AgentVoice, Voice, VoiceProvider},
 };
 use tokio_tungstenite::{
@@ -89,9 +89,11 @@ impl SpeechGateway {
         let credential = headers
             .typed_get::<Authorization<Bearer>>()
             .ok_or(StatusCode::UNAUTHORIZED)?;
+        let key = AgentApiKey::parse(credential.token().to_owned())
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
         let identity = self
             .access
-            .authorize(&Credential::new(credential.token().to_owned()))
+            .authorize(&key)
             .await
             .map_err(|error| match error {
                 BrainGatewayError::Unauthorized => StatusCode::UNAUTHORIZED,

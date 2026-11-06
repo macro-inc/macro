@@ -195,7 +195,6 @@ where
         token: RepoToken,
     ) -> Result<CreatedRepo, AgentGitError> {
         let _mutation = self.mutations.lock().await;
-        let token = RepoToken::recovery(token.expose().to_owned())?;
         // The database uniqueness constraint arbitrates concurrent recovery.
         // Never use upsert_repo here: it intentionally rotates live tokens.
         self.adapters
@@ -258,7 +257,7 @@ where
             .find_repo(agent_user_id)
             .await
             .map_err(internal)?
-            .ok_or(AgentGitError::NotFound)?;
+            .ok_or(AgentGitError::InvalidToken)?;
 
         let access = request.endpoint.access();
 
@@ -287,6 +286,13 @@ where
             }
         }
 
+        if request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack)
+            && request.content_encoding.is_some()
+        {
+            return Err(AgentGitError::EncodedPush);
+        }
+
+        let mut max_input_size = None;
         if access == GitAccess::Push {
             let size_bytes = self
                 .adapters
@@ -314,13 +320,17 @@ where
                     .await
                     .map_err(internal)?;
 
+                max_input_size = Some(limit_bytes - size_bytes);
                 request.body = limit_body(request.body, limit_bytes - size_bytes);
             }
         }
 
         self.adapters
             .backend
-            .serve(&AuthorizedRepo::new(repo.agent_user_id, access), request)
+            .serve(
+                &AuthorizedRepo::new(repo.agent_user_id, access, max_input_size),
+                request,
+            )
             .await
             .map_err(internal)
     }

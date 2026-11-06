@@ -353,6 +353,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_credentials"
+version = "0.1.0"
+dependencies = [
+ "constant_time_eq 0.3.1",
+ "hex",
+ "lazy-regex",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "user_api_key",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -435,11 +452,12 @@ dependencies = [
 name = "agent_git"
 version = "0.1.0"
 dependencies = [
+ "agent_credentials",
  "axum",
  "axum-extra",
  "bytes",
  "chrono",
- "constant_time_eq 0.3.1",
+ "flate2",
  "futures",
  "hex",
  "httparse",
@@ -749,6 +767,7 @@ dependencies = [
  "serde_json",
  "share_permission_db_utils",
  "soup",
+ "soup_realtime",
  "sqlx",
  "sqs_client",
  "sqs_worker",
@@ -925,6 +944,7 @@ dependencies = [
  "model_user",
  "rootcause",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -960,6 +980,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
+ "futures",
  "genai_telemetry",
  "harness_id",
  "jev",
@@ -4990,6 +5011,7 @@ dependencies = [
  "graphql_notification_inbox",
  "graphql_permission",
  "graphql_properties",
+ "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
  "graphql_work_feed",
@@ -9612,6 +9634,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_registered_work"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "async-graphql",
+ "async-stream",
+ "attention_feed",
+ "chrono",
+ "futures",
+ "graphql_common",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "soup_realtime",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_scheduled_action"
 version = "0.1.0"
 dependencies = [
@@ -13024,9 +13067,12 @@ dependencies = [
  "fusionauth",
  "macro_auth",
  "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
+ "model",
  "rand 0.9.4",
  "redis",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -13042,6 +13088,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "wiremock",
  "workspace-hack",
  "zeroize",
 ]
@@ -20393,6 +20440,7 @@ dependencies = [
 name = "team_agents"
 version = "0.1.0"
 dependencies = [
+ "agent_credentials",
  "agent_git",
  "agent_secrets",
  "axum",
@@ -20402,6 +20450,7 @@ dependencies = [
  "harness_id",
  "harnesses",
  "hosted_runtimes",
+ "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -20410,6 +20459,7 @@ dependencies = [
  "reqwest 0.13.4",
  "rootcause",
  "serde",
+ "serde_json",
  "sqlx",
  "strum 0.27.2",
  "teams",

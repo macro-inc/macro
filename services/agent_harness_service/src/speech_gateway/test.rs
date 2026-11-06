@@ -12,18 +12,25 @@ use uuid::Uuid;
 
 struct Access;
 impl BrainGatewayAccess for Access {
-    fn authorize<'a>(&'a self, key: &'a Credential) -> BrainGatewayFuture<'a> {
+    fn authorize<'a>(&'a self, key: &'a AgentApiKey) -> BrainGatewayFuture<'a> {
         Box::pin(async move {
             match key.expose() {
-                "agent-key" => Ok(BrainGatewayIdentity {
+                value if value == format!("mak_{}", "a".repeat(64)) => Ok(BrainGatewayIdentity {
                     user_id: MacroUserIdStr::parse_from_str("macro|agent@example.com")
                         .unwrap()
                         .into_owned(),
                     team_id: Uuid::from_u128(1),
                     computer_id: Uuid::from_u128(2),
                 }),
-                "stopped-key" | "wrong-team-key" => Err(BrainGatewayError::Forbidden),
-                "unavailable-key" => Err(BrainGatewayError::Unavailable),
+                value
+                    if value == format!("mak_{}", "b".repeat(64))
+                        || value == format!("mak_{}", "c".repeat(64)) =>
+                {
+                    Err(BrainGatewayError::Forbidden)
+                }
+                value if value == format!("mak_{}", "d".repeat(64)) => {
+                    Err(BrainGatewayError::Unavailable)
+                }
                 _ => Err(BrainGatewayError::Unauthorized),
             }
         })
@@ -56,11 +63,14 @@ impl UsageRecorder for Recorder {
 #[tokio::test]
 async fn authorization_rejects_ordinary_revoked_stopped_and_other_team_keys_before_admission() {
     for (key, status) in [
-        ("ordinary-user-key", StatusCode::UNAUTHORIZED),
-        ("revoked-key", StatusCode::UNAUTHORIZED),
-        ("stopped-key", StatusCode::FORBIDDEN),
-        ("wrong-team-key", StatusCode::FORBIDDEN),
-        ("unavailable-key", StatusCode::SERVICE_UNAVAILABLE),
+        (format!("mak_{}", "f".repeat(64)), StatusCode::UNAUTHORIZED),
+        (format!("mak_{}", "e".repeat(64)), StatusCode::UNAUTHORIZED),
+        (format!("mak_{}", "b".repeat(64)), StatusCode::FORBIDDEN),
+        (format!("mak_{}", "c".repeat(64)), StatusCode::FORBIDDEN),
+        (
+            format!("mak_{}", "d".repeat(64)),
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
     ] {
         let admission = Arc::new(Admission::default());
         let recorder = Arc::new(Recorder::default());
@@ -308,10 +318,10 @@ async fn websocket_proxy_replaces_agent_auth_and_relays_inference_events_with_me
         axum::serve(listener, router(state)).await.unwrap();
     });
     for (key, expected) in [
-        ("ordinary-user-key", StatusCode::UNAUTHORIZED),
-        ("revoked-key", StatusCode::UNAUTHORIZED),
-        ("stopped-key", StatusCode::FORBIDDEN),
-        ("wrong-team-key", StatusCode::FORBIDDEN),
+        (format!("mak_{}", "f".repeat(64)), StatusCode::UNAUTHORIZED),
+        (format!("mak_{}", "e".repeat(64)), StatusCode::UNAUTHORIZED),
+        (format!("mak_{}", "b".repeat(64)), StatusCode::FORBIDDEN),
+        (format!("mak_{}", "c".repeat(64)), StatusCode::FORBIDDEN),
     ] {
         let mut denied = endpoint.clone().into_client_request().unwrap();
         denied.headers_mut().insert(
@@ -328,7 +338,7 @@ async fn websocket_proxy_replaces_agent_auth_and_relays_inference_events_with_me
     let mut request = endpoint.into_client_request().unwrap();
     request.headers_mut().insert(
         header::AUTHORIZATION,
-        HeaderValue::from_static("Bearer agent-key"),
+        HeaderValue::from_str(&format!("Bearer mak_{}", "a".repeat(64))).unwrap(),
     );
     let (mut client, _) = connect_async(request).await.unwrap();
     client.send(UpstreamMessage::Text(serde_json::json!({"type":"session.create","model":"deepgram/nova-3","language":"en","settings":{"sample_rate":"16000","encoding":"pcm_s16le","extra":{"endpointing":300,"interim_results":true,"smart_format":true,"utterance_end":true,"keyterm":"Agent"}}}).to_string().into())).await.unwrap();

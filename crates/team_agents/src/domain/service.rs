@@ -1,5 +1,8 @@
 //! Team agent service implementation.
 
+use agent_credentials::RepoToken;
+
+use crate::domain::mail::{MailMessageId, MailboxId};
 use std::collections::BTreeMap;
 
 use entity_access::domain::models::{
@@ -11,10 +14,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind,
-    CreateTeamAgent, Credential, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS,
-    NewAgentAccount, Persona, PersonaSeed, PersonaService, SendEmail, SentEmail, TeamAgent,
-    TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
+    AgentApiKey, AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus,
+    ComputerStatusKind, CreateTeamAgent, EmailMessage, EmailMessages, MAX_NAME_CHARS,
+    MAX_PROFILE_CHARS, NewAgentAccount, Persona, PersonaSeed, PersonaService, SendEmail, SentEmail,
+    TeamAgent, TeamAgentError, TeamAgentQuote, TeamAgentSizes, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, Mailboxes, TeamAgentRepository, TeamAgentService,
@@ -24,8 +27,9 @@ use super::ports::{
 #[cfg(test)]
 mod test;
 
-/// PostHog flag that lets a team admin quote and create team agents.
-pub const TEAM_AGENTS_FLAG: &str = "enable-team-agents";
+/// Shared rollout key for every team-agent administrator operation.
+pub use super::rollout::TEAM_AGENTS_FLAG;
+use super::rollout::TeamAgentRollout;
 
 /// The brain's systemd unit, per persona OS user (`brain@<os_user>`).
 const BRAIN_UNIT_PREFIX: &str = "brain@";
@@ -69,9 +73,8 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Inboxes, Comput
     mailboxes: Inboxes,
     computers: Computer,
     repos: Repos,
-    /// `None` where no flag provider is configured (local stacks, tests):
-    /// the feature is then open.
-    flags: Option<Flags>,
+    /// One shared fail-closed rollout policy for administrator operations.
+    rollout: TeamAgentRollout<Flags>,
     /// Public API gateway origin the brain reaches Macro through.
     gateway_url: String,
     anthropic_base_url: String,
@@ -102,7 +105,7 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
             mailboxes,
             computers,
             repos,
-            flags,
+            rollout: TeamAgentRollout::new(flags),
             gateway_url,
             anthropic_base_url,
             included_email_domain,
@@ -191,7 +194,7 @@ fn persona(
     gateway_url: &str,
     anthropic_base_url: &str,
     repo: &AgentRepo,
-    api_key: &Credential,
+    api_key: &AgentApiKey,
 ) -> Persona {
     let config = BTreeMap::from([
         (
@@ -251,7 +254,7 @@ fn team_id<T: RequiredPermission>(
 /// What a create made before the purchase, so a failure can take it back.
 #[derive(Default)]
 struct Undo {
-    mailbox_id: Option<String>,
+    mailbox_id: Option<MailboxId>,
     account: Option<MacroUserIdStr<'static>>,
     joined_team: bool,
     repo: bool,
@@ -268,25 +271,22 @@ where
     Repos: AgentRepos,
     Flags: FeatureFlags + 'static,
 {
-    /// Whether `caller` may quote and create team agents. Fails closed when
-    /// the flags can't be loaded.
     async fn ensure_enabled(&self, caller: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
-        let Some(flags) = &self.flags else {
-            return Ok(());
-        };
-
-        let enabled = flags
-            .load(caller)
-            .await
-            .inspect_err(|error| tracing::warn!(error = ?error, "could not load feature flags; team agents stay closed"))
-            .is_ok_and(|snapshot| snapshot.is_enabled(TEAM_AGENTS_FLAG));
+        let enabled = self.rollout.enabled(caller).await;
         tracing::Span::current().record("team_agents.flag", enabled);
-
         if enabled {
             Ok(())
         } else {
             Err(TeamAgentError::NotEnabled)
         }
+    }
+
+    async fn ensure_management_enabled<T: RequiredPermission>(
+        &self,
+        receipt: &EntityAccessReceipt<T>,
+    ) -> Result<(), TeamAgentError> {
+        let caller = receipt.acting_user_id().ok_or(TeamAgentError::Forbidden)?;
+        self.ensure_enabled(caller).await
     }
 
     async fn is_included(&self, team_id: Uuid) -> Result<bool, TeamAgentError> {
@@ -350,7 +350,8 @@ where
         if included != request.expected_included {
             return Err(TeamAgentError::QuoteChanged);
         }
-        let os_user = slug(&request.name);
+        let name_slug = slug(&request.name);
+        let os_user = format!("agent-{name_slug}");
 
         // A short suffix keeps two agents with the same name apart.
         let suffix: String = Uuid::now_v7()
@@ -360,7 +361,7 @@ where
             .rev()
             .take(6)
             .collect();
-        let username = format!("{os_user}-{suffix}");
+        let username = format!("{name_slug}-{suffix}");
         let mailbox = self.mailboxes.create(&username, &request.name).await?;
         undo.mailbox_id = mailbox.mailbox_id.clone();
         let email = mailbox.email.to_lowercase();
@@ -375,7 +376,7 @@ where
 
         let seed = PersonaSeed {
             voice: request.voice,
-            creator_id: Some(created_by.as_ref().to_string()),
+            creator_id: Some(created_by.clone()),
             name: request.name.clone(),
             job_description: request.job_description,
             personality: request.personality,
@@ -409,7 +410,7 @@ where
 
         let purchase = ComputerPurchase {
             team_id,
-            created_by: created_by.as_ref().to_string(),
+            created_by: created_by.clone(),
             size: request.size,
             name: Some(request.name.clone()),
             persona: Some(persona(
@@ -562,7 +563,7 @@ where
             .ok_or(TeamAgentError::NotAnAgent)
     }
 
-    async fn mailbox(&self, caller: &MacroUserIdStr<'_>) -> Result<String, TeamAgentError> {
+    async fn mailbox(&self, caller: &MacroUserIdStr<'_>) -> Result<MailboxId, TeamAgentError> {
         self.agent(caller).await?;
 
         self.repository
@@ -590,6 +591,7 @@ where
         receipt: EntityAccessReceipt<MemberTeamRole>,
         user: &MacroUserIdStr<'_>,
     ) -> Result<super::voice::AgentVoice, TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, user).await?;
         if !receipt.entity_permission().satisfies::<AdminTeamRole>()
             && agent.created_by.as_ref()
@@ -611,6 +613,7 @@ where
         user: &MacroUserIdStr<'_>,
         voice: super::voice::AgentVoice,
     ) -> Result<super::voice::AgentVoice, TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, user).await?;
         if !receipt.entity_permission().satisfies::<AdminTeamRole>()
             && agent.created_by.as_ref()
@@ -633,6 +636,7 @@ where
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<TeamAgentSizes, TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
         team_id(&receipt)?;
         Ok(TeamAgentSizes {
             sizes: self.computers.sizes(),
@@ -778,6 +782,7 @@ where
         &self,
         receipt: EntityAccessReceipt<MemberTeamRole>,
     ) -> Result<TeamAgents, TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
         let team_id = team_id(&receipt)?;
         let stored = self
             .repository
@@ -821,6 +826,7 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgent, TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let computer_id = agent.computer_id.ok_or_else(|| {
             TeamAgentError::RetryUnavailable("the agent has no saved computer to retry".to_string())
@@ -857,10 +863,7 @@ where
                 )
             })?;
         if seed.creator_id.is_none() {
-            seed.creator_id = agent
-                .created_by
-                .as_ref()
-                .map(|creator| creator.as_ref().to_string());
+            seed.creator_id = agent.created_by.clone();
         }
         let persona = self.computers.persona(agent.team_id, computer_id).await?;
         if persona
@@ -881,7 +884,11 @@ where
                 agent_user_id,
                 agent.team_id,
                 &seed,
-                &Credential::new(token.clone()),
+                &RepoToken::parse(token.clone()).map_err(|_| {
+                    TeamAgentError::RetryUnavailable(
+                        "the saved repo credential is invalid".to_string(),
+                    )
+                })?,
             )
             .await?;
         let computer = self.computers.retry(agent.team_id, computer_id).await?;
@@ -894,6 +901,7 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
+        self.ensure_management_enabled(&receipt).await?;
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let Some(computer_id) = agent.computer_id else {
             return Err(TeamAgentError::RetryUnavailable(
@@ -965,7 +973,7 @@ where
     async fn get_email(
         &self,
         caller: &MacroUserIdStr<'_>,
-        message_id: &str,
+        message_id: &MailMessageId,
     ) -> Result<EmailMessage, TeamAgentError> {
         let mailbox_id = self.mailbox(caller).await?;
         self.mailboxes.get(&mailbox_id, message_id).await

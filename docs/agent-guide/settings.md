@@ -199,8 +199,9 @@ another team are told to leave it first. Team admins and owners also see
 **Reset link** (the old link stops working and a new one is copied) and
 **Turn off**, each behind a confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before; **Invite as agent** invites every address in the dialog as an agent,
-and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
+as before. When the `enable-team-agents` rollout is ready and enabled,
+**Invite as agent** invites every address in the dialog as an agent; its email
+and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
 [agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
@@ -242,10 +243,18 @@ Settings card, and the page scrolls vertically.
 
 ### Invite an agent teammate
 
+The `enable-team-agents` rollout controls invitations, managed agent status and
+actions, and the agent billing breakdown. While the flag loads, these surfaces
+wait and make no agent-management requests. With it off, existing agents remain
+in Members with their data-derived **Agent** chip; invitation, Retry and Remove
+agent controls disappear, and Billing keeps its existing computers view. Human
+invitations, the separate Runtimes rollout, and existing agents' own access keep
+working.
+
 With the `enable-team-agents` rollout enabled, team admins and owners see
 **Invite agent** in **Team → Members**. The split **Invite** control opens the
 existing person invitation with its main action; **Invite options** offers
-**Invite a person** and, for team managers, **Invite an agent**. All header
+**Invite a person** and, for team managers, **Invite an agent**, with icons and descriptions in a menu below the controls. All header
 actions use the same control height on desktop and touch. Inviting an agent
 creates its account and buys its computer together. The existing email
 invitation flow remains available.
@@ -260,11 +269,22 @@ shows **Included for Macro**, with no currency charge.
 1. Choose **Invite agent**. Enter a **Name**, **Role / job description**, and
    **Personality**. Choose **Standard**, **Large**, or **XL** using the quoted
    vCPU, RAM, and disk specifications beside each size (available even without
-   a paid plan), and optionally enter
-   an HTTPS **Avatar URL**. Choose a **Voice** and use **Play sample** to hear
-   the fixed preview line. The suggested voice matches the persona's descriptive
-   tags; choosing another voice keeps that choice through price review.
-   A playing sample stops when the voice changes or the form closes.
+   a paid plan). Specs wrap only between complete items on narrow phones, and
+   computer prices align with the size titles. Specs come from the size catalog
+   (Standard: 4 vCPUs, 8 GB RAM, 100 GB disk).
+   A fictional photographic portrait generates once after the name has been idle
+   for a second, using the role and personality entered so far. The face sits beside
+   Name and Role at the top of the form, with a shimmer while generation waits
+   and an inline retry action after a failure. **Generate another**
+   uses the current profile; **Upload photo** uses the existing avatar uploader.
+   Both store a permanent static-file URL. Generation uses the same metered
+   image-generation service as the AI tool. A failure leaves both actions available.
+   Review waits for an active photo request. The shared Dialog supplies the normal
+   header, close control, scrolling body, footer and phone sheet.
+   Choose a **Voice** and use **Play sample** to hear the fixed preview line.
+   The suggested voice matches the persona’s descriptive tags; another choice
+   stays selected through price review. Samples stop when the voice changes
+   or the form closes.
 2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
    and **Total per month/year**, in its quoted currency. **Back** preserves
    the draft. A loading or failed quote disables confirmation; **Try again**
@@ -273,7 +293,7 @@ shows **Included for Macro**, with no currency charge.
    changes before creation, the server refuses the invitation before purchase
    and asks you to review again. **Back** refreshes the quote and preserves the
    draft so you can review the new terms. Typing changes only the draft; it never refreshes quotes
-   or catalog specifications. Changing computer size requests its quote.
+   or catalog specifications. Computer prices load for all three sizes on opening.
 3. Choose **Confirm and invite** once. The controls stay disabled while the
    request is pending. On success the dialog closes and the roster refreshes.
    If confirmation fails, check the roster before starting another invitation:
@@ -281,36 +301,37 @@ shows **Included for Macro**, with no currency charge.
    creation failure instead shows the server's actionable reason and
    **Nothing was charged**; no purchase has started in that case.
 4. The shared **Team members** roster shows people and agents together. Agent
-   rows show an **Agent** chip and setup or health status. On desktop, the
-   activity column uses the latest completed turn reported by the server, or
-   the current setup step; an agent without a completed turn says
-   **No activity yet**. **More** includes **Retry** when provisioning can be
+   rows share people's height and columns, with an **Agent** chip beside the name
+   and a single setup bar or health pill in the activity/status column. The
+   status tooltip combines the current setup step or failure reason with the
+   latest completed turn reported by the server; an agent without a completed
+   turn says **No activity yet** there. **More** includes **Retry** when provisioning can be
    retried and **Remove agent**. The same actions stay reachable on mobile.
    The roster polls every three seconds while any agent is
    provisioning, then every thirty seconds while the page is visible and the
    roster is nonempty. **Unhealthy** means a ready computer's agent is
-   disconnected, missing, stale, or unhealthy; its reason stays visible without
+   disconnected, missing, stale, or unhealthy; its reason is in the status tooltip and row menu without
    a provisioning Retry action. Before the first connection, setup stays
-   **Setting up…**. Running, unhealthy, and failed rows keep refreshing, so
+   in a compact five-step bar: **Paying → Creating → Booting → Connecting → Ready**, with an accessible current step. Running, unhealthy, and failed rows keep refreshing, so
    transient health failures can recover without a manual refresh. Billing
    shows the same live agent health without changing the subscription amounts.
 5. **Retry** appears only for terminal `failed` status when `retryable=true`
    and payment is **paid** or **comped**. It
    re-drives failed provisioning on the same computer, preserving the agent's
    workspace and billing. Retry is disabled while the request runs. Failures
-   refresh the status and keep an inline error if retry is still available;
+   refresh the status and keep an error in the row menu if retry is still available;
    a stale retry rejected with 409 refreshes the row.
 6. Payment controls what can happen next:
-   - **Pending** shows **Confirming payment** and blocks both Retry and Remove.
+   - **Pending** shows the **Paying** setup step and blocks both Retry and Remove.
      Wait for payment to settle; do not re-invite while payment is pending.
-   - **Unbilled** shows **Payment failed / not billed**, retains the
-     **payment failed** reason, and offers no Retry. Use **More → Remove agent**
+   - **Unbilled** shows **Payment failed**, keeps the failure reason in its tooltip
+     and row menu, and offers no Retry. Use **More → Remove agent**
      for clean removal, then invite another agent if needed.
-   - **Comped** shows **Included for Macro** and permits provisioning Retry
+   - **Comped** permits provisioning Retry
      without a charge; removal releases the computer without billing changes.
-   - **Paid** shows **Billed**. **More → Remove agent** releases the computer
+   - **Paid** keeps the status-only pill. **More → Remove agent** releases the computer
      and removes its billed seat and computer from the subscription.
-   - An unreadable payment state makes no billing claim.
+   - Rows contain no billing labels; Billing and the invitation review show charges or inclusion.
 7. Confirm **Remove agent** to release its resources and permanently delete
    its repository. Removal remains blocked if payment becomes pending after
    the confirmation opens. A failed removal keeps the confirmation open for

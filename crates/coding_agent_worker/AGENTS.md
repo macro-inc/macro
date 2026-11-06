@@ -87,6 +87,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `macrod.computer.control`, `macrod.screen.stream`.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
+- `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
+  `GET /harnesses/me` with `RUNTIME_CONNECTED_HEADER`. A service that reads the
+  harness offline logs `harness_presence_disagreement`, macrod warns, and the TUI
+  header says "runtime connected, service reports offline" instead of "paired,
+  runtime not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
@@ -175,6 +180,9 @@ external chat replies depend on it. Direct session controls still mint IDs.
   must find nothing: librdkafka breaks the static and Windows builds.
 
 ## Gotchas
+
+- Persona enrollment requires an `agent-` Linux username. Reject old names before
+  side effects; local preview agents with old names must be re-invited.
 
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
   Windows-breaking code there without a cfg gate.

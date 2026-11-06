@@ -22,6 +22,7 @@ export function AgentVoiceForm(props: {
     <AgentFormSurface
       open
       title={`Voice for ${props.name}`}
+      closeLabel="Close voice settings"
       close={() => !props.saving && props.onClose()}
       actions={
         <>

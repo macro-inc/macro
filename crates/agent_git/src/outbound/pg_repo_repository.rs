@@ -16,6 +16,9 @@ pub enum PgRepoRepositoryError {
     /// A stored user id did not parse.
     #[error("stored agent user id is malformed: {0}")]
     MalformedUserId(String),
+    /// A stored token digest is malformed; never expose its value in errors.
+    #[error(transparent)]
+    MalformedTokenHash(#[from] agent_credentials::InvalidAgentCredential),
     /// A size did not fit the column.
     #[error("size {0} does not fit in BIGINT")]
     SizeOutOfRange(u64),
@@ -63,7 +66,7 @@ impl RepoRepository for PgRepoRepository {
         Ok(Some(AgentRepo {
             agent_user_id: stored_user_id,
             team_id: row.team_id,
-            token_hash: RepoTokenHash::from_stored(row.token_hash),
+            token_hash: RepoTokenHash::from_stored(row.token_hash)?,
             size_bytes: row.size_bytes.and_then(|size| u64::try_from(size).ok()),
             created_at: row.created_at,
             last_push_at: row.last_push_at,

@@ -283,3 +283,104 @@ test('an unhealthy but live last-good generation is restarted with overlapping i
   assert.equal(stops, 1);
   await supervisor.stop();
 });
+
+test('supervisor fake boot refuses broken turn hooks instead of accepting a swallowed lane failure', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-hook-conformance-')
+  );
+  try {
+    await nodeFs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    await assert.rejects(
+      () =>
+        dryRun(
+          (deps) =>
+            new Brain(deps, {
+              beforeTurn() {
+                throw new Error('bad turn preparation');
+              },
+            }),
+          root
+        ),
+      /fake boot handler failed/
+    );
+    await assert.rejects(
+      () =>
+        dryRun(
+          (deps) =>
+            new Brain(deps, {
+              afterTurn() {
+                throw new Error('bad turn completion');
+              },
+            }),
+          root
+        ),
+      /fake boot handler failed/
+    );
+  } finally {
+    await nodeFs.rm(root, { recursive: true });
+  }
+});
+
+test('repeated brain checks leave live queued messages, receipts and memory untouched', async () => {
+  const root = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-check-isolation-')
+  );
+  try {
+    await nodeFs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    await nodeFs.appendFile(
+      nodePath.join(root, 'brain.ts'),
+      `
+import { writeFile } from 'node:fs/promises';
+await writeFile(new URL('./check-import-marker', import.meta.url), 'fake boot');
+`
+    );
+    await nodeFs.mkdir(nodePath.join(root, 'cache/lanes'), { recursive: true });
+    const queued = `${JSON.stringify({ id: 'waiting-user-message', channelId: 'live-channel', channel: 'live', root: 'waiting-user-message', thread: null, dm: true, from: 'sender', at: '2026-11-04T10:00:00Z', text: 'must survive checks', mentionsMe: false })}\n`;
+    const receipts = '["real-receipt"]';
+    const memory = await nodeFs.readFile(
+      nodePath.join(root, 'memory/self.json'),
+      'utf8'
+    );
+    await nodeFs.writeFile(
+      nodePath.join(root, 'cache/lanes/live-channel.jsonl'),
+      queued
+    );
+    await nodeFs.writeFile(
+      nodePath.join(root, 'cache/event-receipts.json'),
+      receipts
+    );
+    await checkWorkspace(root);
+    await checkWorkspace(root);
+    assert.equal(
+      await nodeFs.readFile(
+        nodePath.join(root, 'cache/lanes/live-channel.jsonl'),
+        'utf8'
+      ),
+      queued
+    );
+    assert.equal(
+      await nodeFs.readFile(
+        nodePath.join(root, 'cache/event-receipts.json'),
+        'utf8'
+      ),
+      receipts
+    );
+    assert.equal(
+      await nodeFs.readFile(nodePath.join(root, 'memory/self.json'), 'utf8'),
+      memory
+    );
+    await assert.rejects(
+      nodeFs.stat(nodePath.join(root, 'check-import-marker'))
+    );
+    const proposed = await nodeFs.readdir(
+      nodePath.join(root, 'brain/fixtures')
+    );
+    assert.deepEqual(proposed, ['README.md']);
+  } finally {
+    await nodeFs.rm(root, { recursive: true });
+  }
+});

@@ -42,7 +42,7 @@ returns transient `unhealthy` for a previously running agent, without writing a
 failure. Every refresh recomputes health and clears diagnostics on recovery.
 
 `GET /team_agents/sizes` returns the hosted-runtimes size catalog to any team
-admin, without consulting billing or feature flags. Use it for the size picker.
+admin with the rollout enabled, without consulting billing. Use it for the size picker.
 `GET /team_agents/quote?size=` returns HTTP 409 with `code: "no_subscription"`
 when the team lacks an active subscription; other conflicts have their own
 `computer_unavailable` or `retry_unavailable` codes. The quote includes `vcpus`, `memoryGb`, and `diskGb`
@@ -61,6 +61,13 @@ The hosted adapter passes `PurchaseBilling::Comped` with reason
 `Included for Macro` and no extra items. It never substitutes a billed purchase.
 The authentication service also applies this shared eligibility policy to direct
 team computer purchases through `MacroStaffCompPolicy`.
+
+The `enable-team-agents` rollout gates management operations: roster, voice
+discovery/samples/settings, sizes, quote, create, retry, remove and admin secret
+list/delete. Load one snapshot for the authenticated user and read it synchronously.
+Missing configuration, a missing key, off or load failure denies with HTTP 403.
+Team authorization remains independent. Agent self profile/mail, own secrets,
+brain gateway and git access never consult this rollout policy.
 
 ## Start here
 
@@ -82,10 +89,16 @@ team computer purchases through `MacroStaffCompPolicy`.
 
 ## Gotchas
 
+- API keys and repository credentials use distinct validated `AgentApiKey` and
+  `RepoToken` types from `agent_credentials`; never wrap arbitrary strings or
+  log their contents. Saved credentials are parsed again before recovery.
 - The config file `/etc/macro/personas/<os_user>.env` holds the bootstrap
   credentials: `MACRO_API_KEY` (also `ANTHROPIC_AUTH_TOKEN`) and the repo-scoped
   `MACRO_REPO_TOKEN`. Write it with mode 600, owned by `os_user`. Every other
   secret goes through `agent_secrets`, fetched per use.
+- Require the `agent-` prefix on every persona OS user, including stored enrollment
+  input. Local preview agents created with old names must be re-invited; no legacy
+  persona-name type or implicit OS-user migration is supported.
 - Run `/opt/macro/brain run` as the name-derived OS user, with `MACRO_GATEWAY`,
   `BRAIN_WORKSPACE=/home/<os_user>/workspace`, `BRAIN_HEALTH_PORT=7801`,
   `MACRO_REPO_URL`, `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID`, `MACRO_API_KEY`,
@@ -104,6 +117,8 @@ team computer purchases through `MacroStaffCompPolicy`.
   are never exposed in the agent's failure reason.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
+- Keep mailbox, message and thread IDs validated before storage or provider URL
+  construction; email-provider IDs remain strings in JSON.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`
   placeholder address and the email routes answer 503.
 - The brain reaches Macro through the typed public gateway and git URLs in
@@ -173,4 +188,5 @@ computer create/retry/delete stay admin-only. Provisioning persists the selected
 voice in the saved persona seed. Voice updates call the agent git port, which
 commits only `config/voice.json`; no settings database column is needed.
 The harness owns the provider catalog and fixed-line sample cache. Discovery
-requires team membership; changing an agent's voice additionally checks ownership.
+requires team membership and the enabled management rollout; changing an agent's
+voice additionally checks ownership.

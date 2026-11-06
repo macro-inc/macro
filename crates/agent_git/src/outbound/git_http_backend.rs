@@ -115,6 +115,25 @@ impl GitBackend for GitHttpBackend {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
+        command
+            .env(
+                "GIT_CONFIG_COUNT",
+                if repo.max_input_size().is_some() {
+                    "3"
+                } else {
+                    "2"
+                },
+            )
+            .env("GIT_CONFIG_KEY_0", "receive.fsckObjects")
+            .env("GIT_CONFIG_VALUE_0", "true")
+            .env("GIT_CONFIG_KEY_1", "transfer.fsckObjects")
+            .env("GIT_CONFIG_VALUE_1", "true");
+        if let Some(remaining) = repo.max_input_size() {
+            command
+                .env("GIT_CONFIG_KEY_2", "receive.maxInputSize")
+                .env("GIT_CONFIG_VALUE_2", remaining.to_string());
+        }
+
         // http-backend refuses receive-pack without an authenticated user.
         if repo.access() == GitAccess::Push {
             command.env("REMOTE_USER", repo.agent_user_id().as_ref());
@@ -244,3 +263,6 @@ impl GitBackend for GitHttpBackend {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

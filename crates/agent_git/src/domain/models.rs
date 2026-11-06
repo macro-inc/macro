@@ -1,94 +1,14 @@
 //! Domain models for agent workspace repos.
 
-use std::fmt;
 use std::pin::Pin;
 
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use futures::Stream;
 use macro_user_id::user_id::MacroUserIdStr;
-use rand::RngCore;
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-/// Prefix on every minted repo token.
-const TOKEN_PREFIX: &str = "mrt_";
-
-/// Entropy of a repo token (32 bytes → 64 hex characters).
-const TOKEN_SECRET_BYTES: usize = 32;
-
-/// A repo token: the agent's HTTP Basic password for its own repo.
-///
-/// [`Debug`] redacts the secret.
-#[derive(Clone, PartialEq, Eq)]
-pub struct RepoToken(String);
-
-impl RepoToken {
-    /// Mint a new token from OS CSPRNG bytes.
-    pub fn generate() -> Self {
-        let mut secret = [0_u8; TOKEN_SECRET_BYTES];
-        rand::rng().fill_bytes(&mut secret);
-        Self(format!("{TOKEN_PREFIX}{}", hex::encode(secret)))
-    }
-
-    /// Wrap a token a client presented. Unchecked: a malformed token simply
-    /// fails to match.
-    pub fn presented(raw: impl Into<String>) -> Self {
-        Self(raw.into())
-    }
-
-    /// Accept only the shape of a token minted by this service for recovery.
-    pub fn recovery(raw: String) -> Result<Self, AgentGitError> {
-        let valid = raw.strip_prefix(TOKEN_PREFIX).is_some_and(|secret| {
-            secret.len() == TOKEN_SECRET_BYTES * 2
-                && secret.bytes().all(|byte| byte.is_ascii_hexdigit())
-        });
-        if !valid {
-            return Err(AgentGitError::InvalidToken);
-        }
-        Ok(Self(raw))
-    }
-
-    /// The only way to read the secret.
-    pub fn expose(&self) -> &str {
-        &self.0
-    }
-
-    /// The token's hash, for persistence and comparison.
-    ///
-    /// SHA-256, not a password KDF: the token is 256 random bits, so a slow
-    /// hash adds no brute-force resistance, only per-request latency.
-    pub fn hash(&self) -> RepoTokenHash {
-        RepoTokenHash(hex::encode(Sha256::digest(self.0.as_bytes())))
-    }
-}
-
-impl fmt::Debug for RepoToken {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{TOKEN_PREFIX}…")
-    }
-}
-
-/// Hex SHA-256 of a [`RepoToken`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RepoTokenHash(String);
-
-impl RepoTokenHash {
-    /// Wrap a stored hash.
-    pub fn from_stored(hash: String) -> Self {
-        Self(hash)
-    }
-
-    /// The hex digest.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// Constant-time comparison.
-    pub fn matches(&self, other: &RepoTokenHash) -> bool {
-        constant_time_eq::constant_time_eq(self.0.as_bytes(), other.0.as_bytes())
-    }
-}
+pub use agent_credentials::{RepoToken, RepoTokenHash};
 
 /// A stored agent repo.
 #[derive(Debug, Clone)]
@@ -202,19 +122,30 @@ pub struct GitResponse {
 pub struct AuthorizedRepo {
     agent_user_id: MacroUserIdStr<'static>,
     access: GitAccess,
+    max_input_size: Option<u64>,
 }
 
 impl AuthorizedRepo {
-    pub(crate) fn new(agent_user_id: MacroUserIdStr<'static>, access: GitAccess) -> Self {
+    pub(crate) fn new(
+        agent_user_id: MacroUserIdStr<'static>,
+        access: GitAccess,
+        max_input_size: Option<u64>,
+    ) -> Self {
         Self {
             agent_user_id,
             access,
+            max_input_size,
         }
     }
 
     /// The repo.
     pub fn agent_user_id(&self) -> &MacroUserIdStr<'static> {
         &self.agent_user_id
+    }
+
+    /// Remaining push bytes, enforced again by git after unpacking the stream.
+    pub fn max_input_size(&self) -> Option<u64> {
+        self.max_input_size
     }
 
     /// The granted access.
@@ -254,6 +185,9 @@ pub enum AgentGitError {
         /// The cap.
         limit_bytes: u64,
     },
+    /// Receive-pack does not accept content encodings.
+    #[error("content encoding is not supported for pushes")]
+    EncodedPush,
     /// Too many pushes in the current window.
     #[error("too many pushes; retry in a minute")]
     PushRateLimited,

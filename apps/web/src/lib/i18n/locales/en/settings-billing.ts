@@ -5,6 +5,11 @@ export default {
   agentSeats: 'Agent seats',
   paidSeats: { one: '{{count}} paid seat', other: '{{count}} paid seats' },
   computer: 'Computer',
+  computers: 'Computers',
+  computerCount: {
+    one: '{{count}} dedicated computer',
+    other: '{{count}} dedicated computers',
+  },
   standard: 'Standard',
   large: 'Large',
   xl: 'XL',

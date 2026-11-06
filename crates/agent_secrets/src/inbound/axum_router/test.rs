@@ -29,6 +29,7 @@ const TEAM_ID: Uuid = Uuid::from_u128(42);
 /// Records what each route asked of the service.
 #[derive(Default)]
 struct FakeService {
+    admin_disabled: bool,
     calls: Mutex<Vec<String>>,
 }
 
@@ -47,7 +48,7 @@ impl AgentSecretService for FakeService {
     ) -> Result<AgentSecretSummary, AgentSecretError> {
         self.record(format!("put {caller} {name} {value}"));
         Ok(AgentSecretSummary {
-            name: name.to_string(),
+            name: crate::domain::models::SecretName::parse(name).unwrap(),
             created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
             updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         })
@@ -60,8 +61,9 @@ impl AgentSecretService for FakeService {
     ) -> Result<AgentSecret, AgentSecretError> {
         self.record(format!("get {caller} {name}"));
         Ok(AgentSecret {
-            name: name.to_string(),
-            value: "ghp_abc".to_string(),
+            name: crate::domain::models::SecretName::parse(name).unwrap(),
+            value: crate::domain::models::SecretValue::parse("ghp_abc".to_string())
+                .expect("valid secret"),
             updated_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         })
     }
@@ -80,6 +82,9 @@ impl AgentSecretService for FakeService {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<AgentSecretSummaries, AgentSecretError> {
+        if self.admin_disabled {
+            return Err(AgentSecretError::NotEnabled);
+        }
         self.record(format!(
             "list {} {agent_user_id}",
             receipt.entity().entity_id
@@ -93,6 +98,9 @@ impl AgentSecretService for FakeService {
         agent_user_id: &MacroUserIdStr<'_>,
         name: &str,
     ) -> Result<(), AgentSecretError> {
+        if self.admin_disabled {
+            return Err(AgentSecretError::NotEnabled);
+        }
         self.record(format!(
             "admin delete {} {agent_user_id} {name}",
             receipt.entity().entity_id
@@ -379,4 +387,43 @@ async fn an_admin_lists_and_deletes_an_agents_secrets() {
                 .to_string(),
         ]
     );
+}
+
+#[tokio::test]
+async fn disabled_admin_secret_operations_stay_forbidden_while_self_access_works() {
+    let service = Arc::new(FakeService {
+        admin_disabled: true,
+        ..Default::default()
+    });
+    for (method, uri) in [
+        ("GET", "/macro%7Csam%40agents.example.com/secrets"),
+        (
+            "DELETE",
+            "/macro%7Csam%40agents.example.com/secrets/api-token",
+        ),
+    ] {
+        let response = router(service.clone(), TeamRole::Admin)
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header(header::AUTHORIZATION, "Bearer admin")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{method} {uri}");
+    }
+    assert!(service.calls.lock().expect("lock").is_empty());
+    let response = router(service, TeamRole::Member)
+        .oneshot(
+            Request::get("/me/secrets/api-token")
+                .header(header::AUTHORIZATION, "Bearer agent")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
 }
