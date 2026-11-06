@@ -1,7 +1,7 @@
 import type {
-  Subteam as SubteamRecord,
   SubteamColor,
   SubteamJoinPolicy,
+  Subteam as SubteamRecord,
   SubteamRole,
 } from '../../../generated/auth/types.gen';
 import { MacroNotFoundError, unwrap } from '../../utils';

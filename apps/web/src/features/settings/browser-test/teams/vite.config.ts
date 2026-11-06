@@ -20,11 +20,13 @@ export default defineConfig({
       name: 'teams-fixture-services',
       enforce: 'pre',
       resolveId(source) {
-        if ([
+        if (
+          [
             '@service-auth/client',
             '@core/context/user',
             '@core/context/emailLinks',
-          ].includes(source))
+          ].includes(source)
+        )
           return boundary;
       },
     },
