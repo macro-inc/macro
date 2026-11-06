@@ -207,7 +207,9 @@ export function createDraftPersistence(options: {
       if (identity.kind === 'none') return;
       const epoch = session.epoch();
       const local = await options.drafts.saveLocalDraft({
-        expectedRevision: localRevision,
+        // A composer that opened no working copy expects none: overwriting one
+        // another composer wrote would drop text it never saw.
+        expectedRevision: localRevision ?? 0,
         expectedGeneration: localGeneration,
         draft: {
           ...draft,

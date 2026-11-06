@@ -558,7 +558,8 @@ working-copy generation and revision it carried under the draft's IDs. A compose
 in another tab that sees the draft sent compares that version with its own last
 local write: text the send carried or a committed save holds goes with the sent
 draft, and anything newer is kept as a new draft. A send from another device
-carries no such version, so only text the server acknowledged counts. Sign-out retains approved sends
+carries no such version, so only text the server acknowledged counts. A composer
+that opened no working copy cannot overwrite one another tab wrote. Sign-out retains approved sends
 under their original account and stops dispatch; ordinary drafts retain their
 existing sign-out policy.
 Signing into another account without signing out ends the previous account's

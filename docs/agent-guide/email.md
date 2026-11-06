@@ -936,7 +936,10 @@ without "Your newer text was kept as a new draft", even when its own last save
 failed, Drafts must not gain a copy of the sent reply, and the thread must not
 reopen it as a draft. Text the first tab types after the send is still kept as
 a new draft, as is unsaved text when another device sends; each such move logs
-`email_draft.kept_as_new` with its reason and `email_draft.unsaved_edits`.
+`email_draft.kept_as_new` with its reason and `email_draft.unsaved_edits`. Open
+a saved draft in two tabs before either edits: the second tab's first edit must
+fail with "This draft changed while saving" instead of replacing the first
+tab's text.
 A completed discard must not resurrect on reload. A clean,
 fully synchronized local copy must not hide newer server edits or sent state.
 While online, create a disposable reply, wait for its server identity, discard
