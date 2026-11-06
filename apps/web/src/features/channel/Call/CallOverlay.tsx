@@ -115,6 +115,7 @@ export function CallOverlay(props: {
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
   const [panelOpen, setPanelOpen] = createSignal(false);
   const [panelMounted, setPanelMounted] = createSignal(false);
+  const [animatePanel, setAnimatePanel] = createSignal(false);
   const [selectedTab, setSelectedTab] = createSignal<CallPanelTab>('chat');
   const [focusChatOnOpen, setFocusChatOnOpen] = createSignal(true);
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
@@ -146,6 +147,7 @@ export function CallOverlay(props: {
     createSignal<HTMLDivElement>();
   const panelToggleSize = createElementSize(panelToggleFrame);
   const closePanel = () => {
+    setAnimatePanel(true);
     setPanelOpen(false);
     panelButton?.focus();
   };
@@ -154,6 +156,7 @@ export function CallOverlay(props: {
       () => props.discussion?.opensByDefault() ?? false,
       (opensByDefault) => {
         if (!opensByDefault) return;
+        setAnimatePanel(false);
         setFocusChatOnOpen(false);
         setPanelMounted(true);
         setPanelOpen(true);
@@ -162,6 +165,7 @@ export function CallOverlay(props: {
   );
   const togglePanel = () => {
     if (panelOpen()) return closePanel();
+    setAnimatePanel(true);
     setFocusChatOnOpen(true);
     setPanelMounted(true);
     setPanelOpen(true);
@@ -484,7 +488,7 @@ export function CallOverlay(props: {
             // Hidden resize panels reset their left offset; keep chat at the right edge.
             '[&>[data-resize-panel]:has(>[data-call-sidebar])]:left-auto! [&>[data-resize-panel]:has(>[data-call-sidebar])]:right-0',
             !isMobile() &&
-              panelMounted() && [
+              animatePanel() && [
                 '[&>[data-resize-panel]]:transition-[width] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
                 '[&>[role=separator]]:transition-[left] [&>[role=separator]]:duration-200 [&>[role=separator]]:ease-out [&>[role=separator]]:motion-reduce:transition-none',
                 '[&:has(>[role=separator]:active)>*]:transition-none',
@@ -923,6 +927,7 @@ export function CallOverlay(props: {
           <CallChatPanel
             id={panelId}
             open={panelOpen()}
+            animate={animatePanel()}
             onClose={closePanel}
             activeTab={activeTab()}
             onTabChange={(tab) => {

@@ -416,7 +416,8 @@ phones use the shared bottom sheet instead of a resize handle.
 
 Desktop has a **Close chat and participants** button beside the tabs.
 Dismiss the phone sheet with its handle, backdrop, or Escape; desktop also
-closes with Escape. Opening and closing animate unless reduced motion is enabled.
+closes with Escape. Explicit panel toggles animate unless reduced motion is enabled;
+returning to the call mounts the stage and default-open panel in place without animation.
 The desktop sidebar stays anchored to the right edge and closes to the right,
 without crossing the call area. Closing returns focus to the footer button.
 Switching tabs, closing, and resizing preserve the message draft and scroll
