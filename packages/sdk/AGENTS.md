@@ -67,7 +67,7 @@ enforced by the ordinary backend APIs.
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
-- `../sdk-calls/`: optional Node and browser LiveKit room helpers for call handles.
+- `../sdk-calls/`: optional Node and browser LiveKit room helpers for call handles. It publishes with this package at the same version; `just bump` moves both.
 - `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
 
 ## Boundaries
