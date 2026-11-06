@@ -48,7 +48,8 @@ edits below; the remaining screenshots retain their original product content.
 - Email: labeled demo correspondence in the Signal inbox. Fictional sender names,
   subjects, previews, row-type icons, and account identity replace real email
   content. Navigation, controls, row spacing, dates, and framing retain the
-  original capture pixels.
+  original capture pixels. Use a normal subject followed by muted-gray email-body
+  opening text, separated by spacing only; do not add a dash or a second title.
 - Chat: the November 4 feature-request conversation, distinct from the header.
 - Tasks: restored original split capture with mixed statuses, assigned work, and
   a completed task with its linked discussion and code change.
