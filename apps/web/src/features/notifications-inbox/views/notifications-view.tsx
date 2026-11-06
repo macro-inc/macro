@@ -281,6 +281,8 @@ export function NotificationsView(props: NotificationsViewProps) {
         count === 0
           ? toast.success(t('notificationsInbox.clearedNothing'))
           : toast.success(t('notificationsInbox.cleared', { count }), {
+              dismissStyle: 'icon',
+              actionLayout: 'inline',
               actions: [
                 {
                   label: t('notificationsInbox.undo'),
