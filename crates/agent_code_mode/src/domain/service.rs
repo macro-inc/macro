@@ -319,6 +319,16 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // document.copy(), database.duplicate() and project.rename().
                 | "DuplicateItem"
                 | "RenameItem"
+                // Document.readPresentation, editPresentation and copyPresentation.
+                | "ReadPresentation"
+                | "EditPresentation"
+                // Document.readWord and editWord.
+                | "ReadWordDocument"
+                | "EditWordDocument"
+                // Document.readDesign, readPhotoshop and readIllustrator.
+                | "ReadDesign"
+                | "ReadPhotoshopDocument"
+                | "ReadIllustratorDocument"
         )
 }
 
