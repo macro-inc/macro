@@ -28,6 +28,7 @@ mod check_generated;
 mod check_node_modules_nix;
 mod check_tauri_lockfiles;
 mod ci_gate_fork;
+mod ci_gate_label;
 mod ci_gate_reminder;
 mod cla;
 mod cleanup_preview;
@@ -309,6 +310,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ci_gate_reminder",
         file_name: "ci-gate-reminder.yml",
         render_yaml: || render_gh_workflow(ci_gate_reminder::ci_gate_reminder)(),
+    },
+    WorkflowFile {
+        slug: "ci_gate_label",
+        file_name: "ci-gate-label.yml",
+        render_yaml: || render_gh_workflow(ci_gate_label::ci_gate_label)(),
     },
     WorkflowFile {
         slug: "ci_gate_fork",

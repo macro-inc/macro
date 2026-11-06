@@ -77,7 +77,7 @@ fn path_check() -> Job {
             "calendar_details_changed",
             "${{ steps.filter.outputs.calendar_details_changed }}",
         )
-        .add_step(checkout("Checkout Repo", false))
+        .add_step(path_check_checkout())
         .add_step(paths_filter())
         .add_step(detect_schema_changes())
 }
@@ -95,35 +95,108 @@ fn typescript() -> Job {
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(false))
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
-        .add_step(check_types())
-        .add_step(check_floating_promises())
-        .add_step(check_functional_test_types())
-        .add_step(check_collaboration_types())
-        .add_step(check_lexical_service_types())
-        .add_step(test_lexical_service())
         .add_step(
             Step::new("Install SDK Documentation Dependencies")
                 .run("bun install --frozen-lockfile")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
-        .add_step(
-            Step::new("Check SDK Documentation")
-                .run("bun run type-check && bun run test")
-                .working_directory(xtask_paths::repo_dir!("packages/sdk-docs")),
-        )
-        .add_step(
-            Step::new("Check Editing Worker")
-                .run("bun run type-check")
-                .working_directory(xtask_paths::repo_dir!("services/ai-editing-worker")),
-        )
-        .add_step(
-            Step::new("Check Code Mode SDK")
-                .run("bun run type-check && bun run test")
-                .working_directory(xtask_paths::repo_dir!("packages/code-mode-sdk")),
-        )
+        .add_step(typecheck_in_parallel())
         .add_step(steps::teardown_nix())
+}
+
+/// Typecheck's checks, each `(name, directory, command)`. They read the same
+/// installed tree and write nothing, so they run at once: in sequence they took
+/// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
+/// SDK documentation's dependencies install first, as they did before.
+const TYPECHECKS: [(&str, &str, &str); 9] = [
+    // `type-check` runs the native TypeScript 7 compiler.
+    ("Check Types", "apps/web", "bun run type-check"),
+    // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
+    // error and needs type information to run at all.
+    (
+        "Check Floating Promises",
+        ".",
+        "bun run lint:oxlint --quiet",
+    ),
+    (
+        "Check Functional Test Types",
+        "apps/web",
+        "bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json",
+    ),
+    (
+        "Check Collaboration Package Types",
+        "packages/collaboration",
+        "bun run type-check",
+    ),
+    (
+        "Check Lexical Service Types",
+        "services/lexical-service",
+        "bun run check",
+    ),
+    (
+        "Test Lexical Service Endpoints",
+        "services/lexical-service",
+        "bun test src",
+    ),
+    (
+        "Check SDK Documentation",
+        "packages/sdk-docs",
+        "bun run type-check && bun run test",
+    ),
+    (
+        "Check Editing Worker",
+        "services/ai-editing-worker",
+        "bun run type-check",
+    ),
+    (
+        "Check Code Mode SDK",
+        "packages/code-mode-sdk",
+        "bun run type-check && bun run test",
+    ),
+];
+
+/// Runs [`TYPECHECKS`] concurrently. Each check's output is printed as its own
+/// group once all finish, every failure is annotated by name, and the step fails
+/// if any check does.
+fn typecheck_in_parallel() -> Step<Run> {
+    Step::new("Run checks").run(typecheck_script(&TYPECHECKS))
+}
+
+fn typecheck_script(checks: &[(&str, &str, &str)]) -> String {
+    let mut script = String::from(indoc::indoc! {r#"
+        set -uo pipefail
+        logs="$RUNNER_TEMP/typecheck"
+        mkdir -p "$logs"
+        names=()
+        pids=()
+        check() {
+          local name="$1" directory="$2" command="$3"
+          ( cd "$directory" && eval "$command" ) > "$logs/${#names[@]}.log" 2>&1 &
+          names+=("$name")
+          pids+=("$!")
+        }
+    "#});
+    for (name, directory, command) in checks {
+        script.push_str(&format!("check '{name}' '{directory}' '{command}'\n"));
+    }
+    script.push_str(indoc::indoc! {r#"
+        failed=0
+        for index in "${!names[@]}"; do
+          status=0
+          wait "${pids[$index]}" || status=$?
+          echo "::group::${names[$index]} (exit $status)"
+          cat "$logs/$index.log"
+          echo "::endgroup::"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::${names[$index]} failed with exit code $status"
+            failed=1
+          fi
+        done
+        exit "$failed"
+    "#});
+    script
 }
 
 /// Everything generated from Rust binaries: the OpenAPI clients in `apps/web`
@@ -185,7 +258,7 @@ fn biome_check() -> Job {
     gated_web_job("Biome Check")
         .add_step(checkout("Checkout Repo", true))
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
@@ -194,16 +267,16 @@ fn biome_check() -> Job {
 }
 
 fn test() -> Job {
-    gated_web_job("Test (${{ matrix.shard }}/3)")
+    gated_web_job("Test (${{ matrix.shard }}/6)")
         .runs_on(mid_web_runner())
         .strategy(
             Strategy::default()
                 .fail_fast(false)
-                .matrix(serde_json::json!({ "shard": [1, 2, 3] })),
+                .matrix(serde_json::json!({ "shard": [1, 2, 3, 4, 5, 6] })),
         )
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
@@ -218,7 +291,7 @@ fn functional() -> Job {
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
@@ -236,7 +309,7 @@ fn browser() -> Job {
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
@@ -251,13 +324,15 @@ fn cycles() -> Job {
     gated_web_job("Cycles Import Check")
         .add_step(checkout("Checkout", false))
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell())
         .add_step(cycles_import_check())
         .add_step(collaboration_cycles_import_check())
         .add_step(steps::teardown_nix())
 }
 
+/// The one web job without the Nix seed: it holds the preview deploy's AWS
+/// credentials, and PR jobs write the seed.
 fn build() -> Job {
     let (preview_credentials, preview_steps) = preview::steps();
     let job = gated_web_job("Build")
@@ -328,6 +403,15 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
         .when(full_history, |step| step.add_with(("fetch-depth", 0)))
 }
 
+/// The filter reads the PR's files from the API and [`detect_schema_changes`]
+/// reads trees and a few blobs, so path-check fetches no blobs up front and
+/// writes almost no work tree: 18 s became 6 s on the tiny runner.
+fn path_check_checkout() -> Step<Use> {
+    checkout("Checkout Repo", false)
+        .add_with(("filter", "blob:none"))
+        .add_with(("sparse-checkout", ".github"))
+}
+
 /// Whether a pull request can change generated output. Schemas come from
 /// `utoipa`, `specta` and `schemars` items, so a Rust file naming none of them,
 /// before or after the change, can't alter one. Replayed over 1,021 commits on
@@ -336,41 +420,49 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
 /// that changed generated output. A schema crate's version change still counts.
 fn detect_schema_changes() -> Step<Run> {
     Step::new("Detect schema changes")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            result() {
-              echo "$1"
-              echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
-              exit 0
-            }
-            [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
-            # The merge commit's first parent is the main this merge result was
-            # built on; a fresh fetch of main could be newer.
-            base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
-            [ -n "$base" ] || result "No base commit to compare with." true
-            git fetch -q --depth=1 origin "$base"
-            names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
-            # Every grep here reads all its input. One that stopped at its first
-            # match would close the pipe, and pipefail reads the writer's SIGPIPE as
-            # no match.
-            if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
-              result "A schema crate's version changed." true
-            fi
-            while IFS= read -r file; do
-              for revision in HEAD "$base"; do
-                if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
-                  result "$file names a schema item." true
-                fi
-              done
-            done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
-            result "No changed Rust file names a schema item." false
-        "#})
+        .run(DETECT_SCHEMA_CHANGES)
         .id("codegen")
         .add_env((
             "CODEGEN_INPUTS",
             "${{ steps.filter.outputs.codegen_inputs }}",
         ))
 }
+
+/// The checkout is blobless, so `git diff` and `git show` fetch blobs as they
+/// read them. Each read is its own command, so a failed fetch fails the step
+/// instead of reading as "no schema item"; a file absent from one revision is
+/// skipped by a tree lookup, which needs no blob.
+const DETECT_SCHEMA_CHANGES: &str = indoc::indoc! {r#"
+    set -euo pipefail
+    result() {
+      echo "$1"
+      echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+      exit 0
+    }
+    [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+    # The merge commit's first parent is the main this merge result was
+    # built on; a fresh fetch of main could be newer.
+    base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+    [ -n "$base" ] || result "No base commit to compare with." true
+    git fetch -q --depth=1 origin "$base"
+    names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+    manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
+    if grep -E "^[-+].*($names)" <<< "$manifests"; then
+      result "A schema crate's version changed." true
+    fi
+    changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      for revision in HEAD "$base"; do
+        [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
+        contents=$(git show "$revision:$file")
+        if grep -E "$names" <<< "$contents" > /dev/null; then
+          result "$file names a schema item." true
+        fi
+      done
+    done <<< "$changed"
+    result "No changed Rust file names a schema item." false
+"#};
 
 fn paths_filter() -> Step<Use> {
     let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");
@@ -480,43 +572,6 @@ fi
     ))
 }
 
-/// `type-check` runs the native TypeScript 7 compiler.
-fn check_types() -> Step<Run> {
-    Step::new("Check Types")
-        .run("bun run type-check")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-}
-
-/// Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
-/// error and needs type information to run at all.
-fn check_floating_promises() -> Step<Run> {
-    Step::new("Check Floating Promises").run("bun run lint:oxlint --quiet")
-}
-
-fn check_functional_test_types() -> Step<Run> {
-    Step::new("Check Functional Test Types")
-        .run("bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-}
-
-fn check_collaboration_types() -> Step<Run> {
-    Step::new("Check Collaboration Package Types")
-        .run("bun run type-check")
-        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
-}
-
-fn check_lexical_service_types() -> Step<Run> {
-    Step::new("Check Lexical Service Types")
-        .run("bun run check")
-        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
-}
-
-fn test_lexical_service() -> Step<Run> {
-    Step::new("Test Lexical Service Endpoints")
-        .run("bun test src")
-        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
-}
-
 fn run_biome() -> Step<Run> {
     Step::new("Run Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
@@ -550,7 +605,7 @@ fn build_agent_fold_for_tests() -> Step<Run> {
 /// keeps it warm across jobs.
 fn run_tests() -> Step<Run> {
     Step::new("Test")
-        .run("bun run test --shard=${{ matrix.shard }}/3")
+        .run("bun run test --shard=${{ matrix.shard }}/6")
         .add_env((
             "VITEST_MODULE_CACHE_DIR",
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,
