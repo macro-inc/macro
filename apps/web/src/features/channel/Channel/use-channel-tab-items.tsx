@@ -1,3 +1,4 @@
+import { CallWaveform } from '@channel/Call/CallWaveform';
 import { useCall } from '@channel/Call/use-call';
 import { isNativeCallEnabled } from '@channel/Call/use-callkit';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
@@ -26,7 +27,7 @@ export const normalizeChannelTab = (tab: ChannelTabId) => {
 function LiveCallDot(props: { class?: string }) {
   return (
     <span class={cn('flex items-center justify-center', props.class)}>
-      <span class="size-1.5 rounded-full bg-success animate-pulse" />
+      <CallWaveform class="size-3.5" />
     </span>
   );
 }

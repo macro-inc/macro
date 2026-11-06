@@ -1,0 +1,18 @@
+@media (prefers-reduced-motion: no-preference) {
+  .call-waveform [data-waveform-bar] {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: call-waveform-live 1s ease-in-out infinite;
+    animation-delay: calc(var(--waveform-bar) * -200ms);
+  }
+}
+
+@keyframes call-waveform-live {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.35);
+  }
+}
