@@ -10,7 +10,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::domain::{models::ClearProgress, ports::ClearLog};
+use crate::domain::{
+    models::{ClearProgress, ClearStep},
+    ports::ClearLog,
+};
 
 #[derive(Debug, Default)]
 struct Entry {
@@ -56,17 +59,21 @@ impl ClearLog for MemoryClearLog {
         id: Uuid,
         rows: usize,
         receipt: &DoneReceipt,
-    ) -> Result<bool, Report> {
+    ) -> Result<ClearStep, Report> {
         Ok(self
             .with(user, id, |entry| {
                 entry.rows += rows;
                 if !receipt.keys.is_empty() {
                     entry.receipts.push(receipt.clone());
                 }
-                entry.cancelled
+                if entry.cancelled {
+                    ClearStep::Stop
+                } else {
+                    ClearStep::Continue
+                }
             })
-            // An undo already took the log: stop.
-            .unwrap_or(true))
+            // An undo already took the log.
+            .unwrap_or(ClearStep::Orphaned))
     }
 
     async fn finish(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {

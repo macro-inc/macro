@@ -7,7 +7,10 @@ use redis::{AsyncCommands, aio::MultiplexedConnection};
 use rootcause::Report;
 use uuid::Uuid;
 
-use crate::domain::{models::ClearProgress, ports::ClearLog};
+use crate::domain::{
+    models::{ClearProgress, ClearStep},
+    ports::ClearLog,
+};
 
 #[cfg(test)]
 mod test;
@@ -15,10 +18,10 @@ mod test;
 /// How long a clear can be undone: a day, well past the undo the app offers.
 const TTL_SECONDS: i64 = 24 * 60 * 60;
 
-/// Records a batch while the clear's state exists; returns 1 when the clear
-/// was cancelled or its log is gone.
+/// Records a batch while the clear's state exists. Returns 0 to continue, 1
+/// when cancelled, 2 when the log is gone (nothing recorded).
 const RECORD_SCRIPT: &str = r"
-if redis.call('EXISTS', KEYS[1]) == 0 then return 1 end
+if redis.call('EXISTS', KEYS[1]) == 0 then return 2 end
 if ARGV[2] ~= '' then
   redis.call('RPUSH', KEYS[2], ARGV[2])
   redis.call('EXPIRE', KEYS[2], ARGV[3])
@@ -70,15 +73,15 @@ impl ClearLog for RedisClearLog {
         id: Uuid,
         rows: usize,
         receipt: &DoneReceipt,
-    ) -> Result<bool, Report> {
-        // One script, so a log an undo already took stays gone: the clear
-        // then reads as cancelled instead of recording into a new log.
+    ) -> Result<ClearStep, Report> {
+        // One script, so a log an undo already took stays gone instead of
+        // being recreated by this batch.
         let encoded = if receipt.keys.is_empty() {
             String::new()
         } else {
             receipt.encode()
         };
-        let cancelled: u8 = redis::Script::new(RECORD_SCRIPT)
+        let step: u8 = redis::Script::new(RECORD_SCRIPT)
             .key(state_key(user, id))
             .key(receipts_key(user, id))
             .arg(rows)
@@ -86,7 +89,11 @@ impl ClearLog for RedisClearLog {
             .arg(TTL_SECONDS)
             .invoke_async(&mut self.conn.clone())
             .await?;
-        Ok(cancelled == 1)
+        Ok(match step {
+            0 => ClearStep::Continue,
+            1 => ClearStep::Stop,
+            _ => ClearStep::Orphaned,
+        })
     }
 
     async fn finish(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {

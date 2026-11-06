@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use uuid::Uuid;
 
-use super::models::ClearProgress;
+use super::models::{ClearProgress, ClearStep};
 
 /// Where a running clear records what it changed, so one token undoes the
 /// whole clear from any server, after the request that started it has
@@ -20,16 +20,15 @@ pub trait ClearLog: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Record one batch: the rows it cleared and what it changed. Returns
-    /// whether the clear should stop: an undo asked it to, or already took
-    /// its log (the batch is then not recorded).
+    /// Record one batch: the rows it cleared and what it changed, unless an
+    /// undo already took the log. Returns what the clear does next.
     fn record(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
         rows: usize,
         receipt: &DoneReceipt,
-    ) -> impl Future<Output = Result<bool, Report>> + Send;
+    ) -> impl Future<Output = Result<ClearStep, Report>> + Send;
 
     /// Mark the clear stopped; its log is complete.
     fn finish(

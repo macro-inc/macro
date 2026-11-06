@@ -37,22 +37,25 @@ async fn a_clear_is_recorded_stopped_and_taken_once() {
     assert_eq!(log.progress(&user, id).await.unwrap(), None);
 
     log.begin(&user, id).await.unwrap();
-    assert!(
-        !log.record(&user, id, 2, &receipt("document:a", 1))
+    assert_eq!(
+        log.record(&user, id, 2, &receipt("document:a", 1))
             .await
-            .unwrap()
+            .unwrap(),
+        ClearStep::Continue
     );
     // A batch that cleared nothing adds no receipt.
-    assert!(
-        !log.record(&user, id, 0, &DoneReceipt::default())
+    assert_eq!(
+        log.record(&user, id, 0, &DoneReceipt::default())
             .await
-            .unwrap()
+            .unwrap(),
+        ClearStep::Continue
     );
     log.cancel(&user, id).await.unwrap();
-    assert!(
+    assert_eq!(
         log.record(&user, id, 1, &receipt("document:b", 2))
             .await
-            .unwrap()
+            .unwrap(),
+        ClearStep::Stop
     );
     log.finish(&user, id).await.unwrap();
     assert_eq!(
@@ -89,10 +92,11 @@ async fn a_clear_whose_log_was_taken_stops_and_records_nothing() {
     log.begin(&user, id).await.unwrap();
     log.take(&user, id).await.unwrap();
 
-    assert!(
+    assert_eq!(
         log.record(&user, id, 1, &receipt("document:a", 1))
             .await
-            .unwrap()
+            .unwrap(),
+        ClearStep::Orphaned
     );
     assert_eq!(log.progress(&user, id).await.unwrap(), None);
     assert!(log.take(&user, id).await.unwrap().is_empty());

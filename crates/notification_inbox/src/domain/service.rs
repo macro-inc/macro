@@ -21,9 +21,9 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        ClearProgress, InboxChange, InboxClearOutcome, InboxClearRequest, InboxDoneOutcome,
-        InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery, InboxRow, InboxRowId,
-        InboxRowTarget, InboxRowType, InboxScope,
+        ClearProgress, ClearStep, InboxChange, InboxClearOutcome, InboxClearRequest,
+        InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery,
+        InboxRow, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
     },
     policy,
     ports::ClearLog,
@@ -339,16 +339,28 @@ where
         for batch_number in 1..=MAX_CLEAR_BATCHES {
             let batch = self.clear_batch(viewer, request, after).await?;
             rows += batch.rows;
-            let cancelled = self
+            let step = self
                 .clear_log
                 .record(&viewer.user, id, batch.rows, &batch.receipt)
                 .await?;
             tracing::Span::current().record("batches", batch_number);
-            if cancelled {
-                return Ok(InboxClearOutcome {
-                    rows,
-                    cancelled: true,
-                });
+            match step {
+                ClearStep::Continue => {}
+                ClearStep::Stop => {
+                    return Ok(InboxClearOutcome {
+                        rows,
+                        cancelled: true,
+                    });
+                }
+                // The undo ran without this batch; reverse it here so the
+                // whole clear is undone.
+                ClearStep::Orphaned => {
+                    self.acknowledger.undo(viewer, &batch.receipt).await?;
+                    return Ok(InboxClearOutcome {
+                        rows: rows - batch.rows,
+                        cancelled: true,
+                    });
+                }
             }
             match batch.next {
                 Some(next) => after = Some(next),

@@ -679,6 +679,68 @@ async fn one_clear_reads_every_batch_until_the_inbox_ends() {
 #[derive(Clone, Default)]
 struct UndoAfterFirstBatch(MemoryClearLog);
 
+/// A log an undo took while the first batch was still running.
+#[derive(Clone, Default)]
+struct TakenDuringFirstBatch(MemoryClearLog);
+
+impl ClearLog for TakenDuringFirstBatch {
+    async fn begin(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
+        self.0.begin(user, id).await
+    }
+    async fn record(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        rows: usize,
+        receipt: &DoneReceipt,
+    ) -> Result<ClearStep, Report> {
+        self.0.take(user, id).await?;
+        self.0.record(user, id, rows, receipt).await
+    }
+    async fn finish(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
+        self.0.finish(user, id).await
+    }
+    async fn progress(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> Result<Option<ClearProgress>, Report> {
+        self.0.progress(user, id).await
+    }
+    async fn cancel(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
+        self.0.cancel(user, id).await
+    }
+    async fn take(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> Result<Vec<DoneReceipt>, Report> {
+        self.0.take(user, id).await
+    }
+}
+
+#[tokio::test]
+async fn a_batch_that_lands_after_the_undo_took_the_log_reverses_itself() {
+    let documents = many_documents(250);
+    let service = NotificationInboxServiceImpl::new(
+        documents.source.clone(),
+        documents.notifications.clone(),
+        documents.mail.clone(),
+        documents.signals.clone(),
+        TakenDuringFirstBatch::default(),
+    );
+    let outcome = service
+        .clear(viewer(), clear_request(InboxScope::default()), uuid(CLEAR))
+        .await
+        .unwrap();
+
+    assert!(outcome.cancelled);
+    assert_eq!(outcome.rows, 0);
+    for i in 0..250 {
+        assert_eq!(state(&documents, 0x2000 + i), NotificationState::Unseen);
+    }
+}
+
 impl ClearLog for UndoAfterFirstBatch {
     async fn begin(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
         self.0.begin(user, id).await
@@ -689,10 +751,10 @@ impl ClearLog for UndoAfterFirstBatch {
         id: Uuid,
         rows: usize,
         receipt: &DoneReceipt,
-    ) -> Result<bool, Report> {
+    ) -> Result<ClearStep, Report> {
         self.0.record(user, id, rows, receipt).await?;
         self.0.cancel(user, id).await?;
-        Ok(true)
+        Ok(ClearStep::Stop)
     }
     async fn finish(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), Report> {
         self.0.finish(user, id).await
