@@ -2,7 +2,9 @@ import { useActiveQuickCallsSource } from '@app/features/meetings/queries/active
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
+import { ActiveCallPopover } from '@channel/Call/ActiveCallPopover';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { CallWaveform } from '@channel/Call/CallWaveform';
 import {
   getActiveMeetingPath,
   getMeetingShareToken,
@@ -11,11 +13,10 @@ import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneFillIcon from '@icon/system/fill/phone-fill.svg';
+import { Popover } from '@kobalte/core/popover';
 import { useNavigate } from '@solidjs/router';
-import { Button, pressHandlers } from '@ui';
-import { Show, Suspense } from 'solid-js';
-import { NavGlyph } from './nav-glyph';
+import { Button } from '@ui';
+import { createSignal, Show, Suspense } from 'solid-js';
 
 function ReturnToCallButtonContent() {
   const call = useCallContextOptional();
@@ -28,6 +29,7 @@ function ReturnToCallButtonContent() {
   );
 
   const inCall = () => Boolean(call?.isInCall());
+  const [popupOpen, setPopupOpen] = createSignal(false);
 
   // A quick call is backed by a channel call; it lives on its meeting page.
   const meetingShareToken = () => {
@@ -39,8 +41,8 @@ function ReturnToCallButtonContent() {
     return meeting ? getMeetingShareToken(meeting.url) : undefined;
   };
 
-  const open = (event: MouseEvent) => {
-    event.preventDefault();
+  const open = () => {
+    setPopupOpen(false);
     analytics.track('sidebar_click', { view: 'active-call' });
     const token = meetingShareToken();
     if (token) {
@@ -54,23 +56,35 @@ function ReturnToCallButtonContent() {
 
   return (
     <Show when={inCall()}>
-      <Button
-        variant="success"
-        size="icon-md"
-        class="size-10 cursor-default rounded-xl"
-        aria-label={t('nav.returnToCall')}
-        tooltip={{ content: t('nav.returnToCall'), placement: 'right' }}
-        draggable={false}
-        data-sidebar-next-item="active-call"
-        {...pressHandlers(open)}
+      <Popover
+        open={popupOpen()}
+        onOpenChange={setPopupOpen}
+        placement="right-end"
+        gutter={8}
       >
-        <NavGlyph icon={PhoneFillIcon} class="size-5" />
-      </Button>
+        <Popover.Trigger
+          as={Button}
+          variant="success"
+          size="icon-md"
+          class="size-10 cursor-default rounded-xl"
+          aria-label={t('nav.returnToCall')}
+          tooltip={{ content: t('nav.returnToCall'), placement: 'right' }}
+          draggable={false}
+          data-sidebar-next-item="active-call"
+        >
+          <CallWaveform class="size-5" />
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Suspense>
+            <ActiveCallPopover onOpenCall={open} />
+          </Suspense>
+        </Popover.Portal>
+      </Popover>
     </Show>
   );
 }
 
-/** Green phone at the bottom of the rail, shown while the user is in a call. */
+/** Live mark at the bottom of the rail, opening the active call controls. */
 export const ReturnToCallButton = () => (
   <Show when={ENABLE_CALLS}>
     <Suspense>
