@@ -498,10 +498,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
-- Label the notification permission toast **Enable Desktop Notifications** in
-  the desktop app and **Enable Notifications** in the Android app, and keep
-  their Enable action on the native notification provider.
+- Label the notification permission toast **Enable notifications** on every
+  platform, and keep the desktop and Android Enable actions on the native
+  notification provider.
 - Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
+  Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without
   mounting private list/sidebar sources; let document access checks decide visibility.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed

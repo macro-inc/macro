@@ -191,3 +191,62 @@ async fn edit_reports_the_revision_the_worker_left() {
     assert_eq!(result.clarification, None);
     assert_eq!(result.revision.as_deref(), Some("AQID"));
 }
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn spreadsheet_statuses_keep_their_meaning() {
+    use crate::domain::spreadsheet::{SpreadsheetError, SpreadsheetRequest};
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
+
+    let worker = MockServer::start().await;
+    for (prefix, status, error) in [
+        (
+            "/conflict",
+            409,
+            "The spreadsheet changed since it was read.",
+        ),
+        ("/invalid", 400, "Unknown sheet Forecast."),
+        (
+            "/unavailable",
+            502,
+            "The spreadsheet sync service is unavailable. Please retry.",
+        ),
+    ] {
+        Mock::given(matchers::method("POST"))
+            .and(matchers::path(format!("{prefix}/spreadsheet")))
+            .respond_with(
+                ResponseTemplate::new(status).set_body_json(serde_json::json!({ "error": error })),
+            )
+            .mount(&worker)
+            .await;
+    }
+    let request = SpreadsheetRequest::Edit {
+        expected_revision: "seen".into(),
+        operations: vec![],
+    };
+    let token = "token".to_owned().into();
+
+    let conflict = ReqwestEditingWorkerClient::from_url(format!("{}/conflict", worker.uri()))
+        .spreadsheet("document", &token, &request)
+        .await
+        .unwrap_err();
+    let invalid = ReqwestEditingWorkerClient::from_url(format!("{}/invalid", worker.uri()))
+        .spreadsheet("document", &token, &request)
+        .await
+        .unwrap_err();
+    let unavailable = ReqwestEditingWorkerClient::from_url(format!("{}/unavailable", worker.uri()))
+        .spreadsheet("document", &token, &request)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        &conflict,
+        SpreadsheetError::RevisionConflict(message)
+            if message == "The spreadsheet changed since it was read."
+    ));
+    assert!(matches!(
+        &invalid,
+        SpreadsheetError::Invalid(message) if message == "Unknown sheet Forecast."
+    ));
+    assert!(matches!(unavailable, SpreadsheetError::Failed(_)));
+}

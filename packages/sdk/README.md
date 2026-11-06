@@ -630,6 +630,26 @@ It returns the new revision, not a diff; read `content()` to see what changed.
 refused edit throws `DocumentEditRefusedError` with the editor's reason;
 `EditOutcomeUnknownError` means read the document before retrying.
 
+### Spreadsheets
+
+`documents.createSpreadsheet({ name })` creates a blank native spreadsheet, and
+`documents.spreadsheet(document)` addresses an existing one. `read()` returns
+every sheet's summary and the cells of the requested ranges with the revision,
+`calculate(formulas, { overrides })` evaluates scratch formulas without saving,
+and `applyEdits(operations, { expectedRevision })` saves one atomic batch:
+
+```ts
+const sheet = macro.documents.spreadsheet(document);
+const { revision, sheets } = await sheet.read({ ranges: ['A1:D20'] });
+await sheet.applyEdits(
+  [{ type: 'set_cells', sheetId: sheets[0].id, cells: [{ address: 'D21', value: '=SUM(D2:D20)' }] }],
+  { expectedRevision: revision },
+);
+```
+
+A workbook that changed since the read throws `RevisionConflictError` and
+saves nothing: read again and rebuild the batch.
+
 ### Document lifecycle and other resources
 
 `documents.createUpload(options)` reserves a binary document and returns upload

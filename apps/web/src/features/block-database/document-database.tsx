@@ -1,6 +1,7 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import DatabaseIcon from '@icon/system/regular/database.svg';
 import {
@@ -102,7 +103,13 @@ export function DocumentDatabase(props: {
         })
       ),
     offer: (label, revert) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: revert }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
+          { label: 'Undo', icon: ArrowCounterClockwise, onClick: revert },
+        ],
+      }),
   });
 
   return (

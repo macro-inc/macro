@@ -4,10 +4,13 @@ mod models;
 pub use models::*;
 
 use super::{
-    permission_token::encode_permission_token,
+    models::DocumentError,
+    permission_token::{encode_permission_token, encode_receipt_permission_token},
     ports::{DocumentService, editing::EditingWorkerService},
 };
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, RequiredPermission, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use std::sync::Arc;
@@ -31,6 +34,44 @@ impl<D: DocumentService> SpreadsheetDocumentLookup for D {
     }
 }
 
+/// Why a spreadsheet workflow did not complete.
+#[derive(Debug, thiserror::Error)]
+pub enum SpreadsheetError {
+    /// Access or token minting.
+    #[error(transparent)]
+    Document(#[from] DocumentError),
+    /// The document is not a native Macro spreadsheet.
+    #[error(
+        "This requires a native Macro spreadsheet. Import an Excel file into a spreadsheet first; read other documents as text."
+    )]
+    NotSpreadsheet,
+    /// The request is invalid, such as an unknown sheet, a bad range or a
+    /// failing operation; nothing changed.
+    #[error("{0}")]
+    Invalid(String),
+    /// The workbook changed since the expected revision was read; nothing
+    /// changed.
+    #[error("{0}")]
+    RevisionConflict(String),
+    /// The engine failed, so an edit may or may not have been saved.
+    #[error(transparent)]
+    Failed(anyhow::Error),
+}
+
+/// Who a spreadsheet workflow acts for, as named in its document token.
+pub enum SpreadsheetCaller<'a> {
+    /// An AI agent acting for a user; the token names the agent as the actor.
+    Agent {
+        /// The user the agent acts for.
+        user: &'a MacroUserIdStr<'a>,
+        /// The agent's storage id.
+        actor: &'a str,
+    },
+    /// Whoever holds the access receipt: its acting user, with its bot as the
+    /// actor.
+    Receipt,
+}
+
 /// Runs spreadsheet workflows after the caller obtains the required typed receipt.
 pub struct SpreadsheetService<D, W> {
     documents: Arc<D>,
@@ -52,45 +93,38 @@ impl<D: SpreadsheetDocumentLookup, W: EditingWorkerService> SpreadsheetService<D
     pub async fn read(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        user: &MacroUserIdStr<'_>,
-        actor: &str,
+        caller: SpreadsheetCaller<'_>,
         request: SpreadsheetRequest,
-    ) -> anyhow::Result<SpreadsheetResponse> {
-        anyhow::ensure!(
-            !matches!(request, SpreadsheetRequest::Edit { .. }),
-            "Editing requires edit access."
-        );
-        self.run(
-            &receipt.entity().entity_id,
-            user,
-            actor,
-            AccessLevel::View,
-            request,
-        )
-        .await
+    ) -> Result<SpreadsheetResponse, SpreadsheetError> {
+        if matches!(request, SpreadsheetRequest::Edit { .. }) {
+            return Err(SpreadsheetError::Invalid(
+                "Editing requires edit access.".to_owned(),
+            ));
+        }
+        self.run(&receipt, caller, AccessLevel::View, request).await
     }
 
     /// Apply an atomic, revision-guarded edit to a native workbook.
     pub async fn edit(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        user: &MacroUserIdStr<'_>,
-        actor: &str,
+        caller: SpreadsheetCaller<'_>,
         expected_revision: String,
         operations: Vec<SpreadsheetOperation>,
-    ) -> anyhow::Result<SpreadsheetResponse> {
-        anyhow::ensure!(
-            !expected_revision.is_empty(),
-            "ReadSpreadsheet first and pass its revision before editing."
-        );
-        anyhow::ensure!(
-            !operations.is_empty() && operations.len() <= 25,
-            "Send between 1 and 25 spreadsheet operations."
-        );
+    ) -> Result<SpreadsheetResponse, SpreadsheetError> {
+        if expected_revision.is_empty() {
+            return Err(SpreadsheetError::Invalid(
+                "Read the spreadsheet first and pass its revision before editing.".to_owned(),
+            ));
+        }
+        if operations.is_empty() || operations.len() > 25 {
+            return Err(SpreadsheetError::Invalid(
+                "Send between 1 and 25 spreadsheet operations.".to_owned(),
+            ));
+        }
         self.run(
-            &receipt.entity().entity_id,
-            user,
-            actor,
+            &receipt,
+            caller,
             AccessLevel::Edit,
             SpreadsheetRequest::Edit {
                 expected_revision,
@@ -100,26 +134,41 @@ impl<D: SpreadsheetDocumentLookup, W: EditingWorkerService> SpreadsheetService<D
         .await
     }
 
-    async fn run(
+    #[tracing::instrument(
+        name = "spreadsheet.run",
+        skip_all,
+        fields(document_id = %receipt.entity().entity_id, access = ?access),
+        err
+    )]
+    async fn run<Permission: RequiredPermission>(
         &self,
-        document_id: &str,
-        user: &MacroUserIdStr<'_>,
-        actor: &str,
+        receipt: &EntityAccessReceipt<Permission>,
+        caller: SpreadsheetCaller<'_>,
         access: AccessLevel,
         request: SpreadsheetRequest,
-    ) -> anyhow::Result<SpreadsheetResponse> {
-        let file_type = self.documents.file_type(document_id).await?;
-        anyhow::ensure!(
-            file_type.as_deref() == Some("spreadsheet"),
-            "This tool requires a native Macro spreadsheet. Import an Excel file into a spreadsheet first; use ReadContent for other documents."
-        );
-        let token = encode_permission_token(
-            Some(user.to_string()),
-            document_id.to_owned(),
-            access,
-            &self.token_secret,
-            Some(actor.to_owned()),
-        )?;
+    ) -> Result<SpreadsheetResponse, SpreadsheetError> {
+        let document_id = &receipt.entity().entity_id;
+        let file_type = self
+            .documents
+            .file_type(document_id)
+            .await
+            .map_err(SpreadsheetError::Failed)?;
+        if file_type.as_deref() != Some("spreadsheet") {
+            return Err(SpreadsheetError::NotSpreadsheet);
+        }
+
+        let token = match caller {
+            SpreadsheetCaller::Agent { user, actor } => encode_permission_token(
+                Some(user.to_string()),
+                document_id.clone(),
+                access,
+                &self.token_secret,
+                Some(actor.to_owned()),
+            )?,
+            SpreadsheetCaller::Receipt => {
+                encode_receipt_permission_token(receipt, access, &self.token_secret)?
+            }
+        };
         self.worker.spreadsheet(document_id, &token, &request).await
     }
 }
