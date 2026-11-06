@@ -34,7 +34,6 @@ export default {
   },
   reviewPrice: 'Review price',
   inviting: 'Inviting…',
-  confirm: 'Confirm and invite',
   needsPlan:
     'Your team needs an active plan before you can invite an agent. Ask the team owner to activate a plan in Billing.',
   goToBilling: 'Go to billing',
@@ -53,6 +52,6 @@ export default {
   pricePerInterval: '{{amount}}/{{interval}}',
   specsUnavailable: 'Specifications unavailable',
   vcpus: { other: '{{count}} vCPUs' },
-  memory: { other: '{{count}} GB RAM' },
-  disk: { other: '{{count}} GB disk' },
+  memory: { other: '{{count}} GiB RAM' },
+  disk: { other: '{{count}} GiB disk' },
 };

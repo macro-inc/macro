@@ -19,6 +19,8 @@ import {
   TeamAgentMenu,
 } from '../../components/team-agent-row';
 import { BillingFixture } from './billing-fixture';
+import { COMPUTER_OFFERS } from './computer-catalog';
+import { ComputerPurchaseFixture } from './computer-purchase-fixture';
 import { MembersFixture } from './members-fixture';
 
 const dark = new URLSearchParams(location.search).has('dark');
@@ -79,17 +81,21 @@ let changeEligibility = new URLSearchParams(location.search).has(
 const repositoryFailure = new URLSearchParams(location.search).has(
   'repository-failure'
 );
-const quote = (value: ComputerSize = size()): TeamAgentQuote => ({
-  included: included(),
-  seat: included() ? 0 : 2000,
-  computer: included() ? 0 : value === 'standard' ? 3000 : 6000,
-  total: included() ? 0 : value === 'standard' ? 5000 : 8000,
-  currency: 'usd',
-  vcpus: value === 'standard' ? 4 : value === 'large' ? 8 : 16,
-  memoryGb: value === 'standard' ? 8 : value === 'large' ? 16 : 32,
-  diskGb: value === 'standard' ? 100 : value === 'large' ? 200 : 400,
-  interval: 'month',
-});
+const quote = (value: ComputerSize = size()): TeamAgentQuote => {
+  const offer =
+    COMPUTER_OFFERS.find((item) => item.size === value) ?? COMPUTER_OFFERS[0];
+  return {
+    included: included(),
+    seat: included() ? 0 : 2000,
+    computer: included() ? 0 : offer.quote.amount,
+    total: included() ? 0 : 2000 + offer.quote.amount,
+    currency: offer.quote.currency,
+    interval: offer.quote.interval,
+    vcpus: offer.vcpus,
+    memoryGb: offer.memoryGb,
+    diskGb: offer.diskGb,
+  };
+};
 const noSubscription = new URLSearchParams(location.search).has(
   'no-subscription'
 );
@@ -111,175 +117,182 @@ const [removals, setRemovals] = createSignal(0);
 render(
   () => (
     <Show
-      when={!new URLSearchParams(location.search).has('billing')}
-      fallback={<BillingFixture />}
+      when={!new URLSearchParams(location.search).has('purchase')}
+      fallback={<ComputerPurchaseFixture />}
     >
       <Show
-        when={!new URLSearchParams(location.search).has('members')}
-        fallback={<MembersFixture />}
+        when={!new URLSearchParams(location.search).has('billing')}
+        fallback={<BillingFixture />}
       >
-        <div class="p-6 bg-panel min-h-screen text-ink">
-          <Show
-            when={menuDialog}
-            fallback={
-              <Button onClick={() => setOpen(true)}>Invite agent</Button>
-            }
-          >
-            <MemberInviteActions
-              canInvitePeople
-              canInviteAgents
-              onInvitePerson={() => setPersonInvites((count) => count + 1)}
-              onInviteAgent={() => setOpen(true)}
-            />
-            <p>Person invitations: {personInvites()}</p>
-          </Show>
-          <p>Purchases: {requests()}</p>
-          <Show when={voiceEnabled}>
-            <Button onClick={() => setSettingsOpen(true)}>Change voice</Button>
-            <p>Saved voice: {savedVoice()}</p>
-            <p>Invited voice: {invitedVoice()}</p>
-            <Show when={settingsOpen()}>
-              <AgentVoiceForm
-                name="Assistant"
-                source={voices}
-                current={savedVoice()}
-                loading={false}
-                loadError={false}
-                saving={false}
-                saveError={saveFailed()}
-                onRetry={() => {}}
-                onClose={() => setSettingsOpen(false)}
-                onSave={(model) => {
-                  if (failSave) {
-                    failSave = false;
-                    setSaveFailed(true);
-                    return;
+        <Show
+          when={!new URLSearchParams(location.search).has('members')}
+          fallback={<MembersFixture />}
+        >
+          <div class="p-6 bg-panel min-h-screen text-ink">
+            <Show
+              when={menuDialog}
+              fallback={
+                <Button onClick={() => setOpen(true)}>Invite agent</Button>
+              }
+            >
+              <MemberInviteActions
+                canInvitePeople
+                canInviteAgents
+                onInvitePerson={() => setPersonInvites((count) => count + 1)}
+                onInviteAgent={() => setOpen(true)}
+              />
+              <p>Person invitations: {personInvites()}</p>
+            </Show>
+            <p>Purchases: {requests()}</p>
+            <Show when={voiceEnabled}>
+              <Button onClick={() => setSettingsOpen(true)}>
+                Change voice
+              </Button>
+              <p>Saved voice: {savedVoice()}</p>
+              <p>Invited voice: {invitedVoice()}</p>
+              <Show when={settingsOpen()}>
+                <AgentVoiceForm
+                  name="Assistant"
+                  source={voices}
+                  current={savedVoice()}
+                  loading={false}
+                  loadError={false}
+                  saving={false}
+                  saveError={saveFailed()}
+                  onRetry={() => {}}
+                  onClose={() => setSettingsOpen(false)}
+                  onSave={(model) => {
+                    if (failSave) {
+                      failSave = false;
+                      setSaveFailed(true);
+                      return;
+                    }
+                    setSavedVoice(model);
+                    setSaveFailed(false);
+                    setSettingsOpen(false);
+                  }}
+                />
+              </Show>
+            </Show>
+            <p>Portrait generations: {portraits()}</p>
+            <p>Photo uploads: {uploads()}</p>
+            <p>Saved avatar: {savedAvatar()}</p>
+            <Show when={showPayments}>
+              <div class="space-y-4 py-5">
+                <Button
+                  onClick={() =>
+                    setAgent({
+                      ...initialAgent,
+                      status: 'failed',
+                      payment: 'unbilled',
+                      statusReason: 'payment failed',
+                    })
                   }
-                  setSavedVoice(model);
-                  setSaveFailed(false);
-                  setSettingsOpen(false);
+                >
+                  Set payment failure
+                </Button>
+                <Button
+                  onClick={() =>
+                    setAgent({
+                      ...initialAgent,
+                      status: 'failed',
+                      payment: 'paid',
+                      retryable: true,
+                      statusReason: 'Brain unavailable',
+                    })
+                  }
+                >
+                  Set paid failure
+                </Button>
+                <AgentStatusPill
+                  agent={agent()}
+                  canManage={
+                    !new URLSearchParams(location.search).has('non-admin')
+                  }
+                />
+                <TeamAgentMenu
+                  agent={agent()}
+                  onRetry={() => {
+                    setRetryRequests((count) => count + 1);
+                    setAgent({
+                      ...agent(),
+                      status: 'provisioning',
+                      retryable: false,
+                      setup: { step: 'booting', position: 3, total: 5 },
+                    });
+                  }}
+                  onRemove={() => setRemovals((count) => count + 1)}
+                />
+                <p>Retry requests: {retryRequests()}</p>
+                <p>Removals: {removals()}</p>
+              </div>
+            </Show>
+            <Show when={open()}>
+              <InviteAgentForm
+                teamId="team-1"
+                voices={voiceEnabled ? voices : undefined}
+                open
+                onClose={() => setOpen(false)}
+                size={size()}
+                setSize={setSize}
+                portrait={{
+                  generate: async () => {
+                    setPortraits((count) => count + 1);
+                    if (portraitFailure) {
+                      portraitFailure = false;
+                      throw new Error('Portrait service unavailable');
+                    }
+                    return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="%23888"/></svg>';
+                  },
+                  upload: async () => {
+                    setUploads((count) => count + 1);
+                    return 'https://fixture.invalid/uploaded-avatar.png';
+                  },
+                }}
+                source={{
+                  quoteForSize: (value) => quote(value),
+                  specsForSize: (value) => ({ ...quote(value), size: value }),
+                  needsSubscription: () => noSubscription && !included(),
+                  quote: () =>
+                    failed() || (noSubscription && !included())
+                      ? undefined
+                      : quote(),
+                  quoteLoading: () => false,
+                  quoteError: () => failed() || (noSubscription && !included()),
+                  reloadQuote: () => setFailed(false),
+                  pending: () => false,
+                  create: async (request) => {
+                    setInvitedVoice(request.voice ?? '');
+                    if (changeEligibility) {
+                      changeEligibility = false;
+                      setIncluded(!included());
+                    }
+                    if (request.expectedIncluded !== included()) {
+                      throw new ThrownResultError([
+                        {
+                          code: 'quote_changed',
+                          message:
+                            'The quote changed. Review the price again. Nothing was charged.',
+                        },
+                      ]);
+                    }
+                    if (repositoryFailure) {
+                      throw new ThrownResultError([
+                        {
+                          code: 'repository_creation_failed',
+                          message:
+                            'The workspace repository could not be created. Nothing was charged.',
+                        },
+                      ]);
+                    }
+                    setSavedAvatar(request.avatarUrl ?? '');
+                    setRequests((count) => count + 1);
+                  },
                 }}
               />
             </Show>
-          </Show>
-          <p>Portrait generations: {portraits()}</p>
-          <p>Photo uploads: {uploads()}</p>
-          <p>Saved avatar: {savedAvatar()}</p>
-          <Show when={showPayments}>
-            <div class="space-y-4 py-5">
-              <Button
-                onClick={() =>
-                  setAgent({
-                    ...initialAgent,
-                    status: 'failed',
-                    payment: 'unbilled',
-                    statusReason: 'payment failed',
-                  })
-                }
-              >
-                Set payment failure
-              </Button>
-              <Button
-                onClick={() =>
-                  setAgent({
-                    ...initialAgent,
-                    status: 'failed',
-                    payment: 'paid',
-                    retryable: true,
-                    statusReason: 'Brain unavailable',
-                  })
-                }
-              >
-                Set paid failure
-              </Button>
-              <AgentStatusPill
-                agent={agent()}
-                canManage={
-                  !new URLSearchParams(location.search).has('non-admin')
-                }
-              />
-              <TeamAgentMenu
-                agent={agent()}
-                onRetry={() => {
-                  setRetryRequests((count) => count + 1);
-                  setAgent({
-                    ...agent(),
-                    status: 'provisioning',
-                    retryable: false,
-                    setup: { step: 'booting', position: 3, total: 5 },
-                  });
-                }}
-                onRemove={() => setRemovals((count) => count + 1)}
-              />
-              <p>Retry requests: {retryRequests()}</p>
-              <p>Removals: {removals()}</p>
-            </div>
-          </Show>
-          <Show when={open()}>
-            <InviteAgentForm
-              teamId="team-1"
-              voices={voiceEnabled ? voices : undefined}
-              open
-              onClose={() => setOpen(false)}
-              size={size()}
-              setSize={setSize}
-              portrait={{
-                generate: async () => {
-                  setPortraits((count) => count + 1);
-                  if (portraitFailure) {
-                    portraitFailure = false;
-                    throw new Error('Portrait service unavailable');
-                  }
-                  return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="%23888"/></svg>';
-                },
-                upload: async () => {
-                  setUploads((count) => count + 1);
-                  return 'https://fixture.invalid/uploaded-avatar.png';
-                },
-              }}
-              source={{
-                quoteForSize: (value) => quote(value),
-                specsForSize: (value) => ({ ...quote(value), size: value }),
-                needsSubscription: () => noSubscription && !included(),
-                quote: () =>
-                  failed() || (noSubscription && !included())
-                    ? undefined
-                    : quote(),
-                quoteLoading: () => false,
-                quoteError: () => failed() || (noSubscription && !included()),
-                reloadQuote: () => setFailed(false),
-                pending: () => false,
-                create: async (request) => {
-                  setInvitedVoice(request.voice ?? '');
-                  if (changeEligibility) {
-                    changeEligibility = false;
-                    setIncluded(!included());
-                  }
-                  if (request.expectedIncluded !== included()) {
-                    throw new ThrownResultError([
-                      {
-                        code: 'quote_changed',
-                        message:
-                          'The quote changed. Review the price again. Nothing was charged.',
-                      },
-                    ]);
-                  }
-                  if (repositoryFailure) {
-                    throw new ThrownResultError([
-                      {
-                        code: 'repository_creation_failed',
-                        message:
-                          'The workspace repository could not be created. Nothing was charged.',
-                      },
-                    ]);
-                  }
-                  setSavedAvatar(request.avatarUrl ?? '');
-                  setRequests((count) => count + 1);
-                },
-              }}
-            />
-          </Show>
-        </div>
+          </div>
+        </Show>
       </Show>
     </Show>
   ),

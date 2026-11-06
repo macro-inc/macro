@@ -152,7 +152,7 @@ it('bounds reactive updates while typing with quotes loaded for all sizes', asyn
       <InviteAgentDialog teamId="team-1" open onClose={() => {}} />
     </QueryClientProvider>
   ));
-  await waitFor(() => expect(screen.getByText('100 GB disk')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('100 GiB disk')).toBeTruthy());
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 
   const updates = vi.fn();

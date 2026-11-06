@@ -1400,6 +1400,12 @@ Take control; keep touch devices watch-only. Bind long-press handlers to the
 underlying DOM element when using Dynamic. The desktop/phone regression is
 `src/features/computer-screen/browser-test/portrait/playwright.config.ts`.
 
+Reuse `PriceBreakdown` for agent invite review, Macro computer purchase and
+subscription billing: item/spec subline/amount, divider, total and billing note.
+Keep included rows visible, use GiB throughout, and size confirmation/release
+dialogs to content. Billing renders each computer once and uses provider amounts;
+show a differing catalog price as context without replacing a subscribed charge.
+
 ### Computer capacity
 
 Computer offers expose ordinary `soldOut` and persona `alwaysOnSoldOut`

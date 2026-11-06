@@ -87,8 +87,8 @@ describe('agent invite purchase', () => {
         })}
       />
     ));
-    expect(screen.getByText('80 GB disk')).toBeTruthy();
-    expect(screen.getByText('320 GB disk')).toBeTruthy();
+    expect(screen.getByText('80 GiB disk')).toBeTruthy();
+    expect(screen.getByText('320 GiB disk')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('XL'));
     fill();
     expect(screen.getByText('$150.00')).toBeTruthy();
@@ -127,7 +127,7 @@ describe('agent invite purchase', () => {
       'Assistant'
     );
     fireEvent.click(screen.getByRole('button', { name: 'Review price' }));
-    const confirm = screen.getByRole('button', { name: 'Confirm and invite' });
+    const confirm = screen.getByRole('button', { name: /^Invite (?!agent$)/ });
     fireEvent.click(confirm);
     fireEvent.click(confirm);
     expect(create).toHaveBeenCalledTimes(1);
@@ -167,14 +167,14 @@ describe('agent invite purchase', () => {
     fill();
     expect(
       screen
-        .getByRole('button', { name: 'Confirm and invite' })
+        .getByRole('button', { name: /^Invite (?!agent$)/ })
         .hasAttribute('disabled')
     ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(reload).toHaveBeenCalledTimes(1);
     expect(
       screen
-        .getByRole('button', { name: 'Confirm and invite' })
+        .getByRole('button', { name: /^Invite (?!agent$)/ })
         .hasAttribute('disabled')
     ).toBe(false);
   });
@@ -192,7 +192,7 @@ describe('agent invite purchase', () => {
       />
     ));
     fill();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Invite (?!agent$)/ }));
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain(
         'Check the members list'
@@ -200,7 +200,7 @@ describe('agent invite purchase', () => {
     );
     expect(
       screen
-        .getByRole('button', { name: 'Confirm and invite' })
+        .getByRole('button', { name: /^Invite (?!agent$)/ })
         .hasAttribute('disabled')
     ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
@@ -289,7 +289,7 @@ it('keeps catalog specs visible without a subscription and directs admins to bil
       })}
     />
   ));
-  expect(screen.getAllByText('100 GB disk')).toHaveLength(3);
+  expect(screen.getAllByText('100 GiB disk')).toHaveLength(3);
   expect(screen.getByText(/Your team needs an active plan/)).toBeTruthy();
   expect(
     screen.getByRole('link', { name: 'Go to billing' }).getAttribute('href')
@@ -327,9 +327,10 @@ it('reviews an included quote without presenting a currency charge', async () =>
   ));
   fill();
   expect(screen.getByText('Included for Macro')).toBeTruthy();
-  expect(screen.queryByText(/Total per/)).toBeNull();
+  expect(screen.getByText(/Total per/)).toBeTruthy();
+  expect(screen.getAllByText('Included', { exact: true })).toHaveLength(3);
   expect(screen.queryByText(/\$0\.00/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Invite (?!agent$)/ }));
   await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
 });
 
@@ -362,7 +363,7 @@ it.each([
       />
     ));
     fill();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Invite (?!agent$)/ }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
     expect(screen.getByRole('alert').textContent).toBe(
       visible
@@ -371,7 +372,7 @@ it.each([
     );
     expect(
       screen
-        .getByRole('button', { name: 'Confirm and invite' })
+        .getByRole('button', { name: /^Invite (?!agent$)/ })
         .hasAttribute('disabled')
     ).toBe(true);
   }
@@ -416,7 +417,7 @@ it.each([true, false])(
       total: included ? quote.total : 0,
     });
     expect(!!screen.queryByText('Included for Macro')).toBe(included);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Invite (?!agent$)/ }));
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toBe(
         'The quote changed. Review the price again. Nothing was charged.'
@@ -436,7 +437,7 @@ it.each([true, false])(
     );
     fireEvent.click(screen.getByRole('button', { name: 'Review price' }));
     expect(!!screen.queryByText('Included for Macro')).toBe(!included);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Invite (?!agent$)/ }));
     await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
     expect(create).toHaveBeenNthCalledWith(
       2,
@@ -468,7 +469,7 @@ it('does not close a new invitation when an old create finishes after rollout re
     </Show>
   ));
   fill();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm and invite' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Invite (?!agent$)/ }));
   await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
   setEnabled(false);
   setEnabled(true);

@@ -6,6 +6,7 @@ import type {
   SizeOffer,
 } from '@service-auth/computers';
 import { match } from 'ts-pattern';
+import { formatBillingAmount } from '../../core/format-billing-amount';
 
 export function sizeLabel(size: string): string {
   return match(size)
@@ -16,7 +17,7 @@ export function sizeLabel(size: string): string {
 }
 
 export function offerSpecs(offer: SizeOffer): string {
-  return t('computers.offerSpecs', {
+  return t('computers.computerSpecs', {
     cpus: offer.vcpus,
     memory: offer.memoryGb,
     disk: offer.diskGb,
@@ -34,11 +35,11 @@ export function computerSpecs(computer: ComputerStatus): string {
 
 /** "$40/month" from a quote in the currency's smallest unit. */
 export function formatQuote(quote: Quote): string {
-  const amount = new Intl.NumberFormat(formatLocale(), {
-    style: 'currency',
-    currency: quote.currency.toUpperCase(),
-    minimumFractionDigits: quote.amount % 100 === 0 ? 0 : 2,
-  }).format(quote.amount / 100);
+  const amount = formatBillingAmount(
+    quote.amount,
+    quote.currency,
+    formatLocale()
+  );
   const interval = match(quote.interval)
     .with('month', () => t('computers.priceMonthly', { amount }))
     .with('year', () => t('computers.priceYearly', { amount }))

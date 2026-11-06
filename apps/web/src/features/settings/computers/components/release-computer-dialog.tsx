@@ -17,7 +17,7 @@ export function ReleaseComputerDialog(props: {
       deleteLabel="Release now"
       confirmationPhrase={props.computerName}
       pending={props.pending}
-      class="w-[min(440px,calc(100vw-16px))]"
+      class="w-[min(440px,calc(100vw-16px))] [&_[data-surface]]:h-auto"
       onDelete={props.onRelease}
     >
       <div class="space-y-2">
