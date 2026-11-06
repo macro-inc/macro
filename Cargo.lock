@@ -38,6 +38,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "account_manager"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "channels",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "messages",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "user_api_key",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "activity"
 version = "0.1.0"
 dependencies = [
@@ -6634,6 +6661,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "access_requests",
+ "account_manager",
  "activity",
  "agent_changes",
  "agent_correlation",
@@ -11390,6 +11418,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "async-trait",
+ "futures",
  "macro_env_var",
  "macro_user_id",
  "reqwest 0.13.4",

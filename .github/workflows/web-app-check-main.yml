@@ -10,6 +10,7 @@ name: Web App Pr Checks
     - ready_for_review
     branches:
     - main
+  workflow_call: {}
 jobs:
   cancel-older:
     name: Cancel older runs

@@ -11,7 +11,8 @@
 //! `graphql-schema-compat` run alongside `test`.
 
 use gh_workflow::{
-    Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
+    Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step,
+    Workflow, WorkflowCall,
 };
 use xtask_paths::RuntimePath;
 
@@ -27,14 +28,16 @@ mod test;
 /// Build the workflow.
 pub fn code_check_cloud_storage() -> Workflow {
     Workflow::new("cloud storage code check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
+        .on(Event::default()
+            .pull_request(
+                PullRequest::default()
+                    .add_branch("main")
+                    .add_type(PullRequestType::Opened)
+                    .add_type(PullRequestType::Synchronize)
+                    .add_type(PullRequestType::Reopened)
+                    .add_type(PullRequestType::ReadyForReview),
+            )
+            .workflow_call(WorkflowCall::default()))
         .map(vars::with_global_env)
         .concurrency(vars::concurrency("code-check-cloud-storage"))
         .add_job("path-check", path_check())
@@ -134,7 +137,7 @@ fn doppler_config() -> Job {
     steps::gated_job()
         .timeout_minutes(45u32)
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'",
+            "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.doppler_candidates == 'true'",
         ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
@@ -160,7 +163,7 @@ fn graphql_schema_compat() -> Job {
     steps::gated_job()
         .timeout_minutes(15u32)
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'",
+            "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.graphql_schema == 'true'",
         ))
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
@@ -179,7 +182,7 @@ fn test() -> Job {
     steps::gated_job()
         .timeout_minutes(90u32)
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
+            "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
@@ -247,7 +250,7 @@ fn build_service_bins() -> Job {
 }
 
 const BUILD_SERVICE_BINS_CONDITION: &str = "needs.path-check.outputs.should_run == 'true' \
-     && github.event.pull_request.draft == false \
+     && (github.event.pull_request.draft == false || github.event.action == 'labeled') \
      && needs.path-check.outputs.skip_tests != 'true' \
      && (needs.path-check.outputs.rust_packages == 'all' \
      || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') \

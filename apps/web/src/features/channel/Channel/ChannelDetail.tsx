@@ -7,6 +7,7 @@ import {
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '@app/components/view-shell';
+import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
 import {
   DmWorkPanel,
   DmWorkProvider,
@@ -45,6 +46,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Tabs } from '@ui';
 import {
   type Accessor,
@@ -207,6 +209,11 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           )}
         </Show>
       </HeaderActionGroup>
+      <Show when={channelType() === ChannelType.direct_message}>
+        <DebugSuspense name="ChannelDetail.account-manager">
+          <AccountManagerRequestButton channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <Show
         when={!isMobile() || activeTab() !== 'call' || !call.isInThisChannel()}
       >

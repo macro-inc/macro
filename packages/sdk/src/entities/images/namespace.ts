@@ -30,7 +30,11 @@ export interface GenerateImageOptions {
   referenceImages?: (Document | StaticImage)[];
 }
 
-/** Image generation, charged to the acting user's AI allowance. */
+/**
+ * Image generation, charged to the acting user's AI allowance.
+ *
+ * @routing Use when generating an image; not structured output or classification (`macro.ai`).
+ */
 export class ImagesNamespace {
   constructor(private readonly client: MacroClient) {}
 

@@ -391,6 +391,25 @@ shows the Macro bot with **from <user>**. To check this, connect an MCP client
 over OAuth, ask it to post in a channel and to comment on a document, and
 confirm both show the client and the user on desktop and at phone width.
 
+## Account manager requests
+
+A DM between a person and an agent account has an account manager button
+(user-gear icon) in the channel top bar; a DM between two agents or two people
+doesn't, because an agent can't be managed and only an agent can manage. It starts
+a request: the person asks the agent to manage their account, or the agent asks to
+manage the person's. Either way a card appears
+in the DM (`<m-account-manager-request>{"id":"<grant>"}</...>`).
+
+- The side that didn't ask gets **Approve** and **Decline**. Approve opens a
+  confirmation stating the access it gives. The side that asked gets **Withdraw**.
+- Approval posts a second card with a one-time link to
+  `/app/account-manager/<grant>`. **Reveal token** on either surface works once,
+  only for the manager, and shows the token in a dialog.
+- Requests and unclaimed approvals expire after 7 days. Revoke active access from
+  Settings → Account Managers.
+- Messages the manager sends with the token show the managed account as sender,
+  with a `from <agent>` line (`triggered_by`).
+
 ## Message composer
 
 Channel messages and thread replies have a microphone next to Send on pointer
