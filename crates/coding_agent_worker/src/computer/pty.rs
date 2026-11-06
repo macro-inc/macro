@@ -32,8 +32,14 @@ impl Pty {
     pub fn spawn(program: &Path, args: &[&str]) -> rootcause::Result<Self> {
         use rustix::pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt};
 
-        let master = openpt(OpenptFlags::RDWR | OpenptFlags::NOCTTY | OpenptFlags::CLOEXEC)
-            .context("could not open a pseudo-terminal")?;
+        let flags = OpenptFlags::RDWR | OpenptFlags::NOCTTY;
+        #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "netbsd"))]
+        let flags = flags | OpenptFlags::CLOEXEC;
+        let master = openpt(flags).context("could not open a pseudo-terminal")?;
+        // posix_openpt on macOS does not accept O_CLOEXEC.
+        #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "netbsd")))]
+        rustix::io::fcntl_setfd(&master, rustix::io::FdFlags::CLOEXEC)
+            .context("could not mark the pseudo-terminal close-on-exec")?;
         grantpt(&master).context("could not grant the pseudo-terminal")?;
         unlockpt(&master).context("could not unlock the pseudo-terminal")?;
         let name = ptsname(&master, Vec::new()).context("could not name the pseudo-terminal")?;
