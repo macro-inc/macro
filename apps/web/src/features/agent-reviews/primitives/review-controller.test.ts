@@ -125,7 +125,11 @@ describe('persisted review decisions', () => {
     });
     controller.edit('one', {
       kind: 'email',
-      draft: { subject: 'Ready?', body: 'Mine', to: [{ email: 'a@example.com' }] },
+      draft: {
+        subject: 'Ready?',
+        body: 'Mine',
+        to: [{ email: 'a@example.com' }],
+      },
     });
     update({
       ...initial,

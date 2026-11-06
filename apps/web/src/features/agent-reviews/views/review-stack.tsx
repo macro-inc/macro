@@ -108,8 +108,7 @@ export function ReviewStack(props: {
   createEffect(
     on(
       controller.generation,
-      () =>
-        setIndex(Math.min(index(), Math.max(0, record().items.length - 1))),
+      () => setIndex(Math.min(index(), Math.max(0, record().items.length - 1))),
       { defer: true }
     )
   );
