@@ -1,5 +1,25 @@
 use super::*;
 use crate::domain::models::JoinCallRequest;
+use crate::domain::ports::ProgrammaticCallGate;
+
+struct DisabledProgrammaticCalls;
+
+#[async_trait::async_trait]
+impl ProgrammaticCallGate for DisabledProgrammaticCalls {
+    async fn enabled_for(&self, _caller: MacroUserIdStr<'_>) -> bool {
+        false
+    }
+}
+
+#[tokio::test]
+async fn programmatic_call_gate_is_read_for_the_caller() {
+    let service = join_service(MockCallRepository::new(), MockRtcClient::new())
+        .with_programmatic_call_gate(DisabledProgrammaticCalls);
+
+    assert!(!service
+        .programmatic_calls_enabled(user("requester@example.com"))
+        .await);
+}
 
 fn join_service(
     repo: MockCallRepository,

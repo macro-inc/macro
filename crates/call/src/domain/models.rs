@@ -427,6 +427,8 @@ pub struct CallWebhookEvent {
     pub room_name: Option<String>,
     /// Participant identity associated with the event, if any.
     pub participant_identity: Option<MacroUserIdStr<'static>>,
+    /// Bot identity, classified separately so it never becomes attendance.
+    pub bot_identity: Option<bot_id::BotId>,
     /// Non-account guest identity, classified separately from Macro users.
     pub guest_identity: Option<super::meetings::GuestId>,
     /// Egress ID associated with the event, if any.

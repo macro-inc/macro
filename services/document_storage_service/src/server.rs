@@ -897,10 +897,13 @@ async fn run_server() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
-            flags,
+            flags.clone(),
             call_root_poster.clone(),
         ),
     ));
+    let call_service_builder = call_service_builder.with_programmatic_call_gate(
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
+    );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
             redis: redis_client.clone(),

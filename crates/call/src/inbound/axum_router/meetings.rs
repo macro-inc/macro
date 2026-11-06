@@ -278,13 +278,22 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
     request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
+    let options = if state
+        .service
+        .programmatic_calls_enabled(actor.authorization.user.macro_user_id.clone())
+        .await
+    {
+        request.map_or_else(JoinCallRequest::default, |body| body.0)
+    } else {
+        JoinCallRequest::default()
+    };
     Ok(Json(
         state
             .service
             .join_meeting_with_options(
                 MeetingToken::try_from(token)?,
                 actor.authorization.user.macro_user_id.clone(),
-                request.map_or_else(JoinCallRequest::default, |body| body.0),
+                options,
                 credential_is_program(&actor.authorization.user.origin),
                 actor.authorization.user.agent_id.is_some(),
             )

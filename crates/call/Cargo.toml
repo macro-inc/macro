@@ -44,6 +44,7 @@ ai_usage = { path = "../ai_usage", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
+bot_id = { path = "../bot_id" }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }

@@ -273,12 +273,19 @@ mod authenticated_join_routes {
         }
     }
 
-    fn router(service: MockCallService) -> axum::Router {
+    fn router_with_flag(mut service: MockCallService, enabled: bool) -> axum::Router {
+        service
+            .expect_programmatic_calls_enabled()
+            .returning(move |_| Box::pin(async move { enabled }));
         call_router(CallRouterState::new(
             Arc::new(service),
             Arc::new(NoOpEntityAccessService),
             MacroAuthorizationState::new(Arc::new(Auth)),
         ))
+    }
+
+    fn router(service: MockCallService) -> axum::Router {
+        router_with_flag(service, true)
     }
 
     fn join(call_id: Uuid, actor: &str) -> Request<Body> {
@@ -287,6 +294,19 @@ mod authenticated_join_routes {
             .header("content-type", "application/json")
             .body(Body::from("{}"))
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn join_route_is_absent_when_programmatic_calls_are_disabled() {
+        let call_id = Uuid::now_v7();
+        let mut service = MockCallService::new();
+        service.expect_join_call().never();
+
+        let response = router_with_flag(service, false)
+            .oneshot(join(call_id, "member"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

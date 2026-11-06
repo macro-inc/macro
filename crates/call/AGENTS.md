@@ -21,6 +21,8 @@ in-call chat.
   and the sweeper that ends abandoned calls and deletes orphaned RTC rooms
   (`src/domain/service/orphan_rooms.rs`).
 - `src/outbound/livekit_rtc_client.rs`: LiveKit adapter.
+- `src/outbound/programmatic_calls.rs`: per-caller server flag for explicit
+  start, join, and leave routes. The legacy GET flow remains available.
 - `src/outbound/pg_call_repo.rs`, `src/outbound/pg_voice_repo.rs`: Postgres.
 - `src/outbound/pg_call_repo/lifecycle.rs`: atomic empty and program-only
   archival checks; the latter uses the last human departure and a 60-second grace.
@@ -71,6 +73,10 @@ in-call chat.
   when one connects. Only a room named after an archived `call_records` row is
   orphaned (call ids are never reused); meeting preparations and get-or-create
   candidate rooms have no `calls` row yet and must be left alone.
+- Bot RTC identities use `bot|<uuid>`. Webhooks never write bot attendance or
+  participant events; an archived call's recreated room evicts the bot.
+- `enable-programmatic-calls` fails closed for the explicit start, join, and
+  leave routes. Meeting join ignores optional join settings while disabled.
 - `GET /call/{channel_id}` remains the shipped get-or-create path. New callers
   start with `POST /call/{channel_id}` and join a specific live session with
   `POST /call/record/{call_id}/join`; the latter never creates a call.

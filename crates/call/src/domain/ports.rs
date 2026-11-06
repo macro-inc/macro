@@ -805,6 +805,14 @@ pub trait CallRtcClient: Send + Sync + 'static {
         name: Option<String>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
+    /// Mint a room token for a bot without treating it as a user.
+    fn generate_bot_token(
+        &self,
+        room_name: &str,
+        bot_id: bot_id::BotId,
+        name: Option<String>,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
     /// Mint a room-scoped token for a validated non-account guest.
     fn generate_guest_token(
         &self,
@@ -817,6 +825,12 @@ pub trait CallRtcClient: Send + Sync + 'static {
         &self,
         room_name: &str,
         guest_id: GuestId,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Remove a bot from a room.
+    fn remove_bot(
+        &self,
+        room_name: &str,
+        bot_id: bot_id::BotId,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Build VoIP payloads for native incoming-call delivery.
@@ -870,6 +884,11 @@ pub trait CallRtcClient: Send + Sync + 'static {
 /// Service interface for call operations.
 #[cfg_attr(test, mockall::automock)]
 pub trait CallService: Send + Sync + 'static {
+    /// Whether explicit programmatic call routes are enabled for this caller.
+    fn programmatic_calls_enabled<'a>(
+        &self,
+        caller: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = bool> + Send;
     /// Reserve an empty room without creating a call, recording, or inviting anyone.
     fn prepare_meeting<'a>(
         &self,
@@ -1371,6 +1390,13 @@ impl VoiceRepository for NoOpVoiceRepository {
     ) -> Result<Option<Uuid>, Self::Err> {
         Ok(None)
     }
+}
+
+/// Per-caller availability of explicit programmatic call routes.
+#[async_trait::async_trait]
+pub trait ProgrammaticCallGate: Send + Sync + 'static {
+    /// Return false when the flag is disabled or unavailable.
+    async fn enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool;
 }
 
 /// Whether new channel calls discuss in a channel thread, and creating that thread.
