@@ -251,11 +251,12 @@ input ChannelSharePolicyInput {
 }
 
 """
-One batch of clearing the viewer's notification inbox.
+Clearing the viewer's notification inbox.
 """
 input ClearNotificationInboxInput {
 	"""
-	Which rows are cleared; the inbox the caller shows.
+	Which rows are cleared; the inbox the caller shows. Omit `rowTypes`
+	to clear every kind; an empty list is rejected, since it names none.
 	"""
 	scope: NotificationInboxScopeInput
 	"""
@@ -268,33 +269,38 @@ input ClearNotificationInboxInput {
 	"""
 	since: String
 	"""
-	Groups read in this batch; defaults to 100, capped at 200.
+	Ignored: the server reads every batch.
 	"""
-	limit: Int
+	limit: Int @deprecated(reason: "The server clears every batch. Remove after 2026-12-06.")
 	"""
-	Opaque cursor from the previous batch's `nextCursor`; absent for the
-	first. Send it with the same scope, filters and `since`.
+	Ignored: the server reads every batch.
 	"""
-	cursor: String
+	cursor: String @deprecated(reason: "The server clears every batch. Remove after 2026-12-06.")
 }
 
 """
-The result of one batch of clearing the inbox.
+The result of clearing the inbox.
 """
 type ClearNotificationInboxPayload {
 	"""
-	How many rows the batch cleared.
+	How many rows the clear has cleared; while it runs on, the count so
+	far.
 	"""
 	rowCount: Int!
 	"""
-	Opaque token that reverses exactly this batch.
+	Opaque token that reverses the whole clear, stopping it first if it
+	is still running. Undo it with `undoNotificationInboxRowsDone`.
 	"""
 	undoToken: String!
 	"""
-	Send as the next batch's `cursor` to keep clearing; absent once
-	nothing is left.
+	Whether the clear finished before the reply. A clear still running
+	carries on in the background; live updates remove its rows.
 	"""
-	nextCursor: String
+	complete: Boolean!
+	"""
+	Always absent: the server reads every batch itself.
+	"""
+	nextCursor: String @deprecated(reason: "The server clears every batch. Remove after 2026-12-06.")
 }
 
 """
@@ -493,11 +499,12 @@ type CompleteMutationRoot {
 	"""
 	markNotificationInboxNotificationDone(input: MarkNotificationInboxNotificationDoneInput!): MarkNotificationInboxNotificationDonePayload!
 	"""
-	Clear the authenticated user's notification inbox one batch at a time:
-	every matching row the batch reads is marked done, its shown and hidden
-	notifications. Email threads are not archived. Repeat with
-	`nextCursor` until it is absent; each batch's undo token reverses that
-	batch.
+	Clear the authenticated user's notification inbox in one call: the
+	server reads every batch and marks each matching row done, its shown
+	and hidden notifications. Email threads are not archived. The clear
+	runs apart from the request, so a closed tab or dropped connection
+	doesn't stop it partway; the reply comes when it finishes, or with
+	its progress after a while, and one token undoes all of it.
 	"""
 	clearNotificationInbox(input: ClearNotificationInboxInput!): ClearNotificationInboxPayload!
 	"""

@@ -34,7 +34,11 @@ function fakeFeed(overrides: Partial<InboxFeedSource> = {}) {
     refresh: vi.fn(async () => {}),
     markDone: vi.fn(async () => ({ undo: vi.fn(async () => {}) })),
     markNotificationDone: vi.fn(async () => ({ undo: vi.fn(async () => {}) })),
-    clear: vi.fn(async () => ({ count: 0, undo: vi.fn(async () => {}) })),
+    clear: vi.fn(async () => ({
+      count: 0,
+      complete: true,
+      undo: vi.fn(async () => {}),
+    })),
     markSeen: vi.fn(async () => {}),
     ...overrides,
   };
@@ -141,7 +145,7 @@ describe('createInboxList', () => {
   it('announces a clear with its count and puts its undo on the stack', async () => {
     const undo = vi.fn(async () => {});
     const { feed } = fakeFeed({
-      clear: vi.fn(async () => ({ count: 12, undo })),
+      clear: vi.fn(async () => ({ count: 12, complete: true, undo })),
     });
     const announced = notices();
     const inbox = createInboxList(feed, announced.value);
@@ -150,11 +154,30 @@ describe('createInboxList', () => {
 
     expect(announced.value.announceCleared).toHaveBeenCalledWith(
       12,
-      expect.any(Function)
+      expect.any(Function),
+      true
     );
     await announced.value.announceCleared.mock.calls[0][1]();
     expect(undo).toHaveBeenCalledOnce();
     expect(announced.dismiss).toHaveBeenCalled();
+  });
+
+  it('offers undo for a clear still running, even with nothing cleared yet', async () => {
+    const undo = vi.fn(async () => {});
+    const { feed } = fakeFeed({
+      clear: vi.fn(async () => ({ count: 0, complete: false, undo })),
+    });
+    const announced = notices();
+    const inbox = createInboxList(feed, announced.value);
+
+    await inbox.clear({ rowTypes: ['email'], unreadOnly: false });
+
+    expect(announced.value.announceCleared).toHaveBeenCalledWith(
+      0,
+      expect.any(Function),
+      false
+    );
+    expect(announced.value.pushUndo).toHaveBeenCalled();
   });
 
   it('says when a clear took nothing, with nothing to undo', async () => {

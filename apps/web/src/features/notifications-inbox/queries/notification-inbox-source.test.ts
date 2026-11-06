@@ -294,19 +294,15 @@ describe('createNotificationInboxSource', () => {
     expect(row('document:doc-s#top_level').count).toBe(3);
   });
 
-  it('clears the inbox in batches, hiding the loaded rows it takes', async () => {
+  it('clears the inbox in one call, hiding the rows it takes, and undoes it with one token', async () => {
     vi.useFakeTimers();
-    let batch = 0;
     const { fake, feed, rowIds } = await loaded({
-      get ClearNotificationInbox() {
-        batch += 1;
-        return {
-          clearNotificationInbox: {
-            rowCount: 2,
-            undoToken: `undo-${batch}`,
-            nextCursor: batch < 3 ? `cursor-${batch}` : null,
-          },
-        };
+      ClearNotificationInbox: {
+        clearNotificationInbox: {
+          rowCount: 6,
+          undoToken: 'clear:one',
+          complete: true,
+        },
       },
       UndoNotificationInboxRowsDone: {
         undoNotificationInboxRowsDone: { patches: [] },
@@ -318,24 +314,12 @@ describe('createNotificationInboxSource', () => {
       unreadOnly: false,
     });
 
-    expect(cleared.count).toBe(6);
+    expect(cleared).toMatchObject({ count: 6, complete: true });
     const clears = fake.mutations.filter(
       ({ name }) => name === 'ClearNotificationInbox'
     );
     expect(clears.map(({ variables }) => variables)).toEqual([
-      {
-        input: {
-          scope: { rowTypes: ['TASK'] },
-          since: null,
-          cursor: null,
-        },
-      },
-      expect.objectContaining({
-        input: expect.objectContaining({ cursor: 'cursor-1' }),
-      }),
-      expect.objectContaining({
-        input: expect.objectContaining({ cursor: 'cursor-2' }),
-      }),
+      { input: { scope: { rowTypes: ['TASK'] }, since: null } },
     ]);
     // Only the task row matches what was cleared.
     expect(rowIds()).toEqual([
@@ -348,10 +332,51 @@ describe('createNotificationInboxSource', () => {
       ({ name }) => name === 'UndoNotificationInboxRowsDone'
     );
     expect(undos.map(({ variables }) => variables.input)).toEqual([
-      expect.objectContaining({ undoToken: 'undo-1' }),
-      expect.objectContaining({ undoToken: 'undo-2' }),
-      expect.objectContaining({ undoToken: 'undo-3' }),
+      expect.objectContaining({ undoToken: 'clear:one' }),
     ]);
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
+  it('tries the undo of a clear again while the server is still stopping it', async () => {
+    vi.useFakeTimers();
+    let undoCalls = 0;
+    const { fake, feed } = await loaded({
+      ClearNotificationInbox: {
+        clearNotificationInbox: {
+          rowCount: 6,
+          undoToken: 'clear:one',
+          complete: false,
+        },
+      },
+      get UndoNotificationInboxRowsDone() {
+        undoCalls += 1;
+        // The first answer is the server's "still stopping".
+        return undoCalls === 1
+          ? undefined
+          : { undoNotificationInboxRowsDone: { patches: [] } };
+      },
+    });
+    const cleared = await feed.clear({ rowTypes: ['task'], unreadOnly: false });
+
+    const undoing = cleared.undo();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await undoing;
+
+    expect(
+      fake.mutations.filter(
+        ({ name }) => name === 'UndoNotificationInboxRowsDone'
+      )
+    ).toHaveLength(2);
+  });
+
+  it('sends nothing when every kind is hidden', async () => {
+    vi.useFakeTimers();
+    const { fake, feed, rowIds } = await loaded();
+
+    const cleared = await feed.clear({ rowTypes: [], unreadOnly: false });
+
+    expect(cleared).toMatchObject({ count: 0, complete: true });
+    expect(fake.mutations).toEqual([]);
     expect(rowIds()).toContain('document:doc-a#task');
   });
 
@@ -573,20 +598,17 @@ describe('createNotificationInboxSource', () => {
       ClearNotificationInbox: {
         clearNotificationInbox: {
           rowCount: 1,
-          undoToken: 'undo-1',
-          nextCursor: null,
+          undoToken: 'clear:one',
+          complete: true,
         },
       },
     });
 
     await feed.clear({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true });
 
+    // Every kind omits rowTypes: the server rejects an empty list.
     expect(fake.mutations[0].variables).toEqual({
-      input: {
-        scope: { rowTypes: [], unreadOnly: true },
-        since: null,
-        cursor: null,
-      },
+      input: { scope: { unreadOnly: true }, since: null },
     });
   });
 

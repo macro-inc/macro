@@ -110,6 +110,22 @@ export function encodeInboxScope(
 }
 
 /**
+ * Encode what a clear takes. Every kind omits `rowTypes`: the server rejects
+ * an empty list rather than read it as every kind.
+ */
+export function encodeClearScope(
+  scope: InboxScope
+): NotificationInboxScopeInput {
+  const everyType = ALL_INBOX_ROW_TYPES.every((type) =>
+    scope.rowTypes.includes(type)
+  );
+  const kinds = everyType
+    ? {}
+    : { rowTypes: scope.rowTypes.map(toGraphqlRowType) };
+  return scope.unreadOnly ? { ...kinds, unreadOnly: true } : kinds;
+}
+
+/**
  * Project one inbox entry into rows, as plain data the source reconciles
  * into its store. An entity the app does not list, or an entry without a
  * valid place, is dropped.

@@ -79,6 +79,10 @@ where
                 .iter()
                 .flat_map(|ack| ack.notification_ids.iter().copied()),
         );
+        let unseen: Vec<Uuid> = acknowledgments
+            .iter()
+            .flat_map(|ack| ack.unseen_ids.iter().copied())
+            .collect();
         let threads = unique(acknowledgments.iter().filter_map(|ack| ack.archive_thread));
 
         let user = viewer.user.clone();
@@ -101,6 +105,11 @@ where
         self.signal(&user, &keys).await;
         Ok(DoneReceipt {
             keys: keys.iter().map(FeedKey::id).collect(),
+            unseen_ids: changed
+                .iter()
+                .copied()
+                .filter(|id| unseen.contains(id))
+                .collect(),
             notification_ids: changed,
             archived_threads: archived,
         })
@@ -117,10 +126,10 @@ where
         let user = viewer.user.clone();
         if !receipt.notification_ids.is_empty() {
             self.notifications
-                .transition(
+                .reopen(
                     user.clone(),
                     receipt.notification_ids.clone(),
-                    NotificationTransition::Undone,
+                    receipt.unseen_ids.clone(),
                 )
                 .await?;
         }

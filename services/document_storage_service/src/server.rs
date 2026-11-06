@@ -2146,7 +2146,7 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
-    let redis_sha_client = Arc::new(Redis::new(redis_client));
+    let redis_sha_client = Arc::new(Redis::new(redis_client.clone()));
 
     let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
         documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(db.clone()),
@@ -2264,6 +2264,9 @@ async fn run_server() -> anyhow::Result<()> {
             attention_feed::outbound::mail::EmailFeedMail::new(Arc::new(email_service.clone())),
             attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
                 KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+            ),
+            notification_inbox::outbound::redis_clear_log::RedisClearLog::new(
+                redis_client.get_multiplexed_async_connection().await?,
             ),
         ),
         feed_triggers,

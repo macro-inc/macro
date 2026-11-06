@@ -255,8 +255,25 @@ pub struct Acknowledgment {
     pub key: FeedKey,
     /// The viewer's notifications to move to done.
     pub notification_ids: Vec<Uuid>,
+    /// Of those, the ones unseen now; undo returns them to unseen.
+    pub unseen_ids: Vec<Uuid>,
     /// An inbox email thread to archive, mail's own done.
     pub archive_thread: Option<Uuid>,
+}
+
+/// Of `ids`, the notifications in `notifications` that are unseen now.
+pub fn unseen_among<'a>(
+    notifications: impl IntoIterator<Item = &'a FeedNotification>,
+    ids: &[Uuid],
+) -> Vec<Uuid> {
+    notifications
+        .into_iter()
+        .filter(|notification| {
+            notification.state == NotificationState::Unseen
+                && ids.contains(&notification.notification_id)
+        })
+        .map(|notification| notification.notification_id)
+        .collect()
 }
 
 /// Everything one acknowledgment changed, so undo can reverse exactly those
@@ -272,6 +289,10 @@ pub struct DoneReceipt {
     /// Email threads this operation archived.
     #[serde(rename = "e", default)]
     pub archived_threads: Vec<Uuid>,
+    /// Of `notification_ids`, those that were unseen before; undo returns
+    /// them to unseen and the rest to seen.
+    #[serde(rename = "u", default, skip_serializing_if = "Vec::is_empty")]
+    pub unseen_ids: Vec<Uuid>,
 }
 
 /// An undo token that does not decode.
@@ -326,6 +347,10 @@ pub enum FeedError {
     /// A dependency failed.
     #[error("the feed is unavailable: {0}")]
     Unavailable(rootcause::Report),
+    /// The request can't complete yet; nothing changed, and the caller
+    /// retries it.
+    #[error("{0}")]
+    Busy(&'static str),
 }
 
 impl From<rootcause::Report> for FeedError {

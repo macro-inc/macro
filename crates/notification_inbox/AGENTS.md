@@ -13,7 +13,9 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
   one message one row, one stack per top-level message and per entity's
   comments, noise hidden in its natural row.
 - `src/domain/service.rs`: page, recompute, done (of rows or of one notification of a
-  stack), seen and undo.
+  stack), clear, seen and undo.
+- `src/domain/ports.rs` and `src/outbound/`: the clear log, in Redis (shared
+  by every server) and in memory (tests).
 - `src/domain/policy.rs`: which groups the inbox lists.
 
 ## Scope
@@ -27,7 +29,7 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
 ## Boundaries
 
 - Depends on: `attention_feed`, `item_filters`, `filter_ast`,
-  `model_notifications`.
+  `model_notifications`, Redis (the clear log).
 - Used by: `graphql_notification_inbox`, `document_storage_service`
   (composition).
 
@@ -43,7 +45,8 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
 
 ## Checks
 
-- `cargo test -p notification_inbox`
+- `cargo test -p notification_inbox`; the Redis clear log tests need a Redis
+  at `REDIS_URL` (default `redis://127.0.0.1:6379`), which CI provides.
 
 ## Gotchas
 
@@ -56,6 +59,11 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
   (`groupId`, `principalId`, `targetId`).
 - Row contents must not depend on the scope; scopes only filter rows, so the
   web cache can normalize rows by id across inboxes.
+- A clear is one call: the service reads every batch, records each in the
+  clear log, and runs apart from the request (GraphQL spawns it), so a
+  dropped connection doesn't stop it. Undo takes the whole log; a server
+  restart mid-clear stops it partway, and undo still reverses what it
+  recorded.
 - An unread scope filters on each row's `unseen`, which follows the row's own
   rule (mail by its unread messages), so a row leaves or returns through the
   same recompute as any other change.

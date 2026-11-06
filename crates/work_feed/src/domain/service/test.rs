@@ -545,14 +545,14 @@ async fn undo_reverses_exactly_one_done() {
         .await
         .unwrap();
 
-    // Undone notifications come back seen.
+    // Both were unseen before the done, so both come back unseen.
     assert_eq!(
         harness.notifications.state_of(uuid(1)),
-        NotificationState::Seen
+        NotificationState::Unseen
     );
     assert_eq!(
         harness.notifications.state_of(uuid(2)),
-        NotificationState::Seen
+        NotificationState::Unseen
     );
     assert_eq!(
         *harness.mail.calls.lock().unwrap(),

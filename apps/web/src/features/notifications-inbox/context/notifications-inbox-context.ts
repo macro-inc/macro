@@ -30,8 +30,14 @@ export type InboxScope = {
 /** A completed done, which the caller can reverse once. */
 export type InboxDoneResult = { undo: () => Promise<void> };
 
-/** A completed clear: how many rows it took, and its reversal. */
-export type InboxClearResult = InboxDoneResult & { count: number };
+/**
+ * A clear: how many rows it took, and its reversal. One that didn't finish
+ * before the reply carries on in the background, and `count` is so far.
+ */
+export type InboxClearResult = InboxDoneResult & {
+  count: number;
+  complete: boolean;
+};
 
 /** One live inbox feed for a scope. */
 export type InboxFeedSource = {

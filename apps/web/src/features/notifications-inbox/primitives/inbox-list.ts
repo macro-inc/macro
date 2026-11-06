@@ -36,10 +36,15 @@ export type InboxDoneNotices = {
   /** Announce a completed done with an Undo action; returns its dismissal. */
   announceDone: (count: number, undo: () => Promise<void>) => () => void;
   /**
-   * Announce a completed clear of `count` rows, with an Undo action when it
-   * took any; returns its dismissal.
+   * Announce a clear of `count` rows, with an Undo action when it took any or
+   * is still running (`complete` false: `count` is so far); returns its
+   * dismissal.
    */
-  announceCleared: (count: number, undo: () => Promise<void>) => () => void;
+  announceCleared: (
+    count: number,
+    undo: () => Promise<void>,
+    complete?: boolean
+  ) => () => void;
   announceFailure: (message: string) => void;
 };
 
@@ -147,7 +152,7 @@ export function createInboxList(
       notices.announceFailure(t('notificationsInbox.clearFailed'));
       return;
     }
-    if (result.count === 0) {
+    if (result.count === 0 && result.complete) {
       notices.announceCleared(0, result.undo);
       return;
     }
@@ -155,7 +160,7 @@ export function createInboxList(
       [],
       result.count,
       result,
-      notices.announceCleared,
+      (count, undo) => notices.announceCleared(count, undo, result.complete),
       t('notificationsInbox.clear')
     );
   };

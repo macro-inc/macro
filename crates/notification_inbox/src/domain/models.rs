@@ -258,8 +258,8 @@ pub struct InboxRowTarget {
     pub revision: Option<FeedRevision>,
 }
 
-/// One batch of clearing an inbox: every matching row of the groups read is
-/// marked done.
+/// A clear of an inbox: every matching row is marked done, read in batches
+/// on the server.
 #[derive(Debug, Clone)]
 pub struct InboxClearRequest {
     /// Which rows are cleared; an unread scope clears unread rows only.
@@ -267,21 +267,37 @@ pub struct InboxClearRequest {
     /// Clear only rows whose newest notification arrived at or after this
     /// time; older groups end the clear.
     pub since: Option<DateTime<Utc>>,
-    /// Groups read in this batch.
-    pub limit: u16,
-    /// Resume after this position; `None` for the first batch.
-    pub after: Option<FeedPosition>,
 }
 
-/// The outcome of one batch of clearing an inbox.
-#[derive(Debug)]
+/// The outcome of a clear.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InboxClearOutcome {
     /// How many rows were cleared.
     pub rows: usize,
-    /// What the batch changed, for undo.
-    pub receipt: DoneReceipt,
-    /// Where the next batch starts; `None` once nothing is left to clear.
-    pub next: Option<FeedPosition>,
+    /// An undo stopped the clear before it read every group.
+    pub cancelled: bool,
+}
+
+/// What a clear does after recording a batch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClearStep {
+    /// Read the next batch.
+    Continue,
+    /// An undo asked the clear to stop; the batch is recorded for it.
+    Stop,
+    /// The log is gone (undone, or expired), so the batch was not recorded:
+    /// the clear reverses it itself and stops.
+    Orphaned,
+}
+
+/// How far a clear has got, as its log records it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClearProgress {
+    /// Rows cleared so far.
+    pub rows: usize,
+    /// The clear has stopped, done or cancelled; its log holds everything
+    /// it changed.
+    pub finished: bool,
 }
 
 /// The outcome of marking one notification of a row done.
