@@ -208,18 +208,19 @@ export function CallTranscript(props: {
   });
 
   const syncButton = () => (
-    <Button
-      class="pointer-events-auto"
-      variant="secondary"
-      size="sm"
-      onClick={() => {
-        setFollowing(true);
-        scrollActiveIntoView(true);
-      }}
-    >
-      <CrosshairIcon class="size-4" />
-      {t('calls.detailSyncToVideo')}
-    </Button>
+    <div class="pointer-events-auto rounded-full border border-edge-muted bg-surface shadow-menu">
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => {
+          setFollowing(true);
+          scrollActiveIntoView(true);
+        }}
+      >
+        <CrosshairIcon class="size-4" />
+        {t('calls.detailSyncToVideo')}
+      </Button>
+    </div>
   );
   return (
     <div

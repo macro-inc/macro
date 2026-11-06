@@ -51,8 +51,8 @@ single panel toggle beside Share. The side panel is docked below that top bar
 in wide panes and has Transcript and Details tabs.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
-scrolls away; Sync to video floats above pinned or phone playback and returns to
-the current line. Authorized chat messages
+scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
+playback and returns to the current line. Authorized chat messages
 appear inline at their recorded moment. Details keeps owner, dates, duration,
 status, channel, team sharing, properties, activity and references on their
 existing permission-scoped readers. Only team sharing has a card; metadata and
