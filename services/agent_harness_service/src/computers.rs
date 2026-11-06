@@ -13,7 +13,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use agent_harness::domain::error::Result as HarnessResult;
+use agent_harness::domain::error::{HarnessError as CommandError, Result as HarnessResult};
 use agent_harness::domain::model::{CommandOutcome, HarnessCommand};
 use agent_harness::domain::ports::{CommandForwarder, CommandTarget, HarnessPresence};
 use agent_session::domain::model::AgentSessionId;
@@ -448,7 +448,9 @@ impl<Inner: CommandForwarder> CommandForwarder for WakingForwarder<Inner> {
                 .inspect_err(
                     |error| tracing::error!(%harness, error = ?error, "could not wake a computer"),
                 )
-                .unwrap_or(false);
+                .map_err(|error| {
+                    CommandError::Forward(rootcause::Report::new(error).into_dynamic())
+                })?;
             if must_wait {
                 tracing::info!(%harness, %session, "parking a command until the computer wakes");
                 self.parked.park(*harness, session, command);
