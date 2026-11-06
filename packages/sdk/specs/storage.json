@@ -14476,6 +14476,126 @@
         }
       }
     },
+    "/documents/{document_id}/spreadsheet/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a native spreadsheet by instructions with the caller's edit access:\na writer model reads the workbook and saves one atomic batch, with AI\nadmission and billing. A workbook changed while it worked saves nothing\nand answers 409.",
+        "description": "A client that disconnects drops the worker request, which cancels the\nedit before its save.",
+        "operationId": "edit_spreadsheet_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpreadsheetAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpreadsheetAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a native spreadsheet, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "The workbook changed while the edit ran; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The writer could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit failed before saving; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit may have been saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditFailed"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/spreadsheet/calculate": {
       "post": {
         "tags": ["document"],
@@ -51326,6 +51446,54 @@
           }
         ],
         "description": "Source identity supplied when creating a job. One binding per Macro team in v1."
+      },
+      "SpreadsheetAiEditRequest": {
+        "type": "object",
+        "description": "What to change in a workbook, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions. Name the sheet and the cells, columns\nor table to change, describe the outcome, and say what must stay.",
+            "minLength": 1
+          }
+        }
+      },
+      "SpreadsheetAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["revision", "applied", "changes", "sheets", "warnings"],
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "description": "Whether a new change was persisted."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetChange"
+            },
+            "description": "What changed, one summary per operation."
+          },
+          "revision": {
+            "type": "string",
+            "description": "Revision after the edit."
+          },
+          "sheets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetSheetSummary"
+            },
+            "description": "Every sheet after the edit."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Issues to check, such as formula errors; they are not repaired."
+          }
+        }
       },
       "SpreadsheetBorderStyle": {
         "type": "string",

@@ -642,6 +642,10 @@ await sheet.applyEdits(
 A workbook that changed since the read throws `RevisionConflictError` and
 saves nothing: read again and rebuild the batch.
 
+`sheet.edit(instructions)` hands the change to an AI writer instead, which reads
+what it needs and saves one batch the same way. It is billed as an AI edit and
+throws `DocumentEditRefusedError` with the writer's reason when it can't do it.
+
 ### Document lifecycle and other resources
 
 `documents.createUpload(options)` reserves a binary document and returns upload
