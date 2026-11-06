@@ -167,6 +167,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Reconnect inbox',
+        dismissLabel: t('common.maybeLater'),
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email sync.',
         actions: [
@@ -184,6 +185,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Reconnect inbox',
+        dismissLabel: t('common.maybeLater'),
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email and calendar sync.',
         actions: [
@@ -201,6 +203,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Reconnect GitHub',
+        dismissLabel: t('common.maybeLater'),
         content: () =>
           'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.',
         actions: [
@@ -219,6 +222,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Email access required',
+        dismissLabel: t('common.maybeLater'),
         content: () =>
           "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
         actions: [
@@ -236,6 +240,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'A new version of Macro is ready',
+        dismissLabel: t('common.maybeLater'),
         actions: [{ label: 'Reload', onClick: dismiss }],
       },
     }),
@@ -251,6 +256,7 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Draft could not be saved',
+        dismissLabel: t('common.maybeLater'),
         icon: ExclamationIcon,
         color: 'var(--color-failure)',
         content: () =>
@@ -515,19 +521,18 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     trigger: 'A Drive folder finishes being created after its composer closes.',
     behavior: '4.5 seconds',
     create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Example folder created',
+      titleIcon: FolderIcon,
       dismissStyle: 'icon',
-      custom: {
-        title: 'Example folder created',
-        icon: FolderIcon,
-        actions: [
-          {
-            label: t('entityActions.open'),
-            icon: ArrowSquareOutIcon,
-            trailingIcon: true,
-            onClick: dismiss,
-          },
-        ],
-      },
+      actions: [
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: dismiss,
+        },
+      ],
     }),
   },
   {
@@ -537,19 +542,18 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     trigger: 'A background folder upload finishes.',
     behavior: '4.5 seconds',
     create: (dismiss) => ({
+      toastType: ToastType.SUCCESS,
+      message: 'Example folder uploaded',
+      titleIcon: FolderIcon,
       dismissStyle: 'icon',
-      custom: {
-        title: 'Example folder uploaded',
-        icon: FolderIcon,
-        actions: [
-          {
-            label: t('entityActions.open'),
-            icon: ArrowSquareOutIcon,
-            trailingIcon: true,
-            onClick: dismiss,
-          },
-        ],
-      },
+      actions: [
+        {
+          label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
+          onClick: dismiss,
+        },
+      ],
     }),
   },
   {

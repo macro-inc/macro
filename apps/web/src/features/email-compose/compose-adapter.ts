@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useHasPaidAccess } from '@core/auth';
 import {
   createFilesReadyHandler,
@@ -307,6 +308,7 @@ export function createEmailComposeContext(
             return toast.custom(
               {
                 title: message,
+                dismissLabel: t('common.maybeLater'),
                 content: () => options.subtext,
                 icon: ExclamationIcon,
                 color: 'var(--color-failure)',

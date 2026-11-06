@@ -48,23 +48,21 @@ async function settleFolderSubmission(
     });
     return;
   }
-  toast.custom(
-    {
-      title: `${outcome.name} created`,
-      icon: FolderIcon,
-      actions: [
-        {
-          label: t('entityActions.open'),
-          icon: ArrowSquareOutIcon,
-          trailingIcon: true,
-          onClick: () => {
-            layout.openWithSplit({ type: 'project', id: outcome.id });
-          },
+  toast.success(`${outcome.name} created`, {
+    titleIcon: FolderIcon,
+    dismissStyle: 'icon',
+    stack: true,
+    actions: [
+      {
+        label: t('entityActions.open'),
+        icon: ArrowSquareOutIcon,
+        trailingIcon: true,
+        onClick: () => {
+          layout.openWithSplit({ type: 'project', id: outcome.id });
         },
-      ],
-    },
-    { dismissStyle: 'icon' }
-  );
+      },
+    ],
+  });
 }
 
 export function FolderComposeView(props: FolderComposeProps) {

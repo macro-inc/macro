@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { useAddInboxFlow } from '@core/email-link';
 import { reconnectScopes } from '@core/email-link/consent';
@@ -31,6 +32,7 @@ export function GmailReauthenticationPrompt() {
     key: (link) => link.id,
     toast: (link, dismiss) => ({
       title: 'Reconnect inbox',
+      dismissLabel: t('common.maybeLater'),
       content(): string {
         return `Sync stopped for ${link.email_address}. Reconnect to restore ${reconnectScopes(link) === 'gmail_and_calendar' ? 'email and calendar' : 'email'} sync.`;
       },

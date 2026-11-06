@@ -380,8 +380,8 @@ buttons; beside the title in narrow layouts) is headed
 the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
 dialog with `Untitled folder` preselected; creating keeps Drive where it is and adds
 the folder to the open folder's list. Creation and completed folder uploads show
-a compact toast with the folder icon, **&lt;folder name&gt; created/uploaded**, and
-**Open**, without a separate description.
+a compact toast with a success check, a folder icon beside **&lt;folder name&gt;
+created/uploaded**, and **Open**, without a separate description.
 Every other item opens as an inline detail in the open folder or tab once created
 (`/app/drive/folder/<uuid>/spreadsheet/<uuid>`, `/app/drive/database/<uuid>`),
 the same as opening an existing file: the Drive sidebar stays mounted and no

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { ReloadReason } from '@app/observability/generated/native-diagnostics';
 import { reloadApp } from '@app/observability/reload';
 import { toast } from '@core/component/Toast/Toast';
@@ -66,6 +67,7 @@ const browserPage: ReloadPage = {
     toast.custom(
       {
         title: 'A new version of Macro is ready',
+        dismissLabel: t('common.maybeLater'),
         actions: [{ label: 'Reload', onClick: reload }],
       },
       { persistent: true }

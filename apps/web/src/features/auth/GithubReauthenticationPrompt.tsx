@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
@@ -72,6 +73,7 @@ export function GithubReauthenticationPrompt() {
     key: (item) => item,
     toast: () => ({
       title: 'Reconnect GitHub',
+      dismissLabel: t('common.maybeLater'),
       content(): string {
         return 'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.';
       },

@@ -7,7 +7,7 @@ const host = vi.hoisted(() => ({
   close: vi.fn(),
   popoverSplit: vi.fn(),
   openWithSplit: vi.fn(),
-  custom: vi.fn(),
+  success: vi.fn(),
   failure: vi.fn(),
   submission: undefined as FolderSubmission | undefined,
 }));
@@ -30,7 +30,7 @@ vi.mock('@components/app/split-panel', () => ({
   },
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { custom: host.custom, failure: host.failure },
+  toast: { success: host.success, failure: host.failure },
 }));
 vi.mock('./queries/folder-creation', () => ({
   createFolderCommands: () => ({}),
@@ -57,7 +57,7 @@ function submit() {
   ));
   fireEvent.click(view.getByRole('button', { name: 'Confirm' }));
   expect(host.close).toHaveBeenCalledOnce();
-  expect(host.custom).not.toHaveBeenCalled();
+  expect(host.success).not.toHaveBeenCalled();
   view.unmount();
   return completion;
 }
@@ -65,7 +65,7 @@ function submit() {
 it('closes before the result and never closes a later composer when the upload completes', async () => {
   const completion = submit();
   completion.resolve({ type: 'created', id: 'folder', name: 'Assets' });
-  await waitFor(() => expect(host.custom).toHaveBeenCalledOnce());
+  await waitFor(() => expect(host.success).toHaveBeenCalledOnce());
   expect(host.close).toHaveBeenCalledOnce();
   expect(host.openWithSplit).not.toHaveBeenCalled();
 });

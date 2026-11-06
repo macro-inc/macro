@@ -58,6 +58,8 @@ type ToastDismissStyle = 'button' | 'icon';
  */
 interface ToastOptions {
   subtext?: string;
+  /** Entity glyph beside the title, separate from the toast's status icon. */
+  titleIcon?: Component<{ class?: string }>;
   /** Auto-dismiss duration in ms. When omitted, the toast uses a default 4.5s timer. */
   duration?: number;
   /** When true, don't render this toast on mobile. */
@@ -272,6 +274,7 @@ export function ToastContent(props: {
   toastType?: ToastType;
   message?: string;
   subtext?: string;
+  titleIcon?: Component<{ class?: string }>;
   actions?: ToastAction[];
   actionLayout?: ToastActionLayout;
   persistent?: boolean;
@@ -374,6 +377,15 @@ export function ToastContent(props: {
                 <div class="min-w-0 flex-1">
                   <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
                     <Toast.Title class="min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere">
+                      <Show when={props.titleIcon}>
+                        {(Icon) => (
+                          <Dynamic
+                            component={Icon()}
+                            class="mr-1 inline-block size-4 align-text-bottom text-ink-muted"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </Show>
                       {props.custom?.title ?? props.message}
                     </Toast.Title>
                     <Show when={inlineActions()}>
@@ -528,6 +540,7 @@ function createToast(
 ) {
   const {
     subtext,
+    titleIcon,
     actions,
     actionLayout,
     duration,
@@ -558,6 +571,7 @@ function createToast(
         toastType={toastType}
         message={message}
         subtext={subtext}
+        titleIcon={titleIcon}
         actions={actions}
         actionLayout={actionLayout}
         duration={duration}

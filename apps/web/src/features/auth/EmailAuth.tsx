@@ -5,6 +5,7 @@ import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflict
 import { onboardingPathWithStep } from '@app/features/onboarding/core/next-target';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { AppEvents } from '@app/lib/analytics/app-events';
+import { t } from '@app/lib/i18n';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { publishLoginSuccess } from '@core/auth/login-events';
@@ -163,6 +164,7 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
   const toastId = toast.custom(
     {
       title: 'Email access required',
+      dismissLabel: t('common.maybeLater'),
       content: () =>
         "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
       actions: [

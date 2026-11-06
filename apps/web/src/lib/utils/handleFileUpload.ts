@@ -43,26 +43,24 @@ export function useHandleFileUpload(options: { projectId?: string } = {}) {
           );
           fireAndForget(refetchHistory(), 'file-upload');
 
-          toast.custom(
-            {
-              title: `${upload.name} uploaded`,
-              icon: FolderIcon,
-              actions: [
-                {
-                  label: t('entityActions.open'),
-                  icon: ArrowSquareOutIcon,
-                  trailingIcon: true,
-                  onClick: () => {
-                    openWithSplit(
-                      { type: 'project', id: createdProjectId },
-                      { referredFrom: 'file-upload', activate: true }
-                    );
-                  },
+          toast.success(`${upload.name} uploaded`, {
+            titleIcon: FolderIcon,
+            dismissStyle: 'icon',
+            stack: true,
+            actions: [
+              {
+                label: t('entityActions.open'),
+                icon: ArrowSquareOutIcon,
+                trailingIcon: true,
+                onClick: () => {
+                  openWithSplit(
+                    { type: 'project', id: createdProjectId },
+                    { referredFrom: 'file-upload', activate: true }
+                  );
                 },
-              ],
-            },
-            { dismissStyle: 'icon' }
-          );
+              },
+            ],
+          });
         }),
         'file-upload'
       );
