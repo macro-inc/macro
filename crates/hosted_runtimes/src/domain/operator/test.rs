@@ -851,3 +851,5 @@ async fn unconfigured_credentials_fail_closed_for_persona_computers() {
 }
 
 mod credentials;
+
+mod capacity;

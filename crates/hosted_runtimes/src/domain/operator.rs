@@ -373,6 +373,14 @@ where
                 Ok(None)
             }
             Effect::MakeRoom { host } => {
+                if !self
+                    .computer(computer_id)
+                    .await?
+                    .state
+                    .waiting_for_capacity()
+                {
+                    return Ok(None);
+                }
                 let coldest = self.repo.coldest_frozen(*host).await.map_err(internal)?;
                 match coldest {
                     Some(coldest) => {
@@ -382,7 +390,9 @@ where
                             .await
                             .map_err(internal)?;
                     }
-                    None => tracing::warn!(host_id = %host, "host is full and nothing is frozen"),
+                    None => {
+                        return Ok(Some(Event::RoomUnavailable));
+                    }
                 }
                 Ok(None)
             }

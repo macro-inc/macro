@@ -32,6 +32,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         macrod_misses: 0,
         recent_crashes: vec![],
         wake_requested: false,
+        capacity_wait: None,
     };
 
     let (next, effects) = transition(
@@ -56,6 +57,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
             macrod_misses: 0,
             recent_crashes: vec![],
             wake_requested: false,
+            capacity_wait: None,
         }
     );
     assert_eq!(
@@ -897,6 +899,7 @@ fn transitions() {
             macrod_misses: 0,
             recent_crashes: case.recent_crashes,
             wake_requested: case.wake_requested,
+            capacity_wait: None,
         };
 
         let (next, effects) = transition(
@@ -957,6 +960,8 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::PowerOn),
         Just(Event::PowerOff),
         Just(Event::WakeRetry),
+        Just(Event::CapacityChanged),
+        Just(Event::RoomUnavailable),
         (1i64..60).prop_map(|days| Event::CancelAtPeriodEnd {
             at: now() + Duration::days(days)
         }),
@@ -1113,3 +1118,5 @@ proptest! {
 }
 
 mod generation;
+
+mod capacity;

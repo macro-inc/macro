@@ -671,3 +671,4 @@ async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
 mod credentials;
 
 mod capacity;
+mod waiting;

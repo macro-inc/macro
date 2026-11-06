@@ -163,6 +163,16 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - **Waiting for capacity**: Preserve stopped/suspended fleet state and project
   `wake_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
   (also provisioning with `start: false`). Suppress setup progress while waiting.
+  Persist `CapacityWait` after the first MakeRoom: check room after 20, 40, 80,
+  160, 320, then 600 seconds, capped thereafter. Prompts and stale timers do not
+  bypass the deadline or enqueue another MakeRoom. MakeRoom reports
+  `RoomUnavailable` when nothing is frozen; retain the latch until
+  `CapacityChanged`, even across worker restarts. Capped retries recheck room
+  without repeating MakeRoom. Log each new deadline once.
+  When a computer leaves awake, enqueue immediate `CapacityChanged` timers for
+  waiters on its host in the same transaction. Lock the host before computer
+  and timer rows, including timer delivery, to serialize wake reservations and
+  avoid lock inversion. Power-off, successful wake and release clear the wait.
   Runtimes and Billing show "Waiting for space on the host" with a hint to turn
   off or release another computer. Waiting computers remain power-manageable.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →

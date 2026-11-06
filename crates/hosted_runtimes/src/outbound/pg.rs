@@ -145,6 +145,18 @@ fn units(resources: ComputerResources) -> Result<i32, PgComputerError> {
 }
 
 impl PgComputerRepo {
+    /// Serialize host transitions before locking computer or timer rows.
+    async fn lock_host(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        computer_id: ComputerId,
+    ) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "SELECT host.id FROM hosted_runtime_host host JOIN hosted_runtime computer ON computer.host_id = host.id WHERE computer.id = $1 FOR UPDATE OF host",
+            computer_id.as_uuid(),
+        ).fetch_optional(&mut **tx).await?;
+        Ok(())
+    }
+
     /// Run the transition for a computer already locked in `tx`, and store
     /// its state, effects and timers.
     async fn apply_locked(
@@ -153,6 +165,7 @@ impl PgComputerRepo {
         event: &Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
+        Self::lock_host(tx, computer_id).await?;
         let row = sqlx::query_as!(
             ComputerRow,
             r#"
@@ -258,6 +271,36 @@ impl PgComputerRepo {
         .execute(&mut **tx)
         .await?;
 
+        if computer.state.is_awake()
+            && !state.is_awake()
+            && let Some(host) = computer.state.host()
+        {
+            // A timer avoids locking another computer while applying this one.
+            sqlx::query!(
+                    r#"
+                    INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at)
+                    SELECT id, 'capacity_changed', $2 FROM hosted_runtime
+                    WHERE host_id = $1 AND id <> $3
+                        AND state->>'power' = 'on' AND state->>'wake_requested' = 'true'
+                        AND state->'phase'->>'phase' IN ('stopped', 'suspended', 'provisioning')
+                    ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = LEAST(hosted_runtime_timer.fire_at, EXCLUDED.fire_at)
+                    "#,
+                    host.into_inner(), now, computer_id.as_uuid(),
+                ).execute(&mut **tx).await?;
+        }
+        if state.capacity_wait.as_ref().map(|wait| wait.retry_at)
+            != computer
+                .state
+                .capacity_wait
+                .as_ref()
+                .map(|wait| wait.retry_at)
+            && let Some(wait) = &state.capacity_wait
+            && wait.retry_at > now
+        {
+            tracing::info!(computer_id = %computer_id, host_id = ?state.host(),
+                backoff_step = wait.backoff_step, retry_at = %wait.retry_at,
+                room_unavailable = wait.room_unavailable, "computer waiting for host capacity");
+        }
         computer.state = state;
         Ok(Some(computer))
     }
@@ -764,6 +807,7 @@ impl ComputerRepo for PgComputerRepo {
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
         let mut tx = self.pool.begin().await?;
+        Self::lock_host(&mut tx, timer.computer_id).await?;
         let deleted = sqlx::query!(
             r#"
             DELETE FROM hosted_runtime_timer

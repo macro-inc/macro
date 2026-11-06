@@ -11,6 +11,10 @@ use serde::{Deserialize, Serialize};
 use crate::domain::models::SubscriptionItem;
 use crate::domain::persona_credentials::EnrollmentGeneration;
 
+mod capacity;
+pub use capacity::CapacityWait;
+use capacity::{make_room, wake};
+
 #[cfg(test)]
 mod test;
 
@@ -30,6 +34,8 @@ pub const MAX_CRASHES: usize = 3;
 pub const RETENTION: Duration = Duration::days(14);
 /// How soon a wake blocked by full host capacity is retried.
 pub const WAKE_RETRY: Duration = Duration::seconds(20);
+/// Maximum interval between capacity checks for a waiting computer.
+pub const MAX_WAKE_RETRY: Duration = Duration::minutes(10);
 /// First restart backoff after a crash; doubles per recent crash.
 pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
 
@@ -166,6 +172,9 @@ pub struct ComputerState {
     pub recent_crashes: Vec<DateTime<Utc>>,
     /// A prompt or power-on is waiting for the computer to wake.
     pub wake_requested: bool,
+    /// Absent until a wake first asks for room; older rows start a fresh backoff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capacity_wait: Option<CapacityWait>,
 }
 
 impl ComputerState {
@@ -181,6 +190,7 @@ impl ComputerState {
             macrod_misses: 0,
             recent_crashes: Vec::new(),
             wake_requested: false,
+            capacity_wait: None,
         }
     }
 
@@ -283,6 +293,10 @@ pub enum Event {
     PowerOff,
     /// Timer: retry a wake that found the host full.
     WakeRetry,
+    /// Another computer on the host released awake units.
+    CapacityChanged,
+    /// MakeRoom found no frozen computer to suspend.
+    RoomUnavailable,
     /// Schedule cancellation at the billing period end.
     CancelAtPeriodEnd {
         /// Time the operation takes effect.
@@ -331,6 +345,8 @@ pub enum TimerKind {
     RestartDue,
     /// Retry a wake blocked by host capacity.
     WakeRetry,
+    /// Another computer on the host released awake units.
+    CapacityChanged,
     /// Apply the scheduled billing cancellation.
     PeriodEnded,
     /// The retained disk may now be deleted.
@@ -345,6 +361,7 @@ impl TimerKind {
             Self::SuspendDue => Event::SuspendDue,
             Self::RestartDue => Event::RestartDue,
             Self::WakeRetry => Event::WakeRetry,
+            Self::CapacityChanged => Event::CapacityChanged,
             Self::PeriodEnded => Event::PeriodEnded,
             Self::RetentionExpired => Event::RetentionExpired,
         }
@@ -718,8 +735,27 @@ pub fn transition(
         }
 
         Event::WakeRetry => {
-            if state.power == Power::On && state.wake_requested {
+            let due = state
+                .capacity_wait
+                .as_ref()
+                .is_none_or(|wait| now >= wait.retry_at);
+            if state.power == Power::On && state.wake_requested && due {
                 wake(&mut next, &mut effects, host, context);
+            }
+        }
+
+        Event::CapacityChanged => {
+            if state.waiting_for_capacity() {
+                next.capacity_wait = None;
+                wake(&mut next, &mut effects, host, context);
+            }
+        }
+
+        Event::RoomUnavailable => {
+            if state.waiting_for_capacity()
+                && let Some(wait) = &mut next.capacity_wait
+            {
+                wait.room_unavailable = true;
             }
         }
 
@@ -750,7 +786,7 @@ pub fn transition(
                     } else {
                         next.phase = Phase::Stopped { host };
                         next.wake_requested = true;
-                        make_room(&mut effects, host, now);
+                        make_room(&mut next, &mut effects, host, now);
                     }
                 } else {
                     next.phase = Phase::Stopped { host };
@@ -824,6 +860,9 @@ pub fn transition(
         }
     }
 
+    if !next.waiting_for_capacity() {
+        next.capacity_wait = None;
+    }
     (next, effects)
 }
 
@@ -837,6 +876,7 @@ fn boot(
     start: Option<Effect>,
 ) {
     next.phase = Phase::Booting { host };
+    next.capacity_wait = None;
     next.macrod_misses = 0;
     next.wake_requested = false;
     next.macrod_connected = false;
@@ -844,40 +884,6 @@ fn boot(
     effects.push(Effect::ScheduleTimer {
         kind: TimerKind::MacrodMissing,
         at: now + MACROD_GRACE,
-    });
-}
-
-/// Wake a stopped or suspended computer when the host has room; otherwise
-/// ask for room and retry. Awake computers need nothing.
-fn wake(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, context: Context) {
-    let start = match next.phase {
-        Phase::Stopped { .. } => Effect::Start { host },
-        Phase::Suspended {
-            saved_state: true, ..
-        } => Effect::Resume { host },
-        Phase::Suspended {
-            saved_state: false, ..
-        }
-        | Phase::Stopping { .. } => {
-            next.wake_requested = true;
-            return;
-        }
-        _ => return,
-    };
-
-    if context.host_has_room {
-        boot(next, effects, host, context.now, Some(start));
-    } else {
-        next.wake_requested = true;
-        make_room(effects, host, context.now);
-    }
-}
-
-fn make_room(effects: &mut Vec<Effect>, host: HostId, now: DateTime<Utc>) {
-    effects.push(Effect::MakeRoom { host });
-    effects.push(Effect::ScheduleTimer {
-        kind: TimerKind::WakeRetry,
-        at: now + WAKE_RETRY,
     });
 }
 
