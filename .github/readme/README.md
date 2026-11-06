@@ -7,10 +7,12 @@ README title. The white logo is downscaled to 480 pixels wide on a dark backing;
 the 512×70 asset displays at 256×35. A regular-weight paragraph avoids heading margins
 and GitHub’s horizontal divider.
 
-`header.png` is a 2400×900 continuous crop of the earlier desktop agent request
-and its completed linked code changes. The global navigation rail remains visible.
-The crop excludes native tabs, split close controls, and unrelated later messages.
-It uses a 32-pixel outer corner radius, matching the feature screenshots.
+`header.png` is a fresh 2400×1350 desktop workspace capture. The conversation
+starts below its pane title, with its completed linked code changes alongside.
+The full navigation rail, pane headers, and bottom composer remain intact.
+Only the native tab strip is excluded; ordinary split close controls remain
+inside the workspace rather than cutting away the headers to hide them.
+One subtle outer border and 32-pixel corner radius frame the complete surface.
 Keep the logo first, regular-weight title second, product third.
 
 ## Feature screenshots
