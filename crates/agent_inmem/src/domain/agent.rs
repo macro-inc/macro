@@ -34,6 +34,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
+use agent_code_mode::domain::ExecutionStatus;
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use agent_session::domain::model::AgentSessionId;
@@ -738,6 +739,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         agent.turn.text_chars = tracing::field::Empty,
                         agent.turn.tool_calls = tracing::field::Empty,
                         agent.turn.replied = tracing::field::Empty,
+                        agent.turn.tool_failures = tracing::field::Empty,
+                        agent.turn.code_executions = tracing::field::Empty,
+                        agent.turn.code_failures = tracing::field::Empty,
+                        agent.turn.compaction_wait_ms = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
@@ -968,10 +973,14 @@ async fn run_turn(
             "This message is too long. Split it into smaller messages or attach it as a file.",
         ));
     }
-    if compaction::before_turn(state, connection, &acp_session_id, &prompt, &cancel)
-        .await
-        .is_err()
-    {
+    let compaction_started = Instant::now();
+    let compacted =
+        compaction::before_turn(state, connection, &acp_session_id, &prompt, &cancel).await;
+    span.record(
+        "agent.turn.compaction_wait_ms",
+        elapsed_ms(compaction_started),
+    );
+    if compacted.is_err() {
         return Ok(StopReason::Cancelled);
     }
     let mcp_tools = tokio::select! {
@@ -1158,6 +1167,9 @@ async fn run_turn(
     result
 }
 
+/// The code-mode tool, whose failed programs come back as results.
+const EXECUTE_CODE: &str = "ExecuteCode";
+
 /// What a turn said, recorded on its `agent.acp.prompt` span so a turn that
 /// ended without answering is found by query, not by reading its log.
 #[derive(Default)]
@@ -1166,6 +1178,12 @@ struct TurnOutput {
     tool_calls: i64,
     /// Text after the last tool call: the answer the reader is left with.
     replied: bool,
+    /// Tool calls that errored, `ExecuteCode` runs that did not succeed
+    /// included.
+    tool_failures: i64,
+    /// `ExecuteCode` runs, and how many of them did not succeed.
+    code_executions: i64,
+    code_failures: i64,
 }
 
 impl TurnOutput {
@@ -1180,9 +1198,30 @@ impl TurnOutput {
                 self.replied = false;
             }
             StreamPart::ToolCallStarted(_) => self.replied = false,
+            StreamPart::ToolResponse(ToolResponse::Err { name, .. }) => {
+                self.tool_failures += 1;
+                if name == EXECUTE_CODE {
+                    self.code_executions += 1;
+                    self.code_failures += 1;
+                }
+            }
+            // A program that failed is still a result the tool returns.
+            StreamPart::ToolResponse(ToolResponse::Json { name, json, .. })
+                if name == EXECUTE_CODE =>
+            {
+                self.code_executions += 1;
+                let status = json
+                    .get("status")
+                    .cloned()
+                    .and_then(|status| serde_json::from_value(status).ok());
+                if status != Some(ExecutionStatus::Succeeded) {
+                    self.tool_failures += 1;
+                    self.code_failures += 1;
+                }
+            }
             StreamPart::ToolCallArgs { .. }
             | StreamPart::Thinking(_)
-            | StreamPart::ToolResponse(_)
+            | StreamPart::ToolResponse(ToolResponse::Json { .. })
             | StreamPart::Usage(_) => {}
         }
     }
@@ -1199,6 +1238,9 @@ impl TurnOutput {
         span.record("agent.turn.text_chars", self.text_chars);
         span.record("agent.turn.tool_calls", self.tool_calls);
         span.record("agent.turn.replied", self.replied);
+        span.record("agent.turn.tool_failures", self.tool_failures);
+        span.record("agent.turn.code_executions", self.code_executions);
+        span.record("agent.turn.code_failures", self.code_failures);
         if stop_reason == "end_turn" && !self.replied {
             tracing::warn!(
                 tool_calls = self.tool_calls,

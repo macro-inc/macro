@@ -26,9 +26,12 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
+use ai_toolset::SearchableTool;
 use genai_telemetry::messages::{self, MediaSource};
 use genai_telemetry::{
     ContentPolicy, GenAiSpanExt as _, attr, bound_messages, bound_tool_definitions,
@@ -43,6 +46,8 @@ use rig_core::message::{
     ToolResultContent, UserContent,
 };
 use rig_core::streaming::StreamingCompletionResponse;
+
+use crate::system_prompt::{MeasuredSection, SystemPrompt, short_hash};
 
 /// Session-scoped telemetry state shared by the traced model, the hooks and
 /// the agent span. Cheap to clone; all clones share one state.
@@ -61,6 +66,9 @@ struct Inner {
     enabled: bool,
     /// The routed `(provider, model)`, set once routing has decided.
     model: OnceLock<(String, String)>,
+    /// The session's system prompt sections and searchable tool names, which
+    /// every model call's size fields are measured against.
+    prompt: OnceLock<PromptShape>,
     /// The `chat` span of the model call in flight: parked by
     /// [`TracedModel`] on request, consumed by [`ChatSpanHook`] on response.
     /// Holding the handle keeps the span open, so it is always taken out again.
@@ -71,6 +79,8 @@ struct Inner {
     /// The time to first chunk and its kind of the current run's first model
     /// call, until [`Self::take_run_first_chunk`].
     run_first_chunk: Mutex<Option<(Duration, &'static str)>>,
+    /// Model calls requested since the last [`Self::take_run_model_calls`].
+    run_model_calls: AtomicI64,
 }
 
 impl GenAiContext {
@@ -86,9 +96,11 @@ impl GenAiContext {
             policy,
             enabled,
             model: OnceLock::new(),
+            prompt: OnceLock::new(),
             chat_span: Mutex::new(None),
             chat_requested_at: Mutex::new(None),
             run_first_chunk: Mutex::new(None),
+            run_model_calls: AtomicI64::new(0),
         }))
     }
 
@@ -111,6 +123,16 @@ impl GenAiContext {
         let _ = self.0.model.set((provider.to_owned(), model.to_owned()));
     }
 
+    /// Record the session's system prompt sections and the names of the
+    /// tools it loads by search, for the size fields of each model call.
+    /// First call wins.
+    pub(crate) fn set_prompt(&self, system_prompt: &SystemPrompt, searchable: &[SearchableTool]) {
+        let _ = self.0.prompt.set(PromptShape {
+            sections: system_prompt.sections().to_vec(),
+            searchable: searchable.iter().map(|tool| tool.name.clone()).collect(),
+        });
+    }
+
     pub(crate) fn provider_name(&self) -> Option<&str> {
         self.0.model.get().map(|(provider, _)| provider.as_str())
     }
@@ -124,6 +146,8 @@ impl GenAiContext {
     /// [`Self::record_response`].
     fn record_request(&self, request: &CompletionRequest) {
         let span = tracing::Span::current();
+        self.record_request_sizes(&span, request);
+        self.0.run_model_calls.fetch_add(1, Ordering::Relaxed);
         if self.0.enabled {
             self.record_request_fields(&span, request);
         }
@@ -133,6 +157,51 @@ impl GenAiContext {
             .chat_requested_at
             .lock()
             .expect("chat request time poisoned") = Some(Instant::now());
+    }
+
+    /// Record how large each part of the request is, and a hash of each
+    /// part a provider caches, so a slow or expensive call can be traced to
+    /// the part that grew and a cache miss to the part that changed. Sizes
+    /// are structure, not content: recorded whatever the content policy.
+    fn record_request_sizes(&self, span: &tracing::Span, request: &CompletionRequest) {
+        let searchable = self.0.prompt.get().map(|prompt| {
+            for measured in &prompt.sections {
+                span.set_u64(measured.section.bytes_key(), measured.bytes as u64);
+                span.set_str(measured.section.hash_key(), measured.hash.clone());
+            }
+            &prompt.searchable
+        });
+        let (loaded, eager): (Vec<_>, Vec<_>) = request
+            .tools
+            .iter()
+            .partition(|tool| searchable.is_some_and(|searchable| searchable.contains(&tool.name)));
+        for (tools, count_key, bytes_key, hash_key) in [
+            (
+                eager,
+                attr::MACRO_PROMPT_TOOLS_EAGER_COUNT,
+                attr::MACRO_PROMPT_TOOLS_EAGER_BYTES,
+                attr::MACRO_PROMPT_TOOLS_EAGER_HASH,
+            ),
+            (
+                loaded,
+                attr::MACRO_PROMPT_TOOLS_LOADED_COUNT,
+                attr::MACRO_PROMPT_TOOLS_LOADED_BYTES,
+                attr::MACRO_PROMPT_TOOLS_LOADED_HASH,
+            ),
+        ] {
+            let schemas = serde_json::to_vec(&tools).unwrap_or_default();
+            span.set_u64(count_key, tools.len() as u64);
+            span.set_u64(bytes_key, schemas.len() as u64);
+            span.set_str(hash_key, short_hash(&schemas));
+        }
+        let sizes = HistorySizes::of(request.chat_history.iter());
+        span.set_u64(attr::MACRO_PROMPT_MESSAGES, sizes.messages);
+        span.set_u64(attr::MACRO_PROMPT_HISTORY_BYTES, sizes.history_bytes);
+        span.set_u64(
+            attr::MACRO_PROMPT_TOOL_RESULTS_BYTES,
+            sizes.tool_result_bytes,
+        );
+        span.set_u64(attr::MACRO_PROMPT_TOOL_RESULTS, sizes.tool_results);
     }
 
     fn record_request_fields(&self, span: &tracing::Span, request: &CompletionRequest) {
@@ -212,6 +281,12 @@ impl GenAiContext {
     /// The time to first chunk and its kind of the first model call recorded
     /// since the last take: taken as a run starts, to clear the slot, and as
     /// it ends.
+    /// How many model calls were requested since the last take: taken as a
+    /// run starts, to clear the count, and as it ends.
+    pub(crate) fn take_run_model_calls(&self) -> i64 {
+        self.0.run_model_calls.swap(0, Ordering::Relaxed)
+    }
+
     pub(crate) fn take_run_first_chunk(&self) -> Option<(Duration, &'static str)> {
         self.0
             .run_first_chunk
@@ -378,6 +453,54 @@ impl GenAiContext {
             agent_span.set_bool(attr::MACRO_CONTENT_TRUNCATED, true);
         }
     }
+}
+
+/// The session's system prompt, measured, and which tools it loads by search.
+struct PromptShape {
+    sections: Vec<MeasuredSection>,
+    searchable: HashSet<String>,
+}
+
+/// How a request's conversation splits between tool results and everything
+/// else. System messages are the prompt's per-session part, measured as its
+/// sections instead.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct HistorySizes {
+    messages: u64,
+    history_bytes: u64,
+    tool_results: u64,
+    tool_result_bytes: u64,
+}
+
+impl HistorySizes {
+    fn of<'a>(history: impl Iterator<Item = &'a Message>) -> Self {
+        let mut sizes = Self::default();
+        for message in history {
+            match message {
+                Message::System { .. } => continue,
+                Message::User { content } => {
+                    for part in content.iter() {
+                        let bytes = serialized_len(part);
+                        if matches!(part, UserContent::ToolResult(_)) {
+                            sizes.tool_results += 1;
+                            sizes.tool_result_bytes += bytes;
+                        } else {
+                            sizes.history_bytes += bytes;
+                        }
+                    }
+                }
+                Message::Assistant { content, .. } => {
+                    sizes.history_bytes += content.iter().map(serialized_len).sum::<u64>();
+                }
+            }
+            sizes.messages += 1;
+        }
+        sizes
+    }
+}
+
+fn serialized_len(value: &impl serde::Serialize) -> u64 {
+    serde_json::to_vec(value).map_or(0, |bytes| bytes.len() as u64)
 }
 
 /// A [`CompletionModel`] that records the request side of every model call
