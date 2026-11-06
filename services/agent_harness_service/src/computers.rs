@@ -59,7 +59,7 @@ pub type Operator = ComputerOperator<
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// runs no computers (`COMPUTERS_FLEET=disabled`).
-pub async fn operator(
+pub(crate) async fn operator(
     config: &Config,
     fleet_config: ComputerFleetConfig,
     pool: &PgPool,
