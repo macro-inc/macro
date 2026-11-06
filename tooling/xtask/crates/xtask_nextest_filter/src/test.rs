@@ -67,7 +67,7 @@ fn unmapped_files_alone_yield_none() {
 #[test]
 fn package_readme_selects_its_package() {
     let graph = build_graph(false).expect("cargo metadata");
-    let selection = select_in_repo(&graph, &["crates/webhook/README.md"]);
+    let selection = select_in_repo(&graph, &["crates/integrations/webhook/README.md"]);
     assert!(
         selected_packages(&selection).contains("webhook"),
         "package README must select its owner: {selection:?}"

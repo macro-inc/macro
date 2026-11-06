@@ -254,10 +254,10 @@ gates, not successful observations:
 ## Fixture checks
 
 ```sh
-ls crates/import/src/outbound/mcp_slack_source/fixtures/
-jq . crates/import/src/outbound/mcp_slack_source/fixtures/*.json
+ls crates/integrations/import/src/outbound/mcp_slack_source/fixtures/
+jq . crates/integrations/import/src/outbound/mcp_slack_source/fixtures/*.json
 grep -n "Canonical slug" docs/runbooks/slack-live-channel-import.md
-grep -rn "@" crates/import/src/outbound/mcp_slack_source/fixtures/ | grep -v example.com
+grep -rn "@" crates/integrations/import/src/outbound/mcp_slack_source/fixtures/ | grep -v example.com
 ```
 
 The final pipeline should emit nothing (exit status 1 means no matching lines).

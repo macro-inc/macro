@@ -75,8 +75,6 @@ members = [
   "crates/folds/claude_fold",
   "crates/folds/codex_fold",
   "crates/forms",
-  "crates/git_patch",
-  "crates/granola_sync",
   "crates/graphql/complete_graph",
   "crates/graphql/graphql_activity",
   "crates/graphql/graphql_calendar",
@@ -99,12 +97,16 @@ members = [
   "crates/graphql/graphql_work_feed",
   "crates/harnesses",
   "crates/image_generation",
-  "crates/import",
-  "crates/import_jira",
-  "crates/import_linear",
-  "crates/import_notion",
-  "crates/import_tracker",
   "crates/integration_tests/local_e2e",
+  "crates/integrations/git_patch",
+  "crates/integrations/granola_sync",
+  "crates/integrations/import",
+  "crates/integrations/import_jira",
+  "crates/integrations/import_linear",
+  "crates/integrations/import_notion",
+  "crates/integrations/import_tracker",
+  "crates/integrations/unfurl",
+  "crates/integrations/webhook_signature",
   "crates/item_filter_index",
   "crates/jev",
   "crates/mcp_select",
@@ -156,10 +158,8 @@ members = [
   "crates/types/models_forms",
   "crates/types/notification_state",
   "crates/types/trigger_context",
-  "crates/unfurl",
   "crates/universal_input",
   "crates/web_search",
-  "crates/webhook_signature",
   "crates/whatsapp/whatsapp_e2e",
   "crates/whatsapp/whatsapp_fake_server",
   "crates/whatsapp/whatsapp_linked",
@@ -639,12 +639,12 @@ frecency = { path = "crates/entities/frecency" }
 fusionauth = { path = "crates/clients/fusionauth" }
 genai_telemetry = { path = "crates/platform/genai_telemetry" }
 generic_email_domains = { path = "crates/email/generic_email_domains" }
-git_patch = { path = "crates/git_patch" }
-github = { path = "crates/github", default-features = false }
-github_pull_requests = { path = "crates/github_pull_requests", default-features = false }
+git_patch = { path = "crates/integrations/git_patch" }
+github = { path = "crates/integrations/github", default-features = false }
+github_pull_requests = { path = "crates/integrations/github_pull_requests", default-features = false }
 gmail_client = { path = "crates/clients/gmail_client" }
 google_token = { path = "crates/email/google_token" }
-granola_sync = { path = "crates/granola_sync" }
+granola_sync = { path = "crates/integrations/granola_sync" }
 graphql_activity = { path = "crates/graphql/graphql_activity" }
 graphql_calendar = { path = "crates/graphql/graphql_calendar" }
 graphql_channel = { path = "crates/graphql/graphql_channel" }
@@ -669,11 +669,11 @@ harness_id = { path = "crates/types/harness_id" }
 harness_token = { path = "crates/types/harness_token" }
 harnesses = { path = "crates/harnesses", default-features = false }
 image_generation = { path = "crates/image_generation" }
-import = { path = "crates/import" }
-import_jira = { path = "crates/import_jira" }
-import_linear = { path = "crates/import_linear" }
-import_notion = { path = "crates/import_notion" }
-import_tracker = { path = "crates/import_tracker" }
+import = { path = "crates/integrations/import" }
+import_jira = { path = "crates/integrations/import_jira" }
+import_linear = { path = "crates/integrations/import_linear" }
+import_notion = { path = "crates/integrations/import_notion" }
+import_tracker = { path = "crates/integrations/import_tracker" }
 initiative = { path = "crates/projects/initiative", default-features = false }
 initiative_description = { path = "crates/projects/initiative_description" }
 invite_email = { path = "crates/email/invite_email" }
@@ -806,7 +806,7 @@ task_dedup = { path = "crates/projects/task_dedup" }
 teams = { path = "crates/accounts/teams", default-features = false }
 trigger_context = { path = "crates/types/trigger_context" }
 turso-opfs = { path = "crates/client/turso-opfs" }
-unfurl = { path = "crates/unfurl" }
+unfurl = { path = "crates/integrations/unfurl" }
 unfurl_service = { path = "services/unfurl_service" }
 universal_input = { path = "crates/universal_input" }
 upstream_error = { path = "crates/platform/upstream_error", default-features = false }
@@ -814,8 +814,8 @@ user_api_key = { path = "crates/accounts/user_api_key" }
 user_language = { path = "crates/accounts/user_language" }
 user_quota = { path = "crates/types/user_quota" }
 web_search = { path = "crates/web_search" }
-webhook = { path = "crates/webhook", default-features = false }
-webhook_signature = { path = "crates/webhook_signature" }
+webhook = { path = "crates/integrations/webhook", default-features = false }
+webhook_signature = { path = "crates/integrations/webhook_signature" }
 whatsapp_fake_server = { path = "crates/whatsapp/whatsapp_fake_server" }
 whatsapp_linked = { path = "crates/whatsapp/whatsapp_linked" }
 whatsapp_session_service = { path = "services/whatsapp_session_service" }
