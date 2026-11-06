@@ -4022,6 +4022,10 @@ export type FetchWebPageErrors = {
      */
     402: WebErrorBody;
     /**
+     * Web fetch is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
      * The page could not be read
      */
     422: WebErrorBody;
@@ -4034,7 +4038,7 @@ export type FetchWebPageErrors = {
      */
     502: WebErrorBody;
     /**
-     * Web fetch unconfigured, busy, or usage validation unavailable
+     * Web fetch busy, or usage validation unavailable
      */
     503: WebErrorBody;
 };
@@ -4071,6 +4075,10 @@ export type SearchWebErrors = {
      */
     402: WebErrorBody;
     /**
+     * Web search is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
      * Per-user hourly rate limit exceeded
      */
     429: unknown;
@@ -4079,7 +4087,7 @@ export type SearchWebErrors = {
      */
     502: WebErrorBody;
     /**
-     * Web search unconfigured, busy, or usage validation unavailable
+     * Web search busy, or usage validation unavailable
      */
     503: WebErrorBody;
 };
