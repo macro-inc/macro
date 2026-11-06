@@ -7,8 +7,8 @@
 #
 # wasm-cache-key.ts computes the key from the package's workspace dependency
 # closure (.github/workspace-dep-closures.json), its slice of Cargo.lock, the
-# root manifest, the toolchain pins, the shared assets build scripts read, its
-# profile's env and the build command.
+# root manifest, the toolchain and Nix definitions, the shared assets build
+# scripts read, its profile's env and the build command.
 #
 # usage: cached-wasm-build.sh <closure package> <out dir> -- <build command...>
 set -euo pipefail

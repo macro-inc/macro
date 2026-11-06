@@ -90,6 +90,7 @@ const BASE_FILES = {
   'Cargo.toml': MANIFEST,
   'Cargo.lock': LOCK,
   'rust-toolchain.toml': '[toolchain]\nchannel = "1.94.0"\n',
+  'nix/tools.nix': '{ wasm-pack = "0.15.0"; }\n',
   '.github/workspace-dep-closures.json': JSON.stringify({
     closures: { engine: ['crates/engine'], server: ['crates/server'] },
   }),
@@ -156,6 +157,7 @@ describe('wasmCacheKey', () => {
       key({ 'Cargo.toml': MANIFEST.replace('png = "0.17"', 'png = "0.18"') }),
       key({ 'Cargo.toml': MANIFEST.replace('lto = true', 'lto = false') }),
       key({ 'rust-toolchain.toml': '[toolchain]\nchannel = "1.95.0"\n' }),
+      key({ 'nix/tools.nix': '{ wasm-pack = "0.15.1"; }\n' }),
       key({}, { CARGO_PROFILE_ENGINE_WASM_LTO: 'off' }),
       wasmCacheKey(workspace(BASE_FILES), 'engine', [...BUILD, '--target', 'web'], {}),
     ];

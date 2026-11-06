@@ -2,7 +2,8 @@
 // reads, so a change elsewhere in the workspace keeps the key.
 //
 // - The files of the package's workspace dependency closure
-//   (.github/workspace-dep-closures.json), the toolchain and Nix pins, `.cargo`
+//   (.github/workspace-dep-closures.json), the toolchain pin, the Nix flake and
+//   its definitions (they choose wasm-pack, wasm-bindgen and binaryen), `.cargo`
 //   and `static_assets`.
 // - Its slice of Cargo.lock: every locked package reachable from the closure's
 //   crates. Lockfile edges cover every target and dependency kind, so the slice
@@ -186,6 +187,8 @@ export function wasmCacheKey(
     ...directories,
     'rust-toolchain.toml',
     'flake.lock',
+    'flake.nix',
+    'nix',
     '.cargo',
     'static_assets',
   ])
