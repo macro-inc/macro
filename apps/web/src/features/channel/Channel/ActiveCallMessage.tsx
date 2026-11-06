@@ -45,7 +45,7 @@ export function ActiveCallMessage(props: { channelId: string }) {
   return (
     <Show when={active.isSuccess && active.data && !call.isInThisChannel()}>
       <div class="mb-2 flex w-full justify-center touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
-        <div class="macro-message-width flex w-full min-w-0 items-center gap-3 rounded-2xl border border-edge-muted bg-surface-2 p-2.5">
+        <div class="macro-message-width flex w-full min-w-0 items-center gap-3 rounded-2xl border border-success/20 bg-success/10 p-2.5">
           <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success/10">
             <CallWaveform class="size-5" />
           </span>

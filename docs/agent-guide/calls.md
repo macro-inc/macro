@@ -98,7 +98,8 @@ With the `enable-call-channel-thread` server flag on for the caller, a new call 
 already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
 
 While a call is active and you have not joined, a compact **Call in progress**
-card stays above the composer with live duration, attendee avatars and **Join**.
+card stays above the composer with a light success tint, live duration, attendee
+avatars and **Join**; both themes keep the normal readable text rather than a solid green fill.
 The channel header also shows attendees, duration and Join. The live status pill
 opens the call tab: its pre-join screen when outside the call, or the live view
 when already connected. Clicking that pill never joins automatically. On phones, Join is
