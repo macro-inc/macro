@@ -24,6 +24,8 @@ function toBlob(content: FileContent): Blob {
  *
  * Change the text of an existing Markdown document or task body in place, with `document.edit(instructions)` in code or the `EditDocument` tool where code isn't available. Never recreate the document or upload its Markdown to change its text. PDF, Word and other uploaded files can't be edited this way.
  *
+ * When a program already holds the exact new Markdown, as an integration syncing from another system does, read `document.contentWithRevision()` and write with `document.setContent(markdown, {expectedRevision})`: the write lands only if nobody changed the document since the read, and throws `DocumentChangedError` otherwise, so read again and reapply instead of overwriting.
+ *
  * ## Linking Macro items inside document content
  *
  * `CreateDocument` content (the `fileContent` argument) is rendered with the same Markdown parser used for chat responses, channel messages, and email bodies inside the Macro app — but only for Markdown (`.md`) documents. Non-Markdown documents (e.g. PDF, CSV, PNG, XLSX, DOCX, created by passing a non-`md` `file_extension`) are stored as raw file bytes and must never contain Markdown syntax or mention tags.

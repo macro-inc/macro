@@ -1,5 +1,7 @@
 //! Outbound adapter for the AI editing worker.
 
+#[cfg(feature = "ai_tools")]
+use crate::domain::ports::editing::MarkdownWrite;
 use crate::domain::ports::editing::{
     EditMode, EditResult, EditUsage, EditingWorkerService, EditorName,
 };
@@ -43,6 +45,29 @@ impl ReqwestEditingWorkerClient {
 
 impl ReqwestEditingWorkerClient {
     #[cfg(feature = "ai_tools")]
+    async fn markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: serde_json::Value,
+    ) -> anyhow::Result<reqwest::Response> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        Ok(self
+            .client
+            .post(format!("{}/markdown", self.worker_url))
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(45))
+            .json(&serde_json::json!({
+                "documentId": document_id,
+                "documentToken": document_token.as_str(),
+                "request": request,
+            }))
+            .send()
+            .await?)
+    }
+
+    #[cfg(feature = "ai_tools")]
     async fn comment_mark(
         &self,
         document_id: &str,
@@ -64,6 +89,17 @@ impl ReqwestEditingWorkerClient {
             .send()
             .await?)
     }
+}
+
+/// The worker's `error` message, or a generic one when its body has none.
+#[cfg(feature = "ai_tools")]
+async fn worker_error(response: reqwest::Response) -> String {
+    response
+        .json::<serde_json::Value>()
+        .await
+        .ok()
+        .and_then(|body| body.get("error")?.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "The editing worker failed".to_owned())
 }
 
 impl EditingWorkerService for ReqwestEditingWorkerClient {
@@ -202,6 +238,61 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             anyhow::bail!("{message} (HTTP {status})");
         }
         Ok(response.json().await?)
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn read_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+        let response = self
+            .markdown(
+                document_id,
+                document_token,
+                serde_json::json!({ "action": "read" }),
+            )
+            .await?;
+        let status = response.status();
+        anyhow::ensure!(
+            status.is_success(),
+            "{} (HTTP {status})",
+            worker_error(response).await
+        );
+        Ok(response.json().await?)
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn write_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        expected_revision: &str,
+        markdown: &str,
+    ) -> anyhow::Result<MarkdownWrite> {
+        let response = self
+            .markdown(
+                document_id,
+                document_token,
+                serde_json::json!({
+                    "action": "write",
+                    "expectedRevision": expected_revision,
+                    "markdown": markdown,
+                }),
+            )
+            .await?;
+        let status = response.status();
+        if status == reqwest::StatusCode::CONFLICT {
+            return Ok(MarkdownWrite::Conflict);
+        }
+        anyhow::ensure!(
+            status.is_success(),
+            "{} (HTTP {status})",
+            worker_error(response).await
+        );
+        Ok(MarkdownWrite::Written(response.json().await?))
     }
 
     #[cfg(feature = "ai_tools")]

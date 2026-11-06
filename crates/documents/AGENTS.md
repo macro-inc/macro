@@ -44,6 +44,10 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `src/domain/markdown_body.rs`: `GET`/`PUT /{id}/markdown`, the SDK's
+  `contentWithRevision`/`setContent`. The worker's `POST /markdown` reads the
+  body with sync-service's revision and commits a write only at the revision
+  the caller read (409 `revision_conflict` otherwise). No model, no billing.
 - `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
   and runs UploadFile's `DocumentCreator::upload_file`, minting the project
   receipt from the caller like the tool. It exists for clients that cannot PUT

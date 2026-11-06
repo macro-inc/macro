@@ -6066,6 +6066,54 @@ export type DocumentInteractionMetadata = {
     reason: InteractionReason;
 };
 
+/**
+ * A markdown document's body and the revision it was read at.
+ */
+export type DocumentMarkdown = {
+    /**
+     * The body as Markdown, in the format `text-content` returns.
+     */
+    markdown: string;
+    /**
+     * The document's version, as sync-service encodes it. Pass it back to
+     * write the body only if nobody has changed the document since.
+     */
+    revision: string;
+};
+
+/**
+ * Why a body read or write did not complete.
+ */
+export type DocumentMarkdownFailure = {
+    /**
+     * What went wrong.
+     */
+    error: DocumentMarkdownFailureCode;
+    /**
+     * What to do next; the cause is logged, never returned.
+     */
+    message: string;
+};
+
+/**
+ * Error code of a body read or write that did not complete.
+ */
+export type DocumentMarkdownFailureCode = 'revision_conflict' | 'read_failed' | 'write_failed';
+
+/**
+ * A body write that landed, or found the body already reading that way.
+ */
+export type DocumentMarkdownWritten = {
+    /**
+     * Whether the body changed; `false` when it already read that way.
+     */
+    changed: boolean;
+    /**
+     * The document's version after the write.
+     */
+    revision: string;
+};
+
 export type DocumentMetadata = {
     /**
      * The id of the document this document branched from
@@ -17717,6 +17765,21 @@ export type WithProjectId = {
     id: string;
 };
 
+/**
+ * The body to write and the revision it was written against.
+ */
+export type WriteDocumentMarkdownRequest = {
+    /**
+     * The `revision` from the read this body is based on. The write applies
+     * only if the document is still at this revision.
+     */
+    expectedRevision: string;
+    /**
+     * The whole new body, as Markdown.
+     */
+    markdown: string;
+};
+
 export type ListAccountManagersData = {
     body?: never;
     path?: never;
@@ -23266,6 +23329,96 @@ export type GetDocumentLocationV3Responses = {
 };
 
 export type GetDocumentLocationV3Response = GetDocumentLocationV3Responses[keyof GetDocumentLocationV3Responses];
+
+export type GetDocumentMarkdownData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type GetDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The body could not be read
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type GetDocumentMarkdownError = GetDocumentMarkdownErrors[keyof GetDocumentMarkdownErrors];
+
+export type GetDocumentMarkdownResponses = {
+    200: DocumentMarkdown;
+};
+
+export type GetDocumentMarkdownResponse = GetDocumentMarkdownResponses[keyof GetDocumentMarkdownResponses];
+
+export type WriteDocumentMarkdownData = {
+    body: WriteDocumentMarkdownRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/markdown';
+};
+
+export type WriteDocumentMarkdownErrors = {
+    /**
+     * Not a markdown document, or an empty revision
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The document changed since the revision was read; nothing was written
+     */
+    409: DocumentMarkdownFailure;
+    /**
+     * The write failed and may have applied
+     */
+    502: DocumentMarkdownFailure;
+};
+
+export type WriteDocumentMarkdownError = WriteDocumentMarkdownErrors[keyof WriteDocumentMarkdownErrors];
+
+export type WriteDocumentMarkdownResponses = {
+    200: DocumentMarkdownWritten;
+};
+
+export type WriteDocumentMarkdownResponse = WriteDocumentMarkdownResponses[keyof WriteDocumentMarkdownResponses];
 
 export type PermanentlyDeleteDocumentData = {
     body?: never;
