@@ -28,7 +28,6 @@ rec {
       envRevision ? "reference",
       devBinaries ? null,
       frontend ? null,
-      devBootstrap ? null,
       enableGmail ? false,
       seeded ? true,
       expose ? true,
@@ -47,7 +46,6 @@ rec {
           nix2container
           crane
           fenix
-          devBootstrap
           ;
       };
       settings = {

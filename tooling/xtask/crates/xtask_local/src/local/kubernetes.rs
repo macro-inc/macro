@@ -394,7 +394,7 @@ fn parameters(args: &InstanceArgs) -> Result<Value> {
     }
     Ok(
         json!({"name": args.name, "host": super::tls::hostname()?, "slot": args.slot,
-        "devBinaries": binaries, "devBootstrap": if args.full_images { None } else { Some(std::env::current_exe()?) }, "seeded": !args.no_seed, "expose": !args.headless }),
+        "devBinaries": binaries, "seeded": !args.no_seed, "expose": !args.headless }),
     )
 }
 

@@ -5,7 +5,6 @@
   nix2container,
   crane,
   fenix,
-  devBootstrap ? null,
 }:
 let
   inherit (pkgs) lib;
@@ -107,18 +106,21 @@ rec {
       entrypoint = [ "/bin/true" ];
     };
   };
-  bootstrap = (
-    if devBootstrap == null then
-      import ./rust.nix { inherit pkgs crane fenix; }
-    else
-      platformLib.wrapBinary {
-        name = "xtask_local";
-        binary = builtins.path {
-          path = devBootstrap;
-          name = "kube-bootstrap-binary";
-        };
-      }
-  );
+  bootstrap =
+    let
+      built = import ./rust.nix { inherit pkgs crane fenix; };
+    in
+    pkgs.runCommand "macro-kubernetes-bootstrap-runtime" { nativeBuildInputs = [ pkgs.patchelf ]; } ''
+      install -Dm755 ${built}/bin/xtask_local $out/bin/xtask_local
+      patchelf --set-rpath ${
+        lib.makeLibraryPath [
+          pkgs.openssl
+          pkgs.stdenv.cc.cc.lib
+          pkgs.glibc
+        ]
+      } $out/bin/xtask_local
+      env -u LD_LIBRARY_PATH $out/bin/xtask_local --help >/dev/null
+    '';
   localstackImage =
     registry:
     let

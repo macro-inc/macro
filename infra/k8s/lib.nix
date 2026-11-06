@@ -116,38 +116,6 @@ rec {
       '
     '';
 
-  # Turn a binary built outside Nix (Cargo in the dev shell, for the fast
-  # loop) into a store path with a complete closure. Cargo's output finds
-  # OpenSSL only through the dev shell's LD_LIBRARY_PATH, so pin the loader
-  # and library path to this nixpkgs' glibc, OpenSSL, and libgcc_s (the only
-  # libraries the services link); Nix then records them as references.
-  wrapBinary =
-    {
-      name,
-      binary,
-    }:
-    pkgs.runCommand name
-      {
-        nativeBuildInputs = [
-          pkgs.patchelf
-          pkgs.binutils
-        ];
-      }
-      ''
-        install -Dm755 ${binary} $out/bin/${name}
-        # Debug info is most of a debug build's size. Panics and traces keep
-        # their symbol names; only line numbers go.
-        strip --strip-debug $out/bin/${name}
-        patchelf --set-interpreter ${pkgs.glibc}/lib/ld-linux-x86-64.so.2 \
-          --set-rpath ${
-            lib.makeLibraryPath [
-              pkgs.openssl
-              pkgs.stdenv.cc.cc.lib
-            ]
-          } \
-          $out/bin/${name}
-      '';
-
   # Workload description -> Kubernetes resources (nixidy `resources` shape). Mirrors what compose expressed: one Deployment (Recreate, one
   # replica unless the size says otherwise), a Service named after the
   # workload plus one per alias, readiness from a command or HTTP path, PVCs
