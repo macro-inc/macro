@@ -1,0 +1,34 @@
+{
+  "localstack": {
+    "imageName": "localstack/localstack",
+    "imageTag": "4",
+    "entrypoint": [
+      "docker-entrypoint.sh"
+    ],
+    "cmd": [],
+    "workingDir": "/opt/code/localstack/",
+    "user": ""
+  },
+  "redis": {
+    "imageName": "redis/redis-stack",
+    "imageTag": "latest",
+    "entrypoint": [],
+    "cmd": [
+      "/entrypoint.sh"
+    ],
+    "workingDir": "/",
+    "user": ""
+  },
+  "kafka": {
+    "imageName": "apache/kafka",
+    "imageTag": "3.9.1",
+    "entrypoint": [
+      "/__cacert_entrypoint.sh"
+    ],
+    "cmd": [
+      "/etc/kafka/docker/run"
+    ],
+    "workingDir": "/",
+    "user": "appuser"
+  }
+}

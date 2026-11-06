@@ -78,7 +78,12 @@
           in
           # Packaging helpers are separate derivation inputs, not frontend or
           # WASM sources. Avoid recompiling both for AppImage-only changes.
-          rel != "nix"
+          rel != "infra/k8s"
+          && !(lib.hasPrefix "infra/k8s/" rel)
+          && !(lib.hasPrefix "tooling/xtask/crates/xtask_local/src/local/kubernetes" rel)
+          && !(lib.hasPrefix ".agents/skills/kube-local" rel)
+          && rel != "docs/development/local-kubernetes.md"
+          && rel != "nix"
           && !(lib.hasPrefix "nix/" rel)
           && !(lib.hasPrefix "nix-support/appimage-" rel)
           && !(lib.hasPrefix "node_modules/" rel)
