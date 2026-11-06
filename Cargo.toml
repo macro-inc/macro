@@ -25,6 +25,7 @@ members = [
   "crates/ai_usage",
   "crates/attention_feed",
   "crates/bot_id",
+  "crates/types/chat_message",
   "crates/bot_token",
   "crates/bots",
   "crates/broadcast",

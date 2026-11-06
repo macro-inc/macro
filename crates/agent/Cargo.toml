@@ -23,7 +23,6 @@ rig-agent = "0.41.0"
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true }
 tokio = { workspace = true }
@@ -31,6 +30,7 @@ tracing = { workspace = true }
 ai_usage = { path = "../ai_usage" }
 ai_toolset = { path = "../ai_toolset" }
 attachment = { path = "../attachment" }
+chat_message = { path = "../types/chat_message", features = ["schema"] }
 genai_telemetry = { path = "../genai_telemetry" }
 macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }

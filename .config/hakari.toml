@@ -91,6 +91,9 @@ workspace-members = [
     # soup-filter-cache-adapter -> cache-wasm) and must stay wasm-safe.
     "model_owner",
     "bot_id",
+    # chat_message: leaf message types, kept out of workspace-hack so the
+    # crates that store chat messages need not wait for its heavy union.
+    "chat_message",
     "macro_uuid",
     "non_empty",
     "cowlike",
