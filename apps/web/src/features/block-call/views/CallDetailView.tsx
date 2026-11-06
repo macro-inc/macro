@@ -100,6 +100,7 @@ function LoadedCallContent(props: {
   transcriptTarget?: CallTranscriptTarget;
   messageId?: string;
   seek?: string;
+  header?: () => JSX.Element;
 }) {
   const [, setSearch] = createSearchParams(callDetailSearch);
   onMount(() => {
@@ -115,6 +116,7 @@ function LoadedCallContent(props: {
         <CallRecordingBody
           record={props.record}
           callId={props.callId}
+          header={props.header}
           transcriptTarget={props.transcriptTarget}
           messageTarget={props.messageId}
           messageTargetRequestKey={props.seek}
@@ -135,6 +137,7 @@ export function CallDetailContent(props: {
   transcriptId?: string;
   messageId?: string;
   seek?: string;
+  header?: () => JSX.Element;
 }) {
   // Include the route's seek token so selecting the same segment re-runs the seek.
   const transcriptTarget = createMemo<CallTranscriptTarget | undefined>(() =>
@@ -143,7 +146,8 @@ export function CallDetailContent(props: {
       : undefined
   );
   return (
-    <div class="relative min-h-0 min-w-0 flex-1">
+    <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <Show when={!props.data}>{props.header?.()}</Show>
       <Show
         when={props.data}
         fallback={
@@ -194,6 +198,7 @@ export function CallDetailContent(props: {
               transcriptTarget={transcriptTarget()}
               messageId={props.messageId}
               seek={props.seek}
+              header={props.header}
             />
           </Suspense>
         )}
@@ -221,43 +226,6 @@ export function CallDetailView(props: {
   return (
     <CallDetailRoot callId={props.callId}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-        <ViewShell.TopBar class="touch:flex">
-          <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <Show
-            when={props.header}
-            fallback={
-              <>
-                <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
-                <span class="min-w-0 truncate text-sm font-semibold">
-                  {detail.data()?.name ?? 'Call Recording'}
-                </span>
-              </>
-            }
-          >
-            {(header) => (
-              <>
-                <div class="contents @max-[600px]/split-header:hidden">
-                  {header()(detail.data)}
-                </div>
-                <div class="hidden min-w-0 items-center gap-1.5 @max-[600px]/split-header:flex">
-                  <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
-                  <span class="truncate text-sm font-medium">
-                    {detail.data()?.name ?? 'Call Recording'}
-                  </span>
-                </div>
-              </>
-            )}
-          </Show>
-          <Show when={detail.data()}>
-            {(data) => (
-              <CallDetailActions
-                callId={props.callId}
-                record={data().record}
-                name={data().name}
-              />
-            )}
-          </Show>
-        </ViewShell.TopBar>
         <CallDetailContent
           callId={props.callId}
           query={detail.query}
@@ -265,6 +233,45 @@ export function CallDetailView(props: {
           transcriptId={props.transcriptId}
           messageId={props.messageId}
           seek={props.seek}
+          header={() => (
+            <ViewShell.TopBar class="touch:flex">
+              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+              <Show
+                when={props.header}
+                fallback={
+                  <>
+                    <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
+                    <span class="min-w-0 truncate text-sm font-semibold">
+                      {detail.data()?.name ?? 'Call Recording'}
+                    </span>
+                  </>
+                }
+              >
+                {(header) => (
+                  <>
+                    <div class="contents @max-[600px]/split-header:hidden">
+                      {header()(detail.data)}
+                    </div>
+                    <div class="hidden min-w-0 items-center gap-1.5 @max-[600px]/split-header:flex">
+                      <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
+                      <span class="truncate text-sm font-medium">
+                        {detail.data()?.name ?? 'Call Recording'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </Show>
+              <Show when={detail.data()}>
+                {(data) => (
+                  <CallDetailActions
+                    callId={props.callId}
+                    record={data().record}
+                    name={data().name}
+                  />
+                )}
+              </Show>
+            </ViewShell.TopBar>
+          )}
         />
       </div>
     </CallDetailRoot>

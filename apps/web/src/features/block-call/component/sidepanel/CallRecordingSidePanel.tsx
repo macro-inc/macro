@@ -6,6 +6,7 @@ import { createSignal, type JSX, onMount, Show } from 'solid-js';
 export function CallRecordingSidePanel(props: {
   transcript: JSX.Element;
   details: JSX.Element;
+  footer?: JSX.Element;
 }) {
   const panel = useSidePanel();
   const [tab, setTab] = createSignal<'transcript' | 'details'>('transcript');
@@ -39,7 +40,14 @@ export function CallRecordingSidePanel(props: {
       </Show>
       <Show
         when={isMobile() || tab() === 'details'}
-        fallback={<div class="min-h-0 flex-1">{props.transcript}</div>}
+        fallback={
+          <>
+            <div class="min-h-0 flex-1">{props.transcript}</div>
+            <Show when={props.footer}>
+              <div class="shrink-0 p-3">{props.footer}</div>
+            </Show>
+          </>
+        }
       >
         <div class="min-h-0 flex-1">{props.details}</div>
       </Show>

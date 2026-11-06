@@ -336,10 +336,13 @@ function SidePanelLayoutInner(
             'absolute inset-0 flex flex-col bg-surface z-split-panel-chrome'
           )}
         >
-          <Scroll>
+          <Scroll contentProps={props.panel ? { class: 'h-full' } : undefined}>
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
-            <div class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)">
+            <div
+              class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)"
+              classList={{ 'flex h-full min-h-0 flex-col': !!props.panel }}
+            >
               <div class="px-2 pt-2">
                 <Button
                   variant="ghost"
@@ -351,13 +354,15 @@ function SidePanelLayoutInner(
                   Back to content
                 </Button>
               </div>
-              {renderPanel(
-                <SidePanelOutlet
-                  sections={props.sections}
-                  openIds={props.openIds}
-                  setOpenIds={props.setOpenIds}
-                />
-              )}
+              <div classList={{ 'min-h-0 flex-1': !!props.panel }}>
+                {renderPanel(
+                  <SidePanelOutlet
+                    sections={props.sections}
+                    openIds={props.openIds}
+                    setOpenIds={props.setOpenIds}
+                  />
+                )}
+              </div>
             </div>
           </Scroll>
         </div>
