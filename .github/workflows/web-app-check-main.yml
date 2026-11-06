@@ -101,19 +101,21 @@ jobs:
         [ -n "$base" ] || result "No base commit to compare with." true
         git fetch -q --depth=1 origin "$base"
         names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
-        # Every grep here reads all its input. One that stopped at its first
-        # match would close the pipe, and pipefail reads the writer's SIGPIPE as
-        # no match.
-        if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
+        manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
+        if grep -E "^[-+].*($names)" <<< "$manifests"; then
           result "A schema crate's version changed." true
         fi
+        changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
         while IFS= read -r file; do
+          [ -n "$file" ] || continue
           for revision in HEAD "$base"; do
-            if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
+            [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
+            contents=$(git show "$revision:$file")
+            if grep -E "$names" <<< "$contents" > /dev/null; then
               result "$file names a schema item." true
             fi
           done
-        done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+        done <<< "$changed"
         result "No changed Rust file names a schema item." false
       env:
         CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}

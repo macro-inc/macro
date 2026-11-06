@@ -420,41 +420,49 @@ fn path_check_checkout() -> Step<Use> {
 /// that changed generated output. A schema crate's version change still counts.
 fn detect_schema_changes() -> Step<Run> {
     Step::new("Detect schema changes")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            result() {
-              echo "$1"
-              echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
-              exit 0
-            }
-            [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
-            # The merge commit's first parent is the main this merge result was
-            # built on; a fresh fetch of main could be newer.
-            base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
-            [ -n "$base" ] || result "No base commit to compare with." true
-            git fetch -q --depth=1 origin "$base"
-            names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
-            # Every grep here reads all its input. One that stopped at its first
-            # match would close the pipe, and pipefail reads the writer's SIGPIPE as
-            # no match.
-            if git diff "$base" HEAD -- Cargo.toml Cargo.lock | grep -E "^[-+].*($names)"; then
-              result "A schema crate's version changed." true
-            fi
-            while IFS= read -r file; do
-              for revision in HEAD "$base"; do
-                if git show "$revision:$file" 2>/dev/null | grep -E "$names" > /dev/null; then
-                  result "$file names a schema item." true
-                fi
-              done
-            done < <(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
-            result "No changed Rust file names a schema item." false
-        "#})
+        .run(DETECT_SCHEMA_CHANGES)
         .id("codegen")
         .add_env((
             "CODEGEN_INPUTS",
             "${{ steps.filter.outputs.codegen_inputs }}",
         ))
 }
+
+/// The checkout is blobless, so `git diff` and `git show` fetch blobs as they
+/// read them. Each read is its own command, so a failed fetch fails the step
+/// instead of reading as "no schema item"; a file absent from one revision is
+/// skipped by a tree lookup, which needs no blob.
+const DETECT_SCHEMA_CHANGES: &str = indoc::indoc! {r#"
+    set -euo pipefail
+    result() {
+      echo "$1"
+      echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+      exit 0
+    }
+    [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+    # The merge commit's first parent is the main this merge result was
+    # built on; a fresh fetch of main could be newer.
+    base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+    [ -n "$base" ] || result "No base commit to compare with." true
+    git fetch -q --depth=1 origin "$base"
+    names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+    manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
+    if grep -E "^[-+].*($names)" <<< "$manifests"; then
+      result "A schema crate's version changed." true
+    fi
+    changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      for revision in HEAD "$base"; do
+        [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
+        contents=$(git show "$revision:$file")
+        if grep -E "$names" <<< "$contents" > /dev/null; then
+          result "$file names a schema item." true
+        fi
+      done
+    done <<< "$changed"
+    result "No changed Rust file names a schema item." false
+"#};
 
 fn paths_filter() -> Step<Use> {
     let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");

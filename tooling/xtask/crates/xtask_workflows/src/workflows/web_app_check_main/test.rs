@@ -939,3 +939,153 @@ fn web_jobs_restore_the_nix_seed_except_the_build() {
         "Build holds the preview credentials"
     );
 }
+
+/// Runs the schema detection step in a blobless clone, as path-check checks
+/// out. `files` are written in a commit on top of a base commit. With
+/// `break_blobs`, origin loses those files' blobs, so fetching them fails.
+fn detect_schema_changes_in_blobless_clone(
+    files: &[(&str, &str)],
+    break_blobs: bool,
+) -> (bool, String) {
+    use std::process::Command;
+
+    let root = tempfile::tempdir().expect("temporary directory");
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.com")
+            .output()
+            .expect("run git");
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
+
+    let source = root.path().join("source");
+    std::fs::create_dir_all(source.join("crates/server/src")).expect("source tree");
+    git(&source, &["init", "-q"]);
+    std::fs::write(source.join("Cargo.toml"), "[workspace]\n").expect("manifest");
+    std::fs::write(
+        source.join("crates/server/src/lib.rs"),
+        "pub fn serve() {}\n",
+    )
+    .expect("lib");
+    git(&source, &["add", "-A"]);
+    git(&source, &["commit", "-q", "-m", "base"]);
+    for (path, contents) in files {
+        let path = source.join(path);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("file directory");
+        std::fs::write(path, contents).expect("changed file");
+    }
+    git(&source, &["add", "-A"]);
+    git(&source, &["commit", "-q", "-m", "change"]);
+
+    let origin = root.path().join("origin.git");
+    git(
+        root.path(),
+        &[
+            "clone",
+            "-q",
+            "--bare",
+            source.to_str().expect("path"),
+            origin.to_str().expect("path"),
+        ],
+    );
+    git(&origin, &["config", "uploadpack.allowFilter", "true"]);
+    git(
+        &origin,
+        &["config", "uploadpack.allowAnySHA1InWant", "true"],
+    );
+    let url = format!("file://{}", origin.display());
+    let checkout = root.path().join("checkout");
+    git(
+        root.path(),
+        &[
+            "clone",
+            "-q",
+            "--filter=blob:none",
+            "--no-checkout",
+            "--depth=1",
+            &url,
+            checkout.to_str().expect("path"),
+        ],
+    );
+    if break_blobs {
+        for (path, _) in files {
+            let blob = git(&origin, &["rev-parse", &format!("HEAD:{path}")]);
+            std::fs::remove_file(origin.join("objects").join(&blob[..2]).join(&blob[2..]))
+                .expect("remove the blob from origin");
+        }
+    }
+
+    let output_file = root.path().join("github_output");
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(DETECT_SCHEMA_CHANGES)
+        .current_dir(&checkout)
+        .env("CODEGEN_INPUTS", "false")
+        .env("GITHUB_OUTPUT", &output_file)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .expect("run schema detection");
+    let outputs = std::fs::read_to_string(&output_file).unwrap_or_default();
+    (
+        output.status.success(),
+        format!(
+            "{outputs}{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    )
+}
+
+#[test]
+fn schema_detection_reads_blobs_on_demand_and_fails_when_it_cannot() {
+    let schema_file = [(
+        "crates/server/src/api.rs",
+        "#[derive(utoipa::ToSchema)]\npub struct Reply;\n",
+    )];
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(&schema_file, false);
+    assert!(
+        passed && log.contains("codegen_changed=true"),
+        "a new file naming a schema item: {log}"
+    );
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(
+        &[("crates/server/src/lib.rs", "pub fn serve() { listen() }\n")],
+        false,
+    );
+    assert!(
+        passed && log.contains("codegen_changed=false"),
+        "no schema item: {log}"
+    );
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(
+        &[(
+            "Cargo.toml",
+            "[workspace]\n[workspace.dependencies]\nutoipa = \"5\"\n",
+        )],
+        false,
+    );
+    assert!(
+        passed && log.contains("codegen_changed=true"),
+        "a schema crate's version: {log}"
+    );
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(&schema_file, true);
+    assert!(
+        !passed && !log.contains("codegen_changed="),
+        "a failed blob fetch must fail the step: {log}"
+    );
+}
