@@ -79,6 +79,8 @@ const runSchema = z
       at: z.string(),
       timezone: z.string().optional(),
       previous_at: z.string().optional(),
+      // An unknown identity hides the line rather than the whole run info.
+      code_acts_as: z.enum(['agent', 'owner']).optional().catch(undefined),
       started_by: z.discriminatedUnion('kind', [
         z.object({
           kind: z.literal('schedule'),
@@ -99,6 +101,7 @@ const runSchema = z
       at: run.at,
       timezone: run.timezone,
       previousAt: run.previous_at,
+      ...(run.code_acts_as ? { codeActsAs: run.code_acts_as } : {}),
       start:
         run.started_by.kind === 'event'
           ? {

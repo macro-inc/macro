@@ -195,20 +195,19 @@ starts with the team's **Invite link**: **Create link** makes one and copies it,
 **Copy link** copies it after that. Anyone signed in who opens
 `/app/team-invite?link=<token>` sees **Join <team>** and joins as a member with
 the same billing and channel effects as an emailed invite; users already on
-another team are told to leave it first. Team admins and owners also see
-**Reset link** (the old link stops working and a new one is copied) and
-**Turn off**, each behind a confirmation. Anyone who may invite can copy the
+another team are told to leave it first. Team admins and owners also get a
+settings (gear) menu beside **Copy link** with **Reset link** (the old link
+stops working and a new one is copied) and **Turn off**, each behind a
+confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before; **Invite as agent** invites every address in the dialog as an agent,
-and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
-[agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
+as before. The dialog no longer offers agent invites; send them with
+`team.invite(email, { agent: true })` (see [agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
 After a person invite sends, the dialog's second step, **Let them know it's
 coming**, lists the addresses and offers **Copy invite link** (creating the
-first link when there is none) and **Done**; agent invites close the dialog
-instead. **Team → Members** also shows **Copy invite link** beside **Invite**,
+first link when there is none) and **Done**. **Team → Members** also shows **Copy invite link** beside **Invite**,
 and onboarding's team confirmation asks a creator who just invited teammates
 to send them the link too.
 A signed-out invitee who opens an emailed or link invite is sent to
@@ -274,7 +273,7 @@ like any other rail item, and Shift-click opens it in a new split.
 visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
 **Search settings** field, a team action at the top of the list (hidden while
-searching): **Invite your team** in rainbow text (opens the invite dialog;
+searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
 hidden for members when the team limits invites to admins) or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
 pills. Unlike other views, it cannot be hidden at

@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 
-const { connectRoomWith } = await import('../src/common');
+const { connectRoomWith } = await import('../../src/calls/common');
 
 describe('connectRoomWith', () => {
   test('starts a channel, connects, and leaves once on repeated disconnects', async () => {
@@ -26,7 +26,7 @@ describe('connectRoomWith', () => {
       connect,
       (_room, callback) => {
         disconnect = callback;
-      }
+      },
     );
 
     expect(result).toEqual({ room, connection });
@@ -58,8 +58,8 @@ describe('connectRoomWith', () => {
         async () => {
           throw new Error('connect failed');
         },
-        () => {}
-      )
+        () => {},
+      ),
     ).rejects.toThrow('connect failed');
     expect(leave).toHaveBeenCalledTimes(1);
   });
@@ -86,8 +86,8 @@ describe('connectRoomWith', () => {
         async () => {
           throw new Error('connect failed');
         },
-        () => {}
-      )
+        () => {},
+      ),
     ).rejects.toThrow('connect failed');
     expect(leave).toHaveBeenCalledTimes(1);
   });

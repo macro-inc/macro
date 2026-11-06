@@ -102,6 +102,7 @@ fn tokens_not_issued_by_fusionauth_for_this_application_are_rejected() {
         expiry_seconds: 60,
         agent_id: None,
         agent_via: None,
+        routine_id: None,
     })
     .unwrap();
 
