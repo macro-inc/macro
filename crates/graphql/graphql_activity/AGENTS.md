@@ -26,7 +26,7 @@ DataLoader) — plus database/form timelines and a realtime subscription.
 ## Scope
 
 - Owns: GraphQL objects/resolvers over activity; not the event log itself →
-  `crates/activity`.
+  `crates/search/activity`.
 
 ## Boundaries
 

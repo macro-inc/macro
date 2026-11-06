@@ -226,9 +226,9 @@ kinds introduced by a newer backend.
 
 ## 7. Server-built feeds (when relevant)
 
-- **Home work feed:** `crates/attention_feed/src/domain/keying.rs`
+- **Home work feed:** `crates/search/attention_feed/src/domain/keying.rs`
   (`channel_thread_root`) attributes channel notifications to thread roots, and
-  `crates/work_feed/src/domain/stacking.rs` stacks channel and comment events. A
+  `crates/search/work_feed/src/domain/stacking.rs` stacks channel and comment events. A
   new kind defaults to a standalone stack (`_ => None`); add it to the thread-root
   and `is_channel_event` / `is_comment_event` matches if it belongs to a
   conversation.

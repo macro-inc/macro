@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "name_search"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+cached = { workspace = true }
+channels = { workspace = true, features = ["outbound"] }
+chrono = { workspace = true }
+macro_user_id = { workspace = true }
+models_opensearch = { workspace = true }
+models_search_cursor = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+macro_db_migrator = { workspace = true }

@@ -195,7 +195,7 @@ new fields needs the regenerated SDL in the same change.
   entity answers offline.
 - **Live updates.** Changes made elsewhere reach clients only through Soup
   realtime patches. A field derived from another domain's data refreshes only if
-  that domain publishes an event that `crates/soup_realtime/src/inbound/kafka_consumer.rs`
+  that domain publishes an event that `crates/search/soup_realtime/src/inbound/kafka_consumer.rs`
   maps to a patch. GitHub PR metadata missed this and needed a follow-up.
 - **Local filtering or search** on a new field also needs a projection in
   `crates/soup_filter_cache_adapter`. That is native code and ships only with a

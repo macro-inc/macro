@@ -1,0 +1,57 @@
+[package]
+edition = "2024"
+name = "search_service"
+publish = false
+version = "0.1.0"
+
+[lib]
+name = "search_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "search_service_openapi"
+path = "src/openapi.rs"
+
+[dependencies]
+agent_session = { workspace = true }
+rootcause = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+calendar_events = { workspace = true }
+chrono = { workspace = true }
+channels = { workspace = true, features = ["outbound"] }
+comms_db_client = { workspace = true }
+crm = { workspace = true, features = ["search"] }
+document_sub_type = { workspace = true, default-features = true }
+email_db_client = { workspace = true }
+entity_access = { workspace = true, features = [
+  "outbound",
+] }
+indexmap = { workspace = true }
+item_filters = { workspace = true, default-features = true }
+macro_authorization = { workspace = true, default-features = true }
+macro_db_client = { workspace = true, default-features = true }
+models_properties = { workspace = true }
+models_soup = { workspace = true }
+properties = { workspace = true, features = [
+  "outbound",
+] }
+system_properties = { workspace = true }
+readonly_pool = { workspace = true }
+macro_user_id = { workspace = true }
+model = { workspace = true }
+models_email = { workspace = true }
+models_opensearch = { workspace = true }
+models_search = { workspace = true }
+models_search_cursor = { workspace = true }
+name_search = { workspace = true }
+opensearch_client = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
