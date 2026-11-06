@@ -288,7 +288,23 @@ impl RecordingEventBroker {
     }
 
     fn events(&self) -> Vec<PublishedCallEvent> {
-        self.events.lock().unwrap().clone()
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event| event.topic == "macro.calls")
+            .cloned()
+            .collect()
+    }
+
+    fn notifications(&self) -> Vec<PublishedCallEvent> {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event| event.topic == "macro.call_notifications")
+            .cloned()
+            .collect()
     }
 
     fn attempts(&self) -> usize {
@@ -720,6 +736,13 @@ async fn get_or_create_call_publishes_started_event() {
                 "recording_enabled": true,
             },
         })
+    );
+    let notifications = broker.notifications();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0].envelope["event_type"], "call.started");
+    assert_eq!(
+        notifications[0].envelope["metadata"]["call_id"],
+        json!(STARTED_EVENT_CALL_ID)
     );
 }
 
@@ -1505,6 +1528,16 @@ fn assert_recording_ready_event(event_broker: &RecordingEventBroker) {
         })
     );
     assert!(!published.envelope.to_string().contains(RECORDING_READY_KEY));
+    let notifications = event_broker.notifications();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(
+        notifications[0].envelope["event_type"],
+        "call.recording_ready"
+    );
+    assert_eq!(
+        notifications[0].envelope["metadata"],
+        json!({ "call_id": ARCHIVED_EVENT_CALL_ID })
+    );
 }
 
 #[tokio::test]
@@ -3045,7 +3078,7 @@ async fn summarize_call_publishes_record_summarized_event() {
         failing_broker,
     )
     .await;
-    assert_eq!(observed_failing_broker.attempts(), 1);
+    assert_eq!(observed_failing_broker.attempts(), 2);
     assert!(observed_failing_broker.events().is_empty());
 }
 
@@ -3083,7 +3116,7 @@ async fn spawned_summarization_publishes_record_summarized_event() {
     );
 
     service.spawn_summarize_call(SUMMARIZED_EVENT_CALL_ID);
-    wait_for_spawned_work(|| failing_broker.attempts() == 1).await;
+    wait_for_spawned_work(|| failing_broker.attempts() == 2).await;
     assert!(failing_broker.events().is_empty());
 }
 

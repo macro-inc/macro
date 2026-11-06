@@ -48,6 +48,9 @@ use crate::domain::models::{
     CallRecordPage, EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
     VoipPushPayloadRequest,
 };
+use crate::domain::notification_events::{
+    CallNotificationEvent, CallNotificationMacroEvent, CallNotificationMetadata,
+};
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestJoinRequest, InviteMeetingUsersRequest, Meeting,
@@ -261,6 +264,10 @@ impl<
         publish_call_event(&self.event_broker, event);
     }
 
+    fn publish_call_notification(&self, event: CallNotificationEvent) {
+        publish_call_notification(&self.event_broker, event);
+    }
+
     /// Authorize an explicit (`teamShareAccessLevel`) or legacy (`shareWithTeam`)
     /// canonical team-share change on an archived call against the persisted
     /// creator.
@@ -344,6 +351,14 @@ impl<
                 channel_thread: archived.channel_thread,
             },
         ));
+        self.publish_call_notification(CallNotificationEvent::Ended(
+            CallNotificationMetadata::new(archived.call_id, archived.channel_id),
+        ));
+        if archived.has_recording {
+            self.publish_call_notification(CallNotificationEvent::RecordingReady(
+                CallNotificationMetadata::new(archived.call_id, None),
+            ));
+        }
     }
 
     /// Send a call event to all channel members (best-effort).
@@ -438,6 +453,10 @@ impl<
         call_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) {
+        let mut metadata = CallNotificationMetadata::new(*call_id, *channel_id);
+        metadata.user_id = Some(user_id.to_string());
+        metadata.recipient_user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::Answered(metadata));
         let _ = self
             .connection_service
             .send_channel_message(
@@ -464,6 +483,10 @@ impl<
         call_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) {
+        let mut metadata = CallNotificationMetadata::new(*call_id, *channel_id);
+        metadata.user_id = Some(user_id.to_string());
+        metadata.recipient_user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::Declined(metadata));
         let _ = self
             .connection_service
             .send_channel_message(
@@ -926,6 +949,12 @@ impl<
                                         recording_enabled: self.egress_s3_config.is_some(),
                                     },
                                 ));
+                                let mut metadata =
+                                    CallNotificationMetadata::new(call.id, call.channel_id);
+                                metadata.created_by = Some(call.created_by.clone());
+                                self.publish_call_notification(CallNotificationEvent::Started(
+                                    metadata,
+                                ));
                             }
                             Err(error) => {
                                 tracing::error!(
@@ -949,6 +978,7 @@ impl<
                             server_url: self.server_url.clone(),
                             ring_status_base_url: self.ring_status_base_url.clone(),
                             egress_s3_config: self.egress_s3_config.clone(),
+                            event_broker: self.event_broker.clone(),
                         }
                         .spawn(
                             call.clone(),
@@ -1046,6 +1076,10 @@ impl<
             .remove_participant(&call.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+        let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+        metadata.identity = Some(user_id.to_string());
+        metadata.user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
 
         // Kick from LiveKit. The resulting participant_left webhook
         // handles archival and room deletion.
@@ -1208,6 +1242,12 @@ impl<
                     {
                         Some(call) => {
                             self.repo.reconcile_guest(&call.id, *identity, true).await?;
+                            let mut metadata =
+                                CallNotificationMetadata::new(call.id, call.channel_id);
+                            metadata.identity = Some(identity.to_string());
+                            self.publish_call_notification(
+                                CallNotificationEvent::ParticipantJoined(metadata),
+                            );
                         }
                         None => {
                             self.evict_from_untracked_room(
@@ -1268,6 +1308,12 @@ impl<
                             participant_identity.copied(),
                         )
                         .await;
+                        let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+                        metadata.identity = Some(participant_identity.to_string());
+                        metadata.user_id = Some(participant_identity.to_string());
+                        self.publish_call_notification(CallNotificationEvent::ParticipantJoined(
+                            metadata,
+                        ));
                     }
                     Err(AddParticipantError::UserAlreadyActive) => {
                         tracing::warn!(
@@ -1304,10 +1350,21 @@ impl<
                         .remove_participant(&call.id, participant_identity.copied())
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+                    metadata.identity = Some(participant_identity.to_string());
+                    metadata.user_id = Some(participant_identity.to_string());
+                    self.publish_call_notification(CallNotificationEvent::ParticipantLeft(
+                        metadata,
+                    ));
                 } else if let Some(identity) = &event.guest_identity {
                     self.repo
                         .reconcile_guest(&call.id, *identity, false)
                         .await?;
+                    let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+                    metadata.identity = Some(identity.to_string());
+                    self.publish_call_notification(CallNotificationEvent::ParticipantLeft(
+                        metadata,
+                    ));
                 }
 
                 self.finish_empty_call(&call).await?;
@@ -1370,6 +1427,9 @@ impl<
                             call_id,
                             channel_id,
                         },
+                    ));
+                    self.publish_call_notification(CallNotificationEvent::RecordingReady(
+                        CallNotificationMetadata::new(call_id, None),
                     ));
                 } else {
                     // Call not yet archived — store on the active call so
@@ -1870,6 +1930,9 @@ impl<
                     ai_name_generated,
                 },
             ));
+            self.publish_call_notification(CallNotificationEvent::Summarized(
+                CallNotificationMetadata::new(*call_id, None),
+            ));
         }
 
         Ok(())
@@ -1998,6 +2061,10 @@ impl<
                         ai_name_generated,
                     }),
                 );
+                publish_call_notification(
+                    &event_broker,
+                    CallNotificationEvent::Summarized(CallNotificationMetadata::new(call_id, None)),
+                );
             }
         });
     }
@@ -2022,6 +2089,19 @@ pub(crate) fn publish_call_event<B: MacroEventBroker>(event_broker: &B, event: &
     drop(event_broker.send_event(event).inspect_err(|error| {
         tracing::error!(error = ?error, "failed to schedule call lifecycle event");
     }));
+}
+
+pub(crate) fn publish_call_notification<B: MacroEventBroker>(
+    event_broker: &B,
+    event: CallNotificationEvent,
+) {
+    drop(
+        event_broker
+            .send_event(&CallNotificationMacroEvent::new(event))
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "failed to schedule call notification");
+            }),
+    );
 }
 
 /// Replace guest speaker ids with their display names for the summarizer's

@@ -1031,6 +1031,8 @@ use utoipa::OpenApi;
 
             // Webhooks
             webhook::domain::events::WebhookEvent,
+            call::domain::notification_events::CallNotificationEvent,
+            call::domain::notification_events::CallNotificationMetadata,
             webhook::domain::models::CreateWebhookRequest,
             webhook::domain::models::CreateWebhookResponse,
             webhook::domain::models::ListWebhooksResponse,
