@@ -11,6 +11,10 @@ enforced by the ordinary backend APIs.
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload.
+- `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
+  `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
+  `calculate` and `applyEdits` run the spreadsheet tools' engine; code mode
+  hides `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet`.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`

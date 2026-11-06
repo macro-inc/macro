@@ -205,6 +205,11 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             "ReadContent"
                 | "ReadMetadata"
                 | "EditDocument"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"

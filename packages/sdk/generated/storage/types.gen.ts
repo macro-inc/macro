@@ -1856,6 +1856,24 @@ export type BulletSpec = {
 };
 
 /**
+ * Scratch formulas to evaluate against a workbook, without writing anything.
+ */
+export type CalculateSpreadsheetRequest = {
+    /**
+     * At most 20 formulas beginning with =.
+     */
+    formulas: Array<SpreadsheetFormula>;
+    /**
+     * Hypothetical cell inputs, never saved.
+     */
+    overrides?: Array<SpreadsheetOverride> | null;
+    /**
+     * Sheet for unqualified references; defaults to the first sheet.
+     */
+    sheetId?: string | null;
+};
+
+/**
  * An attendee on a calendar event.
  */
 export type CalendarAttendee = {
@@ -5178,6 +5196,30 @@ export type CreateSnippetResponse = {
 };
 
 /**
+ * Request to create a blank native spreadsheet.
+ */
+export type CreateSpreadsheetRequest = {
+    /**
+     * Spreadsheet name.
+     */
+    documentName: string;
+    /**
+     * Optional parent project.
+     */
+    projectId?: string | null;
+};
+
+/**
+ * A created native spreadsheet.
+ */
+export type CreateSpreadsheetResponse = {
+    /**
+     * The new spreadsheet's document ID.
+     */
+    documentId: string;
+};
+
+/**
  * Request body for creating a task.
  */
 export type CreateTaskRequest = {
@@ -8284,6 +8326,20 @@ export type EditPdfPlaceableCommentAnchorRequest = {
     widthPct?: number | null;
     xPct?: number | null;
     yPct?: number | null;
+};
+
+/**
+ * One atomic batch of operations against the revision it was planned on.
+ */
+export type EditSpreadsheetRequest = {
+    /**
+     * The revision a read returned; a changed workbook rejects the batch.
+     */
+    expectedRevision: string;
+    /**
+     * Between 1 and 25 operations, validated and saved together.
+     */
+    operations: Array<SpreadsheetOperation>;
 };
 
 /**
@@ -14946,6 +15002,24 @@ export type ReactionInput = {
     nonce?: string | null;
 };
 
+/**
+ * What to read from a workbook.
+ */
+export type ReadSpreadsheetRequest = {
+    /**
+     * Include cell formatting.
+     */
+    includeStyles?: boolean | null;
+    /**
+     * A1 ranges such as A1:F20. Omit for the workbook overview and samples.
+     */
+    ranges?: Array<string> | null;
+    /**
+     * Stable sheet ID or exact name; defaults to the first sheet.
+     */
+    sheetId?: string | null;
+};
+
 export type RecentlyDeletedResponseData = {
     /**
      * The items returned from the call
@@ -17634,6 +17708,691 @@ export type SourceIdentity = {
 } | {
     kind: 'confirmed_unknown';
 };
+
+/**
+ * Excel border line style.
+ */
+export type SpreadsheetBorderStyle = 'reset' | 'thin' | 'medium' | 'thick' | 'double' | 'dotted' | 'dashed' | 'dashDot' | 'dashDotDot' | 'slantDashDot' | 'hair' | 'mediumDashed' | 'mediumDashDot' | 'mediumDashDotDot';
+
+/**
+ * Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.
+ */
+export type SpreadsheetCellInput = {
+    /**
+     * A1 address, from A1 through XFD100000.
+     */
+    address: string;
+    /**
+     * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
+     * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
+     * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
+     * A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
+     * Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
+     * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
+     */
+    value: string;
+};
+
+/**
+ * Applied edit summary.
+ */
+export type SpreadsheetChange = {
+    /**
+     * Affected range, when applicable.
+     */
+    range?: string | null;
+    /**
+     * Affected stable sheet identity.
+     */
+    sheetId: string;
+    /**
+     * Human-readable change summary.
+     */
+    summary: string;
+    /**
+     * Operation type.
+     */
+    type: string;
+};
+
+/**
+ * What a table column holds, as Google Sheets types table columns.
+ */
+export type SpreadsheetColumnType = 'text' | 'number' | 'percent' | 'currency' | 'date' | 'datetime' | 'time' | 'checkbox' | 'dropdown' | 'person';
+
+/**
+ * A column width.
+ */
+export type SpreadsheetColumnWidth = {
+    /**
+     * Column letter A through XFD.
+     */
+    column: string;
+    /**
+     * Width in pixels, 8 through 640.
+     */
+    width: number;
+};
+
+/**
+ * A dropdown choice's color. Cells showing the choice draw it as a chip of this color.
+ */
+export type SpreadsheetDropdownColor = {
+    /**
+     * Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.
+     */
+    color: string;
+    /**
+     * The choice, matched to cell text ignoring case.
+     */
+    item: string;
+};
+
+/**
+ * Font family.
+ */
+export type SpreadsheetFont = 'sans' | 'serif' | 'mono';
+
+/**
+ * A scratch formula evaluated without persisting it.
+ */
+export type SpreadsheetFormula = {
+    /**
+     * Excel-style formula, beginning with =.
+     */
+    formula: string;
+    /**
+     * Optional label echoed with the result.
+     */
+    label?: string | null;
+};
+
+/**
+ * One hypothetical formula result.
+ */
+export type SpreadsheetFormulaResult = SpreadsheetValue & {
+    /**
+     * Evaluated scratch formula.
+     */
+    formula: string;
+    /**
+     * Caller-supplied label.
+     */
+    label?: string | null;
+};
+
+/**
+ * Horizontal alignment.
+ */
+export type SpreadsheetHorizontalAlign = 'auto' | 'left' | 'center' | 'right';
+
+/**
+ * Number interpretation and display; currency and accounting are USD and dates use UTC.
+ */
+export type SpreadsheetNumberFormat = 'general' | 'number' | 'currency' | 'accounting' | 'percent' | 'date' | 'time' | 'scientific' | 'text';
+
+/**
+ * One operation in an atomic workbook edit. All operations validate before any write.
+ */
+export type SpreadsheetOperation = {
+    /**
+     * Cells and their new source inputs.
+     */
+    cells: Array<SpreadsheetCellInput>;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'set_cells';
+} | {
+    /**
+     * A1 rectangle, for example A1:D20.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Properties to change; omitted properties remain unchanged.
+     */
+    style: SpreadsheetStyle;
+    type: 'format_cells';
+} | {
+    /**
+     * Defaults to false; preserves formatting unless requested.
+     */
+    clearFormatting?: boolean | null;
+    /**
+     * A1 rectangle.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'clear_cells';
+} | {
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Source rectangle.
+     */
+    sourceRange: string;
+    /**
+     * Target rectangle.
+     */
+    targetRange: string;
+    type: 'fill_cells';
+} | {
+    /**
+     * Unique Excel-compatible name, at most 31 characters.
+     */
+    name: string;
+    type: 'add_sheet';
+} | {
+    /**
+     * New unique name.
+     */
+    name: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'rename_sheet';
+} | {
+    /**
+     * Optional unique name for the copy.
+     */
+    name?: string | null;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'duplicate_sheet';
+} | {
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'delete_sheet';
+} | {
+    /**
+     * Number of rows to append.
+     */
+    count: number;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'append_rows';
+} | {
+    /**
+     * Column widths to set.
+     */
+    columns: Array<SpreadsheetColumnWidth>;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'resize_columns';
+} | {
+    /**
+     * Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them.
+     */
+    colors?: Array<SpreadsheetDropdownColor> | null;
+    /**
+     * Typed choices, without commas, at most 253 characters in total.
+     */
+    items?: Array<string> | null;
+    /**
+     * A1 rectangle, for example C2:C200.
+     */
+    range: string;
+    /**
+     * Defaults to true: reject typed entries that are not a choice. False only suggests the choices.
+     */
+    rejectInvalid?: boolean | null;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet.
+     */
+    source?: string | null;
+    type: 'set_dropdown';
+} | {
+    /**
+     * A1 rectangle.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'clear_validation';
+} | {
+    /**
+     * A1 rectangle, for example D2:D50.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    type: 'insert_checkboxes';
+} | {
+    /**
+     * Column types by header name. A type formats the column's data cells; checkbox makes
+     * them checkboxes and dropdown offers the column's values as colored choices.
+     */
+    columnTypes?: Array<SpreadsheetTableColumnType> | null;
+    /**
+     * Unique table name, such as Sales; spaces become underscores. Defaults to the next free
+     * TableN.
+     */
+    name?: string | null;
+    /**
+     * A1 rectangle including the header row, for example A1:D20. Must not overlap a table.
+     */
+    range: string;
+    /**
+     * Stable sheet ID or exact name.
+     */
+    sheetId: string;
+    /**
+     * Add a total row below the data, which must be empty. Defaults to false.
+     */
+    totalsRow?: boolean | null;
+    type: 'create_table';
+};
+
+/**
+ * Hypothetical inputs applied only to the calculation's disposable workbook.
+ */
+export type SpreadsheetOverride = {
+    /**
+     * Cells to change in this hypothetical calculation.
+     */
+    cells: Array<SpreadsheetCellInput>;
+    /**
+     * Stable sheet ID or exact sheet name from ReadSpreadsheet.
+     */
+    sheetId: string;
+};
+
+/**
+ * Cell source and calculated result.
+ */
+export type SpreadsheetReadCell = SpreadsheetValue & {
+    /**
+     * A1 address.
+     */
+    address: string;
+    /**
+     * Formula, when this input is calculated.
+     */
+    formula?: string | null;
+    /**
+     * Exact persisted source input.
+     */
+    source: string;
+    style?: null | SpreadsheetStyle;
+};
+
+/**
+ * Addressed range with explicit truncation.
+ */
+export type SpreadsheetReadRange = {
+    /**
+     * Cells with their sources and current results.
+     */
+    cells: Array<SpreadsheetReadCell>;
+    /**
+     * Requested or sampled rectangle.
+     */
+    range: string;
+    /**
+     * Stable sheet identity.
+     */
+    sheetId: string;
+    /**
+     * Current sheet name.
+     */
+    sheetName: string;
+    /**
+     * True when a narrower follow-up read is needed to see every cell.
+     */
+    truncated: boolean;
+    /**
+     * Dropdowns and other data validation rules overlapping this range.
+     */
+    validations?: Array<SpreadsheetReadValidation>;
+};
+
+/**
+ * A data validation rule; list rules are dropdowns.
+ */
+export type SpreadsheetReadValidation = {
+    /**
+     * A dropdown's choice colors.
+     */
+    colors?: Array<SpreadsheetDropdownColor> | null;
+    /**
+     * Whether a list rule shows its dropdown arrow.
+     */
+    dropdown?: boolean | null;
+    /**
+     * Rule formulas, without the leading =.
+     */
+    formulas?: Array<string> | null;
+    /**
+     * A dropdown's typed choices.
+     */
+    items?: Array<string> | null;
+    /**
+     * Comparison for number, date, time and text-length rules.
+     */
+    operator?: string | null;
+    /**
+     * Cells the rule covers, as space-separated A1 ranges.
+     */
+    range: string;
+    /**
+     * Whether entries that break the rule are rejected.
+     */
+    rejectInvalid: boolean;
+    /**
+     * A dropdown's source range.
+     */
+    source?: string | null;
+    /**
+     * Rule kind: list, whole, decimal, date, time, textLength, custom, or any.
+     */
+    type: string;
+};
+
+/**
+ * Structured output from a deterministic workbook operation.
+ */
+export type SpreadsheetResponse = {
+    action: 'read';
+    /**
+     * Addressed cells with raw inputs and calculated results.
+     */
+    ranges: Array<SpreadsheetReadRange>;
+    /**
+     * Opaque revision required for EditSpreadsheet.
+     */
+    revision: string;
+    /**
+     * All visible sheets and their used bounds.
+     */
+    sheets: Array<SpreadsheetSheetSummary>;
+    /**
+     * Limits or issues the caller should account for.
+     */
+    warnings: Array<string>;
+} | {
+    action: 'calculate';
+    /**
+     * Results in input order.
+     */
+    results: Array<SpreadsheetFormulaResult>;
+    /**
+     * Revision used for these calculations.
+     */
+    revision: string;
+    /**
+     * Calculation limits or issues.
+     */
+    warnings: Array<string>;
+} | {
+    action: 'edit';
+    /**
+     * Whether a new change was persisted.
+     */
+    applied: boolean;
+    /**
+     * Applied operation summaries.
+     */
+    changes: Array<SpreadsheetChange>;
+    /**
+     * Revision after the edit; use a fresh read before further editing.
+     */
+    revision: string;
+    /**
+     * Sheet metadata after editing.
+     */
+    sheets: Array<SpreadsheetSheetSummary>;
+    /**
+     * Issues requiring inspection, including formula errors.
+     */
+    warnings: Array<string>;
+};
+
+/**
+ * Compact metadata for a sheet.
+ */
+export type SpreadsheetSheetSummary = {
+    /**
+     * Available columns.
+     */
+    columnCount: number;
+    /**
+     * Number of calculated errors.
+     */
+    errorCells: number;
+    /**
+     * Number of formulas.
+     */
+    formulaCells: number;
+    /**
+     * Stable sheet identity for future calls.
+     */
+    id: string;
+    /**
+     * Current sheet name.
+     */
+    name: string;
+    /**
+     * Number of populated cells.
+     */
+    populatedCells: number;
+    /**
+     * Available rows.
+     */
+    rowCount: number;
+    /**
+     * Named tables on the sheet.
+     */
+    tables?: Array<SpreadsheetTableSummary>;
+    /**
+     * Bounding rectangle of used cells, or null for an empty sheet.
+     */
+    usedRange?: string | null;
+};
+
+/**
+ * Sparse cell styling patch. Omitted fields remain unchanged.
+ */
+export type SpreadsheetStyle = {
+    /**
+     * Bold text.
+     */
+    bold?: boolean | null;
+    /**
+     * Bottom border.
+     */
+    borderBottom?: boolean | null;
+    /**
+     * Bottom border color.
+     */
+    borderBottomColor?: string | null;
+    borderBottomStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Left border.
+     */
+    borderLeft?: boolean | null;
+    /**
+     * Left border color.
+     */
+    borderLeftColor?: string | null;
+    borderLeftStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Right border.
+     */
+    borderRight?: boolean | null;
+    /**
+     * Right border color.
+     */
+    borderRightColor?: string | null;
+    borderRightStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Top border.
+     */
+    borderTop?: boolean | null;
+    /**
+     * Top border color.
+     */
+    borderTopColor?: string | null;
+    borderTopStyle?: null | SpreadsheetBorderStyle;
+    /**
+     * Show the cell's TRUE/FALSE value as a checkbox; false removes it and keeps the value.
+     */
+    checkbox?: boolean | null;
+    /**
+     * Decimal places, 0 through 10; -1 restores automatic.
+     */
+    decimals?: number | null;
+    /**
+     * Fill color as #RRGGBB; empty string resets it.
+     */
+    fillColor?: string | null;
+    fontFamily?: null | SpreadsheetFont;
+    /**
+     * Exact Excel font name, up to 128 characters.
+     */
+    fontName?: string | null;
+    /**
+     * Font size in points, 8 through 36.
+     */
+    fontSize?: number | null;
+    format?: null | SpreadsheetNumberFormat;
+    horizontalAlign?: null | SpreadsheetHorizontalAlign;
+    /**
+     * Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the
+     * left edge, or from the right edge of right-aligned cells. Centered cells ignore it.
+     */
+    indent?: number | null;
+    /**
+     * Italic text.
+     */
+    italic?: boolean | null;
+    /**
+     * Exact Excel number format, up to 512 characters; it overrides the display of `format`.
+     * Show dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,
+     * mm/dd/yyyy, dd/mm/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with
+     * format=time and a code such as h:mm AM/PM.
+     */
+    numberFormat?: string | null;
+    /**
+     * Struck-through text.
+     */
+    strikethrough?: boolean | null;
+    /**
+     * Text color as #RRGGBB; empty string resets it.
+     */
+    textColor?: string | null;
+    /**
+     * Underlined text.
+     */
+    underline?: boolean | null;
+    verticalAlign?: null | SpreadsheetVerticalAlign;
+    /**
+     * Wrap text.
+     */
+    wrap?: boolean | null;
+};
+
+/**
+ * A table column's type, by its header name.
+ */
+export type SpreadsheetTableColumnType = {
+    /**
+     * Header name of the column, ignoring case.
+     */
+    column: string;
+    /**
+     * What the column holds.
+     */
+    type: SpreadsheetColumnType;
+};
+
+/**
+ * A named table (an Excel table) that formulas address with structured references.
+ */
+export type SpreadsheetTableSummary = {
+    /**
+     * Typed columns; untyped columns are left out.
+     */
+    columnTypes?: Array<SpreadsheetTableColumnType>;
+    /**
+     * Column names, from the header row.
+     */
+    columns: Array<string>;
+    /**
+     * Columns whose filters currently hide rows.
+     */
+    filteredColumns?: Array<string>;
+    /**
+     * Table name, as in Sales[Amount].
+     */
+    name: string;
+    /**
+     * A1 rectangle from the header row through the total row, if any.
+     */
+    range: string;
+    /**
+     * Whether the last row is a total row.
+     */
+    totalsRow: boolean;
+};
+
+/**
+ * A calculated scalar with its display text and optional error explanation.
+ */
+export type SpreadsheetValue = {
+    /**
+     * Text shown in the spreadsheet.
+     */
+    display: string;
+    /**
+     * Explanation for an error result.
+     */
+    error?: string | null;
+    /**
+     * Scalar kind: blank, number, text, boolean, or error.
+     */
+    type: SpreadsheetValueKind;
+    /**
+     * The typed scalar. Empty cells have a null value.
+     */
+    value: unknown;
+};
+
+/**
+ * The calculation result kind.
+ */
+export type SpreadsheetValueKind = 'blank' | 'number' | 'text' | 'boolean' | 'error';
+
+/**
+ * Vertical alignment.
+ */
+export type SpreadsheetVerticalAlign = 'top' | 'middle' | 'bottom';
 
 /**
  * A cell as fetched. An absent cell is `NULL`; an absent multi-valued cell
@@ -25249,6 +26008,31 @@ export type CreateSnippetHandlerResponses = {
 
 export type CreateSnippetHandlerResponse = CreateSnippetHandlerResponses[keyof CreateSnippetHandlerResponses];
 
+export type CreateSpreadsheetData = {
+    body: CreateSpreadsheetRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/create_spreadsheet';
+};
+
+export type CreateSpreadsheetErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * Project edit access denied
+     */
+    403: unknown;
+    500: ErrorResponse;
+};
+
+export type CreateSpreadsheetError = CreateSpreadsheetErrors[keyof CreateSpreadsheetErrors];
+
+export type CreateSpreadsheetResponses = {
+    200: CreateSpreadsheetResponse;
+};
+
+export type CreateSpreadsheetResponse2 = CreateSpreadsheetResponses[keyof CreateSpreadsheetResponses];
+
 export type CreateTaskHandlerData = {
     body: CreateTaskRequest;
     path?: never;
@@ -26429,6 +27213,139 @@ export type SetSkillDescriptionResponses = {
 };
 
 export type SetSkillDescriptionResponse = SetSkillDescriptionResponses[keyof SetSkillDescriptionResponses];
+
+export type CalculateSpreadsheetData = {
+    body: CalculateSpreadsheetRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/calculate';
+};
+
+export type CalculateSpreadsheetErrors = {
+    /**
+     * Not a native spreadsheet, or invalid formulas or overrides
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The spreadsheet engine failed
+     */
+    502: ErrorResponse;
+};
+
+export type CalculateSpreadsheetError = CalculateSpreadsheetErrors[keyof CalculateSpreadsheetErrors];
+
+export type CalculateSpreadsheetResponses = {
+    200: SpreadsheetResponse;
+};
+
+export type CalculateSpreadsheetResponse = CalculateSpreadsheetResponses[keyof CalculateSpreadsheetResponses];
+
+export type EditSpreadsheetData = {
+    body: EditSpreadsheetRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/edits';
+};
+
+export type EditSpreadsheetErrors = {
+    /**
+     * Not a native spreadsheet, or an invalid batch; nothing changed
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The workbook changed since expectedRevision; nothing changed
+     */
+    409: ErrorResponse;
+    /**
+     * The engine failed and the batch may have been saved
+     */
+    502: ErrorResponse;
+};
+
+export type EditSpreadsheetError = EditSpreadsheetErrors[keyof EditSpreadsheetErrors];
+
+export type EditSpreadsheetResponses = {
+    200: SpreadsheetResponse;
+};
+
+export type EditSpreadsheetResponse = EditSpreadsheetResponses[keyof EditSpreadsheetResponses];
+
+export type ReadSpreadsheetData = {
+    body: ReadSpreadsheetRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/read';
+};
+
+export type ReadSpreadsheetErrors = {
+    /**
+     * Not a native spreadsheet, or an invalid sheet or range
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The spreadsheet engine failed
+     */
+    502: ErrorResponse;
+};
+
+export type ReadSpreadsheetError = ReadSpreadsheetErrors[keyof ReadSpreadsheetErrors];
+
+export type ReadSpreadsheetResponses = {
+    200: SpreadsheetResponse;
+};
+
+export type ReadSpreadsheetResponse = ReadSpreadsheetResponses[keyof ReadSpreadsheetResponses];
 
 export type GetDocumentTeamShareData = {
     body?: never;
