@@ -350,10 +350,10 @@ fn instance_config(
         ),
         (CREATED_AT_KEY.to_owned(), created_at.to_rfc3339()),
         (INCUS_ENROLLMENT_KEY.to_owned(), enrollment_json.to_owned()),
-        ("limits.cpu".to_owned(), size.vcpus().to_string()),
+        ("limits.cpu".to_owned(), size.spec().incus_cpu.to_owned()),
         (
             "limits.memory".to_owned(),
-            format!("{}GiB", size.memory_gb()),
+            size.spec().incus_memory.to_owned(),
         ),
     ])
 }
@@ -365,10 +365,10 @@ fn root_device(pool: &str, size: ComputerSize) -> BTreeMap<String, String> {
         ("type".to_owned(), "disk".to_owned()),
         ("path".to_owned(), "/".to_owned()),
         ("pool".to_owned(), pool.to_owned()),
-        ("size".to_owned(), format!("{}GiB", size.disk_gb())),
+        ("size".to_owned(), size.spec().incus_root_size.to_owned()),
         (
             "size.state".to_owned(),
-            format!("{}GiB", size.memory_gb() + 1),
+            size.spec().incus_state_size.to_owned(),
         ),
     ])
 }
