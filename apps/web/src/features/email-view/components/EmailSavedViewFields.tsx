@@ -1,8 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { UserIcon } from '@core/component/UserIcon';
-import { parseDomain } from '@core/util/domain';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import GlobeIcon from '@icon/system/regular/globe.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { TagDot } from '@property/tags/TagDot';
 import type { TagOptionSummary } from '@property/tags/tag-options';
@@ -10,14 +7,11 @@ import {
   Button,
   Checkbox,
   ChipCombobox,
-  type ChipComboboxDisplay,
   type ChipComboboxOption,
-  Input,
   Tabs,
 } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { cn } from '@ui/utils/classname';
-import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
   createMemo,
@@ -27,96 +21,17 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { match } from 'ts-pattern';
 import {
   type EmailSavedViewFilters,
   hasAdvancedEmailFilters,
 } from '../filters/email-saved-view';
 import type { EmailParticipantSuggestion } from '../queries/use-email-participant-suggestions';
-import {
-  EMAIL_RECEIVED_WITHIN_DAYS,
-  type EmailParticipant,
-  type EmailParticipantField,
-} from '../types';
-
-// People and domains share one picker, so their values are tagged.
-const PERSON = 'person:';
-const DOMAIN = 'domain:';
-
-const participantValue = (person: EmailParticipant) =>
-  person.type === 'address'
-    ? `${PERSON}${person.email}`
-    : `${DOMAIN}${person.domain}`;
-
-const participantOf = (value: string): EmailParticipant | undefined => {
-  if (value.startsWith(PERSON))
-    return { type: 'address', email: value.slice(PERSON.length) };
-  if (value.startsWith(DOMAIN))
-    return { type: 'domain', domain: value.slice(DOMAIN.length) };
-  return undefined;
-};
-
-/** An address is a person; a domain, `@domain` or website is a domain. */
-const parseParticipant = (text: string) => {
-  const entry = text.trim().toLowerCase();
-  if (EmailValidator.validate(entry)) return `${PERSON}${entry}`;
-  const domain = parseDomain(entry);
-  return domain ? `${DOMAIN}${domain}` : undefined;
-};
-
-const personIcon = (email: string) => () => (
-  <UserIcon email={email} size="sm" suppressClick showTooltip={false} />
-);
-const domainIcon = () => (
-  <GlobeIcon class="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
-);
-
-/** A chosen person or domain no suggestion describes, such as a typed one. */
-const describeParticipant = (value: string): ChipComboboxDisplay => {
-  const person = participantOf(value);
-  if (!person) return { label: value };
-  return person.type === 'address'
-    ? { label: person.email, icon: personIcon(person.email) }
-    : { label: person.domain, icon: domainIcon };
-};
-
-const participantOption = (
-  suggestion: EmailParticipantSuggestion
-): ChipComboboxOption =>
-  match(suggestion)
-    .with({ type: 'domain' }, ({ domain, company, contacts }) => ({
-      value: `${DOMAIN}${domain}`,
-      label: company ?? domain,
-      detail: company
-        ? domain
-        : contacts
-          ? t('emailViews.domainContacts', { count: contacts })
-          : undefined,
-      chipLabel: domain,
-      icon: domainIcon,
-    }))
-    .with({ type: 'address' }, ({ email, name }) => ({
-      value: `${PERSON}${email}`,
-      label: name ?? email,
-      detail: name ? email : undefined,
-      icon: personIcon(email),
-    }))
-    .exhaustive();
-
-// Enter in a list field ends the entry, never submits the whole view.
-const keepEnterInField = (event: KeyboardEvent) => {
-  if (event.key === 'Enter') event.preventDefault();
-};
+import { EMAIL_RECEIVED_WITHIN_DAYS } from '../types';
+import { EmailParticipantsField, EmailSubjectField } from './EmailFilterFields';
 
 const sameList = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length &&
   left.every((value, index) => value === right[index]);
-
-const splitList = (text: string) =>
-  text
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
 
 function Section(props: { label: string; children: JSX.Element }) {
   return (
@@ -164,25 +79,6 @@ function Choice<T extends string>(props: {
   );
 }
 
-const participantFieldLabel = (field: EmailParticipantField) =>
-  ({
-    from: t('emailViews.fieldFrom'),
-    to: t('emailViews.fieldTo'),
-    cc: t('emailViews.fieldCc'),
-    bcc: t('emailViews.fieldBcc'),
-  })[field];
-
-const PARTICIPANT_FIELDS: readonly EmailParticipantField[] = [
-  'from',
-  'to',
-  'cc',
-  'bcc',
-];
-
-/**
- * Edits every condition of an email view; the dialog around it owns saving.
- * Typed lists keep their own text, so remount it to show new filters.
- */
 /** Shown under a new view's name: an agent can make the view from a request. */
 export function EmailSavedViewAgentHint() {
   return (
@@ -193,6 +89,7 @@ export function EmailSavedViewAgentHint() {
   );
 }
 
+/** Edits every condition of an email view; the dialog around it owns saving. */
 export function EmailSavedViewFields(props: {
   filters: EmailSavedViewFilters;
   onChange: (filters: EmailSavedViewFilters) => void;
@@ -200,7 +97,6 @@ export function EmailSavedViewFields(props: {
   suggestions: Accessor<EmailParticipantSuggestion[]>;
   tags: readonly TagOptionSummary[];
 }) {
-  const matchFromId = createUniqueId();
   const advancedId = createUniqueId();
   // Starts open when the view already uses one, so nothing set is hidden.
   const [advancedOpen, setAdvancedOpen] = createSignal(
@@ -210,16 +106,6 @@ export function EmailSavedViewFields(props: {
     key: K,
     value: EmailSavedViewFilters[K]
   ) => props.onChange({ ...props.filters, [key]: value });
-  const [subjectText, setSubjectText] = createSignal(
-    props.filters.subject.join(', ')
-  );
-  // Other edits rebuild `filters`; keep the chips unless the people change.
-  const participants = createMemo(
-    () => props.filters.participants.map(participantValue),
-    undefined,
-    { equals: sameList }
-  );
-  const options = createMemo(() => props.suggestions().map(participantOption));
   const tagValues = createMemo(
     () => props.filters.tags.map((tag) => tag.optionId),
     undefined,
@@ -251,13 +137,6 @@ export function EmailSavedViewFields(props: {
     );
   };
 
-  const toggleField = (field: EmailParticipantField) => {
-    const fields = props.filters.participantFields.includes(field)
-      ? props.filters.participantFields.filter((value) => value !== field)
-      : [...props.filters.participantFields, field];
-    // Looking nowhere matches nothing; keep at least one field.
-    if (fields.length > 0) set('participantFields', fields);
-  };
   const toggleAttachment = (
     id: EmailSavedViewFilters['attachments'][number],
     checked: boolean
@@ -272,71 +151,21 @@ export function EmailSavedViewFields(props: {
   return (
     <div class="flex flex-col gap-5">
       <Section label={t('emailViews.people')}>
-        <ChipCombobox
-          aria-label={t('emailViews.people')}
-          placeholder={t('emailViews.peoplePlaceholder')}
-          values={participants()}
-          onChange={(next) =>
-            set(
-              'participants',
-              next.flatMap((value) => {
-                const person = participantOf(value);
-                return person ? [person] : [];
-              })
-            )
+        <EmailParticipantsField
+          participants={props.filters.participants}
+          participantFields={props.filters.participantFields}
+          onParticipantsChange={(participants) =>
+            set('participants', participants)
           }
-          options={options()}
-          describeValue={describeParticipant}
-          parseValue={parseParticipant}
-          addLabel={(value) =>
-            t('emailViews.addEntry', {
-              entry: describeParticipant(value).label,
-            })
-          }
-          removeLabel={(entry) => t('emailViews.removeEntry', { entry })}
-          portalScope="local"
+          onFieldsChange={(fields) => set('participantFields', fields)}
+          suggestions={props.suggestions}
         />
-        <div class="flex flex-wrap items-center gap-1.5">
-          <span id={matchFromId} class="mr-1 text-xs text-ink-muted">
-            {t('emailViews.matchFrom')}
-          </span>
-          <div
-            role="group"
-            aria-labelledby={matchFromId}
-            class="flex flex-wrap gap-1.5"
-          >
-            <For each={PARTICIPANT_FIELDS}>
-              {(field) => (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  aria-pressed={props.filters.participantFields.includes(field)}
-                  onClick={() => toggleField(field)}
-                >
-                  {participantFieldLabel(field)}
-                </Button>
-              )}
-            </For>
-          </div>
-        </div>
       </Section>
 
       <Section label={t('emailViews.subjectContains')}>
-        <Input
-          aria-label={t('emailViews.subjectContains')}
-          placeholder={t('emailViews.subjectPlaceholder')}
-          value={subjectText()}
-          onKeyDown={keepEnterInField}
-          maxLength={2000}
-          onInput={(event) => {
-            const text = event.currentTarget.value;
-            setSubjectText(text);
-            set(
-              'subject',
-              splitList(text).map((keyword) => keyword.slice(0, 200))
-            );
-          }}
+        <EmailSubjectField
+          subject={props.filters.subject}
+          onChange={(subject) => set('subject', subject)}
         />
       </Section>
 

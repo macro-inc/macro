@@ -4,8 +4,15 @@ import type { EmailFocusSort, EmailTab } from './constants';
 export type { EmailFocusSort, EmailTab };
 
 export type EmailFilterGroupId =
+  | 'people'
+  | 'matchFrom'
+  | 'subject'
+  | 'importance'
   | 'read'
   | 'done'
+  | 'received'
+  | 'inboxes'
+  | 'starred'
   | 'attachments'
   | 'calendar'
   | 'focus'
@@ -38,7 +45,7 @@ export type EmailReceivedWithinDays =
   (typeof EMAIL_RECEIVED_WITHIN_DAYS)[number];
 
 /**
- * A saved view's restrictions that have no Filters menu control. Values within
+ * A tab's or saved view's restrictions beyond the Soup facets. Values within
  * one condition are alternatives; separate conditions all apply.
  */
 export type EmailViewConditions = {
@@ -67,8 +74,9 @@ export type EmailViewState = {
   /** Sidebar sections the user folded away; kept per user, not per visit. */
   collapsedSidebarSectionIds: string[];
   /**
-   * The open saved view's conditions, on the All tab. Undefined on built-in
-   * tabs; never persisted, since the view's definition restores them.
+   * Conditions beyond the facets: a saveable tab's own and the edits on top,
+   * or an open view's. Undefined on tabs a view can't hold; an open view's
+   * are never persisted, since its definition restores them.
    */
   conditions?: EmailViewConditions;
   /** Where leaving the open saved view returns, and what persists meanwhile. */

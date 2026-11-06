@@ -267,6 +267,23 @@ Email Status and Done are single choices that close the menu; attachment filters
 stay open for multiple selections. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
+On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
+condition a saved view can: People and companies (search, or type an address,
+domain, `@domain` or website and pick `Add “…”`), Match from (once someone is
+chosen; the last field stays on), Subject contains (a text field applied after a
+pause or on Enter), Tags, Importance, Status, Done, Latest activity, Inboxes
+(with two or more linked; several can be chosen, in step with the account
+picker), Starred, Attachments and Calendar. Each tab's own restrictions show as
+selected (Signal: Importance Signal and Done Not done; Favorites: Starred;
+Archived: Done; Calendar: Has calendar invite) and can be changed; they don't
+count toward the filter badge or dots, and Clear returns to them and every
+inbox. While they stand, the list uses the tab's own query; once one changes,
+or a People, Subject or Latest activity condition is set, it lists mail as an
+open saved view would. The other tabs keep the facets, Tags and Inboxes. The
+mobile filter drawer shows the same sections, with the builder's People and
+Subject fields. Check on Signal: Filters shows Not done selected with no badge;
+choosing Done → All widens the list, shows **Save view**, and Clear restores it.
+
 ### Read state and trash
 
 In the Email view, Status filters discovery on the server **before pagination**,
@@ -1397,12 +1414,13 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   reveals Importance, Status, Done, Latest activity, Inboxes (with two or more
   linked), and Starred, calendar invite and attachment requirements; it starts
   open when the view already sets one of them. Values within one
-  condition are alternatives; conditions all apply. On a filtered Signal, Noise,
-  All, Archived, Favorites or Calendar tab, **Save view** left of Filters opens
-  the builder prefilled; Sent, Drafts, Scheduled, Reminders, Shared and Focus
-  can't be saved. Search text is never saved.
-- **Open.** The view opens on All with its Status, Done, attachment, calendar,
-  tag and inbox filters in the normal controls; the header shows its name and a
+  condition are alternatives; conditions all apply. Once the filters on Signal,
+  Noise, All, Archived, Favorites or Calendar differ from the tab's own (or an
+  inbox is chosen), **Save view** left of Filters opens the builder prefilled,
+  as in Tasks; Sent, Drafts, Scheduled, Reminders, Shared and Focus can't be
+  saved. Search text is never saved.
+- **Open.** The view opens on All with every condition in the Filters
+  controls; the header shows its name and a
   `…` menu, and built-in tabs stop looking selected. Changing a filter shows
   **Save changes** (owner) and **Reset**. Choosing a tab, or Return to Email
   from an unavailable view, goes back to the tab and inboxes it was opened from.

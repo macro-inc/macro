@@ -518,9 +518,11 @@ Email is the second consumer (`kind: "email"`, `version: 1`), behind the
   query stays stable while open.
 - Values within one condition are alternatives; conditions all apply, as in
   Tasks. Shared threads are excluded, like Signal and Noise.
-- Opening a view selects All and restores Status, Done, attachments, calendar,
-  tags and inboxes into the normal Filters controls; the other conditions have
-  no menu control and are edited in the builder dialog. Dirty state, Save changes,
+- Opening a view selects All and restores every condition into the Filters
+  controls, which hold everything the builder can set. A saveable tab is a
+  built-in view: it starts from its own restrictions as editable filters, keeps
+  its own query while they stand, lists mail as a view once they change, and
+  offers Save view whenever its filters differ from its own. Dirty state, Save changes,
   Reset, skipped-setting diagnostics and the unavailable state follow the Task
   rules above. Leaving returns to the tab and inboxes the view was opened from.
 - The definition compiles into the existing Soup `ef` filter at execution time

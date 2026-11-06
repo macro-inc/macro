@@ -313,7 +313,7 @@ export function ListFilterDropdown<
   ];
   const setSelectedOptionIds = (
     group: ListFilterGroup<TGroupId, TOptionId>,
-    ids: readonly string[]
+    ids: readonly TOptionId[]
   ) => {
     const current = selectedOptionIds(group);
     // Typed entries (`createOption`) arrive with ids no option lists yet.
@@ -414,9 +414,7 @@ export function ListFilterDropdown<
           <Key each={props.groups} by="id">
             {(group) => (
               <Switch>
-                <Match when={group().submenu}>
-                  {(submenu) => submenu()()}
-                </Match>
+                <Match when={group().submenu}>{(submenu) => submenu()()}</Match>
                 <Match when={!group().searchPlaceholder}>
                   <FilterSubmenu
                     label={group().label}
@@ -444,7 +442,10 @@ export function ListFilterDropdown<
                     active={isGroupActive(group())}
                     options={() => group().options}
                     activeIds={() => selectedOptionIds(group())}
-                    onChange={(ids) => setSelectedOptionIds(group(), ids)}
+                    // The submenu returns this group's option and typed ids.
+                    onChange={(ids) =>
+                      setSelectedOptionIds(group(), ids as TOptionId[])
+                    }
                     placeholder={group().searchPlaceholder}
                     createOption={group().createOption}
                   />

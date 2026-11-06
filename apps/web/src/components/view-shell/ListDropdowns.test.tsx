@@ -1010,6 +1010,10 @@ it('offers typed text no option lists and adds it to the selection', async () =>
   );
 
   expect(selected()).toEqual(['alice', 'ada@example.com']);
+
+  fireEvent.input(input, { target: { value: 'bo@example.com' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(selected()).toEqual(['alice', 'ada@example.com', 'bo@example.com']);
 });
 
 it('draws a group’s own submenu, committing its text on Enter', async () => {
@@ -1047,4 +1051,3 @@ it('draws a group’s own submenu, committing its text on Enter', async () => {
 
   expect(subject()).toBe('invoice, receipt');
 });
-

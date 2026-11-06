@@ -14,7 +14,12 @@ the Soup-backed thread list, and saved email views (flag
 - `queries/use-email-query.ts`: list, search, read admission, local drafts.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
-  canonical comparison, and scope resolution.
+  canonical comparison, scope resolution, and each tab's own filters.
+- `filters/use-email-filters.tsx`: the Filters model shared by the desktop menu
+  and the mobile drawer; each group is a field read from and written into the
+  list's filters, active once it differs from what Clear returns to.
+- `components/EmailFilterFields.tsx`: the People and Subject editors the
+  builder and the mobile drawer share.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section, mobile picker, menus, the
@@ -22,10 +27,15 @@ the Soup-backed thread list, and saved email views (flag
 
 ## Gotchas
 
+- A saveable tab is a built-in view: it starts from its own restrictions
+  (`emailTabFilterState`) as facets plus `state.conditions`, which the Filters
+  menu edits like a view's. `emailTabRefinements` keeps the tab's own query
+  while those restrictions stand; otherwise the list queries as a view. Write
+  filters through `setFilters`/`clearFilters`, never by emptying facets.
 - A saved view opens on All. Its Status, Done, attachment, calendar, tag and
   inbox filters live in the normal state so the Filters menu, inbox picker,
   and read admission keep working; its other conditions live in
-  `state.conditions`, edited only in the builder.
+  `state.conditions`.
 - Never query while a selected view is loading or unavailable: that lists all
   mail under the view's name.
 - Keep inbox reconciliation off while a view is open; an inbox no longer
