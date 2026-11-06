@@ -183,7 +183,7 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
         assert!(!prompt.contains(name), "{name}");
     }
     assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
-    assert!(prompt.contains("macro.agents.list()"));
+    assert!(prompt.contains("macro.agents.coding()"));
     assert!(prompt.contains("macro.agentSessions.createManaged"));
     assert!(
         !tools_for(AiHost::AgentSession)

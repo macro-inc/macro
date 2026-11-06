@@ -31,6 +31,9 @@ enforced by the ordinary backend APIs.
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
   route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `agents.list()` reads storage agent records, which built-in personas lack;
+  `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
+  included) that the `ListCodingAgents` tool serves.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
