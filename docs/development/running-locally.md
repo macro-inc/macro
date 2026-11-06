@@ -528,13 +528,15 @@ Press `r`, or run `just run_local rebuild`, to rebuild the binaries. Only servic
 whose binary is newer than their container restart, so a build that failed partway
 still gets its finished services reloaded next time.
 
-Three services have Docker-built images. They are not rebuilt by default:
+Three services have Docker-built images:
 
 - `sync_service`
 - `lexical_service`
 - `websocket_service`
 
-If you change these services, the running stack can use a stale image. Force a rebuild with this flag:
+`sync_service` and `lexical_service`, like the local OpenSearch image, run under tags keyed by the content of what their build reads (the sync worker's cargo dependency closure; the JavaScript workspace manifests, lockfile, shared `packages/` and the lexical service). A start whose inputs changed builds the new image; otherwise every instance and worktree on the machine shares the one already built, so an unrelated edit no longer costs a new instance a minute or two of image builds. Tags over three days old that no container uses are removed.
+
+A running stack keeps the images it started with, and `websocket_service` is built once per instance. If you change these services, force a rebuild with this flag:
 
 ```bash
 just run_local --build-aux-services
