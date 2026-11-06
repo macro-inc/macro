@@ -11,6 +11,9 @@ us-east-1. `README.md` is the full operations guide.
 - `nixos/host.nix`: boot order, retained volume, stable uids, service hardening.
 - `nixos/services.nix`, `nixos/goalert.nix`: the systemd services and credentials.
 - `index.ts`: VPC, ALB, certificate, DNS, alarms and EC2 user data.
+- `deploy/`: the Deploy Observability workflow's steps (`release.ts`), the image
+  source key, AMI publishing, the smoke boot and the plan check. README
+  "Deploying" describes them.
 
 ## Recipes
 
@@ -25,6 +28,12 @@ us-east-1. `README.md` is the full operations guide.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
   the unit → README secret list. Add the unit to `secretConsumers` in `host.nix`.
 - Upgrade GoAlert: bump `version` and the hashes in `nixos/goalert/package.nix`.
+- Ship a host change: merge it, then run **Deploy Observability** from `main`, a
+  dry run first. Pulumi picks the AMI by the source-hash tag; there is no `amiId`.
+- A new file the image reads must sit under `flake.nix`, `flake.lock`, `nixos/`
+  or `assets/` (`deploy/image-key.ts`); the key test fails otherwise.
+- A new AWS call in `deploy/` needs a grant in
+  `../observability-deploy/policy.ts`; `deploy/deploy.test.ts` checks every call.
 
 ## Checks
 
@@ -34,12 +43,18 @@ From this directory:
 - `python3 -m unittest test_macro_alerts_relay` from `nixos/goalert/` when the
   relay's channel post format changes.
 
-From `infra/`: `bun run check`, then Biome on changed `.ts`.
+From `infra/`: `bun run check` (includes `bun test stacks/observability/deploy`),
+then Biome on changed `.ts`.
 
 ## Gotchas
 
-- Changes ship only as a new AMI plus an approved deploy; never `pulumi up` or
-  publish an image without explicit permission.
+- Changes ship only through the Deploy Observability workflow, which replaces the
+  host and takes Grafana, Loki, Tempo and GoAlert down for several minutes. Never
+  run it, `pulumi up` or publish an image without explicit permission.
+- A plan that changes anything besides the instance, its attachments and its
+  alarms is refused by the workflow and needs a reviewed manual `pulumi up`.
+- `pulumi preview` fails until an AMI is tagged for this checkout's image source;
+  a dry run of the workflow builds and tags one.
 - The host reads secrets from the stack's own Secrets Manager secret in
   us-east-2, so it never depends on production to boot. Doppler
   `observability/prd` holds the values; copy changes into the secret.
