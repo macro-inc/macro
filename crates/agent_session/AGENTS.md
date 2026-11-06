@@ -130,6 +130,14 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
+- MCP credentials never enter the log. `Message`'s serialization applies
+  `agent_fold::domain::log::redact_stored_frame`, which storage and every reader
+  go through; `LiveSessionLogWriter` also redacts the frame it holds, and
+  `parse_message` redacts rows that predate this. The session's live server list
+  (`attached_mcp_servers`) and the frame sent to the runtime keep them. A new
+  server-to-runtime method is stored without params until it is added to
+  `STORED_WHOLE_METHODS` in that module; only add methods whose params hold no
+  credential.
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as
