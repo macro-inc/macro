@@ -52,6 +52,7 @@ mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
+mod observability_image;
 mod path_validation;
 mod pr_ci;
 mod pr_privacy_check;
@@ -124,6 +125,11 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
+    WorkflowFile {
+        slug: "observability_image",
+        file_name: "observability_image.yml",
+        render_yaml: || render_gh_workflow(observability_image::observability_image)(),
+    },
     WorkflowFile {
         slug: "deploy_observability",
         file_name: "deploy-observability.yml",

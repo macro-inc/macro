@@ -2,15 +2,6 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_observability.rs
 name: Deploy Observability
 on:
-  pull_request:
-    branches:
-    - main
-    paths:
-    - infra/stacks/observability/flake.nix
-    - infra/stacks/observability/flake.lock
-    - infra/stacks/observability/nixos/**
-    - infra/stacks/observability/assets/**
-    - .github/workflows/deploy-observability.yml
   workflow_dispatch:
     inputs:
       dry_run:
@@ -21,45 +12,7 @@ on:
 permissions:
   contents: read
 jobs:
-  build-image:
-    if: github.event_name == 'pull_request'
-    name: Build observability image
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=observability-image
-    concurrency:
-      group: observability-image-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
-    timeout-minutes: 90
-    steps:
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        clean: 'false'
-        persist-credentials: 'false'
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: ./.github/actions/setup-nix
-    - name: Build the NixOS image
-      run: |
-        set -euo pipefail
-        if [ -e /dev/kvm ]; then
-          echo "KVM is available"
-        else
-          echo "::warning::No /dev/kvm: the image builds under QEMU emulation"
-        fi
-        features="$(nix config show system-features) kvm"
-        time nix build . --option system-features "$features" --print-build-logs --out-link result
-        du -shL result/*.vhd
-      shell: bash
-      working-directory: infra/stacks/observability
-    - name: Teardown Nix
-      if: always()
-      uses: ./.github/actions/teardown-nix
   deploy:
-    if: github.event_name == 'workflow_dispatch'
     name: Deploy observability
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=observability-image
     concurrency:

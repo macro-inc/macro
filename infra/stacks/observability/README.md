@@ -420,8 +420,9 @@ to roll out. The steps, all in `deploy/release.ts`:
    long the update took.
 
 One rollout runs at a time (concurrency group `deploy-observability-prod`,
-never cancelled). Pull requests that change the image run only the build, with
-no credentials, so a broken image fails before merge. The deploy job uses the
+never cancelled). When a pull request changes the image, `PR CI` (the `run-ci`
+label) builds it through `.github/workflows/observability_image.yml`, with no
+credentials, so a broken image fails before merge. The deploy job uses the
 repository's deploy credentials (`AWS_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY` and
 `PULUMI_ACCESS_TOKEN`), the same ones `deploy_on_push` and `deploy_web_app` use.
 Nothing needs setting up first.

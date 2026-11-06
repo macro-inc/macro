@@ -5,14 +5,14 @@
 //!
 //! Started by hand only: a rollout replaces the single host, so Grafana, Loki,
 //! Tempo and GoAlert are down for several minutes. `dry_run` (the default)
-//! stops before `pulumi up`. Pull requests that change the image only build it.
+//! stops before `pulumi up`. Pull requests that change the image build it in
+//! `PR CI`, through [`crate::workflows::observability_image`].
 //! The steps live in `infra/stacks/observability/deploy/release.ts`; the
 //! stack's README ("Deploying") describes them.
 
 use anyhow::Result;
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Step, Use, Workflow,
-    WorkflowDispatch,
+    Concurrency, Event, Expression, Job, Level, Permissions, Step, Use, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -21,32 +21,20 @@ use crate::workflows::{runners, steps, vars};
 mod test;
 
 const STACK_DIR: &str = "infra/stacks/observability";
-const CACHE_TAG: &str = "observability-image";
+/// Shared with the PR image build, so a deploy after a PR starts warm.
+pub(crate) const CACHE_TAG: &str = "observability-image";
 /// Every step's `if` after `find`: which stage this source's image has reached.
 const STAGE: &str = "steps.find.outputs.stage";
 const AMI: &str = "${{ steps.publish.outputs.ami || steps.find.outputs.ami }}";
 
 /// Build the workflow. The ordered dispatch input is filled in by [`patch`].
 pub fn deploy_observability() -> Workflow {
-    let mut pull_request = PullRequest::default().add_branch("main");
-    for path in [
-        xtask_paths::repo_glob!("infra/stacks/observability/flake.nix"),
-        xtask_paths::repo_glob!("infra/stacks/observability/flake.lock"),
-        xtask_paths::repo_glob!("infra/stacks/observability/nixos/**"),
-        xtask_paths::repo_glob!("infra/stacks/observability/assets/**"),
-        xtask_paths::repo_glob!(".github/workflows/deploy-observability.yml"),
-    ] {
-        pull_request = pull_request.add_path(path);
-    }
     Workflow::new("Deploy Observability")
-        .on(Event::default()
-            .workflow_dispatch(WorkflowDispatch::default())
-            .pull_request(pull_request))
+        .on(Event::default().workflow_dispatch(WorkflowDispatch::default()))
         .permissions(Permissions {
             contents: Some(Level::Read),
             ..Default::default()
         })
-        .add_job("build-image", build_image_job())
         .add_job("deploy", deploy_job())
 }
 
@@ -75,7 +63,7 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
 
 /// `nix build` of the image. Its builder boots a VM and requires the `kvm`
 /// system feature; without `/dev/kvm`, QEMU emulates instead, more slowly.
-fn build_image() -> Step<gh_workflow::Run> {
+pub(crate) fn build_image() -> Step<gh_workflow::Run> {
     Step::new("Build the NixOS image")
         .run(indoc::indoc! {r#"
             set -euo pipefail
@@ -92,29 +80,10 @@ fn build_image() -> Step<gh_workflow::Run> {
         .working_directory(STACK_DIR)
 }
 
-fn nix_steps(job: Job) -> Job {
+pub(crate) fn nix_steps(job: Job) -> Job {
     job.add_step(steps::checkout(false, false))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
-}
-
-/// Proves an image change builds before it merges. No credentials.
-fn build_image_job() -> Job {
-    nix_steps(
-        Job::default()
-            .name("Build observability image")
-            .cond(Expression::new("github.event_name == 'pull_request'"))
-            .runs_on(runners::Runner::Mid.with_cache_tag(CACHE_TAG))
-            .timeout_minutes(90u32)
-            .concurrency(
-                Concurrency::new(Expression::new(
-                    "observability-image-${{ github.event.pull_request.number }}",
-                ))
-                .cancel_in_progress(true),
-            ),
-    )
-    .add_step(build_image())
-    .add_step(steps::teardown_nix())
 }
 
 /// The deploy credentials every deploy workflow uses, as in `deploy_web_app`.
@@ -140,7 +109,6 @@ fn release(name: &str, command: &str) -> Step<gh_workflow::Run> {
 fn deploy_job() -> Job {
     let job = Job::default()
         .name("Deploy observability")
-        .cond(Expression::new("github.event_name == 'workflow_dispatch'"))
         .runs_on(runners::Runner::Mid.with_cache_tag(CACHE_TAG))
         .timeout_minutes(180u32)
         // One rollout at a time, and never cancel one: that could leave the

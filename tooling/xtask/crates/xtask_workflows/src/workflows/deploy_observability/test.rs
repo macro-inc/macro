@@ -28,9 +28,12 @@ fn position(names: &[String], name: &str) -> usize {
 fn deploys_only_when_started_by_hand_and_defaults_to_a_dry_run() {
     let root = workflow();
     let on = root["on"].as_mapping().expect("on");
-    assert!(
-        !on.contains_key("push"),
-        "every rollout causes downtime, so none starts on push"
+    assert_eq!(
+        on.keys()
+            .filter_map(serde_yaml::Value::as_str)
+            .collect::<Vec<_>>(),
+        vec!["workflow_dispatch"],
+        "every rollout causes downtime, so only a person starts one"
     );
     let input = &root["on"]["workflow_dispatch"]["inputs"]["dry_run"];
     assert_eq!(input["type"].as_str(), Some("boolean"));
@@ -40,14 +43,6 @@ fn deploys_only_when_started_by_hand_and_defaults_to_a_dry_run() {
             .as_str()
             .is_some_and(|text| text.contains("down")),
         "the input says the rollout causes downtime"
-    );
-    assert_eq!(
-        root["jobs"]["deploy"]["if"].as_str(),
-        Some("github.event_name == 'workflow_dispatch'")
-    );
-    assert_eq!(
-        root["jobs"]["build-image"]["if"].as_str(),
-        Some("github.event_name == 'pull_request'")
     );
 }
 
@@ -63,25 +58,31 @@ fn rollouts_never_overlap_or_cancel() {
 }
 
 #[test]
-fn only_the_deploy_job_gets_the_stored_aws_credentials() {
+fn uses_the_stored_aws_credentials_and_pr_builds_get_none() {
     let root = workflow();
     // The stored deploy keys, like the other deploy workflows; no OIDC role.
     assert_eq!(root["permissions"]["id-token"].as_str(), None);
-    assert!(root["jobs"]["deploy"]["permissions"].is_null());
     let text = yaml();
-    let (build_job, deploy_job) = text.split_once("  deploy:").expect("deploy job");
     for secret in [
         "AWS_ACCESS_KEY",
         "AWS_SECRET_ACCESS_KEY",
         "PULUMI_ACCESS_TOKEN",
     ] {
-        assert!(
-            !build_job.contains(secret),
-            "the PR build job must not see {secret}"
-        );
-        assert!(deploy_job.contains(secret), "the deploy job needs {secret}");
+        assert!(text.contains(secret), "the deploy job needs {secret}");
     }
     assert!(!text.contains("role-to-assume"));
+    let image = crate::workflows::render_gh_workflow(
+        crate::workflows::observability_image::observability_image,
+    )()
+    .expect("image workflow");
+    assert!(image.contains("workflow_call"), "PR CI calls the PR build");
+    assert!(image.contains("nix build ."));
+    for secret in ["secrets.", "configure-aws-credentials"] {
+        assert!(
+            !image.contains(secret),
+            "the PR build must not use {secret}"
+        );
+    }
 }
 
 #[test]
