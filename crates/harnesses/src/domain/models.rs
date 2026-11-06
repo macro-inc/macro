@@ -2,8 +2,10 @@
 
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
+use computer_id::ComputerId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
+use pairing_id::PairingId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -139,7 +141,7 @@ pub struct Harness {
     /// The Macro computer (hosted VM) this harness runs on; absent for a
     /// machine the user paired themselves.
     #[serde(default)]
-    pub computer_id: Option<Uuid>,
+    pub computer_id: Option<ComputerId>,
     /// How Claude Code on this machine is paid for. Only meaningful for
     /// Macro computers.
     #[serde(default)]
@@ -253,16 +255,16 @@ pub struct CreateHostedPairing {
     /// Whether agents may bypass ACP permission requests on this harness.
     pub allow_permission_bypass: bool,
     /// The computer the harness runs on.
-    pub computer_id: Uuid,
+    pub computer_id: ComputerId,
 }
 
 /// The claim material a Macro computer's macrod enrolls with.
 #[derive(Debug, Clone)]
 pub struct HostedPairing {
     /// Pairing id the device secret claims.
-    pub pairing_id: Uuid,
+    pub pairing_id: PairingId,
     /// Claim credential; returned only here and never stored raw.
-    pub device_secret: String,
+    pub device_secret: DeviceSecret,
 }
 
 /// Sent by a daemon reading its own harness while it holds a runtime connection,
@@ -289,7 +291,7 @@ pub struct CreatePairingRequest {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreatedPairing {
     /// Pairing id used to poll for the claim.
-    pub pairing_id: Uuid,
+    pub pairing_id: PairingId,
     /// Human-readable code the user confirms in the web app, `XXXX-XXXX`.
     pub code: String,
     /// Claim credential the daemon must present. Shown only here.
@@ -431,4 +433,32 @@ pub struct PairingClaimFacts {
     pub expires_at: DateTime<Utc>,
     /// The harness created at approval, when approved or claimed.
     pub harness_id: Option<HarnessId>,
+}
+
+/// Plaintext enrollment credential; deliberately requires explicit exposure.
+#[derive(Clone)]
+pub struct DeviceSecret(zeroize::Zeroizing<String>);
+
+impl DeviceSecret {
+    /// Take ownership of a newly minted credential.
+    pub fn new(secret: String) -> Self {
+        Self(zeroize::Zeroizing::new(secret))
+    }
+
+    /// Borrow the plaintext for enrollment or hashing.
+    pub fn expose(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl std::fmt::Debug for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("**redacted**")
+    }
+}
+
+impl std::fmt::Display for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("**redacted**")
+    }
 }

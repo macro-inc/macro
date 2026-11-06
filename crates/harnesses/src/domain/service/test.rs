@@ -62,7 +62,7 @@ fn pending_pairing() -> PairingRow {
 struct Calls {
     inserted_pairings: Vec<NewPairing>,
     approved: Vec<(String, NewHarness)>,
-    claimed: Vec<Uuid>,
+    claimed: Vec<PairingId>,
     deleted: Vec<HarnessId>,
     updated: Vec<(HarnessId, HarnessChanges)>,
     team_lookups: Vec<(String, Uuid)>,
@@ -167,11 +167,17 @@ impl HarnessRepo for FakeRepo {
         Ok(self.hosted_upsert)
     }
 
-    async fn computer_harness(&self, _computer_id: Uuid) -> Result<Option<HarnessId>, Self::Err> {
+    async fn computer_harness(
+        &self,
+        _computer_id: ComputerId,
+    ) -> Result<Option<HarnessId>, Self::Err> {
         Ok(self.harness.as_ref().map(|harness| harness.id))
     }
 
-    async fn harness_computer(&self, _harness_id: HarnessId) -> Result<Option<Uuid>, Self::Err> {
+    async fn harness_computer(
+        &self,
+        _harness_id: HarnessId,
+    ) -> Result<Option<ComputerId>, Self::Err> {
         Ok(self
             .harness
             .as_ref()
@@ -206,14 +212,15 @@ impl HarnessRepo for FakeRepo {
 
     async fn pairing_claim_facts(
         &self,
-        _pairing_id: Uuid,
+        _pairing_id: PairingId,
     ) -> Result<Option<PairingClaimFacts>, Self::Err> {
         Ok(self.claim_facts.clone())
     }
 
     async fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
+        _device_secret_hash: [u8; 32],
         _token_id: Uuid,
         _token: HashedHarnessToken,
     ) -> Result<Option<Harness>, Self::Err> {
@@ -578,7 +585,7 @@ fn claim_facts(status: PairingStatus, secret: &str) -> PairingClaimFacts {
 #[tokio::test]
 async fn claim_verifies_the_secret_then_walks_pending_to_claimed() {
     let secret = "device-secret";
-    let pairing_id = Uuid::new_v4();
+    let pairing_id = PairingId::new_from_uuid(Uuid::new_v4());
 
     let repo = FakeRepo {
         claim_facts: Some(claim_facts(PairingStatus::Pending, secret)),
@@ -621,7 +628,7 @@ async fn claim_verifies_the_secret_then_walks_pending_to_claimed() {
 #[tokio::test]
 async fn claim_rejects_bad_secrets_and_dead_pairings() {
     let secret = "device-secret";
-    let pairing_id = Uuid::new_v4();
+    let pairing_id = PairingId::new_from_uuid(Uuid::new_v4());
 
     let repo = FakeRepo {
         claim_facts: Some(claim_facts(PairingStatus::Approved, secret)),
@@ -989,7 +996,7 @@ async fn only_a_harness_manager_may_patch() {
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }
 
-const COMPUTER_ID: Uuid = Uuid::from_u128(42);
+const COMPUTER_ID: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(42));
 
 fn hosted_request() -> CreateHostedPairing {
     CreateHostedPairing {
@@ -1017,7 +1024,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
         .await
         .unwrap();
 
-    assert!(!hosted.device_secret.is_empty());
+    assert!(!hosted.device_secret.expose().is_empty());
     let calls = repo.calls.lock().unwrap();
     assert!(calls.inserted_pairings.is_empty());
     assert_eq!(calls.hosted_upserts.len(), 1);
@@ -1026,7 +1033,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
     assert_eq!(pairing.code, format!("hosted:{}", hosted.pairing_id));
     assert_eq!(
         pairing.device_secret_hash,
-        harness_token::hash_token(&hosted.device_secret)
+        harness_token::hash_token(hosted.device_secret.expose())
     );
     assert_eq!(pairing.requested_name, "Standard computer");
     assert_eq!(pairing.host, None);
@@ -1040,7 +1047,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
 
 #[tokio::test]
 async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rekey() {
-    let existing = Uuid::from_u128(99);
+    let existing = PairingId::new_from_uuid(Uuid::from_u128(99));
     let repo = FakeRepo {
         hosted_upsert: HostedPairingUpsert::Rotated {
             pairing_id: existing,
@@ -1056,7 +1063,7 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         let calls = repo.calls.lock().unwrap();
         assert_eq!(
             calls.hosted_upserts[0].0.device_secret_hash,
-            harness_token::hash_token(&hosted.device_secret)
+            harness_token::hash_token(hosted.device_secret.expose())
         );
     }
 
@@ -1073,13 +1080,13 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         assert_eq!(hosted.pairing_id, calls.hosted_upserts[0].0.id);
         assert_eq!(
             calls.hosted_upserts[0].0.device_secret_hash,
-            harness_token::hash_token(&hosted.device_secret)
+            harness_token::hash_token(hosted.device_secret.expose())
         );
     }
     let mut existing_harness = harness(user_owner(OWNER_ID));
     existing_harness.computer_id = Some(COMPUTER_ID);
     repo.claim_facts = Some(PairingClaimFacts {
-        device_secret_hash: harness_token::hash_token(&hosted.device_secret),
+        device_secret_hash: harness_token::hash_token(hosted.device_secret.expose()),
         status: PairingStatus::Approved,
         expires_at: Utc::now() + Duration::minutes(15),
         harness_id: Some(existing_harness.id),
@@ -1089,7 +1096,7 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         .claim_pairing(
             hosted.pairing_id,
             ClaimPairingRequest {
-                device_secret: hosted.device_secret,
+                device_secret: hosted.device_secret.expose().to_owned(),
             },
         )
         .await
@@ -1335,3 +1342,15 @@ async fn an_agent_computer_team_grant_is_read_only_and_cannot_target_another_tea
     assert!(matches!(result, Err(HarnessError::Unauthorized)));
     assert_eq!(repo.calls.lock().unwrap().team_access.len(), 1);
 }
+#[test]
+fn hosted_pairing_redacts_its_credential() {
+    let pairing = HostedPairing {
+        pairing_id: PairingId::new_from_uuid(Uuid::now_v7()),
+        device_secret: super::super::models::DeviceSecret::new("enrollment-credential".to_owned()),
+    };
+    assert!(!format!("{pairing:?}").contains(pairing.device_secret.expose()));
+    assert_eq!(format!("{}", pairing.device_secret), "**redacted**");
+    assert_eq!(format!("{:?}", pairing.device_secret), "**redacted**");
+}
+
+mod hosted_claim;

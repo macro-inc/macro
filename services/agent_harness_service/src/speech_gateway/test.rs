@@ -21,7 +21,7 @@ impl BrainGatewayAccess for Access {
                         .unwrap()
                         .into_owned(),
                     team_id: Uuid::from_u128(1),
-                    computer_id: ComputerId::new(Uuid::from_u128(2)),
+                    computer_id: ComputerId::new_from_uuid(Uuid::from_u128(2)),
                 }),
                 value
                     if value == format!("mak_{}", "b".repeat(64))

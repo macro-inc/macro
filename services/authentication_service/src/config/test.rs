@@ -519,21 +519,56 @@ fn computer_prices_reject_malformed_configured_ids_even_without_a_fleet() {
         "price_bad\n",
     ] {
         let mut values = config_values();
+        for key in [
+            "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+            "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+            "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+            "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+            "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+            "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+        ] {
+            values[key] = serde_json::json!("price_test");
+        }
         values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!(value);
         let config: Config = serde_json::from_value(values).unwrap();
         assert!(config.computer_prices().is_err(), "{value:?}");
     }
+}
+
+#[test]
+fn partial_computer_prices_fail_without_a_fleet() {
+    let keys = [
+        "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+    ];
+    for mask in 0_u8..64 {
+        let mut values = config_values();
+        for (index, key) in keys.iter().enumerate() {
+            if mask & (1 << index) != 0 {
+                values[key] = serde_json::json!("price_test");
+            }
+        }
+        let config: Config = serde_json::from_value(values).unwrap();
+        match mask {
+            0 => assert!(config.computer_prices().unwrap().is_empty()),
+            63 => assert!(!config.computer_prices().unwrap().is_empty()),
+            _ => assert!(config.computer_prices().is_err(), "partial group {mask}"),
+        }
+    }
+}
+
+#[test]
+fn disabled_computers_need_no_prices_but_reject_partial_prices() {
     let mut values = config_values();
-    values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!("price_standard");
+    values["COMPUTERS_FLEET"] = serde_json::json!("disabled");
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    config.validate_computer_config().unwrap();
+
+    values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!("price_test");
     let config: Config = serde_json::from_value(values).unwrap();
-    assert_eq!(
-        config
-            .computer_prices()
-            .unwrap()
-            .standard
-            .monthly
-            .unwrap()
-            .as_str(),
-        "price_standard"
-    );
+    assert!(config.validate_computer_config().is_err());
 }

@@ -24,6 +24,8 @@ const HARNESS: HarnessId =
 enum FakeFleetError {
     #[error("fleet unavailable")]
     Unavailable,
+    #[error(transparent)]
+    Enrollment(#[from] PersonaCredentialError),
     #[error("instance missing")]
     Missing,
 }
@@ -41,8 +43,10 @@ struct FakeFleet {
     host_attempts: AtomicU32,
     failures: Mutex<u32>,
     missing: bool,
+    lose_during_create: std::sync::atomic::AtomicBool,
     calls: Mutex<Vec<String>>,
     enrollments: Mutex<Vec<(Enrollment, bool)>>,
+    created: Mutex<HashMap<ComputerId, (EnrollmentGeneration, PairingId)>>,
     instances: Mutex<Vec<FleetInstance>>,
 }
 
@@ -57,19 +61,41 @@ impl Fleet for FakeFleet {
 
     async fn create(
         &self,
-        _computer: &Computer,
-        enrollment: &Enrollment,
+        computer: &Computer,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<(), FakeFleetError> {
-        let mut failures = self.failures.lock().unwrap();
-        if *failures > 0 {
-            *failures -= 1;
-            return Err(FakeFleetError::Unavailable);
+        {
+            let mut failures = self.failures.lock().unwrap();
+            if *failures > 0 {
+                *failures -= 1;
+                return Err(FakeFleetError::Unavailable);
+            }
         }
-        self.enrollments
+        let existing = if self.missing {
+            None
+        } else {
+            self.created.lock().unwrap().get(&computer.id).copied()
+        };
+        if let Some((stored, pairing)) = existing {
+            assert_eq!(stored, generation);
+            if enrollment.claimed(pairing).await? {
+                return Ok(());
+            }
+        }
+        let enrollment = enrollment.issue().await?;
+        if self.lose_during_create.swap(false, Ordering::SeqCst) {
+            return Err(FakeFleetError::Missing);
+        }
+        self.created
             .lock()
             .unwrap()
-            .push((enrollment.clone(), start));
+            .insert(computer.id, (generation, enrollment.pairing_id));
+        self.enrollments.lock().unwrap().push((enrollment, start));
+        if existing.is_some() {
+            self.restart(computer.id).await?;
+        }
         Ok(())
     }
 
@@ -124,6 +150,10 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
+    async fn resources_match(&self, _computer: &Computer) -> Result<bool, Self::Err> {
+        Ok(true)
+    }
+
     async fn instances(&self) -> Result<Vec<FleetInstance>, FakeFleetError> {
         Ok(self.instances.lock().unwrap().clone())
     }
@@ -163,6 +193,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
         EnrollmentDefaults {
             service_url_overrides: BTreeMap::new(),
         },
+        FixedCredentials::default(),
     )
     .await
     .unwrap();
@@ -196,6 +227,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
 
 #[derive(Default)]
 struct FakeHarnesses {
+    claimed: std::sync::atomic::AtomicBool,
     enrollments: Mutex<Vec<Option<HarnessId>>>,
 }
 
@@ -210,7 +242,7 @@ impl Harnesses for FakeHarnesses {
         let generation = enrollments.len() as u128;
         enrollments.push(computer.harness_id);
         Ok(HostedPairing {
-            pairing_id: PairingId::new(Uuid::from_u128(
+            pairing_id: PairingId::new_from_uuid(Uuid::from_u128(
                 0x0000_0000_0000_7000_8000_0000_0000_0909 + generation,
             )),
             device_secret: DeviceSecret::new(if generation == 0 {
@@ -221,8 +253,12 @@ impl Harnesses for FakeHarnesses {
         })
     }
 
+    async fn pairing_claimed(&self, _pairing_id: PairingId) -> Result<bool, FakeError> {
+        Ok(self.claimed.load(Ordering::SeqCst))
+    }
+
     async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, FakeError> {
-        Ok((harness_id == HARNESS).then_some(ComputerId::new(Uuid::from_u128(1))))
+        Ok((harness_id == HARNESS).then_some(ComputerId::new_from_uuid(Uuid::from_u128(1))))
     }
 
     async fn revoke(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
@@ -232,7 +268,7 @@ impl Harnesses for FakeHarnesses {
 
 async fn operator(
     fleet: FakeFleet,
-) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock> {
+) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FixedCredentials> {
     ComputerOperator::start(
         FakeRepo {
             sold_units: 9,
@@ -247,15 +283,16 @@ async fn operator(
                 "http://10.210.0.1:8080".to_owned(),
             )]),
         },
+        FixedCredentials::default(),
     )
     .await
     .unwrap()
 }
 
 async fn paid_computer(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FixedCredentials>,
 ) -> ComputerId {
-    let id = ComputerId::new(Uuid::from_u128(1));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     operator
         .repo
         .reserve(
@@ -266,6 +303,18 @@ async fn paid_computer(
                 team_id: TEAM,
                 name: ComputerName::try_new("Ada").unwrap(),
                 size: ComputerSize::Standard,
+                resources: crate::domain::size::ComputerResources {
+                    vcpus: crate::domain::size::Vcpus::new(4),
+                    memory_gib: crate::domain::size::MemoryGib::new(8),
+                    disk_gib: crate::domain::size::DiskGib::new(100),
+                },
+                catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                    "standard@2026-11".to_owned(),
+                )
+                .unwrap(),
+                price_id: Some(
+                    crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
+                ),
                 persona: None,
                 created_by: "macro|owner@example.com".to_owned(),
             },
@@ -370,7 +419,8 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
         vec![(
             Enrollment {
                 computer_id: id,
-                pairing_id: PairingId::new(Uuid::from_u128(
+                generation: EnrollmentGeneration::new(1),
+                pairing_id: PairingId::new_from_uuid(Uuid::from_u128(
                     0x0000_0000_0000_7000_8000_0000_0000_0909
                 )),
                 device_secret: DeviceSecret::new("secret".to_owned()),
@@ -380,6 +430,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                     "http://10.210.0.1:8080".to_owned(),
                 )]),
                 persona: None,
+                persona_enrollment: Default::default(),
             },
             true,
         )]
@@ -421,7 +472,8 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
 
 #[tokio::test]
 async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
-    let orphan = ComputerId::new(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead));
+    let orphan =
+        ComputerId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead));
     let operator = operator(FakeFleet {
         instances: Mutex::new(vec![FleetInstance {
             computer_id: orphan,
@@ -626,6 +678,7 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
         .get_mut(&id)
         .unwrap()
         .persona = Some(saved_persona.clone());
+    operator.fleet.created.lock().unwrap().remove(&id);
     operator
         .repo
         .apply(id, Event::InstanceLost, now())
@@ -669,31 +722,31 @@ async fn reconcile_never_destroys_foreign_recent_or_unknown_age_instances() {
     let operator = operator(FakeFleet {
         instances: Mutex::new(vec![
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(1)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-b".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::hours(1)),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(2)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(2)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::minutes(9)),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(3)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(3)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(4)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(4)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::minutes(10)),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(5)),
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(5)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() + Duration::minutes(1)),
@@ -718,3 +771,76 @@ fn control_plane_identity_rejects_missing_or_invalid_values() {
         "local-test_a"
     );
 }
+
+#[derive(Default)]
+struct FixedCredentials {
+    include_persona: std::sync::atomic::AtomicBool,
+    fail_response: std::sync::atomic::AtomicBool,
+    issues: Mutex<Vec<(EnrollmentGeneration, String, bool)>>,
+}
+impl PersonaCredentialSource for FixedCredentials {
+    async fn issue(
+        &self,
+        _computer: ComputerId,
+        generation: EnrollmentGeneration,
+    ) -> Result<crate::domain::persona_credentials::PersonaEnrollment, PersonaCredentialError> {
+        use crate::domain::persona_credentials::{
+            PersonaCredentials, PersonaEnrollment, PersonaEnv,
+        };
+        let mut issues = self.issues.lock().unwrap();
+        for (_, _, revoked) in issues.iter_mut() {
+            *revoked = true;
+        }
+        let value = format!("fixture-issued-value-{}", issues.len() + 1);
+        issues.push((generation, value.clone(), false));
+        if self.fail_response.swap(false, Ordering::SeqCst) {
+            return Err(PersonaCredentialError::IssuanceFailed);
+        }
+        if !self.include_persona.load(Ordering::SeqCst) {
+            return Ok(Default::default());
+        }
+        Ok(PersonaEnrollment {
+            secrets: PersonaCredentials::new(BTreeMap::from([(
+                PersonaConfigKey::parse("MACRO_API_KEY").unwrap(),
+                value,
+            )]))?,
+            env: PersonaEnv::new(BTreeMap::from([(
+                PersonaConfigKey::parse("OVERRIDE_APP_SERVICE_URL").unwrap(),
+                "https://app.example.com".to_owned(),
+            )]))?,
+        })
+    }
+}
+
+#[tokio::test]
+async fn unconfigured_credentials_fail_closed_for_persona_computers() {
+    use crate::domain::no_persona_credentials::NoPersonaCredentials;
+    use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
+    for has_persona in [false, true] {
+        let operator = operator(FakeFleet::default()).await;
+        let id = paid_computer(&operator).await;
+        if has_persona {
+            operator.repo.computers.lock().unwrap().get_mut(&id).unwrap().persona = Some(serde_json::from_str(r#"{
+                "name":"Worker","os_user":"worker","extra_service":{"unit_name":"worker","exec":"/bin/worker","env":{}},"config":{}
+            }"#).unwrap());
+        }
+        let source = NoPersonaCredentials::new(operator.repo);
+        let result = source.issue(id, EnrollmentGeneration::new(1)).await;
+        if has_persona {
+            assert!(matches!(result, Err(PersonaCredentialError::Unavailable)));
+        } else {
+            assert_eq!(result.unwrap(), Default::default());
+        }
+        assert!(matches!(
+            source
+                .issue(
+                    ComputerId::new_from_uuid(Uuid::from_u128(2)),
+                    EnrollmentGeneration::new(1)
+                )
+                .await,
+            Err(PersonaCredentialError::NotFound)
+        ));
+    }
+}
+
+mod credentials;

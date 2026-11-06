@@ -40558,12 +40558,7 @@ export const approveHarnessPairingResponse = zod
       .enum(['macro_credits', 'own_account'])
       .optional()
       .describe('How Claude Code on a Macro computer is paid for.'),
-    computer_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves.'
-      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -40610,7 +40605,7 @@ code) addresses it.
  * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
  */
 export const claimHarnessPairingParams = zod.object({
-  pairing_id: zod.uuid().describe('Pairing ID'),
+  pairing_id: zod.string().describe('Pairing ID'),
 });
 
 export const claimHarnessPairingBody = zod
@@ -40727,12 +40722,7 @@ export const claimHarnessPairingResponse = zod
           .enum(['macro_credits', 'own_account'])
           .optional()
           .describe('How Claude Code on a Macro computer is paid for.'),
-        computer_id: zod
-          .uuid()
-          .nullish()
-          .describe(
-            'The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves.'
-          ),
+        computer_id: zod.union([zod.null(), zod.string()]).optional(),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -40880,12 +40870,7 @@ export const listHarnessesResponseItem = zod
       .enum(['macro_credits', 'own_account'])
       .optional()
       .describe('How Claude Code on a Macro computer is paid for.'),
-    computer_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves.'
-      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -41027,12 +41012,7 @@ export const listHarnessDirectoryResponseItem = zod
       .enum(['macro_credits', 'own_account'])
       .optional()
       .describe('How Claude Code on a Macro computer is paid for.'),
-    computer_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves.'
-      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -41176,12 +41156,7 @@ export const getSelfHarnessResponse = zod
       .enum(['macro_credits', 'own_account'])
       .optional()
       .describe('How Claude Code on a Macro computer is paid for.'),
-    computer_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves.'
-      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -41471,12 +41446,7 @@ export const patchHarnessResponse = zod
       .enum(['macro_credits', 'own_account'])
       .optional()
       .describe('How Claude Code on a Macro computer is paid for.'),
-    computer_id: zod
-      .uuid()
-      .nullish()
-      .describe(
-        'The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves.'
-      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),

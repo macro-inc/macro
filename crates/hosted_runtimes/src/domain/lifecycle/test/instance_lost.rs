@@ -44,6 +44,8 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
                         &state,
                         &Event::InstanceLost,
                         Context {
+                            enrollment_generation:
+                                crate::domain::persona_credentials::EnrollmentGeneration::new(0),
                             now: now(),
                             host_has_room,
                         },
@@ -52,7 +54,15 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
                     assert_eq!(next.phase, Phase::Provisioning { host: HOST, start });
                     assert_eq!(next.wake_requested, power == Power::On && !host_has_room);
                     assert!(!next.macrod_connected);
-                    assert_eq!(effects, vec![Effect::Create { host: HOST, start }]);
+                    assert_eq!(
+                        effects,
+                        vec![Effect::Create {
+                            host: HOST,
+                            start,
+                            generation:
+                                crate::domain::persona_credentials::EnrollmentGeneration::new(1)
+                        }]
+                    );
                 }
             }
         }
@@ -70,6 +80,8 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
             &state,
             &Event::InstanceLost,
             Context {
+                enrollment_generation:
+                    crate::domain::persona_credentials::EnrollmentGeneration::new(0),
                 now: now(),
                 host_has_room: true,
             },
@@ -99,6 +111,8 @@ fn loss_is_ignored_before_payment_and_after_destruction() {
             &state,
             &Event::InstanceLost,
             Context {
+                enrollment_generation:
+                    crate::domain::persona_credentials::EnrollmentGeneration::new(0),
                 now: now(),
                 host_has_room: true,
             },

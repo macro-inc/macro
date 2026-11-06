@@ -13,9 +13,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   state, outbox effects and timers in one transaction.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
-- Keep each size's resources and Incus limits literal in `ComputerSize::spec`;
-  never derive one resource or limit from another.
-- Capacity is in units (`domain::size`): Standard 1, Large 2, XL 4. Purchase
+- Keep literal purchase resources in the versioned `domain::size::current_catalog`.
+- Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
   reserves sold units on a host; waking checks awake units (`Context::host_has_room`).
 
 ## Start here
@@ -33,6 +32,11 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## Explicit configuration
 
+Report environment sale availability through `Billing::sales_available` and
+reject unavailable purchases in the domain before reserving capacity. Map
+`BillingError::NotAvailable` to 503 on public and internal computer routes;
+keep missing subscription and unsupported billing intervals distinct.
+
 Require image, host reserve and oversell factor for either enabled fleet;
 require Docker memory for Docker, and explicit profile, storage pool,
 request/connect/operation/state-change limits and shutdown grace for Incus.
@@ -43,8 +47,26 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Contracts (PR B, agent brains, builds on these — keep them stable)
 
+- **Sold resources**: Snapshot `ComputerResources { vcpus: Vcpus, memory_gib: MemoryGib, disk_gib: DiskGib }`,
+  `CatalogEntryId` and `price_id` once at purchase. Comped rows have NULL price IDs;
+  Stripe retries and removal use the saved price. Use the versioned catalog only
+  for new offers and purchases; never infer size from resources. Fleet CPU/RAM/root
+  limits, capacity and reconcile drift checks read recorded resources; Incus state
+  space is memory + 1 GiB. Drift logs an operator error without resizing.
+  Docker enforces/checks CPU and RAM only (overlayfs has no disk quota).
+  Subscription reconcile compares saved price ids, never current catalog prices.
+  `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
+  Read configured offers without billing through `ComputerService::catalog()`
+  and `size_spec(size)`; omitted sizes return `ComputerError::BadRequest`.
+  Apply forward migrations over the unchanged historical files. Legacy rows
+  receive original resource snapshots and `size@legacy-2026-11` catalog IDs;
+  their NULL Stripe prices require an explicit historical backfill before billing
+  operations resume. Comped rows keep NULL prices.
+  Purchaser deletion is RESTRICTed to retain enrollment/billing attribution until
+  the computer or team is deleted; harness deletion clears its reference, and
+  user deletion cascades waitlist requests.
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
-  `COMPUTERS_FLEET` is set, shared across replicas but distinct per control plane.
+  `COMPUTERS_FLEET` is `incus` or `docker`, shared across replicas but distinct per control plane.
   Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;
   `Fleet::instances` lists only that owner's instances. Reconcile independently
   checks ownership and deletes orphans only after ten minutes. Creation timestamps
@@ -86,7 +108,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Payment and reason remain latched through release. The optional persisted reason
   is absent on legacy Stripe rows; no migration is required.
   Comped computers never carry a charged subscription item, emit
-  `RemoveBillingItem`, or count in `reconcile_billed_count`; subscription webhooks
+  `RemoveBillingItem`, or count in `reconcile_billed_counts`; subscription webhooks
   cannot cancel them. Cancel-at-period-end stops them immediately (`at = now`)
   and retains the disk for the usual 14 days; undo is unavailable afterward.
   Cancel, release, retention expiry and delayed payment recovery make no Billing
@@ -118,7 +140,41 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   an `agent-` name with a nonempty suffix before side effects.
   `PersonaConfigKey` supports borrowed string map lookups. `Persona` and
   `PersonaService` Debug redact config and env values.
-  `service::validate_persona` checks commands and values.
+  `service::validate_persona` checks commands and values. Persisted config and
+  service env reject credential names ending in `_TOKEN`, `_KEY`, or `_SECRET`
+  (case-sensitive) with `PersonaFieldError::ReservedConfigKey`.
+  Run the forward bootstrap stripping migrations before decoding stored Personas;
+  both `config` and `extra_service.env` are cleaned without recovery copies.
+  The original cleanup also stripped lowercase suffixes; the forward cleanup and
+  validator use case-sensitive suffix matching.
+- **Persona credentials**: `PersonaCredentialSource::issue(computer, generation)`
+  returns `PersonaEnrollment { secrets: PersonaCredentials, env: PersonaEnv }`.
+  Each call rotates credentials; neither half is stored in `hosted_runtime`,
+  outbox effects, timers, or logs. `PersonaCredentials` has validated
+  `PersonaConfigKey` names, Debug lists keys only, values zeroize on drop,
+  and it does not implement Serialize. Only `Enrollment.persona_enrollment`
+  serializes it for the one-time `user.macro.enrollment` JSON or Docker file.
+  `Effect::Create { host, start, generation: EnrollmentGeneration }` carries no
+  issuance material. `hosted_runtime.enrollment_generation` starts at zero and
+  is reserved and advanced inside `ComputerRepo::apply`, atomically with the
+  transition and Create outbox insert. First provisioning reserves 1; retries
+  keep that generation even when creation or issuance fails. `InstanceLost`
+  reserves its successor. The forward reservation migration synchronizes pending
+  effects written by the earlier post-create generation recorder.
+  Fleet Create checks the persisted generation and pairing identity before
+  polling `FleetEnrollment::issue`: an already-claimed guest completes without
+  issuance or re-keying. An unclaimed guest receives a fresh enrollment and a
+  restart so its enroll oneshot applies the replacement values. Creation runs
+  under the per-computer enrollment guard (`hosted-enrollment:<computer UUID>`
+  advisory key), also taken by the harness claim transaction. Claims recheck the
+  device-secret hash after acquiring it. This fences claims racing a retry,
+  including retries after an expired effect lease.
+  The explicit `NoPersonaCredentials` composition permits only computers without
+  personas; persona computers fail until a provider is installed.
+  That is the only transient fleet copy, removed by `clear_enrollment` after
+  macrod connects. Enrollment Debug redacts secrets. macrod merges both halves
+  with non-secret persona config into the guest's mode-0600
+  `/etc/macro/personas/<os_user>.env` before claiming the pairing.
 - Persona computers are never idle-frozen; they run until powered off or canceled.
 - Fleet host discovery must not abort harness startup: report unhealthy and retry
   registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers

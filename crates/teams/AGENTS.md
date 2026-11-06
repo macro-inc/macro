@@ -128,3 +128,6 @@ event contract (schema, sanitization, delivery semantics).
 - Persist `team_user.seat_included` when joining an included agent. Ordinary
   removal and account cleanup skip seat billing for that membership, removal
   rollback preserves it, and paid plan changes are rejected for included seats.
+- Subscription item/pricing data errors are typed in `customer_repo/subscription_error.rs`, bridged to the existing customer error contract.
+
+- `customer_repo/billing.rs` handles subscription locks, schedules, and request construction; `subscription_items.rs` handles item quantities and provider value mapping.

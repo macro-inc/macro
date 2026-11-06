@@ -131,6 +131,11 @@ export type AutoReloadSnapshot = {
 export type BillingInterval = 'month' | 'year';
 
 /**
+ * The versioned identity recorded at purchase.
+ */
+export type CatalogEntryId = string;
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -331,13 +336,16 @@ export type ComputerStatus = {
      * When billing stops, for a computer canceled at period end.
      */
     cancelsAt?: string | null;
+    catalogEntry: CatalogEntryId;
     /**
      * Present for a comped purchase, including after release.
      */
     compReason?: string | null;
     createdAt: string;
+    diskGib: DiskGib;
     harnessId?: string | null;
     id: string;
+    memoryGib: MemoryGib;
     name: string;
     payment: PaymentOutcome;
     personaName?: string | null;
@@ -349,6 +357,7 @@ export type ComputerStatus = {
     setup?: null | SetupProgress;
     size: ComputerSize;
     status: ComputerStatusKind;
+    vcpus: Vcpus;
 };
 
 /**
@@ -662,6 +671,11 @@ export type CursorModelsResponse = {
  * Why a request was refused.
  */
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+
+/**
+ * A recorded resource quantity.
+ */
+export type DiskGib = number;
 
 /**
  * What the provider selector offers the requesting user.
@@ -1477,6 +1491,11 @@ export type MacroApiTokenResponse = {
      */
     macro_api_token: string;
 };
+
+/**
+ * A recorded resource quantity.
+ */
+export type MemoryGib = number;
 
 /**
  * A request to merge one pull request on the user's behalf.
@@ -2986,6 +3005,11 @@ export type UserTokensResponse = {
     refresh_token: string;
 };
 
+/**
+ * A recorded resource quantity.
+ */
+export type Vcpus = number;
+
 export type DeleteAgentApiKeyData = {
     body?: never;
     path: {
@@ -3882,6 +3906,12 @@ export type InternalPurchaseComputerData = {
     url: '/internal/computers';
 };
 
+export type InternalPurchaseComputerErrors = {
+    503: ErrorResponse;
+};
+
+export type InternalPurchaseComputerError = InternalPurchaseComputerErrors[keyof InternalPurchaseComputerErrors];
+
 export type InternalPurchaseComputerResponses = {
     200: Purchased;
 };
@@ -3897,6 +3927,12 @@ export type InternalQuoteComputerData = {
     };
     url: '/internal/computers/quote';
 };
+
+export type InternalQuoteComputerErrors = {
+    503: ErrorResponse;
+};
+
+export type InternalQuoteComputerError = InternalQuoteComputerErrors[keyof InternalQuoteComputerErrors];
 
 export type InternalQuoteComputerResponses = {
     200: Quote;
@@ -4782,6 +4818,7 @@ export type PurchaseTeamComputerData = {
 export type PurchaseTeamComputerErrors = {
     402: ErrorResponse;
     409: ErrorResponse;
+    503: ErrorResponse;
 };
 
 export type PurchaseTeamComputerError = PurchaseTeamComputerErrors[keyof PurchaseTeamComputerErrors];
@@ -4812,6 +4849,12 @@ export type ListTeamComputerOffersData = {
     url: '/team/computers/offers';
 };
 
+export type ListTeamComputerOffersErrors = {
+    503: ErrorResponse;
+};
+
+export type ListTeamComputerOffersError = ListTeamComputerOffersErrors[keyof ListTeamComputerOffersErrors];
+
 export type ListTeamComputerOffersResponses = {
     200: Array<SizeOffer>;
 };
@@ -4826,6 +4869,12 @@ export type QuoteTeamComputerData = {
     };
     url: '/team/computers/quote';
 };
+
+export type QuoteTeamComputerErrors = {
+    503: ErrorResponse;
+};
+
+export type QuoteTeamComputerError = QuoteTeamComputerErrors[keyof QuoteTeamComputerErrors];
 
 export type QuoteTeamComputerResponses = {
     200: Quote;

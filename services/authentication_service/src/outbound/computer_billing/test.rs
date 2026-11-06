@@ -151,7 +151,7 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
     billing
         .add_computer(
             team_id,
-            ComputerSize::Standard,
+            &StripePriceId::parse("price_standard_month").unwrap(),
             &[SubscriptionItem {
                 price_id: StripePriceId::parse("price_pro").unwrap(),
                 quantity: 2,
@@ -161,7 +161,11 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
         .await
         .unwrap();
     billing
-        .remove_computer(team_id, ComputerSize::Standard, "computer-1-release")
+        .remove_computer(
+            team_id,
+            &StripePriceId::parse("price_standard_month").unwrap(),
+            "computer-1-release",
+        )
         .await
         .unwrap();
 
@@ -201,7 +205,12 @@ async fn declines_and_missing_subscriptions_keep_their_meaning() {
     let mut declined = FakeTeams::new(BillingCadence::Month);
     declined.decline = true;
     let result = TeamComputerBilling::new(declined, prices())
-        .add_computer(Uuid::nil(), ComputerSize::Standard, &[], "computer-2")
+        .add_computer(
+            Uuid::nil(),
+            &StripePriceId::parse("price_standard_month").unwrap(),
+            &[],
+            "computer-2",
+        )
         .await;
     assert!(
         matches!(result, Err(BillingError::PaymentFailed)),
@@ -226,7 +235,7 @@ async fn a_successful_purchase_replays_before_subscription_or_price_lookup() {
     TeamComputerBilling::new(teams.clone(), prices())
         .add_computer(
             team_id,
-            ComputerSize::Standard,
+            &StripePriceId::parse("price_standard_month").unwrap(),
             &[],
             "computer-add:confirmed",
         )
@@ -239,11 +248,33 @@ async fn a_successful_purchase_replays_before_subscription_or_price_lookup() {
     billing
         .add_computer(
             team_id,
-            ComputerSize::Standard,
+            &StripePriceId::parse("price_standard_month").unwrap(),
             &[],
             "computer-add:confirmed",
         )
         .await
         .unwrap();
     assert_eq!(teams.changes.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn no_prices_rejects_sales_before_contacting_the_subscription_provider() {
+    let mut teams = FakeTeams::new(BillingCadence::Month);
+    teams.subscribed = false;
+    let mut unavailable = prices();
+    for interval in [
+        &mut unavailable.standard,
+        &mut unavailable.large,
+        &mut unavailable.xl,
+    ] {
+        interval.monthly = None;
+        interval.yearly = None;
+    }
+    let billing = TeamComputerBilling::new(teams, unavailable);
+    for size in ComputerSize::ALL {
+        assert!(matches!(
+            billing.quote(Uuid::nil(), size).await,
+            Err(BillingError::NotAvailable)
+        ));
+    }
 }

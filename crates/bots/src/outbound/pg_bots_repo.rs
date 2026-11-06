@@ -1674,3 +1674,5 @@ impl BotRepo for PgBotsRepo {
         Ok(())
     }
 }
+
+mod harness_assignments;

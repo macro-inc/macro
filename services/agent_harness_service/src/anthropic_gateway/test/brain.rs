@@ -16,7 +16,7 @@ use super::*;
 
 const TEAM: Uuid = Uuid::from_u128(0x00000000_0000_4000_8000_0000000000aa);
 const COMPUTER: ComputerId =
-    ComputerId::new(Uuid::from_u128(0x00000000_0000_4000_8000_0000000000bb));
+    ComputerId::new_from_uuid(Uuid::from_u128(0x00000000_0000_4000_8000_0000000000bb));
 
 fn agent_user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|brain@example.com")

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { CatalogEntryId } from './catalogEntryId';
 import type { ComputerSize } from './computerSize';
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
 import type { ComputerStatusCompReason } from './computerStatusCompReason';
@@ -13,7 +14,10 @@ import type { ComputerStatusKind } from './computerStatusKind';
 import type { ComputerStatusPersonaName } from './computerStatusPersonaName';
 import type { ComputerStatusRetainedUntil } from './computerStatusRetainedUntil';
 import type { ComputerStatusSetup } from './computerStatusSetup';
+import type { DiskGib } from './diskGib';
+import type { MemoryGib } from './memoryGib';
 import type { PaymentOutcome } from './paymentOutcome';
+import type { Vcpus } from './vcpus';
 
 /**
  * A computer as its team sees it.
@@ -21,11 +25,14 @@ import type { PaymentOutcome } from './paymentOutcome';
 export interface ComputerStatus {
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
+  catalogEntry: CatalogEntryId;
   /** Present for a comped purchase, including after release. */
   compReason?: ComputerStatusCompReason;
   createdAt: string;
+  diskGib: DiskGib;
   harnessId?: ComputerStatusHarnessId;
   id: string;
+  memoryGib: MemoryGib;
   name: string;
   payment: PaymentOutcome;
   personaName?: ComputerStatusPersonaName;
@@ -35,4 +42,5 @@ export interface ComputerStatus {
   setup?: ComputerStatusSetup;
   size: ComputerSize;
   status: ComputerStatusKind;
+  vcpus: Vcpus;
 }

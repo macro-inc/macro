@@ -12,7 +12,9 @@ use uuid::Uuid;
 use crate::domain::enrollment::Persona;
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
-use crate::domain::size::ComputerSize;
+use crate::domain::size::{
+    CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
+};
 
 /// Stable identity shared by replicas of one computer control plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -50,10 +52,15 @@ pub struct Computer {
     pub team_id: Uuid,
     pub name: ComputerName,
     pub size: ComputerSize,
+    pub resources: ComputerResources,
+    pub catalog_entry: CatalogEntryId,
+    pub price_id: Option<StripePriceId>,
     pub state: ComputerState,
     /// The harness macrod claims, created when the instance is created.
     pub harness_id: Option<HarnessId>,
     pub persona: Option<Persona>,
+    /// Last guest creation begun by the fleet; retries keep the same generation.
+    pub enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration,
     pub created_by: String,
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
@@ -70,6 +77,9 @@ pub struct NewComputer {
     pub team_id: Uuid,
     pub name: ComputerName,
     pub size: ComputerSize,
+    pub resources: ComputerResources,
+    pub catalog_entry: CatalogEntryId,
+    pub price_id: Option<StripePriceId>,
     pub persona: Option<Persona>,
     pub created_by: String,
 }
@@ -147,7 +157,7 @@ pub struct SizeOffer {
     pub notify_requested: bool,
 }
 
-/// A fleet host, counted in size units.
+/// A fleet host, counted in resource units.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Host {
     pub id: HostId,
@@ -169,7 +179,7 @@ pub struct HostRegistration {
 
 impl HostRegistration {
     pub fn awake_capacity_units(&self) -> u32 {
-        self.memory_gb.saturating_sub(self.reserve_gb) / ComputerSize::Standard.memory_gb()
+        self.memory_gb.saturating_sub(self.reserve_gb) / 8
     }
 
     pub fn sold_capacity_units(&self) -> u32 {
@@ -226,6 +236,10 @@ pub struct ComputerStatus {
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
     pub name: ComputerName,
     pub size: ComputerSize,
+    pub vcpus: Vcpus,
+    pub memory_gib: MemoryGib,
+    pub disk_gib: DiskGib,
+    pub catalog_entry: CatalogEntryId,
     pub status: ComputerStatusKind,
     pub payment: PaymentOutcome,
     /// Present for a comped purchase, including after release.
@@ -286,6 +300,10 @@ impl Computer {
             id: self.id,
             name: self.name.clone(),
             size: self.size,
+            vcpus: self.resources.vcpus,
+            memory_gib: self.resources.memory_gib,
+            disk_gib: self.resources.disk_gib,
+            catalog_entry: self.catalog_entry.clone(),
             status,
             payment: self.state.payment,
             comp_reason: self.state.comp_reason.clone(),

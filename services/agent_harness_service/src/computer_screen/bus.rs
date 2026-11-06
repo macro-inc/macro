@@ -496,7 +496,7 @@ pub(super) fn decode_frame(payload: &[u8]) -> Frame {
 }
 
 /// Publish bytes for the other side.
-pub async fn publish_data(
+pub(crate) async fn publish_data(
     publisher: &mut MultiplexedConnection,
     channel: &str,
     bytes: &[u8],
@@ -508,7 +508,7 @@ pub async fn publish_data(
 }
 
 /// Tell the other side the stream ended.
-pub async fn publish_close(
+pub(crate) async fn publish_close(
     publisher: &mut MultiplexedConnection,
     channel: &str,
 ) -> redis::RedisResult<()> {

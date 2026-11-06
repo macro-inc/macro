@@ -1,11 +1,9 @@
-import { useComputerOffersQuery } from '@queries/computers/computers';
-import type { ComputerStatus } from '@service-auth/computers';
 import { For, Show } from 'solid-js';
 import { SettingsCard } from '../../primitives';
 import {
+  computerSpecs,
   computerStatusLabel,
   formatComputerDate,
-  formatQuote,
   sizeLabel,
 } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
@@ -13,16 +11,6 @@ import { useTeamComputers } from '../primitives/team-computers';
 /** The Macro computers billed on the team subscription, for Billing. */
 export function BillingComputers() {
   const { enabled, computers, failed } = useTeamComputers();
-  const offers = useComputerOffersQuery(
-    () => enabled() && computers().length > 0
-  );
-
-  const price = (computer: ComputerStatus) => {
-    const offer = offers.isSuccess
-      ? offers.data.find((candidate) => candidate.size === computer.size)
-      : undefined;
-    return offer ? formatQuote(offer.quote) : undefined;
-  };
 
   return (
     <Show when={enabled() && (computers().length > 0 || failed())}>
@@ -43,16 +31,13 @@ export function BillingComputers() {
                   <p class="text-xs text-ink-extra-muted">
                     {sizeLabel(computer.size)} ·{' '}
                     {computerStatusLabel(computer).label}
+                    {' · '}
+                    {computerSpecs(computer)}
                     <Show when={computer.cancelsAt}>
                       {(at) => <> · Cancels {formatComputerDate(at())}</>}
                     </Show>
                   </p>
                 </div>
-                <Show when={price(computer)}>
-                  {(amount) => (
-                    <p class="shrink-0 text-sm text-ink">{amount()}</p>
-                  )}
-                </Show>
               </div>
             )}
           </For>

@@ -81,7 +81,7 @@ impl TryFrom<AgentRow> for TeamAgent {
             name: row.name,
             email: row.email,
             created_by: row.created_by.map(user_id).transpose()?,
-            computer_id: row.computer_id.map(ComputerId::new),
+            computer_id: row.computer_id.map(ComputerId::new_from_uuid),
             status,
             status_reason: row.status_reason,
             setup: None,
@@ -321,7 +321,7 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         sqlx::query!(
             r#"UPDATE team_agents SET computer_id = $2 WHERE user_id = $1"#,
             user_id.as_ref(),
-            computer_id.into_inner(),
+            computer_id.as_uuid(),
         )
         .execute(&self.pool)
         .await?;

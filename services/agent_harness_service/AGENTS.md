@@ -45,7 +45,7 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/computers.rs`: configures the optional fleet operator, runs fleet effects,
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
-  `incus` or local-only `docker`; unset disables the control plane.
+  `incus`, local-only `docker`, or explicit `disabled`; missing selection fails startup.
   `COMPUTERS_IMAGE` selects the local Incus image alias or Docker image;
   an Incus override must not silently use the shared `macro-box` alias.
   HostedHarnesses pairing retains the buying admin as the harness owner and
@@ -216,8 +216,9 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 ## Configuration and lifecycle
 
 Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
-is set. Read the stable identity from Doppler in deployed environments; local
-stacks explicitly set `local-<instance>`. Distinct control planes sharing a host
+is `incus` or `docker`. The selector is required; use `disabled` without a fleet.
+Read the stable identity from Doppler in deployed environments; local stacks
+explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.
 
 An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_HOST_NAME`,
@@ -239,7 +240,8 @@ once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
 `document-cognition[-dev].macro.com` integration callbacks, and `AppServiceUrl`
 supplies browser links and preview form origin. Preview control accepts the
 `PreviewGatewayUrl` host (plus app/loopback hosts locally). Use process-level
-`OVERRIDE_*` values for local instances. The shared gateway preserves the public
+`OVERRIDE_*` values for local instances; enrollment copies only macrod’s typed
+service overrides from that process environment. The shared gateway preserves the public
 hostnames and internally rewrites cognition paths. `PREVIEW_DOMAIN` and
 `PREVIEW_SSH_HOST` remain infrastructure-generated Doppler settings. Legacy
 `MCP_PUBLIC_URL`, `MCP_CLIENT_PUBLIC_URL`, `PREVIEW_APP_ORIGIN`, and
@@ -334,3 +336,8 @@ Authenticated team admins with the agent-management rollout enabled can query
 Catalog metadata is cached for a day; fixed-line WAV previews are cached by model.
 The admin-only voice settings policy lives in team_agents, and agent_git
 commits the selected model. Spans never include transcripts, synthesis text or keys.
+- `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
+
+Computer operator construction requires an explicit persona credential source.
+The composition currently passes `NoPersonaCredentials`, which returns empty
+material only for computers without a persona and rejects persona computers.

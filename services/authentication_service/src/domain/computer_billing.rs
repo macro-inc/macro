@@ -19,11 +19,6 @@ impl IntervalPrices {
             BillingInterval::Year => self.yearly.as_ref(),
         }
     }
-
-    fn contains(&self, price_id: &str) -> bool {
-        self.monthly.as_ref().map(StripePriceId::as_str) == Some(price_id)
-            || self.yearly.as_ref().map(StripePriceId::as_str) == Some(price_id)
-    }
 }
 
 /// The Stripe prices computers are billed at. Not seat plans: seat
@@ -61,41 +56,28 @@ impl ComputerPrices {
         self.of(size).price_id(interval)
     }
 
-    /// The size a subscription item's price bills, if it is a computer price.
-    pub fn size_for_price(&self, price_id: &str) -> Option<ComputerSize> {
-        ComputerSize::ALL
-            .into_iter()
-            .find(|size| self.of(*size).contains(price_id))
-    }
-
-    /// How many computers of every size `items` (price id, quantity) bill.
-    pub fn billed_counts<'a>(
-        &self,
-        items: impl IntoIterator<Item = (&'a str, u64)>,
-    ) -> [(ComputerSize, u32); 3] {
-        let mut counts = ComputerSize::ALL.map(|size| (size, 0u32));
-        for (price_id, quantity) in items {
-            if let Some(size) = self.size_for_price(price_id)
-                && let Some((_, count)) = counts.iter_mut().find(|(s, _)| *s == size)
-            {
-                *count = count.saturating_add(u32::try_from(quantity).unwrap_or(u32::MAX));
-            }
-        }
-        counts
+    /// Recognize an unlinked legacy computer charge without inferring its size.
+    pub fn contains_legacy_price(&self, price_id: &StripePriceId) -> bool {
+        ComputerSize::ALL.into_iter().any(|size| {
+            let prices = self.of(size);
+            [prices.monthly.as_ref(), prices.yearly.as_ref()]
+                .into_iter()
+                .flatten()
+                .any(|configured| configured == price_id)
+        })
     }
 }
 
-/// Learns how many computers of a size the team subscription bills, after
+/// Learns the complete subscription item snapshot after
 /// every team subscription webhook, so computers whose items were removed
 /// outside Macro (dashboard edits, cancellation) are cancelled too.
 // Object-safe: `ApiContext` holds it as `Arc<dyn ComputerBillingObserver>`.
 #[async_trait::async_trait]
 pub trait ComputerBillingObserver: Send + Sync {
-    async fn billed_count(
+    async fn billed_counts(
         &self,
         team_id: uuid::Uuid,
-        size: ComputerSize,
-        billed: u32,
+        items: Vec<hosted_runtimes::domain::models::SubscriptionItem>,
     ) -> Result<(), rootcause::Report>;
 }
 

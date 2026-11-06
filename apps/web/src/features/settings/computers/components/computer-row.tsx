@@ -7,6 +7,7 @@ import { HarnessIcon, StatusDot } from '../../integration-ui';
 import { IntegrationRow } from '../../primitives';
 import {
   canTogglePower,
+  computerSpecs,
   computerStatusLabel,
   formatComputerDate,
   type StatusTone,
@@ -67,7 +68,9 @@ export function ComputerRow(props: {
           {status().label}
         </span>
       }
-      description={status().detail}
+      description={[computerSpecs(props.computer), status().detail]
+        .filter(Boolean)
+        .join(' · ')}
       facts={
         <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
           {props.claudeAccess}

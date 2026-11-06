@@ -10,7 +10,7 @@
 //! - `incus`: VMs on `runtime-dev-1`, reached directly over Tailscale.
 //!   Resolve the runtime's IPv4 address before generating compose env so
 //!   containers do not depend on MagicDNS. Persona bootstrap uses reverse bridge listeners.
-//! - `off`: no control plane; every `COMPUTERS_*` key is removed.
+//! - `off`: no control plane; explicitly sets `COMPUTERS_FLEET=disabled`.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -155,7 +155,7 @@ impl Computers {
     /// hold the stack's in-network service URLs (`LocalEnv::to_env`).
     pub fn write_env(&self, env: &mut BTreeMap<String, String>) -> Result<()> {
         let computers = match self.fleet {
-            Fleet::Off => BTreeMap::new(),
+            Fleet::Off => BTreeMap::from([("COMPUTERS_FLEET".into(), "disabled".into())]),
             Fleet::Docker => self.docker_env(env)?,
             Fleet::Incus => {
                 let network = IncusNetwork::load()?;
@@ -179,7 +179,7 @@ impl Computers {
                 Ok((name.to_string(), url))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
-        Ok(BTreeMap::from([
+        let mut settings = BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "docker".into()),
             (
                 "COMPUTERS_CONTROL_PLANE_ID".into(),
@@ -198,11 +198,13 @@ impl Computers {
                 "COMPUTERS_DOCKER_ENROLLMENT_DIR".into(),
                 self.enrollment_dir().display().to_string(),
             ),
-            (
-                "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
-                serde_json::to_string(&overrides)?,
-            ),
-        ]))
+        ]);
+        settings.insert(
+            "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
+            serde_json::to_string(&overrides)?,
+        );
+        settings.extend(overrides);
+        Ok(settings)
     }
 
     fn incus_env(
@@ -227,7 +229,7 @@ impl Computers {
                 Ok((name.to_string(), url))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
-        Ok(BTreeMap::from([
+        let mut settings = BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "incus".into()),
             (
                 "COMPUTERS_CONTROL_PLANE_ID".into(),
@@ -265,11 +267,13 @@ impl Computers {
                 "COMPUTERS_INCUS_SERVER_CERT".into(),
                 credentials.server_cert.clone(),
             ),
-            (
-                "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
-                serde_json::to_string(&overrides)?,
-            ),
-        ]))
+        ]);
+        settings.insert(
+            "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
+            serde_json::to_string(&overrides)?,
+        );
+        settings.extend(overrides);
+        Ok(settings)
     }
 
     /// Build and load the macro-box image for the Docker fleet. Nix is the

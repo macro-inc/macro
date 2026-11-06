@@ -14,11 +14,14 @@ use crate::{
 };
 use ai_billing::domain::SubscriptionScope;
 use hosted_runtimes::domain::{
+    ids::ComputerId,
     lifecycle::{PaymentOutcome, Phase},
     ports::ComputerRepo,
+    size::CatalogEntry,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
+use stripe_price_id::StripePriceId;
 use team_agents::domain::{models::BillingInterval, ports::TeamAgentRepository};
 use teams::domain::{
     model::{SeatPrices, TeamRole},
@@ -135,15 +138,23 @@ impl<Teams: TeamRepository, Computers: ComputerRepo, Agents: TeamAgentRepository
             currency = Some(fixed.currency);
             interval = Some(fixed.interval);
             let unit_amount = fixed.unit_amount;
-            let kind = if let Some(plan) = self.seat_prices.plan_for_price(price.id.as_str()) {
-                RecurringItemKind::Seat(plan)
-            } else if let Some(size) = self.computer_prices.size_for_price(price.id.as_str()) {
-                RecurringItemKind::Computer(size)
-            } else {
-                RecurringItemKind::Other
-            };
+            let price_id = StripePriceId::parse(price.id.as_str()).map_err(anyhow::Error::from)?;
+            let computer_id = item
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("computer_id"))
+                .and_then(|id| ComputerId::parse_uuid_str(id).ok());
+            let kind = RecurringItemKind::for_provider_price(
+                &self.seat_prices,
+                &self.computer_prices,
+                &computers,
+                &price_id,
+                computer_id,
+            );
             items.push(RecurringItem {
                 kind,
+                price_id,
+                computer_id,
                 quantity: item.quantity.unwrap_or(1),
                 unit_amount,
                 name: price
@@ -253,7 +264,12 @@ impl<Teams: TeamRepository, Computers: ComputerRepo, Agents: TeamAgentRepository
                     computers.push(BillingComputer {
                         id: computer.id,
                         agent_user_id: agent.map(|agent| agent.user_id.clone()),
-                        size: computer.size,
+                        catalog_entry: CatalogEntry {
+                            id: computer.catalog_entry,
+                            size: computer.size,
+                            resources: computer.resources,
+                        },
+                        price_id: computer.price_id,
                         name: computer.name,
                         status,
                         included: computer.state.payment == PaymentOutcome::Comped,

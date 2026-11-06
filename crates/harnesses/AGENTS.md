@@ -12,6 +12,15 @@ claim rotate the secret; retries after claim revoke old tokens and re-key the
 same harness. Both preserve owner, grants, agent bindings, and computer identity.
 Claim and re-key serialize on the harness row. `revoke_hosted_harness` and
 `harness_computer` are the other trusted control-plane entry points.
+`hosted_pairing_claimed(pairing_id)` reads the durable pairing claim for the
+fleet generation gate, including the interval before macrod connects. Hosted
+claims take the same `hosted-enrollment:<computer UUID>` advisory guard as
+fleet Create before the harness lock, then recheck the presented device-secret
+hash while claiming. A claim waiting through rotation cannot use its old secret.
+Expiry cleanup retains claimed pairing rows for live hosted harnesses; a missing
+pairing fails closed rather than treating the guest as unclaimed.
+These trusted entry points take no caller: they are for trusted in-process callers that
+already authorized the team admin, never for an HTTP route.
 
 ## Start here
 
@@ -96,3 +105,11 @@ Claim and re-key serialize on the harness row. `revoke_hosted_harness` and
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`
 - Skill: `cloud-storage-hexagonal-architecture`
+
+- `HostedPairing.device_secret` redacts formatting and zeroizes on drop; use `expose()` only at enrollment boundaries.
+
+- Pairing and computer ports use the leaf `pairing_id::PairingId` and `computer_id::ComputerId`; unwrap UUIDs only at adapter boundaries.
+
+- New hosted-registration and metadata persistence failures use typed adapter errors with rootcause reports; existing repository callers retain their error contract.
+
+- `pg_harness_repo/hosted_pairing.rs` owns hosted enrollment and computer lookups; `metadata.rs` persists capabilities and Claude mode.

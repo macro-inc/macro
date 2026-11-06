@@ -173,6 +173,8 @@ pub struct InstanceInfo {
     pub stateful: bool,
     /// The instance's own config (not expanded with profiles).
     pub config: BTreeMap<String, String>,
+    /// Instance device overrides, including root volume limits.
+    pub devices: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Live resource usage of a running instance.

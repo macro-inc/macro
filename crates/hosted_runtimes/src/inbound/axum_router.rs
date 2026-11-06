@@ -232,7 +232,7 @@ pub async fn status<
     get,
     path = "/team/computers/offers",
     operation_id = "list_team_computer_offers",
-    responses((status = 200, body = Vec<SizeOffer>)),
+    responses((status = 200, body = Vec<SizeOffer>), (status = 503, body = ErrorResponse)),
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn offers<
@@ -267,7 +267,7 @@ pub struct QuoteQuery {
     path = "/team/computers/quote",
     operation_id = "quote_team_computer",
     params(QuoteQuery),
-    responses((status = 200, body = Quote)),
+    responses((status = 200, body = Quote), (status = 503, body = ErrorResponse)),
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn quote<
@@ -314,6 +314,7 @@ pub struct Purchased {
         (status = 200, body = Purchased),
         (status = 402, body = ErrorResponse),
         (status = 409, body = ErrorResponse),
+        (status = 503, body = ErrorResponse),
     ),
 )]
 #[tracing::instrument(skip_all, err)]
@@ -565,7 +566,7 @@ pub struct InternalPurchaseBody {
     path = "/internal/computers",
     operation_id = "internal_purchase_computer",
     request_body = InternalPurchaseBody,
-    responses((status = 200, body = Purchased)),
+    responses((status = 200, body = Purchased), (status = 503, body = ErrorResponse)),
 )]
 #[tracing::instrument(skip_all, fields(team_id = %body.team_id), err)]
 pub async fn internal_purchase<
@@ -608,7 +609,7 @@ pub struct InternalQuoteQuery {
     path = "/internal/computers/quote",
     operation_id = "internal_quote_computer",
     params(InternalQuoteQuery),
-    responses((status = 200, body = Quote)),
+    responses((status = 200, body = Quote), (status = 503, body = ErrorResponse)),
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn internal_quote<
@@ -688,6 +689,7 @@ impl IntoResponse for ComputersHttpError {
             ComputerError::BadRequest(_) | ComputerError::ConfirmationMismatch => {
                 StatusCode::BAD_REQUEST
             }
+            ComputerError::Billing(BillingError::NotAvailable) => StatusCode::SERVICE_UNAVAILABLE,
             ComputerError::Billing(BillingError::PaymentFailed) => StatusCode::PAYMENT_REQUIRED,
             ComputerError::Billing(BillingError::NoSubscription)
             | ComputerError::Billing(BillingError::IntervalNotSold(_)) => {
@@ -712,3 +714,6 @@ impl IntoResponse for ComputersHttpError {
             .into_response()
     }
 }
+
+#[cfg(test)]
+mod test;

@@ -115,25 +115,43 @@ async fn main() -> Result<(), rootcause::Report> {
     let fleet = IncusFleet::new(config)?;
 
     let now = Utc::now();
-    let computer = Computer {
-        id: ComputerId::new(Uuid::now_v7()),
+    let mut computer = Computer {
+        id: ComputerId::new_from_uuid(Uuid::now_v7()),
         team_id: Uuid::now_v7(),
         name: ComputerName::try_new("fleet smoke test")?,
         size: ComputerSize::Standard,
+        resources: hosted_runtimes::domain::size::ComputerResources {
+            vcpus: hosted_runtimes::domain::size::Vcpus::new(4),
+            memory_gib: hosted_runtimes::domain::size::MemoryGib::new(8),
+            disk_gib: hosted_runtimes::domain::size::DiskGib::new(100),
+        },
+        catalog_entry: hosted_runtimes::domain::size::CatalogEntryId::try_new(
+            "standard@2026-11".to_owned(),
+        )?,
+        price_id: Some(hosted_runtimes::domain::models::StripePriceId::parse(
+            "price_standard",
+        )?),
         state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
         harness_id: None,
         persona: None,
         created_by: "incus_fleet_smoke".to_owned(),
         created_at: now,
         enrolled_at: None,
+        enrollment_generation: Default::default(),
+    };
+    computer.state.phase = hosted_runtimes::domain::lifecycle::Phase::Provisioning {
+        host: HostId::new(Uuid::now_v7()),
+        start: true,
     };
     let enrollment = Enrollment {
         computer_id: computer.id,
-        pairing_id: PairingId::new(Uuid::now_v7()),
+        generation: hosted_runtimes::domain::persona_credentials::EnrollmentGeneration::new(1),
+        pairing_id: PairingId::new_from_uuid(Uuid::now_v7()),
         device_secret: DeviceSecret::new("smoke-test-not-a-secret".to_owned()),
         name: computer.name.clone(),
         service_url_overrides: BTreeMap::new(),
         persona: None,
+        persona_enrollment: Default::default(),
     };
     let id = computer.id;
     println!("instance {}", instance_name(id));
@@ -161,7 +179,14 @@ async fn run(
 ) -> Result<(), rootcause::Report> {
     let id = computer.id;
     let started = Instant::now();
-    fleet.create(computer, enrollment, true).await?;
+    fleet
+        .create(
+            computer,
+            enrollment.generation,
+            &SmokeEnrollment(enrollment.clone()),
+            true,
+        )
+        .await?;
     println!("create+start {:>8.1?}", started.elapsed());
     print_status(fleet, id).await?;
 
@@ -200,4 +225,20 @@ async fn print_status(fleet: &IncusFleet, id: ComputerId) -> Result<(), rootcaus
         .map(|instance| instance.status);
     println!("  -> {status:?}");
     Ok(())
+}
+
+struct SmokeEnrollment(Enrollment);
+impl hosted_runtimes::domain::ports::FleetEnrollment for SmokeEnrollment {
+    async fn claimed(
+        &self,
+        _pairing: PairingId,
+    ) -> Result<bool, hosted_runtimes::domain::persona_credentials::PersonaCredentialError> {
+        Ok(false)
+    }
+    async fn issue(
+        &self,
+    ) -> Result<Enrollment, hosted_runtimes::domain::persona_credentials::PersonaCredentialError>
+    {
+        Ok(self.0.clone())
+    }
 }

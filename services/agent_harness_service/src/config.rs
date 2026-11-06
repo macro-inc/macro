@@ -149,52 +149,8 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
-    /// Which fleet runs Macro computers: `incus` or `docker` (local only).
-    /// Unset runs no computer control plane here.
-    pub computers_fleet: Option<String>,
-    /// Stable fleet owner; required whenever COMPUTERS_FLEET is set.
-    pub computers_control_plane_id: Option<String>,
-    /// Name of the computer host this control plane drives.
-    pub computers_host_name: Option<String>,
-    /// Base image computers are created from (Incus alias or Docker image).
-    pub computers_image: Option<String>,
-    /// RAM kept for the host itself, in GB.
-    pub computers_host_reserve_gb: Option<u32>,
-    /// Units sold per awake unit of host capacity.
-    pub computers_oversell_factor: Option<u32>,
-    /// Incus request deadline, in seconds.
-    pub computers_incus_request_timeout_secs: Option<u64>,
-    /// Incus connection deadline, in seconds.
-    pub computers_incus_connect_timeout_secs: Option<u64>,
-    /// Seconds each Incus operation wait blocks on the server.
-    pub computers_incus_operation_wait_secs: Option<u32>,
-    /// Server-side Incus state change deadline, in seconds.
-    pub computers_incus_state_change_timeout_secs: Option<u32>,
-    /// Maximum Incus operation wait calls.
-    pub computers_incus_operation_waits: Option<u32>,
-    /// Clean shutdown deadline before forcibly stopping a VM, in seconds.
-    pub computers_incus_shutdown_grace_secs: Option<u64>,
-    /// Incus profile installed on the host.
-    pub computers_incus_profile: Option<String>,
-    /// Incus storage pool for root volumes.
-    pub computers_incus_storage_pool: Option<String>,
-    /// Incus API origin of the computer host.
-    pub computers_incus_url: Option<String>,
-    /// PEM client certificate the Incus host trusts.
-    pub computers_incus_client_cert: Option<String>,
-    /// PEM key of [`Self::computers_incus_client_cert`].
-    pub computers_incus_client_key: Option<String>,
-    /// PEM certificate the Incus host serves, pinned.
-    pub computers_incus_server_cert: Option<String>,
-    /// Docker network local computers join to reach the stack.
-    pub computers_docker_network: Option<String>,
-    /// Host directory holding each Docker computer's enrollment file.
-    pub computers_docker_enrollment_dir: Option<String>,
-    /// RAM the Docker fleet may hand to computers, in GB.
-    pub computers_docker_memory_gb: Option<u32>,
-    /// JSON object of `OVERRIDE_*` service URLs written into every
-    /// computer's enrollment; local stacks only.
-    pub computers_service_url_overrides: Option<String>,
+    /// Required fleet selection; only `disabled` runs no control plane.
+    pub computers_fleet: ComputerFleetKind,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
@@ -453,6 +409,153 @@ macro_env_var::maybe_env_vars! {
     pub struct FusionauthPublicUrl;
     /// Optional public MCP OAuth configuration.
     pub struct McpAllowedRedirectHosts;
+}
+
+/// Explicit selection shared by startup and Doppler validation.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComputerFleetKind {
+    Incus,
+    Docker,
+    Disabled,
+}
+
+/// Required settings for the selected fleet; unselected groups are not loaded.
+pub enum ComputerFleetConfig {
+    Incus(IncusFleetSettings),
+    Docker(DockerFleetSettings),
+    Disabled,
+}
+
+impl Config {
+    /// Load only the required settings for the explicitly selected fleet.
+    pub fn computer_fleet(&self) -> macro_config::MacroConfigResult<ComputerFleetConfig> {
+        match self.computers_fleet {
+            ComputerFleetKind::Incus => {
+                let settings: IncusFleetSettings = macro_config::load()?;
+                settings.validate()?;
+                Ok(ComputerFleetConfig::Incus(settings))
+            }
+            ComputerFleetKind::Docker => {
+                let settings: DockerFleetSettings = macro_config::load()?;
+                settings.validate()?;
+                Ok(ComputerFleetConfig::Docker(settings))
+            }
+            ComputerFleetKind::Disabled => Ok(ComputerFleetConfig::Disabled),
+        }
+    }
+}
+
+/// Required Incus fleet configuration.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct IncusFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_host_name: String,
+    pub computers_image: String,
+    pub computers_host_reserve_gb: u32,
+    pub computers_oversell_factor: u32,
+    pub computers_incus_request_timeout_secs: u64,
+    pub computers_incus_connect_timeout_secs: u64,
+    pub computers_incus_operation_wait_secs: u32,
+    pub computers_incus_state_change_timeout_secs: u32,
+    pub computers_incus_operation_waits: u32,
+    pub computers_incus_shutdown_grace_secs: u64,
+    pub computers_incus_profile: String,
+    pub computers_incus_storage_pool: String,
+    pub computers_incus_url: String,
+    pub computers_incus_client_cert: String,
+    pub computers_incus_client_key: String,
+    pub computers_incus_server_cert: String,
+}
+
+/// Required Docker fleet configuration.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct DockerFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_host_name: String,
+    pub computers_image: String,
+    pub computers_host_reserve_gb: u32,
+    pub computers_oversell_factor: u32,
+    pub computers_docker_network: String,
+    pub computers_docker_enrollment_dir: String,
+    pub computers_docker_memory_gb: u32,
+}
+
+impl IncusFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            (
+                "COMPUTERS_INCUS_PROFILE",
+                self.computers_incus_profile.as_str(),
+            ),
+            (
+                "COMPUTERS_INCUS_STORAGE_POOL",
+                self.computers_incus_storage_pool.as_str(),
+            ),
+            ("COMPUTERS_INCUS_URL", self.computers_incus_url.as_str()),
+            (
+                "COMPUTERS_INCUS_CLIENT_CERT",
+                self.computers_incus_client_cert.as_str(),
+            ),
+            (
+                "COMPUTERS_INCUS_CLIENT_KEY",
+                self.computers_incus_client_key.as_str(),
+            ),
+            (
+                "COMPUTERS_INCUS_SERVER_CERT",
+                self.computers_incus_server_cert.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        if self.computers_oversell_factor == 0 {
+            return Err(macro_config::MacroConfigError::Deserialize(
+                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl DockerFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            (
+                "COMPUTERS_DOCKER_NETWORK",
+                self.computers_docker_network.as_str(),
+            ),
+            (
+                "COMPUTERS_DOCKER_ENROLLMENT_DIR",
+                self.computers_docker_enrollment_dir.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        if self.computers_oversell_factor == 0 {
+            return Err(macro_config::MacroConfigError::Deserialize(
+                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

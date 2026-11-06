@@ -127,3 +127,6 @@ foreign keys; the broker deletes expired rows.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
+Hosted runtime enrollment generations are additive counters owned by
+`hosted_runtimes`. The forward persona cleanup removes reserved bootstrap keys
+from both persona maps in place without retaining recovery copies.

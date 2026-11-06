@@ -27,11 +27,11 @@ async fn agent_computer_roles_stay_bounded_and_survive_rekey(pool: PgPool) {
         sqlx::query!("INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, $3::text::team_role)", id, team_id, role)
             .execute(&pool).await.unwrap();
     }
-    let computer_id = Uuid::new_v4();
+    let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
     sqlx::query!(
-        r#"INSERT INTO hosted_runtime (id, team_id, name, size, units, state, created_by, persona)
-        VALUES ($1, $2, 'Agent computer', 'standard', 1, '{}', $3, '{}')"#,
-        computer_id,
+        r#"INSERT INTO hosted_runtime (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, created_by, persona)
+        VALUES ($1, $2, 'Agent computer', 'standard', 4, 8, 100, 'standard@2026-11', 'price_fixture', '{}', $3, '{}')"#,
+        computer_id.as_uuid(),
         team_id,
         OWNER_ID,
     )
@@ -41,7 +41,7 @@ async fn agent_computer_roles_stay_bounded_and_survive_rekey(pool: PgPool) {
     let mut registration = hosted_harness(team_id, computer_id);
     registration.team_grant.as_mut().unwrap().access = HarnessTeamAccess::Read;
     let harness_id = registration.id;
-    let pairing_id = Uuid::new_v4();
+    let pairing_id = PairingId::new_from_uuid(Uuid::new_v4());
     repo.upsert_hosted_pairing(hosted_pairing(pairing_id, "initial"), registration.clone())
         .await
         .unwrap();
@@ -73,7 +73,7 @@ async fn agent_computer_roles_stay_bounded_and_survive_rekey(pool: PgPool) {
     );
     sqlx::query!(
         "INSERT INTO team_agents (user_id, team_id, created_by, computer_id) VALUES ($1, $2, $3, $4)",
-        resident, team_id, OWNER_ID, computer_id,
+        resident, team_id, OWNER_ID, computer_id.as_uuid(),
     ).execute(&pool).await.unwrap();
     for (id, expected) in [
         (OWNER_ID, HarnessAccess::Owner),
@@ -103,7 +103,7 @@ async fn agent_computer_roles_stay_bounded_and_survive_rekey(pool: PgPool) {
     // The bound account also classifies the computer if persona metadata is missing.
     sqlx::query!(
         "UPDATE hosted_runtime SET persona = NULL WHERE id = $1",
-        computer_id
+        computer_id.as_uuid()
     )
     .execute(&pool)
     .await
@@ -125,6 +125,7 @@ async fn agent_computer_roles_stay_bounded_and_survive_rekey(pool: PgPool) {
     // A claimed computer is re-keyed without replacing its owner, grant or resident.
     repo.claim_pairing(
         pairing_id,
+        harness_token::hash_token("initial"),
         Uuid::new_v4(),
         HashedHarnessToken::from_raw("initial-token"),
     )
@@ -135,9 +136,12 @@ async fn agent_computer_roles_stay_bounded_and_survive_rekey(pool: PgPool) {
         user_id: admin.to_owned(),
     };
     registration.created_by = user(admin);
-    repo.upsert_hosted_pairing(hosted_pairing(Uuid::new_v4(), "replacement"), registration)
-        .await
-        .unwrap();
+    repo.upsert_hosted_pairing(
+        hosted_pairing(PairingId::new_from_uuid(Uuid::new_v4()), "replacement"),
+        registration,
+    )
+    .await
+    .unwrap();
     let after = repo.get_harness(harness_id).await.unwrap().unwrap();
     assert_eq!(
         after.owner,

@@ -41,10 +41,18 @@ fn standard(id: u128) -> NewComputer {
     NewComputer {
         billing: crate::domain::models::PurchaseBilling::Stripe,
         extra_items: vec![],
-        id: ComputerId::new(Uuid::from_u128(id)),
+        id: ComputerId::new_from_uuid(Uuid::from_u128(id)),
         team_id: TEAM,
         name: ComputerName::try_new(&format!("Computer {id}")).unwrap(),
         size: ComputerSize::Standard,
+        resources: crate::domain::size::ComputerResources {
+            vcpus: crate::domain::size::Vcpus::new(4),
+            memory_gib: crate::domain::size::MemoryGib::new(8),
+            disk_gib: crate::domain::size::DiskGib::new(100),
+        },
+        catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-11".to_owned())
+            .unwrap(),
+        price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
         persona: None,
         created_by: "macro|owner@example.com".to_owned(),
     }
@@ -76,7 +84,9 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
 
     assert!(matches!(tenth, Err(ReserveError::SoldOut)));
     assert_eq!(
-        repo.sold_out_sizes().await.unwrap(),
+        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+            .await
+            .unwrap(),
         vec![
             ComputerSize::Standard,
             ComputerSize::Large,
@@ -104,7 +114,7 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
 
     let first = repo
         .apply(
-            ComputerId::new(Uuid::from_u128(1)),
+            ComputerId::new_from_uuid(Uuid::from_u128(1)),
             Event::PaymentConfirmed,
             now(),
         )
@@ -113,7 +123,7 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
         .unwrap();
     let second = repo
         .apply(
-            ComputerId::new(Uuid::from_u128(2)),
+            ComputerId::new_from_uuid(Uuid::from_u128(2)),
             Event::PaymentConfirmed,
             now(),
         )
@@ -139,7 +149,7 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
         .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
         .await
         .unwrap();
-    leased.sort_by_key(|pending| pending.computer_id.into_inner());
+    leased.sort_by_key(|pending| pending.computer_id.as_uuid());
     assert_eq!(
         leased
             .iter()
@@ -147,17 +157,19 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
             .collect::<Vec<_>>(),
         vec![
             (
-                ComputerId::new(Uuid::from_u128(1)),
+                ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 Effect::Create {
                     host: host.id,
-                    start: true
+                    start: true,
+                    generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
                 }
             ),
             (
-                ComputerId::new(Uuid::from_u128(2)),
+                ComputerId::new_from_uuid(Uuid::from_u128(2)),
                 Effect::Create {
                     host: host.id,
-                    start: false
+                    start: false,
+                    generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
                 }
             ),
         ]
@@ -183,7 +195,7 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
     })
     .await
     .unwrap();
-    let id = ComputerId::new(Uuid::from_u128(1));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     repo.reserve(standard(1), now()).await.unwrap();
     repo.apply(id, Event::PaymentConfirmed, now())
         .await
@@ -224,14 +236,14 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
     repo.reserve(standard(1), now()).await.unwrap();
 
     repo.apply(
-        ComputerId::new(Uuid::from_u128(1)),
+        ComputerId::new_from_uuid(Uuid::from_u128(1)),
         Event::PaymentConfirmed,
         now(),
     )
     .await
     .unwrap();
     repo.apply(
-        ComputerId::new(Uuid::from_u128(1)),
+        ComputerId::new_from_uuid(Uuid::from_u128(1)),
         Event::InstanceStarted,
         now(),
     )
@@ -255,7 +267,12 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
         .unwrap();
     assert!(matches!(crashed.state.phase, Phase::Restarting { .. }));
     assert_eq!(repo.list_for_team(TEAM).await.unwrap().len(), 1);
-    assert_eq!(repo.sold_out_sizes().await.unwrap(), vec![]);
+    assert_eq!(
+        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+            .await
+            .unwrap(),
+        vec![]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -271,7 +288,7 @@ async fn lifecycle_selectors_read_the_nested_phase_tag(pool: PgPool) {
         })
         .await
         .unwrap();
-    let id = ComputerId::new(Uuid::from_u128(1));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     repo.reserve(standard(1), now()).await.unwrap();
     assert!(repo.instances_expected(host.id).await.unwrap().is_empty());
     repo.apply(id, Event::PaymentConfirmed, now())
@@ -348,7 +365,10 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
         .await
         .unwrap();
     assert_eq!(effects.len(), 1);
-    assert_eq!(effects[0].computer_id, ComputerId::new(Uuid::from_u128(1)));
+    assert_eq!(
+        effects[0].computer_id,
+        ComputerId::new_from_uuid(Uuid::from_u128(1))
+    );
     assert_eq!(
         effects[0].effect,
         Effect::ConfirmPayment {
@@ -359,7 +379,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
         }
     );
     repo.apply(
-        ComputerId::new(Uuid::from_u128(1)),
+        ComputerId::new_from_uuid(Uuid::from_u128(1)),
         Event::PurchaseFailed,
         now(),
     )
@@ -382,7 +402,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
     assert!(repo.instances_expected(host.id).await.unwrap().is_empty());
     repo.reserve(standard(2), now()).await.unwrap();
     repo.apply(
-        ComputerId::new(Uuid::from_u128(1)),
+        ComputerId::new_from_uuid(Uuid::from_u128(1)),
         Event::ReleaseNow,
         now(),
     )
@@ -395,7 +415,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn payment_resolution_is_serialized_per_computer_across_repositories(pool: PgPool) {
     let repo = PgComputerRepo::new(pool.clone());
-    let id = ComputerId::new(Uuid::from_u128(42));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(42));
     let guard = repo.lock_payment(id).await.unwrap();
     let mut competing = pool.begin().await.unwrap();
     let key = format!("computer-payment:{id}");
@@ -408,7 +428,7 @@ async fn payment_resolution_is_serialized_per_computer_across_repositories(pool:
     .unwrap();
     assert!(!locked);
     let other = PgComputerRepo::new(pool.clone())
-        .lock_payment(ComputerId::new(Uuid::from_u128(43)))
+        .lock_payment(ComputerId::new_from_uuid(Uuid::from_u128(43)))
         .await
         .unwrap();
     other.commit().await.unwrap();
@@ -443,42 +463,42 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
         repo.reserve(standard(id), now()).await.unwrap();
     }
     repo.apply(
-        ComputerId::new(Uuid::from_u128(2)),
+        ComputerId::new_from_uuid(Uuid::from_u128(2)),
         Event::PurchaseFailed,
         now(),
     )
     .await
     .unwrap();
     repo.apply(
-        ComputerId::new(Uuid::from_u128(3)),
+        ComputerId::new_from_uuid(Uuid::from_u128(3)),
         Event::PaymentConfirmed,
         now(),
     )
     .await
     .unwrap();
     repo.apply(
-        ComputerId::new(Uuid::from_u128(4)),
+        ComputerId::new_from_uuid(Uuid::from_u128(4)),
         Event::PaymentConfirmed,
         now(),
     )
     .await
     .unwrap();
     repo.apply(
-        ComputerId::new(Uuid::from_u128(4)),
+        ComputerId::new_from_uuid(Uuid::from_u128(4)),
         Event::ReleaseNow,
         now(),
     )
     .await
     .unwrap();
     repo.apply(
-        ComputerId::new(Uuid::from_u128(5)),
+        ComputerId::new_from_uuid(Uuid::from_u128(5)),
         Event::PurchaseFailed,
         now(),
     )
     .await
     .unwrap();
     repo.apply(
-        ComputerId::new(Uuid::from_u128(5)),
+        ComputerId::new_from_uuid(Uuid::from_u128(5)),
         Event::ReleaseNow,
         now(),
     )
@@ -507,7 +527,7 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
         (5, PaymentOutcome::Unbilled),
     ] {
         let computer = repo
-            .get(ComputerId::new(Uuid::from_u128(id)))
+            .get(ComputerId::new_from_uuid(Uuid::from_u128(id)))
             .await
             .unwrap()
             .unwrap();
@@ -529,6 +549,7 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
     .await
     .unwrap();
     let mut request = standard(19);
+    request.price_id = None;
     request.billing = crate::domain::models::PurchaseBilling::Comped {
         reason: "internal team".to_owned(),
     };
@@ -539,6 +560,7 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
         crate::domain::lifecycle::PaymentOutcome::Pending
     );
     assert_eq!(pending.state.comp_reason.as_deref(), Some("internal team"));
+    assert_eq!(pending.price_id, None);
     let comped = repo
         .apply(
             reserved.id,
@@ -565,3 +587,75 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
         Some("internal team")
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool);
+    repo.register_host(HostRegistration {
+        name: "resource-host".to_owned(),
+        memory_gb: 24,
+        reserve_gb: 0,
+        oversell_factor: 1,
+    })
+    .await
+    .unwrap();
+    let mut request = standard(50);
+    request.resources = ComputerResources {
+        vcpus: Vcpus::new(6),
+        memory_gib: MemoryGib::new(12),
+        disk_gib: DiskGib::new(150),
+    };
+    repo.reserve(request, now()).await.unwrap();
+    let stored = repo
+        .get(ComputerId::new_from_uuid(Uuid::from_u128(50)))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.size, ComputerSize::Standard);
+    assert_eq!(
+        stored.resources,
+        ComputerResources {
+            vcpus: Vcpus::new(6),
+            memory_gib: MemoryGib::new(12),
+            disk_gib: DiskGib::new(150)
+        }
+    );
+    assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
+    assert_eq!(stored.price_id.unwrap().as_str(), "price_standard");
+    assert_eq!(
+        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+            .await
+            .unwrap(),
+        vec![ComputerSize::Large, ComputerSize::Xl]
+    );
+    repo.reserve(standard(51), now()).await.unwrap();
+    assert!(matches!(
+        repo.reserve(standard(52), now()).await,
+        Err(ReserveError::SoldOut)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool);
+    repo.register_host(HostRegistration {
+        name: "reference-host".to_owned(),
+        memory_gb: 24,
+        reserve_gb: 0,
+        oversell_factor: 1,
+    })
+    .await
+    .unwrap();
+    let mut request = standard(70);
+    request.created_by = "macro|missing@example.com".to_owned();
+    let error = repo.reserve(request, now()).await.unwrap_err();
+    let ReserveError::Storage(PgComputerError::Sqlx(sqlx::Error::Database(error))) = error else {
+        panic!("expected a database foreign key error, got {error:?}");
+    };
+    assert_eq!(error.code().as_deref(), Some("23503"));
+    assert_eq!(error.constraint(), Some("hosted_runtime_created_by_fkey"));
+}
+
+mod credentials;

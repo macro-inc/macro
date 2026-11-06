@@ -9,6 +9,7 @@ name = "macrod"
 path = "src/main.rs"
 
 [dependencies]
+pairing_id = { path = "../pairing_id" }
 agent_fold = { path = "../folds/agent_fold", default-features = false }
 claude_fold = { path = "../folds/claude_fold" }
 codex_fold = { path = "../folds/codex_fold" }
@@ -72,6 +73,7 @@ uuid = { workspace = true }
 webbrowser = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs", "pty", "termios"] }

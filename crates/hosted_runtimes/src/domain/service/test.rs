@@ -11,21 +11,34 @@ use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOu
 use crate::domain::models::{BillingInterval, SubscriptionItem};
 
 mod comped;
+mod sold_resources;
 
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
 struct FakeBilling {
+    quote_price: Option<crate::domain::models::StripePriceId>,
+    not_sold: bool,
     no_subscription: bool,
     yearly: bool,
     decline: bool,
     provider_error: bool,
     charged: Mutex<HashSet<String>>,
     calls: Mutex<Vec<&'static str>>,
-    updates: Mutex<Vec<(ComputerSize, Vec<SubscriptionItem>, String)>>,
-    removals: Mutex<Vec<(ComputerSize, String)>>,
+    updates: Mutex<
+        Vec<(
+            crate::domain::models::StripePriceId,
+            Vec<SubscriptionItem>,
+            String,
+        )>,
+    >,
+    removals: Mutex<Vec<(crate::domain::models::StripePriceId, String)>>,
 }
 
 impl Billing for FakeBilling {
+    fn sales_available(&self) -> bool {
+        !self.not_sold
+    }
+
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         self.calls.lock().unwrap().push("quote");
         if self.no_subscription {
@@ -33,12 +46,16 @@ impl Billing for FakeBilling {
         }
         Ok(Quote {
             size,
-            price_id: crate::domain::models::StripePriceId::parse(&format!(
-                "price_{}",
-                size.as_ref()
-            ))
-            .unwrap(),
-            amount: 2000 * i64::from(size.units()),
+            price_id: self.quote_price.clone().unwrap_or_else(|| {
+                crate::domain::models::StripePriceId::parse(&format!("price_{}", size.as_ref()))
+                    .unwrap()
+            }),
+            amount: 2000
+                * i64::from(match size {
+                    ComputerSize::Standard => 1,
+                    ComputerSize::Large => 2,
+                    ComputerSize::Xl => 4,
+                }),
             currency: "usd".to_owned(),
             interval: if self.yearly {
                 BillingInterval::Year
@@ -51,7 +68,7 @@ impl Billing for FakeBilling {
     async fn add_computer(
         &self,
         _team_id: Uuid,
-        size: ComputerSize,
+        price_id: &crate::domain::models::StripePriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
@@ -68,24 +85,25 @@ impl Billing for FakeBilling {
             .lock()
             .unwrap()
             .insert(idempotency_key.to_owned());
-        self.updates
-            .lock()
-            .unwrap()
-            .push((size, extra_items.to_vec(), idempotency_key.to_owned()));
+        self.updates.lock().unwrap().push((
+            price_id.clone(),
+            extra_items.to_vec(),
+            idempotency_key.to_owned(),
+        ));
         Ok(())
     }
 
     async fn remove_computer(
         &self,
         _team_id: Uuid,
-        size: ComputerSize,
+        price_id: &crate::domain::models::StripePriceId,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
         self.calls.lock().unwrap().push("remove_computer");
         self.removals
             .lock()
             .unwrap()
-            .push((size, idempotency_key.to_owned()));
+            .push((price_id.clone(), idempotency_key.to_owned()));
         Ok(())
     }
 
@@ -144,7 +162,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
     assert_eq!(
         *service.billing.updates.lock().unwrap(),
         vec![(
-            ComputerSize::Standard,
+            crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
             vec![SubscriptionItem {
                 price_id: crate::domain::models::StripePriceId::parse("price_agent_seat").unwrap(),
                 quantity: 1,
@@ -152,6 +170,17 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             format!("computer-add:{computer_id}"),
         )]
     );
+    let stored = service.repo.get(computer_id).await.unwrap().unwrap();
+    assert_eq!(
+        stored.resources,
+        crate::domain::size::ComputerResources {
+            vcpus: crate::domain::size::Vcpus::new(4),
+            memory_gib: crate::domain::size::MemoryGib::new(8),
+            disk_gib: crate::domain::size::DiskGib::new(100),
+        }
+    );
+    assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
+    assert_eq!(stored.price_id.unwrap().as_str(), "price_standard");
     let status = service.status(TEAM, computer_id).await.unwrap();
     assert_eq!(status.name.as_str(), "Ada");
     assert_eq!(status.persona_name.as_deref(), Some("Ada"));
@@ -187,6 +216,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             Effect::Create {
                 host: HOST,
                 start: true,
+                generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
             }
         ]
     );
@@ -236,7 +266,10 @@ async fn declined_payment_drops_the_reservation() {
     );
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
-    assert_eq!(*service.billing.calls.lock().unwrap(), vec!["add_computer"]);
+    assert_eq!(
+        *service.billing.calls.lock().unwrap(),
+        vec!["quote", "add_computer"]
+    );
     assert!(service.billing.charged.lock().unwrap().is_empty());
     assert_eq!(computers[0].payment, PaymentOutcome::Unbilled);
     let released = service
@@ -412,38 +445,57 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         state.phase = Phase::Running { host: HOST };
         state.payment = PaymentOutcome::Paid;
         repo.computers.lock().unwrap().insert(
-            ComputerId::new(Uuid::from_u128(index as u128 + 1)),
+            ComputerId::new_from_uuid(Uuid::from_u128(index as u128 + 1)),
             Computer {
-                id: ComputerId::new(Uuid::from_u128(index as u128 + 1)),
+                id: ComputerId::new_from_uuid(Uuid::from_u128(index as u128 + 1)),
                 team_id: TEAM,
                 name: ComputerName::try_new(&format!("Computer {index}")).unwrap(),
                 size: ComputerSize::Standard,
+                resources: crate::domain::size::ComputerResources {
+                    vcpus: crate::domain::size::Vcpus::new(4),
+                    memory_gib: crate::domain::size::MemoryGib::new(8),
+                    disk_gib: crate::domain::size::DiskGib::new(100),
+                },
+                catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                    "standard@2026-11".to_owned(),
+                )
+                .unwrap(),
+                price_id: Some(
+                    crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
+                ),
                 state,
                 harness_id: None,
                 persona: None,
                 created_by: "macro|admin@example.com".to_owned(),
                 created_at,
                 enrolled_at: Some(created_at),
+                enrollment_generation: Default::default(),
             },
         );
     }
     let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
 
     service
-        .reconcile_billed_count(TEAM, ComputerSize::Standard, 1)
+        .reconcile_billed_counts(
+            TEAM,
+            &[SubscriptionItem {
+                price_id: crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
+                quantity: 1,
+            }],
+        )
         .await
         .unwrap();
 
     assert_eq!(
         *service.repo.events.lock().unwrap(),
         vec![(
-            ComputerId::new(Uuid::from_u128(2)),
+            ComputerId::new_from_uuid(Uuid::from_u128(2)),
             Event::SubscriptionCanceled
         )]
     );
     let newest = service
         .repo
-        .get(ComputerId::new(Uuid::from_u128(2)))
+        .get(ComputerId::new_from_uuid(Uuid::from_u128(2)))
         .await
         .unwrap()
         .unwrap();
@@ -456,7 +508,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
 
 #[tokio::test]
 async fn retry_failed_computer_restarts_without_billing() {
-    let computer_id = ComputerId::new(Uuid::from_u128(1));
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
@@ -465,6 +517,16 @@ async fn retry_failed_computer_restarts_without_billing() {
             team_id: TEAM,
             name: ComputerName::try_new("Build box").unwrap(),
             size: ComputerSize::Standard,
+            resources: crate::domain::size::ComputerResources {
+                vcpus: crate::domain::size::Vcpus::new(4),
+                memory_gib: crate::domain::size::MemoryGib::new(8),
+                disk_gib: crate::domain::size::DiskGib::new(100),
+            },
+            catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                "standard@2026-11".to_owned(),
+            )
+            .unwrap(),
+            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
             state: ComputerState {
                 phase: Phase::Failed { host: HOST },
                 power: Power::On,
@@ -481,6 +543,7 @@ async fn retry_failed_computer_restarts_without_billing() {
             created_by: "macro|admin@example.com".to_owned(),
             created_at: now(),
             enrolled_at: Some(now()),
+            enrollment_generation: Default::default(),
         },
     );
     let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
@@ -517,7 +580,7 @@ async fn retry_failed_computer_restarts_without_billing() {
 
 #[tokio::test]
 async fn retry_running_computer_is_rejected_without_applying_events() {
-    let computer_id = ComputerId::new(Uuid::from_u128(1));
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
@@ -526,6 +589,16 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
             team_id: TEAM,
             name: ComputerName::try_new("Build box").unwrap(),
             size: ComputerSize::Standard,
+            resources: crate::domain::size::ComputerResources {
+                vcpus: crate::domain::size::Vcpus::new(4),
+                memory_gib: crate::domain::size::MemoryGib::new(8),
+                disk_gib: crate::domain::size::DiskGib::new(100),
+            },
+            catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                "standard@2026-11".to_owned(),
+            )
+            .unwrap(),
+            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
             state: ComputerState {
                 phase: Phase::Running { host: HOST },
                 power: Power::On,
@@ -542,6 +615,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
             created_by: "macro|admin@example.com".to_owned(),
             created_at: now(),
             enrolled_at: Some(now()),
+            enrollment_generation: Default::default(),
         },
     );
     let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
@@ -556,7 +630,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
 
 #[tokio::test]
 async fn retry_another_teams_computer_is_not_found() {
-    let computer_id = ComputerId::new(Uuid::from_u128(1));
+    let computer_id = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
@@ -565,6 +639,16 @@ async fn retry_another_teams_computer_is_not_found() {
             team_id: TEAM,
             name: ComputerName::try_new("Build box").unwrap(),
             size: ComputerSize::Standard,
+            resources: crate::domain::size::ComputerResources {
+                vcpus: crate::domain::size::Vcpus::new(4),
+                memory_gib: crate::domain::size::MemoryGib::new(8),
+                disk_gib: crate::domain::size::DiskGib::new(100),
+            },
+            catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                "standard@2026-11".to_owned(),
+            )
+            .unwrap(),
+            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
             state: ComputerState {
                 phase: Phase::Failed { host: HOST },
                 power: Power::On,
@@ -581,6 +665,7 @@ async fn retry_another_teams_computer_is_not_found() {
             created_by: "macro|admin@example.com".to_owned(),
             created_at: now(),
             enrolled_at: Some(now()),
+            enrollment_generation: Default::default(),
         },
     );
     let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
@@ -657,7 +742,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
         }
     );
     let expected = (
-        ComputerSize::Large,
+        crate::domain::models::StripePriceId::parse("price_large").unwrap(),
         vec![SubscriptionItem {
             price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
             quantity: 1,
@@ -726,7 +811,7 @@ async fn provider_error_stays_pending_and_confirmation_keeps_retrying() {
     );
     assert_eq!(
         *service.billing.calls.lock().unwrap(),
-        vec!["add_computer", "add_computer"]
+        vec!["quote", "add_computer", "add_computer"]
     );
 }
 
@@ -754,7 +839,10 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
         .unwrap();
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
-    assert_eq!(*service.billing.calls.lock().unwrap(), vec!["add_computer"]);
+    assert_eq!(
+        *service.billing.calls.lock().unwrap(),
+        vec!["quote", "add_computer"]
+    );
 }
 
 #[tokio::test]
@@ -770,7 +858,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
         },
         FixedClock,
     );
-    let id = ComputerId::new(Uuid::from_u128(17));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(17));
     service
         .repo
         .reserve(
@@ -780,6 +868,18 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
                 team_id: TEAM,
                 name: ComputerName::try_new("Build box").unwrap(),
                 size: ComputerSize::Standard,
+                resources: crate::domain::size::ComputerResources {
+                    vcpus: crate::domain::size::Vcpus::new(4),
+                    memory_gib: crate::domain::size::MemoryGib::new(8),
+                    disk_gib: crate::domain::size::DiskGib::new(100),
+                },
+                catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                    "standard@2026-11".to_owned(),
+                )
+                .unwrap(),
+                price_id: Some(
+                    crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
+                ),
                 persona: None,
                 created_by: "test-admin".to_owned(),
                 extra_items: vec![],
@@ -798,4 +898,33 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
     assert_eq!(*service.billing.calls.lock().unwrap(), vec!["add_computer"]);
     assert!(service.billing.charged.lock().unwrap().is_empty());
     assert!(service.billing.removals.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn disabled_sales_reject_purchase_before_reserving_capacity() {
+    let service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling {
+            not_sold: true,
+            ..FakeBilling::default()
+        },
+        FixedClock,
+    );
+    let result = service
+        .purchase(PurchaseRequest {
+            billing: PurchaseBilling::Stripe,
+            team_id: TEAM,
+            created_by: "test-admin".to_owned(),
+            size: ComputerSize::Standard,
+            name: None,
+            persona: None,
+            extra_items: vec![],
+        })
+        .await;
+    assert!(matches!(
+        result,
+        Err(ComputerError::Billing(BillingError::NotAvailable))
+    ));
+    assert!(service.repo.list_for_team(TEAM).await.unwrap().is_empty());
+    assert!(service.billing.calls.lock().unwrap().is_empty());
 }

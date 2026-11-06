@@ -9,11 +9,13 @@ use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 
 use crate::domain::enrollment::{Enrollment, PersonaConfigKey};
-use crate::domain::ids::ComputerId;
+use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
 use crate::domain::models::{Computer, EnrollmentDefaults};
+use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
 use crate::domain::ports::{
-    ComputerRepo, Fleet, FleetError, FleetInstance, Harnesses, InstanceStatus, PendingEffect,
+    ComputerRepo, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses, InstanceStatus,
+    PendingEffect, PersonaCredentialSource,
 };
 use crate::domain::service::{Clock, ComputerError};
 
@@ -49,7 +51,8 @@ pub trait SessionActivity: Send + Sync + 'static {
 }
 
 /// Drives one host's computers. V1 runs one fleet (one host) per control plane.
-pub struct ComputerOperator<Repo, Machines, Registry, Time> {
+pub struct ComputerOperator<Repo, Machines, Registry, Time, Credentials> {
+    credentials: Credentials,
     repo: Repo,
     fleet: Machines,
     harnesses: Registry,
@@ -65,12 +68,14 @@ struct HostReadiness {
     failures: u32,
 }
 
-impl<Repo, Machines, Registry, Time> ComputerOperator<Repo, Machines, Registry, Time>
+impl<Repo, Machines, Registry, Time, Credentials>
+    ComputerOperator<Repo, Machines, Registry, Time, Credentials>
 where
     Repo: ComputerRepo,
     Machines: Fleet,
     Registry: Harnesses,
     Time: Clock,
+    Credentials: PersonaCredentialSource,
 {
     /// Build the operator; unavailable host discovery is retried by its passes.
     #[tracing::instrument(skip_all, err)]
@@ -80,8 +85,10 @@ where
         harnesses: Registry,
         clock: Time,
         defaults: EnrollmentDefaults,
+        credentials: Credentials,
     ) -> Result<Self, ComputerError> {
         let operator = Self {
+            credentials,
             repo,
             fleet,
             harnesses,
@@ -232,51 +239,44 @@ where
         }
 
         match effect {
-            Effect::Create { start, .. } => {
+            Effect::Create {
+                start, generation, ..
+            } => {
+                // An expired effect lease may have been acquired by another replica.
+                // The same guard also fences the harness claim transaction.
+                let _guard = self
+                    .repo
+                    .lock_enrollment(computer_id)
+                    .await
+                    .map_err(internal)?;
                 let computer = self.computer(computer_id).await?;
-                let pairing = self
-                    .harnesses
-                    .create_hosted_pairing(&computer)
-                    .await
-                    .map_err(internal)?;
-                let enrollment = Enrollment {
-                    computer_id,
-                    pairing_id: pairing.pairing_id,
-                    device_secret: pairing.device_secret,
-                    name: computer.name.clone(),
-                    service_url_overrides: self.defaults.service_url_overrides.clone(),
-                    persona: computer
-                        .persona
-                        .clone()
-                        .map(|mut persona| {
-                            if let Some(parent) = super::telemetry::traceparent() {
-                                persona.config.insert(
-                                    PersonaConfigKey::parse("BRAIN_PROVISION_TRACEPARENT")
-                                        .map_err(internal)?,
-                                    parent,
-                                );
-                            }
-                            persona.config.insert(
-                                PersonaConfigKey::parse("MACRO_COMPUTER_ID").map_err(internal)?,
-                                computer.id.to_string(),
-                            );
-                            persona.config.insert(
-                                PersonaConfigKey::parse("MACRO_TEAM_ID").map_err(internal)?,
-                                computer.team_id.to_string(),
-                            );
-                            Ok::<_, ComputerError>(persona)
-                        })
-                        .transpose()?,
+                if *generation < computer.enrollment_generation {
+                    return Ok(None);
+                }
+                if computer.enrollment_generation != *generation {
+                    return Err(ComputerError::BadRequest(
+                        "invalid enrollment generation".to_owned(),
+                    ));
+                }
+                let enrollment = CreateEnrollment {
+                    harnesses: &self.harnesses,
+                    credentials: &self.credentials,
+                    defaults: &self.defaults,
+                    computer: &computer,
+                    generation: *generation,
                 };
-                self.fleet
-                    .create(&computer, &enrollment, *start)
-                    .await
-                    .map_err(internal)?;
-                Ok(Some(if *start {
-                    Event::InstanceStarted
-                } else {
-                    Event::InstanceStopped
-                }))
+                let result = self
+                    .fleet
+                    .create(&computer, *generation, &enrollment, *start)
+                    .await;
+                fleet_completion(
+                    result,
+                    Some(if *start {
+                        Event::InstanceStarted
+                    } else {
+                        Event::InstanceStopped
+                    }),
+                )
             }
             Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
             Effect::Resume { .. } => fleet_completion(self.fleet.resume(computer_id).await, None),
@@ -368,6 +368,17 @@ where
 
         for computer in &expected {
             let observed = instances.get(&computer.id).map(|instance| instance.status);
+            if observed.is_some() {
+                match self.fleet.resources_match(computer).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        tracing::error!(computer_id = %computer.id, resources = ?computer.resources, reason = "resource limits drifted", "computer needs an operator")
+                    }
+                    Err(error) => {
+                        tracing::warn!(computer_id = %computer.id, error = ?error, "could not check computer resource limits")
+                    }
+                }
+            }
             let crashed = match computer.state.phase {
                 Phase::Running { .. } | Phase::Booting { .. } => {
                     observed.is_none() || observed == Some(InstanceStatus::Stopped)
@@ -566,5 +577,71 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. } => None,
+    }
+}
+
+struct CreateEnrollment<'a, Registry, Credentials> {
+    harnesses: &'a Registry,
+    credentials: &'a Credentials,
+    defaults: &'a EnrollmentDefaults,
+    computer: &'a Computer,
+    generation: EnrollmentGeneration,
+}
+
+impl<Registry: Harnesses, Credentials: PersonaCredentialSource> FleetEnrollment
+    for CreateEnrollment<'_, Registry, Credentials>
+{
+    async fn claimed(&self, pairing: PairingId) -> Result<bool, PersonaCredentialError> {
+        self.harnesses
+            .pairing_claimed(pairing)
+            .await
+            .map_err(|_| PersonaCredentialError::IssuanceFailed)
+    }
+
+    #[tracing::instrument(name = "computer.enrollment.issue", skip_all, fields(computer_id = %self.computer.id, generation = i64::from(self.generation.get())), err)]
+    async fn issue(&self) -> Result<Enrollment, PersonaCredentialError> {
+        // Retire the earlier claim secret first. If issuance loses its response,
+        // the old guest must not claim with persona credentials now revoked.
+        let pairing = self
+            .harnesses
+            .create_hosted_pairing(self.computer)
+            .await
+            .map_err(|_| PersonaCredentialError::IssuanceFailed)?;
+        let persona_enrollment = self
+            .credentials
+            .issue(self.computer.id, self.generation)
+            .await?;
+        let persona = self
+            .computer
+            .persona
+            .clone()
+            .map(|mut persona| {
+                if let Some(parent) = super::telemetry::traceparent() {
+                    persona.config.insert(
+                        PersonaConfigKey::parse("BRAIN_PROVISION_TRACEPARENT")?,
+                        parent,
+                    );
+                }
+                persona.config.insert(
+                    PersonaConfigKey::parse("MACRO_COMPUTER_ID")?,
+                    self.computer.id.to_string(),
+                );
+                persona.config.insert(
+                    PersonaConfigKey::parse("MACRO_TEAM_ID")?,
+                    self.computer.team_id.to_string(),
+                );
+                Ok::<_, PersonaCredentialError>(persona)
+            })
+            .transpose()?;
+        Ok(Enrollment {
+            computer_id: self.computer.id,
+            generation: self.generation,
+            pairing_id: pairing.pairing_id,
+            device_secret: pairing.device_secret,
+            name: self.computer.name.clone(),
+            service_url_overrides: self.defaults.service_url_overrides.clone(),
+            persona,
+            persona_enrollment,
+        })
     }
 }

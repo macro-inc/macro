@@ -217,3 +217,46 @@ fn persona_values_reject_line_breaks_in_config_and_environment() {
         assert!(serde_json::from_value::<Persona>(json).is_err());
     }
 }
+
+#[test]
+fn persisted_persona_rejects_bootstrap_keys_in_both_maps() {
+    for name in [
+        "MACRO_API_KEY",
+        "MACRO_REPO_TOKEN",
+        "ANTHROPIC_AUTH_TOKEN",
+        "OTHER_TOKEN",
+        "OTHER_KEY",
+        "OTHER_SECRET",
+    ] {
+        let key = PersonaConfigKey::parse(name).unwrap();
+        assert_eq!(
+            key.validate_non_secret(),
+            Err(PersonaFieldError::ReservedConfigKey)
+        );
+        for field in ["config", "env"] {
+            let mut json = serde_json::json!({
+                "name": "Worker", "os_user": "worker",
+                "extra_service": {"unit_name": "worker", "exec": "/bin/worker", "env": {}},
+                "config": {}
+            });
+            if field == "config" {
+                json["config"][name] = serde_json::json!("fixture-bootstrap-value");
+            } else {
+                json["extra_service"]["env"][name] = serde_json::json!("fixture-bootstrap-value");
+            }
+            assert!(serde_json::from_value::<Persona>(json).is_err());
+        }
+    }
+}
+
+#[test]
+fn bootstrap_suffix_rules_are_case_sensitive() {
+    for name in ["other_token", "other_key", "other_secret", "REPO_URL"] {
+        assert!(
+            PersonaConfigKey::parse(name)
+                .unwrap()
+                .validate_non_secret()
+                .is_ok()
+        );
+    }
+}

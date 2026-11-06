@@ -410,10 +410,12 @@ upgrades. Bun is still used for dependency installation and builds.
 ## Macro Computers
 
 `agent_harness_service` runs the Macro computer control plane when
-`COMPUTERS_FLEET` is set. The stack sets every `COMPUTERS_*` value from the
-fleet you pick. An enabled fleet requires explicit configuration; missing values
-fail startup with the variable name. With `COMPUTERS_FLEET` unset, these values
-are not required.
+`COMPUTERS_FLEET` is `incus` or `docker`. The stack sets every `COMPUTERS_*`
+value from the fleet you pick. An enabled fleet requires explicit configuration;
+missing values fail startup with the variable name. `COMPUTERS_FLEET` is required;
+`disabled` needs no fleet settings. Local orchestration sets `disabled` when
+computers are off. Enrollment copies macrod’s `OVERRIDE_*` service URLs from
+the harness process environment; xtask supplies the values for the fleet.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
@@ -440,8 +442,11 @@ Incus additionally requires `COMPUTERS_INCUS_URL`,
 
 Authentication also reads `COMPUTERS_FLEET`. When enabled, all six
 `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values must be
-nonblank. Missing prices fail startup; no size or interval receives a fallback
-price. Local Doppler supplies test-mode prices. `--no-doppler` supplies explicit
+nonblank. Without a fleet, omit the entire price group to disable computer
+sales; partial groups fail startup and Doppler validation. Disabled sales
+answer 503 on offers, quotes and purchases before contacting Stripe. No size
+or interval receives a fallback price. Local Doppler supplies test-mode prices.
+`--no-doppler` supplies explicit
 placeholder price IDs for startup only; replace them with real test prices
 before buying a computer.
 

@@ -1,5 +1,6 @@
 //! Axum router for harness registration and device-code pairing.
 
+use pairing_id::PairingId;
 use std::sync::Arc;
 
 use axum::{
@@ -16,7 +17,6 @@ use macro_authorization::{
 };
 use model_error_response::ErrorResponse;
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::domain::{
     models::{
@@ -73,7 +73,7 @@ pub struct PairingCodePath {
 #[derive(Debug, serde::Deserialize)]
 pub struct PairingIdPath {
     /// Pairing id.
-    pub pairing_id: Uuid,
+    pub pairing_id: PairingId,
 }
 
 /// Harness path.
@@ -243,7 +243,7 @@ pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorization
     tag = "harnesses",
     operation_id = "claim_harness_pairing",
     path = "/harness-pairings/{pairing_id}/claim",
-    params(("pairing_id" = Uuid, Path, description = "Pairing ID")),
+    params(("pairing_id" = PairingId, Path, description = "Pairing ID")),
     request_body = ClaimPairingRequest,
     responses(
         (status = 200, body = ClaimedPairing),

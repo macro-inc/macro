@@ -929,6 +929,12 @@ the team subscription. They sit in `Runtimes`, behind the
 page shows nothing about them. Every team member sees the **Macro computers**
 list; only team admins and owners see the buying card and the row controls.
 
+If the environment has no computer prices configured, offers, quotes, and
+purchases answer 503 with `computers are not available in this environment`.
+Partial price configuration prevents the authentication service from starting.
+Runtimes rows and the team Billing computers list show the recorded resources
+(vCPU, GiB memory and GiB disk), even when the purchase catalog changes.
+
 To buy one as a team admin:
 
 1. Open `/app/settings/runtimes` (mobile: Settings sheet → Runtimes).
@@ -947,7 +953,7 @@ To buy one as a team admin:
 The new row reads **Setting up** with its step (confirming payment, creating,
 starting up, connecting; "step N of 5") and the list polls every 3 seconds
 while any computer is setting up, waking or stopping. Once ready a row shows
-its size, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
+its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
 **Stopped**, **Failed**), its Claude access mode, and the runtime it
 registered as with a connection dot; that runtime's row under **Connected
 runtimes** carries a **Macro computer** badge and no Remove. Admin controls

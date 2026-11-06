@@ -9,6 +9,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::models::SubscriptionItem;
+use crate::domain::persona_credentials::EnrollmentGeneration;
 
 #[cfg(test)]
 mod test;
@@ -292,6 +293,7 @@ pub enum Effect {
     Create {
         host: HostId,
         start: bool,
+        generation: EnrollmentGeneration,
     },
     Start {
         host: HostId,
@@ -365,6 +367,8 @@ pub enum EffectWorker {
 /// Facts the applier gathers under the host lock before a transition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Context {
+    /// Last creation begun by the fleet; Create effects reserve its successor.
+    pub enrollment_generation: EnrollmentGeneration,
     pub now: DateTime<Utc>,
     /// Whether the computer's host has awake units free for it to wake.
     pub host_has_room: bool,
@@ -405,7 +409,13 @@ pub fn transition(
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
                 next.wake_requested = state.power == Power::On && !start;
-                effects.push(Effect::Create { host, start });
+                schedule_create(
+                    &mut next,
+                    &mut effects,
+                    host,
+                    start,
+                    context.enrollment_generation,
+                );
             }
             Event::PurchaseFailed => {
                 next.payment = PaymentOutcome::Unbilled;
@@ -429,7 +439,13 @@ pub fn transition(
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
                 next.wake_requested = state.power == Power::On && !start;
-                effects.push(Effect::Create { host, start });
+                schedule_create(
+                    &mut next,
+                    &mut effects,
+                    host,
+                    start,
+                    context.enrollment_generation,
+                );
             }
         }
 
@@ -810,4 +826,26 @@ fn destroy(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {
     next.macrod_connected = false;
     effects.push(Effect::Destroy { host });
     effects.push(Effect::RevokeHarness);
+}
+
+fn schedule_create(
+    state: &mut ComputerState,
+    effects: &mut Vec<Effect>,
+    host: HostId,
+    start: bool,
+    previous: EnrollmentGeneration,
+) {
+    match previous.next() {
+        Some(generation) => effects.push(Effect::Create {
+            host,
+            start,
+            generation,
+        }),
+        None => {
+            state.phase = Phase::Failed { host };
+            effects.push(Effect::PageOperator {
+                reason: "enrollment generation exhausted".to_owned(),
+            });
+        }
+    }
 }

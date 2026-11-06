@@ -20,9 +20,10 @@ INSERT INTO team_user (user_id, team_id, team_role) VALUES ('macro|recipient@req
 INSERT INTO team_user (user_id, team_id, team_role) VALUES ('macro|agent@requests.test', '00000000-0000-0000-0000-000000000020', 'admin');
 INSERT INTO team_user (user_id, team_id, team_role) VALUES ('macro|owner@requests.test', '00000000-0000-0000-0000-000000000021', 'member');
 INSERT INTO team_user (user_id, team_id, team_role) VALUES ('macro|outsider@requests.test', '00000000-0000-0000-0000-000000000021', 'member');
-INSERT INTO hosted_runtime (id, team_id, name, size, units, state, created_by, harness_id, persona)
-VALUES ('00000000-0000-0000-0000-000000000040', '00000000-0000-0000-0000-000000000020', 'Agent computer', 'standard', 1, '{}', 'macro|owner@requests.test', '00000000-0000-0000-0000-000000000050', '{"name":"Agent","os_user":"agent-example","extra_service":{"unit_name":"brain@agent-example","exec":"/opt/macro/brain run","env":{}},"config":{}}');
+INSERT INTO hosted_runtime (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, created_by, persona)
+VALUES ('00000000-0000-0000-0000-000000000040', '00000000-0000-0000-0000-000000000020', 'Agent computer', 'standard', 4, 8, 100, 'standard@2026-11', 'price_fixture', '{}', 'macro|owner@requests.test', '{"name":"Agent","os_user":"agent-example","extra_service":{"unit_name":"brain@agent-example","exec":"/opt/macro/brain run","env":{}},"config":{}}');
 INSERT INTO harnesses (id, name, owner_user_id, created_by, computer_id)
 VALUES ('00000000-0000-0000-0000-000000000050', 'Agent runtime', 'macro|owner@requests.test', 'macro|owner@requests.test', '00000000-0000-0000-0000-000000000040');
+UPDATE hosted_runtime SET harness_id = '00000000-0000-0000-0000-000000000050' WHERE id = '00000000-0000-0000-0000-000000000040';
 INSERT INTO team_agents (user_id, team_id, created_by, computer_id)
 VALUES ('macro|agent@requests.test', '00000000-0000-0000-0000-000000000020', 'macro|owner@requests.test', '00000000-0000-0000-0000-000000000040');

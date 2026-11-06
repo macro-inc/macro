@@ -10,7 +10,6 @@ use hosted_runtimes::domain::{
     models,
     ports::{Billing, BillingError, CompPolicy, ComputerRepo, NoComps},
     service::{Clock, ComputerError, ComputerService},
-    size,
 };
 use uuid::Uuid;
 
@@ -51,13 +50,14 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     Computers for HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
 {
     fn sizes(&self) -> Vec<ComputerSizeSpec> {
-        size::ComputerSize::ALL
-            .into_iter()
-            .map(|size| ComputerSizeSpec {
-                size,
-                vcpus: size.vcpus(),
-                memory_gb: size.memory_gb(),
-                disk_gb: size.disk_gb(),
+        self.service
+            .catalog()
+            .iter()
+            .map(|entry| ComputerSizeSpec {
+                size: entry.size,
+                vcpus: entry.resources.vcpus.get(),
+                memory_gb: entry.resources.memory_gib.get(),
+                disk_gb: entry.resources.disk_gib.get(),
             })
             .collect()
     }
@@ -73,11 +73,11 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             .quote(team_id, size, &models::PurchaseBilling::Stripe)
             .await
             .map_err(error)?;
-        let size = quote.size;
+        let resources = self.service.size_spec(quote.size).map_err(error)?.resources;
         Ok(ComputerQuote {
-            vcpus: size.vcpus(),
-            memory_gb: size.memory_gb(),
-            disk_gb: size.disk_gb(),
+            vcpus: resources.vcpus.get(),
+            memory_gb: resources.memory_gib.get(),
+            disk_gb: resources.disk_gib.get(),
             price_id: quote.price_id,
             amount: quote.amount,
             currency: quote.currency,
@@ -225,7 +225,7 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
             .get_harness(harness_id)
             .await
             .map_err(|_| TeamAgentError::internal_message("harness health is unavailable"))?
-            .filter(|harness| harness.computer_id == Some(computer_id.into_inner()))
+            .filter(|harness| harness.computer_id == Some(computer_id))
         else {
             return Ok(None);
         };

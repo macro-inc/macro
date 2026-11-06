@@ -2,7 +2,7 @@ use super::*;
 use uuid::Uuid;
 
 const COMPUTER_ID: ComputerId =
-    ComputerId::new(Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001));
+    ComputerId::new_from_uuid(Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001));
 
 fn config() -> DockerFleetConfig {
     DockerFleetConfig {
@@ -20,6 +20,8 @@ fn config() -> DockerFleetConfig {
 #[test]
 fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
     let spec = CreateSpec {
+        generation: EnrollmentGeneration::new(1),
+        pairing_id: PairingId::new_from_uuid(Uuid::from_u128(1)),
         control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         image: "macro-box:latest".to_owned(),
@@ -46,6 +48,10 @@ fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
             "macro.control_plane=test-a",
             "--label",
             "macro.created_at=2026-11-05T10:00:00+00:00",
+            "--label",
+            "macro.enrollment_generation=1",
+            "--label",
+            "macro.pairing_id=00000000-0000-0000-0000-000000000001",
             "--network",
             "macro_services",
             "--memory",
@@ -144,8 +150,8 @@ impl Drop for DockerFixtures {
 #[tokio::test]
 #[ignore = "requires a local Docker daemon with macro-box:latest loaded"]
 async fn listing_cannot_expose_another_fleets_containers_to_reconciliation() {
-    let own = ComputerId::new(Uuid::now_v7());
-    let other = ComputerId::new(Uuid::now_v7());
+    let own = ComputerId::new_from_uuid(Uuid::now_v7());
+    let other = ComputerId::new_from_uuid(Uuid::now_v7());
     let mut fixtures = DockerFixtures(Vec::new());
     for (id, network) in [(own, "none"), (other, "host")] {
         let name = format!("fleet-isolation-test-{id}");
@@ -199,7 +205,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
         parse_instances(output, &ControlPlaneId::parse("test-a".to_owned()).unwrap()).unwrap(),
         [
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0001
                 )),
                 status: InstanceStatus::Running,
@@ -207,7 +213,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0002
                 )),
                 status: InstanceStatus::Frozen,
@@ -215,7 +221,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0003
                 )),
                 status: InstanceStatus::Stopped,
@@ -223,7 +229,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },
             FleetInstance {
-                computer_id: ComputerId::new(Uuid::from_u128(
+                computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0004
                 )),
                 status: InstanceStatus::Stopped,
@@ -311,3 +317,5 @@ fn listing_ignores_foreign_and_unlabelled_instances() {
         }]
     );
 }
+
+mod enrollment;

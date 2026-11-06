@@ -12,6 +12,9 @@ use crate::domain::models::{
     BillingInterval, Computer, ControlPlaneId, Host, HostRegistration, NewComputer, Quote,
     SubscriptionItem,
 };
+use crate::domain::persona_credentials::{
+    EnrollmentGeneration, PersonaCredentialError, PersonaEnrollment,
+};
 use crate::domain::size::ComputerSize;
 
 /// Classifies a fleet failure that requires replacing a lost guest.
@@ -54,6 +57,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
 
     /// Serializes payment resolution through its lifecycle write across replicas.
     type PaymentGuard: Send;
+
+    /// Serializes fleet enrollment with the harness claim transaction.
+    type EnrollmentGuard: Send;
+
+    fn lock_enrollment(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Self::EnrollmentGuard, Self::Err>> + Send;
 
     fn lock_payment(
         &self,
@@ -166,7 +177,10 @@ pub trait ComputerRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Host, Self::Err>> + Send;
 
     /// Sizes that no host can sell right now.
-    fn sold_out_sizes(&self) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
+    fn sold_out_sizes(
+        &self,
+        catalog: &[crate::domain::size::CatalogEntry],
+    ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 
     /// Ask to hear when `size` can be bought again.
     fn request_notify(
@@ -186,6 +200,8 @@ pub trait ComputerRepo: Send + Sync + 'static {
 /// Errors from billing a team.
 #[derive(Debug, thiserror::Error)]
 pub enum BillingError {
+    #[error("computers are not available in this environment")]
+    NotAvailable,
     #[error("the team has no active subscription")]
     NoSubscription,
     #[error("computers are not sold on {0:?} billing")]
@@ -198,6 +214,9 @@ pub enum BillingError {
 
 /// The team subscription, where computers are billed as items.
 pub trait Billing: Send + Sync + 'static {
+    /// Whether this environment sells computers, before reserving capacity.
+    fn sales_available(&self) -> bool;
+
     /// The price of one computer of `size` at the team's billing interval.
     fn quote(
         &self,
@@ -205,22 +224,22 @@ pub trait Billing: Send + Sync + 'static {
         size: ComputerSize,
     ) -> impl Future<Output = Result<Quote, BillingError>> + Send;
 
-    /// Add one `size` computer plus `extra_items` to the team subscription
+    /// Add one computer at its saved `price_id` plus `extra_items` to the team subscription
     /// in ONE update, invoiced now with proration. `idempotency_key` makes a
     /// retried call a no-op.
     fn add_computer(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
+        price_id: &crate::domain::models::StripePriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
 
-    /// Remove one `size` computer from the team subscription, without a refund.
+    /// Remove one computer at its saved `price_id`, without a refund.
     fn remove_computer(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
+        price_id: &crate::domain::models::StripePriceId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
 
@@ -240,12 +259,14 @@ pub trait Fleet: Send + Sync + 'static {
     /// Stable owner of every instance this fleet creates and lists.
     fn control_plane_id(&self) -> &ControlPlaneId;
 
-    /// Create the instance from the base image, carrying `enrollment`, and
-    /// start it when `start`. An instance that already exists is reused.
+    /// Create lazily: an existing guest with the same generation and claimed
+    /// pairing completes without polling `enrollment.issue()`. An unclaimed
+    /// guest gets a fresh payload and is restarted to apply it.
     fn create(
         &self,
         computer: &Computer,
-        enrollment: &Enrollment,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -282,6 +303,12 @@ pub trait Fleet: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Whether enforced fleet limits still match the recorded sale. Never resize here.
+    fn resources_match(
+        &self,
+        computer: &Computer,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Only instances stamped with this fleet's control-plane identity.
     fn instances(&self) -> impl Future<Output = Result<Vec<FleetInstance>, Self::Err>> + Send;
@@ -325,6 +352,12 @@ pub trait Harnesses: Send + Sync + 'static {
         computer: &Computer,
     ) -> impl Future<Output = Result<HostedPairing, Self::Err>> + Send;
 
+    /// Whether this exact pairing has been claimed, independently of presence.
+    fn pairing_claimed(
+        &self,
+        pairing_id: PairingId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// The computer a harness runs on, if it is a computer's.
     fn computer_for(
         &self,
@@ -356,4 +389,28 @@ impl CompPolicy for NoComps {
     async fn comp_reason(&self, _team_id: Uuid) -> Result<Option<String>, Self::Err> {
         Ok(None)
     }
+}
+
+/// Supplies fresh persona material only while the fleet Create effect runs.
+/// Every call mints new credentials and revokes the earlier ones; the fleet
+/// must skip this call when an existing guest has claimed this generation.
+pub trait PersonaCredentialSource: Send + Sync + 'static {
+    fn issue(
+        &self,
+        computer: ComputerId,
+        generation: EnrollmentGeneration,
+    ) -> impl Future<Output = Result<PersonaEnrollment, PersonaCredentialError>> + Send;
+}
+
+/// A lazy one-time enrollment, requested only after the fleet checks its guest.
+/// It borrows the operator for the duration of one Create effect.
+pub trait FleetEnrollment: Send + Sync {
+    /// Check the persisted pairing claim, not WebSocket presence.
+    fn claimed(
+        &self,
+        pairing: PairingId,
+    ) -> impl Future<Output = Result<bool, PersonaCredentialError>> + Send;
+
+    /// Rotate credentials and pairing, without retaining or replaying plaintext.
+    fn issue(&self) -> impl Future<Output = Result<Enrollment, PersonaCredentialError>> + Send;
 }

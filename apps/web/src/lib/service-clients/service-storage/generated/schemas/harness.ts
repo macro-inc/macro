@@ -29,8 +29,6 @@ in question, such as to the daemon itself. */
   /** How Claude Code on this machine is paid for. Only meaningful for
 Macro computers. */
   claude_mode?: ClaudeMode;
-  /** The Macro computer (hosted VM) this harness runs on; absent for a
-machine the user paired themselves. */
   computer_id?: HarnessComputerId;
   /** Whether the daemon currently holds a runtime connection. */
   connected: boolean;

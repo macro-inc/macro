@@ -54,6 +54,7 @@ key issuance, and account merge/link flows.
 
 ## Computer billing identifiers
 
+- Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computers are not sold here; any partial group fails startup and Doppler validation even without `COMPUTERS_FLEET`. An enabled fleet requires all six. Validate configured price syntax in both startup and the Doppler binary.
 - Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when the fleet is disabled. `Config::computer_prices` returns a validation result.
 
 ## Checks
@@ -79,12 +80,14 @@ metered AI usage policy.
   `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the
   subscription's interval). Prices are `ComputerPrices`
   (`src/domain/computer_billing.rs`), not seat plans. Replay durable item-change
-  receipts before resolving current prices or subscription terms.
-- Every team subscription webhook re-reads the subscription and reports each
-  size's billed count to `ComputerBillingObserver` (`ComputerService`), which
-  cancels computers whose items were removed outside Macro. Its failures are
-  logged, never fail the webhook. With no computer price configured it does
-  nothing; changing a configured price id strands items on the old price.
+  receipts before applying changes. Purchase snapshots the quoted price id;
+  retries and removal use that saved id rather than resolving current prices.
+- With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
+- Every team subscription webhook re-reads the complete subscription and reports
+  item quantities by price id to `ComputerBillingObserver` (`ComputerService`).
+  Reconcile against each row's saved price id, including prices no longer in
+  configuration; cancel newest excess computers per price. Ignore partial
+  subscription snapshots. Observer failures are logged, never fail the webhook.
 
 ## Subscription billing status
 
@@ -94,6 +97,9 @@ personal subscribers and team owners/admins. Allocation and access policy live i
 recurring prices, quantities, upcoming invoice amounts and owning-domain facts.
 Computer billing facts retain canonical `ComputerId` and `ComputerName` until
 the response renderer emits their UUID and string wire values.
+Match provider items to recorded computer IDs or price IDs and label them from
+the stored catalog entry and resources. Never infer an existing computer size
+from the current price table; unlinked legacy charges remain generic Computer rows.
 Included memberships contribute no paid seat amount. Comped computers appear as
 zero rows, and unmatched or ambiguous provider quantities remain `other` rather
 than invented per-account charges. Unsupported interval/price shapes have no
@@ -257,5 +263,5 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 Computer billing requires all six
 `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values to be
 nonblank whenever `COMPUTERS_FLEET` is set. Validate this at startup and in the
-Doppler config check; unset fleets require no computer price config. Prices
+Doppler config check; unset or explicitly disabled fleets require no computer price config; partial price groups are always rejected. Prices
 have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).

@@ -76,7 +76,7 @@ fn account(team_id: Uuid) -> NewAgentAccount {
 async fn a_created_agent_reads_back_and_tracks_its_computer(pool: PgPool) {
     let team_id = seed(&pool).await;
     let repo = PgTeamAgentsRepo::new(pool.clone());
-    let computer_id = ComputerId::new(Uuid::now_v7());
+    let computer_id = ComputerId::new_from_uuid(Uuid::now_v7());
 
     repo.create_account(&account(team_id))
         .await

@@ -225,6 +225,8 @@ async fn main() -> anyhow::Result<()> {
     result
 }
 
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
 fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
     // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
     url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
@@ -264,6 +266,7 @@ async fn run() -> anyhow::Result<()> {
         .await
         .context("failed to resolve agent harness service secrets")?;
     let livekit_credentials = config.livekit_credentials()?;
+    let computer_fleet = config.computer_fleet()?;
     let non_user_owners = config.non_user_owners()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     let enable_dev_commands = matches!(
@@ -751,10 +754,7 @@ async fn run() -> anyhow::Result<()> {
         .value()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
             )
@@ -914,7 +914,7 @@ async fn run() -> anyhow::Result<()> {
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
         {
-            let overrides = computers::service_url_overrides(&config)?;
+            let overrides = computers::service_url_overrides()?;
             let mut urls = vec![egress_base_url.as_str()];
             urls.extend(config.external_egress_base_url.as_deref());
             urls.extend(
@@ -1331,6 +1331,7 @@ async fn run() -> anyhow::Result<()> {
     // a forwarder that wakes an asleep computer for a prompt.
     let computer_operator = computers::operator(
         &config,
+        computer_fleet,
         &pool,
         Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
             PgHarnessRepo::new(pool.clone()),
@@ -1493,6 +1494,8 @@ async fn run() -> anyhow::Result<()> {
                 Arc::clone(&command_forwarder),
                 computer_operator.clone(),
                 Arc::clone(&parked_commands),
+                computer_tasks.clone(),
+                service_shutdown.clone(),
             ),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
@@ -1818,10 +1821,7 @@ async fn run() -> anyhow::Result<()> {
         .value()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
             )

@@ -14,7 +14,7 @@ use hosted_runtimes::domain::{
     },
     ports::{Billing, BillingError, ComputerRepo, DueTimer, PendingEffect, ReserveError},
     service::{Clock, ComputerService},
-    size::ComputerSize,
+    size::{CatalogEntry, ComputerSize, current_catalog},
 };
 use uuid::Uuid;
 
@@ -53,6 +53,11 @@ struct FakeRepo {
 impl ComputerRepo for FakeRepo {
     type Err = FakeError;
     type PaymentGuard = ();
+    type EnrollmentGuard = ();
+
+    async fn lock_enrollment(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
+        Ok(())
+    }
 
     async fn lock_payment(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
         Ok(())
@@ -67,9 +72,9 @@ impl ComputerRepo for FakeRepo {
         let sold: u32 = computers
             .values()
             .filter(|existing| existing.state.holds_units())
-            .map(|existing| existing.size.units())
+            .map(|existing| existing.resources.units())
             .sum();
-        if sold + computer.size.units() > self.sold_units {
+        if sold + computer.resources.units() > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
         let mut state = ComputerState::reserved(HOST, now);
@@ -83,6 +88,10 @@ impl ComputerRepo for FakeRepo {
             team_id: computer.team_id,
             name: computer.name,
             size: computer.size,
+            resources: computer.resources,
+            catalog_entry: computer.catalog_entry,
+            price_id: computer.price_id,
+            enrollment_generation: Default::default(),
             state,
             harness_id: None,
             persona: computer.persona,
@@ -117,11 +126,15 @@ impl ComputerRepo for FakeRepo {
             Context {
                 now,
                 host_has_room: true,
+                enrollment_generation: computer.enrollment_generation,
             },
         );
         computer.state = state;
         let mut outbox = self.effects.lock().unwrap();
         for effect in effects {
+            if let hosted_runtimes::domain::lifecycle::Effect::Create { generation, .. } = &effect {
+                computer.enrollment_generation = *generation;
+            }
             let id = outbox.len() as i64 + 1;
             outbox.push(PendingEffect {
                 id,
@@ -246,7 +259,10 @@ impl ComputerRepo for FakeRepo {
         Err(FakeError)
     }
 
-    async fn sold_out_sizes(&self) -> Result<Vec<ComputerSize>, FakeError> {
+    async fn sold_out_sizes(
+        &self,
+        _catalog: &[CatalogEntry],
+    ) -> Result<Vec<ComputerSize>, FakeError> {
         Ok(vec![])
     }
 
@@ -268,7 +284,7 @@ impl ComputerRepo for FakeRepo {
     }
 }
 
-type BillingUpdate = (ComputerSize, Vec<SubscriptionItem>, String);
+type BillingUpdate = (StripePriceId, Vec<SubscriptionItem>, String);
 
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
@@ -276,18 +292,23 @@ struct FakeBilling {
     calls: Arc<std::sync::atomic::AtomicUsize>,
     decline: bool,
     provider_fails: bool,
+    quote_fails: bool,
     no_subscription: bool,
     updates: Arc<Mutex<Vec<BillingUpdate>>>,
-    removals: Mutex<Vec<(ComputerSize, String)>>,
+    removals: Mutex<Vec<(StripePriceId, String)>>,
 }
 
 impl Billing for FakeBilling {
+    fn sales_available(&self) -> bool {
+        true
+    }
+
     async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
         self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if self.no_subscription {
             return Err(BillingError::NoSubscription);
         }
-        if self.provider_fails {
+        if self.quote_fails {
             return Err(BillingError::Provider(rootcause::report!(
                 "billing is unreachable"
             )));
@@ -295,7 +316,15 @@ impl Billing for FakeBilling {
         Ok(Quote {
             size,
             price_id: StripePriceId::parse(&format!("price_{}", size.as_ref())).expect("price"),
-            amount: 2000 * i64::from(size.units()),
+            amount: 2000
+                * i64::from(
+                    current_catalog()
+                        .iter()
+                        .find(|entry| entry.size == size)
+                        .expect("catalog size")
+                        .resources
+                        .units(),
+                ),
             currency: "usd".to_owned(),
             interval: BillingInterval::Month,
         })
@@ -304,7 +333,7 @@ impl Billing for FakeBilling {
     async fn add_computer(
         &self,
         _team_id: Uuid,
-        size: ComputerSize,
+        price_id: &StripePriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
@@ -312,10 +341,11 @@ impl Billing for FakeBilling {
         if self.decline {
             return Err(BillingError::PaymentFailed);
         }
-        self.updates
-            .lock()
-            .unwrap()
-            .push((size, extra_items.to_vec(), idempotency_key.to_owned()));
+        self.updates.lock().unwrap().push((
+            price_id.clone(),
+            extra_items.to_vec(),
+            idempotency_key.to_owned(),
+        ));
         if self.provider_fails {
             return Err(BillingError::Provider(rootcause::report!(
                 "billing response was lost"
@@ -327,14 +357,14 @@ impl Billing for FakeBilling {
     async fn remove_computer(
         &self,
         _team_id: Uuid,
-        size: ComputerSize,
+        price_id: &StripePriceId,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
         self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.removals
             .lock()
             .unwrap()
-            .push((size, idempotency_key.to_owned()));
+            .push((price_id.clone(), idempotency_key.to_owned()));
         Ok(())
     }
 
@@ -367,8 +397,8 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
             env: Default::default(),
         },
         config: std::collections::BTreeMap::from([(
-            PersonaConfigKey::parse("MACRO_API_KEY").expect("config key"),
-            "test-bootstrap".to_string(),
+            PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
+            "macro|agent@example.com".to_string(),
         )]),
     };
     let id = service
@@ -392,7 +422,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     {
         let updates = updates.lock().unwrap();
         assert_eq!(updates.len(), 1);
-        assert_eq!(updates[0].0, ComputerSize::Large);
+        assert_eq!(updates[0].0.as_str(), "price_large");
         assert_eq!(
             updates[0].1,
             vec![SubscriptionItem {
@@ -440,14 +470,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         .await
         .expect("quote");
     assert_eq!(quote.amount, 4000);
-    assert_eq!(
-        (quote.vcpus, quote.memory_gb, quote.disk_gb),
-        (
-            ComputerSize::Large.vcpus(),
-            ComputerSize::Large.memory_gb(),
-            ComputerSize::Large.disk_gb()
-        )
-    );
+    assert_eq!((quote.vcpus, quote.memory_gb, quote.disk_gb), (8, 16, 200));
     assert_eq!(quote.interval, agent::BillingInterval::Month);
     let pending = service.status(TEAM, id).await.expect("status");
     assert_eq!(pending.status, agent::ComputerStatusKind::SettingUp);
@@ -497,7 +520,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         agent::ComputerPayment::Paid
     );
     service
-        .release(TEAM, ComputerId::new(Uuid::now_v7()))
+        .release(TEAM, ComputerId::new_from_uuid(Uuid::now_v7()))
         .await
         .expect("missing release");
 }
@@ -554,7 +577,7 @@ async fn billing_provider_failures_remain_upstream_errors() {
         Arc::new(ComputerService::new(
             repo.clone(),
             FakeBilling {
-                provider_fails: true,
+                quote_fails: true,
                 ..Default::default()
             },
             FixedClock,
@@ -706,7 +729,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                 sold_units: 4,
                 ..Default::default()
             };
-            let id = ComputerId::new(Uuid::now_v7());
+            let id = ComputerId::new_from_uuid(Uuid::now_v7());
             let harness_id = "00000000-0000-4000-8000-0000000000aa".parse().unwrap();
             let mut computer = repo
                 .reserve(
@@ -717,6 +740,9 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                         team_id: TEAM,
                         name: ComputerName::try_new("Agent").unwrap(),
                         size: ComputerSize::Standard,
+                        resources: current_catalog()[0].resources,
+                        catalog_entry: current_catalog()[0].id.clone(),
+                        price_id: Some(StripePriceId::parse("price_standard").unwrap()),
                         created_by: "macro|admin@example.com".to_string(),
                         persona: Some(enrollment::Persona {
                             name: "Agent".to_string(),
@@ -768,9 +794,9 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                     ]),
                 },
                 computer_id: Some(if matching_computer {
-                    id.into_inner()
+                    id
                 } else {
-                    Uuid::now_v7()
+                    ComputerId::new_from_uuid(Uuid::from_u128(0xbad))
                 }),
                 claude_mode: ClaudeMode::MacroCredits,
             };
@@ -819,16 +845,79 @@ async fn catalog_is_available_without_billing_and_quote_preserves_no_subscriptio
     );
     let specs = service.sizes();
     assert_eq!(specs.len(), ComputerSize::ALL.len());
-    for (spec, size) in specs.iter().zip(ComputerSize::ALL) {
-        assert_eq!(spec.size, size);
+    for (spec, entry) in specs.iter().zip(current_catalog()) {
+        assert_eq!(spec.size, entry.size);
         assert_eq!(
             (spec.vcpus, spec.memory_gb, spec.disk_gb),
-            (size.vcpus(), size.memory_gb(), size.disk_gb())
+            (
+                entry.resources.vcpus.get(),
+                entry.resources.memory_gib.get(),
+                entry.resources.disk_gib.get()
+            )
         );
     }
     assert!(matches!(
         service.quote(TEAM, agent::ComputerSize::Standard).await,
         Err(agent::TeamAgentError::NoSubscription)
+    ));
+}
+
+#[tokio::test]
+async fn configured_catalog_drives_sizes_quotes_and_reserved_resources() {
+    use hosted_runtimes::domain::size::{
+        CatalogEntryId, ComputerResources, DiskGib, MemoryGib, Vcpus,
+    };
+
+    let repo = FakeRepo {
+        sold_units: 2,
+        ..Default::default()
+    };
+    let catalog = vec![CatalogEntry {
+        id: CatalogEntryId::try_new("standard@fixture".to_owned()).unwrap(),
+        size: ComputerSize::Standard,
+        resources: ComputerResources {
+            vcpus: Vcpus::new(6),
+            memory_gib: MemoryGib::new(12),
+            disk_gib: DiskGib::new(150),
+        },
+    }];
+    let billing = FakeBilling::default();
+    let calls = billing.calls.clone();
+    let adapter = HostedRuntimesComputers::new(
+        Arc::new(
+            ComputerService::new(repo.clone(), billing, FixedClock).with_catalog(catalog.clone()),
+        ),
+        repo.clone(),
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let specs = adapter.sizes();
+    assert_eq!(specs.len(), 1);
+    assert_eq!(
+        (specs[0].vcpus, specs[0].memory_gb, specs[0].disk_gb),
+        (6, 12, 150)
+    );
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let quote = adapter.quote(TEAM, ComputerSize::Standard).await.unwrap();
+    assert_eq!((quote.vcpus, quote.memory_gb, quote.disk_gb), (6, 12, 150));
+    let purchase = agent::ComputerPurchase {
+        team_id: TEAM,
+        created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+            "macro|admin@example.com",
+        )
+        .unwrap()
+        .into_owned(),
+        size: ComputerSize::Standard,
+        name: Some("Agent".to_owned()),
+        persona: None,
+        extra_items: vec![],
+    };
+    let id = adapter.purchase(purchase.clone()).await.unwrap();
+    let saved = repo.get(id).await.unwrap().unwrap();
+    assert_eq!(saved.resources, catalog[0].resources);
+    assert_eq!(saved.catalog_entry, catalog[0].id);
+    assert!(matches!(
+        adapter.purchase(purchase).await,
+        Err(agent::TeamAgentError::ComputerUnavailable(_))
     ));
 }
 

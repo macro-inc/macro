@@ -35,8 +35,15 @@ fn docker_computers_dial_the_stack_in_network() {
     assert_eq!(env["COMPUTERS_DOCKER_MEMORY_GB"], "32");
     assert_eq!(env["COMPUTERS_DOCKER_NETWORK"], "macro-computers_services");
     assert_eq!(env["COMPUTERS_DOCKER_ENROLLMENT_DIR"], enrollment_dir);
-    let overrides: BTreeMap<String, String> =
-        serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
+    let overrides: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(name, _)| {
+            MACROD_SERVICES
+                .iter()
+                .any(|(needed, _)| name.as_str() == *needed)
+        })
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
     assert_eq!(
         overrides,
         BTreeMap::from([
@@ -103,8 +110,15 @@ fn incus_control_uses_tailnet_and_persona_bootstrap_uses_reverse_bridge() {
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_CERT"], "client cert");
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_KEY"], "client key");
     assert_eq!(env["COMPUTERS_INCUS_SERVER_CERT"], "server cert");
-    let overrides: BTreeMap<String, String> =
-        serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
+    let overrides: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(name, _)| {
+            MACROD_SERVICES
+                .iter()
+                .any(|(needed, _)| name.as_str() == *needed)
+        })
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
     let bridge = |port: Port| format!("http://10.210.0.1:{}", instance.port(port));
     assert_eq!(
         overrides["OVERRIDE_API_GATEWAY_URL"],
@@ -145,7 +159,7 @@ fn incus_control_uses_tailnet_and_persona_bootstrap_uses_reverse_bridge() {
 }
 
 #[test]
-fn off_removes_every_computers_key() {
+fn off_removes_shared_computer_settings() {
     let instance = Instance::derive(Some("computers-off"), None).unwrap();
     let mut env = local_env(&instance);
     env.insert("COMPUTERS_FLEET".into(), "docker".into());
@@ -153,7 +167,11 @@ fn off_removes_every_computers_key() {
     Computers::new(Mode::Local, Fleet::Off, &instance)
         .write_env(&mut env)
         .unwrap();
-    assert!(!env.keys().any(|key| key.starts_with("COMPUTERS_")));
+    assert_eq!(env["COMPUTERS_FLEET"], "disabled");
+    assert!(
+        !env.keys()
+            .any(|key| key.starts_with("COMPUTERS_") && key != "COMPUTERS_FLEET")
+    );
 }
 
 #[test]
@@ -214,8 +232,15 @@ fn incus_control_plane_address_can_be_overridden() {
         .incus_env(&local_env(&instance), &credentials(), &network)
         .unwrap();
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ADDRESS"], "100.104.105.106");
-    let overrides: BTreeMap<String, String> =
-        serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
+    let overrides: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(name, _)| {
+            MACROD_SERVICES
+                .iter()
+                .any(|(needed, _)| name.as_str() == *needed)
+        })
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
     assert_eq!(
         overrides["OVERRIDE_AGENT_HARNESS_EGRESS_URL"],
         format!(

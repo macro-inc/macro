@@ -4,9 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ComputerId } from './computerId';
 
-/**
- * The Macro computer (hosted VM) this harness runs on; absent for a
-machine the user paired themselves.
- */
-export type HarnessComputerId = string | null;
+export type HarnessComputerId = null | ComputerId;

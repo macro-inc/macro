@@ -81,7 +81,7 @@ impl TeamAgentService for FakeService {
         }
         self.record(format!("computer {}", receipt.entity().entity_id));
         Ok(TeamAgentComputer {
-            computer_id: ComputerId::new(uuid::Uuid::from_u128(0x40)),
+            computer_id: ComputerId::new_from_uuid(uuid::Uuid::from_u128(0x40)),
             harness_id: None,
             is_agent_computer: true,
         })

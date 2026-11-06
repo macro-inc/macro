@@ -997,6 +997,7 @@
       "crates/cognition",
       "crates/collab_surface",
       "crates/comms_db_client",
+      "crates/computer_id",
       "crates/connect_client",
       "crates/connection",
       "crates/connection_gateway_client",
@@ -1126,6 +1127,7 @@
       "crates/onboarding",
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
+      "crates/pairing_id",
       "crates/pipedream_mcp",
       "crates/pptx_engine",
       "crates/projects",
@@ -2656,6 +2658,7 @@
       "crates/codex_cloud_agents",
       "crates/codex_connection",
       "crates/comms_db_client",
+      "crates/computer_id",
       "crates/connection",
       "crates/connection_gateway_client",
       "crates/connection_gateway_models",
@@ -2768,6 +2771,7 @@
       "crates/notification",
       "crates/notification_state",
       "crates/onboarding",
+      "crates/pairing_id",
       "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",
@@ -4023,6 +4027,7 @@
       "crates/channels",
       "crates/coding_agent_worker",
       "crates/comms_db_client",
+      "crates/computer_id",
       "crates/connection",
       "crates/connection_gateway_client",
       "crates/connection_gateway_models",
@@ -4106,6 +4111,7 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
+      "crates/pairing_id",
       "crates/pptx_engine",
       "crates/prompt",
       "crates/properties",
@@ -4552,6 +4558,10 @@
       "crates/upstream_error",
       "crates/user_quota",
       "crates/work_feed",
+      "crates/workspace-hack"
+    ],
+    "computer_id": [
+      "crates/computer_id",
       "crates/workspace-hack"
     ],
     "connect_client": [
@@ -5512,6 +5522,7 @@
       "crates/collab_surface",
       "crates/comms_db_client",
       "crates/complete_graph",
+      "crates/computer_id",
       "crates/connect_client",
       "crates/connection",
       "crates/connection_gateway_client",
@@ -5660,6 +5671,7 @@
       "crates/notification_state",
       "crates/opensearch_client",
       "crates/opensearch_query_builder",
+      "crates/pairing_id",
       "crates/pipedream_mcp",
       "crates/pptx_engine",
       "crates/predicate_index",
@@ -9696,6 +9708,7 @@
     "harnesses": [
       "crates/bot_id",
       "crates/bot_token",
+      "crates/computer_id",
       "crates/cowlike",
       "crates/entity_access_db_utils",
       "crates/harness_id",
@@ -9714,6 +9727,7 @@
       "crates/model_user",
       "crates/models_entity_access_management",
       "crates/models_permissions",
+      "crates/pairing_id",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -9724,6 +9738,7 @@
       "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
+      "crates/computer_id",
       "crates/cowlike",
       "crates/database_env_vars",
       "crates/document_sub_type",
@@ -9751,6 +9766,7 @@
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
+      "crates/pairing_id",
       "crates/prompt",
       "crates/remote_env_var",
       "crates/stripe_price_id",
@@ -12220,6 +12236,10 @@
       "crates/sqs_client",
       "crates/workspace-hack",
       "services/organization_retention_trigger"
+    ],
+    "pairing_id": [
+      "crates/pairing_id",
+      "crates/workspace-hack"
     ],
     "pipedream_mcp": [
       "crates/ai_toolset",
@@ -14731,6 +14751,7 @@
       "crates/broadcast",
       "crates/channel_sender",
       "crates/channels",
+      "crates/computer_id",
       "crates/connection_gateway_client",
       "crates/connection_gateway_models",
       "crates/contacts",
@@ -14790,6 +14811,7 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
+      "crates/pairing_id",
       "crates/prompt",
       "crates/properties",
       "crates/rate_limit",

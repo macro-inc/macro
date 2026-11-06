@@ -19,6 +19,11 @@ export function offerSpecs(offer: SizeOffer): string {
   return `${offer.vcpus} vCPU · ${offer.memoryGb} GB memory · ${offer.diskGb} GB disk`;
 }
 
+/** The resources recorded when this computer was purchased. */
+export function computerSpecs(computer: ComputerStatus): string {
+  return `${computer.vcpus} vCPU · ${computer.memoryGib} GiB memory · ${computer.diskGib} GiB disk`;
+}
+
 /** "$40/month" from a quote in the currency's smallest unit. */
 export function formatQuote(quote: Quote): string {
   const amount = new Intl.NumberFormat(undefined, {

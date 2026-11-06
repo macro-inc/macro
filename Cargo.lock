@@ -703,10 +703,12 @@ dependencies = [
  "chat",
  "chrono",
  "chrono-tz",
+ "clap",
  "code_execution",
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
+ "computer_id",
  "connection_gateway",
  "connection_gateway_client",
  "contacts",
@@ -798,6 +800,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "pairing_id",
  "pipedream_mcp",
  "prompt",
  "properties",
@@ -4852,6 +4855,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "pairing_id",
  "ratatui",
  "reqwest 0.13.4",
  "rootcause",
@@ -4882,6 +4886,7 @@ dependencies = [
  "windows-sys 0.61.2",
  "wiremock",
  "workspace-hack",
+ "zeroize",
  "zip",
 ]
 
@@ -5093,6 +5098,18 @@ name = "compression-core"
 version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
+
+[[package]]
+name = "computer_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "concolor"
@@ -10029,6 +10046,7 @@ dependencies = [
  "axum",
  "bot_id",
  "chrono",
+ "computer_id",
  "constant_time_eq 0.3.1",
  "entity_access_db_utils",
  "harness_id",
@@ -10040,7 +10058,9 @@ dependencies = [
  "mockall",
  "model-error-response",
  "models_permissions",
+ "pairing_id",
  "rand 0.9.4",
+ "rootcause",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
@@ -10049,6 +10069,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -10338,6 +10359,7 @@ dependencies = [
  "axum",
  "chrono",
  "clap",
+ "computer_id",
  "entity_access",
  "harness_id",
  "incus_client",
@@ -10348,6 +10370,7 @@ dependencies = [
  "model-error-response",
  "opentelemetry",
  "opentelemetry_sdk",
+ "pairing_id",
  "proptest",
  "rootcause",
  "serde",
@@ -10355,6 +10378,7 @@ dependencies = [
  "sqlx",
  "stripe_price_id",
  "strum 0.27.2",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -15263,6 +15287,18 @@ dependencies = [
  "tokio",
  "windows",
  "windows-strings",
+]
+
+[[package]]
+name = "pairing_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

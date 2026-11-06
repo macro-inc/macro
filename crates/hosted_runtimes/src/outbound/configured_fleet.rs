@@ -2,10 +2,10 @@
 //! There is no fallback: an unreachable Incus host fails loudly instead of
 //! quietly running computers in Docker.
 
-use crate::domain::enrollment::Enrollment;
 use crate::domain::ids::ComputerId;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetError, FleetInstance};
+use crate::domain::persona_credentials::EnrollmentGeneration;
+use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
 use crate::outbound::incus_fleet::{IncusFleet, IncusFleetError};
 
@@ -45,12 +45,17 @@ impl Fleet for ConfiguredFleet {
     async fn create(
         &self,
         computer: &Computer,
-        enrollment: &Enrollment,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<(), Self::Err> {
         match self {
-            Self::Incus(fleet) => Ok(fleet.create(computer, enrollment, start).await?),
-            Self::Docker(fleet) => Ok(fleet.create(computer, enrollment, start).await?),
+            Self::Incus(fleet) => Ok(fleet
+                .create(computer, generation, enrollment, start)
+                .await?),
+            Self::Docker(fleet) => Ok(fleet
+                .create(computer, generation, enrollment, start)
+                .await?),
         }
     }
 
@@ -114,6 +119,13 @@ impl Fleet for ConfiguredFleet {
         match self {
             Self::Incus(fleet) => Ok(fleet.clear_enrollment(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.clear_enrollment(computer_id).await?),
+        }
+    }
+
+    async fn resources_match(&self, computer: &Computer) -> Result<bool, Self::Err> {
+        match self {
+            Self::Incus(fleet) => Ok(fleet.resources_match(computer).await?),
+            Self::Docker(fleet) => Ok(fleet.resources_match(computer).await?),
         }
     }
 

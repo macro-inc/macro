@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use hosted_runtimes::domain::enrollment::{
     Enrollment, INCUS_ENROLLMENT_KEY, Persona, PersonaOsUser, SystemdUnitName,
 };
+use hosted_runtimes::domain::persona_credentials::PersonaEnrollment;
 use macro_service_urls::{
     AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
 };
@@ -205,7 +206,7 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     let persona = enrollment
         .persona
         .as_ref()
-        .map(|persona| PersonaFiles::render(persona, &paths))
+        .map(|persona| PersonaFiles::render(persona, &enrollment.persona_enrollment, &paths))
         .transpose()?;
     let urls = DeploymentUrls::from_overrides(&enrollment.service_url_overrides)?;
 
@@ -215,12 +216,13 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         Some(crate::service::installed_agent(&options.agent)?)
     };
     write_config(&options, agent, urls.as_ref())?;
-    ensure_credentials(&options.config, &enrollment).await?;
-    own_like_parent(&options.config, host)?;
-
+    // Claim only after the persona file is safely installed: a claimed guest
+    // must never be left with the credentials from a retired issuance.
     if let Some(persona) = persona {
         persona.install(host)?;
     }
+    ensure_credentials(&options.config, &enrollment).await?;
+    own_like_parent(&options.config, host)?;
 
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
@@ -269,17 +271,19 @@ async fn read_enrollment(
     paths: &SystemPaths,
 ) -> rootcause::Result<Enrollment> {
     let raw = match source {
-        EnrollmentSource::File(path) => std::fs::read_to_string(path).context(format!(
-            "could not read the enrollment at {}",
-            path.display()
-        ))?,
+        EnrollmentSource::File(path) => {
+            zeroize::Zeroizing::new(std::fs::read_to_string(path).context(format!(
+                "could not read the enrollment at {}",
+                path.display()
+            ))?)
+        }
         EnrollmentSource::Incus => read_incus_enrollment(&paths.at(INCUS_SOCKET)).await?,
     };
     Ok(serde_json::from_str(&raw).context("the enrollment is not valid Enrollment JSON")?)
 }
 
 /// `GET /1.0/config/<key>` on the guest API answers the raw value.
-async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<String> {
+async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<zeroize::Zeroizing<String>> {
     let http = reqwest::Client::builder()
         .unix_socket(socket)
         .timeout(INCUS_TIMEOUT)
@@ -296,15 +300,14 @@ async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<String> {
             socket.display()
         ))?;
     let status = response.status();
-    let body = response
-        .text()
-        .await
-        .context("could not read the Incus guest API answer")?;
+    let body = zeroize::Zeroizing::new(
+        response
+            .text()
+            .await
+            .context("could not read the Incus guest API answer")?,
+    );
     if !status.is_success() {
-        rootcause::bail!(
-            "the Incus guest API answered {status} for {INCUS_ENROLLMENT_KEY}: {}",
-            body.trim()
-        );
+        rootcause::bail!("the Incus guest API answered {status} for {INCUS_ENROLLMENT_KEY}");
     }
     Ok(body)
 }
@@ -399,10 +402,7 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
     let started = Instant::now();
     loop {
         match client
-            .claim(
-                enrollment.pairing_id.into_inner(),
-                enrollment.device_secret.expose(),
-            )
+            .claim(enrollment.pairing_id, enrollment.device_secret.expose())
             .await
         {
             Ok(ClaimStatus::Claimed(credentials)) => {
@@ -450,13 +450,17 @@ struct PersonaFiles {
     os_user: PersonaOsUser,
     unit_name: SystemdUnitName,
     env_path: PathBuf,
-    env_contents: String,
+    env_contents: zeroize::Zeroizing<String>,
     unit_path: PathBuf,
     unit_contents: String,
 }
 
 impl PersonaFiles {
-    fn render(persona: &Persona, paths: &SystemPaths) -> rootcause::Result<Self> {
+    fn render(
+        persona: &Persona,
+        enrollment: &PersonaEnrollment,
+        paths: &SystemPaths,
+    ) -> rootcause::Result<Self> {
         let os_user = &persona.os_user;
         if !lazy_regex::regex_is_match!(r"^agent-[a-z0-9][a-z0-9_-]{0,24}$", os_user.as_str()) {
             rootcause::bail!(
@@ -475,8 +479,11 @@ impl PersonaFiles {
         }
 
         let env_system_path = format!("{PERSONA_ENV_DIR}/{os_user}.env");
-        let mut env_contents = String::new();
-        for (key, value) in &persona.config {
+        let mut env_contents = zeroize::Zeroizing::new(String::new());
+        let mut values: BTreeMap<_, _> = persona.config.iter().collect();
+        values.extend(enrollment.env.as_map());
+        values.extend(enrollment.secrets.expose());
+        for (key, value) in values {
             env_contents.push_str(&format!("{}=\"{}\"\n", key, env_file_value(value)?));
         }
 

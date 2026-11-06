@@ -728,7 +728,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(
         config.environment,
-        config.computers_fleet.is_some(),
+        matches!(config.computers_fleet.as_deref(), Some("incus" | "docker")),
         config.computers_service_url_overrides.as_deref(),
     )?;
     let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(

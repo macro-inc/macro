@@ -44,10 +44,7 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
 
     service.repo.effect_run_after.lock().unwrap().clear();
     service.run_billing_effects().await.unwrap();
-    service
-        .reconcile_billed_count(TEAM, ComputerSize::Standard, 0)
-        .await
-        .unwrap();
+    service.reconcile_billed_counts(TEAM, &[]).await.unwrap();
     assert_eq!(
         service.repo.get(id).await.unwrap().unwrap().state.billing,
         BillingState::Active
@@ -86,7 +83,10 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
             .payment,
         PaymentOutcome::Paid
     );
-    assert_eq!(*service.billing.calls.lock().unwrap(), vec!["add_computer"]);
+    assert_eq!(
+        *service.billing.calls.lock().unwrap(),
+        vec!["quote", "add_computer"]
+    );
 }
 
 #[tokio::test]
@@ -99,7 +99,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
         FakeBilling::default(),
         FixedClock,
     );
-    let id = ComputerId::new(Uuid::from_u128(18));
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(18));
     service
         .repo
         .reserve(
@@ -111,6 +111,16 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
                 team_id: TEAM,
                 name: ComputerName::try_new("Build box").unwrap(),
                 size: ComputerSize::Standard,
+                resources: crate::domain::size::ComputerResources {
+                    vcpus: crate::domain::size::Vcpus::new(4),
+                    memory_gib: crate::domain::size::MemoryGib::new(8),
+                    disk_gib: crate::domain::size::DiskGib::new(100),
+                },
+                catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                    "standard@2026-11".to_owned(),
+                )
+                .unwrap(),
+                price_id: None,
                 persona: None,
                 created_by: "test-admin".to_owned(),
                 extra_items: vec![],

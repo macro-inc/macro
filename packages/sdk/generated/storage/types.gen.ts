@@ -4276,6 +4276,8 @@ export type CompleteUploads = {
     uploads: Array<UploadId>;
 };
 
+export type ComputerId = string;
+
 /**
  * The conferencing system backing an event's join URL.
  *
@@ -5472,7 +5474,7 @@ export type CreatedPairing = {
     /**
      * Pairing id used to poll for the claim.
      */
-    pairing_id: string;
+    pairing_id: PairingId;
     /**
      * Suggested delay between claim polls.
      */
@@ -11590,11 +11592,7 @@ export type Harness = {
      * Macro computers.
      */
     claude_mode?: ClaudeMode;
-    /**
-     * The Macro computer (hosted VM) this harness runs on; absent for a
-     * machine the user paired themselves.
-     */
-    computer_id?: string | null;
+    computer_id?: null | ComputerId;
     /**
      * Whether the daemon currently holds a runtime connection.
      */
@@ -13995,6 +13993,8 @@ export type PairingDetails = {
      */
     requested_name: string;
 };
+
+export type PairingId = string;
 
 /**
  * Paragraph formatting changes.
@@ -29048,7 +29048,7 @@ export type ClaimHarnessPairingData = {
         /**
          * Pairing ID
          */
-        pairing_id: string;
+        pairing_id: PairingId;
     };
     query?: never;
     url: '/harness-pairings/{pairing_id}/claim';

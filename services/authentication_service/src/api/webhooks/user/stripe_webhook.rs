@@ -857,15 +857,11 @@ async fn handle_team_subscription_event<'a>(
     result
 }
 
-/// Tells the computer service how many computers of each size the team
-/// subscription bills now, so computers whose items were removed outside
-/// Macro are cancelled. Reads the subscription fresh because webhook payloads
+/// Passes a complete subscription snapshot so computers whose items were
+/// removed outside Macro are cancelled. Reads the subscription fresh because webhook payloads
 /// arrive out of order. Never fails the webhook.
 #[tracing::instrument(skip(ctx))]
 async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_id: &uuid::Uuid) {
-    if ctx.computer_prices.is_empty() {
-        return;
-    }
     let subscription = match stripe::SubscriptionId::from_str(subscription_id) {
         Ok(id) => stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[]).await,
         Err(error) => {
@@ -889,22 +885,36 @@ async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_
         tracing::warn!("team subscription items are paginated; skipping computer reconcile");
         return;
     }
-    let counts = if ended {
-        hosted_runtimes::domain::size::ComputerSize::ALL.map(|size| (size, 0))
-    } else {
-        ctx.computer_prices
-            .billed_counts(subscription.items.data.iter().filter_map(|item| {
-                Some((item.price.as_ref()?.id.as_str(), item.quantity.unwrap_or(1)))
-            }))
-    };
-    for (size, billed) in counts {
-        if let Err(error) = ctx
-            .computer_billing_observer
-            .billed_count(*team_id, size, billed)
-            .await
-        {
-            tracing::error!(error = ?error, size = size.as_ref(), billed, "computer billing reconcile failed");
+    let mut items = Vec::new();
+    if !ended {
+        for item in &subscription.items.data {
+            let Some(price) = &item.price else {
+                tracing::warn!("subscription item has no price; skipping computer reconcile");
+                return;
+            };
+            let price_id = match stripe_price_id::StripePriceId::parse(price.id.as_str()) {
+                Ok(id) => id,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "invalid subscription price; skipping computer reconcile");
+                    return;
+                }
+            };
+            let quantity = match u32::try_from(item.quantity.unwrap_or(1)) {
+                Ok(quantity) => quantity,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "subscription quantity exceeds supported range; skipping computer reconcile");
+                    return;
+                }
+            };
+            items.push(hosted_runtimes::domain::models::SubscriptionItem { price_id, quantity });
         }
+    }
+    if let Err(error) = ctx
+        .computer_billing_observer
+        .billed_counts(*team_id, items)
+        .await
+    {
+        tracing::error!(error = ?error, "computer billing reconcile failed");
     }
 }
 

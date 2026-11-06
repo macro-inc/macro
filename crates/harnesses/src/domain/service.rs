@@ -1,5 +1,7 @@
 //! Harness domain service.
 
+use computer_id::ComputerId;
+use pairing_id::PairingId;
 #[cfg(test)]
 mod test;
 
@@ -136,7 +138,7 @@ where
         let device_secret = tokens::generate_device_secret();
         let device_secret_hash = harness_token::hash_token(&device_secret);
         let expires_at = Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES);
-        let pairing_id = Uuid::new_v4();
+        let pairing_id = PairingId::new_from_uuid(Uuid::now_v7());
 
         for _ in 0..CODE_ATTEMPTS {
             let code = tokens::generate_pairing_code();
@@ -254,7 +256,7 @@ where
     #[tracing::instrument(skip(self, req), err)]
     async fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         req: ClaimPairingRequest,
     ) -> Result<ClaimOutcome, HarnessError> {
         let facts = self
@@ -290,6 +292,7 @@ where
             .repo
             .claim_pairing(
                 pairing_id,
+                presented,
                 Uuid::new_v4(),
                 HashedHarnessToken::from_raw(&token),
             )
@@ -541,8 +544,8 @@ where
         req: CreateHostedPairing,
     ) -> Result<HostedPairing, HarnessError> {
         let name = validated_name(&req.name)?;
-        let device_secret = tokens::generate_device_secret();
-        let new_pairing_id = Uuid::now_v7();
+        let device_secret = super::models::DeviceSecret::new(tokens::generate_device_secret());
+        let new_pairing_id = PairingId::new_from_uuid(Uuid::now_v7());
         let upserted = self
             .repo
             .upsert_hosted_pairing(
@@ -551,7 +554,7 @@ where
                     // Never shown or typed: the code only has to be unique,
                     // and its shape keeps it out of code lookups entirely.
                     code: format!("hosted:{new_pairing_id}"),
-                    device_secret_hash: harness_token::hash_token(&device_secret),
+                    device_secret_hash: harness_token::hash_token(device_secret.expose()),
                     requested_name: name.clone(),
                     host: None,
                     expires_at: Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES),
@@ -584,8 +587,25 @@ where
         })
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn hosted_pairing_claimed(&self, pairing_id: PairingId) -> Result<bool, HarnessError> {
+        let facts = self
+            .repo
+            .pairing_claim_facts(pairing_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown hosted pairing".to_owned()))?;
+        match facts.status {
+            PairingStatus::Claimed => Ok(true),
+            PairingStatus::Approved => Ok(false),
+            PairingStatus::Pending => Err(HarnessError::BadRequest(
+                "hosted pairing is not approved".to_owned(),
+            )),
+        }
+    }
+
     #[tracing::instrument(skip(self), fields(harness_id = tracing::field::Empty), err)]
-    async fn revoke_hosted_harness(&self, computer_id: Uuid) -> Result<(), HarnessError> {
+    async fn revoke_hosted_harness(&self, computer_id: ComputerId) -> Result<(), HarnessError> {
         let Some(harness_id) = self
             .repo
             .computer_harness(computer_id)
@@ -604,7 +624,10 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn harness_computer(&self, harness_id: HarnessId) -> Result<Option<Uuid>, HarnessError> {
+    async fn harness_computer(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<ComputerId>, HarnessError> {
         Ok(self
             .repo
             .harness_computer(harness_id)

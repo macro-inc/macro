@@ -21,9 +21,10 @@ use chrono::{DateTime, Utc};
 use macro_env::Environment;
 
 use crate::domain::enrollment::Enrollment;
-use crate::domain::ids::ComputerId;
+use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
+use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
+use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, InstanceStatus};
 
 #[cfg(test)]
 mod test;
@@ -31,6 +32,8 @@ mod test;
 /// Label carrying the control-plane owner.
 pub const CONTROL_PLANE_LABEL: &str = "macro.control_plane";
 const CREATED_AT_LABEL: &str = "macro.created_at";
+const GENERATION_LABEL: &str = "macro.enrollment_generation";
+const PAIRING_LABEL: &str = "macro.pairing_id";
 
 /// Label every computer container carries, valued with its computer id.
 pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
@@ -39,6 +42,11 @@ pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
 /// `/etc/macro/enroll.env` reads `file:/run/macro/enrollment.json`.
 const ENROLLMENT_MOUNT: &str = "/run/macro";
 const ENROLLMENT_FILE: &str = "enrollment.json";
+
+#[cfg(test)]
+trait DockerCommand: std::fmt::Debug + Send + Sync {
+    fn run(&self, command: &str, args: &[String]) -> Result<String, DockerFleetError>;
+}
 
 /// What the Docker fleet runs and how it reports its host.
 #[derive(Debug, Clone)]
@@ -58,6 +66,10 @@ pub struct DockerFleetConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DockerFleetError {
+    #[error(transparent)]
+    Credential(#[from] PersonaCredentialError),
+    #[error("instance enrollment identity does not match the Create generation")]
+    EnrollmentMismatch,
     #[error("instance {computer_id} is missing")]
     Missing { computer_id: ComputerId },
     #[error("DockerFleet only runs in the local environment, not {0:?}")]
@@ -86,6 +98,8 @@ pub enum DockerFleetError {
 #[derive(Debug, Clone)]
 pub struct DockerFleet {
     config: DockerFleetConfig,
+    #[cfg(test)]
+    command: Option<std::sync::Arc<dyn DockerCommand>>,
 }
 
 impl DockerFleet {
@@ -96,7 +110,11 @@ impl DockerFleet {
         environment: Environment,
     ) -> Result<Self, DockerFleetError> {
         match environment {
-            Environment::Local => Ok(Self { config }),
+            Environment::Local => Ok(Self {
+                config,
+                #[cfg(test)]
+                command: None,
+            }),
             other => Err(DockerFleetError::NotLocal(other)),
         }
     }
@@ -110,7 +128,7 @@ impl DockerFleet {
         &self,
         computer_id: ComputerId,
     ) -> Result<Option<ContainerState>, DockerFleetError> {
-        let output = docker("ps", &state_args(computer_id)).await?;
+        let output = self.docker("ps", &state_args(computer_id)).await?;
         output
             .lines()
             .map(str::trim)
@@ -137,16 +155,23 @@ impl DockerFleet {
             .map_err(io_error(&dir))?;
 
         let file = dir.join(ENROLLMENT_FILE);
-        let body = serde_json::to_vec(enrollment)?;
+        let body = zeroize::Zeroizing::new(serde_json::to_vec(enrollment)?);
         // Written in place, never renamed over: a running container keeps
         // seeing the same inode through the directory mount either way.
-        tokio::fs::write(&file, body)
+        tokio::fs::write(&file, body.as_slice())
             .await
             .map_err(io_error(&file))?;
         tokio::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
             .await
             .map_err(io_error(&file))?;
         Ok(dir)
+    }
+    async fn docker(&self, command: &str, args: &[String]) -> Result<String, DockerFleetError> {
+        #[cfg(test)]
+        if let Some(runner) = &self.command {
+            return runner.run(command, args);
+        }
+        docker(command, args).await
     }
 }
 
@@ -168,26 +193,63 @@ impl Fleet for DockerFleet {
     async fn create(
         &self,
         computer: &Computer,
-        enrollment: &Enrollment,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<(), DockerFleetError> {
-        // Rewritten on reuse too: a retried create re-keys the pairing.
-        let dir = self.write_enrollment(computer.id, enrollment).await?;
-        if self.state(computer.id).await?.is_none() {
+        if self.state(computer.id).await?.is_some() {
+            let identity = self.docker("inspect", &[
+                "inspect".to_owned(), "--format".to_owned(),
+                format!("{{{{index .Config.Labels \"{CONTROL_PLANE_LABEL}\"}}}} {{{{index .Config.Labels \"{GENERATION_LABEL}\"}}}} {{{{index .Config.Labels \"{PAIRING_LABEL}\"}}}}"),
+                container_name(computer.id),
+            ]).await?;
+            let fields: Vec<_> = identity.split_whitespace().collect();
+            let pairing = match fields.as_slice() {
+                [owner, stored_generation, pairing]
+                    if *owner == self.config.control_plane_id.as_str()
+                        && *stored_generation == generation.get().to_string() =>
+                {
+                    pairing.parse::<PairingId>().ok()
+                }
+                _ => None,
+            }
+            .ok_or(DockerFleetError::EnrollmentMismatch)?;
+            if enrollment.claimed(pairing).await? {
+                return Ok(());
+            }
+            let enrollment = enrollment.issue().await?;
+            self.write_enrollment(computer.id, &enrollment).await?;
+            self.restart(computer.id).await?;
+            if !start {
+                self.stop(computer.id).await?;
+            }
+        } else {
+            if !matches!(
+                computer.state.phase,
+                crate::domain::lifecycle::Phase::Provisioning { .. }
+            ) {
+                return Err(DockerFleetError::Missing {
+                    computer_id: computer.id,
+                });
+            }
+            let enrollment = enrollment.issue().await?;
+            let dir = self.write_enrollment(computer.id, &enrollment).await?;
             let spec = CreateSpec {
                 image: self.config.image.clone(),
                 network: self.config.network.clone(),
                 computer_id: computer.id,
                 control_plane_id: self.config.control_plane_id.clone(),
                 created_at: Utc::now(),
-                memory_gb: computer.size.memory_gb(),
-                vcpus: computer.size.vcpus(),
+                generation,
+                pairing_id: enrollment.pairing_id,
+                memory_gb: computer.resources.memory_gib.get(),
+                vcpus: computer.resources.vcpus.get(),
                 enrollment_dir: dir,
             };
-            docker("create", &create_args(&spec)).await?;
-        }
-        if start {
-            self.start(computer.id).await?;
+            self.docker("create", &create_args(&spec)).await?;
+            if start {
+                self.start(computer.id).await?;
+            }
         }
         Ok(())
     }
@@ -196,10 +258,12 @@ impl Fleet for DockerFleet {
     async fn start(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         match self.state(computer_id).await? {
             Some(ContainerState::Paused) => {
-                docker("unpause", &verb_args("unpause", computer_id)).await?;
+                self.docker("unpause", &verb_args("unpause", computer_id))
+                    .await?;
             }
             _ => {
-                docker("start", &verb_args("start", computer_id)).await?;
+                self.docker("start", &verb_args("start", computer_id))
+                    .await?;
             }
         }
         Ok(())
@@ -210,7 +274,10 @@ impl Fleet for DockerFleet {
         match self.state(computer_id).await? {
             None => return Ok(()),
             Some(ContainerState::Paused) => {
-                if let Err(error) = docker("unpause", &verb_args("unpause", computer_id)).await {
+                if let Err(error) = self
+                    .docker("unpause", &verb_args("unpause", computer_id))
+                    .await
+                {
                     return if error.is_missing() {
                         Ok(())
                     } else {
@@ -220,7 +287,7 @@ impl Fleet for DockerFleet {
             }
             _ => {}
         }
-        if let Err(error) = docker("stop", &verb_args("stop", computer_id)).await {
+        if let Err(error) = self.docker("stop", &verb_args("stop", computer_id)).await {
             return if error.is_missing() {
                 Ok(())
             } else {
@@ -233,16 +300,19 @@ impl Fleet for DockerFleet {
     #[tracing::instrument(name = "docker_fleet.restart", skip(self), err)]
     async fn restart(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? == Some(ContainerState::Paused) {
-            docker("unpause", &verb_args("unpause", computer_id)).await?;
+            self.docker("unpause", &verb_args("unpause", computer_id))
+                .await?;
         }
-        docker("restart", &verb_args("restart", computer_id)).await?;
+        self.docker("restart", &verb_args("restart", computer_id))
+            .await?;
         Ok(())
     }
 
     #[tracing::instrument(name = "docker_fleet.freeze", skip(self), err)]
     async fn freeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? != Some(ContainerState::Paused) {
-            docker("pause", &verb_args("pause", computer_id)).await?;
+            self.docker("pause", &verb_args("pause", computer_id))
+                .await?;
         }
         Ok(())
     }
@@ -252,7 +322,8 @@ impl Fleet for DockerFleet {
         match self.state(computer_id).await? {
             None => return Err(DockerFleetError::Missing { computer_id }),
             Some(ContainerState::Paused) => {
-                docker("unpause", &verb_args("unpause", computer_id)).await?;
+                self.docker("unpause", &verb_args("unpause", computer_id))
+                    .await?;
             }
             _ => {}
         }
@@ -264,12 +335,13 @@ impl Fleet for DockerFleet {
         match self.state(computer_id).await? {
             None => return Err(DockerFleetError::Missing { computer_id }),
             Some(ContainerState::Paused) => {
-                docker("unpause", &verb_args("unpause", computer_id)).await?;
+                self.docker("unpause", &verb_args("unpause", computer_id))
+                    .await?;
             }
             _ => {}
         }
         // Unlike stop, suspend must report a guest lost during the operation.
-        docker("stop", &verb_args("stop", computer_id)).await?;
+        self.docker("stop", &verb_args("stop", computer_id)).await?;
         Ok(())
     }
 
@@ -280,7 +352,7 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.destroy", skip(self), err)]
     async fn destroy(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        if let Err(error) = docker("rm", &remove_args(computer_id)).await
+        if let Err(error) = self.docker("rm", &remove_args(computer_id)).await
             && !error.is_missing()
         {
             return Err(error);
@@ -305,13 +377,36 @@ impl Fleet for DockerFleet {
         }
     }
 
+    #[tracing::instrument(name = "docker_fleet.resources_match", skip_all, fields(computer_id = %computer.id), err)]
+    async fn resources_match(&self, computer: &Computer) -> Result<bool, Self::Err> {
+        let output = self
+            .docker(
+                "inspect",
+                &[
+                    "inspect".to_owned(),
+                    "--format".to_owned(),
+                    "{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}".to_owned(),
+                    container_name(computer.id),
+                ],
+            )
+            .await?;
+        // Docker overlayfs has no disk quota; only CPU and memory are enforced.
+        Ok(output.trim()
+            == format!(
+                "{} {}",
+                u64::from(computer.resources.memory_gib.get()) * 1024 * 1024 * 1024,
+                u64::from(computer.resources.vcpus.get()) * 1_000_000_000
+            ))
+    }
+
     #[tracing::instrument(name = "docker_fleet.instances", skip(self), err)]
     async fn instances(&self) -> Result<Vec<FleetInstance>, DockerFleetError> {
-        let output = docker(
-            "ps",
-            &list_args(&self.config.network, &self.config.control_plane_id),
-        )
-        .await?;
+        let output = self
+            .docker(
+                "ps",
+                &list_args(&self.config.network, &self.config.control_plane_id),
+            )
+            .await?;
         parse_instances(&output, &self.config.control_plane_id)
     }
 
@@ -365,6 +460,8 @@ impl ContainerState {
 /// What `docker create` needs for one computer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CreateSpec {
+    generation: EnrollmentGeneration,
+    pairing_id: PairingId,
     control_plane_id: ControlPlaneId,
     created_at: DateTime<Utc>,
     image: String,
@@ -395,6 +492,10 @@ fn create_args(spec: &CreateSpec) -> Vec<String> {
         format!("{CONTROL_PLANE_LABEL}={}", spec.control_plane_id.as_str()),
         "--label".to_owned(),
         format!("{CREATED_AT_LABEL}={}", spec.created_at.to_rfc3339()),
+        "--label".to_owned(),
+        format!("{GENERATION_LABEL}={}", spec.generation.get()),
+        "--label".to_owned(),
+        format!("{PAIRING_LABEL}={}", spec.pairing_id),
         "--network".to_owned(),
         spec.network.clone(),
         "--memory".to_owned(),

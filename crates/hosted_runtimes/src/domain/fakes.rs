@@ -42,6 +42,7 @@ pub struct FakeError;
 pub struct FakeRepo {
     pub sold_units: u32,
     pub fail_next_apply: AtomicBool,
+    pub enrollment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub payment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
     pub computers: Mutex<HashMap<ComputerId, Computer>>,
@@ -52,6 +53,21 @@ pub struct FakeRepo {
 impl ComputerRepo for FakeRepo {
     type Err = FakeError;
     type PaymentGuard = tokio::sync::OwnedMutexGuard<()>;
+    type EnrollmentGuard = tokio::sync::OwnedMutexGuard<()>;
+
+    async fn lock_enrollment(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Self::EnrollmentGuard, FakeError> {
+        let lock = self
+            .enrollment_locks
+            .lock()
+            .unwrap()
+            .entry(computer_id)
+            .or_default()
+            .clone();
+        Ok(lock.lock_owned().await)
+    }
 
     async fn lock_payment(&self, computer_id: ComputerId) -> Result<Self::PaymentGuard, FakeError> {
         let lock = self
@@ -73,9 +89,9 @@ impl ComputerRepo for FakeRepo {
         let sold: u32 = computers
             .values()
             .filter(|existing| existing.state.holds_units())
-            .map(|existing| existing.size.units())
+            .map(|existing| existing.resources.units())
             .sum();
-        if sold + computer.size.units() > self.sold_units {
+        if sold + computer.resources.units() > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
         let mut state = ComputerState::reserved(HOST, now);
@@ -87,12 +103,16 @@ impl ComputerRepo for FakeRepo {
             team_id: computer.team_id,
             name: computer.name,
             size: computer.size,
+            resources: computer.resources,
+            catalog_entry: computer.catalog_entry,
+            price_id: computer.price_id,
             state,
             harness_id: None,
             persona: computer.persona,
             created_by: computer.created_by,
             created_at: now,
             enrolled_at: None,
+            enrollment_generation: Default::default(),
         };
         let mut effects = self.effects.lock().unwrap();
         let id = effects.iter().map(|effect| effect.id).max().unwrap_or(0) + 1;
@@ -133,6 +153,7 @@ impl ComputerRepo for FakeRepo {
             &computer.state,
             &event,
             Context {
+                enrollment_generation: computer.enrollment_generation,
                 now,
                 host_has_room: true,
             },
@@ -140,6 +161,9 @@ impl ComputerRepo for FakeRepo {
         computer.state = state;
         let mut outbox = self.effects.lock().unwrap();
         for effect in effects {
+            if let Effect::Create { generation, .. } = &effect {
+                computer.enrollment_generation = *generation;
+            }
             let id = outbox.iter().map(|pending| pending.id).max().unwrap_or(0) + 1;
             outbox.push(PendingEffect {
                 id,
@@ -299,7 +323,10 @@ impl ComputerRepo for FakeRepo {
         })
     }
 
-    async fn sold_out_sizes(&self) -> Result<Vec<ComputerSize>, FakeError> {
+    async fn sold_out_sizes(
+        &self,
+        _catalog: &[crate::domain::size::CatalogEntry],
+    ) -> Result<Vec<ComputerSize>, FakeError> {
         Ok(vec![])
     }
 

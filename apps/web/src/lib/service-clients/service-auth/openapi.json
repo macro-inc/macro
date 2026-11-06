@@ -2079,6 +2079,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -2113,6 +2123,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4317,6 +4337,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -4361,6 +4391,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -4387,6 +4427,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -8123,6 +8173,10 @@
         "description": "How often a recurring price bills.",
         "enum": ["month", "year"]
       },
+      "CatalogEntryId": {
+        "type": "string",
+        "description": "The versioned identity recorded at purchase."
+      },
       "ChangePlanRequest": {
         "type": "object",
         "description": "Request body for switching plans",
@@ -8355,6 +8409,10 @@
           "id",
           "name",
           "size",
+          "vcpus",
+          "memoryGib",
+          "diskGib",
+          "catalogEntry",
           "status",
           "payment",
           "poweredOn",
@@ -8366,6 +8424,9 @@
             "format": "date-time",
             "description": "When billing stops, for a computer canceled at period end."
           },
+          "catalogEntry": {
+            "$ref": "#/components/schemas/CatalogEntryId"
+          },
           "compReason": {
             "type": ["string", "null"],
             "description": "Present for a comped purchase, including after release."
@@ -8374,6 +8435,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "diskGib": {
+            "$ref": "#/components/schemas/DiskGib"
+          },
           "harnessId": {
             "type": ["string", "null"],
             "format": "uuid"
@@ -8381,6 +8445,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "memoryGib": {
+            "$ref": "#/components/schemas/MemoryGib"
           },
           "name": {
             "type": "string"
@@ -8415,6 +8482,9 @@
           },
           "status": {
             "$ref": "#/components/schemas/ComputerStatusKind"
+          },
+          "vcpus": {
+            "$ref": "#/components/schemas/Vcpus"
           }
         }
       },
@@ -8795,6 +8865,12 @@
           "overage_limit_reached",
           "overage_payment_failed"
         ]
+      },
+      "DiskGib": {
+        "type": "integer",
+        "format": "int32",
+        "description": "A recorded resource quantity.",
+        "minimum": 0
       },
       "EmailConnectionProviders": {
         "type": "object",
@@ -9883,6 +9959,12 @@
             "description": "The newly created macro_api_token"
           }
         }
+      },
+      "MemoryGib": {
+        "type": "integer",
+        "format": "int32",
+        "description": "A recorded resource quantity.",
+        "minimum": 0
       },
       "MergeGithubPullRequestRequest": {
         "type": "object",
@@ -12028,6 +12110,12 @@
             "description": "The users refresh token"
           }
         }
+      },
+      "Vcpus": {
+        "type": "integer",
+        "format": "int32",
+        "description": "A recorded resource quantity.",
+        "minimum": 0
       }
     }
   },

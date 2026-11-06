@@ -1,4 +1,8 @@
 use super::*;
+use crate::domain::computer_billing::IntervalPrices;
+use hosted_runtimes::domain::size::{
+    CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
+};
 use uuid::Uuid;
 
 fn billing() -> SubscriptionBillingFacts {
@@ -9,18 +13,24 @@ fn billing() -> SubscriptionBillingFacts {
         items: vec![
             RecurringItem {
                 kind: RecurringItemKind::Seat(SeatPlan::Premium),
+                price_id: StripePriceId::parse("price_premium").unwrap(),
+                computer_id: None,
                 quantity: 3,
                 unit_amount: 2500,
                 name: "Seats".to_owned(),
             },
             RecurringItem {
-                kind: RecurringItemKind::Computer(ComputerSize::Large),
+                kind: RecurringItemKind::Other,
+                price_id: StripePriceId::parse("price_large_recorded").unwrap(),
+                computer_id: None,
                 quantity: 1,
                 unit_amount: 10000,
                 name: "Computers".to_owned(),
             },
             RecurringItem {
                 kind: RecurringItemKind::Other,
+                price_id: StripePriceId::parse("price_unrelated").unwrap(),
+                computer_id: None,
                 quantity: 2,
                 unit_amount: 500,
                 name: "Other subscription item".to_owned(),
@@ -45,19 +55,37 @@ fn billing() -> SubscriptionBillingFacts {
         ],
         computers: vec![
             BillingComputer {
-                id: ComputerId::new(Uuid::from_u128(1)),
+                id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 agent_user_id: Some(
                     MacroUserIdStr::parse_from_str("macro|agent@example.com").expect("agent id"),
                 ),
-                size: ComputerSize::Large,
+                catalog_entry: CatalogEntry {
+                    id: CatalogEntryId::try_new("large@2026-10".to_owned()).unwrap(),
+                    size: ComputerSize::Large,
+                    resources: ComputerResources {
+                        vcpus: Vcpus::new(8),
+                        memory_gib: MemoryGib::new(16),
+                        disk_gib: DiskGib::new(200),
+                    },
+                },
+                price_id: Some(StripePriceId::parse("price_large_recorded").unwrap()),
                 name: ComputerName::try_new("Agent").unwrap(),
                 status: ComputerStatusKind::Ready,
                 included: false,
             },
             BillingComputer {
-                id: ComputerId::new(Uuid::from_u128(2)),
+                id: ComputerId::new_from_uuid(Uuid::from_u128(2)),
                 agent_user_id: None,
-                size: ComputerSize::Standard,
+                catalog_entry: CatalogEntry {
+                    id: CatalogEntryId::try_new("standard@2026-10".to_owned()).unwrap(),
+                    size: ComputerSize::Standard,
+                    resources: ComputerResources {
+                        vcpus: Vcpus::new(4),
+                        memory_gib: MemoryGib::new(8),
+                        disk_gib: DiskGib::new(100),
+                    },
+                },
+                price_id: None,
                 name: ComputerName::try_new("Included agent").unwrap(),
                 status: ComputerStatusKind::SettingUp,
                 included: true,
@@ -135,6 +163,8 @@ fn multiple_prices_for_the_same_plan_do_not_double_allocate_members() {
     let mut facts = billing();
     facts.items.push(RecurringItem {
         kind: RecurringItemKind::Seat(SeatPlan::Premium),
+        price_id: StripePriceId::parse("price_premium").unwrap(),
+        computer_id: None,
         quantity: 2,
         unit_amount: 2750,
         name: "Another seat item".to_owned(),
@@ -175,4 +205,130 @@ fn typed_computer_billing_fields_keep_the_existing_json_schema() {
     let schema = serde_json::to_value(SubscriptionBillingLineItem::schema()).expect("schema");
     assert!(schema["properties"]["agentUserId"]["$ref"].is_null());
     assert!(schema["properties"]["status"]["$ref"].is_null());
+}
+
+#[test]
+fn changing_configured_prices_never_relabels_a_recorded_computer() {
+    let seats = SeatPrices {
+        premium: StripePriceId::parse("price_premium").unwrap(),
+        max: None,
+    };
+    let empty = IntervalPrices {
+        monthly: None,
+        yearly: None,
+    };
+    let old = StripePriceId::parse("price_large_recorded").unwrap();
+    let original = ComputerPrices {
+        standard: empty.clone(),
+        large: IntervalPrices {
+            monthly: Some(old.clone()),
+            yearly: None,
+        },
+        xl: empty.clone(),
+    };
+    let changed = ComputerPrices {
+        standard: IntervalPrices {
+            monthly: Some(old),
+            yearly: None,
+        },
+        large: IntervalPrices {
+            monthly: Some(StripePriceId::parse("price_large_new").unwrap()),
+            yearly: None,
+        },
+        xl: empty,
+    };
+    for configured in [original, changed] {
+        let mut facts = billing();
+        let item = &mut facts.items[1];
+        item.kind = RecurringItemKind::for_provider_price(
+            &seats,
+            &configured,
+            &facts.computers,
+            &item.price_id,
+            item.computer_id,
+        );
+        let result = facts.render().unwrap();
+        let row = result
+            .line_items
+            .iter()
+            .find(|row| row.computer_id == Some(Uuid::from_u128(1)))
+            .unwrap();
+        assert_eq!(row.name, "Agent");
+        assert_eq!(row.size, Some(ComputerSize::Large));
+        assert_eq!(row.amount, 10000);
+    }
+}
+
+#[test]
+fn metadata_links_a_computer_without_inferring_its_size_from_a_new_price() {
+    let mut facts = billing();
+    facts.items[1].price_id = StripePriceId::parse("price_replaced").unwrap();
+    facts.items[1].computer_id = Some(ComputerId::new_from_uuid(Uuid::from_u128(1)));
+    let result = facts.render().unwrap();
+    let row = result
+        .line_items
+        .iter()
+        .find(|row| row.computer_id == Some(Uuid::from_u128(1)))
+        .unwrap();
+    assert_eq!(row.size, Some(ComputerSize::Large));
+    assert_eq!(row.amount, 10000);
+}
+
+#[test]
+fn duplicate_provider_items_do_not_allocate_the_same_computer_twice() {
+    let mut facts = billing();
+    facts.items.push(facts.items[1].clone());
+    let result = facts.render().unwrap();
+    assert!(
+        !result
+            .line_items
+            .iter()
+            .any(|row| row.computer_id == Some(Uuid::from_u128(1)))
+    );
+    assert_eq!(
+        result.line_items.iter().map(|row| row.amount).sum::<i64>(),
+        result.subscription_total
+    );
+}
+
+#[test]
+fn an_unlinked_legacy_charge_has_no_invented_computer_size() {
+    let mut facts = billing();
+    facts.computers[0].price_id = None;
+    let seats = SeatPrices {
+        premium: StripePriceId::parse("price_premium").unwrap(),
+        max: None,
+    };
+    let prices = ComputerPrices {
+        standard: IntervalPrices {
+            monthly: Some(facts.items[1].price_id.clone()),
+            yearly: None,
+        },
+        large: IntervalPrices {
+            monthly: None,
+            yearly: None,
+        },
+        xl: IntervalPrices {
+            monthly: None,
+            yearly: None,
+        },
+    };
+    let item = &mut facts.items[1];
+    item.kind = RecurringItemKind::for_provider_price(
+        &seats,
+        &prices,
+        &facts.computers,
+        &item.price_id,
+        None,
+    );
+    let result = facts.render().unwrap();
+    let row = result
+        .line_items
+        .iter()
+        .find(|row| row.kind == SubscriptionBillingLineKind::Computer && !row.included)
+        .unwrap();
+    assert_eq!(row.name, "Computer");
+    assert_eq!(row.size, None);
+    assert_eq!(row.computer_id, None);
+    assert_eq!(row.amount, 10000);
 }
