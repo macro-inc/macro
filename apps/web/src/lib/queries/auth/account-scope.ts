@@ -40,6 +40,10 @@ export function captureQueryAccount(
     : undefined;
 }
 
+export function queryAccountSessionPending(): boolean {
+  return session().pending;
+}
+
 export function currentQueryAccount(): QueryAccount | undefined {
   if (
     thrownResultErrorHasCode(

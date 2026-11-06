@@ -74,7 +74,8 @@ export function useCrmContactMentionSource(
   );
   const aliases = createContactAliasWindow({
     rows: entities,
-    email: (item) => (item.data.type === 'crm_contact' ? item.data.email : ''),
+    email: (item) =>
+      (item.data.type === 'crm_contact' ? item.data.email : '') ?? '',
     search,
     enabled,
     resolveUsers,
@@ -165,7 +166,7 @@ export function useCrmContactDiscovery(
   });
   const aliases = createContactAliasWindow({
     rows: discovery.contacts,
-    email: (contact) => contact.email,
+    email: (contact) => contact.email ?? '',
     search: query,
     enabled,
     hasMore: discovery.hasMore,
