@@ -624,7 +624,7 @@ export function CallOverlay(props: {
                         !selfInGrid() &&
                           (focusedParticipant() === 'local'
                             ? 'inset-0'
-                            : `right-4 w-48 aspect-video shadow-lg ${(panelOpen() && widePanel()) || stageWidth() < 980 ? 'bottom-24' : 'bottom-4'}`)
+                            : 'bottom-4 right-4 w-48 aspect-video shadow-lg')
                       )}
                     >
                       <LocalTile class="size-full min-h-0" avatarSize="sm" />
@@ -646,19 +646,22 @@ export function CallOverlay(props: {
                 data-holds-prompts={isTouchDevice() ? undefined : ''}
               >
                 <div
-                  class={cn(
-                    'grid w-fit max-w-full grid-cols-[auto_auto_auto] items-center mobile:grid-cols-[auto_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]',
-                    compactControls() ? 'gap-2' : 'gap-3'
-                  )}
+                  data-call-controls-row
+                  class="grid w-full items-center mobile:w-fit mobile:grid-cols-[auto_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]"
+                  style={
+                    isMobile()
+                      ? undefined
+                      : {
+                          'grid-template-columns': `minmax(min-content,1fr) auto minmax(${(panelToggleSize.width ?? (compactControls() ? 48 : 56)) + (compactControls() ? 8 : 12)}px,1fr)`,
+                        }
+                  }
                 >
-                  <div
-                    aria-hidden={!props.footerLeading}
-                    class="min-w-0 justify-self-end mobile:hidden"
-                    style={{ width: `${panelToggleSize.width ?? 0}px` }}
-                  >
-                    {props.footerLeading}
-                  </div>
-                  <div class="flex min-w-0 justify-center">
+                  <Show when={!isMobile() && props.footerLeading}>
+                    <div class="col-start-1 row-start-1 mr-2 justify-self-start">
+                      {props.footerLeading}
+                    </div>
+                  </Show>
+                  <div class="col-start-2 row-start-1 flex min-w-0 justify-center mobile:col-start-1">
                     <CallControls
                       compact={compactControls()}
                       onLeave={props.onLeave}
@@ -742,7 +745,7 @@ export function CallOverlay(props: {
                     ref={setPanelToggleFrame}
                     class={cn(
                       isMobile() ? 'island' : 'menu-surface',
-                      'flex justify-center justify-self-start rounded-full',
+                      'col-start-3 row-start-1 flex justify-center justify-self-end rounded-full mobile:col-start-2',
                       isMobile() ? 'p-1.5' : 'p-2'
                     )}
                   >
