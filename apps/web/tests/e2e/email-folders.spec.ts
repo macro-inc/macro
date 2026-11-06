@@ -10,9 +10,7 @@ async function mockFolderApi(page: Page, fail = false) {
       url.hostname === '127.0.0.1' ||
       url.hostname === 'localhost' ||
       url.hostname.endsWith('.localhost');
-    return local
-      ? route.continue()
-      : route.fulfill({ status: 404, json: {} });
+    return local ? route.continue() : route.fulfill({ status: 404, json: {} });
   });
   await page.route('**/items/soup/ast**', async (route) => {
     const { emailView } = route.request().postDataJSON();
