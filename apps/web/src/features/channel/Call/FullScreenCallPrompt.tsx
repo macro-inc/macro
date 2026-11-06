@@ -18,8 +18,13 @@ const DISMISSED_KEY = 'full-screen-call-prompt-dismissed';
 const dismissedValue = z.literal('true');
 const fullScreenIntentState = z.object({ allowed: z.boolean() });
 
-async function canUseFullScreenIntent(): Promise<boolean> {
+type AccessCheckTrigger = 'mount' | 'resume';
+
+async function canUseFullScreenIntent(
+  trigger: AccessCheckTrigger
+): Promise<boolean> {
   return Telemetry.span('call.full_screen_intent.check', async (span) => {
+    span.setAttr('call.full_screen_intent.trigger', trigger);
     const result = await catchToResult(() =>
       invoke<unknown>('plugin:call-kit|can_use_full_screen_intent')
     );
@@ -83,9 +88,9 @@ export function FullScreenCallPrompt() {
     },
   });
 
-  const checkBlocked = async () =>
-    setBlocked(!(await canUseFullScreenIntent()));
-  onMount(() => fireAndForget(checkBlocked(), 'channel-call'));
+  const checkBlocked = async (trigger: AccessCheckTrigger) =>
+    setBlocked(!(await canUseFullScreenIntent(trigger)));
+  onMount(() => fireAndForget(checkBlocked('mount'), 'channel-call'));
 
   // Calls only ring once notifications are on; that prompt comes first.
   const shouldShow = createMemo(
@@ -99,12 +104,16 @@ export function FullScreenCallPrompt() {
   );
 
   // The toast stays up while the user is in Settings; returning rechecks
-  // access, and granting it unmounts the toast.
+  // access, and granting it unmounts the toast. The Android WebView shows the
+  // page again on return but never fires window focus.
   const recheckOnReturn = () => {
-    if (shouldShow()) fireAndForget(checkBlocked(), 'channel-call');
+    if (document.visibilityState === 'visible' && shouldShow())
+      fireAndForget(checkBlocked('resume'), 'channel-call');
   };
-  window.addEventListener('focus', recheckOnReturn);
-  onCleanup(() => window.removeEventListener('focus', recheckOnReturn));
+  document.addEventListener('visibilitychange', recheckOnReturn);
+  onCleanup(() =>
+    document.removeEventListener('visibilitychange', recheckOnReturn)
+  );
 
   return (
     <Show when={shouldShow()}>

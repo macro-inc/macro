@@ -71,6 +71,23 @@ function accessChecks() {
   ).length;
 }
 
+let visibility: DocumentVisibilityState = 'visible';
+Object.defineProperty(document, 'visibilityState', {
+  configurable: true,
+  get: () => visibility,
+});
+
+function setVisibility(next: DocumentVisibilityState) {
+  visibility = next;
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
+/** Leaves for Settings and comes back, as the Android WebView reports it. */
+function returnFromSettings() {
+  setVisibility('hidden');
+  setVisibility('visible');
+}
+
 /** Waits for the mount check to reach native and its result to land. */
 async function settleAccessCheck() {
   await waitFor(() => expect(accessChecks()).toBeGreaterThan(0));
@@ -80,6 +97,7 @@ async function settleAccessCheck() {
 describe('full-screen call prompt', () => {
   beforeEach(() => {
     localStorage.clear();
+    visibility = 'visible';
     native.allowed = false;
     native.invoke.mockReset();
     native.invoke.mockImplementation(async (command: string) => {
@@ -99,16 +117,35 @@ describe('full-screen call prompt', () => {
       localStorage.getItem('full-screen-call-prompt-dismissed')
     ).toBeNull();
 
-    // Back from Settings without allowing it.
+    // Leaving for Settings doesn't check; coming back without allowing it
+    // checks once and keeps the toast, with Allow still there.
     const checks = accessChecks();
-    fireEvent.focus(window);
+    setVisibility('hidden');
+    expect(accessChecks()).toBe(checks);
+    setVisibility('visible');
     await waitFor(() => expect(accessChecks()).toBe(checks + 1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByText(title)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeTruthy();
 
     native.allowed = true;
-    fireEvent.focus(window);
+    returnFromSettings();
     await waitFor(() => expect(screen.queryByText(title)).toBeNull());
+
+    // Granted: later returns don't bring it back.
+    returnFromSettings();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText(title)).toBeNull();
+  });
+
+  it('stays hidden on the next launch once access is granted', async () => {
+    native.allowed = true;
+    renderPrompt();
+    await settleAccessCheck();
+    expect(screen.queryByText(title)).toBeNull();
+    expect(
+      localStorage.getItem('full-screen-call-prompt-dismissed')
+    ).toBeNull();
   });
 
   it('stays hidden on this device once dismissed', async () => {
