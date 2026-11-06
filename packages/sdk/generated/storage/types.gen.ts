@@ -316,6 +316,10 @@ export type Agent = {
      */
     is_coding: boolean;
     /**
+     * Mentions start a durable thread visible only to the invoking user.
+     */
+    is_ephemeral?: boolean;
+    /**
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
@@ -4234,6 +4238,10 @@ export type CreateAgentRequest = {
      * chip into its live session (`true`) or a reply in the thread (`false`).
      */
     is_coding: boolean;
+    /**
+     * Mentions start a durable thread visible only to the invoking user.
+     */
+    is_ephemeral?: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -10807,6 +10815,10 @@ export type Message = {
      * Last persisted update.
      */
     updated_at: string;
+    /**
+     * Audience fixed when the thread was created.
+     */
+    visibility?: MessageVisibility;
 };
 
 /**
@@ -10977,6 +10989,10 @@ export type MessageChange = {
      */
     thread_id?: string | null;
     type: 'typing';
+    /**
+     * Audience inherited from the target thread.
+     */
+    visibility?: MessageVisibility;
 };
 
 /**
@@ -11288,6 +11304,10 @@ export type MessagePostedMetadata = {
      * User whose invocation produced a bot response.
      */
     triggered_by?: string | null;
+    /**
+     * Immutable audience of the originating thread.
+     */
+    visibility?: MessageVisibility;
 };
 
 /**
@@ -11445,6 +11465,23 @@ export type MessageTopicEvent = {
      * Attachments were removed from a message.
      */
     metadata: MessageAttachmentRemovedMetadata;
+};
+
+/**
+ * The immutable audience of a durable message thread.
+ */
+export type MessageVisibility = {
+    type: 'public';
+} | {
+    /**
+     * Canonical bot principals invited when the thread was created.
+     */
+    bot_ids: Array<string>;
+    type: 'private';
+    /**
+     * Authenticated user who started the thread.
+     */
+    user_id: string;
 };
 
 /**
@@ -13353,6 +13390,10 @@ export type SessionIdentity = {
      * nothing and read as a person.
      */
     source?: SessionSource;
+    /**
+     * Immutable audience inherited from the originating message thread.
+     */
+    visibility?: MessageVisibility;
 };
 
 /**
@@ -16263,6 +16304,10 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+    /**
+     * Immutable audience inherited from the root message.
+     */
+    visibility?: MessageVisibility;
 };
 
 /**
@@ -16649,6 +16694,10 @@ export type UpdateAgentRequest = {
      * chip into its live session (`true`) or a reply in the thread (`false`).
      */
     is_coding: boolean;
+    /**
+     * New mention privacy. Omit to preserve the saved setting.
+     */
+    is_ephemeral?: boolean | null;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
