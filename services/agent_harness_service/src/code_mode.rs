@@ -65,10 +65,10 @@ impl ExecutionCredentials for RunCredentials {
 
 /// Credentials for public MCP runs: the signed-in user, with no session, and
 /// the agent the run's posts are attributed to: an agent caller (a self-hosted
-/// agent's call through egress) as itself, any other caller as the Macro bot,
-/// labelled with the MCP client's name - the same attribution the direct MCP
-/// tools give. The MCP client asks the user before each tool call, so there is
-/// no owner gate.
+/// agent's call through egress) as itself, a verified teammate API-key caller
+/// as its own user, and other callers as the Macro bot, labelled with the MCP
+/// client's name where available. Public runs use the caller's permissions
+/// without a session owner gate.
 pub struct UserRunCredentials {
     pub teammates: Arc<dyn agent_inmem::domain::tool_mode::AgentAccounts>,
     pub signer: MacroApiTokenSigner,

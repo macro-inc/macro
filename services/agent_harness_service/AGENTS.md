@@ -95,8 +95,9 @@ Pulumi stacks; they do not host extra agent processes.
   `computer_screen.view`/`.computer` (joined by `stream_id` and propagated
   context).
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
-  reuses the harness tool context and retains bearer authentication. Users with
-  `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
+  reuses the harness tool context with JWT bearer or standard user API-key
+  authentication. Teammates and ordinary users with `ai-code-mode` get only
+  `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
   `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
   is cached per user (`tool_mode_cache.rs`).
   `src/code_mode/connected_apps.rs` serves a running execution's
@@ -286,10 +287,12 @@ listener failure shuts down the process so ECS can replace the task.
   `agent_session.bot_id`) writes as that agent, under the bot's own name (read
   per call, so its document edits label their live cursors with it);
   `McpClient` (OAuth) writes as the Macro bot labelled with the client's name
-  (shown as the author); `ApiKey` writes as the Macro bot. Public `ExecuteCode`
-  builds its context per call from the caller and signs the same attribution
-  into its SDK token: the agent, or the Macro bot plus the client name as
-  `agent_via`. Never read a bot id or client name from the request itself.
+  (shown as the author); direct native `ApiKey` tools retain Macro bot
+  attribution. Public `ExecuteCode` resolves API-key owners against
+  server-side teammate account facts: teammates write as themselves; ordinary
+  API-key users retain Macro bot attribution. It signs this attribution into
+  the SDK token, preserving OAuth client names as `agent_via`. Never read a
+  bot id, client name, or teammate claim from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
