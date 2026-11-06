@@ -2,7 +2,13 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_generated.rs
 name: check generated workflows
 on:
-  workflow_call: {}
+  pull_request:
+    paths:
+    - tooling/xtask/**
+    - crates/macro_event_topics/**
+    - .github/workflows/**
+    - .gitea/workflows/**
+    - .github/kafka-cluster-topics.json
 jobs:
   check-workflows:
     runs-on: linux-ci

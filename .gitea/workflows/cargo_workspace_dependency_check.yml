@@ -2,7 +2,19 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_workspace_dependency_check.rs
 name: cargo workspace dependency check
 on:
-  workflow_call: {}
+  pull_request:
+    paths:
+    - Cargo.toml
+    - crates/**/Cargo.toml
+    - services/**/Cargo.toml
+    - tooling/xtask/**/Cargo.toml
+    - Cargo.lock
+    - .config/hakari.toml
+    - crates/workspace-hack/**
+    - tooling/xtask/src/**
+    - tooling/xtask/crates/xtask_deps/**
+    - tooling/xtask/crates/xtask_graph/**
+    - .github/workspace-dep-closures.json
 jobs:
   dependency-check:
     runs-on: linux-ci

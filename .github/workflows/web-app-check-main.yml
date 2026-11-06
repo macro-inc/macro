@@ -819,7 +819,7 @@ jobs:
     - name: Calendar Event Details Browser Tests
       if: needs.path-check.outputs.calendar_details_changed == 'true'
       run: |-
-        bunx playwright install-deps chromium
+        env -u LD_LIBRARY_PATH bunx playwright install-deps chromium
         just test-calendar-details-browser
       working-directory: apps/web
     - name: Teardown Nix

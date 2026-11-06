@@ -3,9 +3,18 @@
 //! the AWS configuration stops validating. Neither needs credentials or applies
 //! anything. Generated into `platform_parity.yml`.
 
-use gh_workflow::{Event, Job, Level, Permissions, PullRequest, Step, Workflow};
+use gh_workflow::{Event, Job, Level, Permissions, Step, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps};
+
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("infra/platform/**"),
+    xtask_paths::repo_glob!("nix/platform.nix"),
+    xtask_paths::repo_glob!("flake.lock"),
+    xtask_paths::repo_glob!(".github/workflows/platform_parity.yml"),
+];
 
 /// Build the workflow.
 pub fn platform_parity() -> Workflow {
@@ -14,16 +23,7 @@ pub fn platform_parity() -> Workflow {
             contents: Some(Level::Read),
             ..Default::default()
         })
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_path(xtask_paths::repo_glob!("infra/platform/**"))
-                .add_path(xtask_paths::repo_glob!("nix/platform.nix"))
-                .add_path(xtask_paths::repo_glob!("flake.lock"))
-                .add_path(xtask_paths::repo_glob!(
-                    ".github/workflows/platform_parity.yml"
-                )),
-        ))
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("parity", parity_job())
 }
 

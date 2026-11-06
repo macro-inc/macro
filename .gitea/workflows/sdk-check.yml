@@ -2,13 +2,10 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/sdk_check.rs
 name: SDK Check
 on:
-  push:
-    branches:
-    - main
+  pull_request:
     paths:
     - packages/sdk/**
     - .github/workflows/sdk-check.yml
-  workflow_call: {}
 jobs:
   check-package:
     name: SDK Package Check

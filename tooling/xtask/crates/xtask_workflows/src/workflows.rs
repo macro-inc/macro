@@ -506,7 +506,12 @@ fn render_forge(ported: &forge::Ported) -> Result<String> {
         .with_context(|| format!("{} is not a generated workflow", ported.file_name))?;
     let yaml =
         (workflow.render_yaml)().with_context(|| format!("serializing {}", workflow.file_name))?;
-    let body = forge::port(&yaml, ported.dropped_jobs)
+    let paths: Vec<String> = pr_ci::paths_of(ported.file_name)
+        .unwrap_or_default()
+        .iter()
+        .map(|path| path.as_str().to_owned())
+        .collect();
+    let body = forge::port(&yaml, ported.dropped_jobs, &paths)
         .with_context(|| format!("porting {}", workflow.file_name))?;
     Ok(format!("{}{body}", disclaimer(workflow.slug)))
 }

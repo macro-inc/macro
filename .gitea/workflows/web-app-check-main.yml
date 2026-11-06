@@ -2,7 +2,7 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
 on:
-  workflow_call: {}
+  pull_request: {}
 jobs:
   path-check:
     runs-on: linux-ci
@@ -188,65 +188,6 @@ jobs:
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
-    - id: preview-credentials
-      name: Configure AWS Credentials
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
-      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-      continue-on-error: true
-    - id: preview-id
-      name: Get or create preview ID
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-credentials.outcome == 'success'
-      run: |
-        PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
-          --pr ${{ github.event.pull_request.number }} \
-          --repo ${{ github.repository }} \
-          --token ${{ secrets.GITHUB_TOKEN }} \
-          --branch "${{ github.head_ref }}")
-        echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
-        echo "Preview ID: $PREVIEW_ID"
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-      working-directory: apps/web
-    - id: preview-bucket
-      name: Validate bucket name
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-id.outcome == 'success'
-      run: |
-        if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
-          echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
-          exit 1
-        fi
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-    - id: preview-deploy
-      name: Deploy to S3
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-bucket.outcome == 'success'
-      run: |
-        bun scripts/preview/deploy.ts \
-          --preview-id ${{ steps.preview-id.outputs.id }} \
-          --skip-build
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-      working-directory: apps/web
-    - name: Comment on PR
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-deploy.outcome == 'success'
-      run: |
-        bun scripts/preview/post-comment.ts \
-          --pr ${{ github.event.pull_request.number }} \
-          --repo ${{ github.repository }} \
-          --token ${{ secrets.GITHUB_TOKEN }} \
-          --preview-id ${{ steps.preview-id.outputs.id }} \
-          --sha ${{ github.sha }}
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-      working-directory: apps/web
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
@@ -710,7 +651,7 @@ jobs:
     - name: Calendar Event Details Browser Tests
       if: needs.path-check.outputs.calendar_details_changed == 'true'
       run: |-
-        bunx playwright install-deps chromium
+        env -u LD_LIBRARY_PATH bunx playwright install-deps chromium
         just test-calendar-details-browser
       working-directory: apps/web
     - name: Teardown Nix

@@ -9,7 +9,7 @@ env:
   RUST_BACKTRACE: '1'
   RUSTFLAGS: -C link-arg=-fuse-ld=lld
 on:
-  workflow_call: {}
+  pull_request: {}
 jobs:
   path-check:
     runs-on: linux-ci
@@ -496,45 +496,27 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
-  status-check:
+  graphql-schema-compat:
     needs:
     - path-check
-    - check
-    - test
-    - build-service-bins
-    - graphql-schema-compat
-    if: always()
-    name: Cloud Storage Status Check
+    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'
     runs-on: linux-ci
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
     - name: Put Cargo on PATH
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-    - name: Check job results
-      run: |
-        echo "path-check: ${{ needs.path-check.result }}"
-        echo "check: ${{ needs.check.result }}"
-        echo "doppler-config: ${{ needs.doppler-config.result }}"
-        echo "test: ${{ needs.test.result }}"
-        echo "build-service-bins: ${{ needs.build-service-bins.result }}"
-        echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
-
-        # Only success and skipped are OK. A job that hits its timeout reports
-        # cancelled, and passing on that would merge code whose tests never ran.
-        for result in \
-          "${{ needs.path-check.result }}" \
-          "${{ needs.check.result }}" \
-          "${{ needs.doppler-config.result }}" \
-          "${{ needs.test.result }}" \
-          "${{ needs.build-service-bins.result }}" \
-          "${{ needs.graphql-schema-compat.result }}"; do
-          if [[ "$result" != "success" && "$result" != "skipped" ]]; then
-            echo "❌ One or more jobs failed or were cancelled"
-            exit 1
-          fi
-        done
-
-        echo "✅ All jobs passed or were skipped"
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '2'
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - name: Check GraphQL schema compatibility
+      run: cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- graphql-schema-compat --base HEAD^1
   test:
     needs:
     - path-check
@@ -990,24 +972,3 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
-  graphql-schema-compat:
-    needs:
-    - path-check
-    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'
-    runs-on: linux-ci
-    timeout-minutes: 15
-    steps:
-    - name: Put Cargo on PATH
-      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-    - name: Checkout
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        clean: 'false'
-        fetch-depth: '2'
-    - name: Setup Rust
-      uses: ./.github/actions/setup-rust
-      with:
-        sccache: 'false'
-        rust-cache: 'false'
-    - name: Check GraphQL schema compatibility
-      run: cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- graphql-schema-compat --base HEAD^1

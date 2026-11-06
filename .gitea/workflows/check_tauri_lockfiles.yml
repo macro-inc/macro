@@ -2,7 +2,15 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_tauri_lockfiles.rs
 name: check tauri lockfiles
 on:
-  workflow_call: {}
+  pull_request:
+    paths:
+    - apps/web/tauri/**
+    - crates/**/Cargo.toml
+    - Cargo.toml
+    - nix/tauri-desktop.nix
+    - flake.nix
+    - flake.lock
+    - .github/workflows/check_tauri_lockfiles.yml
 permissions:
   contents: read
 jobs:

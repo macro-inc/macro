@@ -2,7 +2,15 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/cargo_deny.rs
 name: cargo deny check
 on:
-  workflow_call: {}
+  pull_request:
+    paths:
+    - Cargo.toml
+    - crates/**/Cargo.toml
+    - services/**/Cargo.toml
+    - tooling/xtask/**/Cargo.toml
+    - Cargo.lock
+    - deny.toml
+    - .github/workflows/cargo_deny.yml
 jobs:
   cargo-deny:
     runs-on: linux-ci

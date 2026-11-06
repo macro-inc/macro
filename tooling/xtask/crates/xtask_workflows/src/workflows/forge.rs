@@ -43,8 +43,8 @@ pub const PORTED: &[Ported] = &[
     },
     Ported {
         file_name: "code_check_cloud_storage.yml",
-        // Reads production-scoped Doppler configs.
-        dropped_jobs: &["doppler-config"],
+        // Doppler's reads production-scoped configs, and the status job requires it.
+        dropped_jobs: &["doppler-config", "status-check"],
     },
     Ported {
         file_name: "code_check_conventions.yml",
@@ -72,22 +72,24 @@ pub const PORTED: &[Ported] = &[
 
 /// Rewrite one rendered GitHub workflow for the forge: its runner label, no
 /// Namespace cache volumes (the runner keeps its own), none of `dropped`, and no
-/// `types` filter on pull requests. Gitea does not match `synchronize` there, so
-/// a filtered workflow would never re-run on a push; the default activity types
-/// are what these workflows want. Each job first puts Cargo's bin directory on
+/// preview deploy. GitHub calls these workflows from `PR CI`; the forge has neither its
+/// label nor its gate, so each runs on pull requests touching `paths`, or any if empty,
+/// with Gitea's default activity types. Each job first puts Cargo's bin directory on
 /// PATH, which hosted runners do and the job image does not. `dorny/paths-filter`
 /// gets no token, so it diffs with git instead of asking GitHub's API, and its job
 /// checks out full history for that. Checkouts keep their credentials, because the
 /// mirror is private and some jobs fetch from it later.
-pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
+pub fn port(yaml: &str, dropped: &[&str], paths: &[String]) -> Result<String> {
     let mut root: Value = serde_yaml::from_str(yaml).context("parsing workflow")?;
-    if let Some(pull_request) = root
-        .get_mut("on")
-        .and_then(|on| on.get_mut("pull_request"))
-        .and_then(Value::as_mapping_mut)
-    {
-        pull_request.remove("types");
+    let mut pull_request = serde_yaml::Mapping::new();
+    if !paths.is_empty() {
+        pull_request.insert(Value::from("paths"), Value::from(paths.to_vec()));
     }
+    let mut on = serde_yaml::Mapping::new();
+    on.insert(Value::from("pull_request"), Value::Mapping(pull_request));
+    root.as_mapping_mut()
+        .context("workflow is not a mapping")?
+        .insert(Value::from("on"), Value::Mapping(on));
     let jobs = root
         .get_mut("jobs")
         .and_then(Value::as_mapping_mut)
@@ -118,10 +120,10 @@ pub fn port(yaml: &str, dropped: &[&str]) -> Result<String> {
                 .context("parsing the PATH step")?,
             );
             steps.retain(|step| {
-                !step
-                    .get("uses")
-                    .and_then(Value::as_str)
-                    .is_some_and(|uses| uses.starts_with("namespacelabs/nscloud-cache-action"))
+                let field = |key: &str| step.get(key).and_then(Value::as_str).unwrap_or_default();
+                !(field("uses").starts_with("namespacelabs/nscloud-cache-action")
+                    || field("id").starts_with("preview")
+                    || field("run").contains("scripts/preview/"))
             });
             let uses = |step: &Value, action: &str| {
                 step.get("uses")
@@ -167,9 +169,7 @@ mod test {
 
     const WORKFLOW: &str = r#"
 on:
-  pull_request:
-    types: [opened, synchronize]
-    branches: [main]
+  workflow_call: {}
 jobs:
   build:
     needs: [paths, ios]
@@ -177,6 +177,10 @@ jobs:
     steps:
     - uses: namespacelabs/nscloud-cache-action@abc
     - uses: actions/checkout@abc
+    - id: preview-credentials
+      uses: aws-actions/configure-aws-credentials@abc
+    - name: Comment on PR
+      run: bun scripts/preview/post-comment.ts
   paths:
     runs-on: ubuntu-latest
     steps:
@@ -190,7 +194,9 @@ jobs:
 
     #[test]
     fn port_rewrites_runners_and_drops_namespace_caches_and_jobs() {
-        let ported: Value = serde_yaml::from_str(&port(WORKFLOW, &["ios"]).unwrap()).unwrap();
+        let paths = ["a/**".to_owned()];
+        let ported: Value =
+            serde_yaml::from_str(&port(WORKFLOW, &["ios"], &paths).unwrap()).unwrap();
         let build = &ported["jobs"]["build"];
         assert_eq!(build["runs-on"], RUNNER_LABEL);
         assert_eq!(build["needs"].as_sequence().unwrap().len(), 1);
@@ -202,13 +208,27 @@ jobs:
         assert!(paths[1]["with"].get("persist-credentials").is_none());
         assert_eq!(paths[2]["with"]["token"], "");
         assert!(paths[0].get("with").is_none());
-        assert!(ported["on"]["pull_request"].get("types").is_none());
-        assert!(ported["on"]["pull_request"].get("branches").is_some());
+        assert!(ported["on"].get("workflow_call").is_none());
+        assert_eq!(ported["on"]["pull_request"]["paths"][0], "a/**");
     }
 
     #[test]
     fn port_refuses_jobs_the_runners_cannot_serve() {
-        assert!(port(WORKFLOW, &[]).is_err());
+        assert!(port(WORKFLOW, &[], &[]).is_err());
+    }
+
+    #[test]
+    fn no_ported_workflow_holds_cloud_credentials_or_previews() {
+        for ported in PORTED {
+            let rendered = crate::workflows::render_forge(ported).unwrap();
+            for forbidden in ["aws-actions/", "scripts/preview/", "needs.doppler-config"] {
+                assert!(
+                    !rendered.contains(forbidden),
+                    "{} holds `{forbidden}`",
+                    ported.file_name
+                );
+            }
+        }
     }
 
     #[test]

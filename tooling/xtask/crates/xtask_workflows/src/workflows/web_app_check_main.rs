@@ -603,7 +603,7 @@ fn run_database_browser_tests() -> Step<Run> {
 /// the calendar queries the adapters stand in for change.
 fn run_calendar_details_browser_tests() -> Step<Run> {
     Step::new("Calendar Event Details Browser Tests")
-        .run("bunx playwright install-deps chromium\njust test-calendar-details-browser")
+        .run("env -u LD_LIBRARY_PATH bunx playwright install-deps chromium\njust test-calendar-details-browser")
         .if_condition(Expression::new(
             "needs.path-check.outputs.calendar_details_changed == 'true'",
         ))
