@@ -96,7 +96,7 @@ async fn scrub_dry_run_apply_and_resume(pool: PgPool) {
         .await
         .unwrap();
         match number {
-            1 | 2 | 3 => {
+            1..=3 => {
                 assert_eq!(content["params"]["mcpServers"], json!([]));
                 assert!(!content.to_string().contains("placeholder-token"));
             }
