@@ -3,7 +3,10 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
 use crate::domain::{
-    models::{PatchHarnessRequest, RequestedHarnessOwner},
+    models::{
+        PatchHarnessRequest, ReportWorkspacesRequest, ReportedWorkspace, ReportedWorkspaceKind,
+        RequestedHarnessOwner, RequestedHarnessWorkspace,
+    },
     ports::{HarnessError, HarnessService},
     service::HarnessServiceImpl,
     tokens,
@@ -949,4 +952,98 @@ async fn owner_changes_need_a_manager_and_a_team_they_belong_to(pool: PgPool) {
     assert!(matches!(result, Err(HarnessError::Unauthorized)));
 
     assert_eq!(stored_owner(&pool, harness_id).await, (None, Some(team_id)));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reported_workspace_becomes_the_runtime_and_agent_workspace(pool: PgPool) {
+    insert_user(&pool, OWNER_ID).await;
+    let harness_id = insert_harness_owned_by(&pool, Some(OWNER_ID), None).await;
+    let bot_id = insert_bound_agent(&pool, "Mine", Some(OWNER_ID), None, harness_id).await;
+    let harness = HarnessId::new_from_uuid(harness_id);
+
+    service(&pool)
+        .report_workspaces(
+            harness,
+            ReportWorkspacesRequest {
+                workspaces: vec![
+                    ReportedWorkspace {
+                        path: "/home/owner/code".to_owned(),
+                        kind: ReportedWorkspaceKind::AllowedRoot,
+                    },
+                    ReportedWorkspace {
+                        path: "/home/owner/code/macro".to_owned(),
+                        kind: ReportedWorkspaceKind::Repository,
+                    },
+                ],
+            },
+        )
+        .await
+        .unwrap();
+
+    let refused = service(&pool)
+        .patch_harness(
+            caller(),
+            harness,
+            PatchHarnessRequest {
+                workspace: Some(RequestedHarnessWorkspace::Path {
+                    path: "/etc".to_owned(),
+                }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(refused, Err(HarnessError::BadRequest(_))));
+
+    let updated = service(&pool)
+        .patch_harness(
+            caller(),
+            harness,
+            PatchHarnessRequest {
+                workspace: Some(RequestedHarnessWorkspace::Path {
+                    path: "/home/owner/code/macro".to_owned(),
+                }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        updated.workspace_path.as_deref(),
+        Some("/home/owner/code/macro")
+    );
+    assert_eq!(updated.reported_workspaces.len(), 2);
+
+    sqlx::query!(
+        "UPDATE agent_configs SET workspace_path = '/home/owner/code' WHERE bot_id = $1",
+        bot_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let agents = service(&pool).list_bound_agents(harness).await.unwrap();
+    assert_eq!(
+        agents[0].workspace_path.as_deref(),
+        Some("/home/owner/code")
+    );
+
+    let local = service(&pool)
+        .patch_harness(
+            caller(),
+            harness,
+            PatchHarnessRequest {
+                workspace: Some(RequestedHarnessWorkspace::Local),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(local.workspace_path, None);
+    assert_eq!(
+        service(&pool)
+            .get_self(harness)
+            .await
+            .unwrap()
+            .workspace_path,
+        None
+    );
 }

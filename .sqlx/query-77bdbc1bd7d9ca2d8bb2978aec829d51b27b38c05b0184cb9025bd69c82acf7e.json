@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at,\n                EXISTS (\n                    SELECT 1 FROM harness_runtime_connection c\n                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()\n                ) AS \"has_live_connection!\",\n                EXISTS (\n                    SELECT 1 FROM harness_runtime_connection c\n                    WHERE c.harness_id = harnesses.id\n                ) AS \"has_connection_record!\"\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
+  "query": "\n            SELECT\n                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n                created_at, updated_at, last_connected_at, last_disconnected_at, workspace_path,\n                reported_workspaces AS \"reported_workspaces: Json<Vec<ReportedWorkspace>>\",\n                EXISTS (\n                    SELECT 1 FROM harness_runtime_connection c\n                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()\n                ) AS \"has_live_connection!\",\n                EXISTS (\n                    SELECT 1 FROM harness_runtime_connection c\n                    WHERE c.harness_id = harnesses.id\n                ) AS \"has_connection_record!\"\n            FROM harnesses\n            WHERE deleted_at IS NULL\n              AND (\n                owner_user_id = $1\n                OR team_id IN (SELECT team_id FROM team_user WHERE user_id = $1)\n              )\n            ORDER BY created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -60,18 +60,28 @@
       },
       {
         "ordinal": 11,
+        "name": "workspace_path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "reported_workspaces: Json<Vec<ReportedWorkspace>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
         "name": "has_live_connection!",
         "type_info": "Bool"
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "has_connection_record!",
         "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -86,9 +96,11 @@
       false,
       true,
       true,
+      true,
+      false,
       null,
       null
     ]
   },
-  "hash": "c5052e4731eb9c665326a8884c1776feefaf57d261a5fe18c4a885feb4ffeed0"
+  "hash": "77bdbc1bd7d9ca2d8bb2978aec829d51b27b38c05b0184cb9025bd69c82acf7e"
 }

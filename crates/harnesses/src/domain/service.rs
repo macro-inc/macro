@@ -15,7 +15,8 @@ use super::{
         ApprovePairingRequest, BoundHarnessAgent, ClaimOutcome, ClaimPairingRequest,
         ClaimedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAgent,
         HarnessAgentOwner, HarnessOwner, HarnessSession, PairingDetails, PairingStatus,
-        PatchHarnessRequest, RequestedHarnessOwner,
+        PatchHarnessRequest, ReportWorkspacesRequest, ReportedWorkspace, RequestedHarnessOwner,
+        RequestedHarnessWorkspace,
     },
     ports::{
         BoundAgentFacts, HarnessChanges, HarnessError, HarnessRepo, HarnessService, HarnessUpdate,
@@ -36,6 +37,10 @@ const MAX_OPEN_PAIRINGS_PER_NAME: i64 = 4;
 const CODE_ATTEMPTS: usize = 5;
 const MAX_NAME_CHARS: usize = 100;
 const MAX_HOST_CHARS: usize = 200;
+/// Cap on the workspaces one daemon reports; it bounds its own scan lower.
+const MAX_REPORTED_WORKSPACES: usize = 500;
+/// Longest reported workspace path, matching the session workspace limit.
+const MAX_WORKSPACE_PATH_BYTES: usize = 4096;
 
 /// A trimmed display name within the length limit.
 fn validated_name(name: &str) -> Result<String, HarnessError> {
@@ -46,6 +51,65 @@ fn validated_name(name: &str) -> Result<String, HarnessError> {
         )));
     }
     Ok(name.to_owned())
+}
+
+/// A reported workspace list with every path checked and duplicates dropped,
+/// keeping the first of each path.
+fn validated_workspaces(
+    workspaces: Vec<ReportedWorkspace>,
+) -> Result<Vec<ReportedWorkspace>, HarnessError> {
+    if workspaces.len() > MAX_REPORTED_WORKSPACES {
+        return Err(HarnessError::BadRequest(format!(
+            "report at most {MAX_REPORTED_WORKSPACES} workspaces"
+        )));
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut validated = Vec::with_capacity(workspaces.len());
+    for workspace in workspaces {
+        let path = workspace.path.as_str();
+        if path.is_empty() || path.len() > MAX_WORKSPACE_PATH_BYTES || path.contains('\0') {
+            return Err(HarnessError::BadRequest(format!(
+                "workspace paths must be 1..={MAX_WORKSPACE_PATH_BYTES} bytes with no NUL"
+            )));
+        }
+        if seen.insert(workspace.path.clone()) {
+            validated.push(workspace);
+        }
+    }
+    Ok(validated)
+}
+
+/// The requested workspace, when the daemon reported it.
+fn validated_workspace(
+    harness: &Harness,
+    requested: RequestedHarnessWorkspace,
+) -> Result<RequestedHarnessWorkspace, HarnessError> {
+    match &requested {
+        RequestedHarnessWorkspace::Local => Ok(requested),
+        RequestedHarnessWorkspace::Path { path } => {
+            let reported = harness
+                .reported_workspaces
+                .iter()
+                .any(|workspace| workspace.path == *path);
+            if !reported {
+                return Err(HarnessError::BadRequest(
+                    "this runtime has not reported that workspace; pick one it lists".to_owned(),
+                ));
+            }
+            Ok(requested)
+        }
+    }
+}
+
+/// Whether `requested` is what the harness already uses.
+fn workspace_is_current(harness: &Harness, requested: &RequestedHarnessWorkspace) -> bool {
+    match requested {
+        RequestedHarnessWorkspace::Local => harness.workspace_path.is_none(),
+        RequestedHarnessWorkspace::Path { path } => {
+            harness.workspace_path.as_deref() == Some(path.as_str())
+        }
+    }
 }
 
 /// Harness service backed by a repository.
@@ -182,10 +246,16 @@ where
             Some(requested) => Some(self.resolve_owner(&managed, requested).await?),
             None => None,
         };
+        let workspace = req
+            .workspace
+            .map(|requested| validated_workspace(&managed.harness, requested))
+            .transpose()?;
         let changes = HarnessChanges {
             name: req.name.as_deref().map(validated_name).transpose()?,
             allow_permission_bypass: req.allow_permission_bypass,
             owner: owner.filter(|owner| *owner != managed.harness.owner),
+            workspace: workspace
+                .filter(|workspace| !workspace_is_current(&managed.harness, workspace)),
         };
         if changes == HarnessChanges::default() {
             return Ok(managed.harness);
@@ -493,5 +563,28 @@ where
             .list_sessions(harness_id)
             .await
             .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(
+        name = "harness.report_workspaces",
+        skip(self, req),
+        fields(harness = %harness_id, workspaces = req.workspaces.len()),
+        err
+    )]
+    async fn report_workspaces(
+        &self,
+        harness_id: HarnessId,
+        req: ReportWorkspacesRequest,
+    ) -> Result<(), HarnessError> {
+        let workspaces = validated_workspaces(req.workspaces)?;
+        if !self
+            .repo
+            .replace_reported_workspaces(harness_id, workspaces)
+            .await
+            .map_err(Into::into)?
+        {
+            return Err(HarnessError::NotFound("unknown harness".to_owned()));
+        }
+        Ok(())
     }
 }

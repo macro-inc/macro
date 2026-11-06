@@ -44,6 +44,11 @@ daemon reconciles its webhook feed from.
 - Changes to a registered harness take a `ManagedHarness`, which only
   `HarnessServiceImpl::ensure_may_manage` builds; add new manager-only
   operations behind it, not beside it.
+- `reported_workspaces` is whatever the daemon last sent to
+  `PUT /harnesses/me/workspaces` (its `allowed_roots` and the repositories
+  under them). A runtime's `workspace_path` and an agent's
+  (`agent_configs.workspace_path`, checked in `crates/bots`) must be one of
+  those when they are set; macrod still refuses anything outside its roots.
 - `agents_stranded_by` mirrors `crates/bots`' `ensure_harness_usable` binding
   rule; change both together. An owner change locks the harness row FOR
   UPDATE and the bots agent write takes it FOR SHARE, so the two serialize.

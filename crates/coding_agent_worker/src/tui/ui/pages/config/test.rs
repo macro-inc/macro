@@ -41,6 +41,8 @@ fn short_config_keeps_selected_settings_and_web_owned_values_visible() {
         updated_at: chrono::Utc::now(),
         connected: true,
         last_connected_at: None,
+        workspace_path: None,
+        reported_workspaces: Vec::new(),
     });
     for height in [22, 24] {
         for (index, setting) in settings(&app.config).iter().enumerate() {

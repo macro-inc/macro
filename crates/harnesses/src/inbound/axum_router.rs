@@ -7,7 +7,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
 };
 use harness_id::HarnessId;
 use macro_authorization::{
@@ -23,6 +23,7 @@ use crate::domain::{
         ApprovePairingRequest, BoundHarnessAgent, ClaimOutcome, ClaimPairingRequest,
         ClaimedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAgent,
         HarnessSession, PairingDetails, PatchHarnessRequest, RUNTIME_CONNECTED_HEADER,
+        ReportWorkspacesRequest,
     },
     ports::{HarnessError, HarnessService},
 };
@@ -116,6 +117,10 @@ where
         .route(
             "/harnesses/me/sessions",
             get(list_harness_sessions_handler::<S, Auth>),
+        )
+        .route(
+            "/harnesses/me/workspaces",
+            put(report_harness_workspaces_handler::<S, Auth>),
         )
         .route(
             "/harnesses/{harness_id}",
@@ -442,6 +447,40 @@ pub async fn list_harness_sessions_handler<S: HarnessService, Auth: MacroAuthori
             .list_sessions(authorization.authorization.harness_id)
             .await?,
     ))
+}
+
+/// Handler for `PUT /harnesses/me/workspaces`.
+///
+/// The daemon reports the directories its sessions may use: its allowed
+/// roots and the repositories under them. The web picks workspaces from this
+/// list only.
+#[utoipa::path(
+    put,
+    tag = "harnesses",
+    operation_id = "report_harness_workspaces",
+    path = "/harnesses/me/workspaces",
+    request_body = ReportWorkspacesRequest,
+    responses(
+        (status = 204),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn report_harness_workspaces_handler<
+    S: HarnessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+    Json(req): Json<ReportWorkspacesRequest>,
+) -> Result<StatusCode, HarnessesHandlerErr> {
+    state
+        .service
+        .report_workspaces(authorization.authorization.harness_id, req)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Handler for `GET /harnesses/me/agents`.

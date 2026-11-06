@@ -53,6 +53,46 @@ pub struct Harness {
     pub connected: bool,
     /// When the daemon last attached a runtime connection.
     pub last_connected_at: Option<DateTime<Utc>>,
+    /// The directory new sessions use when their agent names none, one of
+    /// `reported_workspaces`. `None` uses the workspace in the machine's
+    /// `macrod.toml`.
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    /// The directories the daemon last reported its sessions may use. The web
+    /// picks workspaces from this list only.
+    #[serde(default)]
+    pub reported_workspaces: Vec<ReportedWorkspace>,
+}
+
+/// What a reported workspace is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ReportedWorkspaceKind {
+    /// A directory from `allowed_roots` in the machine's `macrod.toml`.
+    AllowedRoot,
+    /// A repository the daemon found under an allowed root.
+    Repository,
+}
+
+/// A directory a daemon reports its sessions may work in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ReportedWorkspace {
+    /// Absolute path on the daemon's machine.
+    pub path: String,
+    /// What the directory is.
+    pub kind: ReportedWorkspaceKind,
+}
+
+/// The directories a daemon's sessions may use, replacing its last report.
+///
+/// The daemon serializes this, so both derives are used.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ReportWorkspacesRequest {
+    /// Allowed roots first, then the repositories under them.
+    pub workspaces: Vec<ReportedWorkspace>,
 }
 
 /// Sent by a daemon reading its own harness while it holds a runtime connection,
@@ -133,6 +173,20 @@ pub enum RequestedHarnessOwner {
     },
 }
 
+/// Which directory a harness's sessions use when their agent names none.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum RequestedHarnessWorkspace {
+    /// The workspace in the machine's `macrod.toml`.
+    Local,
+    /// One of the directories the daemon reported.
+    Path {
+        /// The reported directory.
+        path: String,
+    },
+}
+
 /// Request to change a registered harness. Omitted fields stay as they are.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -148,6 +202,11 @@ pub struct PatchHarnessRequest {
     /// that their owners could no longer run on it.
     #[serde(default)]
     pub owner: Option<RequestedHarnessOwner>,
+    /// New workspace for sessions whose agent names none, one of the
+    /// daemon's reported workspaces. New sessions use it; running sessions
+    /// keep theirs.
+    #[serde(default)]
+    pub workspace: Option<RequestedHarnessWorkspace>,
 }
 
 /// Owner of an agent bound to a harness.
@@ -220,6 +279,10 @@ pub struct HarnessAgent {
     pub name: String,
     /// Stable `@` handle.
     pub handle: String,
+    /// The directory this agent's new sessions use, one of the harness's
+    /// reported workspaces. `None` uses the harness's workspace.
+    #[serde(default)]
+    pub workspace_path: Option<String>,
 }
 
 /// An agent session running on a harness, as listed for the daemon's UI.
