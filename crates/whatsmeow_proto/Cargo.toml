@@ -16,3 +16,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [build-dependencies]
 prost-build = { workspace = true }
 protox = { workspace = true }
+
+[package.metadata.cargo-shear]
+# Used by the code `build.rs` generates into `OUT_DIR`.
+ignored = ["prost"]

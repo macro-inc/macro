@@ -12,8 +12,6 @@ test = false
 [dependencies]
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
-chrono = { workspace = true }
-either = { workspace = true }
 email_formatting = { path = "../../crates/email_formatting" }
 hmac = { workspace = true }
 inquire = { workspace = true }
@@ -41,7 +39,6 @@ tokio = { workspace = true, features = [
   "signal",
   "sync",
 ] }
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

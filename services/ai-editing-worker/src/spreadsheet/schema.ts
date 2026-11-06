@@ -81,7 +81,8 @@ const style = z
   })
   .strict();
 const name = z.string().min(1).max(31);
-const operation = z.discriminatedUnion('type', [
+/** One EditSpreadsheet operation; the writer model's batch uses it too. */
+export const spreadsheetOperationSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('set_cells'),
@@ -219,7 +220,7 @@ export const spreadsheetRequestSchema = z.discriminatedUnion('action', [
     .object({
       action: z.literal('edit'),
       expectedRevision: z.string().min(1).max(100_000),
-      operations: z.array(operation).min(1).max(25),
+      operations: z.array(spreadsheetOperationSchema).min(1).max(25),
     })
     .strict(),
 ]);

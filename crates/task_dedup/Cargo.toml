@@ -29,8 +29,6 @@ backfill = [
   "dep:aws-sdk-secretsmanager",
   "dep:clap",
   "dep:macro_aws_config",
-  "dep:macro_entrypoint",
-  "dep:macro_env",
   "dep:secretsmanager_client",
   "dep:tokio",
   "dep:macro_env_var"
@@ -63,8 +61,6 @@ uuid = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 macro_aws_config = { path = "../macro_aws_config", optional = true }
-macro_entrypoint = { path = "../macro_entrypoint", optional = true }
-macro_env = { path = "../macro_env", optional = true }
 secretsmanager_client = { path = "../secretsmanager_client", optional = true }
 tokio = { workspace = true, features = [
   "macros",

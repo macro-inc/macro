@@ -71,10 +71,8 @@ sqlx = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-cool_asserts = "2"
 harness_id = { path = "../harness_id" }
 macro_db_migrator = { path = "../macro_db_migrator" }
-mockall = { workspace = true }
 model_user = { path = "../model_user" }
 rootcause = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }

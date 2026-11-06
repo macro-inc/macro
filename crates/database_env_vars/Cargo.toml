@@ -11,3 +11,7 @@ test = false
 tracing = { workspace = true }
 macro_env_var = { path = "../macro_env_var" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[package.metadata.cargo-shear]
+# `macro_env_var` macros expand to `#[tracing::instrument]`.
+ignored = ["tracing"]

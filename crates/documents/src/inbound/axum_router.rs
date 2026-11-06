@@ -5,8 +5,8 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
-//! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits` — read,
-//!   calculate and edit a native spreadsheet
+//! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits`, `/ai-edit` —
+//!   read, calculate and edit a native spreadsheet, by operations or instructions
 //! - `POST /create_spreadsheet` — create a native spreadsheet
 //! - `GET /{document_id}/presentation`, `POST .../presentation/edits`,
 //!   `POST .../presentation/copy` — read, edit, or copy a PowerPoint deck
@@ -33,6 +33,8 @@ mod tests;
 
 #[cfg(feature = "ai_tools")]
 pub mod ai_edit;
+#[cfg(feature = "ai_tools")]
+pub mod canvas;
 pub mod content_uploaded;
 pub mod copy_document;
 #[cfg(feature = "document_create")]
@@ -218,9 +220,17 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// The Canvas tools' worker, admission, metering and rollout, for the
+    /// SDK's canvas routes.
+    #[cfg(feature = "ai_tools")]
+    pub canvas: CanvasRouteDeps,
     /// The spreadsheet tools' read, calculate and edit workflows.
     #[cfg(feature = "ai_tools")]
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<T, DefaultEditingWorker>>,
+    /// Spreadsheet edits by instructions, with the host's admission and metering.
+    #[cfg(feature = "ai_tools")]
+    pub spreadsheet_ai_edit:
+        Arc<crate::domain::spreadsheet::SpreadsheetAiEditService<T, DefaultEditingWorker>>,
     /// The presentation tools' read, edit and copy use cases.
     #[cfg(feature = "ai_tools")]
     pub presentations: Arc<crate::domain::presentation::PresentationService>,
@@ -248,6 +258,23 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     pub non_user_owners: NonUserOwners,
 }
 
+/// What the canvas routes need beyond the document service: the editing
+/// worker, AI admission and metering, the artifacts rollout and image storage.
+#[cfg(feature = "ai_tools")]
+#[derive(Clone)]
+pub struct CanvasRouteDeps {
+    /// The live canvas editing peer.
+    pub worker: Arc<DefaultEditingWorker>,
+    /// AI admission for edits by instructions.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
+    /// Records model usage of edits by instructions.
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+    /// Whether a user has the Canvas artifacts rollout.
+    pub artifacts: crate::domain::canvas::CanvasArtifactsRollout,
+    /// Keeps rendered images as the caller's static files.
+    pub images: Arc<dyn crate::domain::canvas::CanvasImageStore>,
+}
+
 // Manual Clone impl so T, Svc, and Auth don't need to be Clone.
 impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
     fn clone(&self) -> Self {
@@ -263,7 +290,11 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
             #[cfg(feature = "ai_tools")]
+            canvas: self.canvas.clone(),
+            #[cfg(feature = "ai_tools")]
             spreadsheet: self.spreadsheet.clone(),
+            #[cfg(feature = "ai_tools")]
+            spreadsheet_ai_edit: self.spreadsheet_ai_edit.clone(),
             #[cfg(feature = "ai_tools")]
             presentations: self.presentations.clone(),
             #[cfg(feature = "ai_tools")]
@@ -382,6 +413,22 @@ where
             axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
         )
         .route(
+            "/{document_id}/canvas/scene",
+            axum::routing::post(canvas::canvas_scene_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/canvas/render",
+            axum::routing::post(canvas::render_canvas_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/canvas/edits",
+            axum::routing::post(canvas::apply_canvas_edits_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/canvas/ai-edit",
+            axum::routing::post(canvas::edit_canvas_with_ai_handler::<T, Svc, Auth>),
+        )
+        .route(
             "/{document_id}/spreadsheet/read",
             axum::routing::post(spreadsheet::read_spreadsheet_handler::<T, Svc, Auth>),
         )
@@ -392,6 +439,10 @@ where
         .route(
             "/{document_id}/spreadsheet/edits",
             axum::routing::post(spreadsheet::edit_spreadsheet_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/spreadsheet/ai-edit",
+            axum::routing::post(spreadsheet::ai_edit_spreadsheet_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/presentation",

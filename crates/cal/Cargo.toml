@@ -9,7 +9,7 @@ test = false
 
 [features]
 all = ["axum", "outbound"]
-axum = ["dep:axum", "dep:model-error-response", "dep:utoipa"]
+axum = ["dep:axum", "dep:model-error-response"]
 outbound = ["dep:analytics_client"]
 
 [dependencies]
@@ -25,5 +25,4 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

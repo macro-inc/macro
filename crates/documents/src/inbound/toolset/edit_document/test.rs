@@ -579,7 +579,7 @@ impl EditingWorkerService for FakeEditingWorker {
         _: &DocumentPermissionToken,
         _: &crate::domain::canvas::CanvasRequest,
         _: bool,
-    ) -> anyhow::Result<crate::domain::canvas::CanvasResult> {
+    ) -> Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError> {
         panic!("unexpected canvas call")
     }
 
@@ -593,6 +593,18 @@ impl EditingWorkerService for FakeEditingWorker {
         crate::domain::spreadsheet::SpreadsheetError,
     > {
         panic!("unexpected spreadsheet call")
+    }
+
+    async fn spreadsheet_instructions(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _instructions: &str,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetWriterResult,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        panic!("unexpected spreadsheet instructions call")
     }
 
     async fn word_document(

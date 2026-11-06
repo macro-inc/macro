@@ -12,7 +12,6 @@ test = false
 
 [dependencies]
 anyhow = { workspace = true }
-aws-sdk-s3 = { workspace = true }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 aws-sdk-sns = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["s3"] }
