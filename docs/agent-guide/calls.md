@@ -286,9 +286,9 @@ its **After the call ends** menu offers **Share with team** and **Channel only**
 for channel-thread discussions. Legacy call-chat and standalone calls retain
 **Private** rather than promise channel access. The control shows Team, Channel
 or Private with the corresponding icon and a caret; it locks while saving.
-Audio settings, video settings, screen share settings, and call sharing use
-bottom drawers on phones, with a handle and scrollable options; desktop and
-tablet keep dropdowns.
+Desktop and tablet keep the device settings dropdowns. The phone call's sharing
+control uses the shared bottom drawer; its media buttons are single-tap toggles
+without device carets.
 The sharing icons align with the option titles, with short descriptions below.
 Click outside or press Escape to close and return focus to the opener. The
 controls also work by keyboard and touch.
@@ -395,7 +395,7 @@ for 60 seconds, the call ends automatically.
 ### Work in a call
 
 Behind `enable-agent-work`, the call panel gains a **Work** tab, after Chat and
-Participants, while any other participant has registered work you can open.
+People, while any other participant has registered work you can open.
 Chat stays the default tab. Each participant with work gets a section; rows keep
 their order, and clicking one opens the session in a new split so the call stays
 live. Registering is SDK-only (`session.registerAsWork()`).

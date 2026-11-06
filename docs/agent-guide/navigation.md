@@ -1045,8 +1045,9 @@ view is in the foreground. Leaving the call view restores the current page's
 action, even if the call continues in the background.
 Active phone calls hide the bottom dock but retain the channel header island.
 Their Back button returns to the app while the call continues; tablets keep app
-chrome. Phone media controls sit below the video and hide when idle without
-resizing it; the header islands remain visible.
+chrome. Phone media controls sit below the video and remain visible while idle.
+Away from the Call tab, the call island sits above the dock. Desktop uses the
+rail's call popover and a draggable mini player; see [Calls](calls.md).
 After closing mobile search with the keyboard open or leaving a focused editor,
 verify that the current view’s New action returns once the keyboard closes.
 Removing the focused editor must not leave the action hidden on subsequent views.
