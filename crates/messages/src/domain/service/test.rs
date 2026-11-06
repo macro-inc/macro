@@ -271,6 +271,7 @@ fn fixture() -> Repo {
                 name: "External PDF author".into(),
             }),
             triggered_via: None,
+            triggered_via_kind: None,
             triggered_by: None,
             content: "root".into(),
             created_at: Utc::now(),
@@ -1179,7 +1180,10 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
                 .is_none()
         );
         input.attribution = MessageAttribution::ActingUserVia {
-            client: "Claude Code".into(),
+            client: McpClientLabel {
+                name: "Claude Code".into(),
+                kind: Some(McpClientKind::ClaudeCode),
+            },
         };
         service.post(receipt(), input).await.unwrap();
         {
@@ -1189,7 +1193,13 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
                 via.triggered_by.as_deref(),
                 Some("macro|author@example.com")
             );
-            assert_eq!(via.triggered_via.as_deref(), Some("Claude Code"));
+            assert_eq!(
+                via.triggered_via,
+                Some(McpClientLabel {
+                    name: "Claude Code".into(),
+                    kind: Some(McpClientKind::ClaudeCode),
+                })
+            );
             assert!(creates[0].triggered_via.is_none());
         }
         service

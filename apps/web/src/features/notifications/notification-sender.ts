@@ -1,3 +1,4 @@
+import type { McpClientKind } from '@service-storage/generated/schemas/mcpClientKind';
 import { match } from 'ts-pattern';
 import type { UnifiedNotification } from './types';
 
@@ -6,6 +7,7 @@ type SenderMetadataContent = {
   senderDisplayName?: string | null;
   senderGithubLogin?: string;
   senderProfilePictureUrl?: string | null;
+  senderClientKind?: McpClientKind | null;
   botName?: string;
   routineName?: string;
   mentionedBy?: string;
@@ -72,12 +74,14 @@ export function getNotificationSenderAvatarUrl(
 export type NotificationAgentSender = {
   name: string;
   avatarUrl?: string;
+  /** The product of the MCP client the agent posted through, for its mark. */
+  clientKind?: McpClientKind;
 };
 
 /**
- * The agent that authored a comment notification. Agent-authored comments
- * carry no `sender_id` (it only holds human senders); the agent's name and
- * avatar travel in the metadata instead.
+ * The agent that authored a comment or channel message notification.
+ * Agent-authored posts carry no `sender_id` (it only holds human senders); the
+ * agent's name, avatar and verified client travel in the metadata instead.
  */
 export function getNotificationAgentSender(
   notification: UnifiedNotification
@@ -90,12 +94,18 @@ export function getNotificationAgentSender(
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
       'crm_discussion',
+      'channel_mention',
+      'channel_message_send',
+      'channel_message_reply',
       () => {
-        const name = getNotificationSenderFallbackName(notification)?.trim();
+        const content = senderContent(notification);
+        const name = content?.senderDisplayName?.trim();
         if (!name) return undefined;
-        const avatarUrl =
-          senderContent(notification)?.senderProfilePictureUrl ?? undefined;
-        return { name, avatarUrl };
+        return {
+          name,
+          avatarUrl: content?.senderProfilePictureUrl ?? undefined,
+          clientKind: content?.senderClientKind ?? undefined,
+        };
       }
     )
     .otherwise(() => undefined);

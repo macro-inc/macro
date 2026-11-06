@@ -1,4 +1,5 @@
 import { firstPartyBotMark } from '@core/component/firstPartyBotMark';
+import { mcpClientMark } from '@core/component/mcpClientMark';
 import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
@@ -27,7 +28,8 @@ export function SenderIcon(props: SenderIconProps) {
   // Team bots render their uploaded avatar; first-party bots have none and
   // keep their brand mark, which UserIcon draws the same way the mention menu
   // does. A post a user made through a client is that client's, so it shows
-  // the client's initial rather than the mark of the bot that carried it.
+  // the client's product mark when the server verified it, else its initial,
+  // rather than the mark of the bot that carried it.
   const botSender = (): MessageSender | undefined => {
     const current = sender();
     if (current.type !== 'bot') return undefined;
@@ -59,6 +61,12 @@ export function SenderIcon(props: SenderIconProps) {
     };
   };
 
+  // Guests and external authors take the avatar slot before a bot does.
+  const clientMark = () =>
+    message().guest_name || externalAuthor()
+      ? undefined
+      : mcpClientMark(botSender()?.triggered_via_kind);
+
   const avatar = () => (
     <Show
       when={
@@ -69,7 +77,12 @@ export function SenderIcon(props: SenderIconProps) {
       fallback={<UserIcon id={message().sender_id} size="fill" />}
     >
       {(bot) => (
-        <BotIcon name={bot().name} avatarUrl={bot().avatar_url} size="fill" />
+        <BotIcon
+          name={bot().name}
+          avatarUrl={bot().avatar_url}
+          mark={clientMark()}
+          size="fill"
+        />
       )}
     </Show>
   );

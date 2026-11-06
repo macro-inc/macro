@@ -10,10 +10,12 @@
 mod test;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use mcp_client_label::McpClientLabel;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use super::{
+    client_kind::classify,
     models::RefreshTokenBinding,
     ports::{ClientRegistrationStore, RefreshTokenBindingStore},
 };
@@ -52,10 +54,11 @@ impl AccessTokenClients {
             .await
     }
 
-    /// The registered name of the client `access_token` was issued to.
-    /// `None` when the broker never recorded one: a token issued before it
-    /// did, or one whose client registration has lapsed.
-    pub async fn client_name(&self, access_token: &str) -> anyhow::Result<Option<String>> {
+    /// The label of the client `access_token` was issued to: its registered
+    /// name, and the product its registration is consistent with. `None` when
+    /// the broker never recorded one: a token issued before it did, or one
+    /// whose client registration has lapsed.
+    pub async fn client(&self, access_token: &str) -> anyhow::Result<Option<McpClientLabel>> {
         let Some(binding) = self
             .bindings
             .binding(&access_token_digest(access_token))
@@ -67,12 +70,13 @@ impl AccessTokenClients {
             .clients
             .find_client(&binding.client_id)
             .await?
-            .map(|client| {
-                client
+            .map(|client| McpClientLabel {
+                kind: classify(&client.client_name, &client.redirect_uris),
+                name: client
                     .client_name
                     .chars()
                     .take(MAX_CLIENT_NAME_CHARS)
-                    .collect()
+                    .collect(),
             }))
     }
 }

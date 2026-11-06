@@ -1,3 +1,4 @@
+use messages::domain::models::{McpClientKind, McpClientLabel};
 use std::sync::{Arc, Mutex};
 
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
@@ -123,6 +124,7 @@ impl MessageCommands for FakeMessages {
             bot_profile: None,
             mentions: vec![],
             triggered_via: None,
+            triggered_via_kind: None,
             triggered_by: Some(USER.to_owned()),
             content: input.content.clone(),
             created_at: at,
@@ -300,7 +302,10 @@ async fn comment_on_text_through_an_mcp_client_carries_its_name() {
     );
     comment_on_text("ships on Friday", None)
         .call(
-            ServiceContext(context.with_via("Claude Code".to_owned())),
+            ServiceContext(context.with_via(McpClientLabel {
+                name: "Claude Code".to_owned(),
+                kind: Some(McpClientKind::ClaudeCode),
+            })),
             request(),
         )
         .await
@@ -314,7 +319,10 @@ async fn comment_on_text_through_an_mcp_client_carries_its_name() {
     assert_eq!(
         post.attribution,
         MessageAttribution::ActingUserVia {
-            client: "Claude Code".to_owned()
+            client: McpClientLabel {
+                name: "Claude Code".to_owned(),
+                kind: Some(McpClientKind::ClaudeCode),
+            }
         }
     );
 }

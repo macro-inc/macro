@@ -208,7 +208,7 @@ pub struct CreateMessage {
     /// User who triggered a bot message, if applicable.
     pub triggered_by: Option<String>,
     /// Label of the client the user triggered it through, if any.
-    pub triggered_via: Option<String>,
+    pub triggered_via: Option<McpClientLabel>,
     /// Parsed message input.
     pub input: PostMessage,
 }

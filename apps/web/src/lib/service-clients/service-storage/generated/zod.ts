@@ -53353,6 +53353,23 @@ export const messageTimelineResponse = zod
               .describe(
                 'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
               ),
+            triggered_via_kind: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'claude',
+                    'claude_code',
+                    'chatgpt',
+                    'cursor',
+                    'codex',
+                    'opencode',
+                  ])
+                  .describe(
+                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                  ),
+              ])
+              .optional(),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
           })
           .describe(
@@ -53716,6 +53733,23 @@ export const messageTimelineResponse = zod
                             .describe(
                               'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                             ),
+                          triggered_via_kind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           updated_at: zod.iso
                             .datetime({})
                             .describe('Last persisted update.'),
@@ -54085,6 +54119,23 @@ export const entityMessageCreateResponse = zod
       .describe(
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
+    triggered_via_kind: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'claude',
+            'claude_code',
+            'chatgpt',
+            'cursor',
+            'codex',
+            'opencode',
+          ])
+          .describe(
+            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+          ),
+      ])
+      .optional(),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -54259,6 +54310,23 @@ export const entityMessageGetMessageResponse = zod
       .describe(
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
+    triggered_via_kind: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'claude',
+            'claude_code',
+            'chatgpt',
+            'cursor',
+            'codex',
+            'opencode',
+          ])
+          .describe(
+            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+          ),
+      ])
+      .optional(),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -54437,6 +54505,23 @@ export const entityMessageDeleteMessageResponse = zod
       .describe(
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
+    triggered_via_kind: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'claude',
+            'claude_code',
+            'chatgpt',
+            'cursor',
+            'codex',
+            'opencode',
+          ])
+          .describe(
+            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+          ),
+      ])
+      .optional(),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -54711,6 +54796,23 @@ export const entityMessageEditResponse = zod
       .describe(
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
+    triggered_via_kind: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'claude',
+            'claude_code',
+            'chatgpt',
+            'cursor',
+            'codex',
+            'opencode',
+          ])
+          .describe(
+            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+          ),
+      ])
+      .optional(),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -54893,6 +54995,23 @@ export const entityMessageReactResponse = zod
       .describe(
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
+    triggered_via_kind: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'claude',
+            'claude_code',
+            'chatgpt',
+            'cursor',
+            'codex',
+            'opencode',
+          ])
+          .describe(
+            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+          ),
+      ])
+      .optional(),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -55074,6 +55193,23 @@ export const entityMessageLegacyResponse = zod
       .describe(
         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
       ),
+    triggered_via_kind: zod
+      .union([
+        zod.null(),
+        zod
+          .enum([
+            'claude',
+            'claude_code',
+            'chatgpt',
+            'cursor',
+            'codex',
+            'opencode',
+          ])
+          .describe(
+            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+          ),
+      ])
+      .optional(),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -55275,6 +55411,23 @@ export const entityMessageGetThreadResponse = zod
               .describe(
                 'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
               ),
+            triggered_via_kind: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'claude',
+                    'claude_code',
+                    'chatgpt',
+                    'cursor',
+                    'codex',
+                    'opencode',
+                  ])
+                  .describe(
+                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                  ),
+              ])
+              .optional(),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
           })
           .describe(
@@ -55452,6 +55605,23 @@ export const entityMessageGetThreadResponse = zod
           .describe(
             'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
           ),
+        triggered_via_kind: zod
+          .union([
+            zod.null(),
+            zod
+              .enum([
+                'claude',
+                'claude_code',
+                'chatgpt',
+                'cursor',
+                'codex',
+                'opencode',
+              ])
+              .describe(
+                "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+              ),
+          ])
+          .optional(),
         updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
       })
       .describe(
@@ -56064,6 +56234,23 @@ export const messageTimelineEntriesResponse = zod
                       .describe(
                         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                       ),
+                    triggered_via_kind: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'claude',
+                            'claude_code',
+                            'chatgpt',
+                            'cursor',
+                            'codex',
+                            'opencode',
+                          ])
+                          .describe(
+                            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                          ),
+                      ])
+                      .optional(),
                     updated_at: zod.iso
                       .datetime({})
                       .describe('Last persisted update.'),
@@ -56451,6 +56638,23 @@ export const messageTimelineEntriesResponse = zod
                                     .describe(
                                       'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                                     ),
+                                  triggered_via_kind: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'claude',
+                                          'claude_code',
+                                          'chatgpt',
+                                          'cursor',
+                                          'codex',
+                                          'opencode',
+                                        ])
+                                        .describe(
+                                          "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                        ),
+                                    ])
+                                    .optional(),
                                   updated_at: zod.iso
                                     .datetime({})
                                     .describe('Last persisted update.'),
@@ -56712,6 +56916,23 @@ export const messageTimelineEntriesResponse = zod
                       .describe(
                         'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                       ),
+                    triggered_via_kind: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'claude',
+                            'claude_code',
+                            'chatgpt',
+                            'cursor',
+                            'codex',
+                            'opencode',
+                          ])
+                          .describe(
+                            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                          ),
+                      ])
+                      .optional(),
                     updated_at: zod.iso
                       .datetime({})
                       .describe('Last persisted update.'),
@@ -57099,6 +57320,23 @@ export const messageTimelineEntriesResponse = zod
                                     .describe(
                                       'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                                     ),
+                                  triggered_via_kind: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'claude',
+                                          'claude_code',
+                                          'chatgpt',
+                                          'cursor',
+                                          'codex',
+                                          'opencode',
+                                        ])
+                                        .describe(
+                                          "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                        ),
+                                    ])
+                                    .optional(),
                                   updated_at: zod.iso
                                     .datetime({})
                                     .describe('Last persisted update.'),

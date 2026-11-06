@@ -4,6 +4,8 @@
 pub mod access_token_clients;
 /// The secret tying an OAuth handshake to the browser that started it.
 pub mod browser_binding;
+/// Which known product a registered client is.
+pub mod client_kind;
 /// Domain models for broker-managed OAuth state and request payloads.
 pub mod models;
 /// Domain port traits for upstream OAuth providers and broker state stores.

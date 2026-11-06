@@ -57,6 +57,7 @@ fn notification_row(
         notification_metadata: NotifEvent::ChannelMessageSend(ChannelMessageSendMetadata {
             sender: None,
             sender_display_name: None,
+            sender_client_kind: None,
             message_content: "Test message".to_string(),
             message_id: "message-1".to_string(),
             has_attachments: false,

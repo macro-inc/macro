@@ -158,8 +158,8 @@ pub async fn validate_bearer(
     }
     let (user_id, auth_method, caller) = match jwt_token {
         JwtToken::MacroAccessToken(access) => {
-            let name = match auth.clients.client_name(&token).await {
-                Ok(name) => name,
+            let client = match auth.clients.client(&token).await {
+                Ok(client) => client,
                 Err(error) => {
                     tracing::error!(error=?error, "could not read the client an access token was issued to");
                     let mut response = Response::new(Body::empty());
@@ -170,7 +170,7 @@ pub async fn validate_bearer(
             (
                 access.macro_user_id,
                 McpAuthMethod::OAuth,
-                ToolCaller::McpClient { name },
+                ToolCaller::McpClient { client },
             )
         }
         JwtToken::MacroApiToken(api) => (

@@ -368,6 +368,7 @@ fn api_user_notification_and_realtime_notif_metadata_serialize_identically() {
         has_attachments: false,
         thread_id: None,
         sender_display_name: None,
+        sender_client_kind: None,
         common: model_notifications::CommonChannelMetadata {
             channel_type: model_notifications::ChannelType::Public,
             channel_name: "general".to_string(),
@@ -448,6 +449,7 @@ fn realtime_notif_has_identical_serialization() {
         has_attachments: false,
         thread_id: Some("threadid".to_string()),
         sender_display_name: None,
+        sender_client_kind: None,
         common: model_notifications::CommonChannelMetadata {
             channel_type: model_notifications::ChannelType::Public,
             channel_name: "my channel".to_string(),

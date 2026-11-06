@@ -1279,7 +1279,12 @@ async fn both_token_exchanges_record_the_client_behind_the_access_token() {
     let clients = harness.service.access_token_clients();
     for access_token in [UPSTREAM_ACCESS_TOKEN, REFRESHED_ACCESS_TOKEN] {
         assert_eq!(
-            clients.client_name(access_token).await.unwrap().as_deref(),
+            clients
+                .client(access_token)
+                .await
+                .unwrap()
+                .map(|client| client.name)
+                .as_deref(),
             Some("test-client"),
             "{access_token}"
         );

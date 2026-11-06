@@ -184,6 +184,29 @@ holding them authorize once more. Rate limiting of `/register` belongs at the
 edge; the broker bounds each registration's size but not how many a caller may
 create.
 
+## Which product a client is
+
+Posts a client writes show its registered name, and, when the broker recognizes
+the client as a known product, that product's mark instead of a letter
+(`domain/client_kind.rs`). The name alone never earns a mark, since
+registration is open and anyone can call a client "Claude". The broker takes
+the name only when every registered redirect URI is somewhere that product
+sends its users:
+
+- web products need their own `https` host: Claude needs `claude.ai`, ChatGPT
+  needs `chatgpt.com` or `chat.openai.com`;
+- Cursor needs `cursor.com`, `www.cursor.com` or loopback, since it registers
+  its site and its loopback listener together;
+- native clients (Claude Code, Codex, OpenCode) need loopback, which is on the
+  user's own machine and so proves no more than the name, but no less either.
+
+A code only ever reaches a registered redirect URI, so a client whose every URI
+is on `claude.ai` is Claude's service. A client calling itself "Claude" with
+its own callback host keeps its name and gets a letter. Claude Code appends the
+user's own name for the server in parentheses ("Claude Code (macro)"), which is
+ignored when matching. The kind is computed when a token is resolved, so it
+needs no backfill and a change to the rules applies to every registration.
+
 ## Token endpoint errors
 
 `/token` answers errors in the RFC 6749 section 5.2 JSON shape

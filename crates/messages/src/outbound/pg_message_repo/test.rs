@@ -82,7 +82,10 @@ async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
         let mut input = command("message-doc-a", None, "Agent answer");
         input.actor = channel_sender::ChannelSender::new_from_bot(bot_id);
         input.triggered_by = Some(USER.to_owned());
-        input.triggered_via = Some("Claude Code".to_owned());
+        input.triggered_via = Some(McpClientLabel {
+            name: "Claude Code".to_owned(),
+            kind: Some(McpClientKind::ClaudeCode),
+        });
         let message = repo.create(input).await.unwrap();
         let read = repo
             .get(&message.parent, message.id)
@@ -91,6 +94,7 @@ async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
             .unwrap();
         assert_eq!(read.triggered_by.as_deref(), Some(USER));
         assert_eq!(read.triggered_via.as_deref(), Some("Claude Code"));
+        assert_eq!(read.triggered_via_kind, Some(McpClientKind::ClaudeCode));
         assert_eq!(
             read.bot_profile,
             Some(BotSenderProfile {

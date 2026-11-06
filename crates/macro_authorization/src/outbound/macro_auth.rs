@@ -5,6 +5,7 @@ use ::macro_auth::{
     error::MacroAuthError,
     middleware::decode_jwt::{self, JwtToken, JwtValidationArgs},
 };
+use mcp_client_label::McpClientLabel;
 use rootcause::Report;
 use tracing::Level;
 
@@ -62,7 +63,13 @@ fn identity_from_token(token: JwtToken) -> ValidatedCredential {
             token.fusion_user_id,
             token.macro_organization_id,
             token.agent_id.map(bot_id::BotId::new_from_uuid),
-            token.agent_id.and(token.agent_via),
+            token
+                .agent_id
+                .and(token.agent_via)
+                .map(|name| McpClientLabel {
+                    name,
+                    kind: token.agent_via_kind,
+                }),
         ),
     };
 

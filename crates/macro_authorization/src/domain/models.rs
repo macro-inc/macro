@@ -6,6 +6,7 @@ use std::{collections::HashSet, fmt};
 use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_client_label::McpClientLabel;
 use model_user::UserContext;
 use thiserror::Error;
 use uuid::Uuid;
@@ -18,7 +19,7 @@ pub struct MacroUserAuthentication {
     /// Signed agent attribution for user-authorized SDK messages, not a bot credential.
     pub agent_id: Option<BotId>,
     /// Signed label of the client the user drives `agent_id` through.
-    pub agent_via: Option<String>,
+    pub agent_via: Option<McpClientLabel>,
     /// The user's parsed Macro identifier.
     pub macro_user_id: MacroUserIdStr<'static>,
     /// The authenticated user context.
@@ -303,7 +304,7 @@ pub struct ValidatedIdentity {
     /// Agent attribution from a cryptographically verified Macro API token.
     pub agent_id: Option<BotId>,
     /// Client label signed with `agent_id`, such as "Claude Code".
-    pub agent_via: Option<String>,
+    pub agent_via: Option<McpClientLabel>,
     /// The user's Macro identifier.
     pub user_id: String,
     /// The user's FusionAuth or root identifier.

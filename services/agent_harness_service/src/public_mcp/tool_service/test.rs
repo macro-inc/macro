@@ -286,6 +286,7 @@ mod code_mode {
         http::Request,
     };
     use code_execution::domain::ExecuteRequest;
+    use mcp_client_label::{McpClientKind, McpClientLabel};
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
@@ -551,7 +552,10 @@ mod code_mode {
 
     fn mcp_client(name: &str) -> Option<ToolCaller> {
         Some(ToolCaller::McpClient {
-            name: Some(name.to_owned()),
+            client: Some(McpClientLabel {
+                name: name.to_owned(),
+                kind: None,
+            }),
         })
     }
 
@@ -571,7 +575,7 @@ mod code_mode {
         let nameless = rpc_as(
             app.clone(),
             FLAGGED,
-            Some(ToolCaller::McpClient { name: None }),
+            Some(ToolCaller::McpClient { client: None }),
             "tools/list",
             serde_json::json!({}),
         )
@@ -739,7 +743,10 @@ mod code_mode {
         let callers = [
             ToolCaller::Agent(BotId::TEST_A),
             ToolCaller::McpClient {
-                name: Some("Claude Code".to_owned()),
+                client: Some(McpClientLabel {
+                    name: "Claude Code".to_owned(),
+                    kind: Some(McpClientKind::ClaudeCode),
+                }),
             },
             ToolCaller::ApiKey,
         ];
