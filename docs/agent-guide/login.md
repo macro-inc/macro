@@ -1,5 +1,14 @@
 # Login
 
+## Recent sign-in for Passwords
+
+Open `/app/login?prompt=login&max_age=0&redirect=%2Fpasswords` when a vault
+disclosure reports `reauthentication_required`. The page presents sign-in even
+with an existing session. Finish an email-code or SSO login; the original vault
+destination is preserved. SSO forwards the fresh-login requirement to the
+identity provider and removes it from the return URL to avoid a login loop.
+Retry reveal after returning. A refresh alone must leave disclosure locked.
+
 ## Flow
 
 1. Navigate to `/app`. Unauthenticated sessions land on `/app/welcome`.

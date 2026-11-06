@@ -111,6 +111,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
+- `/login/sso?reauthenticate=true` adds `prompt=login&max_age=0` to the
+  identity-provider authorization request; token refresh is never fresh login.
+
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
   request onto the desktop signup link and always sets
   `signup_flow=mobile_email`. The web app keeps that set on the PostHog person
