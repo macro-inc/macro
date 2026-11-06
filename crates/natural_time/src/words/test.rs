@@ -60,8 +60,6 @@ fn short_names_and_ambiguous_typos_are_not_guessed() {
     assert_eq!(month("mrach"), None);
     assert_eq!(month("match"), None);
     assert_eq!(month("jule"), None);
-    // Two edits away.
-    assert_eq!(weekday("thrsdy"), None);
     // Too short to be a typo of anything.
     assert_eq!(weekday("fry"), None);
 }
@@ -97,11 +95,41 @@ fn plural_day_names_mark_a_repeat() {
 }
 
 #[test]
-fn one_edit_covers_each_kind_of_typo() {
-    assert!(one_edit("fridday", "friday"));
-    assert!(one_edit("frday", "friday"));
-    assert!(one_edit("frixay", "friday"));
-    assert!(one_edit("firday", "friday"));
-    assert!(!one_edit("fdiray", "friday"));
-    assert!(!one_edit("fri", "friday"));
+fn long_names_tolerate_two_typos() {
+    for (word, day) in [
+        ("thrsdy", Weekday::Thu),
+        ("wednsdy", Weekday::Wed),
+        ("wensday", Weekday::Wed),
+        ("wendsday", Weekday::Wed),
+        ("satrdy", Weekday::Sat),
+    ] {
+        assert_eq!(weekday(word), Some(day), "{word}");
+    }
+    assert_eq!(month("febuwary"), Some(2));
+    assert_eq!(month("novembre"), Some(11));
+    for word in ["tommorow", "tommorrow", "tmorow"] {
+        assert_eq!(relative(word), Some(RelativeWord::Tomorrow), "{word}");
+    }
+    assert_eq!(relative("yestrdy"), Some(RelativeWord::Yesterday));
+    // Six- and seven-letter names still allow only one.
+    assert_eq!(weekday("frdya"), None);
+    assert_eq!(weekday("mndya"), None);
+    // Three typos is too many even for a long name.
+    assert_eq!(weekday("thsdy"), None);
+}
+
+#[test]
+fn the_closest_name_wins_and_a_tie_is_not_guessed() {
+    // One typo from Thursday, two from Tuesday.
+    assert_eq!(weekday("thusday"), Some(Weekday::Thu));
+    // One typo from both Tuesday and Thursday.
+    assert_eq!(weekday("tursday"), None);
+}
+
+#[test]
+fn each_kind_of_typo_counts_once() {
+    for word in ["fridday", "frday", "frixay", "firday"] {
+        assert_eq!(weekday(word), Some(Weekday::Fri), "{word}");
+    }
+    assert_eq!(weekday("fdiray"), None);
 }

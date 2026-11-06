@@ -7,9 +7,6 @@ use crate::phrase::Daypart;
 #[cfg(test)]
 mod test;
 
-/// Names shorter than this get no typo matching: one letter away from
-/// "march" or "june" is too often another word.
-const MIN_TYPO_NAME: usize = 6;
 /// A typo must still be this long, so a short word never reads as a name.
 const MIN_TYPO_WORD: usize = 5;
 
@@ -18,11 +15,7 @@ type Names<T> = [(T, &'static str, &'static [&'static str])];
 const WEEKDAYS: &Names<Weekday> = &[
     (Weekday::Mon, "monday", &["mon"]),
     (Weekday::Tue, "tuesday", &["tue", "tues", "tu"]),
-    (
-        Weekday::Wed,
-        "wednesday",
-        &["wed", "weds", "wensday", "wendsday"],
-    ),
+    (Weekday::Wed, "wednesday", &["wed", "weds"]),
     (
         Weekday::Thu,
         "thursday",
@@ -68,17 +61,7 @@ const RELATIVE: &Names<RelativeWord> = &[
         RelativeWord::Tomorrow,
         "tomorrow",
         &[
-            "tmrw",
-            "tmr",
-            "tmw",
-            "tmrow",
-            "tom",
-            "tomo",
-            "2moro",
-            "2morrow",
-            "2morow",
-            "tommorow",
-            "tommorrow",
+            "tmrw", "tmr", "tmw", "tmrow", "tom", "tomo", "2moro", "2morrow", "2morow",
         ],
     ),
     (
@@ -207,8 +190,8 @@ pub(crate) fn unit(word: &str) -> Option<(Unit, u32)> {
     })
 }
 
-/// The value whose name or alias is `word`, or else the one name a single
-/// typo away from it.
+/// The value whose name or alias is `word`, or else the name closest to it
+/// within that name's typo allowance. A tie for closest isn't guessed.
 fn named<T: Copy>(word: &str, names: &Names<T>) -> Option<T> {
     if let Some((value, ..)) = names
         .iter()
@@ -219,32 +202,29 @@ fn named<T: Copy>(word: &str, names: &Names<T>) -> Option<T> {
     if word.len() < MIN_TYPO_WORD {
         return None;
     }
-    let mut near = names
+    let near: Vec<(usize, T)> = names
         .iter()
-        .filter(|(_, name, _)| name.len() >= MIN_TYPO_NAME && one_edit(word, name));
-    match (near.next(), near.next()) {
-        (Some((value, ..)), None) => Some(*value),
+        .filter_map(|(value, name, _)| {
+            // A swapped pair of letters counts as one typo.
+            let distance = strsim::osa_distance(word, name);
+            (distance <= typos_allowed(name)).then_some((distance, *value))
+        })
+        .collect();
+    let closest = near.iter().map(|(distance, _)| *distance).min()?;
+    let mut closest = near.iter().filter(|(distance, _)| *distance == closest);
+    match (closest.next(), closest.next()) {
+        (Some((_, value)), None) => Some(*value),
         _ => None,
     }
 }
 
-/// Whether `word` is `name` with one letter added, dropped, changed, or
-/// swapped with its neighbour.
-fn one_edit(word: &str, name: &str) -> bool {
-    let (word, name) = (word.as_bytes(), name.as_bytes());
-    let same = word.iter().zip(name).take_while(|(a, b)| a == b).count();
-    let (word, name) = (&word[same..], &name[same..]);
-    match word.len().abs_diff(name.len()) {
-        0 => {
-            word.is_empty()
-                || word[1..] == name[1..]
-                || (word.len() >= 2
-                    && word[0] == name[1]
-                    && word[1] == name[0]
-                    && word[2..] == name[2..])
-        }
-        1 if word.len() < name.len() => word == &name[1..],
-        1 => &word[1..] == name,
-        _ => false,
+/// How many typos a name tolerates. Names under six letters get none: a
+/// letter away from "march" or "june" is too often another word. Names of
+/// eight letters or more are long enough for two.
+fn typos_allowed(name: &str) -> usize {
+    match name.len() {
+        ..=5 => 0,
+        6 | 7 => 1,
+        _ => 2,
     }
 }

@@ -32,7 +32,8 @@
 //!   deadline takes the end, a reminder the start. `in 2 hours` is elapsed
 //!   time from now.
 //! - Day and month names take common abbreviations (`tues`, `thurs`, `sept`)
-//!   and, for names of six letters or more, one typo (`thrusday`).
+//!   and typos: one in a name of six or seven letters (`fridya`), two from
+//!   eight letters up (`thrsdy`). The closest name wins; a tie isn't read.
 //! - Filler such as `by`, `due`, `on`, `at` and `the` is ignored.
 //! - Repeating phrases (`every friday`) are not read yet.
 #![deny(missing_docs)]

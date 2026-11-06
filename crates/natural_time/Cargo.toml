@@ -7,4 +7,5 @@ version = "0.1.0"
 [dependencies]
 chrono = { workspace = true }
 nom = { workspace = true }
+strsim = { workspace = true }
 thiserror = { workspace = true }

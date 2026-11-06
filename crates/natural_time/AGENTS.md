@@ -27,7 +27,7 @@ places that on the calendar for a `Purpose` at the caller's local wall time.
 
 ## Boundaries
 
-- Depends on: `chrono`, `nom`, `thiserror` only.
+- Depends on: `chrono`, `nom`, `strsim` (typo distance) and `thiserror` only.
 - Used by: nothing yet; built for `crates/universal_input` extraction and the
   web app's date fields (through wasm).
 

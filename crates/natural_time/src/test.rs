@@ -82,6 +82,7 @@ fn days_relative_to_today() {
             ("tomorow", "2026-11-07"),
             ("tommorow", "2026-11-07"),
             ("tommorrow", "2026-11-07"),
+            ("tmorow", "2026-11-07"),
             ("yesterday", "2026-11-05"),
             ("yday", "2026-11-05"),
             ("day after tomorrow", "2026-11-08"),
@@ -161,6 +162,10 @@ fn weekdays_and_their_abbreviations() {
             ("thurs", "2026-11-12"),
             ("thrusday", "2026-11-12"),
             ("thurday", "2026-11-12"),
+            ("next thrsdy", "2026-11-12"),
+            ("wednsdy", "2026-11-11"),
+            // One typo from both Tuesday and Thursday.
+            ("tursday", "error: Unrecognized"),
             ("saturday", "2026-11-07"),
             ("sat", "2026-11-07"),
             ("saterday", "2026-11-07"),
@@ -245,6 +250,7 @@ fn written_dates() {
             ("jan 5", "2027-01-05 [year]"),
             ("1/5", "2027-01-05 [year]"),
             ("febuary 3", "2027-02-03 [year]"),
+            ("febuwary 3", "2027-02-03 [year]"),
             ("feb 29", "2028-02-29 [year]"),
             // Passed within the last month: this year's, so it shows as overdue.
             ("nov 5", "2026-11-05 [year]"),
