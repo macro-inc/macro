@@ -900,6 +900,7 @@ async fn a_mention_of_someone_connected_to_the_threads_call_is_dropped() {
                 sender_id: Sender::new_from_user(sender),
                 triggered_by: None,
                 triggered_via: None,
+                triggered_via_kind: None,
                 content: "look at this".to_string(),
                 created_at: now,
                 updated_at: now,
