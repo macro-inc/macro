@@ -117,10 +117,9 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         });
         const appLink = page.locator('.site-header a.site-nav-open');
         await expect(appLink).toHaveCount(1);
-        await expect(appLink).toHaveAttribute('data-cta-footer', '');
         await expect
           .poll(() =>
-            page.locator('.site-nav-open-footer').evaluate((element) => {
+            page.locator('.site-nav-open-face').evaluate((element) => {
               const textSize = Number.parseFloat(
                 getComputedStyle(element).fontSize
               );
@@ -134,11 +133,7 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         await scroller.evaluate((element) => {
           element.scrollTop = 0;
         });
-        await expect(appLink.locator('.site-nav-open-label')).toHaveCSS(
-          'opacity',
-          '1'
-        );
-        await expect(appLink.locator('.site-nav-open-footer')).toHaveCSS(
+        await expect(appLink.locator('.site-nav-open-face')).toHaveCSS(
           'font-size',
           '16px'
         );

@@ -21,19 +21,15 @@ which builds the homepage). It stays in the
 accessibility tree and page text, because that is what agents read; do not hide it
 with `display: none`.
 
-Public calls to action use the shared `site-nav-start` treatment: warm white,
-soft pill corners, a fine border, and a 2px arrow shift on hover. `Book a demo` is a
-soft grey secondary action; the header's `Sign Up` uses a warm-white fill with
-near-black text, a fine border, and no arrow. Its fill fades with the header label during
-the footer transition. As it lands in the footer, the same link reveals the
-original wider white pill, glass rim, and arrow. It follows the existing scroll
-animation and fits within phone widths. Its header label fades out completely
-before the footer presentation fades in, so the two labels never overlap.
-The homepage primary adds a subtle satin gradient and inset edge, a quieter
-18px arrow, and a 1px hover lift; it remains a single link.
-Feedback uses 140ms CSS transitions, respects reduced motion, and does not
-track the pointer. Mobile header actions retain 44px touch targets. The homepage scroll cue is a
-16px arrow inside a 44px button, inset 20px from the bottom while respecting safe areas.
+Public calls to action use the shared `site-nav-start` treatment: a raised white
+pill with a one-pixel glass rim and a soft highlight that follows the pointer.
+`Book a demo` is the quieter cream secondary pill with the same highlight. The
+homepage hero's `Get Started` and every feature page's hero `Get started` use the
+same primary pill. The header's `Sign Up` is that pill with an arrow; it travels
+into the closing space on the homepage. Its link keeps the header footprint while
+`.site-nav-open-face` paints the pill, so the landed button can render at native
+size. The homepage scroll cue reads "Explore" beside a 20px arrow, inset 48px
+from the bottom while respecting safe areas.
 
 The homepage keeps the original colored constellation and grainy demo backdrop,
 with “with one system” in the unification heading. The original sample workspace is
@@ -42,8 +38,8 @@ remain in place. Compact arrows and dots sit above the original, fuller captions
 at the bottom of the frame. Slide selection is manual: arrows, dots, caption
 swipes, and page-level left/right keys. There is no timed cycling or oversized
 side-arrow treatment. The existing scroll entrance, reduced-motion behavior,
-and interaction boundary remain. The primary button keeps its larger satin
-finish but has no looping glimmer. Cream typography from PR #8299 is preserved.
+and interaction boundary remain. The primary button has no looping glimmer.
+Cream typography from PR #8299 is preserved.
 
 The homepage feature sections retain the original centered headings, descriptions,
 conversations, and demos, with rules beside the descriptions. The CRM section
@@ -1083,10 +1079,10 @@ footer rule. The homepage document frame is 420px tall below 700px because its
 version-history band is hidden there; avoid retaining empty desktop fade space
 between the document and its Learn more links.
 
-The travelling Sign Up CTA switches to native footer dimensions, text, and SVG
+The travelling Sign Up CTA switches its face to native dimensions, text, and SVG
 sizes after its landing transition settles, removing the compositor scale to
 avoid Safari retaining an enlarged low-resolution text layer. Reverse scrolling
-restores compact dimensions before the header reappears; keep one app link.
+restores header dimensions before the header reappears; keep one app link.
 
 The landing-page CRM illustration has a transparent outer frame with no
 decorative rim in either palette. Keep the inner CRM window surface and shadow.
