@@ -1007,6 +1007,8 @@ export function Channel(props: ChannelProps) {
                                             }
                                           >
                                             <ChannelThread
+                                              repliesAsRoots={isPanelRoot()}
+                                              hideRail={isPanelRoot()}
                                               rootSlot={
                                                 isCallRow()
                                                   ? () => (

@@ -133,7 +133,9 @@ On phones, Chat and People fill the shared sheet's tab row; the sheet opens at 6
 and at the newest message otherwise. The composer shares the messages' horizontal inset
 in both docked and overlay panels while keeping its bottom spacing. The composer opens as a plain message input bound to the call discussion. Reply
 mode appears only after choosing Reply on a message; closing or sending that reply
-returns to the plain call composer. Nothing posts top-level from the panel. A popup counts top-level messages
+returns to the plain call composer. The call root remains above the conversation;
+replies show root-style avatars, names and times without thread rails or indent.
+This is presentation only: nothing posts top-level from the panel. A popup counts top-level messages
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
 call still connected. On the meeting page it navigates to the channel.
 

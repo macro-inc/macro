@@ -57,6 +57,8 @@ export function ThreadReplyList(props: {
   /** Keep replies on the root's rail instead of branching each one off it. */
   monorail?: boolean;
   hideRail?: boolean;
+  /** Show each reply's avatar and header as a root message. */
+  asRoots?: boolean;
   /** An inline composer or footer continues the rail after the replies. */
   railContinues?: boolean;
 }) {
@@ -141,7 +143,14 @@ export function ThreadReplyList(props: {
                 inputMode={props.inputMode}
                 message={replyMessage()}
                 actions={props.getMessageActions?.(replyMessage())}
-                listMeta={listMetaByReplyId()[id]}
+                listMeta={
+                  props.asRoots
+                    ? {
+                        ...listMetaByReplyId()[id],
+                        isGroupedWithPrevious: false,
+                      }
+                    : listMetaByReplyId()[id]
+                }
                 messageEditor={props.messageEditor}
                 onClick={() => props.onSelectReply?.(id)}
                 selected={isReplySelected()}
