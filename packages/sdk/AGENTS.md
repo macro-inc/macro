@@ -14,6 +14,8 @@ enforced by the ordinary backend APIs.
   reads (`scene`), edits (`apply` code against a revision, `edit` by instructions) and
   renders the live scene over DSS `/documents/{id}/canvas/*`; `render` returns a
   `StaticImage` the server stored, since static file storage rejects API keys.
+  `Canvas.webUrl()` is `/app/canvas/<id>`; `Document.webUrl()` uses the loaded
+  native file type's route and falls back to `/app/md/` before detail loads.
 - `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
   `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
   `calculate` and `applyEdits` run the spreadsheet tools' engine, and whose
@@ -74,7 +76,10 @@ enforced by the ordinary backend APIs.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
-  { images })` and `thread.reply` as `static/image` attachments.
+  { images })` and `thread.reply` as `static/image` attachments, and
+  `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
+  shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
+  (pinned in `lexical-core/tests/generated-image.test.ts`).
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /

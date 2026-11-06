@@ -30,6 +30,11 @@ Retry reveal after returning. A refresh alone must leave disclosure locked.
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+If the code was accepted but local cleanup reports a failure, **Verify** retries
+completion without submitting that consumed code again. Queued edits stay preserved
+and the app opens only after cleanup succeeds. Changing the email, going back or
+requesting another code starts a new attempt that must verify with the server.
+
 ## Agent accounts
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without
