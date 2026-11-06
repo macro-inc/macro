@@ -13,6 +13,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   state, outbox effects and timers in one transaction.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
+- Keep each size's resources and Incus limits literal in `ComputerSize::spec`;
+  never derive one resource or limit from another.
 - Capacity is in units (`domain::size`): Standard 1, Large 2, XL 4. Purchase
   reserves sold units on a host; waking checks awake units (`Context::host_has_room`).
 
