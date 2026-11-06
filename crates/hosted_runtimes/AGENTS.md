@@ -160,6 +160,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   calls. A comped quote reads the Stripe quote and sets amount to zero, preserving
   price id, currency and interval. Without a subscription the quote returns
   `NoSubscription`; billing errors propagate.
+- **Waiting for capacity**: Preserve stopped/suspended fleet state and project
+  `wake_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
+  (also provisioning with `start: false`). Suppress setup progress while waiting.
+  Runtimes and Billing show "Waiting for space on the host" with a hint to turn
+  off or release another computer. Waiting computers remain power-manageable.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
   Connecting → Ready, positions 1–4) until macrod first connects. Pending payment

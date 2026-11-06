@@ -12,6 +12,8 @@ import type { Quote } from './quote';
  * A size with its resources, price and whether it can be bought now.
  */
 export interface SizeOffer {
+  /** Whether no host has both sold units and awake reservations for a persona. */
+  alwaysOnSoldOut: boolean;
   /**
    * Root disk size in GiB.
    * @minimum 0

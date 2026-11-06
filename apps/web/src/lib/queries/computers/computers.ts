@@ -17,6 +17,7 @@ const TRANSITION_POLL_MS = 3_000;
 
 const TRANSITIONAL_STATUSES: readonly ComputerStatusKind[] = [
   'setting_up',
+  'waiting_for_capacity',
   'waking',
   'stopping',
 ];

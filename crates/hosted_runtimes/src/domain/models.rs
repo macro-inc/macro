@@ -250,6 +250,8 @@ impl HostRegistration {
 pub enum ComputerStatusKind {
     /// Initial setup is in progress.
     SettingUp,
+    /// Wake is blocked by the host's awake capacity.
+    WaitingForCapacity,
     /// Guest is connected and ready.
     Ready,
     /// Guest is frozen or suspended.
@@ -343,7 +345,9 @@ pub struct ComputerStatus {
 impl Computer {
     /// Project lifecycle state into the team-facing status.
     pub fn status(&self) -> ComputerStatus {
+        let waiting_for_capacity = self.state.waiting_for_capacity();
         let setup_step = match self.state.phase {
+            _ if waiting_for_capacity => None,
             _ if self.enrolled_at.is_some() => None,
             Phase::PendingPayment { .. } => Some(SetupStep::Creating),
             Phase::Provisioning { .. } if self.harness_id.is_none() => Some(SetupStep::Creating),
@@ -352,6 +356,7 @@ impl Computer {
             _ => None,
         };
         let status = match self.state.phase {
+            _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
             Phase::Running { .. } => ComputerStatusKind::Ready,
             Phase::Frozen { .. } | Phase::Suspended { .. } if self.state.wake_requested => {

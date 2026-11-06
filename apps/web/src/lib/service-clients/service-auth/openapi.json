@@ -7503,6 +7503,7 @@
         "description": "The coarse status the team sees.",
         "enum": [
           "setting_up",
+          "waiting_for_capacity",
           "ready",
           "asleep",
           "waking",
@@ -9765,9 +9766,14 @@
           "diskGb",
           "quote",
           "soldOut",
+          "alwaysOnSoldOut",
           "notifyRequested"
         ],
         "properties": {
+          "alwaysOnSoldOut": {
+            "type": "boolean",
+            "description": "Whether no host has both sold units and awake reservations for a persona."
+          },
           "diskGb": {
             "type": "integer",
             "format": "int32",

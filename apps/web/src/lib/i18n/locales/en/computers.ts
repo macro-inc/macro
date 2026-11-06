@@ -59,6 +59,9 @@ export default {
   stepConnecting: 'Connecting to Macro',
   ready: 'Ready',
   settingUp: 'Setting up',
+  waitingForCapacity: 'Waiting for space on the host',
+  waitingForCapacityHint:
+    'Turn off or release another computer on this host to make room',
   asleep: 'Asleep',
   wakeHint: 'Wakes when an agent gets a prompt.',
   waking: 'Waking',

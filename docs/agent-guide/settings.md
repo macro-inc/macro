@@ -803,15 +803,19 @@ To buy one as a team admin:
 
 The new row reads **Setting up** with its step (creating, starting up,
 connecting, ready; "step N of 4"). Payment recovery also reports creating;
-no payment stage is shown. The list polls every 3 seconds
-while any computer is setting up, waking or stopping. Once ready a row shows
+no payment stage is shown. A computer blocked by awake host capacity instead
+shows **Waiting for space on the host**, with "Turn off or release another
+computer on this host to make room". It has no setup step; admins can turn it
+off or release it. This applies both before and after first enrollment, on
+desktop and mobile. The list polls every 3 seconds
+while any computer is setting up, waiting for capacity, waking or stopping. Once ready a row shows
 its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
 **Stopped**, **Failed**), its Claude access mode, and the runtime it
 registered as with a connection dot; that runtime's row under **Connected
 runtimes** carries a **Macro computer** badge and no Remove. Admin controls
 on each row:
 
-- **Power** switch: on/off, available when Ready, Asleep or Stopped.
+- **Power** switch: on/off, available when Ready, Asleep, Stopped or waiting for capacity.
 - **Cancel at period end**: billing stops at the period end, shown as
   "Cancels <date>"; **Keep computer** undoes it until then. After the period
   a canceled computer shows "Disk deleted <date>".

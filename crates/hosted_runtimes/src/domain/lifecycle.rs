@@ -201,6 +201,21 @@ impl ComputerState {
         }
     }
 
+    /// Whether an on request is waiting for host capacity rather than setup.
+    pub fn waiting_for_capacity(&self) -> bool {
+        self.power == Power::On
+            && self.wake_requested
+            && matches!(
+                self.phase,
+                Phase::Provisioning { start: false, .. }
+                    | Phase::Stopped { .. }
+                    | Phase::Suspended {
+                        saved_state: true,
+                        ..
+                    }
+            )
+    }
+
     /// Whether the computer counts against sold capacity.
     pub fn holds_units(&self) -> bool {
         !matches!(self.phase, Phase::PaymentFailed | Phase::Destroyed)
