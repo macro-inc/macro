@@ -1,7 +1,8 @@
 //! `CI Gate for Forks` — what `PR CI`'s start and gate steps can't do for a
 //! fork PR, whose token is read-only. Generated into `ci-gate-fork.yml`.
 //!
-//! Both triggers run this file from `main` with a write token and never check
+//! The request uses the trusted PR base; the report uses the default branch.
+//! Both triggers have a write token and never check
 //! out the fork's code. When the label goes on, `request` removes it and opens
 //! a pending `CI gate` request on the head it was added at. When the fork's run
 //! ends, `report` copies its verdict, but only onto a commit with an open
@@ -26,11 +27,7 @@ const FORK_PULL_REQUEST: &str =
 pub fn ci_gate_fork() -> Workflow {
     Workflow::new("CI Gate for Forks")
         .on(Event::default()
-            .pull_request_target(
-                PullRequestTarget::default()
-                    .add_branch("main")
-                    .add_type(PullRequestType::Labeled),
-            )
+            .pull_request_target(PullRequestTarget::default().add_type(PullRequestType::Labeled))
             .workflow_run(
                 WorkflowRun::default()
                     .add_type(WorkflowRunType::Completed)

@@ -5,6 +5,28 @@ fn rendered() -> serde_yaml::Value {
     serde_yaml::from_str(&yaml).expect("PR CI should parse")
 }
 
+#[test]
+fn stacked_pull_requests_can_request_and_receive_a_gate() {
+    for (yaml, event) in [
+        (pr_ci().to_string(), "pull_request"),
+        (
+            crate::workflows::ci_gate_reminder::ci_gate_reminder().to_string(),
+            "pull_request",
+        ),
+        (
+            crate::workflows::ci_gate_fork::ci_gate_fork().to_string(),
+            "pull_request_target",
+        ),
+    ] {
+        let yaml = yaml.expect("gate should render");
+        let workflow: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("gate should parse");
+        let trigger = &workflow["on"][event];
+        assert!(trigger.is_mapping(), "missing {event} trigger");
+        assert!(trigger.get("branches").is_none(), "stacked bases must run");
+        assert!(trigger.get("branches-ignore").is_none());
+    }
+}
+
 /// A called workflow the gate doesn't wait for could fail after the gate passed.
 #[test]
 fn the_gate_waits_for_start_and_every_call() {
