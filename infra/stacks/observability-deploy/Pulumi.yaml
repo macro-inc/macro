@@ -1,3 +1,0 @@
-name: observability-deploy
-runtime: nodejs
-description: The observability deploy workflow's role and smoke-boot resources

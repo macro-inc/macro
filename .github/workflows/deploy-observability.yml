@@ -62,9 +62,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     name: Deploy observability
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=observability-image
-    permissions:
-      contents: read
-      id-token: write
     concurrency:
       group: deploy-observability-prod
       cancel-in-progress: false
@@ -75,7 +72,7 @@ jobs:
     - name: Refuse branches other than main
       run: |
         if [ "$GITHUB_REF" != refs/heads/main ]; then
-          echo "::error::Deploy observability from main; the deploy role trusts only main"
+          echo "::error::Deploy observability from main"
           exit 1
         fi
       shell: bash
@@ -107,12 +104,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
       working-directory: infra/stacks/observability
-    - name: Assume the deploy role
+    - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
       with:
-        role-to-assume: arn:aws:iam::569036502058:role/macro-observability-deploy
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-2
-        role-duration-seconds: '900'
     - id: find
       name: Find this source's image
       run: bun deploy/release.ts find
@@ -132,13 +129,6 @@ jobs:
         du -shL result/*.vhd
       shell: bash
       working-directory: infra/stacks/observability
-    - name: Assume the deploy role to publish
-      if: steps.find.outputs.stage != 'deploy'
-      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
-      with:
-        role-to-assume: arn:aws:iam::569036502058:role/macro-observability-deploy
-        aws-region: us-east-2
-        role-duration-seconds: '7200'
     - id: publish
       name: Publish the AMI
       if: steps.find.outputs.stage == 'build'
@@ -154,12 +144,6 @@ jobs:
       env:
         AMI: ${{ steps.publish.outputs.ami || steps.find.outputs.ami }}
       working-directory: infra/stacks/observability
-    - name: Assume the deploy role to roll out
-      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
-      with:
-        role-to-assume: arn:aws:iam::569036502058:role/macro-observability-deploy
-        aws-region: us-east-2
-        role-duration-seconds: '3600'
     - name: Check the plan and roll out
       run: bun deploy/release.ts deploy
       shell: bash
@@ -167,7 +151,7 @@ jobs:
         AMI: ${{ steps.publish.outputs.ami || steps.find.outputs.ami }}
         DRY_RUN: ${{ inputs.dry_run }}
       working-directory: infra/stacks/observability
-    - name: Remove a smoke host a cancelled run left
+    - name: Remove smoke resources a cancelled run left
       if: always() && steps.find.outputs.stage != '' && steps.find.outputs.stage != 'deploy'
       run: bun deploy/release.ts cleanup
       shell: bash

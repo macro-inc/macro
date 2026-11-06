@@ -21,7 +21,6 @@ use crate::workflows::{runners, steps, vars};
 mod test;
 
 const STACK_DIR: &str = "infra/stacks/observability";
-const DEPLOY_ROLE: &str = "arn:aws:iam::569036502058:role/macro-observability-deploy";
 const CACHE_TAG: &str = "observability-image";
 /// Every step's `if` after `find`: which stage this source's image has reached.
 const STAGE: &str = "steps.find.outputs.stage";
@@ -118,16 +117,17 @@ fn build_image_job() -> Job {
     .add_step(steps::teardown_nix())
 }
 
-fn assume_role(name: &str, seconds: u32) -> Step<Use> {
-    Step::new(name)
+/// The deploy credentials every deploy workflow uses, as in `deploy_web_app`.
+fn aws_credentials() -> Step<Use> {
+    Step::new("Configure AWS credentials")
         .uses(
             "aws-actions",
             "configure-aws-credentials",
             "e7f100cf4c008499ea8adda475de1042d6975c7b",
         )
-        .add_with(("role-to-assume", DEPLOY_ROLE))
+        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
+        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
         .add_with(("aws-region", "us-east-2"))
-        .add_with(("role-duration-seconds", seconds))
 }
 
 fn release(name: &str, command: &str) -> Step<gh_workflow::Run> {
@@ -143,11 +143,6 @@ fn deploy_job() -> Job {
         .cond(Expression::new("github.event_name == 'workflow_dispatch'"))
         .runs_on(runners::Runner::Mid.with_cache_tag(CACHE_TAG))
         .timeout_minutes(180u32)
-        .permissions(Permissions {
-            contents: Some(Level::Read),
-            id_token: Some(Level::Write),
-            ..Default::default()
-        })
         // One rollout at a time, and never cancel one: that could leave the
         // stack mid-replacement. A queued run waits for the running one.
         .concurrency(
@@ -159,7 +154,7 @@ fn deploy_job() -> Job {
             Step::new("Refuse branches other than main")
                 .run(indoc::indoc! {r#"
                     if [ "$GITHUB_REF" != refs/heads/main ]; then
-                      echo "::error::Deploy observability from main; the deploy role trusts only main"
+                      echo "::error::Deploy observability from main"
                       exit 1
                     fi
                 "#})
@@ -185,14 +180,9 @@ fn deploy_job() -> Job {
             )
             .add_env(("GITHUB_TOKEN", "${{ github.token }}")),
         )
-        .add_step(assume_role("Assume the deploy role", 900))
+        .add_step(aws_credentials())
         .add_step(release("Find this source's image", "find").id("find"))
         .add_step(build_image().if_condition(Expression::new(format!("{STAGE} == 'build'"))))
-        // A VM import can take most of an hour.
-        .add_step(
-            assume_role("Assume the deploy role to publish", 7200)
-                .if_condition(Expression::new(format!("{STAGE} != 'deploy'"))),
-        )
         .add_step(
             release("Publish the AMI", "publish")
                 .id("publish")
@@ -204,14 +194,13 @@ fn deploy_job() -> Job {
                 .if_condition(Expression::new(format!("{STAGE} != 'deploy'")))
                 .add_env(("AMI", AMI)),
         )
-        .add_step(assume_role("Assume the deploy role to roll out", 3600))
         .add_step(
             release("Check the plan and roll out", "deploy")
                 .add_env(("AMI", AMI))
                 .add_env(("DRY_RUN", "${{ inputs.dry_run }}")),
         )
         .add_step(
-            release("Remove a smoke host a cancelled run left", "cleanup").if_condition(
+            release("Remove smoke resources a cancelled run left", "cleanup").if_condition(
                 Expression::new(format!("always() && {STAGE} != '' && {STAGE} != 'deploy'")),
             ),
         )

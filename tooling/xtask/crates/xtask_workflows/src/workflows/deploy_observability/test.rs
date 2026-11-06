@@ -63,20 +63,25 @@ fn rollouts_never_overlap_or_cancel() {
 }
 
 #[test]
-fn only_the_deploy_job_can_request_aws_credentials() {
+fn only_the_deploy_job_gets_the_stored_aws_credentials() {
     let root = workflow();
+    // The stored deploy keys, like the other deploy workflows; no OIDC role.
     assert_eq!(root["permissions"]["id-token"].as_str(), None);
-    assert_eq!(
-        root["jobs"]["deploy"]["permissions"]["id-token"].as_str(),
-        Some("write")
-    );
-    let build = yaml();
-    let build_job = build
-        .split("  deploy:")
-        .next()
-        .expect("build job comes first");
-    assert!(!build_job.contains("configure-aws-credentials"));
-    assert!(!build_job.contains("PULUMI_ACCESS_TOKEN"));
+    assert!(root["jobs"]["deploy"]["permissions"].is_null());
+    let text = yaml();
+    let (build_job, deploy_job) = text.split_once("  deploy:").expect("deploy job");
+    for secret in [
+        "AWS_ACCESS_KEY",
+        "AWS_SECRET_ACCESS_KEY",
+        "PULUMI_ACCESS_TOKEN",
+    ] {
+        assert!(
+            !build_job.contains(secret),
+            "the PR build job must not see {secret}"
+        );
+        assert!(deploy_job.contains(secret), "the deploy job needs {secret}");
+    }
+    assert!(!text.contains("role-to-assume"));
 }
 
 #[test]
@@ -90,7 +95,7 @@ fn production_is_touched_only_after_the_smoke_boot() {
         "Publish the AMI",
         "Smoke-boot the AMI on a throwaway host",
         "Check the plan and roll out",
-        "Remove a smoke host a cancelled run left",
+        "Remove smoke resources a cancelled run left",
     ];
     let positions: Vec<usize> = order.iter().map(|name| position(&names, name)).collect();
     assert!(
@@ -101,7 +106,7 @@ fn production_is_touched_only_after_the_smoke_boot() {
     for needle in [
         "DRY_RUN: ${{ inputs.dry_run }}",
         "bun deploy/release.ts deploy",
-        "role-to-assume: arn:aws:iam::569036502058:role/macro-observability-deploy",
+        "aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}",
         "steps.find.outputs.stage == 'build'",
     ] {
         assert!(text.contains(needle), "missing `{needle}`:\n{text}");
