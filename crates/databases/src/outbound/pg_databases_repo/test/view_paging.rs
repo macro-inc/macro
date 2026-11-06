@@ -805,6 +805,79 @@ async fn select_and_entity_pages_preserve_option_rank_membership_and_empty_sets(
     );
 }
 
+/// The generic plan of a membership filter, with every other way into
+/// `entity_properties` removed: a sequential scan means the partial index's
+/// predicate is not implied by the query text.
+async fn membership_plan(pool: &PgPool, table: &QueryTable, test: FilterTest) -> String {
+    let query = database_sql::compile_table_query(
+        table.id,
+        &filtered(table, test),
+        &Catalog {
+            tables: vec![table.clone()],
+            scope: None,
+        },
+    )
+    .unwrap();
+    let sql = crate::outbound::pg_view_rows::query::page(table, &query, None, 500).unwrap();
+    let mut transaction = pool.begin().await.unwrap();
+    sqlx::raw_sql(
+        "DROP INDEX idx_entity_properties_property_definition_id, idx_entity_properties_entity_id; \
+         ALTER TABLE entity_properties DROP CONSTRAINT unique_entity_properties_assignment; \
+         SET LOCAL enable_seqscan = off",
+    )
+    .execute(&mut *transaction)
+    .await
+    .unwrap();
+    let explain = format!("EXPLAIN (GENERIC_PLAN, COSTS OFF) {}", sql.sql());
+    let plan: Vec<String> = sqlx::raw_sql(&explain)
+        .fetch_all(&mut *transaction)
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| sqlx::Row::get(row, 0))
+        .collect();
+    plan.join("\n")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn select_and_entity_membership_filters_use_the_database_row_value_index(pool: PgPool) {
+    use database_sql::catalog::{EntityKind, SelectOption};
+    use models_databases::{OptionId, views::SetOperator};
+    let (mut table, _) = page_fixture(&pool).await;
+    let option = OptionId::from_uuid(Uuid::from_u128(201));
+    table.columns[0].kind = ColumnKind::Select {
+        multi: true,
+        options: vec![SelectOption {
+            id: option,
+            label: "Won".into(),
+        }],
+    };
+    let plan = membership_plan(
+        &pool,
+        &table,
+        FilterTest::Options {
+            operator: SetOperator::HasAny,
+            options: vec![option],
+        },
+    )
+    .await;
+    assert!(plan.contains("idx_ep_database_row_value_gin"), "{plan}");
+    table.columns[0].kind = ColumnKind::Entity {
+        multi: false,
+        target: EntityKind::User,
+    };
+    let plan = membership_plan(
+        &pool,
+        &table,
+        FilterTest::Entities {
+            operator: SetOperator::IsAnyOf,
+            entities: vec!["a".into(), "b".into()],
+        },
+    )
+    .await;
+    assert!(plan.contains("idx_ep_database_row_value_gin"), "{plan}");
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unicode_case_mapping_matches_the_view_engine(pool: PgPool) {
     use models_databases::views::TextOperator;

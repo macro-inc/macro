@@ -48,7 +48,7 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Checks
 
-- `cargo test -p databases --features postgres,inbound,ai_tools,gateway,entity_mutation`
+- `cargo test -p databases --features postgres,inbound,ai_tools,gateway,entity_mutation,view_rows`
   (`SQLX_OFFLINE` unset; needs a migrated local MacroDB).
 
 ## Gotchas
