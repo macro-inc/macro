@@ -198,6 +198,7 @@ fn layout_over(table: &Table) -> FormLayout {
                     required: true,
                     widget: Some(Widget::Paragraph),
                 }],
+                show_when: None,
             },
             FormSection::Gate {
                 id: FormSectionId::new(),
@@ -219,6 +220,7 @@ fn layout_over(table: &Table) -> FormLayout {
                 title: "Empty".into(),
                 description: "".into(),
                 questions: vec![],
+                show_when: None,
             },
         ],
     }
@@ -315,6 +317,7 @@ async fn a_layout_is_replaced_whole_and_a_trashed_forms_is_not(pool: PgPool) {
                     widget: Some(Widget::Short),
                 },
             ],
+            show_when: None,
         }],
     };
     assert_eq!(
@@ -346,6 +349,79 @@ async fn a_layout_is_replaced_whole_and_a_trashed_forms_is_not(pool: PgPool) {
     assert!(repo.forms_by_ids(&[form.id]).await.unwrap().is_empty());
     assert!(repo.restore_form(form.id).await.unwrap());
     assert_eq!(repo.form(form.id).await.unwrap().unwrap().trashed_at, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_sections_show_when_rules_read_back_as_written_and_clear_with_a_replace(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    let first = FormSectionId::new();
+    let branch = FormSectionId::new();
+    let branching = FormLayout {
+        sections: vec![
+            FormSection::Questions {
+                id: first,
+                title: "About you".into(),
+                description: "".into(),
+                questions: vec![QuestionLayout {
+                    id: FormQuestionId::new(),
+                    column: table.first,
+                    help_text: "".into(),
+                    required: true,
+                    widget: None,
+                }],
+                show_when: None,
+            },
+            FormSection::Questions {
+                id: branch,
+                title: "Follow-up".into(),
+                description: "".into(),
+                questions: vec![QuestionLayout {
+                    id: FormQuestionId::new(),
+                    column: table.second,
+                    help_text: "".into(),
+                    required: true,
+                    widget: None,
+                }],
+                show_when: Some(FilterGroup {
+                    conjunction: Conjunction::Or,
+                    conditions: vec![FilterNode::Condition(FilterCondition {
+                        column: table.first,
+                        test: FilterTest::Presence {
+                            operator: PresenceOperator::IsNotEmpty,
+                        },
+                    })],
+                }),
+            },
+        ],
+    };
+    repo.create_form(&form, &branching, false).await.unwrap();
+
+    assert_eq!(repo.layout(form.id).await.unwrap(), branching);
+
+    let mut always_shown = branching.clone();
+    let FormSection::Questions { show_when, .. } = &mut always_shown.sections[1] else {
+        panic!("the second section asks questions");
+    };
+    *show_when = None;
+    repo.replace_layout(form.id, &always_shown, at(10), None)
+        .await
+        .unwrap();
+
+    assert_eq!(repo.layout(form.id).await.unwrap(), always_shown);
+    // Only a questions section is ever shown conditionally.
+    let gate_with_show_when = sqlx::query!(
+        r#"
+        INSERT INTO form_sections (id, form_id, position, kind, gate_rules, show_when)
+        VALUES ($1, $2, 'z', 'gate', '{}'::jsonb, '{}'::jsonb)
+        "#,
+        Uuid::now_v7(),
+        form.id.into_uuid(),
+    )
+    .execute(&pool)
+    .await;
+    assert!(gate_with_show_when.is_err());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

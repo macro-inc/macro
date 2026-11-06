@@ -50,6 +50,14 @@ While the email list itself has focus, `Tab` moves browser focus instead; use
 `g i` or `g o`. Calendar mail remains available through the calendar filter and
 existing Calendar route. Mobile keeps its original tabs and order, including
 separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
+The top of Signal shows a pinned **Learn how to use Macro Mail** row
+(`TutorialRow` from `features/video-tutorials`, shared by every block). Clicking it opens the tutorial video in a dialog at 80% of
+the window (a bottom sheet on phones) that never autoplays: the play pill
+(play disc, then the presenter's photo and name over "Watch demo · 1:27")
+starts it and brings up the native controls. When it ends, the last frame dims under a shelf, "More videos from Macro", of the other tutorials (each block's nav icon on a pastel tile with its length); a card switches the dialog to that video, paused, and Replay or a click on the frame restarts it. Under the video, three Macro team faces (stacked like a block's live viewers) and "Have questions about Macro Mail? **Talk to us in your support channel →**" open the person's own `Macro Support x …` channel and close the dialog; the line is left out when they own no such channel. The row's X (on hover, always on
+touch) hides it on that device for good (`localStorage`
+`email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
+keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
@@ -65,7 +73,24 @@ view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, and `N`/`P` step
-messages like the arrows. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+messages like the arrows. `B` in an open thread, or `Create event` in its
+title menu, opens the event composer with the subject as the title and every
+From, To and Cc address except the viewer's as guests (Bcc and drafts are left
+out); both are hidden while the calendar is off. With `enable-universal-input`
+on, the composer also sends the subject and latest message to
+`/universal_input/extract` (`intent: 'calendar'`, the Cmd+K event extractor)
+and, while a small spinner shows left of Cancel (left of Create event on phones),
+fills in
+the suggested title, time, location and repeat rule. Suggestions that arrive after
+any edit are dropped. The desktop reply and standalone composers have the same
+action as a calendar button between attach and the schedule clock (tooltip
+`Create event` and `B`; in the standalone composer `B` works while focus is
+outside the editor, as in a reply it works from the thread). It uses the draft instead: subject, To
+and Cc as guests, and the written text (with the replied-to message in a
+reply) for extraction. The button is accented while the written text, above
+any quoted thread, pairs a meeting word with a time (`proposesMeeting` in
+`email-compose/core/meeting-intent.ts`, a keyword heuristic until a classifier
+replaces it). `Cmd+Up`/`Cmd+Down` jump to either end of a list.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
@@ -151,6 +176,14 @@ query: load more threads from the same address, then check that existing row
 names and their hover cards do not change. Repeat with a text query to exercise
 the search-service results.
 
+Hovering a sender's name in a Mail row or a collapsed thread message shows the
+sender's card. Clicking the name, or anywhere else on the row, opens that email
+or message; clicking inside the card (its actions, padding, or name) never
+opens the row underneath. On touch, tapping a collapsed message's sender
+picture opens the message. The backend-free desktop/phone regression is
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`
+from `apps/web`.
+
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
 Signal, Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
@@ -161,24 +194,65 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs and the mobile pills. It lists signal
+desktop Inbox tabs and the mobile pills. It lists inbox
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
-linked to the account, by priority: the importance score halved for every 2 days
-since the thread's latest inbound mail. Rows at least 32rem wide show the 0-100
-importance score with a five-bar meter just before the date, and from 56rem also
-`Reply needed` and `Follow up` tag pills ahead of it. Narrower rows drop both;
-without a touch screen the score moves before the subject, and touch screens
-show neither. The desktop header's sort dropdown (`Sort Focus`, among the view
-options) switches between **Priority**,
-**Importance** and **Most recent**; touch layouts have no dropdown and keep the
-saved order (Priority by default). The filter menu adds a Focus group (Reply
+linked to the account, newest first by the thread's latest message in either
+direction, so a thread the owner replied to last sorts and dates by that reply.
+Day headers group the list and stay pinned while it scrolls: Today, Yesterday,
+the weekday for the rest of the last week, then the date. These are Focus's own
+(`focusDateBucket`); Signal keeps the shared date sections, drops a leading
+Today, and does not pin. Key
+mail stays in whatever its score: mail waiting on the owner's reply, and mail from
+someone the owner wrote to in the last 90 days, unless it reads as outreach or
+automated. A calendar change (a reschedule, update, cancellation or proposed new
+time) stays in until its event is over, or for 7 days after the notice when it is a
+recurring event or no time can be read, and is the only mail with the Calendar
+category in Focus. New invites and RSVP notices stay out. A calendar notice counts
+only as the thread's latest message: once anyone writes after it, the thread takes
+the same rules as any other. A thread the owner answered last joins 3 days after
+their message, unless that message only closes the exchange ("Thanks!"). `Follow up`
+marks only threads whose
+latest message is the owner's, and `Reply needed` only threads whose latest message
+is someone else's. A thread holding only the owner's sent mail is not listed: it
+has no inbox state, so Mark Done could not remove it. Each row says why it is
+there with one tag pill: `Reply needed`, else `Follow up`, else its category as
+`Calendar change`, `Customer`, `Teammate` or `Contact`; other categories show no
+pill. When a thread's mail names an open deadline, a second pill beside it says
+when: `Due today`, `Due tomorrow`, a weekday for the week ahead (`Due Fri`), or a
+date (`Due Nov 12`), on either sort, with the full date in its tooltip. A date
+before the viewer's local today reads `Overdue` with a warning dot and border. A
+thread classified before due dates shipped shows none until new mail arrives, and
+mail naming no firm date shows none. Every row also shows the 0-100 score and five
+bars colored by band, red through green, on either sort, except on phones (touch
+and under 640px), which leave it out so the reason and due date fit. The meter's
+tooltip and label add `rising` or `falling` while a thread's
+importance is moving: Jev judges per thread whether it gets more pressing or matters
+less as it sits, and the read moves the score from the time of its classified
+message until newer mail arrives. Threads classified before those questions stay
+flat until their next message. Rows at least 45rem wide keep all of it just before
+the date. Narrower Focus rows stack, on touch too, with the subject on its own line
+and all of it ahead of the preview, so a narrow desktop window still shows the
+meter. The desktop
+header's sort dropdown (`Sort Focus`, among the view options) switches between
+**Most recent**, the default, and **Importance**, which
+is flat with no day headers. Touch layouts, phone or tablet, have no dropdown and
+keep the saved order: Most recent, unless that browser had already saved
+Importance. A saved order
+that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
-list is one `user.emailFocus` GraphQL read filtered on the client; it refreshes
-on open, not live. Mark Done hides the row at once and archives the thread; Undo
-brings it back. The worker classifies only inboxes on its
-`FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so other accounts see the empty state
-`Nothing needs you`.
+list is one `user.emailFocus` GraphQL read filtered on the client. New mail
+reaches an open Focus tab within seconds: when the worker stores a
+classification it pushes `refresh_email` (`focus_updated`) to the inbox's owner
+and delegates, and the tab reads the list again without a reload. A hidden tab
+reads once when it next shows, and any other tab reads when Focus opens. Time
+passing stores nothing and pushes nothing, so a follow-up coming due, a
+calendar change whose event ends or importance moving shows at the tab's next
+read. Mark
+Done hides the row at once and archives the thread; Undo brings it back. The
+worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS` allowlist, so
+other accounts see the empty state `You're caught up`, whose **See the rest of
+your inbox** opens Signal.
 
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
@@ -588,6 +662,15 @@ Opening a saved draft from **Drafts** shows the title menu beside Back, since
 the composer has no subject line above it, and keeps the applicable header
 controls. Verify these remain
 available when returning to Drafts and reopening the draft.
+On desktop a new email opens inside the Email view at `/app/mail/new`, from
+Email's **New**, the app's New menu, a `mailto:` link, a calendar event's
+guest email, or the agent's send-email card: the composer takes the list's
+place beside the Email sidebar, and the reading pane folds away while it is
+open. Its Back arrow returns to the list. Replies stay in their thread. Touch
+keeps the full-screen composer. Check with the reading pane on and off that
+the sidebar stays usable while composing, that Back and sidebar tabs return
+to the list without the draft in its URL, that reloading keeps the draft, and
+that a second **New** starts an empty composer.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
 **Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
@@ -614,6 +697,21 @@ scrolls it into view, and briefly highlights it. For navigation regressions,
 exercise both a recent message and one outside the first page. Open another
 target while loading or highlighting: the previous request must not scroll the
 new thread or clear its highlight. Closing the split cancels pending positioning.
+### Sharing a thread
+
+The thread's **Share** dialog forwards it to people or channels at **Can edit**
+by default; its access dropdown also offers **Can view**, and the People tab
+changes an existing recipient between the two. Edit lets a recipient reply:
+they get Reply, Reply all, and the inline reply box, sending from an inbox of
+their own (their primary unless they pick another in From), never the owner's.
+Forward stays with the owner, since it re-sends attachments held in the
+owner's inbox. The reply starts a thread in their inbox and threads under the original
+for every other participant through `In-Reply-To`/`References`; the owner's
+thread is untouched. View recipients read without a reply box, and only the
+owner keeps tags and side-panel edits. To verify, share a thread from one
+account at each level, open it from a second account under Shared, reply at
+edit, and check the reply arrives in the first account's conversation.
+
 The load gate and message body share one live thread source in both hosts. Cached
 body rendering should not wait for a second thread fetch, optional References,
 or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown;
@@ -840,6 +938,12 @@ edit, an attachment upload completing during another local save, and Discard
 while an attachment snapshot is still being saved. A snapshot based on an older
 local revision must fail without replacing newer content or files, including
 when another tab saves first. Reopen the draft to use the latest version.
+Then open one reply in two tabs, type in the first, wait for its queued save to
+reach the server, and send from the second. The first tab's composer must clear
+without "Your newer text was kept as a new draft", Drafts must not gain a copy
+of the sent reply, and the thread must not reopen it as a draft. Text typed
+after the server last acknowledged the draft is still kept as a new draft;
+each such move logs `email_draft.kept_as_new` with its reason.
 A completed discard must not resurrect on reload. A clean,
 fully synchronized local copy must not hide newer server edits or sent state.
 While online, create a disposable reply, wait for its server identity, discard

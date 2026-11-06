@@ -1181,6 +1181,13 @@ impl<E: SoupEntityEdges> GraphqlSoupDatabaseRow<E> {
 /// GraphQL agent session entity.
 pub struct GraphqlSoupAgentSession<E: SoupEntityEdges>(SoupAgentSession<()>, E, Option<f64>);
 
+impl<E: SoupEntityEdges> GraphqlSoupAgentSession<E> {
+    /// Whether the session is archived, for adapters that must not return archived sessions.
+    pub fn archived(&self) -> bool {
+        self.0.archived_by.is_some()
+    }
+}
+
 /// Last synchronized state of a session's linked GitHub pull request.
 #[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
 pub enum GraphqlAgentPullRequestState {

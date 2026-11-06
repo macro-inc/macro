@@ -7,9 +7,8 @@
 		".": "./src/index.ts"
 	},
 	"scripts": {
-		"generate": "bun scripts/generate.ts",
-		"check:generated": "bun scripts/generate.ts --check",
-		"test": "bun run check:generated && vitest run",
+		"generate": "bun scripts/generate.ts dist",
+		"test": "bun run generate && vitest run",
 		"type-check": "tsc --noEmit --project tsconfig.json"
 	},
 	"dependencies": {

@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
+use crate::domain::code_check::{CodeCheckError, StarterRoutine};
+use crate::domain::code_upgrade::CodeUpgrade;
+use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    AlreadyRunningError, InProgressExecution, LastRun, ListedAction, OwnerNotUserError, Schedule,
+    AlreadyRunningError, InProgressExecution, ListedAction, OwnerNotUserError, Schedule,
     ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
@@ -23,7 +26,7 @@ use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners, OwnedPurgeOutcome};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    UserOnly, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -52,10 +55,10 @@ pub struct ScheduledActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub timezone: Option<Tz>,
-    /// The latest finished run. Present only in lists, and only once the
-    /// routine has finished a run.
+    /// The latest finished run, with what each step did. Present only in
+    /// lists, and only once the routine has finished a run.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_run: Option<LastRun>,
+    pub last_run: Option<ActionExecutionRecord>,
 }
 
 impl From<ScheduledAction> for ScheduledActionResponse {
@@ -179,6 +182,14 @@ where
         .route(
             "/scheduled-actions/{id}/history",
             get(list_history::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/code-upgrades",
+            get(list_code_upgrades::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/code/starters",
+            get(code_starters::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -537,6 +548,60 @@ where
     Ok(Json(records))
 }
 
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}/code-upgrades",
+    tag = "scheduled actions",
+    operation_id = "list_scheduled_action_code_upgrades",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = Vec<CodeUpgrade>, description = "How the routine's code steps were brought to new SDKs, newest first"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn list_code_upgrades<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let upgrades = state
+        .service
+        .get_code_upgrades(entity_access_receipt)
+        .await?;
+    Ok(Json(upgrades))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/code/starters",
+    tag = "scheduled actions",
+    operation_id = "routine_code_starters",
+    responses(
+        (status = 200, body = Vec<StarterRoutine>, description = "Starter routines whose step is code; empty where code steps aren't available"),
+        (status = 401, body = String),
+    )
+)]
+pub async fn code_starters<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    _user: MacroAuthorizationExtractor<Auth, UserOnly>,
+) -> Json<Vec<StarterRoutine>>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    Json(state.service.code_starters())
+}
+
 pub enum ScheduledActionApiError {
     InvalidRequest(JsonRejection),
     Service(anyhow::Error),
@@ -573,20 +638,32 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::InvalidAppearance(_)
-                | ActionPolicyError::GithubNotLinked => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::GithubNotLinked
+                | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(draft) = error.downcast_ref::<InvalidDraft>() {
+            return (StatusCode::BAD_REQUEST, draft.to_string()).into_response();
+        }
+        if let Some(code) = error.downcast_ref::<CodeCheckError>() {
+            let status = match code {
+                CodeCheckError::DoesNotCheck { .. } => StatusCode::BAD_REQUEST,
+                CodeCheckError::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            };
+            return (status, code.to_string()).into_response();
         }
         if let Some(input) = error.downcast_ref::<TemplateInputError>() {
             return (StatusCode::BAD_REQUEST, input.to_string()).into_response();
         }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {
-                TargetValidationError::InvalidTask | TargetValidationError::SessionsUnavailable => {
-                    StatusCode::BAD_REQUEST
-                }
+                TargetValidationError::InvalidTask
+                | TargetValidationError::InvalidProgram(_)
+                | TargetValidationError::SessionsUnavailable => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
-                | TargetValidationError::ExplicitAppsRequired => StatusCode::CONFLICT,
+                | TargetValidationError::ExplicitAppsRequired
+                | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,
             };
             return (status, validation.to_string()).into_response();
         }

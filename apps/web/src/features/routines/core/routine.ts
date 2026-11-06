@@ -1,5 +1,6 @@
 import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ScheduleDraft } from './draft';
+import type { HistoryRecord } from './history';
 
 /** The editor's view of a routine, independent of scheduled-action wire fields. */
 export type RoutineSnapshot = {
@@ -11,11 +12,11 @@ export type RoutineSnapshot = {
   enabled: boolean;
   nextRunAt?: string | null;
   claimedAt?: string | null;
-  /** Whether the latest finished run failed; unknown outside the list. */
-  lastRunFailed?: boolean;
   revision: number;
   configurationKey: string;
   draft?: ScheduleDraft;
   /** The shared template this routine was activated from. */
   templateId?: string;
+  /** Its latest run, where the list carries one. */
+  lastRun?: HistoryRecord;
 };

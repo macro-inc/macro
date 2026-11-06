@@ -16,6 +16,13 @@ use crate::{
     outbound,
     service::{self, s3::S3},
 };
+use account_manager::{
+    domain::service::AccountManagerServiceImpl,
+    inbound::axum_router::AccountManagerRouterState,
+    outbound::{
+        dm_delivery::DmAccountManagerDelivery, pg_account_manager_repo::PgAccountManagerRepo,
+    },
+};
 use agent_session_realtime::{
     domain::service::AgentSessionLogConsumerService,
     outbound::redis_stream::consumer::RedisLogStreamConsumer,
@@ -58,9 +65,10 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
+        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
@@ -130,10 +138,9 @@ use macro_authorization::{
 };
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-#[cfg(feature = "delete_document_worker")]
-use macro_service_urls::AiEditingWorkerUrl;
 use macro_service_urls::{
-    ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl,
+    SyncServiceUrl,
 };
 use macro_sha_count_client::Redis;
 use notification::domain::service::{
@@ -198,6 +205,8 @@ use user_api_key::{
 const SOUP_CONSUMER_RESTART_MAX_DELAY_SECS: u64 = 60;
 const SOUP_CONSUMER_RESTART_ALERT_THRESHOLD: u32 = 5;
 
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
 fn soup_consumer_restart_delay(consecutive_failures: u32) -> Duration {
     let exponent = consecutive_failures.saturating_sub(1).min(6);
     Duration::from_secs((1_u64 << exponent).min(SOUP_CONSUMER_RESTART_MAX_DELAY_SECS))
@@ -209,7 +218,12 @@ maybe_env_vars! {
 }
 
 /// Build the service from the environment and serve until shutdown.
-pub async fn run() -> anyhow::Result<()> {
+// Not a `pub async fn`: see CS-73.
+pub fn run() -> impl Future<Output = anyhow::Result<()>> {
+    run_server()
+}
+
+async fn run_server() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -408,6 +422,12 @@ pub async fn run() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
     let email_service = EmailServiceImpl::new(
         EmailPgRepo::new(db.clone()),
         frecency_service.clone(),
@@ -430,6 +450,10 @@ pub async fn run() -> anyhow::Result<()> {
                 macro_service_urls::AuthServiceUrl::new()?.to_string(),
             )),
         ),
+    ))
+    .with_shared_thread_replies(email::outbound::EntityAccessSharedThreadReplies::new(
+        db.clone(),
+        (*entity_access_service).clone(),
     ))
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
@@ -469,12 +493,6 @@ pub async fn run() -> anyhow::Result<()> {
             realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
         });
     tracing::trace!("initialized notification ingress service");
-
-    let entity_access_service = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
-        ),
-    );
 
     let permission_checker = PermissionServiceImpl::new(db.clone(), entity_access_service.clone());
     let notification_service = NotificationServiceImpl::new(
@@ -866,11 +884,34 @@ pub async fn run() -> anyhow::Result<()> {
     };
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
-    let call_service = Arc::new(
-        call_service_builder
-            .with_voice_repo(PgVoiceRepo::new(db.clone()))
-            .with_event_broker(macro_event_broker.clone()),
+    let call_root_poster = call::outbound::channel_threads::LateCallRootPoster::default();
+    let call_service_builder = call_service_builder
+        .with_voice_repo(PgVoiceRepo::new(db.clone()))
+        .with_event_broker(macro_event_broker.clone());
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        // Flag evaluation is on the call-start path; fall back promptly.
+        Duration::from_millis(300),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
+        call::outbound::channel_threads::FlaggedChannelThreads::new(
+            flags.clone(),
+            call_root_poster.clone(),
+        ),
+    ));
+    let call_service_builder = call_service_builder.with_programmatic_call_gate(
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
     );
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
+    let call_service = Arc::new(call_service_builder.with_start_limiter(
+        call::inbound::axum_router::RateLimitedCallStarts(call_public_rate_limiter.clone()),
+    ));
 
     consumer_tracker.spawn({
         let service = call_service.clone();
@@ -891,11 +932,6 @@ pub async fn run() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
-    let call_public_rate_limiter = RateLimitServiceImpl {
-        repo: RedisRateLimitAdapter {
-            redis: redis_client.clone(),
-        },
-    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
@@ -1221,7 +1257,12 @@ pub async fn run() -> anyhow::Result<()> {
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
-        NotificationChannelSender::new(notification_ingress_service.clone()),
+        NotificationChannelSender::new(notification_ingress_service.clone()).with_completion(
+            NotificationReaderCompletion::new(
+                graphql_notification_reader.clone(),
+                Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
+            ),
+        ),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_macro_event_broker(macro_event_broker.clone());
@@ -1322,6 +1363,10 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    let call_roots: Arc<dyn messages::domain::api::CallRootPoster> = message_service.clone();
+    if call_root_poster.set(call_roots).is_err() {
+        tracing::error!("the call root poster was set twice");
+    }
     let guest_chat_service = Arc::new(
         messages::domain::service::guest_chat::GuestChatService::new(
             message_service.clone(),
@@ -1426,6 +1471,34 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
+    // Document AI edits over HTTP share the channel agent's admission.
+    let document_editing_worker = Arc::new(
+        documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+            AiEditingWorkerUrl::new()?.to_string(),
+        ),
+    );
+    let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
+        document_editing_worker.clone(),
+        admission.clone(),
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+    ));
+    // The file-document routes read and write what the matching AI tools do.
+    let document_files = Arc::new(
+        documents_hex::outbound::s3_document_files::S3DocumentFiles::new(
+            db.clone(),
+            macro_aws_config::s3_client().await,
+            config.document_storage_bucket.to_string(),
+        ),
+    );
+    let word_documents = Arc::new(
+        documents_hex::domain::word_document::WordDocumentService::new(
+            document_service.clone(),
+            document_editing_worker,
+            sync_service_client.clone(),
+            document_files.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        ),
+    );
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
@@ -1932,6 +2005,15 @@ pub async fn run() -> anyhow::Result<()> {
         favorites_service.clone(),
         entity_access_service.clone(),
     ));
+    let account_manager_service = Arc::new(AccountManagerServiceImpl::new(
+        PgAccountManagerRepo::new(db.clone()),
+        DmAccountManagerDelivery::new(
+            channels_service.clone(),
+            message_commands.clone(),
+            entity_access_service.clone(),
+            macro_service_urls::AppServiceUrl::new()?,
+        ),
+    ));
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
         db.clone(),
     )));
@@ -2120,31 +2202,72 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service.clone(),
     ));
 
-    // Home's work feed: Soup candidates over the replica, notification
-    // acknowledgement on the primary, and live updates recomputed from the
-    // viewer's notification, activity and Soup streams. Done publishes a
-    // viewer-addressed Soup patch so the viewer's other sessions recompute
-    // too: GraphQL notification writes publish no realtime update.
-    let graphql_work_feed_context = complete_graph::WorkFeedGraphqlContext::new(
-        work_feed::domain::service::WorkFeedServiceImpl::new(
-            work_feed::outbound::source::SoupWorkFeedSource::new(
-                soup_service.clone(),
-                Arc::new(email_service.clone()),
-            ),
-            work_feed::outbound::notifications::ReaderWorkFeedNotifications::new(
-                graphql_notification_reader.clone(),
-            ),
-            work_feed::outbound::mail::EmailWorkFeedMail::new(Arc::new(email_service.clone())),
-            work_feed::outbound::signals::SoupRealtimeWorkFeedSignals::new(
-                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
-            ),
-        ),
-        work_feed::outbound::triggers::RealtimeWorkFeedTriggers::new(
+    // Attention feeds (Home's work feed and the notifications inbox) share
+    // one feed layer and these adapters: Soup
+    // candidates over the replica, notification acknowledgement on the
+    // primary, and live updates recomputed from the viewer's notification,
+    // activity and Soup streams. Done publishes a viewer-addressed Soup patch
+    // so the viewer's other sessions recompute too: GraphQL notification
+    // writes publish no realtime update.
+    let feed_triggers: Arc<dyn attention_feed::domain::ports::FeedTriggers> = Arc::new(
+        attention_feed::outbound::triggers::RealtimeFeedTriggers::new(
             websocket_notification_consumer_service.clone(),
             activity_realtime_service.clone(),
             soup_realtime_service.clone(),
         ),
-        complete_graph::EntityAccessWorkFeedViewers(entity_access_service.clone()),
+    );
+    let feed_viewers: Arc<dyn attention_feed::inbound::viewers::FeedViewerResolver> = Arc::new(
+        attention_feed::inbound::viewers::EntityAccessFeedViewers(entity_access_service.clone()),
+    );
+    // Reads the primary: a client refetches right after the change it heard about.
+    let graphql_registered_work_context = complete_graph::RegisteredWorkGraphqlContext::new(
+        agent_session::domain::work_registration::WorkRegistrationService::new(
+            agent_session::outbound::postgres::PgAgentSessionRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            ),
+            Arc::new(
+                agent_session::domain::audience::EntityAccessSessionView::new(
+                    entity_access_service.as_ref().clone(),
+                ),
+            ),
+            agent_session::domain::work_registration::NoWorkRegistrationSignal,
+        ),
+        soup_realtime_service.clone(),
+    );
+    let graphql_work_feed_context = complete_graph::WorkFeedGraphqlContext::new(
+        work_feed::domain::service::WorkFeedServiceImpl::new(
+            attention_feed::outbound::soup::SoupCandidateSource::new(
+                soup_service.clone(),
+                Arc::new(email_service.clone()),
+            ),
+            attention_feed::outbound::notifications::ReaderFeedNotifications::new(
+                graphql_notification_reader.clone(),
+            ),
+            attention_feed::outbound::mail::EmailFeedMail::new(Arc::new(email_service.clone())),
+            attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
+                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+            ),
+        ),
+        feed_triggers.clone(),
+        feed_viewers.clone(),
+    );
+    let graphql_notification_inbox_context = complete_graph::NotificationInboxGraphqlContext::new(
+        notification_inbox::domain::service::NotificationInboxServiceImpl::new(
+            attention_feed::outbound::soup::SoupCandidateSource::new(
+                soup_service.clone(),
+                Arc::new(email_service.clone()),
+            ),
+            attention_feed::outbound::notifications::ReaderFeedNotifications::new(
+                graphql_notification_reader.clone(),
+            ),
+            attention_feed::outbound::mail::EmailFeedMail::new(Arc::new(email_service.clone())),
+            attention_feed::outbound::signals::SoupRealtimeFeedSignals::new(
+                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+            ),
+        ),
+        feed_triggers,
+        feed_viewers,
     );
 
     let sync_sessions =
@@ -2153,6 +2276,8 @@ pub async fn run() -> anyhow::Result<()> {
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,
+        graphql_registered_work_context,
+        graphql_notification_inbox_context,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
@@ -2175,6 +2300,10 @@ pub async fn run() -> anyhow::Result<()> {
                 db.clone(),
             ))),
             entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        account_manager_state: AccountManagerRouterState::new(
+            account_manager_service,
             authorization_state.clone(),
         ),
         user_api_key_state: UserApiKeyRouterState::new(
@@ -2344,6 +2473,22 @@ pub async fn run() -> anyhow::Result<()> {
             task_dedup_service,
             lexical_client: lexical_client.clone(),
             creator: document_creator,
+            ai_editing: document_ai_editing,
+            presentations: Arc::new(
+                documents_hex::domain::presentation::PresentationService::new(
+                    document_files.clone(),
+                ),
+            ),
+            word_documents,
+            designs: Arc::new(documents_hex::domain::design::DesignService::new(
+                document_files.clone(),
+            )),
+            photoshop_documents: Arc::new(documents_hex::domain::photoshop::PhotoshopService::new(
+                document_files.clone(),
+            )),
+            illustrator_documents: Arc::new(
+                documents_hex::domain::illustrator::IllustratorService::new(document_files),
+            ),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
             non_user_owners,
         },

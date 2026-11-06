@@ -20,9 +20,15 @@ use tokio_util::{
 };
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
-const SDK: &str = include_str!("deno/sdk.mjs");
-const HANDLEBARS: &str = include_str!("deno/handlebars.mjs");
 const TIMERS: &str = include_str!("deno/timers.mjs");
+/// Node timer and worker modules resolve to timers.mjs, which refuses to
+/// sleep; see bootstrap.mjs.
+const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#;
+/// An unattended program's requests go through the bootstrap's `fetch`, where
+/// a dry run holds back writes, so the Node modules that open their own
+/// connections or threads resolve to a module that doesn't exist. Timers
+/// refuse to sleep, as above.
+const UNATTENDED_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs"}}"#;
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
 
@@ -46,21 +52,9 @@ impl DenoRunner {
                 "Deno heap must be between 32 and 1024 MiB"
             ));
         }
-        let binary = tokio::fs::canonicalize(binary).await?;
+        let binary = pinned_deno(binary).await?;
         tokio::fs::create_dir_all(&scratch).await?;
         let scratch = tokio::fs::canonicalize(scratch).await?;
-        let mut command = Command::new(&binary);
-        command.arg("--version").env_clear().kill_on_drop(true);
-        let output =
-            tokio::time::timeout(std::time::Duration::from_secs(5), command.output()).await??;
-        if !output.status.success()
-            || !String::from_utf8_lossy(&output.stdout)
-                .starts_with(&format!("deno {DENO_VERSION} "))
-        {
-            return Err(rootcause::report!(
-                "code execution requires Deno {DENO_VERSION}"
-            ));
-        }
         Ok(Self {
             binary,
             scratch,
@@ -103,17 +97,23 @@ impl DenoRunner {
                 .await
                 .map_err(internal)?;
         }
-        tokio::fs::write(root.join("main.mjs"), &job.request.source)
+        // An unattended program is TypeScript; Deno strips its types on load.
+        let program = if job.environment.unattended.is_some() {
+            "main.ts"
+        } else {
+            "main.mjs"
+        };
+        tokio::fs::write(root.join(program), &job.request.source)
             .await
             .map_err(internal)?;
         let bootstrap = root.join("bootstrap.mjs");
         tokio::fs::write(&bootstrap, BOOTSTRAP)
             .await
             .map_err(internal)?;
-        tokio::fs::write(root.join("sdk.mjs"), SDK)
+        tokio::fs::write(root.join("sdk.mjs"), code_mode_assets::SDK)
             .await
             .map_err(internal)?;
-        tokio::fs::write(root.join("handlebars.mjs"), HANDLEBARS)
+        tokio::fs::write(root.join("handlebars.mjs"), code_mode_assets::HANDLEBARS)
             .await
             .map_err(internal)?;
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
@@ -121,7 +121,11 @@ impl DenoRunner {
             .map_err(internal)?;
         tokio::fs::write(
             root.join("imports.json"),
-            r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#,
+            if job.environment.unattended.is_some() {
+                UNATTENDED_IMPORTS
+            } else {
+                IMPORTS
+            },
         )
         .await
         .map_err(internal)?;
@@ -175,13 +179,29 @@ impl DenoRunner {
             .arg(&bootstrap)
             .spawn()
             .map_err(internal)?;
+        if let Err(error) = limit(&child, &job.limits) {
+            reap(&mut child).await;
+            return Err(error);
+        }
         let stdin = child.stdin.take().expect("piped child stdin");
         let stdout = child.stdout.take().expect("piped child stdout");
         let stderr = child.stderr.take().expect("piped child stderr");
         let execution = async {
             let candidate =
                 bridge(&job.environment, stdin, stdout, stderr, events, &job.limits).await?;
+            // Both streams have closed, so the process is exiting.
             let status = child.wait().await.map_err(internal)?;
+            if std::os::unix::process::ExitStatusExt::signal(&status)
+                == Some(rustix::process::Signal::XCPU.as_raw())
+            {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Limit,
+                    "the program used up its CPU time",
+                ));
+            }
+            let candidate = candidate.ok_or_else(|| {
+                ExecutionFailure::new(FailureCode::Runtime, "Deno exited without a result")
+            })?;
             if !status.success() {
                 return Err(ExecutionFailure::new(
                     FailureCode::Runtime,
@@ -203,6 +223,23 @@ impl DenoRunner {
     }
 }
 
+/// The canonical path of `binary`, once it has proved to be the pinned Deno.
+async fn pinned_deno(binary: PathBuf) -> Result<PathBuf, rootcause::Report> {
+    let binary = tokio::fs::canonicalize(binary).await?;
+    let mut command = Command::new(&binary);
+    command.arg("--version").env_clear().kill_on_drop(true);
+    let output =
+        tokio::time::timeout(std::time::Duration::from_secs(5), command.output()).await??;
+    if !output.status.success()
+        || !String::from_utf8_lossy(&output.stdout).starts_with(&format!("deno {DENO_VERSION} "))
+    {
+        return Err(rootcause::report!(
+            "code execution requires Deno {DENO_VERSION}"
+        ));
+    }
+    Ok(binary)
+}
+
 #[async_trait]
 impl CodeRunner for DenoRunner {
     async fn run(
@@ -216,6 +253,36 @@ impl CodeRunner for DenoRunner {
             .unwrap_or_else(Outcome::from)
     }
 }
+
+/// Apply the per-process limits to a child that has just started.
+fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
+    let pid = child
+        .id()
+        .and_then(|id| i32::try_from(id).ok())
+        .and_then(rustix::process::Pid::from_raw)
+        .ok_or_else(|| internal("child has no pid"))?;
+    if let Some(cpu) = limits.max_cpu {
+        // The soft limit sends SIGXCPU, which stops Deno; the hard limit a
+        // second later is the kernel's SIGKILL backstop.
+        let seconds = cpu.as_secs();
+        rustix::process::prlimit(
+            Some(pid),
+            rustix::process::Resource::Cpu,
+            rustix::process::Rlimit {
+                current: Some(seconds),
+                maximum: Some(seconds + 1),
+            },
+        )
+        .map_err(internal)?;
+    }
+    if limits.background {
+        rustix::process::setpriority_process(Some(pid), BACKGROUND_NICENESS).map_err(internal)?;
+    }
+    Ok(())
+}
+
+/// Niceness of background programs: below the host, above idle work.
+const BACKGROUND_NICENESS: i32 = 10;
 
 async fn reap(child: &mut Child) {
     let _ = child.start_kill();
@@ -234,7 +301,31 @@ struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
     max_result_bytes: usize,
+    /// For an unattended program, the catalog a dry run tells reads from
+    /// writes with, both for SDK operations and the requests they send.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    operations: Option<&'static [CatalogEntry]>,
 }
+
+#[derive(Serialize)]
+struct CatalogEntry {
+    key: &'static str,
+    method: &'static str,
+    path: &'static str,
+    write: bool,
+}
+
+static CATALOG: std::sync::LazyLock<Vec<CatalogEntry>> = std::sync::LazyLock::new(|| {
+    operations()
+        .iter()
+        .map(|(key, operation)| CatalogEntry {
+            key,
+            method: &operation.method,
+            path: &operation.path,
+            write: operation.write,
+        })
+        .collect()
+});
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -264,10 +355,11 @@ async fn bridge(
     stderr: tokio::process::ChildStderr,
     events: &mut EventSink,
     limits: &Limits,
-) -> Result<Outcome, ExecutionFailure> {
+) -> Result<Option<Outcome>, ExecutionFailure> {
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         max_result_bytes: limits.max_result_bytes,
+        operations: environment.unattended.as_ref().map(|_| CATALOG.as_slice()),
     })
     .map_err(internal)?;
     initial.push(b'\n');
@@ -292,7 +384,7 @@ async fn bridge(
     let mut outcome = None;
     while stdout_open || stderr_open {
         tokio::select! {
-            _ = events.closed() => return Ok(Outcome::Cancelled),
+            _ = events.closed() => return Ok(Some(Outcome::Cancelled)),
             line = stdout.next(), if stdout_open => {
                 let Some(line) = line else { stdout_open = false; continue };
                 let raw = bounded_line(frame_line(line, limits.max_frame_bytes)?, &mut remaining_total)?;
@@ -327,8 +419,7 @@ async fn bridge(
             }
         }
     }
-    outcome
-        .ok_or_else(|| ExecutionFailure::new(FailureCode::Runtime, "Deno exited without a result"))
+    Ok(outcome)
 }
 
 // Prevent accidental exposure of the credential supplied to this run. The token
@@ -364,6 +455,8 @@ fn bounded_line(line: String, remaining: &mut usize) -> Result<String, Execution
     })?;
     Ok(line)
 }
+
+pub mod check;
 
 #[cfg(test)]
 mod test;

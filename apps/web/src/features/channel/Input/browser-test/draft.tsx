@@ -5,14 +5,44 @@ import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
+import type { MessageData } from '@core/messages/types';
 import { EntityProvider } from '@entity';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { createMessageEditor } from '../../Channel/create-message-editor';
+import { MessageEditorContent } from '../../Channel/InlineMessageEditor';
 import { ChannelInput } from '../ChannelInput';
 import { makeInputValuePersistenceKey } from '../utils/persistence';
 
 const channelId = 'draft-fixture-channel';
+
+function EditFixture(props: { onSave: (content: string) => void }) {
+  const parent = { type: 'channel' as const, id: channelId };
+  const message: MessageData = {
+    id: 'formatted-message',
+    parent,
+    content: '~~formatted draft~~',
+    sender_id: 'fixture-user',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    attachments: [],
+    reactions: [],
+  };
+  const editor = createMessageEditor({
+    parent: () => parent,
+    patchMessage: ({ content }) => props.onSave(content),
+  });
+  editor.start(message);
+  return (
+    <MessageEditorContent
+      parent={parent}
+      message={message}
+      messageEditor={editor}
+      collapsible
+    />
+  );
+}
 
 /**
  * The real channel composer over the app shell's providers, in the order
@@ -58,34 +88,39 @@ function Fixture() {
                     >
                       Fail send
                     </button>
-                    <Show when={open()}>
-                      <ChannelInput
-                        input={{
-                          mode: 'channel',
-                          id: `channel-input-${channelId}`,
-                          placeholder: 'Message #draft-fixture',
-                        }}
-                        onSend={(snapshot) => {
-                          setSent(snapshot.value);
-                          setPending(true);
-                          return new Promise<void>((resolve, reject) => {
-                            completeSend = () => {
-                              setPending(false);
-                              resolve();
-                            };
-                            failSend = () => {
-                              setPending(false);
-                              reject(new Error('offline'));
-                            };
-                          });
-                        }}
-                        onSendError={() => {}}
-                        participants={() => []}
-                        bots={() => []}
-                        persistenceKey={makeInputValuePersistenceKey({
-                          channelId,
-                        })}
-                      />
+                    <Show
+                      when={!new URLSearchParams(location.search).has('edit')}
+                      fallback={<EditFixture onSave={setSent} />}
+                    >
+                      <Show when={open()}>
+                        <ChannelInput
+                          input={{
+                            mode: 'channel',
+                            id: `channel-input-${channelId}`,
+                            placeholder: 'Message #draft-fixture',
+                          }}
+                          onSend={(snapshot) => {
+                            setSent(snapshot.value);
+                            setPending(true);
+                            return new Promise<void>((resolve, reject) => {
+                              completeSend = () => {
+                                setPending(false);
+                                resolve();
+                              };
+                              failSend = () => {
+                                setPending(false);
+                                reject(new Error('offline'));
+                              };
+                            });
+                          }}
+                          onSendError={() => {}}
+                          participants={() => []}
+                          bots={() => []}
+                          persistenceKey={makeInputValuePersistenceKey({
+                            channelId,
+                          })}
+                        />
+                      </Show>
                     </Show>
                   </main>
                 </QuickAccessProvider>

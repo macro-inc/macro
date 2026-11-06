@@ -347,6 +347,34 @@ impl DocumentService for StubDocumentService {
     ) -> anyhow::Result<()> {
         unimplemented!()
     }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: documents::domain::skill_description::SkillDescription,
+    ) -> Result<(), documents::domain::models::DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: documents::domain::skill_description::SkillDescription,
+    ) -> Result<(), documents::domain::models::DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, documents::domain::skill_description::SkillDescription>,
+        documents::domain::models::DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
+    }
 }
 
 /// Stateful stub repo that tracks task IDs per github key.

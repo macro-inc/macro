@@ -154,7 +154,8 @@ impl ToolActivityAction {
                 action @ (Action::Renamed(_)
                 | Action::AppearanceChanged(_)
                 | Action::PictureChanged
-                | Action::CallEnded(_)),
+                | Action::CallEnded(_)
+                | Action::AccessRequested(_)),
             ) => {
                 let (tag, payload) = action.to_columns();
                 Self::Unknown {

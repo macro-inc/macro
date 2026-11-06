@@ -93,6 +93,7 @@ Module layout, layering, and TypeScript conventions.
 
 - Represent sets of independently enabled UI features with typed arrays instead of parallel boolean props.
 - Import types with `import type` instead of inline `import('module').Type` annotations.
+- Declare TypeScript types and interfaces at module scope, outside functions and component bodies.
 
 - Name module-level value constants in `SCREAMING_SNAKE_CASE`, except schema definitions; keep functions and local variables in `camelCase`.
 - For exhaustive matching use `match(...).exhaustive()` from `ts-pattern`, never

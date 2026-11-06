@@ -658,6 +658,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     // updated_at for unviewed companies — same shape as channels.
     const crmCompanyData = crmCompaniesAccessor();
     for (const company of crmCompanyData) {
+      if (company.hidden) continue;
       const viewedAt =
         viewedAtMap.get(company.id) ?? company.viewedAt ?? undefined;
 

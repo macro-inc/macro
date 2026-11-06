@@ -1,4 +1,5 @@
 import type { MacroOpts } from './config';
+import { AccountManagerNamespace } from './entities/account-managers/namespace';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
@@ -8,6 +9,7 @@ import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
+import { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 import { CrmNamespace } from './entities/crm/namespace';
 import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
@@ -21,6 +23,7 @@ import { GithubPullRequestNamespace } from './entities/github-pull-requests/name
 import { HarnessNamespace } from './entities/harnesses/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
+import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
@@ -28,11 +31,13 @@ import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
 import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
+import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
+import { WebNamespace } from './entities/web/namespace';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
 import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
@@ -52,7 +57,22 @@ export type {
   StructuredCompletionRequest,
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
+export { CallRecord } from './entities/calls/call-record';
+export { CallConnection, type JoinOptions } from './entities/calls/connection';
+export {
+  AlreadyConnectedError,
+  CallEndedError,
+  InOtherCallError,
+} from './entities/calls/errors';
 export type { CallMessage } from './entities/calls/message';
+export type { CallSummary } from './entities/calls/namespace';
+export { CallParticipant } from './entities/calls/participant';
+export {
+  ConnectedApp,
+  ConnectedTool,
+} from './entities/connected-apps/connected-app';
+export { Connector } from './entities/connected-apps/connector';
+export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
@@ -97,6 +117,11 @@ export {
   wrapXml,
 } from './mentions';
 export type { RequestActivity } from './utils/activity';
+/**
+ * The authenticated SDK client; every namespace hangs off it.
+ *
+ * @routing Use when a request is only about the Macro SDK client itself or its shared plumbing, such as live events or an item's access requests; not any request about the user's content, people or settings.
+ */
 export class Macro<T extends MacroOpts = MacroOpts> {
   /** routines resources and operations. */
   readonly routines: RoutineNamespace;
@@ -112,6 +137,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** apiKeys resources and operations. */
   readonly apiKeys: ApiKeyNamespace;
+
+  /** accountManagers resources and operations. */
+  readonly accountManagers: AccountManagerNamespace;
 
   /** harnesses resources and operations. */
   readonly harnesses: HarnessNamespace;
@@ -153,6 +181,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly email: EmailNamespace;
 
+  /** Call the user's connected apps and MCP servers from a code execution. */
+  readonly connectedApps: ConnectedAppNamespace;
+
   readonly favorites: FavoritesNamespace;
 
   readonly foreignEntities: ForeignEntityNamespace;
@@ -162,6 +193,10 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+  /** Search the public web and read web pages. */
+  readonly web: WebNamespace;
+  /** Your own profile: set your name and profile picture. */
+  readonly me: MeNamespace;
 
   readonly notifications: NotificationNamespace;
 
@@ -175,6 +210,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly referrals: ReferralNamespace;
 
   readonly tasks: TaskNamespace;
+
+  /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
+  readonly search: SearchNamespace;
 
   readonly teams: TeamNamespace;
 
@@ -204,6 +242,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
     this.apiKeys = new ApiKeyNamespace(client);
+    this.accountManagers = new AccountManagerNamespace(client);
+    this.me = new MeNamespace(client);
     this.harnesses = new HarnessNamespace(client);
     this.meetings = new MeetingNamespace(client);
     this.githubPullRequests = new GithubPullRequestNamespace(client);
@@ -221,15 +261,18 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.databases = new DatabaseNamespace(client);
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
+    this.connectedApps = new ConnectedAppNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
+    this.web = new WebNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
     this.referrals = new ReferralNamespace(client);
+    this.search = new SearchNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
@@ -255,6 +298,11 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
+export {
+  type AgentActivity,
+  type AgentActivityOptions,
+  AgentInvocation,
+} from './entities/agent-sessions/activity';
 export type {
   ArchiveCause,
   AutoArchiveOverrides,
@@ -267,6 +315,12 @@ export {
   ConversationTurn,
 } from './entities/agent-sessions/conversation';
 export type {
+  SessionOrigin,
+  SessionOriginCaller,
+  SessionOriginLineage,
+  SessionOriginRoot,
+} from './entities/agent-sessions/origin';
+export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
   ReviewDraft,
@@ -275,16 +329,42 @@ export type {
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
-export { Agent, type AgentOptions } from './entities/agents/agent';
+export {
+  Agent,
+  type AgentApps,
+  type AgentOptions,
+  type AgentPatch,
+} from './entities/agents/agent';
+export type { CodingAgent } from './entities/agents/namespace';
 export { UserApiKey } from './entities/api-keys/api-key';
+export {
+  Bot,
+  type BotOwner,
+  type BotWebhook,
+  type CreateBotOptions,
+  type UpdateBotOptions,
+} from './entities/bots/bot';
+export { BotToken } from './entities/bots/token';
+export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
+export type {
+  ConnectedAppKind,
+  ConnectedToolResult,
+} from './entities/connected-apps/connected-app';
+export type {
+  ConnectorAction,
+  ConnectorInspection,
+} from './entities/connected-apps/connector';
+export type { ConnectMcpServerResponse } from './entities/connected-apps/namespace';
 export {
   CrmPipeline,
   PipelineColumn,
   PipelineRow,
+  type PipelineStageRequirement,
   PipelineTable,
+  PipelineView,
 } from './entities/crm/pipeline';
 export type {
   DatabaseQueryOptions,
@@ -294,11 +374,19 @@ export type {
   QueryStatement,
   QueryTableVersion,
 } from './entities/databases/query';
+export {
+  type DocumentEditOptions,
+  DocumentEditRefusedError,
+  type DocumentEditResult,
+  EditOutcomeUnknownError,
+} from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
+export type { FileContent } from './entities/documents/namespace';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
   type DraftOptions,
+  type DraftSendOptions,
   EmailDraft,
 } from './entities/email/draft';
 export { EmailFilter, type EmailFilterOptions } from './entities/email/filter';
@@ -327,6 +415,11 @@ export {
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
 export type { InitiativeSummary } from './entities/initiatives/namespace';
+export {
+  MeNamespace,
+  type UpdateMeOptions,
+  type UploadProfilePictureOptions,
+} from './entities/me/namespace';
 export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
@@ -342,10 +435,25 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export type { SearchOn, SearchOpts } from './entities/search/options';
+export type {
+  SearchOptions,
+  SearchPage,
+  SearchPageOptions,
+  SearchResult,
+  SearchType,
+} from './entities/search/types';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export type {
+  WebFetchOptions,
+  WebFetchResponse,
+  WebSearchOptions,
+  WebSearchResult,
+  WebSearchTopic,
+} from './entities/web/namespace';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,

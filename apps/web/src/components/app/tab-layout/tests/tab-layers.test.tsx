@@ -17,10 +17,16 @@ import {
   notFoundRoute,
 } from '@app/routes/routes';
 import { setGlobalTabManager } from '@app/signal/tabLayout';
-import { SplitLayoutContext } from '@components/app/split-layout/context';
+import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import {
+  SplitLayoutContext,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
 import {
   createSplitLayout,
   type SplitManager,
+  splitOf,
 } from '@components/app/split-layout/layoutManager';
 import { SplitLayout } from '@components/app/split-layout/SplitLayout';
 import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';
@@ -28,6 +34,7 @@ import {
   resolveContentLocation,
   splitContentFromLocation,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
 import { onCleanup } from 'solid-js';
@@ -103,7 +110,27 @@ function setup(url: string) {
       </SplitRouterProvider>
     );
   });
-  return { router, tabManager };
+  return { router, tabManager, manager };
+}
+
+/** A view's preview guard, as a host mounted in the router's first open pane creates it. */
+function guardInFirstPane(router: SplitRouter, manager: SplitManager) {
+  const handle = manager.getSplit(splitOf(router.panes()[0]!));
+  let guard!: ReturnType<typeof createPreviewSelectionGuard>;
+  function Host() {
+    guard = createPreviewSelectionGuard();
+    return null;
+  }
+  render(() => (
+    <SplitLayoutContext.Provider value={{ manager }}>
+      <SplitPanelContext.Provider
+        value={{ handle } as unknown as SplitPanelContextType}
+      >
+        <Host />
+      </SplitPanelContext.Provider>
+    </SplitLayoutContext.Provider>
+  ));
+  return guard;
 }
 
 async function flush(router: SplitRouter) {
@@ -128,6 +155,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   setGlobalTabManager(undefined);
   cleanup();
   panels.mounted = 0;
@@ -164,6 +192,47 @@ describe('desktop tab layers', () => {
     expect(document.querySelector('[data-panel]')).toBe(firstPanel);
     expect(layer(first)?.inert).toBe(false);
     expect(layer(second)?.inert).toBe(true);
+  });
+
+  it('selecting a preview held by a background tab switches to that tab', async () => {
+    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
+    const { router, tabManager, manager } = setup('/channels');
+    await flush(router);
+    const first = tabManager.activeTabId();
+    const channel = { type: 'channel', id: 'channel-two' } as const;
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+
+    tabManager.newTab();
+    await flush(router);
+    expect(tabManager.activeTabId()).not.toBe(first);
+    const liveGuard = guardInFirstPane(router, manager);
+    const activeSplit = manager.activeSplitId();
+
+    expect(liveGuard.canSelect(channel)).toBe(false);
+    await flush(router);
+
+    expect(tabManager.activeTabId()).toBe(first);
+    expect(layer(first)?.inert).toBe(false);
+    expect(manager.activeSplitId()).not.toBe(activeSplit);
+    expect(alert).toHaveBeenCalledOnce();
+  });
+
+  it('a tab mounting onto an entity another tab holds does not switch back', async () => {
+    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
+    const { router, tabManager, manager } = setup('/channels');
+    await flush(router);
+    const channel = { type: 'channel', id: 'channel-two' } as const;
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+
+    expect(guardInFirstPane(router, manager)(channel)).toBe(false);
+    await flush(router);
+
+    expect(tabManager.activeTabId()).toBe(second);
+    expect(alert).not.toHaveBeenCalled();
   });
 
   it('a stacked tab parks and comes back stacked without remounting', async () => {

@@ -42,7 +42,7 @@ pub struct DiscoverConnectors {
 }
 
 /// Discovery metadata and optional markup for a user-controlled auth flow.
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Serialize, JsonSchema, utoipa::ToSchema)]
 pub struct DiscoverConnectorsResponse {
     /// Catalog or capability results.
     pub result: DiscoveryResult,
@@ -77,6 +77,14 @@ where
                 description: error.to_string(),
                 internal_error: error,
             })?;
+        Ok(DiscoverConnectorsResponse::from(result))
+    }
+}
+
+impl From<DiscoveryResult> for DiscoverConnectorsResponse {
+    /// Offer connect markup only for an unconnected app whose inspected tools
+    /// could do something.
+    fn from(result: DiscoveryResult) -> Self {
         let connect_markup = match &result {
             DiscoveryResult::Inspect {
                 app,
@@ -89,9 +97,9 @@ where
             }
             _ => None,
         };
-        Ok(DiscoverConnectorsResponse {
+        Self {
             result,
             connect_markup,
-        })
+        }
     }
 }

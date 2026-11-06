@@ -35,6 +35,7 @@ import { applyOp, isResult, patchViews } from './detail-cache';
 import { databaseViewKeys } from './keys';
 
 const writes = createKeyedSerializer();
+const positionUpdates = createKeyedSerializer();
 
 /** A view's writes, or a table's view-list writes, reach the server in the order they were made. */
 function inOrder<Value>(
@@ -328,9 +329,16 @@ export function setCardPositions(
   viewId: string,
   change: (positions: CardPosition[]) => CardPosition[]
 ) {
-  queryClient.setQueryData<CardPosition[]>(
-    databaseViewKeys.positions(databaseId, viewId).queryKey,
-    (previous) => change(previous ?? [])
+  const queryKey = databaseViewKeys.positions(databaseId, viewId).queryKey;
+  // Cancel again for the server result: a read may start while a move is pending.
+  fireAndForget(
+    positionUpdates.run(JSON.stringify(queryKey), async () => {
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueryData<CardPosition[]>(queryKey, (previous) =>
+        change(previous ?? [])
+      );
+    }),
+    'database-cache'
   );
 }
 

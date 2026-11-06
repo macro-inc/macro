@@ -266,6 +266,16 @@ export class Database extends MacroEntity<DatabaseDetail> {
       throw new MacroError(`${part} does not belong to database ${this.id}`);
   }
 
+  /** The database's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/database/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** A handle to a database by id. Details load on first access. */
   static byId(client: MacroClient, id: string): Database {
     return new Database(client, id);

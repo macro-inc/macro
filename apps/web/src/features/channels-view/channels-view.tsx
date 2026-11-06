@@ -4,11 +4,15 @@ import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/util
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { TutorialPill } from '@app/features/video-tutorials';
 import { SplitRouter } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
+import { ChannelAccessDenied } from '@channel/ChannelAccessDenied';
+import { ChannelUnavailable } from '@channel/components/ChannelUnavailable';
 import { DebugSuspense } from '@channel/DebugSuspense';
+import { isPendingDirectMessageId } from '@channel/primitives/pending-direct-messages';
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -34,6 +38,7 @@ import { ChannelDetailView } from './components/ChannelDetailView';
 import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
+import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
@@ -147,12 +152,18 @@ function ChannelsViewRoot() {
   const {
     state,
     tab,
+    setTab,
     mobileLayout,
     sectionsLoading,
     selectedChannel,
-    setAsideWidth,
+    setSelectedChannel,
   } = useChannelsView();
   const threadsTab = () => !mobileLayout() && tab() === 'threads';
+  // Threads fill Main like a conversation, so going back leaves them first.
+  const returnToList = () => {
+    if (threadsTab()) setTab('browse');
+    else setSelectedChannel(undefined);
+  };
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -194,16 +205,18 @@ function ChannelsViewRoot() {
                       asidePreferenceKey="channels"
                       // The empty state only points at the rail, so keep it open.
                       asideRequired={selectedChannel() === undefined}
-                      // Keep tab changes from resetting a narrow navigation overlay.
+                      // Threads are chosen in the rail's tabs, so keep it docked.
                       asidePinned={threadsTab()}
-                      aside={{
-                        width: state.asideWidth,
-                        preserveDuringResize: false,
+                      // Narrow, the rail and the conversation take turns.
+                      asideList={{
+                        open: selectedChannel() !== undefined || threadsTab(),
+                        onBack: returnToList,
                       }}
+                      aside={{ preserveDuringResize: false }}
                       main={{ preferredWidth: 640 }}
                       resizable
                     >
-                      <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
+                      <ViewShell.Aside>
                         <DebugSuspense
                           name="ChannelsView.rail"
                           fallback={
@@ -250,6 +263,10 @@ function ChannelsViewRoot() {
                                           Choose a channel or person from the
                                           sidebar to open the conversation here.
                                         </p>
+                                        <TutorialPill
+                                          tutorial="chat"
+                                          class="mt-3 self-center"
+                                        />
                                       </div>
                                     </div>
                                   </>
@@ -347,6 +364,16 @@ function ChannelDetailRouteContent() {
     () => channelId() !== undefined && detail.view().status === 'loading'
   );
   const unavailable = () => detail.view().status === 'unavailable';
+  const deniedChannelId = createMemo<string | undefined>((previous) => {
+    const view = detail.view();
+    if (
+      view.status === 'unavailable' &&
+      (view.denied ||
+        source.load().status === 'ready' ||
+        (source.load().status === 'pending' && previous === view.channelId))
+    )
+      return view.channelId;
+  });
   const retry = async () => {
     try {
       await detail.refresh();
@@ -370,15 +397,24 @@ function ChannelDetailRouteContent() {
               </span>
             </ViewShell.TopBar>
             <Show when={unavailable()} fallback={<ChannelLoading />}>
-              <div
-                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-ink-muted"
-                role="status"
+              <Show
+                when={deniedChannelId()}
+                keyed
+                fallback={
+                  <ChannelUnavailable
+                    onRetry={() => fireAndForget(retry(), 'channel')}
+                  />
+                }
               >
-                <h2>Conversation unavailable</h2>
-                <button type="button" onClick={retry}>
-                  Retry
-                </button>
-              </div>
+                {(id) => (
+                  <ChannelAccessDenied
+                    channelId={id}
+                    onRefreshChannel={() =>
+                      fireAndForget(retry(), 'channel-access-request')
+                    }
+                  />
+                )}
+              </Show>
             </Show>
           </>
         }
@@ -394,12 +430,21 @@ function ChannelDetailRouteContent() {
 }
 
 export function ChannelDetailRouteView() {
+  const { selectedChannel } = useChannelsView();
+  // A DM its first message will create has nothing to load yet.
+  const pendingId = () => {
+    const id = selectedChannel()?.id;
+    return isPendingDirectMessageId(id) ? id : undefined;
+  };
+
   return (
     <DebugSuspense
       name="ChannelsView.detail-route"
       fallback={<ChannelLoading />}
     >
-      <ChannelDetailRouteContent />
+      <Show when={pendingId()} keyed fallback={<ChannelDetailRouteContent />}>
+        {(id) => <PendingDirectMessageDetail pendingId={id} />}
+      </Show>
     </DebugSuspense>
   );
 }

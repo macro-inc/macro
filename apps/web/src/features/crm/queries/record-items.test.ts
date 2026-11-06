@@ -8,6 +8,51 @@ import {
 } from './record-items';
 
 describe('CRM record item queries', () => {
+  it.each([undefined, null, ''])(
+    'keeps files scoped to the contact when its email is %s',
+    (email) => {
+      const body = JSON.parse(
+        JSON.stringify(
+          recordFilesBody({
+            type: 'contact',
+            id: '00000000-0000-4000-8000-000000000001',
+            email,
+          })
+        )
+      );
+
+      expect(body.df).toEqual({
+        '&': [
+          { '!': { l: { dst: 'task' } } },
+          {
+            l: {
+              crm: { contact: '00000000-0000-4000-8000-000000000001' },
+            },
+          },
+        ],
+      });
+      expect(body.ef).toEqual({ l: { ThreadId: NIL_UUID } });
+      expect(body.ccf).toEqual({ l: { id: NIL_UUID } });
+    }
+  );
+
+  it('keeps a company without domains scoped to its associations', () => {
+    const body = recordFilesBody({
+      type: 'company',
+      id: '00000000-0000-4000-8000-000000000002',
+      domains: [],
+    });
+
+    expect(body.df).toEqual({
+      '&': [
+        { '!': { l: { dst: 'task' } } },
+        {
+          l: { crm: { company: '00000000-0000-4000-8000-000000000002' } },
+        },
+      ],
+    });
+  });
+
   it('lists non-task files associated with a company or attached to emails with its domains', () => {
     const body = recordFilesBody({
       type: 'company',

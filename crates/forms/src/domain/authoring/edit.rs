@@ -186,6 +186,18 @@ fn apply_step(latest: &FormLayout, change: &Change) -> Result<FormLayout, Author
                 };
                 *target = rules.clone();
             }
+            Change::SetShowWhen {
+                section_id,
+                show_when,
+            } => {
+                let FormSection::Questions {
+                    show_when: target, ..
+                } = section_mut(&mut next, *section_id)?
+                else {
+                    return Err(invalid("Select a questions section."));
+                };
+                *target = show_when.clone();
+            }
             Change::SetBookingTarget {
                 section_id,
                 target,

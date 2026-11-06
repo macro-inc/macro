@@ -87,6 +87,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         invited_by: &MacroUserIdStr<'_>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        is_agent: bool,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Compares the list of users you are trying to invite to ones already invited
@@ -230,6 +231,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<String, TeamError>> + Send;
+
+    /// Gets a user's display name (first and last name). `None` when they have not set one.
+    fn get_user_display_name(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<String>, TeamError>> + Send;
 
     /// Updates a team
     fn patch_team(
@@ -419,6 +426,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        is_agent: bool,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
     /// Remove user from a team.

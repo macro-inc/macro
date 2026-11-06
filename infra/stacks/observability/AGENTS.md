@@ -18,6 +18,8 @@ us-east-1. `README.md` is the full operations guide.
   (rules and the `Prod alerts` dashboard panel both read it), and its Datadog
   copy in `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next
   free `panelId`; never renumber one, since sent notifications link to it.
+- Change a CI percentile, queue or CI hours query: edit `nixos/ci-report.json`;
+  the `Macro CI` dashboard's Loki panels and `scripts/ci-report.ts` both read it.
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in

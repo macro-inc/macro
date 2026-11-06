@@ -40,6 +40,7 @@ import type {
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
+  PutCursorDefaultModelRequest,
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
@@ -49,6 +50,7 @@ import type {
   UserQuota,
 } from './generated/schemas';
 import type { AgentApiKey } from './generated/schemas/agentApiKey';
+import type { AgentSetupResponse } from './generated/schemas/agentSetupResponse';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
@@ -465,6 +467,12 @@ export const authServiceClient = {
       )
     ).map((result) => result);
   },
+  async agentSetup() {
+    return await fetchWithAuth<AgentSetupResponse>(
+      `${authHost}/user/agent_setup`,
+      { method: 'POST' }
+    );
+  },
   async putProfilePicture(args: PutProfilePictureParams) {
     return (
       await fetchWithAuth<EmptyResponse>(
@@ -666,6 +674,7 @@ export const authServiceClient = {
       name: data.name,
       licenseStatus: data.licenseStatus,
       tutorialComplete: data.tutorialComplete,
+      isAgent: data.isAgent,
       group: data.group,
       hasChromeExt: data.hasChromeExt,
       authenticated: !!data.userId,
@@ -1129,15 +1138,16 @@ export const authServiceClient = {
   },
 
   /**
-   * Chooses the model the user's sessions start on.
+   * Chooses the model, and optionally its effort, the user's sessions start on.
+   * Saving a model without an effort clears the previous one.
    */
-  async putCursorDefaultModel(modelId: string) {
+  async putCursorDefaultModel(request: PutCursorDefaultModelRequest) {
     return (
       await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
         `${authHost}/cursor-api-key/default-model`,
         {
           method: 'PUT',
-          body: JSON.stringify({ modelId }),
+          body: JSON.stringify(request),
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
         }
       )

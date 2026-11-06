@@ -131,6 +131,7 @@ impl ActivitySource for DocumentTopicEvent {
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
             DocumentTopicEvent::SyncContentUpdated(metadata) => {
                 let legacy = metadata.actor.clone().map(|actor| DocumentSyncEditor {
+                    agent_correlation_id: None,
                     actor,
                     on_behalf_of: metadata.on_behalf_of.clone(),
                 });
@@ -151,6 +152,7 @@ impl ActivitySource for DocumentTopicEvent {
                             CommonAction::Edited,
                             event_time(event_id),
                         )
+                        .with_agent_correlation(editor.agent_correlation_id)
                     })
                     .collect();
                 if activities.is_empty() {
@@ -165,10 +167,11 @@ impl ActivitySource for DocumentTopicEvent {
     }
 }
 
-fn editor_key(editor: &DocumentSyncEditor) -> (&str, Option<&str>) {
+fn editor_key(editor: &DocumentSyncEditor) -> (&str, Option<&str>, Option<Uuid>) {
     (
         editor.actor.as_ref(),
         editor.on_behalf_of.as_ref().map(|user| user.as_ref()),
+        editor.agent_correlation_id,
     )
 }
 

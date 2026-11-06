@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search';
 
 /**
  * A structured part within an assistant message.
@@ -402,6 +402,11 @@ export type CompleteOnboardingRequest = {
      */
     skipped?: boolean;
 };
+
+/**
+ * How much a model may think before it gives a structured answer.
+ */
+export type CompletionThinking = 'default' | 'low';
 
 /**
  * User and feature attribution for one invocation.
@@ -1635,27 +1640,31 @@ export type PipedreamUpdateRequest = {
  */
 export type Price = {
     /**
-     * Price per audio minute (USD), absent for token billing.
+     * Price per audio minute (USD), absent for token and credit billing.
      */
     price_per_audio_minute?: number | null;
     /**
      * Price per million cache-read input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_read?: number | null;
     /**
      * Price per million cache-write input tokens (USD), absent when the model
-     * has no published rate and for audio billing.
+     * has no published rate and for audio and credit billing.
      */
     price_per_million_cache_write?: number | null;
     /**
-     * Price per million input tokens (USD); zero for audio billing.
+     * Price per million input tokens (USD); zero for audio and credit billing.
      */
     price_per_million_in: number;
     /**
-     * Price per million output tokens (USD); zero for audio billing.
+     * Price per million output tokens (USD); zero for audio and credit billing.
      */
     price_per_million_out: number;
+    /**
+     * Price per vendor credit (USD), absent for token and audio billing.
+     */
+    price_per_provider_credit?: number | null;
     /**
      * Total cost (USD).
      */
@@ -1870,6 +1879,10 @@ export type SetPricingRequest = {
      * New price per million output tokens (USD). Required for token pricing.
      */
     price_per_mil_out?: number | null;
+    /**
+     * Price per vendor credit (USD), or null unless the model bills in credits.
+     */
+    price_per_provider_credit?: number | null;
 };
 
 export type SharePermissionV2 = {
@@ -1888,6 +1901,84 @@ export type SharePermissionV2 = {
      */
     owner: string;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * A skill's complete instructions.
+ */
+export type SkillContentResponse = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * The skill's full markdown instructions.
+     */
+    content: string;
+    /**
+     * The skill's id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+};
+
+/**
+ * Machine-readable failure of a skill request.
+ */
+export type SkillErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without backend diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * One skill the caller can read.
+ */
+export type SkillListing = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * When to use the skill, when it says.
+     */
+    description?: string | null;
+    /**
+     * The skill document's id, or a built-in skill's well-known id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+    /**
+     * When the skill document was last updated; built-in skills have none.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * How search terms are matched against skill names.
+ */
+export type SkillsMatchType = 'partial' | 'exact';
+
+/**
+ * The skills matching a listing or search, most recently updated first,
+ * built-in skills last.
+ */
+export type SkillsResponse = {
+    /**
+     * The matching skills.
+     */
+    skills: Array<SkillListing>;
 };
 
 /**
@@ -2035,6 +2126,11 @@ export type StructuredCompletionRequest = {
     model: string;
     output_schema: DynamicSchema;
     prompt: string;
+    /**
+     * How much the model may think first; `low` answers faster. Applies to
+     * completions without tools.
+     */
+    thinking?: CompletionThinking;
     toolset?: ToolSet;
 };
 
@@ -2211,15 +2307,15 @@ export type UpsertProjectionRequest = {
  */
 export type Usage = {
     /**
-     * Audio duration in seconds, absent for token billing.
+     * Audio duration in seconds, absent for token and credit billing.
      */
     audio_seconds?: number | null;
     /**
-     * Input tokens read from a prompt cache; zero for audio billing.
+     * Input tokens read from a prompt cache; zero for audio and credit billing.
      */
     cache_read_input_tokens: number;
     /**
-     * Input tokens written to a prompt cache; zero for audio billing.
+     * Input tokens written to a prompt cache; zero for audio and credit billing.
      */
     cache_write_input_tokens: number;
     /**
@@ -2227,7 +2323,7 @@ export type Usage = {
      */
     created_at: string;
     /**
-     * Uncached input tokens; zero for audio billing.
+     * Uncached input tokens; zero for audio and credit billing.
      */
     input_tokens: number;
     /**
@@ -2235,10 +2331,14 @@ export type Usage = {
      */
     model: string;
     /**
-     * Output tokens; zero for audio billing.
+     * Output tokens; zero for audio and credit billing.
      */
     output_tokens: number;
     price?: null | Price;
+    /**
+     * Vendor credits consumed, absent for token and audio billing.
+     */
+    provider_credits?: number | null;
 };
 
 /**
@@ -2323,6 +2423,128 @@ export type WebCitation = {
      */
     url: string;
 };
+
+/**
+ * Machine-readable failure of a web request.
+ */
+export type WebErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without provider diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Read one public web page.
+ */
+export type WebFetch = {
+    /**
+     * Most characters of page text to return, 1 to 100,000 (default 20,000).
+     */
+    maxChars?: number | null;
+    /**
+     * The `http` or `https` URL of the page.
+     */
+    url: string;
+};
+
+/**
+ * The text of a fetched page.
+ */
+export type WebFetchResponse = {
+    /**
+     * The page text as Markdown, cut to `maxChars`.
+     */
+    content: string;
+    /**
+     * The page title, when the provider reports one.
+     */
+    title?: string | null;
+    /**
+     * Whether `content` was cut to `maxChars`.
+     */
+    truncated: boolean;
+    /**
+     * The URL that was read.
+     */
+    url: string;
+};
+
+/**
+ * Search the public web.
+ */
+export type WebSearch = {
+    /**
+     * Only return pages from these domains, e.g. `["docs.rs", "github.com"]`.
+     */
+    domains?: Array<string> | null;
+    /**
+     * Never return pages from these domains.
+     */
+    excludeDomains?: Array<string> | null;
+    /**
+     * Also return each page's text as Markdown (up to 8,000 characters per result).
+     */
+    includeContent?: boolean | null;
+    /**
+     * How many results to return, 1 to 20 (default 5).
+     */
+    maxResults?: number | null;
+    /**
+     * What to search for, in natural language or keywords (at most 400 characters).
+     */
+    query: string;
+    /**
+     * Only return pages published on or after this date (`YYYY-MM-DD`).
+     */
+    since?: string | null;
+    topic?: null | WebSearchTopic;
+};
+
+/**
+ * The pages a search found, best match first.
+ */
+export type WebSearchResponse = {
+    /**
+     * Results, best match first. Empty when nothing matched.
+     */
+    results: Array<WebSearchResult>;
+};
+
+/**
+ * One page a search found.
+ */
+export type WebSearchResult = {
+    /**
+     * The page text as Markdown, when `includeContent` was set.
+     */
+    content?: string | null;
+    /**
+     * When the page was published, as the search provider reports it.
+     */
+    publishedAt?: string | null;
+    /**
+     * The part of the page most relevant to the query.
+     */
+    snippet: string;
+    /**
+     * The page title.
+     */
+    title: string;
+    /**
+     * The page URL; cite it when you use the result.
+     */
+    url: string;
+};
+
+/**
+ * The kind of results a search favours.
+ */
+export type WebSearchTopic = 'general' | 'news';
 
 export type WithChatId = {
     chat_id: string;
@@ -2438,6 +2660,46 @@ export type GetChatsForAttachmentHandlerResponses = {
 };
 
 export type GetChatsForAttachmentHandlerResponse = GetChatsForAttachmentHandlerResponses[keyof GetChatsForAttachmentHandlerResponses];
+
+export type CreateConfirmedCalendarEventData = {
+    /**
+     * CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/calendar/events/create-confirmed';
+};
+
+export type CreateConfirmedCalendarEventErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not created: a blank confirmation, a calendar the user cannot write, or a provider failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type CreateConfirmedCalendarEventError = CreateConfirmedCalendarEventErrors[keyof CreateConfirmedCalendarEventErrors];
+
+export type CreateConfirmedCalendarEventResponses = {
+    /**
+     * ToolCalendarEvent
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type CreateConfirmedCalendarEventResponse = CreateConfirmedCalendarEventResponses[keyof CreateConfirmedCalendarEventResponses];
 
 export type DeleteChatData = {
     body?: never;
@@ -2920,6 +3182,46 @@ export type DecisionsResponses = {
 };
 
 export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
+
+export type SendConfirmedEmailData = {
+    /**
+     * SendConfirmedEmail arguments: SendEmail's, plus userConfirmation
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/email/send-confirmed';
+};
+
+export type SendConfirmedEmailErrors = {
+    /**
+     * Malformed, or missing userConfirmation
+     */
+    400: GenericErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure
+     */
+    422: GenericErrorResponse;
+};
+
+export type SendConfirmedEmailError = SendConfirmedEmailErrors[keyof SendConfirmedEmailErrors];
+
+export type SendConfirmedEmailResponses = {
+    /**
+     * SendEmailResponse
+     */
+    200: {
+        [key: string]: unknown;
+    };
+};
+
+export type SendConfirmedEmailResponse = SendConfirmedEmailResponses[keyof SendConfirmedEmailResponses];
 
 export type HealthHandlerData = {
     body?: never;
@@ -3662,6 +3964,95 @@ export type GetBatchPreviewResponses = {
 
 export type GetBatchPreviewResponse2 = GetBatchPreviewResponses[keyof GetBatchPreviewResponses];
 
+export type ListSkillsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Words from the skill's name, matched as one adjacent phrase. Omit to
+         * list the 100 most recently updated skills.
+         */
+        query?: string;
+        /**
+         * How `query` is matched; `partial` when omitted.
+         */
+        matchType?: SkillsMatchType;
+    };
+    url: '/skills';
+};
+
+export type ListSkillsErrors = {
+    /**
+     * Blank query
+     */
+    400: SkillErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Listing failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Search failed
+     */
+    502: SkillErrorBody;
+};
+
+export type ListSkillsError = ListSkillsErrors[keyof ListSkillsErrors];
+
+export type ListSkillsResponses = {
+    /**
+     * Matching skills, most recently updated first
+     */
+    200: SkillsResponse;
+};
+
+export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
+
+export type ReadSkillData = {
+    body?: never;
+    path: {
+        /**
+         * The skill's id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/skills/{id}';
+};
+
+export type ReadSkillErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * No skill the caller can view has this id
+     */
+    404: SkillErrorBody;
+    /**
+     * Reading failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Access check unavailable
+     */
+    503: SkillErrorBody;
+};
+
+export type ReadSkillError = ReadSkillErrors[keyof ReadSkillErrors];
+
+export type ReadSkillResponses = {
+    /**
+     * The skill's instructions
+     */
+    200: SkillContentResponse;
+};
+
+export type ReadSkillResponse = ReadSkillResponses[keyof ReadSkillResponses];
+
 export type SendChatMessageData = {
     body: HttpSendChatMessageRequest;
     path?: never;
@@ -3776,3 +4167,97 @@ export type StructuredCompletionResponses = {
 };
 
 export type StructuredCompletionResponse2 = StructuredCompletionResponses[keyof StructuredCompletionResponses];
+
+export type FetchWebPageData = {
+    body: WebFetch;
+    path?: never;
+    query?: never;
+    url: '/web/fetch';
+};
+
+export type FetchWebPageErrors = {
+    /**
+     * Invalid URL or length
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * The page could not be read
+     */
+    422: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The fetch provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web fetch unconfigured, busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type FetchWebPageError = FetchWebPageErrors[keyof FetchWebPageErrors];
+
+export type FetchWebPageResponses = {
+    /**
+     * The page text
+     */
+    200: WebFetchResponse;
+};
+
+export type FetchWebPageResponse = FetchWebPageResponses[keyof FetchWebPageResponses];
+
+export type SearchWebData = {
+    body: WebSearch;
+    path?: never;
+    query?: never;
+    url: '/web/search';
+};
+
+export type SearchWebErrors = {
+    /**
+     * Invalid query or filters
+     */
+    400: WebErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: WebErrorBody;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * The search provider failed
+     */
+    502: WebErrorBody;
+    /**
+     * Web search unconfigured, busy, or usage validation unavailable
+     */
+    503: WebErrorBody;
+};
+
+export type SearchWebError = SearchWebErrors[keyof SearchWebErrors];
+
+export type SearchWebResponses = {
+    /**
+     * Results, best match first
+     */
+    200: WebSearchResponse;
+};
+
+export type SearchWebResponse = SearchWebResponses[keyof SearchWebResponses];

@@ -26,11 +26,14 @@ use crate::ids::FormId;
 #[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "snake_case")]
 pub enum Audience {
-    /// Signed-in Macro users the form is shared with; one response each,
-    /// editable while the form is open.
+    /// Signed-in Macro users the form is shared with, directly or through a
+    /// channel: everyone in a channel it is shared with can respond, people
+    /// outside the owner's team included. One response each, editable while
+    /// the form is open.
     Members,
     /// Anyone with the link. Anonymous visitors respond anonymously and
-    /// without a limit; a signed-in visitor responds as themselves.
+    /// without a limit; a signed-in visitor responds as themselves. Needed
+    /// only for people without a Macro account or the form's channels.
     Public,
 }
 

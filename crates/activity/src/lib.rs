@@ -29,10 +29,10 @@ pub mod outbound;
 
 pub use domain::events::{ActivityMacroEvent, ActivityTopicEvent, ActivityWireRow};
 pub use domain::models::{
-    Action, ActionDecodeError, ActionTag, Activity, ActivityRecord, ActivitySource, Actor,
-    AppearanceChange, AppearanceUpdate, Attribution, CallStart, CommonAction, DomainActivity,
-    EntityType, Ingest, InitiativeTaskChange, NON_TOUCH_ACTION_TAGS, ParticipantChange,
-    PropertyChange, RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
+    AccessRequest, Action, ActionDecodeError, ActionTag, Activity, ActivityRecord, ActivitySource,
+    Actor, AppearanceChange, AppearanceUpdate, Attribution, CallStart, CommonAction,
+    DomainActivity, EntityType, Ingest, InitiativeTaskChange, NON_TOUCH_ACTION_TAGS,
+    ParticipantChange, PropertyChange, RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
 pub use domain::overview::{
     ActivityOverview, ActivityOverviewError, ActivityWindow, ActivityWindowError, DayCount,

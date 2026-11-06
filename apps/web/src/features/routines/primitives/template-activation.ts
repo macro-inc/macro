@@ -5,10 +5,12 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
+import { firstAgent, stepsFromTask, stepsToWire } from '../core/routine-steps';
 import {
   type Activator,
   fillTemplatePrompt,
   fillTemplateTrigger,
+  mapStepTexts,
   needsDecision,
   type ReferenceChoice,
   type ReferenceState,
@@ -22,10 +24,35 @@ export type TemplateReference = {
   state: ReferenceState;
 };
 
-/** The instructions a template's routine runs, from its task. */
-export function templatePrompt(template: RoutineTemplate): string {
+/**
+ * The instructions a template's routine runs, from its task: a routine with
+ * steps keeps them on its agent step.
+ */
+export function templatePrompt(
+  template: Pick<RoutineTemplate, 'task'>
+): string {
+  const steps = stepsFromTask(template.task);
+  if (steps) return firstAgent(steps)?.instructions ?? '';
   const prompt = template.task.user_prompt;
   return typeof prompt === 'string' ? prompt : '';
+}
+
+/**
+ * The template's task filled in for the activator: every text that can
+ * mention someone (each Ask AI step's instructions).
+ */
+function filledTask(
+  task: RoutineTemplate['task'],
+  fill: (text: string) => string
+) {
+  const steps = stepsFromTask(task);
+  if (!steps)
+    return {
+      ...task,
+      ...(typeof task.prompt === 'string' ? { prompt: fill(task.prompt) } : {}),
+      user_prompt: fill(templatePrompt({ task })),
+    };
+  return { ...task, steps: stepsToWire(mapStepTexts(steps, fill)) };
 }
 
 /**
@@ -59,15 +86,18 @@ export function createTemplateActivation(args: {
         needsDecision(reference.state) && !choices().has(reference.key)
     );
 
-  const prompt = () => {
-    const activator = args.activator();
-    if (!activator) return templatePrompt(args.template());
-    return fillTemplatePrompt({
-      prompt: templatePrompt(args.template()),
+  const fill = (activator: Activator) => (prompt: string) =>
+    fillTemplatePrompt({
+      prompt,
       variables: args.template().variables,
       activator,
       choices: choices(),
     });
+
+  const prompt = () => {
+    const activator = args.activator();
+    const instructions = templatePrompt(args.template());
+    return activator ? fill(activator)(instructions) : instructions;
   };
 
   /** The routine to create, once every reference that needs one has a decision. */
@@ -75,6 +105,7 @@ export function createTemplateActivation(args: {
     const activator = args.activator();
     if (!activator || undecided().length > 0) return undefined;
     const template = args.template();
+    const task = filledTask(template.task, fill(activator));
     return {
       name: template.name,
       trigger: fillTemplateTrigger({
@@ -83,9 +114,10 @@ export function createTemplateActivation(args: {
         activator,
       }),
       kind: 'Agent',
-      task: { ...template.task, user_prompt: prompt() },
+      task,
       enabled: true,
       run_visibility: DEFAULT_RUN_VISIBILITY,
+      ...(template.description ? { description: template.description } : {}),
     };
   };
 

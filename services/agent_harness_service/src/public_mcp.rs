@@ -19,6 +19,7 @@ use mcp_auth_proxy::{
         service::{McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
     },
     outbound::{
+        email_sign_in::AuthServiceEmailCodes,
         fusionauth::FusionAuthOAuthProvider,
         postgres::PostgresAuthStore,
         redis::{RedisClientRegistry, RedisInflightAuth},
@@ -39,6 +40,8 @@ pub struct PublicCodeMode {
     pub selector: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>,
 }
 
+/// Browser-based MCP clients Macro has vetted, whose users skip the consent
+/// screen. Any other `https` client works too, after the user approves it.
 const DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS: [&str; 5] = [
     "claude.ai",
     "chatgpt.com",
@@ -132,8 +135,15 @@ pub async fn router(
     });
     // OAuth router has its own CORS and bearer middleware; mount outside the
     // browser API layers, with the same tracing layer as the harness API.
+    // Serves the ChatGPT Apps Directory domain verification token.
+    let openai_domain_verification_token =
+        config.openai_domain_verification_token.as_ref().to_string();
     Ok(
         mcp_auth_proxy::inbound::axum_router::mounted_mcp_router(auth_proxy, jwt_args, mcp_service)
+            .route(
+                "/.well-known/openai-apps-challenge",
+                axum::routing::get(move || async move { openai_domain_verification_token }),
+            )
             .layer(
                 macro_tower_layers::MacroRequestIdAndTracingLayer::new(
                     std::time::Duration::from_millis(200),
@@ -157,6 +167,11 @@ async fn build_auth_proxy(
 )> {
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
+    let email_codes = AuthServiceEmailCodes::new(
+        &macro_service_urls::AuthServiceUrl::new()?,
+        mcp_oauth_redirect_uri.clone(),
+    )
+    .context("failed to initialize MCP email sign-in")?;
 
     let fusionauth_api_key = LocalOrRemoteSecret::new_from_secret_manager(
         config.fusionauth_api_key_secret_key.as_ref().to_owned(),
@@ -234,6 +249,7 @@ async fn build_auth_proxy(
         client_registrations: store.clone(),
         refresh_token_bindings: store,
         oauth_provider: Arc::new(auth_provider),
+        email_codes: Arc::new(email_codes),
     });
     Ok((auth_proxy, backfill))
 }
@@ -263,7 +279,8 @@ fn build_analytics(config: &Config, db: sqlx::PgPool) -> McpAnalytics {
 }
 
 /// Builds the redirect URI policy the broker enforces at registration and at
-/// authorize, from the configured host list or the built-in default.
+/// authorize. The configured host list, or the built-in default, names the
+/// `https` hosts trusted without the consent screen.
 fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
     match config.mcp_allowed_redirect_hosts.value() {
         Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),

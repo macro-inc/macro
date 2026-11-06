@@ -300,6 +300,7 @@ impl EventRunRepository for PgEventRunRepo {
         let action = sqlx::query!(
             r#"
             SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id, appearance AS "appearance: Json<EntityAppearance>",
+                   description,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
             WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2
@@ -371,6 +372,7 @@ impl EventRunRepository for PgEventRunRepo {
                 .appearance
                 .map(|v: sqlx::types::Json<EntityAppearance>| v.0)
                 .unwrap_or_default(),
+            description: action.description,
         };
         sqlx::query!(
             "UPDATE scheduled_action SET claimed = $2, claim_token = $3, updated_at = now() WHERE id = $1",

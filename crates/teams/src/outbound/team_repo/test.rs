@@ -417,7 +417,7 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert_eq!(invited.len(), 1);
@@ -430,7 +430,7 @@ async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert!(invited.is_empty());
@@ -533,7 +533,7 @@ async fn test_invite_existing_user_within_rate_limit(pool: Pool<Postgres>) -> an
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     // Rate limit blocks re-send, no new invite created either
@@ -565,7 +565,7 @@ async fn test_invite_existing_user_inside_email_rate_limit(
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert!(invited.is_empty());
@@ -596,7 +596,7 @@ async fn test_invite_existing_user_after_rate_limit(pool: Pool<Postgres>) -> any
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert_eq!(invited.len(), 1);
@@ -631,7 +631,7 @@ async fn test_invite_mix_new_and_existing(pool: Pool<Postgres>) -> anyhow::Resul
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
 
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
 
     assert_eq!(invited.len(), 2);
@@ -666,7 +666,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -678,7 +678,7 @@ async fn test_reinvite_updates_last_sent_at(pool: Pool<Postgres>) -> anyhow::Res
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert!(invited.is_empty());
 
@@ -708,7 +708,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -718,7 +718,7 @@ async fn test_resend_without_mark_sent_stays_eligible(pool: Pool<Postgres>) -> a
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert_eq!(invited.len(), 1);
 
@@ -768,7 +768,7 @@ async fn test_mark_invites_sent(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let invites = vec![Email::parse_from_str("invite@macro.com")?.lowercase()];
     let invites = non_empty::NonEmpty::new(invites.as_slice())?;
     let invited = team_repo
-        .invite_users_to_team(&team_id, &user_id, invites)
+        .invite_users_to_team(&team_id, &user_id, invites, false)
         .await?;
     assert!(invited.is_empty());
 
@@ -1111,6 +1111,14 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
     let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
 
+    // A rolled-back agent invite must stay one, or the retry never joins.
+    sqlx::query!(
+        "UPDATE team_invite SET is_agent = TRUE WHERE id = $1",
+        team_invite_id
+    )
+    .execute(&pool)
+    .await?;
+
     let accepted_invite = team_repo
         .accept_team_invite(&team_invite_id, &user_id)
         .await?;
@@ -1134,7 +1142,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
 
     let invite = sqlx::query(
         r#"
-        SELECT email, team_role
+        SELECT email, team_role, is_agent
         FROM team_invite
         WHERE id = $1
         "#,
@@ -1142,6 +1150,7 @@ async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Resul
     .bind(team_invite_id)
     .fetch_one(&pool)
     .await?;
+    assert!(invite.try_get::<bool, _>("is_agent")?);
     assert_eq!(invite.try_get::<String, _>("email")?, "user3@user.com");
     assert_eq!(
         invite.try_get::<TeamRole, _>("team_role")?,
@@ -1865,26 +1874,35 @@ const TEAM_1: &str = "11111111-1111-1111-1111-111111111111";
 
 /// Sets the fixture invite to `invite@macro.com` as `days_old` days old, last
 /// emailed `last_sent_days_ago` days ago, with `reminders_sent` reminders.
+///
+/// `last_sent_at` is `TIMESTAMP(3)`, which rounds to the nearest millisecond,
+/// so it is truncated first. Rounded up, an invite aged to exactly its due
+/// time is still up to 0.5ms short of it if the claim's `NOW()` comes that soon.
 async fn age_invite(
     pool: &Pool<Postgres>,
     days_old: i32,
     last_sent_days_ago: i32,
     reminders_sent: i16,
 ) -> anyhow::Result<()> {
-    sqlx::query(
+    let aged_exactly: bool = sqlx::query_scalar(
         r#"
         UPDATE team_invite
         SET created_at = NOW() - make_interval(days => $1),
-            last_sent_at = NOW() - make_interval(days => $2),
+            last_sent_at = date_trunc('milliseconds', NOW() - make_interval(days => $2)),
             reminders_sent = $3
         WHERE email = 'invite@macro.com'
+        RETURNING last_sent_at <= NOW() - make_interval(days => $2)
         "#,
     )
     .bind(days_old)
     .bind(last_sent_days_ago)
     .bind(reminders_sent)
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
+    assert!(
+        aged_exactly,
+        "last_sent_at must not round past its due time"
+    );
     Ok(())
 }
 
@@ -2087,5 +2105,95 @@ async fn invite_reminder_claims_respect_the_limit(pool: Pool<Postgres>) -> anyho
         claimed_emails(&team_repo).await?,
         vec![("invite@macro.com".to_string(), 1)]
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn agent_invites_are_visible_to_the_invitee(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let macro_user_id = uuid::Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
+           VALUES ($1, 'owner@example.com', 'owner@example.com', 'cus_owner')"#,
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" ("id", "email", "macro_user_id")
+           VALUES ('macro|owner@example.com', 'owner@example.com', $1)"#,
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let team_repo = TeamRepositoryImpl::new(pool);
+    let user_id = MacroUserIdStr::parse_from_str("macro|owner@example.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let invites = vec![Email::parse_from_str("agent@example.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites, true)
+        .await?;
+    assert!(invited[0].is_agent);
+
+    let invitee = MacroUserIdStr::parse_from_str("macro|agent@example.com")?;
+    let pending = team_repo.get_user_team_invites(&invitee).await?;
+    assert_eq!(pending.len(), 1);
+    assert!(pending[0].is_agent);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_user_display_name_joins_the_set_name_parts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    for statement in [
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
+            ('b1111111-1111-1111-1111-111111111111', 'full@example.com', 'full@example.com', 'cus_full'),
+            ('b2222222-2222-2222-2222-222222222222', 'first@example.com', 'first@example.com', 'cus_first'),
+            ('b3333333-3333-3333-3333-333333333333', 'unset@example.com', 'unset@example.com', 'cus_unset'),
+            ('b4444444-4444-4444-4444-444444444444', 'none@example.com', 'none@example.com', 'cus_none')"#,
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES
+            ('macro|full@example.com', 'full@example.com', 'b1111111-1111-1111-1111-111111111111'),
+            ('macro|first@example.com', 'first@example.com', 'b2222222-2222-2222-2222-222222222222'),
+            ('macro|unset@example.com', 'unset@example.com', 'b3333333-3333-3333-3333-333333333333'),
+            ('macro|none@example.com', 'none@example.com', 'b4444444-4444-4444-4444-444444444444')"#,
+        r#"INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES
+            ('b1111111-1111-1111-1111-111111111111', 'Ada', 'Lovelace'),
+            ('b2222222-2222-2222-2222-222222222222', 'Grace', 'N/A'),
+            ('b3333333-3333-3333-3333-333333333333', 'N/A', NULL)"#,
+    ] {
+        sqlx::query(statement).execute(&pool).await?;
+    }
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let mut names = Vec::new();
+    for user in [
+        "macro|full@example.com",
+        "macro|first@example.com",
+        "macro|unset@example.com",
+        "macro|none@example.com",
+        "macro|missing@example.com",
+    ] {
+        let user = MacroUserIdStr::parse_from_str(user)?;
+        names.push(team_repo.get_user_display_name(&user).await?);
+    }
+
+    assert_eq!(
+        names,
+        [
+            Some("Ada Lovelace".to_string()),
+            Some("Grace".to_string()),
+            None,
+            None,
+            None,
+        ]
+    );
+
     Ok(())
 }

@@ -128,8 +128,10 @@ async fn word_document_requests_carry_the_token_and_surface_agent_errors() {
         .await
         .unwrap_err();
     assert_eq!(
-        error.to_string(),
-        "No paragraph or block has id x. (HTTP 422 Unprocessable Entity)"
+        error
+            .downcast_ref::<crate::domain::word_document::WordDocumentRejected>()
+            .map(ToString::to_string),
+        Some("No paragraph or block has id x.".to_owned())
     );
 
     let bodies = bodies.lock().unwrap();
@@ -149,4 +151,43 @@ async fn word_document_requests_carry_the_token_and_surface_agent_errors() {
             "author": "Jacob Beckerman",
         })
     );
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn edit_reports_the_revision_the_worker_left() {
+    use axum::{Json, Router, routing::post};
+
+    let app = Router::new().route(
+        "/edit",
+        post(|| async {
+            Json(serde_json::json!({
+                "ops": [{}, {}],
+                "usage": [{ "model": "gemini-3.8-flash", "inputTokens": 12, "outputTokens": 3 }],
+                "revision": "AQID",
+            }))
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = ReqwestEditingWorkerClient::new(
+        url,
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    );
+
+    let result = client
+        .edit(
+            "doc",
+            &"test-token".to_owned().into(),
+            "Replace Q3 with Q4",
+            EditMode::Fast,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.edits_applied, 2);
+    assert_eq!(result.clarification, None);
+    assert_eq!(result.revision.as_deref(), Some("AQID"));
 }

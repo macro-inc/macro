@@ -97,6 +97,7 @@ fn emits_required_keys() {
         "JWT_SECRET_KEY",
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
+        "POSTHOG_API_KEY",
         "REDIS_HOST",
         "MACRO_DB_URL",
         "INTERNAL_API_KEY",
@@ -124,7 +125,6 @@ fn emits_required_keys() {
         "MACRO_API_TOKEN_PRIVATE_SECRET_KEY",
         "MACRO_API_TOKEN_EXPIRY_SECONDS",
         "GMAIL_GCP_QUEUE",
-        "APOLLO_API_KEY",
         "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL",
         "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY",
         "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
@@ -135,6 +135,7 @@ fn emits_required_keys() {
         "ANTHROPIC_API_KEY",
         "SLACK_MCP_CLIENT_ID",
         "SLACK_MCP_CLIENT_SECRET",
+        "OPENAI_DOMAIN_VERIFICATION_TOKEN",
         "GITHUB_SYNC_APP_URL",
         "GITHUB_SYNC_APP_CLIENT_ID",
         "GITHUB_SYNC_APP_CLIENT_SECRET",

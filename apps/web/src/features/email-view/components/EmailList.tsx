@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -8,6 +9,7 @@ import {
   type ListKey,
   useListInteractions,
 } from '@app/components/list';
+import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
@@ -63,7 +65,7 @@ import {
   Switch,
 } from 'solid-js';
 import type { CacheSnapshot } from 'virtua';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { VirtualizerHandle } from 'virtua/solid';
 import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
 import {
   persistSoupNavigationTouchHighlight,
@@ -90,10 +92,10 @@ import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
 import {
-  EmailFocusFlags,
-  EmailFocusNarrowScore,
+  EMAIL_FOCUS_WIDE_BREAKPOINT,
+  EmailFocusPreviewLeading,
+  EmailFocusReason,
   EmailFocusScore,
-  emailFocusOf,
 } from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
@@ -124,6 +126,9 @@ const savedLayouts = new Map<
   }
 >();
 const MAX_SAVED_LAYOUTS = 20;
+
+const isGroupHeaderRow = (row: EmailDataSourceItem) =>
+  row.kind === 'group-header';
 
 export function EmailList(props: EmailListProps) {
   const {
@@ -209,13 +214,17 @@ export function EmailList(props: EmailListProps) {
       activeTab: state.tab,
     });
 
+  // Focus's day headers stay pinned while its chronological list scrolls.
+  const pinsDateHeaders = () =>
+    state.tab === 'focus' && state.focusSort === 'recent';
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  createScrollTopFade(viewport);
+  // The top-edge fade would wash out a pinned header.
+  createScrollTopFade(() => (pinsDateHeaders() ? undefined : viewport()));
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
   // The virtualizer's item offsets exclude this; its scroll offset includes it.
-  const listStartMargin = () =>
-    isTouchDevice() ? (topSpacerSize.height ?? 0) : 0;
+  // The top spacer holds the touch inset and the pinned tutorial row.
+  const listStartMargin = () => topSpacerSize.height ?? 0;
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   // Coming back from a thread, or toggling the reading pane, remounts the
@@ -544,7 +553,13 @@ export function EmailList(props: EmailListProps) {
     const top = listStartMargin() + handle.getItemOffset(focused);
     const bottom = top + handle.getItemSize(focused);
     const viewTop = handle.scrollOffset;
-    if (top < viewTop || bottom > viewTop + handle.viewportSize) {
+    // A pinned header can cover a row within these bounds; the sticky handle
+    // allows for it and leaves a row that is really in view alone.
+    if (
+      pinsDateHeaders() ||
+      top < viewTop ||
+      bottom > viewTop + handle.viewportSize
+    ) {
       handle.scrollToIndex(focused, { align: 'nearest' });
     }
   }
@@ -677,7 +692,13 @@ export function EmailList(props: EmailListProps) {
           onRefresh={pullRefresh}
         />
 
-        <ListLayoutProvider ref={grid} narrowLayout="inbox">
+        <ListLayoutProvider
+          ref={grid}
+          narrowLayout="inbox"
+          wideBreakpoint={
+            state.tab === 'focus' ? EMAIL_FOCUS_WIDE_BREAKPOINT : undefined
+          }
+        >
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseEntity}
@@ -755,7 +776,19 @@ export function EmailList(props: EmailListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
-                  <EmailEmptyState />
+                  {/* New inboxes start empty, which is when the tutorial
+                      matters most. The row then takes the touch top inset. */}
+                  <Show
+                    when={state.tab === 'important'}
+                    fallback={<EmailEmptyState />}
+                  >
+                    <div class="touch:pt-(--mobile-content-inset-top)">
+                      <TutorialRow tutorial="mail" />
+                    </div>
+                    <div class="contents touch:[--mobile-content-inset-top:0px]">
+                      <EmailEmptyState />
+                    </div>
+                  </Show>
                 </div>
               </Match>
 
@@ -768,20 +801,28 @@ export function EmailList(props: EmailListProps) {
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
                 >
                   {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={state.tab === 'important'}>
+                      <TutorialRow tutorial="mail" />
+                    </Show>
+                  </div>
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
-                    <Virtualizer
+                    <StickyVirtualizer
                       ref={registerVirtualizer}
                       cache={initialCache}
                       data={rows()}
                       scrollRef={viewport()}
                       startMargin={listStartMargin()}
+                      isSticky={
+                        pinsDateHeaders() ? isGroupHeaderRow : undefined
+                      }
+                      stickyInset={listStartMargin()}
                       bufferSize={500}
                       itemSize={44}
                       keepMounted={
@@ -831,40 +872,20 @@ export function EmailList(props: EmailListProps) {
                                     <ListEntity
                                       entity={entityRow().entity}
                                       onFilterByTag={filterByTag}
-                                      titleLeading={
-                                        <Show
-                                          when={emailFocusOf(
-                                            entityRow().entity
-                                          )}
-                                        >
-                                          {(focus) => (
-                                            <EmailFocusNarrowScore
-                                              focus={focus()}
-                                            />
-                                          )}
-                                        </Show>
-                                      }
                                       meta={
-                                        <Show
-                                          when={emailFocusOf(
-                                            entityRow().entity
-                                          )}
-                                        >
-                                          {(focus) => (
-                                            <EmailFocusFlags focus={focus()} />
-                                          )}
-                                        </Show>
+                                        <EmailFocusReason
+                                          entity={entityRow().entity}
+                                        />
                                       }
                                       metaEnd={
-                                        <Show
-                                          when={emailFocusOf(
-                                            entityRow().entity
-                                          )}
-                                        >
-                                          {(focus) => (
-                                            <EmailFocusScore focus={focus()} />
-                                          )}
-                                        </Show>
+                                        <EmailFocusScore
+                                          entity={entityRow().entity}
+                                        />
+                                      }
+                                      previewLeading={
+                                        <EmailFocusPreviewLeading
+                                          entity={entityRow().entity}
+                                        />
                                       }
                                       scheduleStatus={
                                         <Show
@@ -1046,7 +1067,7 @@ export function EmailList(props: EmailListProps) {
                           </Match>
                         </Switch>
                       )}
-                    </Virtualizer>
+                    </StickyVirtualizer>
                   </Suspense>
                   <Show when={isTouchDevice()}>
                     <div

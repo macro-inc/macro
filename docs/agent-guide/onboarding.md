@@ -13,6 +13,9 @@ localStorage for that user and removed from the URL after it is applied, so a
 reload keeps later progress. The app shell and the inbox connection callback
 keep `step` when they send a first-run user into onboarding.
 
+Agent accounts never see this flow, including through a direct link; see
+[login](login.md#agent-accounts).
+
 ## Onboarding bypass — `/app/onboarding`
 
 In local development (`LOCAL_ONLY`), every account sees **Bypass** on every

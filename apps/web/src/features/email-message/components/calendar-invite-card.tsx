@@ -54,9 +54,7 @@ function MetaRow(props: { icon: JSX.Element; children: JSX.Element }) {
       <span class="mt-0.5 flex shrink-0 text-ink-subtle [&>svg]:size-4">
         {props.icon}
       </span>
-      <div class="min-w-0 break-words [overflow-wrap:anywhere]">
-        {props.children}
-      </div>
+      <div class="min-w-0 wrap-anywhere">{props.children}</div>
     </li>
   );
 }
@@ -237,7 +235,7 @@ export function CalendarInviteCard(props: {
             <span>{eyebrow().text}</span>
             <Show when={eyebrow().suffix}> {eyebrow().suffix}</Show>
           </p>
-          <h3 class="break-words text-base font-semibold leading-snug [overflow-wrap:anywhere]">
+          <h3 class="text-base font-semibold leading-snug wrap-anywhere">
             {title() || 'Calendar notification'}
           </h3>
         </header>
@@ -283,9 +281,11 @@ export function CalendarInviteCard(props: {
               {visibleAttendees().map(participantName).join(', ')}
               <Show when={invite().attendees.length > 3}>
                 {' '}
+                {/* Inline in the names, so it keeps their line height beside the
+                    icon; on touch an overlay restores the 44px tap target. */}
                 <Button
                   variant="ghost"
-                  class="h-auto border-0 p-0 align-baseline text-sm font-medium text-accent"
+                  class="h-auto min-h-0 border-0 p-0 align-baseline text-sm font-medium text-accent touch:min-h-0 touch:min-w-0 touch:before:absolute touch:before:inset-x-0 touch:before:top-1/2 touch:before:h-11 touch:before:-translate-y-1/2 touch:before:content-['']"
                   aria-expanded={attendeesExpanded()}
                   onClick={() => setAttendeesExpanded((value) => !value)}
                 >
@@ -300,7 +300,7 @@ export function CalendarInviteCard(props: {
         <Show when={!cancelled() && invite().description}>
           <div class="flex flex-col items-start gap-1.5">
             <div
-              class="break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
+              class="text-ink-muted wrap-anywhere [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
               classList={{ 'line-clamp-2': !descriptionExpanded() }}
               innerHTML={descriptionHtml()}
               onClick={openDescriptionLink}
@@ -402,7 +402,7 @@ export function CalendarInviteCard(props: {
             <Show when={canRespond() || props.actions?.showDay}>
               <p class="flex flex-wrap items-center gap-x-1 text-xs text-ink-subtle">
                 <Show when={canRespond()}>
-                  <span class="break-words [overflow-wrap:anywhere]">
+                  <span class="wrap-anywhere">
                     Responding as {resolved()?.respondingEmail}
                   </span>
                 </Show>
@@ -475,7 +475,7 @@ function SchedulingNotification(props: {
       >
         {badge(status).icon}
       </span>
-      <p class="min-w-0 break-words [overflow-wrap:anywhere]">
+      <p class="min-w-0 wrap-anywhere">
         <span class="font-semibold">{name}</span> {verb(status)}{' '}
         <span class="text-ink-subtle">{title(name)}</span>
       </p>
@@ -494,7 +494,7 @@ function SchedulingNotification(props: {
       <div class="flex min-w-0 flex-col items-start gap-1 pl-9.5">
         <p class="text-xs text-ink-subtle">{props.when}</p>
         <Show when={props.invitation.comment}>
-          <p class="break-words text-ink-muted [overflow-wrap:anywhere]">
+          <p class="text-ink-muted wrap-anywhere">
             “{props.invitation.comment}”
           </p>
         </Show>

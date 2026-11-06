@@ -150,6 +150,9 @@ struct MockTeamRepository {
     invite_link_team: Option<TeamInviteLinkTeam>,
     /// What `claim_due_invite_reminders` hands out, once.
     due_invite_reminders: Arc<Mutex<Vec<DueInviteReminder>>>,
+    /// What `get_user_display_name` returns for every user.
+    user_display_name: Option<String>,
+    fail_user_display_name: bool,
 }
 
 impl MockTeamRepository {
@@ -236,6 +239,8 @@ impl MockTeamRepository {
             invite_link_creator: Arc::new(Mutex::new(None)),
             invite_link_team: None,
             due_invite_reminders: Arc::new(Mutex::new(Vec::new())),
+            user_display_name: Some("Olivia Owner".to_string()),
+            fail_user_display_name: false,
         }
     }
 
@@ -413,6 +418,7 @@ impl TeamRepository for MockTeamRepository {
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
         _: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        _: bool,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send {
         *self.invite_users_to_team_calls.lock().unwrap() += 1;
         let invites = self.invites_to_return.clone();
@@ -724,6 +730,20 @@ impl TeamRepository for MockTeamRepository {
     ) -> impl Future<Output = Result<String, TeamError>> + Send {
         let name = self.team_name.clone();
         async move { Ok(name) }
+    }
+
+    fn get_user_display_name(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<String>, TeamError>> + Send {
+        let result = if self.fail_user_display_name {
+            Err(TeamError::StorageLayerError(anyhow::anyhow!(
+                "name lookup failed"
+            )))
+        } else {
+            Ok(self.user_display_name.clone())
+        };
+        async move { result }
     }
 
     fn patch_team(
@@ -1783,6 +1803,7 @@ impl OpenSeatRelease for RecordingOpenSeatRelease {
 
 fn make_invite(email: &str, invite_id: uuid::Uuid, team_id: uuid::Uuid) -> TeamInvite<'static> {
     TeamInvite {
+        is_agent: false,
         team_id,
         team_invite_id: invite_id,
         email: Email::parse_from_str(email)
@@ -1840,6 +1861,7 @@ fn make_accepted_invite(
                 .into_owned(),
             created_at: chrono::Utc::now(),
             last_sent_at: chrono::Utc::now(),
+            is_agent: false,
         },
     }
 }
@@ -2221,6 +2243,7 @@ async fn invite_team_event_is_published_only_for_new_lowercase_email() {
         .invite_users_to_team(
             test_team_receipt::<MemberTeamRole>(team_id, &inviter),
             non_empty::NonEmpty::new(emails.as_slice()).unwrap(),
+            false,
         )
         .await
         .unwrap();
@@ -2258,6 +2281,7 @@ async fn invite_team_event_repository_failure_emits_nothing_and_broker_failure_i
             .invite_users_to_team(
                 test_team_receipt::<MemberTeamRole>(team_id, &inviter),
                 non_empty::NonEmpty::new(emails.as_slice()).unwrap(),
+                false,
             )
             .await
             .is_err()
@@ -2275,6 +2299,7 @@ async fn invite_team_event_repository_failure_emits_nothing_and_broker_failure_i
             .invite_users_to_team(
                 test_team_receipt::<MemberTeamRole>(team_id, &inviter),
                 non_empty::NonEmpty::new(emails.as_slice()).unwrap(),
+                false,
             )
             .await
             .is_ok()
@@ -3320,7 +3345,7 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let result = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -3358,6 +3383,84 @@ async fn invite_users_to_team_enterprise_bypasses_billing_and_preserves_side_eff
             assert_eq!(team_name.as_deref(), Some("Enterprise Team"));
         }
         event => panic!("unexpected event: {event:?}"),
+    }
+}
+
+/// The inviter name each sent invite email carried, in send order.
+fn inviter_names_sent(notification_ingress: &MockNotificationIngress) -> Vec<serde_json::Value> {
+    notification_ingress
+        .recorded_requests
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|request| request["req"]["notification"]["content"]["inviterName"].clone())
+        .collect()
+}
+
+/// Invites one member and returns the inviter names the invite emails carried.
+async fn inviter_names_for_invite(team_repo: MockTeamRepository) -> Vec<serde_json::Value> {
+    let team_id = uuid::Uuid::from_u128(7200);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let notification_ingress = Arc::new(MockNotificationIngress::new(HashSet::new()));
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        notification_ingress.clone(),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let invites = vec![
+        Email::parse_from_str("member@example.com")
+            .unwrap()
+            .lowercase(),
+    ];
+    let invites = non_empty::NonEmpty::new(invites.as_slice()).unwrap();
+    service
+        .invite_users_to_team(
+            test_team_receipt::<MemberTeamRole>(team_id, &owner_id),
+            invites,
+            false,
+        )
+        .await
+        .unwrap();
+
+    inviter_names_sent(&notification_ingress)
+}
+
+fn invite_name_team_repo() -> MockTeamRepository {
+    let team_id = uuid::Uuid::from_u128(7200);
+    MockTeamRepository::new(
+        vec![make_invite(
+            "member@example.com",
+            uuid::Uuid::from_u128(7201),
+            team_id,
+        )],
+        "Acme",
+        Arc::new(Mutex::new(Vec::new())),
+    )
+}
+
+#[tokio::test]
+async fn invite_email_names_the_inviter() {
+    let names = inviter_names_for_invite(invite_name_team_repo()).await;
+    assert_eq!(names, ["Olivia Owner"]);
+}
+
+/// The email falls back to the inviter's address, so neither a missing name
+/// nor a failed lookup stops the invite.
+#[tokio::test]
+async fn invite_email_is_sent_without_the_inviters_name() {
+    let mut unnamed = invite_name_team_repo();
+    unnamed.user_display_name = None;
+    let mut failed = invite_name_team_repo();
+    failed.fail_user_display_name = true;
+
+    for team_repo in [unnamed, failed] {
+        let names = inviter_names_for_invite(team_repo).await;
+        assert_eq!(names, [serde_json::Value::Null]);
     }
 }
 
@@ -3420,6 +3523,7 @@ async fn invitee_plans_for_team(
         .invite_users_to_team(
             test_team_receipt::<MemberTeamRole>(team_id, &owner_id),
             invites,
+            false,
         )
         .await
         .unwrap();
@@ -3492,7 +3596,7 @@ async fn invite_users_to_team_blocked_for_member_when_non_admin_invites_disabled
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let error = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap_err();
 
@@ -3523,6 +3627,7 @@ async fn invite_users_to_team_caps_new_invites_per_day() {
         invited_by: "macro|owner@example.com".to_string(),
         created_at,
         last_sent_at: created_at,
+        is_agent: false,
     };
     let now = chrono::Utc::now();
     // A day-old invite no longer counts toward today's limit.
@@ -3551,6 +3656,7 @@ async fn invite_users_to_team_caps_new_invites_per_day() {
         .invite_users_to_team(
             test_team_receipt::<MemberTeamRole>(team_id, &invited_by),
             non_empty::NonEmpty::new(invite_emails.as_slice()).unwrap(),
+            false,
         )
         .await
         .unwrap_err();
@@ -3596,7 +3702,7 @@ async fn invite_users_to_team_allowed_for_admin_when_non_admin_invites_disabled(
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let result = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -3677,7 +3783,7 @@ async fn invite_users_to_team_enterprise_allows_invites_past_former_plan_limit()
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let result = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -3726,7 +3832,7 @@ async fn invite_users_to_team_enterprise_status_lookup_failure_precedes_persiste
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let error = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap_err();
 
@@ -3777,7 +3883,7 @@ async fn test_invite_marks_sent_only_for_successful_notifications() {
 
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
     let result = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -3819,7 +3925,7 @@ async fn test_invite_does_not_call_mark_sent_when_all_notifications_fail() {
 
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
     service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -3860,7 +3966,7 @@ async fn test_invite_marks_all_sent_when_all_notifications_succeed() {
 
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
     service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -3905,7 +4011,7 @@ async fn team_analytics_invite_users_emits_invited_events_with_team_id() {
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -3959,7 +4065,7 @@ async fn team_analytics_invite_users_does_not_emit_when_invite_creation_fails() 
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let err = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .err()
         .unwrap();
@@ -4882,7 +4988,7 @@ async fn test_invite_users_to_team_backfills_legacy_team_subscription() {
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &owner_id);
 
     service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -4952,7 +5058,7 @@ async fn invite_users_to_team_fails_when_the_owners_subscription_lookup_fails() 
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &owner_id);
 
     let err = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .err()
         .unwrap();
@@ -7860,7 +7966,7 @@ async fn invite_users_to_team_free_team_under_cap_skips_billing() {
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let result = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -7910,7 +8016,7 @@ async fn invite_users_to_team_free_team_allows_invites_past_former_limit() {
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &invited_by);
 
     let result = service
-        .invite_users_to_team(receipt, invites)
+        .invite_users_to_team(receipt, invites, false)
         .await
         .unwrap();
 
@@ -8816,6 +8922,7 @@ fn due_reminder(invite: u128, reminder_number: u8) -> DueInviteReminder {
         enterprise: false,
         paying: true,
         has_subscription: true,
+        is_agent: false,
     }
 }
 
@@ -8861,6 +8968,7 @@ async fn invite_reminders_email_each_claimed_invite() {
         let content = &request["req"]["notification"]["content"];
         assert_eq!(content["reminder"], true);
         assert_eq!(content["teamName"], "Acme");
+        assert_eq!(content["inviterName"], "Olivia Owner");
         assert_eq!(
             content["teamInviteId"],
             uuid::Uuid::from_u128(invite).to_string()

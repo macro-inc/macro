@@ -133,6 +133,8 @@ pub struct RequestedExternalSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session, told to the runtime on the event.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Validate the base branch supported by external repository provisioning.
@@ -297,6 +299,9 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
     /// Instructions the session's runtime works under, when any were stated.
     pub instructions: Option<String>,
+    /// What opened the session, as the runtime was told on the trigger event.
+    /// A description only: it never decides visibility or notifications.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -333,6 +338,8 @@ pub struct OpenManagedSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+    /// What opened the session.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// The prompt a managed session opens with, delivered as soon as it can run.
@@ -464,6 +471,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them. Idempotent; grants
+    /// nothing.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Who prompted the turn `id` is running or last ran; `None` before its

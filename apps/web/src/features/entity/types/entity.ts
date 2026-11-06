@@ -14,6 +14,10 @@ import type {
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
+import type {
+  GraphqlEmailFocusCategory,
+  GraphqlEmailImportanceTrend,
+} from '@service-storage/graphql/generated/graphql';
 
 export type EntityBase = {
   id: string;
@@ -304,10 +308,14 @@ export type EmailAttachment = {
 
 /** A thread's Focus classification; present only on Focus list rows. */
 export type EmailFocus = {
+  category: GraphqlEmailFocusCategory;
   /** 0 to 100. */
   importance: number;
   needsReply: boolean;
   needsFollowUp: boolean;
+  importanceTrend: GraphqlEmailImportanceTrend;
+  /** The day the thread's mail says it is due, as a `YYYY-MM-DD` calendar date. */
+  dueOn?: string | null;
 };
 
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?

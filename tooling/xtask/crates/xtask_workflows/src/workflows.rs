@@ -9,6 +9,7 @@
 //! files — [`runners`] (runner labels), [`vars`] (env / secrets / concurrency),
 //! and [`steps`] (reusable step + job helpers).
 
+mod android_play_publish;
 mod android_play_release;
 mod android_release_drift;
 mod android_release_watch;
@@ -26,6 +27,9 @@ mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
 mod check_tauri_lockfiles;
+mod ci_gate_fork;
+mod ci_gate_label;
+mod ci_gate_reminder;
 mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
@@ -36,7 +40,6 @@ mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_on_push;
-mod deploy_preview;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
@@ -50,6 +53,7 @@ mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
 mod path_validation;
+mod pr_ci;
 mod pr_privacy_check;
 mod publish_sdk;
 mod pulumi_preview_pr;
@@ -261,11 +265,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         },
     },
     WorkflowFile {
-        slug: "deploy_preview",
-        file_name: "deploy_preview.yml",
-        render_yaml: || render_gh_workflow(deploy_preview::deploy_preview)(),
-    },
-    WorkflowFile {
         slug: "deploy_sync_service",
         file_name: "deploy_sync_service.yml",
         render_yaml: || {
@@ -299,6 +298,26 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ios_preview",
         file_name: "ios_preview.yml",
         render_yaml: || render_gh_workflow(ios_preview::ios_preview)(),
+    },
+    WorkflowFile {
+        slug: "pr_ci",
+        file_name: "pr-ci.yml",
+        render_yaml: || render_patched(pr_ci::pr_ci, pr_ci::patch),
+    },
+    WorkflowFile {
+        slug: "ci_gate_reminder",
+        file_name: "ci-gate-reminder.yml",
+        render_yaml: || render_gh_workflow(ci_gate_reminder::ci_gate_reminder)(),
+    },
+    WorkflowFile {
+        slug: "ci_gate_label",
+        file_name: "ci-gate-label.yml",
+        render_yaml: || render_gh_workflow(ci_gate_label::ci_gate_label)(),
+    },
+    WorkflowFile {
+        slug: "ci_gate_fork",
+        file_name: "ci-gate-fork.yml",
+        render_yaml: || render_gh_workflow(ci_gate_fork::ci_gate_fork)(),
     },
     WorkflowFile {
         slug: "pr_privacy_check",
@@ -344,6 +363,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "android_play_release",
         file_name: "android-play-release.yml",
         render_yaml: || render_gh_workflow(android_play_release::android_play_release)(),
+    },
+    WorkflowFile {
+        slug: "android_play_publish",
+        file_name: "android-play-publish.yml",
+        render_yaml: || render_gh_workflow(android_play_publish::android_play_publish)(),
     },
     WorkflowFile {
         slug: "android_release_watch",

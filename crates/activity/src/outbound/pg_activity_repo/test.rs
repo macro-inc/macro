@@ -981,3 +981,107 @@ async fn timeline_index_skips_exactly_the_unindexed_actions(pool: PgPool) {
         format!("(action <> ALL (ARRAY[{}]))", tags.join(", "))
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn session_activity_preserves_invocations_and_paginates_without_entity_grants(pool: PgPool) {
+    use crate::domain::ports::AgentActivityReads;
+    let session = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let first_run = Uuid::now_v7();
+    let second_run = Uuid::now_v7();
+    let foreign_run = Uuid::now_v7();
+    for id in [session, other] {
+        sqlx::query!("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ($1, 'macro|owner@example.com', $2, 'test', 'test', '/workspace')", id, Uuid::now_v7()).execute(&pool).await.unwrap();
+    }
+    for (id, parent) in [
+        (first_run, session),
+        (second_run, session),
+        (foreign_run, other),
+    ] {
+        sqlx::query!(
+            "INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)",
+            id,
+            parent
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repo = PgActivityRepo::new(pool.clone());
+    let timestamp = Utc::now();
+    let rows: Vec<_> = [
+        Some(first_run),
+        Some(second_run),
+        Some(first_run),
+        Some(foreign_run),
+        None,
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, correlation)| {
+        Activity::common(
+            Uuid::from_u128(100 + index as u128),
+            0,
+            Actor::new_from_user(user("macro|actor@example.com")),
+            None,
+            EntityType::Document,
+            "private-document",
+            CommonAction::Edited,
+            timestamp,
+        )
+        .with_agent_correlation(correlation)
+    })
+    .collect();
+    repo.insert_activities(&rows).await.unwrap();
+    repo.insert_activities(&rows).await.unwrap();
+    let page = repo
+        .agent_activity(session, None, None, nz(2))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 2);
+    let next = repo
+        .agent_activity(session, None, page.next, nz(2))
+        .await
+        .unwrap();
+    assert_eq!(next.records.len(), 1);
+    assert!(next.next.is_none());
+    assert!(page.records.iter().all(|row| row.id != next.records[0].id));
+    let filtered = repo
+        .agent_activity(session, Some(first_run), None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(filtered.records.len(), 2);
+    assert!(
+        filtered
+            .records
+            .iter()
+            .all(|row| row.agent_correlation_id == Some(first_run))
+    );
+    assert!(
+        repo.agent_activity(session, Some(foreign_run), None, nz(10))
+            .await
+            .unwrap()
+            .records
+            .is_empty()
+    );
+    // Session deletion removes its mapping, never the entity's existing history.
+    sqlx::query!("DELETE FROM agent_session WHERE id = $1", session)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        repo.agent_activity(session, None, None, nz(10))
+            .await
+            .unwrap()
+            .records
+            .is_empty()
+    );
+    assert_eq!(
+        repo.entity_feed(EntityType::Document, "private-document", None, nz(10))
+            .await
+            .unwrap()
+            .records
+            .len(),
+        5
+    );
+}

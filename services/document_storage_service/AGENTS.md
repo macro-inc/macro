@@ -23,6 +23,8 @@ threads, pins, recents, notifications, folders, activity.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
+  It also builds the attention feeds (Home's work feed and the notifications
+  inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
 - `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
   mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
   (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
@@ -34,6 +36,9 @@ threads, pins, recents, notifications, folders, activity.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
+- Authenticated call routes are composed from `crates/call` under `/call`;
+  `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
+  `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
   across item types. Folder duplication runs on its own task and copies
   documents and chats through `entity_mutation/project_contents.rs`, the
@@ -69,6 +74,8 @@ threads, pins, recents, notifications, folders, activity.
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
   `src/api/swagger.rs`; register query-only schemas explicitly in its components list.
+  Then `bun run gen-api cloud-storage` in `apps/web` regenerates
+  `service-storage/openapi.json` and its clients.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 
@@ -76,10 +83,16 @@ threads, pins, recents, notifications, folders, activity.
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs
   MacroDB + Redis — `just run_dbs` from repo root; DynamoDB local via
-  `just ensure::ensure_dynamodb`, see `justfile`).
+  `just ensure::ensure_dynamodb` from `services/document_storage_service`,
+  whose `justfile` declares the `ensure` module).
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
+
+- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
+  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
+- The same flag client evaluates `enable-programmatic-calls` per caller for the
+  explicit call start, join, and leave routes; failures disable those routes.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
@@ -103,3 +116,5 @@ threads, pins, recents, notifications, folders, activity.
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/observability.md`
 
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
+
+- The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.

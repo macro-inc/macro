@@ -254,6 +254,57 @@ describe('channel rail virtualizer', () => {
     expect(view.getByText('row-0')).toBe(row);
   });
 
+  it('measures unequal section heights before and after reordering', () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute('data-viewport')) return 200;
+        return Number(
+          this.firstElementChild?.getAttribute('data-height') ?? 32
+        );
+      }
+    );
+    const viewport = document.createElement('div');
+    viewport.setAttribute('data-viewport', '');
+    Object.defineProperty(viewport, 'clientHeight', { value: 200 });
+    document.body.append(viewport);
+    const [keys, setKeys] = createSignal(['short', 'long', 'last']);
+    let handle: ChannelRailVirtualizerHandle | undefined;
+    const view = render(
+      () =>
+        createComponent(ChannelRailVirtualizer<string>, {
+          get keys() {
+            return keys();
+          },
+          scrollRoot: viewport,
+          estimateSize: 200,
+          keepMounted: [0, 1, 2],
+          ref: (current) => {
+            handle = current;
+          },
+          children: (key) => {
+            const button = document.createElement('button');
+            button.textContent = key;
+            button.setAttribute('data-height', key === 'long' ? '260' : '40');
+            return button;
+          },
+        }),
+      { container: viewport }
+    );
+    const short = view.getByText('short');
+    const long = view.getByText('long');
+    expect(handle?.scrollMetrics().size).toBe(340);
+    expect(long.parentElement?.style.top).toBe('40px');
+
+    setKeys(['long', 'short', 'last']);
+
+    expect(view.getByText('short')).toBe(short);
+    expect(view.getByText('long')).toBe(long);
+    expect(handle?.scrollMetrics().size).toBe(340);
+    expect(long.parentElement?.style.top).toBe('0px');
+    expect(short.parentElement?.style.top).toBe('260px');
+    expect(view.getByText('last').parentElement?.style.top).toBe('300px');
+  });
+
   it('retains focused or dragged rows outside the viewport', () => {
     const view = mount(0);
     measure(200);

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { context, trace } from '@opentelemetry/api';
+import { context, propagation, trace } from '@opentelemetry/api';
 import { logs } from '@opentelemetry/api-logs';
+import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import {
   InMemoryLogRecordExporter,
   LoggerProvider,
@@ -17,6 +18,7 @@ import { Telemetry } from './index';
 import { userIdSuppressed } from './privacy';
 
 context.setGlobalContextManager(new StackContextManager().enable());
+propagation.setGlobalPropagator(new W3CTraceContextPropagator());
 
 const spanExporter = new InMemorySpanExporter();
 trace.setGlobalTracerProvider(
@@ -108,6 +110,39 @@ describe('Telemetry', () => {
     expect(spans.get('cache.request')?.attributes).not.toHaveProperty('usr.id');
     expect(spans.get('cache.request')?.parentSpanContext).toBeUndefined();
     expect(spans.get('cache.storage')?.attributes).not.toHaveProperty('usr.id');
+  });
+
+  test('a remote context joins the trace another service started', async () => {
+    const traceId = '0af7651916cd43dd8448eb211c80319c';
+    const parentId = 'b7ad6b7169203331';
+    const remote = Telemetry.remoteContext(`00-${traceId}-${parentId}-01`);
+    await Promise.resolve();
+
+    remote.run(() =>
+      Telemetry.span('pushed.read', {}, async (span) => {
+        span.span('pushed.read.phase').end();
+      })
+    );
+    await Promise.resolve();
+
+    const spans = new Map(
+      spanExporter.getFinishedSpans().map((span) => [span.name, span])
+    );
+    const read = spans.get('pushed.read');
+    expect(read?.spanContext().traceId).toBe(traceId);
+    expect(read?.parentSpanContext?.spanId).toBe(parentId);
+    expect(read?.parentSpanContext?.isRemote).toBe(true);
+    expect(spans.get('pushed.read.phase')?.spanContext().traceId).toBe(traceId);
+  });
+
+  test('a malformed remote context starts a new trace', () => {
+    Telemetry.remoteContext('not-a-traceparent').run(() =>
+      Telemetry.span('pushed.read').end()
+    );
+
+    const [read] = spanExporter.getFinishedSpans();
+    expect(read?.parentSpanContext).toBeUndefined();
+    expect(read?.spanContext().traceId).toMatch(/^[0-9a-f]{32}$/);
   });
 
   test('captured context survives an await and restores an unrelated caller', async () => {

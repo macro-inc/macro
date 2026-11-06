@@ -57,6 +57,7 @@ import {
   outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
+import { SkillDescriptionField } from './SkillDescriptionField';
 import { shouldAutofocusDocument } from './should-autofocus-document';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
@@ -408,6 +409,7 @@ export function Notebook(props: {
       >
         <TitleEditor autoFocusOnMount={props.autoFocus} />
         <div class="spacer h-3" />
+        <SkillDescriptionField />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <Show
             when={

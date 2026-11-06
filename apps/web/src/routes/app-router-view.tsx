@@ -1,6 +1,6 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { AgentsViewSkeleton } from '@app/features/agents-view/agents-view-skeleton';
-import { MobileWebSignup } from '@app/features/auth/auth';
+import { AgentSignup, MobileWebSignup } from '@app/features/auth/auth';
 import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-skeleton';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
@@ -51,6 +51,7 @@ import {
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
+  EmailComposeRouteView,
   EmailDetailRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
@@ -58,13 +59,14 @@ import {
   MailRouteView,
   MeetingRouter,
   NotFound,
+  NotificationsCalendarRouteView,
+  NotificationsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
   RecentRouteView,
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
-  RoutineCreateRouteView,
   SearchRouteView,
   SettingsRouteView,
   TasksDetailRouteView,
@@ -83,8 +85,12 @@ import {
   WelcomePage,
 } from './pages';
 import {
+  accountManagerRoute,
   activityRoute,
   agentChatsRoute,
+  agentSetupDoneRoute,
+  agentSetupRoute,
+  agentSignupRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -106,10 +112,14 @@ import {
   crmPipelineRecordFileItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRetiredDatabaseRoute,
+  crmPipelineRetiredRecordDatabasesRoute,
   crmPipelineRoute,
   crmRecordFileItemRoute,
   crmRecordItemRoute,
   crmRecordRoute,
+  crmRetiredDatabaseRoute,
+  crmRetiredRecordDatabasesRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -118,6 +128,7 @@ import {
   driveSplitRoute,
   driveTabDocumentRoute,
   driveTabRoute,
+  emailComposeRoute,
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
@@ -140,6 +151,8 @@ import {
   meetRoute,
   mobileEmailSignupRoute,
   notFoundRoute,
+  notificationsCalendarRoute,
+  notificationsRoute,
   onboardingRoute,
   prDetailRoute,
   projectDetailRoute,
@@ -170,6 +183,18 @@ import {
   withMeetingShell,
 } from './shells';
 
+const AccountManagerPage = lazyNamed(
+  () => import('@app/features/account-manager/account-manager-page'),
+  'AccountManagerPage'
+);
+const AgentSetupPage = lazyNamed(
+  () => import('@app/features/agent-setup/agent-setup-page'),
+  'AgentSetupPage'
+);
+const AgentSetupDonePage = lazyNamed(
+  () => import('@app/features/agent-setup/agent-setup-page'),
+  'AgentSetupDonePage'
+);
 const ExternalChatRouteView = lazyNamed(
   () => import('@app/features/external-view/route-views'),
   'ExternalChatRouteView'
@@ -252,6 +277,16 @@ export function AppRouterView() {
       <Route definition={authRoute} component={AuthShell}>
         <Route definition={taskSlugRoute} component={TaskSlugPage} />
         <Route definition={signupRoute} component={SignupPage} />
+        <Route definition={agentSignupRoute} component={AgentSignup} />
+        <Route
+          definition={accountManagerRoute}
+          component={AccountManagerPage}
+        />
+        <Route definition={agentSetupRoute} component={AgentSetupPage} />
+        <Route
+          definition={agentSetupDoneRoute}
+          component={AgentSetupDonePage}
+        />
         <Route
           definition={emailSignupCallbackRoute}
           component={EmailCallback}
@@ -314,7 +349,8 @@ export function AppRouterView() {
         <Route definition={settingsRoute} component={SettingsRouteView} />
         <Route
           definition={routineCreateRoute}
-          component={RoutineCreateRouteView}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
         />
         <Route
           definition={routineDetailRoute}
@@ -363,6 +399,15 @@ export function AppRouterView() {
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route
+          definition={notificationsRoute}
+          component={NotificationsRouteView}
+        >
+          <Route
+            definition={notificationsCalendarRoute}
+            component={NotificationsCalendarRouteView}
+          />
+        </Route>
+        <Route
           definition={agentsViewRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
@@ -372,6 +417,10 @@ export function AppRouterView() {
           component={MailRouteView}
           loading={EmailViewSkeleton}
         >
+          <Route
+            definition={emailComposeRoute}
+            component={EmailComposeRouteView}
+          />
           <Route
             definition={emailThreadRoute}
             component={EmailDetailRouteView}
@@ -447,11 +496,15 @@ export function AppRouterView() {
             <Route definition={crmPipelineRecordRoute} />
             <Route definition={crmPipelineRecordItemRoute} />
             <Route definition={crmPipelineRecordFileItemRoute} />
+            <Route definition={crmPipelineRetiredDatabaseRoute} />
+            <Route definition={crmPipelineRetiredRecordDatabasesRoute} />
           </Route>
           <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute} />
           <Route definition={crmRecordItemRoute} />
           <Route definition={crmRecordFileItemRoute} />
+          <Route definition={crmRetiredDatabaseRoute} />
+          <Route definition={crmRetiredRecordDatabasesRoute} />
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />

@@ -135,6 +135,9 @@ pub struct DocumentContentUploadedMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentSyncEditor {
+    /// Invocation from the editor's signed document grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_correlation_id: Option<uuid::Uuid>,
     /// User or bot that performed the edit.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub actor: Actor<'static>,

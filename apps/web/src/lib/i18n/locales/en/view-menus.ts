@@ -1,4 +1,9 @@
 export default {
+  crmVisibility: 'Visibility',
+  crmVisible: 'Visible',
+  crmArchived: 'Archived',
+  crmArchive: 'Archive',
+  crmRestore: 'Restore',
   // View tabs
   favorites: 'Favorites',
   scheduled: 'Scheduled',
@@ -58,6 +63,14 @@ export default {
   priorities: 'Priorities',
   assignee: 'Assignee',
 
+  // People display options
+  peopleDisplayOptions: 'People display options',
+  showRemovedPeople: 'Show removed people',
+  removedPeople: 'Removed people',
+  removedPeopleDescription:
+    'Removed people in this team. Open a person and use Restore. People in hidden companies stay removed until their company is restored.',
+  showActivePeople: 'Show active people',
+
   // List controls
   layout: 'Layout',
   layoutList: 'List',
@@ -67,6 +80,7 @@ export default {
   groupList: 'Group list',
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
+  showHiddenRoutineRuns: 'Show hidden routine runs',
 
   // Filter menu
   filter: 'Filter',
@@ -109,6 +123,8 @@ export default {
   filterByTag: 'Filter by tag...',
   searchAssignees: 'Search assignees...',
   searchAssigneesLabel: 'Search assignees',
+  loadingTeamMembers: 'Loading team members…',
+  teamMembersUnavailable: 'Team members could not be loaded.',
   createdBy: 'Created by',
   searchCreators: 'Search creators...',
   searchCreatorsLabel: 'Search creators',

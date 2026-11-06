@@ -976,6 +976,45 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::models::LiveCallParticipant>>> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        _bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_bot(&self, _room_name: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_named_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_program_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn build_voip_push_payloads<'a>(
         &self,
         _request: call::domain::models::VoipPushPayloadRequest<'a>,
@@ -2115,6 +2154,9 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// The web search vendor behind `WebSearch` and `WebFetch`.
+    #[from_ref(skip)]
+    pub web_search_provider: Arc<dyn web_search::domain::ports::SearchProvider>,
     /// Shared admission for independently initiated AI work. Hosts must inject
     /// their configured service; request identity always comes from RequestContext.
     pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
@@ -2160,6 +2202,19 @@ impl FromRef<ToolServiceContext> for AnthropicToolContext {
         tools.recorder = context.recorder.clone();
         tools.usage_context = context.usage_context.clone();
         tools
+    }
+}
+
+impl FromRef<ToolServiceContext> for web_search::inbound::toolset::WebToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        Self {
+            service: Arc::new(web_search::domain::service::WebSearchService::new(
+                context.web_search_provider.clone(),
+                context.admission.clone(),
+                context.recorder.clone(),
+            )),
+            entity: context.usage_context.entity,
+        }
     }
 }
 

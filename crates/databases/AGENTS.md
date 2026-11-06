@@ -54,11 +54,17 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Gotchas
 
-- A duplicate rewrites ids by walking each column config, view and card place
-  as JSON and swapping any UUID it copied, so a new id-bearing field is copied
-  correctly without changes; cells are rewritten only in their option and row
-  references, never in text.
-- Copy saved appearance into a duplicate's app entity in the same transaction as its storage and grants; keep the copy outside any folder.
+- `POST /databases` and `POST /databases/{id}/duplicate` attribute the
+  creation to the SDK token's `agent_id` (code mode, `agent_attribution`), like
+  the native tool, so channel delivery shares a database an agent makes; access
+  checks still run as the plain user (`viewer_of`).
+- Hosts authorize the database through their own entity before calling
+  `storage_view_positions`; the operation also checks database, table and view
+  membership.
+- A duplicate rewrites IDs while walking each column config, view and card
+  position as JSON. Cells are rewritten only in their option and row references,
+  never in text. Copy saved appearance into the duplicate's app entity in the
+  same transaction as storage and grants; keep the copy outside any folder.
 - `databases` (core storage) and `database_entities` (app identity: name,
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").

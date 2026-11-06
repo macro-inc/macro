@@ -225,18 +225,16 @@ impl SessionPurpose {
     }
 
     /// Where a session created for this purpose is shown. Speculative,
-    /// DM-backing and inline @macro thread sessions are reached through what
-    /// they back, so they are hidden; a routine's run follows its routine.
-    pub fn visibility(
-        self,
-        bot_id: BotId,
-        thread_id: Option<Uuid>,
-        hide_agent_dms: bool,
-    ) -> SessionVisibility {
+    /// DM-backing and thread sessions (any agent started by a mention or an
+    /// assignment in a thread) are reached through what they back, so they
+    /// are hidden until someone prompts them directly (see
+    /// [`AgentSessionRepo::add_follower`](super::ports::AgentSessionRepo::add_follower));
+    /// a routine's run follows its routine.
+    pub fn visibility(self, thread_id: Option<Uuid>, hide_agent_dms: bool) -> SessionVisibility {
         let hidden = match self {
             Self::Warm => true,
             Self::AgentDm => hide_agent_dms,
-            Self::Standalone => bot_id == bot_id::MACRO_NEW_BOT_ID && thread_id.is_some(),
+            Self::Standalone => thread_id.is_some(),
             Self::Dispatched => false,
             Self::Routine { visibility } => return visibility,
         };
@@ -359,6 +357,9 @@ pub struct CreateAgentSessionParams {
     /// replayed from a recording, or created without a sandbox, has nothing to
     /// store here.
     pub egress_token_hash: Option<String>,
+    /// What opened the session, written with the session's row. `Unknown`
+    /// writes nothing: an unclaimed warm session has no cause yet.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Who or what archived a session.
@@ -430,6 +431,8 @@ pub struct AgentSession {
     pub task_id: Option<String>,
     /// Who started the session.
     pub source: SessionSource,
+    /// What opened the session. `Unknown` when nothing recorded it.
+    pub origin: trigger_context::TriggerOrigin,
     /// Where the session is shown.
     pub visibility: SessionVisibility,
     /// Directory the harness runs in, snapshotted at creation. The session

@@ -136,6 +136,7 @@ fn routine(
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
         appearance: Default::default(),
+        description: String::new(),
     }
 }
 
@@ -195,7 +196,10 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                 "On create",
                 true,
                 ActionTrigger::Events { filters },
-                json!({"prompt": "only-a-prompt"}),
+                json!({"steps": [
+                    { "type": "code", "title": "Label it", "source": "export async function main() {}" },
+                    { "type": "agent", "model": "fast", "instructions": "Escalate it" }
+                ]}),
                 None,
                 None,
                 "2026-02-03T00:00:00Z",
@@ -245,8 +249,8 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                         "agentTask": {
                             "model": "good",
                             "agent": null,
-                            "prompt": "summarize the inbox",
-                            "userPrompt": "please summarize"
+                            "prompt": "",
+                            "userPrompt": "summarize the inbox\n\nplease summarize"
                         },
                         "claimExpiresAt": "2020-01-01T00:20:00+00:00",
                         "createdAt": "2026-02-01T00:00:00+00:00",
@@ -264,7 +268,12 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                                 {"events": ["CHANNEL_CREATED"], "entityIds": [entity_id]}
                             ]
                         },
-                        "agentTask": null,
+                        "agentTask": {
+                            "model": "fast",
+                            "agent": null,
+                            "prompt": "",
+                            "userPrompt": "Escalate it"
+                        },
                         "claimExpiresAt": null,
                         "createdAt": "2026-02-03T00:00:00+00:00",
                         "updatedAt": "2026-02-04T00:00:00+00:00"
@@ -282,8 +291,8 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                         "agentTask": {
                             "model": null,
                             "agent": {"botId": agent_id},
-                            "prompt": "paused prompt",
-                            "userPrompt": "paused user"
+                            "prompt": "",
+                            "userPrompt": "paused prompt\n\npaused user"
                         },
                         "claimExpiresAt": null,
                         "createdAt": "2026-02-05T00:00:00+00:00",

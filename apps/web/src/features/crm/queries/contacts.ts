@@ -1,12 +1,20 @@
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listCanIncludeCrmContacts } from './list-refresh';
+import {
+  updateVisibilityDetails,
+  visibilityDetailsFilter,
+  visibilityQueryFilter,
+} from './visibility-refresh';
 
 const CONTACT_STALE_TIME = 60 * 1000;
 
@@ -25,7 +33,7 @@ function crmContactByEmailQueryOptions(
           signal,
         })
       );
-      if (contact) {
+      if (contact && !signal.aborted) {
         deps.client.setQueryData(crmKeys.contact(contact.id).queryKey, contact);
       }
       return contact;
@@ -144,12 +152,13 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
 
 /**
  * Toggles `crm_contacts.hidden` via `PUT /crm/contacts/{id}/hidden`.
- * Hidden contacts disappear from the parent company's contact list
- * (non-admin view) and from any soup surface that filters them.
+ * Hidden contacts disappear from normal company Team lists for every role
+ * and from any soup surface that filters them. Authorized detail reads still
+ * include hidden contacts for restoration.
  *
  * Awaits cache invalidation in the visibility trace so the mutation
- * stays pending until both the contact query and the soup queries
- * refetch — the toggle state and any dependent UI all flip in one beat.
+ * stays pending until active contact, company and soup queries refetch.
+ * Inactive company queries become stale and reload when revisited.
  */
 export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -166,23 +175,52 @@ export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.record_id', contactId);
           span.setAttr('crm.hidden', hidden);
           try {
+            const cacheWrite = prepareCrmVisibilityWrite();
             const result = await throwOnErr(() =>
               deps.storage.setContactHidden({ contactId, hidden })
             );
+            if (!cacheWrite.isCurrent()) return result;
             await span.span(
               'crm.visibility_change.refresh',
               async (refresh) => {
                 try {
-                  await invalidateCachedCrmContacts(contactId);
+                  const change = {
+                    kind: 'contact' as const,
+                    id: contactId,
+                    hidden,
+                  };
                   await Promise.all([
-                    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+                    cacheWrite.commit({ contactIds: [contactId], hidden }),
+                    updateVisibilityDetails(
+                      deps.client,
+                      change,
+                      cacheWrite.isCurrent
+                    ),
+                  ]);
+                  if (!cacheWrite.isCurrent()) return;
+                  await Promise.all([
+                    refreshActiveGraphqlSoupQueries({
+                      where: listCanIncludeCrmContacts,
+                      unmaintainedOnly: true,
+                    }),
                     deps.client.invalidateQueries({
-                      queryKey: crmKeys.contact(contactId).queryKey,
+                      predicate: visibilityQueryFilter(change),
+                    }),
+                    deps.client.invalidateQueries({
+                      predicate: visibilityDetailsFilter(change),
+                      // Confirmed flags are already patched; refresh on the next visit.
+                      refetchType: 'none',
+                    }),
+                    deps.client.refetchQueries({
+                      type: 'active',
+                      predicate: (query) =>
+                        query.state.data === undefined &&
+                        visibilityDetailsFilter(change)(query),
                     }),
                   ]);
                 } catch (error) {
                   refresh.error('Contact visibility refresh failed');
-                  throw error;
+                  Telemetry.error(error);
                 }
               }
             );

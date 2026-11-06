@@ -16,7 +16,6 @@ jobs:
       pull-requests: write
       checks: read
       statuses: read
-      id-token: write
     env:
       CI: 'true'
       GH_TOKEN: ${{ github.token }}
@@ -85,8 +84,9 @@ jobs:
         # ------------------------------------------------------------------------------
         # --- merge result native check ------------------------------------------------
         # merge_result_native_check <hash> <listing> <fetch>: is the native code of
-        # PR #PR_NUMBER's merge result the native code of HEAD, the code this run
-        # built or is about to build? The merge gate hashes the merge result, so a
+        # PR #PR_NUMBER's merge result the native code of the commit this run built
+        # or is about to build — BUILT_SHA when set (a job that checked out other
+        # code, such as main's, to judge it), else HEAD? The merge gate hashes the merge result, so a
         # build that differs from it could never pass the gate. <hash> / <listing>
         # print a commit's native hash / the listing behind it; <fetch> makes a
         # commit available (the iOS and Android helpers differ). Needs GH_TOKEN,
@@ -103,7 +103,7 @@ jobs:
           # Callers run this under `if !`, which turns off `set -e` here, so every
           # lookup is checked: an empty commit hashes the same on both sides and would
           # pass an unchecked comparison.
-          built=$(git rev-parse HEAD)
+          built=${BUILT_SHA:-$(git rev-parse HEAD)}
           if ! built_hash=$($hash "$built"); then
             echo "Could not hash this build's native code (${built:0:10})." >&2
             return 1
@@ -202,12 +202,33 @@ jobs:
         echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
         echo "Releasing Android version code ${version_code}."
 
-        # (`gh pr checks` names are job names, not workflow names.)
-        ours='^(Android Native Check|Android Play Release|Re-run the native check|Web App Status Check|Android Release Drift|iOS Native Check)'
+        # (`gh pr checks` names are job names, not workflow names, plus the contexts
+        # of commit statuses, such as the android-play/* ones Android Play Publish
+        # and Android Release Watch set. PR CI prefixes the jobs it calls with
+        # `Web App / `. The CI gate status aggregates every check, and stays pending
+        # on a head no one has run PR CI on.)
+        ours='^((Web App / )?(Android Native Check|Web App Status Check|iOS Native Check)|Android Play Release|Re-run the native check|Android Release Drift|android-play/|CI gate$)'
         deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
         while true; do
-          checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \
-            | jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]')
+          all_checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket,description)
+          # The checks only exist once someone has run PR CI on this head; its CI gate
+          # fails with the native check, so only the gate's description is read here.
+          gate=$(jq -r '[.[] | select(.name == "CI gate") | .description][0] // ""' <<<"$all_checks")
+          case "$gate" in
+            "" | "Not run on this commit."*)
+              echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add android-update once it passes." >&2
+              exit 1
+              ;;
+            "Running on"* | "Passed on"* | "Failed:"*) ;;
+            *)
+              echo "CI could not run on ${head_sha:0:10}: ${gate}. Re-add android-update once it passes." >&2
+              exit 1
+              ;;
+          esac
+          checks=$(jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]' <<<"$all_checks")
+          if [[ "$gate" == "Running on"* ]]; then
+            checks=$(jq -c '. + [{name: "CI gate", bucket: "pending"}]' <<<"$checks")
+          fi
           failing=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")
           pending=$(jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' <<<"$checks")
           if [[ -n "$failing" ]]; then
@@ -384,8 +405,9 @@ jobs:
         # ------------------------------------------------------------------------------
         # --- merge result native check ------------------------------------------------
         # merge_result_native_check <hash> <listing> <fetch>: is the native code of
-        # PR #PR_NUMBER's merge result the native code of HEAD, the code this run
-        # built or is about to build? The merge gate hashes the merge result, so a
+        # PR #PR_NUMBER's merge result the native code of the commit this run built
+        # or is about to build — BUILT_SHA when set (a job that checked out other
+        # code, such as main's, to judge it), else HEAD? The merge gate hashes the merge result, so a
         # build that differs from it could never pass the gate. <hash> / <listing>
         # print a commit's native hash / the listing behind it; <fetch> makes a
         # commit available (the iOS and Android helpers differ). Needs GH_TOKEN,
@@ -402,7 +424,7 @@ jobs:
           # Callers run this under `if !`, which turns off `set -e` here, so every
           # lookup is checked: an empty commit hashes the same on both sides and would
           # pass an unchecked comparison.
-          built=$(git rev-parse HEAD)
+          built=${BUILT_SHA:-$(git rev-parse HEAD)}
           if ! built_hash=$($hash "$built"); then
             echo "Could not hash this build's native code (${built:0:10})." >&2
             return 1
@@ -453,50 +475,53 @@ jobs:
         }
         # ------------------------------------------------------------------------------
         set -euo pipefail
-        # Last check before uploading: the bundle must still describe the native code
+        # Last check before uploading (and before promoting): the bundle must still describe the native code
         # the merge gate will hash — that of the PR's merge result — or it could never
         # pass the gate, and a promoted Play release cannot be withdrawn. Two things
         # can move while a build runs: the PR head (a native push; the drift workflow
         # cancels runs after the fact, but better not to upload at all) and main
-        # (another Android PR merged).
-        built=$(bun scripts/android-native.mjs hash HEAD)
+        # (another Android PR merged). The build is HEAD, or BUILT_SHA when set (the
+        # publisher judges a PR build from main's checkout). GUARD_STAGE=promote words
+        # it for the check before the production promotion, after the upload to the
+        # internal track has used the version code up.
+        if [[ "${GUARD_STAGE:-upload}" == promote ]]; then
+          verb=promoting
+          done_msg="Promoting"
+          retry="Version code is used up on the internal track: bump (cd apps/web && just android-bump), commit, and re-add the android-update label."
+        else
+          verb=uploading
+          done_msg="Uploading"
+          retry="Re-add the android-update label to release the current head."
+        fi
+        built_sha=${BUILT_SHA:-$(git rev-parse HEAD)}
+        if [[ -n "${BUILT_SHA:-}" ]]; then
+          gh_fetch "$BUILT_SHA"
+        fi
+        built=$(bun scripts/android-native.mjs hash "$built_sha")
         head_sha=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')
-        if [[ "$head_sha" == "$(git rev-parse HEAD)" ]]; then
+        if [[ "$head_sha" == "$built_sha" ]]; then
           echo "PR head unchanged (${head_sha:0:10}); native hash ${built:0:10} is current."
         else
           gh_fetch "$head_sha"
           current=$(bun scripts/android-native.mjs hash "$head_sha")
           if [[ "$current" != "$built" ]]; then
             echo "Android native code changed on PR #${PR_NUMBER} while this release was building" \
-              "(${built:0:10} → ${current:0:10}). Not uploading the stale bundle." >&2
-            echo "Re-add the android-update label to release the current head." >&2
+              "(${built:0:10} → ${current:0:10}). Not ${verb} the stale bundle." >&2
+            echo "$retry" >&2
             exit 1
           fi
           echo "PR head moved to ${head_sha:0:10} but its Android native code is unchanged (${built:0:10})."
         fi
         if ! merge_result_native_check "bun scripts/android-native.mjs hash" "bun scripts/android-native.mjs listing" gh_fetch; then
-          echo "Android native code landed on ${BASE_BRANCH} while this release was building. Not uploading the bundle" \
+          echo "Android native code landed on ${BASE_BRANCH} while this release was building. Not ${verb} the bundle" \
             "(native hash ${built:0:10}): the merge gate could never accept it." >&2
           echo "Merge ${BASE_BRANCH} into the PR, bump (cd apps/web && just android-bump), commit, and re-add the android-update label." >&2
           exit 1
         fi
-        echo "Uploading the bundle (native hash ${built:0:10})."
+        echo "${done_msg} the bundle (native hash ${built:0:10})."
       shell: bash
       env:
         LOGGED_STEP: Require the PR's Android native code to be unchanged since the build
-      working-directory: apps/web
-    - name: Write the provenance stamp as release notes
-      run: |
-        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
-        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
-        set -euo pipefail
-        hash=$(bun scripts/android-native.mjs hash HEAD)
-        mkdir -p "$RUNNER_TEMP/whatsnew"
-        printf 'native tree %s for PR #%s\n' "$hash" "$PR_NUMBER" > "$RUNNER_TEMP/whatsnew/whatsnew-en-US"
-        echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
-      shell: bash
-      env:
-        LOGGED_STEP: Write the provenance stamp as release notes
       working-directory: apps/web
     - name: Upload verified Android artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -505,56 +530,15 @@ jobs:
         path: android-artifacts/
         if-no-files-found: error
         retention-days: '90'
-    - id: auth
-      name: Authenticate to Google Play
-      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-      with:
-        workload_identity_provider: ${{ vars.GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER }}
-        service_account: ${{ vars.GOOGLE_PLAY_SERVICE_ACCOUNT }}
-        token_format: access_token
-        access_token_scopes: https://www.googleapis.com/auth/androidpublisher
-        export_environment_variables: 'false'
-    - name: Upload to internal testing
-      uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5
-      with:
-        serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
-        packageName: com.macro.workspace.mobile
-        releaseFiles: ${{ steps.artifact.outputs.bundle }}
-        mappingFile: ${{ steps.artifact.outputs.mapping }}
-        releaseName: ${{ steps.metadata.outputs.release_name }}
-        track: internal
-        status: completed
-        whatsNewDirectory: ${{ runner.temp }}/whatsnew
-    - name: Promote to production
-      run: |
-        printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
-        exec > >(tee "$RUNNER_TEMP/last-step.log") 2>&1
-        set -euo pipefail
-        for attempt in 1 2 3 4 5; do
-          if node scripts/android-play-promote.mjs; then
-            exit 0
-          fi
-          echo "Promotion attempt ${attempt} failed; retrying in 30s."
-          sleep 30
-        done
-        echo "Could not promote version code ${VERSION_CODE} to production; promote it by hand with publish-android-play.yml (operation=promote-production)." >&2
-        exit 1
-      shell: bash
-      env:
-        LOGGED_STEP: Promote to production
-        GOOGLE_PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-        VERSION_CODE: ${{ steps.preconditions.outputs.version_code }}
-        CHANGES_NOT_SENT_FOR_REVIEW: 'false'
-      working-directory: apps/web
     - name: Remove signing material
       if: always()
       run: |
         rm -rf "$RUNNER_TEMP/android-signing" "$RUNNER_TEMP/android-release.json" \
-          "$RUNNER_TEMP/android-google-services.json" "$RUNNER_TEMP/whatsnew" || true
+          "$RUNNER_TEMP/android-google-services.json" || true
         rm -f apps/web/tauri/src-tauri/gen/android/keystore.properties || true
       shell: bash
     - name: Comment on the PR
-      if: success() || failure()
+      if: failure()
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -566,55 +550,39 @@ jobs:
           const runUrl =
             `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
             `/actions/runs/${context.runId}`;
-          const success = '${{ job.status }}' === 'success';
-          const SUCCESS_BODY = [
-            `🤖 Android ${releaseName} was uploaded to Google Play internal testing and submitted for a full production rollout.`,
-            '',
-            'When Google approves it, the version goes live, the **Android Release Watch** workflow',
-            're-runs the **Android Native Check** on this PR within half an hour of that, and the PR',
-            'becomes mergeable. To merge it the moment that happens, click **Enable auto-merge** on this PR now (squash).',
-            'After merge, the next prod deploy applies the Android native build floor committed in `min-native-build.json`.',
-            '',
-            `[Workflow run](${runUrl})`,
-          ].join('\n');
-          let body;
-          if (success) {
-            body = SUCCESS_BODY;
-          } else {
-            // Name the failed step and, when it is one that logs its
-            // output (steps::logged_run), quote the end of that output.
-            let failedStep = null;
-            try {
-              const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: context.runId,
-                attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-              });
-              const job = data.jobs.find((j) => j.name === 'Android Play Release');
-              failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
-            } catch (error) {
-              core.warning(`Could not list this job's steps: ${error.message}`);
-            }
-            const read = (file) => {
-              try {
-                return fs.readFileSync(path.join(process.env.RUNNER_TEMP, file), 'utf8');
-              } catch {
-                return '';
-              }
-            };
-            let tail = '';
-            if (failedStep && read('last-step.name').trim() === failedStep) {
-              const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
-              tail = lines.slice(-30).join('\n').slice(-3000);
-            }
-            body = [
-              `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} — see the [workflow run](${runUrl}).`,
-              ...(tail ? ['', '```text', tail, '```'] : []),
-              '',
-              'Fix the problem, then remove and re-add the `android-update` label to retry.',
-            ].join('\n');
+          // Name the failed step and, when it is one that logs its
+          // output (steps::logged_run), quote the end of that output.
+          let failedStep = null;
+          try {
+            const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+            });
+            const job = data.jobs.find((j) => j.name === 'Android Play Release');
+            failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
+          } catch (error) {
+            core.warning(`Could not list this job's steps: ${error.message}`);
           }
+          const read = (file) => {
+            try {
+              return fs.readFileSync(path.join(process.env.RUNNER_TEMP, file), 'utf8');
+            } catch {
+              return '';
+            }
+          };
+          let tail = '';
+          if (failedStep && read('last-step.name').trim() === failedStep) {
+            const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
+            tail = lines.slice(-30).join('\n').slice(-3000);
+          }
+          const body = [
+            `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} — see the [workflow run](${runUrl}).`,
+            ...(tail ? ['', '```text', tail, '```'] : []),
+            '',
+            'Fix the problem, then remove and re-add the `android-update` label to retry.',
+          ].join('\n');
           await github.rest.issues.createComment({
             owner: context.repo.owner,
             repo: context.repo.repo,

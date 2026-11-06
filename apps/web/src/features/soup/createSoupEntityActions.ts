@@ -56,6 +56,7 @@ import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
 import { supportsEntityAppearance } from '../entity-appearance/core/appearance';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
@@ -128,6 +129,7 @@ export function createSoupEntityActions(
     return entities?.length === 1 ? entities[0] : undefined;
   };
   const canEditIcon = useAppearanceEditAccess(selectedEntity, userId);
+  const isTeamAdmin = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
 
@@ -148,6 +150,7 @@ export function createSoupEntityActions(
   });
 
   const deleteAction = makeDeleteAction({
+    isTeamAdmin,
     userId: () => userId(),
   });
 

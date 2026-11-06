@@ -26,6 +26,7 @@ export type BuildEntityDataArgs = {
   fileType?: string;
   isCompleted?: boolean;
   channelType?: ChannelEntity['channelType'];
+  teamId?: string;
   isParticipant?: boolean;
   cron?: string;
   enabled?: boolean;
@@ -146,6 +147,7 @@ export function buildEntityData(
           ...base,
           type: 'channel',
           channelType: args.channelType,
+          ...(args.teamId === undefined ? {} : { teamId: args.teamId }),
           ...(args.isParticipant === undefined
             ? {}
             : { isParticipant: args.isParticipant }),

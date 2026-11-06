@@ -479,10 +479,13 @@ horizontally to reach more lanes; each lane scrolls vertically on its own. A car
 or lane being dragged stays mounted while scrolling. After a card move, its
 destination is revealed. Starting a new card reveals the lane's draft at the
 bottom and focuses its title, including after the lane was offscreen.
+If a move is refused, the card returns to its saved lane and order; other pending
+moves stay visible until their own responses arrive.
 
 Lane headers show a color or type icon, a name, and an adjacent record count.
-Cards use the Tasks board's header and compact, wrapping property layout rather than
-stacked field rows. Cards without fields do not render an empty property area.
+Cards use the Tasks board's header, with wrapping titles and each configured field's
+label above its full-width value. Unset fields show a dash. Cards without fields
+do not render an empty property area.
 Title editing keeps the displayed title's typography, wrapping, and spacing.
 Cards have a six-dot drag handle; their custom fields share a CSS grid with the title
 and align below its left edge. **Open record details** (the expand
@@ -495,8 +498,11 @@ medium-size icon buttons as Drive. View tabs and New use the shared Button styli
 A board has a lane per option (or person). Records without a grouping value are
 currently omitted from the board; they remain available in the table. Drag a card within
 a lane or into another lane; it moves at once, and moving it to another lane also
-sets its Select value. The order is saved for everyone and survives a reload. A
-sorted board keeps the sort's order, so dragging a card asks **Remove sort to
+sets its Select value. The order is saved for everyone and survives a reload.
+Switching boards during a save clears the previous board's temporary placement;
+the response updates only the board where the move started. Verify both a successful
+save and a refused move without changing the newly selected board's order.
+A sorted board keeps the sort's order, so dragging a card asks **Remove sort to
 arrange cards manually?**; **Remove sort** clears the sort and then places the
 card. The insertion marker stays visible above the first card when reordering
 within a lane. Drag a lane header to reorder lanes. Click an editable option lane's name to
@@ -509,7 +515,7 @@ be cleared, but records will not be deleted; **Delete group** uses danger stylin
 **Hide empty lanes** remains only in the board's **Board menu**, with a right-side
 checkmark when enabled. The card's **Move …** menu offers the same moves without
 dragging. Click a card’s title or field to edit it in place using the same editors
-as the table. Card-field inline editors fill the value area beside their icon and
+as the table. Card-field inline editors fill the value area below their label and
 keep its width, height, and typography; longer drafts scroll inside rather than
 pushing neighboring fields.
 Inline field edits save on Enter or leaving the field. Each save changes only that
@@ -717,6 +723,15 @@ Escape cancels. Renaming keeps the question and its saved query unchanged. A sav
 query names databases, tables, and columns by their display names, so renaming one
 it reads makes the answer fail until the question is updated.
 
+AI document editing (the selection toolbar's **AI edit**, `EditDocument`) works with
+database blocks.
+It inserts a saved answer or chart from the `<m-db-query>` block that
+`SaveDatabaseQuery` returns, can change an existing answer's chart type, title,
+or height without changing its question, and can switch an embedded database
+to another table or view. To check, have chat save a chart and add it to a
+document, then select nearby text, choose **AI edit**, and ask for a pie chart; the same question
+should redraw as a pie.
+
 An existing document keeps its answer label when Databases is off and does not
 fetch its database results; see [Feature flag](#feature-flag).
 
@@ -849,6 +864,11 @@ opens the editor. **Collapse** returns it to a small mention. Cell and schema
 edits use the same database grid and authorization as the standalone app. The
 document stores only the database reference and selected table/view, never a
 copy of its rows. See [Databases in documents](documents.md#databases-in-documents).
+Opening a row there (its row-number button, **Open record**, a board card, or a
+timeline bar) opens the database in its own split at that table and view, with
+the row highlighted or its record panel open; the card shows no record panel of
+its own. A record just created in the card still opens in place, and so does
+every record where the card has no splits to open into (call chat).
 
 The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
 row queries and operation batches from that host's API. Verify cell edits and

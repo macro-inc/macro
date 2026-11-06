@@ -13,6 +13,8 @@ note: |-
 files:
   - apps/web/src/features/entity-appearance/queries/**
   - apps/web/src/features/entity-appearance/primitives/**
+  - apps/web/src/features/notifications-inbox/queries/**
+  - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/command/queries/**
   - apps/web/src/features/document-composer/queries/**
   - apps/web/src/features/task-composer/queries/**

@@ -30,9 +30,9 @@ pub enum PgFormsRepoError {
     /// Underlying database failure.
     #[error("database error")]
     Sqlx(#[from] sqlx::Error),
-    /// A gate's rules could not be encoded as JSON for storage, or stored
-    /// ones decoded.
-    #[error("failed to encode or decode stored gate rules")]
+    /// A section's rules or booking target could not be encoded as JSON for
+    /// storage, or stored ones decoded.
+    #[error("failed to encode or decode a stored section's JSON")]
     Json(#[from] serde_json::Error),
     /// A folder id is not a uuid.
     #[error("folder id is not a uuid")]

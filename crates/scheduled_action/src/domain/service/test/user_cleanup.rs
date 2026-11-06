@@ -86,7 +86,7 @@ impl ScheduledActionRepo for FakeRepo {
     async fn last_runs(
         &self,
         _: &[Uuid],
-    ) -> Result<std::collections::HashMap<Uuid, crate::domain::models::LastRun>> {
+    ) -> Result<std::collections::HashMap<Uuid, ActionExecutionRecord>> {
         unreachable!()
     }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
@@ -111,7 +111,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         id: Some(macro_uuid::generate_uuid_v7()),
         owner,
         name: config.name,
-        next_run_at: next_run(&config.trigger).unwrap(),
+        next_run_at: next_run(&config.trigger, now, |_| false).unwrap(),
         trigger: config.trigger,
         kind: config.kind,
         created_at: now,
@@ -124,6 +124,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         run_visibility: config.run_visibility,
         template_id: None,
         appearance: model_entity::EntityAppearance::default(),
+        description: String::new(),
     }
 }
 

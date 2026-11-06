@@ -359,6 +359,7 @@ async fn renaming_the_database_renames_its_form_wherever_the_form_is_read() {
                     title: "".into(),
                     description: "".into(),
                     questions: vec![],
+                    show_when: None,
                 }],
             },
         )

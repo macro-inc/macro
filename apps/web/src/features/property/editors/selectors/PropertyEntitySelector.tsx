@@ -3,6 +3,7 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -24,6 +25,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -42,7 +44,7 @@ import {
   userToEntity,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
-import type { EntitySelectorConfig, PinnedOption } from './types';
+import type { EntitySelectorConfig } from './types';
 
 type EntityInputProps = {
   config: EntitySelectorConfig;
@@ -54,13 +56,14 @@ type EntityInputProps = {
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
-  pinnedOptions?: PinnedOption[];
+  /** Override empty-result content; null hides the default message. */
+  emptyState?: JSX.Element;
 };
 
 function getEntityTypePluralLabel(
-  entityType: EntityType | null | undefined
+  entityType: EntityType | EntityType[] | null | undefined
 ): string {
-  if (!entityType) return 'entities';
+  if (!entityType || Array.isArray(entityType)) return 'entities';
   switch (entityType) {
     case 'USER':
       return 'users';
@@ -117,16 +120,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const openedSelectedIds = [...props.selectedOptions()];
   const keyboardMode = useKeyPressed(100);
-
-  // Pinned options filtered by search term
-  const visiblePinnedOptions = createMemo(() => {
-    const options = props.pinnedOptions ?? [];
-    const term = searchTerm();
-    if (!term) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(term));
-  });
-  const pinnedCount = () => visiblePinnedOptions().length;
 
   let scrollContainerRef: HTMLDivElement | undefined;
 
@@ -194,6 +189,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const isLoadingEntities = createMemo(() => {
+    if (props.config.users) return false;
     if (needsEmailSearch()) {
       return (
         emailsQuery.isLoading ||
@@ -204,16 +200,22 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return isQuickAccessLoading();
   });
 
-  // Convert quickAccess items to CombinedEntity format
-  const entities = createMemo((): CombinedEntity[] => {
-    const specificEntityType = props.config.specificEntityType;
-
-    // An explicit user pool replaces the quick-access people list.
-    if (specificEntityType === 'USER' && props.config.users) {
-      return props.config
-        .users()
-        .map((user) => userToEntity(augmentUserWithDmActivity(user)));
+  // An explicit user pool replaces Quick Access options.
+  const scopedUserEntities = createMemo(() => {
+    if (props.config.specificEntityType !== 'USER' || !props.config.users) {
+      return undefined;
     }
+    return [
+      ...props.config.users(),
+      ...(props.config.additionalUsers?.() ?? []),
+    ].map((user) => userToEntity(augmentUserWithDmActivity(user)));
+  });
+
+  // Convert quickAccess items to CombinedEntity format.
+  const entities = createMemo((): CombinedEntity[] => {
+    const scoped = scopedUserEntities();
+    if (scoped) return scoped;
+    const specificEntityType = props.config.specificEntityType;
 
     // For THREAD type, use email data (not in quickAccess yet)
     if (specificEntityType === 'THREAD') {
@@ -238,10 +240,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       } else {
         const entity = quickAccessItemToEntity(item);
         const entityType = getEntityType(entity);
-        if (
-          entityType &&
-          (!specificEntityType || entityType === specificEntityType)
-        ) {
+        const matches =
+          !specificEntityType ||
+          (Array.isArray(specificEntityType)
+            ? entityType && specificEntityType.includes(entityType)
+            : entityType === specificEntityType);
+        if (entityType && matches) {
           converted.push(entity);
         }
       }
@@ -301,17 +305,18 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           !(getEntityType(e) === currentEntityType && e.id === blockId)
       : () => true;
 
-    // Get visible entities based on search
-    // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
-    const localResults = term
-      ? entitySearch(allEntities, term)
-          .slice(0, MAX_SEARCH_RESULTS)
-          .map((result) => result.item)
-          .filter(excludeFilter)
-      : sortEntitiesWithSelfFirst(
-          allEntities.filter(excludeFilter),
-          userId
-        ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+    let localResults: CombinedEntity[];
+    if (term) {
+      localResults = entitySearch(allEntities, term)
+        .slice(0, MAX_SEARCH_RESULTS)
+        .map((result) => result.item)
+        .filter(excludeFilter);
+    } else {
+      localResults = sortEntitiesWithSelfFirst(
+        allEntities.filter(excludeFilter),
+        userId
+      ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+    }
 
     // For THREAD or generic entity: merge local + server results
     if (needsEmailSearch() && term) {
@@ -332,21 +337,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const sortedEntities = useSelectedFirst({
     items: filteredEntities,
     allItems: entities,
-    selectedIds: props.selectedOptions,
+    selectedIds: () => openedSelectedIds,
     searchQuery: searchTerm,
     getId: (e: CombinedEntity) => e.id,
   });
-
-  const openedSelectedIds = new Set(props.selectedOptions());
-  const selectedEntityCountAtOpen = createMemo(() => {
-    if (!props.config.isMultiSelect || searchTerm()) return 0;
-    return sortedEntities().filter((entity) => openedSelectedIds.has(entity.id))
-      .length;
-  });
-  const shouldShowSelectedDivider = (index: number) =>
-    selectedEntityCountAtOpen() > 0 &&
-    selectedEntityCountAtOpen() < sortedEntities().length &&
-    index === selectedEntityCountAtOpen();
 
   const toggleEntity = (entity: CombinedEntity) => {
     const entityType = getEntityType(entity);
@@ -382,48 +376,35 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
   };
 
-  const togglePinnedOption = (option: PinnedOption) => {
-    const newSelected = new Set(props.selectedOptions());
-    if (newSelected.has(option.id)) {
-      newSelected.delete(option.id);
-    } else {
-      if (!props.config.isMultiSelect) newSelected.clear();
-      newSelected.add(option.id);
-    }
-    props.setSelectedOptions(newSelected);
-
-    if (!props.config.isMultiSelect && props.onClose) {
-      props.onClose();
-    } else if (props.config.isMultiSelect && searchInputRef) {
-      setInputValue('');
-      setSearchTerm('');
-      setTimeout(() => searchInputRef.focus(), 0);
-    }
-  };
-
-  const totalCount = () =>
-    pinnedCount() + sortedEntities().length + (customEmail() ? 1 : 0);
+  const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
   // Reset selected index to top when search term or list changes
   createEffect(() => {
     searchTerm(); // track search term changes
-    totalCount(); // track list size changes
+    resultCount(); // track list size changes
     setSelectedIndex(0);
   });
 
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
-    const pCount = pinnedCount();
-    if (!keyboardMode() || index < pCount || !scrollContainerRef) return;
+    if (!keyboardMode() || !scrollContainerRef) return;
     const row = scrollContainerRef.querySelector<HTMLDivElement>(
-      `[data-entity-index="${index - pCount}"]`
+      `[data-entity-index="${index}"]`
     );
     row?.scrollIntoView({ block: 'nearest' });
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    const total = totalCount();
+    if (e.target instanceof HTMLElement && e.target.closest('button')) return;
+    // Another field on the page keeps its own keys.
+    if (
+      e.target !== searchInputRef &&
+      e.target instanceof Element &&
+      isEditableInput(e.target)
+    )
+      return;
+    const total = resultCount();
     if (total === 0) return;
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
@@ -435,11 +416,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const idx = selectedIndex();
-      const pCount = pinnedCount();
-      if (idx < pCount) {
-        togglePinnedOption(visiblePinnedOptions()[idx]);
-      } else if (idx < pCount + sortedEntities().length) {
-        const entity = sortedEntities()[idx - pCount];
+      if (idx < sortedEntities().length) {
+        const entity = sortedEntities()[idx];
         if (entity) toggleEntity(entity);
       } else {
         const entity = customEmailEntity();
@@ -460,6 +438,21 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const fills = () => props.config.fillHeight === true;
   const keepSearchFocus = (event: Event) => event.preventDefault();
+
+  const selectedEntityCountAtOpen = createMemo(() => {
+    if (!props.config.isMultiSelect || searchTerm()) return 0;
+
+    return sortedEntities().filter((entity) =>
+      openedSelectedIds.includes(entity.id)
+    ).length;
+  });
+  const shouldShowSelectedDivider = (index: number) => {
+    const selectedCount = selectedEntityCountAtOpen();
+    if (selectedCount === 0) return false;
+    if (selectedCount === sortedEntities().length) return false;
+
+    return index === selectedCount;
+  };
 
   return (
     <div class={cn(fills() && 'flex min-h-0 flex-1 flex-col')}>
@@ -483,50 +476,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           />
         </div>
       </div>
-
-      <Show when={totalCount() > 0}>
+      <Show when={resultCount() > 0}>
         {/* Picking a row keeps focus in the search field: a tap that moved
-            it would drop the phone keyboard until the refocus below. iOS
-            devices still send mousedown after a cancelled pointerdown. */}
+          it would drop the phone keyboard until the refocus below. iOS
+          devices still send mousedown after a cancelled pointerdown. */}
         <div
           class={cn('p-1.5', fills() && 'flex min-h-0 flex-1 flex-col')}
           onPointerDown={keepSearchFocus}
           onMouseDown={keepSearchFocus}
         >
-          <For each={visiblePinnedOptions()}>
-            {(option, i) => {
-              const isSelected = () => props.selectedOptions().has(option.id);
-              const isKeyboardSelected = () => i() === selectedIndex();
-
-              return (
-                <div
-                  class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
-                  classList={{
-                    'bg-hover': isKeyboardSelected(),
-                  }}
-                  onClick={() => togglePinnedOption(option)}
-                  onMouseEnter={() => {
-                    if (!keyboardMode()) {
-                      setSelectedIndex(i());
-                    }
-                  }}
-                >
-                  <Show when={props.config.isMultiSelect}>
-                    <div class="shrink-0">
-                      <OptionCheckBox checked={isSelected()} multiselect />
-                    </div>
-                  </Show>
-                  <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <div class="size-4 shrink-0">{option.icon}</div>
-                    <span class="truncate min-w-0">{option.label}</span>
-                  </div>
-                  <Show when={!props.config.isMultiSelect && isSelected()}>
-                    <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                  </Show>
-                </div>
-              );
-            }}
-          </For>
           <Show when={sortedEntities().length > 0}>
             <div
               ref={scrollContainerRef}
@@ -540,11 +498,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             >
               <For each={sortedEntities()}>
                 {(entity, index) => {
-                  const adjustedIndex = () => index() + pinnedCount();
                   const isSelected = () =>
                     props.selectedOptions().has(entity.id);
-                  const isKeyboardSelected = () =>
-                    adjustedIndex() === selectedIndex();
+                  const isKeyboardSelected = () => index() === selectedIndex();
 
                   return (
                     <>
@@ -563,7 +519,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         }
                         onMouseEnter={() => {
                           if (!keyboardMode()) {
-                            setSelectedIndex(adjustedIndex());
+                            setSelectedIndex(index());
                           }
                         }}
                       >
@@ -572,6 +528,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                             <OptionCheckBox
                               checked={isSelected()}
                               multiselect
+                              visible={props.config.visibleCheckboxes}
                             />
                           </div>
                         </Show>
@@ -608,7 +565,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                                     <>
                                       {parts().name}
                                       <Show when={parts().email}>
-                                        <span class="ml-[0.5em] opacity-50">
+                                        {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+                                        {' '}
+                                        <span class="opacity-50">
                                           {parts().email}
                                         </span>
                                       </Show>
@@ -642,7 +601,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </Show>
           <Show when={customEmail()}>
             {(email) => {
-              const rowIndex = () => pinnedCount() + sortedEntities().length;
+              const rowIndex = () => sortedEntities().length;
               const entity = () => customEmailEntity();
               return (
                 <div
@@ -681,12 +640,20 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </Show>
 
-      <Show when={totalCount() === 0}>
-        <div class="text-center py-4 text-ink-muted text-sm">
-          <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
-            No {getEntityTypePluralLabel(props.config.specificEntityType)} found
-          </Show>
-        </div>
+      <Show when={resultCount() === 0}>
+        {props.emptyState !== undefined ? (
+          props.emptyState
+        ) : (
+          <div class="text-center py-4 text-ink-muted text-sm">
+            <Show
+              when={!isLoadingEntities()}
+              fallback={<span>Loading...</span>}
+            >
+              {props.config.emptyMessage ??
+                `No ${getEntityTypePluralLabel(props.config.specificEntityType)} found`}
+            </Show>
+          </div>
+        )}
       </Show>
     </div>
   );

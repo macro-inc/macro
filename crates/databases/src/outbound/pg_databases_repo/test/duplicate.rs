@@ -220,7 +220,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
         .unwrap();
 
     let copy = service
-        .duplicate_database(view(guests.database_id), duplicator(), None)
+        .duplicate_database(view(guests.database_id), duplicator(), None, None)
         .await
         .unwrap();
 

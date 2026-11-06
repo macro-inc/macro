@@ -288,6 +288,17 @@ export function DocumentDatabase(props: {
                         })
                       }
                       onOpenRelated={openRelated}
+                      // The card is too small for the record panel: a clicked row opens in the full table.
+                      // Hosts without splits, such as call chat, keep the panel.
+                      onOpenRecord={(rowId) => {
+                        const opened = open({
+                          databaseId,
+                          tableId: shown().table.id,
+                          viewId: currentView().id,
+                          rowId,
+                        });
+                        return !!opened && opened.status !== 'unavailable';
+                      }}
                       actionsRef={setRecordActions}
                     />
                   </div>
