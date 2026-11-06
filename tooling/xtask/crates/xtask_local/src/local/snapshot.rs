@@ -12,12 +12,13 @@
 //! change to an input misses the cache and falls back to a real init (which
 //! then saves the new snapshot).
 //!
-//! Snapshots are tarballs of the Docker volumes, written by a throwaway helper
-//! container, stored under `infra/local/generated/.snapshots/<key>/` (override
+//! Snapshots are tarballs of the Docker volumes, streamed through a throwaway
+//! helper container's stdio so this process owns the files, stored under `infra/local/generated/.snapshots/<key>/` (override
 //! with `MACRO_STACK_SNAPSHOT_DIR` — CI and Cloud install can bake this dir).
 
+use std::fs::File;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -164,13 +165,17 @@ pub fn restore(stage: &Stage, instance: &Instance, plan: &Plan) -> Result<()> {
         &format!("Restoring init snapshot ({})", plan.short_key()),
         || {
             for (archive, volume) in &pairs {
-                if !dir.join(archive).exists() {
+                let path = dir.join(archive);
+                if !path.exists() {
                     bail!("snapshot {} is missing {archive}", dir.display());
                 }
+                let file =
+                    File::open(&path).with_context(|| format!("opening {}", path.display()))?;
                 helper_tar(
                     &format!("{volume}:/vol"),
-                    &format!("{}:/snap:ro", dir.display()),
-                    &format!("tar xzf /snap/{archive} -C /vol"),
+                    "tar xzf - -C /vol",
+                    file.into(),
+                    Stdio::null(),
                 )?;
             }
             Ok(())
@@ -201,10 +206,14 @@ pub fn save(
         }
         std::fs::create_dir_all(&tmp)?;
         for (archive, volume) in &pairs {
+            let path = tmp.join(archive);
+            let file =
+                File::create(&path).with_context(|| format!("creating {}", path.display()))?;
             helper_tar(
                 &format!("{volume}:/vol:ro"),
-                &format!("{}:/snap", tmp.display()),
-                &format!("tar czf /snap/{archive} -C /vol ."),
+                "tar czf - -C /vol .",
+                Stdio::null(),
+                file.into(),
             )?;
         }
         let manifest = Manifest {
@@ -241,13 +250,17 @@ pub fn save(
     fusionauth::wait_ready(stage, instance)
 }
 
-/// Run `tar` in the helper container with two mounts. The stack's own stage
-/// plumbing is bypassed on purpose — these run inside `run_step` parents.
-fn helper_tar(vol_mount: &str, snap_mount: &str, script: &str) -> Result<()> {
+/// Run `tar` in the helper container against one volume, with the archive on
+/// its stdin or stdout. A bind-mounted snapshot dir would leave the archives
+/// owned by the container's root. The stack's own stage plumbing is bypassed on
+/// purpose — these run inside `run_step` parents.
+fn helper_tar(vol_mount: &str, script: &str, stdin: Stdio, stdout: Stdio) -> Result<()> {
     let out = Command::new("docker")
-        .args(["run", "--rm", "-v", vol_mount, "-v", snap_mount])
+        .args(["run", "--rm", "-i", "-v", vol_mount])
         .arg(HELPER_IMAGE)
         .args(["sh", "-ceu", script])
+        .stdin(stdin)
+        .stdout(stdout)
         .output()
         .context("running snapshot helper container")?;
     if !out.status.success() {
