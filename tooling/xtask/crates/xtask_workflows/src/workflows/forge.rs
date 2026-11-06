@@ -9,6 +9,9 @@
 use anyhow::{Context, Result, ensure};
 use serde_yaml::Value;
 
+/// `actions/cache` v4, which the forge runner's cache server speaks.
+const CACHE_ACTION: &str = "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830";
+
 /// The runner label every ported job runs on (see infra/platform/cluster.nix).
 pub const RUNNER_LABEL: &str = "linux-ci";
 pub const DIR: &str = ".gitea/workflows";
@@ -119,6 +122,37 @@ pub fn port(yaml: &str, dropped: &[&str], paths: &[String]) -> Result<String> {
                 )
                 .context("parsing the PATH step")?,
             );
+            // Namespace keeps these paths on a volume across runs; the forge's runner
+            // cache keeps them instead. Vitest's module cache is what keeps lazily
+            // imported components inside a test's time limit.
+            for step in steps.iter_mut() {
+                let namespace = step
+                    .get("uses")
+                    .and_then(Value::as_str)
+                    .is_some_and(|uses| uses.starts_with("namespacelabs/nscloud-cache-action"));
+                if let Some(path) = namespace
+                    .then(|| step.get("with").and_then(|with| with.get("path")).cloned())
+                    .flatten()
+                {
+                    *step = serde_yaml::from_str(&format!(
+                        "{{ name: Restore caches, uses: '{CACHE_ACTION}', continue-on-error: true }}"
+                    ))
+                    .context("parsing the cache step")?;
+                    let mut with = serde_yaml::Mapping::new();
+                    with.insert(Value::from("path"), path);
+                    with.insert(
+                        Value::from("key"),
+                        Value::from(format!("forge-{name}-${{{{ github.run_id }}}}")),
+                    );
+                    with.insert(
+                        Value::from("restore-keys"),
+                        Value::from(format!("forge-{name}-")),
+                    );
+                    step.as_mapping_mut()
+                        .context("cache step is not a mapping")?
+                        .insert(Value::from("with"), Value::Mapping(with));
+                }
+            }
             steps.retain(|step| {
                 let field = |key: &str| step.get(key).and_then(Value::as_str).unwrap_or_default();
                 !(field("uses").starts_with("namespacelabs/nscloud-cache-action")
@@ -176,6 +210,9 @@ jobs:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     steps:
     - uses: namespacelabs/nscloud-cache-action@abc
+      with:
+        path: /home/runner/.cache/vitest-modules
+    - uses: namespacelabs/nscloud-cache-action@abc
     - uses: actions/checkout@abc
     - id: preview-credentials
       uses: aws-actions/configure-aws-credentials@abc
@@ -200,8 +237,13 @@ jobs:
         let build = &ported["jobs"]["build"];
         assert_eq!(build["runs-on"], RUNNER_LABEL);
         assert_eq!(build["needs"].as_sequence().unwrap().len(), 1);
-        assert_eq!(build["steps"].as_sequence().unwrap().len(), 2);
+        assert_eq!(build["steps"].as_sequence().unwrap().len(), 3);
         assert_eq!(build["steps"][0]["name"], "Put Cargo on PATH");
+        let cache = &build["steps"][1];
+        assert_eq!(cache["uses"], CACHE_ACTION);
+        assert_eq!(cache["with"]["path"], "/home/runner/.cache/vitest-modules");
+        assert_eq!(cache["with"]["key"], "forge-build-${{ github.run_id }}");
+        assert_eq!(cache["with"]["restore-keys"], "forge-build-");
         assert!(ported["jobs"].get("ios").is_none());
         let paths = &ported["jobs"]["paths"]["steps"];
         assert_eq!(paths[1]["with"]["fetch-depth"], "0");

@@ -137,6 +137,18 @@ jobs:
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
+        key: forge-build-${{ github.run_id }}
+        restore-keys: forge-build-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
     - name: Setup
@@ -206,6 +218,13 @@ jobs:
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: /home/runner/.bun/install/cache
+        key: forge-typescript-${{ github.run_id }}
+        restore-keys: forge-typescript-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
       with:
@@ -268,6 +287,16 @@ jobs:
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+        key: forge-generated-code-${{ github.run_id }}
+        restore-keys: forge-generated-code-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
       with:
@@ -475,6 +504,19 @@ jobs:
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
+        key: forge-test-${{ github.run_id }}
+        restore-keys: forge-test-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
       with:
@@ -539,6 +581,18 @@ jobs:
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
+        key: forge-functional-${{ github.run_id }}
+        restore-keys: forge-functional-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
       with:
@@ -615,6 +669,19 @@ jobs:
       run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
+        key: forge-browser-${{ github.run_id }}
+        restore-keys: forge-browser-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
       with:

@@ -119,6 +119,16 @@ jobs:
         printf '%s\n' "$compare_rev" > /tmp/base-revision
         git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.cache/macro-nextest-filter
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+        key: forge-path-check-${{ github.run_id }}
+        restore-keys: forge-path-check-
     - name: Configure Namespace remote sccache
       if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
@@ -322,6 +332,18 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+        key: forge-check-${{ github.run_id }}
+        restore-keys: forge-check-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
       with:
@@ -554,6 +576,18 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+        key: forge-test-${{ github.run_id }}
+        restore-keys: forge-test-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
       with:
@@ -828,6 +862,18 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+        key: forge-build-service-bins-${{ github.run_id }}
+        restore-keys: forge-build-service-bins-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
     - name: Setup Nix dev shell

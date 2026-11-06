@@ -47,6 +47,13 @@ jobs:
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: /home/runner/.bun/install/cache
+        key: forge-ast-grep-${{ github.run_id }}
+        restore-keys: forge-ast-grep-
     - name: Setup Nix
       uses: ./.github/actions/setup-nix
     - name: Setup Nix dev shell
