@@ -3,6 +3,7 @@ audio/*.wav
 audio/cues.json
 stills/
 /macro-trailer*.mp4
+/macro-email-press-b*.mp4
 audio/explainer-cues.json
 vo/models/
 vo/lines/
