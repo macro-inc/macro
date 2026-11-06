@@ -28,8 +28,8 @@ export default {
   docsTitle: 'Learn how to use Macro Docs',
   docsBlock: 'Macro Docs',
   docsSnippet:
-    'Mention anything, edit live with your team, and agents with a live cursor',
-  docsLength: '1:46',
+    '@mention anything, open it in a split, plain markdown, live agent cursors',
+  docsLength: '1:15',
   tasksTitle: 'Learn how to use Macro Tasks',
   tasksBlock: 'Macro Tasks',
   tasksSnippet:
