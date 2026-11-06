@@ -381,7 +381,10 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
     let started = Instant::now();
     loop {
         match client
-            .claim(enrollment.pairing_id, &enrollment.device_secret)
+            .claim(
+                enrollment.pairing_id.into_inner(),
+                &enrollment.device_secret,
+            )
             .await
         {
             Ok(ClaimStatus::Claimed(credentials)) => {

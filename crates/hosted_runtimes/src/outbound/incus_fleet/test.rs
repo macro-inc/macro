@@ -1,8 +1,10 @@
 use incus_client::{ImageProtocol, ImageRemote, IncusTimeouts};
 
 use super::*;
+use uuid::Uuid;
 
-const COMPUTER_ID: Uuid = Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001);
+const COMPUTER_ID: ComputerId =
+    ComputerId::new(Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001));
 
 fn endpoint() -> IncusEndpoint {
     IncusEndpoint {
@@ -191,19 +193,25 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
         .unwrap(),
         [
             FleetInstance {
-                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001),
+                computer_id: ComputerId::new(Uuid::from_u128(
+                    0x0190_0000_0000_7000_8000_0000_0000_0001
+                )),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
+                computer_id: ComputerId::new(Uuid::from_u128(
+                    0x0190_0000_0000_7000_8000_0000_0000_0002
+                )),
                 status: InstanceStatus::Frozen,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0003),
+                computer_id: ComputerId::new(Uuid::from_u128(
+                    0x0190_0000_0000_7000_8000_0000_0000_0003
+                )),
                 status: InstanceStatus::Stopped,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,

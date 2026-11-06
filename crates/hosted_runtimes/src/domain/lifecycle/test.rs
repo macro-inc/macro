@@ -1,6 +1,5 @@
 use chrono::{DateTime, TimeZone, Utc};
 use proptest::prelude::*;
-use uuid::Uuid;
 
 use super::*;
 
@@ -8,7 +7,9 @@ mod comped;
 mod instance_lost;
 mod payment;
 
-const HOST: HostId = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001);
+const HOST: HostId = HostId::new(uuid::Uuid::from_u128(
+    0x0000_0000_0000_4000_8000_0000_0000_0001,
+));
 
 fn now() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap()

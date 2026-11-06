@@ -28,6 +28,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 incus_client = { path = "../incus_client", optional = true }
+harness_id = { path = "../harness_id" }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 macro_env = { path = "../macro_env", optional = true }

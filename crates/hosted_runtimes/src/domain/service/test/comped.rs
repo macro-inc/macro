@@ -99,7 +99,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
         FakeBilling::default(),
         FixedClock,
     );
-    let id = Uuid::from_u128(18);
+    let id = ComputerId::new(Uuid::from_u128(18));
     service
         .repo
         .reserve(
@@ -109,7 +109,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
                 },
                 id,
                 team_id: TEAM,
-                name: "Build box".to_owned(),
+                name: ComputerName::try_new("Build box").unwrap(),
                 size: ComputerSize::Standard,
                 persona: None,
                 created_by: "test-admin".to_owned(),

@@ -135,6 +135,10 @@ Channel/document trigger prompts retain their source message ID through
 for initial mentions, existing-session follow-ups, and conflicted-create retries;
 external chat replies depend on it. Direct session controls still mint IDs.
 
+## Enrollment identities
+
+- Retain typed computer/pairing IDs and persona user/unit names until the pairing HTTP or OS command boundary. Expose the device secret only for the pairing claim. Persona user validation accepts non-reserved Linux names, including legacy names without an agent prefix.
+
 ## Checks
 
 - `cargo test -p coding_agent_worker` (`SQLX_OFFLINE` unset).

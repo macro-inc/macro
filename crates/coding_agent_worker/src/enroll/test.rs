@@ -295,7 +295,7 @@ token = "mhns_claimed"
         loaded.credentials.map(|credentials| credentials.token),
         Some("mhns_claimed".to_owned())
     );
-    assert_eq!(enrollment.pairing_id, Uuid::from_u128(0xa));
+    assert_eq!(enrollment.pairing_id.into_inner(), Uuid::from_u128(0xa));
 
     let host = FakeHost::default();
     own_like_parent(&config, &host).unwrap();

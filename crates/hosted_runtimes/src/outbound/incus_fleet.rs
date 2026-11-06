@@ -13,9 +13,9 @@ use incus_client::generated::types;
 use incus_client::{
     ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo, InstanceKind,
 };
-use uuid::Uuid;
 
 use crate::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
+use crate::domain::ids::ComputerId;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
 use crate::domain::size::ComputerSize;
@@ -53,7 +53,7 @@ pub struct IncusFleetConfig {
 #[derive(Debug, thiserror::Error)]
 pub enum IncusFleetError {
     #[error("instance {computer_id} is missing")]
-    Missing { computer_id: Uuid },
+    Missing { computer_id: ComputerId },
     #[error(transparent)]
     Incus(#[from] IncusError),
     #[error("could not encode the enrollment: {0}")]
@@ -90,7 +90,7 @@ impl IncusFleet {
     }
 
     /// The instance, `None` when it does not exist.
-    async fn find(&self, computer_id: Uuid) -> Result<Option<InstanceInfo>, IncusFleetError> {
+    async fn find(&self, computer_id: ComputerId) -> Result<Option<InstanceInfo>, IncusFleetError> {
         match self.client.instance(&instance_name(computer_id)).await {
             Ok(instance) => Ok(Some(instance)),
             Err(IncusError::NotFound { .. }) => Ok(None),
@@ -98,7 +98,10 @@ impl IncusFleet {
         }
     }
 
-    async fn status(&self, computer_id: Uuid) -> Result<Option<InstanceStatus>, IncusFleetError> {
+    async fn status(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<InstanceStatus>, IncusFleetError> {
         self.find(computer_id)
             .await?
             .map(|instance| observed_status(&instance))
@@ -169,7 +172,7 @@ impl Fleet for IncusFleet {
     }
 
     #[tracing::instrument(name = "incus_fleet.start", skip(self), err)]
-    async fn start(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn start(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let name = instance_name(computer_id);
         match self.status(computer_id).await? {
             Some(InstanceStatus::Running) => {}
@@ -181,7 +184,7 @@ impl Fleet for IncusFleet {
 
     /// A clean shutdown, killed after the configured grace period.
     #[tracing::instrument(name = "incus_fleet.stop", skip(self), err)]
-    async fn stop(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn stop(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let result: Result<(), IncusFleetError> = async {
             let name = instance_name(computer_id);
             match self.status(computer_id).await? {
@@ -211,7 +214,7 @@ impl Fleet for IncusFleet {
     }
 
     #[tracing::instrument(name = "incus_fleet.restart", skip(self), err)]
-    async fn restart(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn restart(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let name = instance_name(computer_id);
         match self.status(computer_id).await? {
             Some(InstanceStatus::Running) => self.client.restart(&name, true).await?,
@@ -225,7 +228,7 @@ impl Fleet for IncusFleet {
     }
 
     #[tracing::instrument(name = "incus_fleet.freeze", skip(self), err)]
-    async fn freeze(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn freeze(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         if self.status(computer_id).await? != Some(InstanceStatus::Frozen) {
             self.client.freeze(&instance_name(computer_id)).await?;
         }
@@ -233,7 +236,7 @@ impl Fleet for IncusFleet {
     }
 
     #[tracing::instrument(name = "incus_fleet.unfreeze", skip(self), err)]
-    async fn unfreeze(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn unfreeze(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         match self.status(computer_id).await? {
             None => return Err(IncusFleetError::Missing { computer_id }),
             Some(InstanceStatus::Frozen) => {
@@ -246,7 +249,7 @@ impl Fleet for IncusFleet {
 
     /// Stateful stop: RAM goes to the root volume's `size.state` space.
     #[tracing::instrument(name = "incus_fleet.suspend", skip(self), err)]
-    async fn suspend(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn suspend(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let name = instance_name(computer_id);
         match self.status(computer_id).await? {
             Some(InstanceStatus::Stopped) => return Ok(()),
@@ -258,12 +261,12 @@ impl Fleet for IncusFleet {
     }
 
     /// Starting a statefully stopped VM restores its RAM.
-    async fn resume(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn resume(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         self.start(computer_id).await
     }
 
     #[tracing::instrument(name = "incus_fleet.destroy", skip(self), err)]
-    async fn destroy(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn destroy(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let name = instance_name(computer_id);
         match self.status(computer_id).await? {
             None => return Ok(()),
@@ -279,7 +282,7 @@ impl Fleet for IncusFleet {
     }
 
     #[tracing::instrument(name = "incus_fleet.clear_enrollment", skip(self), err)]
-    async fn clear_enrollment(&self, computer_id: Uuid) -> Result<(), IncusFleetError> {
+    async fn clear_enrollment(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         match self
             .client
             .remove_config_key(&instance_name(computer_id), INCUS_ENROLLMENT_KEY)
@@ -316,15 +319,15 @@ impl Fleet for IncusFleet {
 }
 
 /// Incus names are hostname labels: a leading letter, at most 63 characters.
-pub fn instance_name(computer_id: Uuid) -> String {
-    format!("mc-{}", computer_id.simple())
+pub fn instance_name(computer_id: ComputerId) -> String {
+    format!("mc-{}", computer_id.into_inner().simple())
 }
 
 /// The instance config: identity, enrollment and limits.
 fn instance_config(
     control_plane_id: &ControlPlaneId,
     created_at: DateTime<Utc>,
-    computer_id: Uuid,
+    computer_id: ComputerId,
     size: ComputerSize,
     enrollment_json: &str,
 ) -> BTreeMap<String, String> {
@@ -364,7 +367,7 @@ fn root_device(pool: &str, size: ComputerSize) -> BTreeMap<String, String> {
 /// `size.state`.
 fn instance_body(
     config: &IncusFleetConfig,
-    computer_id: Uuid,
+    computer_id: ComputerId,
     size: ComputerSize,
     enrollment_json: &str,
     created_at: DateTime<Utc>,
@@ -445,10 +448,12 @@ fn computer_instances(
         })
         .map(|(instance, value)| {
             let computer_id =
-                Uuid::parse_str(value).map_err(|_| IncusFleetError::BadComputerId {
-                    name: instance.name.clone(),
-                    value: value.clone(),
-                })?;
+                value
+                    .parse::<ComputerId>()
+                    .map_err(|_| IncusFleetError::BadComputerId {
+                        name: instance.name.clone(),
+                        value: value.clone(),
+                    })?;
             Ok(FleetInstance {
                 computer_id,
                 status: observed_status(instance)?,

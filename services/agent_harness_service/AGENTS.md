@@ -206,6 +206,8 @@ listener failure shuts down the process so ECS can replace the task.
 
 ## Gotchas
 
+- Keep computer domain IDs, harness IDs, and Incus resource names typed in `computers.rs`; unwrap only when calling the existing harness registry or SQL boundary.
+
 - Keep two tasks and rolling replacements in both environments. Preview
   control uses shared Postgres state. SSH claims a tunnel owner; browser HTTP/WS
   forwards directly to that owner. Keep preview security-group self-ingress on

@@ -6,9 +6,11 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::domain::enrollment::Persona;
+use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, Phase};
 use crate::domain::models::{
-    Computer, ComputerStatus, NewComputer, PurchaseBilling, PurchaseRequest, Quote, SizeOffer,
+    Computer, ComputerName, ComputerStatus, NewComputer, PurchaseBilling, PurchaseRequest, Quote,
+    SizeOffer,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, NoComps, ReserveError,
@@ -18,7 +20,6 @@ use crate::domain::size::ComputerSize;
 #[cfg(test)]
 mod test;
 
-const MAX_NAME_CHARS: usize = 64;
 const DEFAULT_NAME: &str = "Macro computer";
 /// Billing effects leased per worker pass.
 const BILLING_BATCH: u32 = 16;
@@ -131,7 +132,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn purchase_for_team(
         &self,
         mut request: PurchaseRequest,
-    ) -> Result<Uuid, ComputerError> {
+    ) -> Result<ComputerId, ComputerError> {
         request.billing = self.purchase_billing(request.team_id).await?;
         self.purchase(request).await
     }
@@ -203,7 +204,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, comped = matches!(&request.billing, PurchaseBilling::Comped { .. })),
         err
     )]
-    pub async fn purchase(&self, request: PurchaseRequest) -> Result<Uuid, ComputerError> {
+    pub async fn purchase(&self, request: PurchaseRequest) -> Result<ComputerId, ComputerError> {
         if matches!(request.billing, PurchaseBilling::Comped { .. })
             && !request.extra_items.is_empty()
         {
@@ -215,7 +216,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             validate_persona(persona)?;
         }
         let name = computer_name(&request)?;
-        let computer_id = Uuid::now_v7();
+        let computer_id = ComputerId::new(Uuid::now_v7());
         tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
 
         let reserved = self
@@ -251,7 +252,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn status(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         Ok(self.team_computer(team_id, computer_id).await?.status())
     }
@@ -267,7 +268,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn set_power(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         on: bool,
     ) -> Result<ComputerStatus, ComputerError> {
         let event = if on { Event::PowerOn } else { Event::PowerOff };
@@ -279,7 +280,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn retry(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         let computer = self.team_computer(team_id, computer_id).await?;
         if !matches!(computer.state.phase, Phase::Failed { .. }) {
@@ -299,7 +300,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn cancel(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         let computer = self.team_computer(team_id, computer_id).await?;
         let at = if computer.state.payment == crate::domain::lifecycle::PaymentOutcome::Comped {
@@ -315,7 +316,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn undo_cancel(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         self.apply_for_team(team_id, computer_id, Event::UndoCancel)
             .await
@@ -327,11 +328,11 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     pub async fn release_now(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         confirm_name: &str,
     ) -> Result<ComputerStatus, ComputerError> {
         let computer = self.team_computer(team_id, computer_id).await?;
-        if confirm_name.trim() != computer.name {
+        if confirm_name.trim() != computer.name.as_str() {
             return Err(ComputerError::ConfirmationMismatch);
         }
         self.apply_for_team(team_id, computer_id, Event::ReleaseNow)
@@ -456,7 +457,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     #[tracing::instrument(skip(self, extra_items), fields(comped), err)]
     async fn confirm_payment(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         extra_items: &[crate::domain::models::SubscriptionItem],
     ) -> Result<(), ComputerError> {
         let _payment = self
@@ -513,7 +514,11 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         Ok(())
     }
 
-    async fn remove_item(&self, computer_id: Uuid, effect_id: i64) -> Result<(), ComputerError> {
+    async fn remove_item(
+        &self,
+        computer_id: ComputerId,
+        effect_id: i64,
+    ) -> Result<(), ComputerError> {
         let computer = self
             .repo
             .get(computer_id)
@@ -537,7 +542,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     async fn team_computer(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<Computer, ComputerError> {
         self.repo
             .get(computer_id)
@@ -550,7 +555,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     async fn apply_for_team(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         event: Event,
     ) -> Result<ComputerStatus, ComputerError> {
         self.team_computer(team_id, computer_id).await?;
@@ -578,7 +583,7 @@ impl Computer {
     }
 }
 
-fn computer_name(request: &PurchaseRequest) -> Result<String, ComputerError> {
+fn computer_name(request: &PurchaseRequest) -> Result<ComputerName, ComputerError> {
     let name = request
         .name
         .as_deref()
@@ -588,12 +593,7 @@ fn computer_name(request: &PurchaseRequest) -> Result<String, ComputerError> {
             .map(|persona| persona.name.as_str()))
         .unwrap_or(DEFAULT_NAME)
         .trim();
-    if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
-        return Err(ComputerError::BadRequest(format!(
-            "name must be 1..={MAX_NAME_CHARS} characters"
-        )));
-    }
-    Ok(name.to_owned())
+    ComputerName::try_new(name).map_err(|error| ComputerError::BadRequest(error.to_string()))
 }
 
 /// Reject empty commands and multiline persona values before purchase.

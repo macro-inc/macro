@@ -123,6 +123,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 
+## Typed boundaries
+
+- Use `domain::ids::{ComputerId, PairingId, HostId}` and `harness_id::HarnessId`; keep team IDs as UUIDs until a shared team identity exists. Convert only at external/storage boundaries.
+- Construct `ComputerName` to trim and validate display names.
+- Keep serde newtypes transparent and validate string deserialization through `TryFrom<String>`; serde does not allow `transparent` together with its `try_from` container attribute.
+
 ## Scope
 
 - Owns: computer rows, hosts, outbox, timers, waitlist, lifecycle, size catalog.

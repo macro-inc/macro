@@ -2,9 +2,8 @@
 //! There is no fallback: an unreachable Incus host fails loudly instead of
 //! quietly running computers in Docker.
 
-use uuid::Uuid;
-
 use crate::domain::enrollment::Enrollment;
+use crate::domain::ids::ComputerId;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{Fleet, FleetError, FleetInstance};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
@@ -55,63 +54,63 @@ impl Fleet for ConfiguredFleet {
         }
     }
 
-    async fn start(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn start(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.start(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.start(computer_id).await?),
         }
     }
 
-    async fn stop(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn stop(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.stop(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.stop(computer_id).await?),
         }
     }
 
-    async fn restart(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn restart(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.restart(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.restart(computer_id).await?),
         }
     }
 
-    async fn freeze(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn freeze(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.freeze(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.freeze(computer_id).await?),
         }
     }
 
-    async fn unfreeze(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn unfreeze(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.unfreeze(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.unfreeze(computer_id).await?),
         }
     }
 
-    async fn suspend(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn suspend(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.suspend(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.suspend(computer_id).await?),
         }
     }
 
-    async fn resume(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn resume(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.resume(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.resume(computer_id).await?),
         }
     }
 
-    async fn destroy(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn destroy(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.destroy(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.destroy(computer_id).await?),
         }
     }
 
-    async fn clear_enrollment(&self, computer_id: Uuid) -> Result<(), Self::Err> {
+    async fn clear_enrollment(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.clear_enrollment(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.clear_enrollment(computer_id).await?),

@@ -6,11 +6,13 @@
 //! These types are the contract between the control plane and
 //! `macrod enroll`; macrod depends on this crate with default features off.
 
+use crate::domain::ids::{ComputerId, PairingId};
+
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
+use crate::domain::models::ComputerName;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Instance config key carrying the JSON [`Enrollment`].
 pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
@@ -19,11 +21,11 @@ pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
 /// pairing exactly once; a copy read after that claim is useless.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Enrollment {
-    pub computer_id: Uuid,
-    pub pairing_id: Uuid,
+    pub computer_id: ComputerId,
+    pub pairing_id: PairingId,
     pub device_secret: String,
     /// Display name the harness shows in Settings → Runtimes.
-    pub name: String,
+    pub name: ComputerName,
     /// `OVERRIDE_*` service URL variables (see `macro_service_urls`) macrod
     /// must use, for stacks that are not the computer's default environment.
     pub service_url_overrides: BTreeMap<String, String>,

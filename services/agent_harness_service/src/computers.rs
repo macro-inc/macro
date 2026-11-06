@@ -5,6 +5,8 @@
 //! Purchases, billing and the team routes live in authentication_service,
 //! which owns Stripe; both share the `hosted_runtime*` tables.
 
+use hosted_runtimes::domain::ids::{ComputerId, PairingId};
+
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::pin::Pin;
@@ -357,28 +359,32 @@ impl Harnesses for HostedHarnesses {
             .service
             .create_hosted_pairing(CreateHostedPairing {
                 team_id: computer.team_id,
-                name: computer.name.clone(),
+                name: computer.name.as_str().to_owned(),
                 created_by,
                 // The computer is the team's own isolated VM, run for agents.
                 allow_permission_bypass: true,
-                computer_id: computer.id,
+                computer_id: computer.id.into_inner(),
             })
             .await?;
         Ok(HostedPairing {
-            pairing_id: pairing.pairing_id,
+            pairing_id: PairingId::new(pairing.pairing_id),
             device_secret: pairing.device_secret,
         })
     }
 
-    async fn computer_for(&self, harness_id: Uuid) -> Result<Option<Uuid>, Self::Err> {
+    async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, Self::Err> {
         Ok(self
             .service
-            .harness_computer(HarnessId::new_from_uuid(harness_id))
-            .await?)
+            .harness_computer(harness_id)
+            .await?
+            .map(ComputerId::new))
     }
 
-    async fn revoke(&self, computer_id: Uuid) -> Result<(), Self::Err> {
-        Ok(self.service.revoke_hosted_harness(computer_id).await?)
+    async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
+        Ok(self
+            .service
+            .revoke_hosted_harness(computer_id.into_inner())
+            .await?)
     }
 }
 
@@ -399,7 +405,7 @@ impl SessionActivity for PgSessionActivity {
 
     async fn is_idle_since(
         &self,
-        harness_id: Uuid,
+        harness_id: HarnessId,
         since: DateTime<Utc>,
     ) -> Result<bool, sqlx::Error> {
         let busy = sqlx::query_scalar!(
@@ -413,7 +419,7 @@ impl SessionActivity for PgSessionActivity {
                   AND (s.turn_state = 'running' OR s.modified_at > $2)
             ) AS "busy!"
             "#,
-            harness_id,
+            harness_id.as_uuid(),
             since,
         )
         .fetch_one(&self.pool)
@@ -478,7 +484,7 @@ impl<Inner: CommandForwarder> CommandForwarder for WakingForwarder<Inner> {
     ) -> HarnessResult<CommandOutcome> {
         if let (Some(operator), CommandTarget::Harness(harness)) = (&self.operator, &target) {
             let must_wait = operator
-                .prompt_arrived(harness.as_uuid())
+                .prompt_arrived(*harness)
                 .await
                 .inspect_err(
                     |error| tracing::error!(%harness, error = ?error, "could not wake a computer"),
@@ -550,7 +556,7 @@ where
             Arc::clone(&self.inner).connected(harness).await;
             if let Some(operator) = &self.operator {
                 operator
-                    .macrod_connected(harness.as_uuid())
+                    .macrod_connected(harness)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
                     .ok();
@@ -567,7 +573,7 @@ where
             Arc::clone(&self.inner).disconnected(harness).await;
             if let Some(operator) = &self.operator {
                 operator
-                    .macrod_disconnected(harness.as_uuid())
+                    .macrod_disconnected(harness)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer disconnect event failed"))
                     .ok();

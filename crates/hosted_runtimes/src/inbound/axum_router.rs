@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::enrollment::Persona;
+use crate::domain::ids::ComputerId;
 use crate::domain::models::{
     ComputerStatus, PurchaseBilling, PurchaseRequest, Quote, SizeOffer, SubscriptionItem,
 };
@@ -220,7 +221,7 @@ pub async fn status<
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy>>,
-    Path(computer_id): Path<Uuid>,
+    Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(state.service.status(team_id, computer_id).await?))
@@ -299,7 +300,8 @@ pub struct PurchaseBody {
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Purchased {
-    pub computer_id: Uuid,
+    #[schema(value_type = Uuid)]
+    pub computer_id: ComputerId,
 }
 
 /// Buy a computer for the team, billed on the team subscription.
@@ -370,7 +372,7 @@ pub async fn power<
 >(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy>>,
-    Path(computer_id): Path<Uuid>,
+    Path(computer_id): Path<ComputerId>,
     Json(body): Json<PowerBody>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -405,7 +407,7 @@ pub async fn retry<
 >(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy>>,
-    Path(computer_id): Path<Uuid>,
+    Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(state.service.retry(team_id, computer_id).await?))
@@ -430,7 +432,7 @@ pub async fn cancel<
 >(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy>>,
-    Path(computer_id): Path<Uuid>,
+    Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(state.service.cancel(team_id, computer_id).await?))
@@ -455,7 +457,7 @@ pub async fn undo_cancel<
 >(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy>>,
-    Path(computer_id): Path<Uuid>,
+    Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(state.service.undo_cancel(team_id, computer_id).await?))
@@ -492,7 +494,7 @@ pub async fn release<
 >(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy>>,
-    Path(computer_id): Path<Uuid>,
+    Path(computer_id): Path<ComputerId>,
     Json(body): Json<ReleaseBody>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -654,7 +656,7 @@ pub async fn internal_status<
 >(
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
     State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy>>,
-    Path(computer_id): Path<Uuid>,
+    Path(computer_id): Path<ComputerId>,
     Query(query): Query<InternalTeamQuery>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     Ok(Json(

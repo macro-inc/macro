@@ -19,9 +19,9 @@ use std::process::Stdio;
 
 use chrono::{DateTime, Utc};
 use macro_env::Environment;
-use uuid::Uuid;
 
 use crate::domain::enrollment::Enrollment;
+use crate::domain::ids::ComputerId;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
 
@@ -59,7 +59,7 @@ pub struct DockerFleetConfig {
 #[derive(Debug, thiserror::Error)]
 pub enum DockerFleetError {
     #[error("instance {computer_id} is missing")]
-    Missing { computer_id: Uuid },
+    Missing { computer_id: ComputerId },
     #[error("DockerFleet only runs in the local environment, not {0:?}")]
     NotLocal(Environment),
     #[error("could not run docker: {0}")]
@@ -101,12 +101,15 @@ impl DockerFleet {
         }
     }
 
-    fn enrollment_dir(&self, computer_id: Uuid) -> PathBuf {
+    fn enrollment_dir(&self, computer_id: ComputerId) -> PathBuf {
         self.config.enrollment_dir.join(computer_id.to_string())
     }
 
     /// The container's state, `None` when it does not exist.
-    async fn state(&self, computer_id: Uuid) -> Result<Option<ContainerState>, DockerFleetError> {
+    async fn state(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<ContainerState>, DockerFleetError> {
         let output = docker("ps", &state_args(computer_id)).await?;
         output
             .lines()
@@ -118,7 +121,7 @@ impl DockerFleet {
 
     async fn write_enrollment(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         enrollment: &Enrollment,
     ) -> Result<PathBuf, DockerFleetError> {
         let dir = self.enrollment_dir(computer_id);
@@ -190,7 +193,7 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.start", skip(self), err)]
-    async fn start(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn start(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         match self.state(computer_id).await? {
             Some(ContainerState::Paused) => {
                 docker("unpause", &verb_args("unpause", computer_id)).await?;
@@ -203,7 +206,7 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.stop", skip(self), err)]
-    async fn stop(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn stop(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         match self.state(computer_id).await? {
             None => return Ok(()),
             Some(ContainerState::Paused) => {
@@ -228,7 +231,7 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.restart", skip(self), err)]
-    async fn restart(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn restart(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? == Some(ContainerState::Paused) {
             docker("unpause", &verb_args("unpause", computer_id)).await?;
         }
@@ -237,7 +240,7 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.freeze", skip(self), err)]
-    async fn freeze(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn freeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? != Some(ContainerState::Paused) {
             docker("pause", &verb_args("pause", computer_id)).await?;
         }
@@ -245,7 +248,7 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.unfreeze", skip(self), err)]
-    async fn unfreeze(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn unfreeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         match self.state(computer_id).await? {
             None => return Err(DockerFleetError::Missing { computer_id }),
             Some(ContainerState::Paused) => {
@@ -257,7 +260,7 @@ impl Fleet for DockerFleet {
     }
 
     /// A cold stop: Docker cannot save RAM.
-    async fn suspend(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn suspend(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         match self.state(computer_id).await? {
             None => return Err(DockerFleetError::Missing { computer_id }),
             Some(ContainerState::Paused) => {
@@ -271,12 +274,12 @@ impl Fleet for DockerFleet {
     }
 
     /// A cold boot, after [`Self::suspend`]'s cold stop.
-    async fn resume(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn resume(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         self.start(computer_id).await
     }
 
     #[tracing::instrument(name = "docker_fleet.destroy", skip(self), err)]
-    async fn destroy(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn destroy(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if let Err(error) = docker("rm", &remove_args(computer_id)).await
             && !error.is_missing()
         {
@@ -292,7 +295,7 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.clear_enrollment", skip(self), err)]
-    async fn clear_enrollment(&self, computer_id: Uuid) -> Result<(), DockerFleetError> {
+    async fn clear_enrollment(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         let file = self.enrollment_dir(computer_id).join(ENROLLMENT_FILE);
         match tokio::fs::remove_file(&file).await {
             Err(source) if source.kind() != std::io::ErrorKind::NotFound => {
@@ -366,13 +369,13 @@ struct CreateSpec {
     created_at: DateTime<Utc>,
     image: String,
     network: String,
-    computer_id: Uuid,
+    computer_id: ComputerId,
     memory_gb: u32,
     vcpus: u32,
     enrollment_dir: PathBuf,
 }
 
-fn container_name(computer_id: Uuid) -> String {
+fn container_name(computer_id: ComputerId) -> String {
     format!("macro-computer-{computer_id}")
 }
 
@@ -414,12 +417,12 @@ fn create_args(spec: &CreateSpec) -> Vec<String> {
 }
 
 /// `docker <verb> macro-computer-<id>`.
-fn verb_args(verb: &str, computer_id: Uuid) -> Vec<String> {
+fn verb_args(verb: &str, computer_id: ComputerId) -> Vec<String> {
     vec![verb.to_owned(), container_name(computer_id)]
 }
 
 /// `rm --force` succeeds for a missing container too, which destroy needs.
-fn remove_args(computer_id: Uuid) -> Vec<String> {
+fn remove_args(computer_id: ComputerId) -> Vec<String> {
     vec![
         "rm".to_owned(),
         "--force".to_owned(),
@@ -428,7 +431,7 @@ fn remove_args(computer_id: Uuid) -> Vec<String> {
     ]
 }
 
-fn state_args(computer_id: Uuid) -> Vec<String> {
+fn state_args(computer_id: ComputerId) -> Vec<String> {
     vec![
         "ps".to_owned(),
         "--all".to_owned(),
@@ -469,7 +472,8 @@ fn parse_instances(
             match fields.as_slice() {
                 [_, _, owner, _] if *owner != control_plane_id.as_str() => None,
                 [id, state, _, created_at] => Some((|| {
-                    let computer_id = Uuid::parse_str(id)
+                    let computer_id = id
+                        .parse::<ComputerId>()
                         .map_err(|_| DockerFleetError::Malformed(format!("computer id {id:?}")))?;
                     Ok(FleetInstance {
                         computer_id,

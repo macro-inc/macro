@@ -10128,6 +10128,7 @@ dependencies = [
  "chrono",
  "clap",
  "entity_access",
+ "harness_id",
  "incus_client",
  "lazy-regex",
  "macro_authorization",

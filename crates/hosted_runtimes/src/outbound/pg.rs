@@ -1,14 +1,17 @@
 //! Postgres adapter for [`ComputerRepo`].
 
+use harness_id::HarnessId;
+
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::enrollment::Persona;
+use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{
     ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, TimerKind, transition,
 };
-use crate::domain::models::{Computer, Host, HostRegistration, NewComputer};
+use crate::domain::models::{Computer, ComputerName, Host, HostRegistration, NewComputer};
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::ComputerSize;
 
@@ -93,12 +96,13 @@ impl TryFrom<ComputerRow> for Computer {
             .transpose()?;
 
         Ok(Computer {
-            id: row.id,
+            id: ComputerId::new(row.id),
             team_id: row.team_id,
-            name: row.name,
+            name: ComputerName::try_new(&row.name)
+                .map_err(|error| PgComputerError::Corrupt(error.to_string()))?,
             size,
             state: serde_json::from_value(row.state)?,
-            harness_id: row.harness_id,
+            harness_id: row.harness_id.map(HarnessId::new_from_uuid),
             persona,
             created_by: row.created_by,
             created_at: row.created_at,
@@ -116,7 +120,7 @@ impl PgComputerRepo {
     /// its state, effects and timers.
     async fn apply_locked(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         event: &Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
@@ -129,7 +133,7 @@ impl PgComputerRepo {
             WHERE id = $1
             FOR UPDATE
             "#,
-            computer_id,
+            computer_id.into_inner(),
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -153,7 +157,7 @@ impl PgComputerRepo {
                         VALUES ($1, $2, $3)
                         ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = EXCLUDED.fire_at
                         "#,
-                        computer_id,
+                        computer_id.into_inner(),
                         kind.as_ref(),
                         at,
                     )
@@ -167,7 +171,7 @@ impl PgComputerRepo {
                         INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)
                         VALUES ($1, $2, $3, $4, $4)
                         "#,
-                        computer_id,
+                        computer_id.into_inner(),
                         worker.as_ref(),
                         serde_json::to_value(&effect)?,
                         now,
@@ -182,7 +186,7 @@ impl PgComputerRepo {
         if destroyed {
             sqlx::query!(
                 "DELETE FROM hosted_runtime_timer WHERE computer_id = $1",
-                computer_id
+                computer_id.into_inner()
             )
             .execute(&mut **tx)
             .await?;
@@ -194,11 +198,11 @@ impl PgComputerRepo {
                 version = version + 1, updated_at = $6
             WHERE id = $1
             "#,
-            computer_id,
+            computer_id.into_inner(),
             serde_json::to_value(&state)?,
             state.is_awake(),
             state.holds_units(),
-            state.host(),
+            state.host().map(HostId::into_inner),
             now,
         )
         .execute(&mut **tx)
@@ -217,7 +221,7 @@ impl PgComputerRepo {
     ) -> Result<bool, PgComputerError> {
         let capacity = sqlx::query_scalar!(
             "SELECT awake_capacity_units FROM hosted_runtime_host WHERE id = $1 FOR UPDATE",
-            host,
+            host.into_inner(),
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -230,8 +234,8 @@ impl PgComputerRepo {
             FROM hosted_runtime
             WHERE host_id = $1 AND awake AND id <> $2
             "#,
-            host,
-            computer.id,
+            host.into_inner(),
+            computer.id.into_inner(),
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -249,7 +253,10 @@ impl ComputerRepo for PgComputerRepo {
     type PaymentGuard = sqlx::Transaction<'static, sqlx::Postgres>;
 
     #[tracing::instrument(skip(self), err)]
-    async fn lock_payment(&self, computer_id: Uuid) -> Result<Self::PaymentGuard, PgComputerError> {
+    async fn lock_payment(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Self::PaymentGuard, PgComputerError> {
         let mut guard = self.payment_locks.begin().await?;
         let key = format!("computer-payment:{computer_id}");
         sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
@@ -293,7 +300,7 @@ impl ComputerRepo for PgComputerRepo {
             return Err(ReserveError::SoldOut);
         };
 
-        let mut state = ComputerState::reserved(host, now);
+        let mut state = ComputerState::reserved(HostId::new(host), now);
         if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
             state.comp_reason = Some(reason.clone());
         }
@@ -312,9 +319,9 @@ impl ComputerRepo for PgComputerRepo {
                  persona, created_by, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, false, true, $7, $8, $9, $10, $10)
             "#,
-            computer.id,
+            computer.id.into_inner(),
             computer.team_id,
-            computer.name,
+            computer.name.as_str(),
             computer.size.as_ref(),
             computer_units,
             host,
@@ -332,7 +339,7 @@ impl ComputerRepo for PgComputerRepo {
         .map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?;
         sqlx::query!(
             "INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at) VALUES ($1, 'billing', $2, $3, $4)",
-            computer.id,
+            computer.id.into_inner(),
             effect_json,
             now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY,
             now,
@@ -359,7 +366,7 @@ impl ComputerRepo for PgComputerRepo {
     #[tracing::instrument(skip(self), err)]
     async fn apply(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         event: Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
@@ -369,7 +376,7 @@ impl ComputerRepo for PgComputerRepo {
         Ok(computer)
     }
 
-    async fn get(&self, computer_id: Uuid) -> Result<Option<Computer>, PgComputerError> {
+    async fn get(&self, computer_id: ComputerId) -> Result<Option<Computer>, PgComputerError> {
         sqlx::query_as!(
             ComputerRow,
             r#"
@@ -378,7 +385,7 @@ impl ComputerRepo for PgComputerRepo {
             FROM hosted_runtime
             WHERE id = $1
             "#,
-            computer_id,
+            computer_id.into_inner(),
         )
         .fetch_optional(&self.pool)
         .await?
@@ -403,7 +410,10 @@ impl ComputerRepo for PgComputerRepo {
         self.fetch_many(rows).await
     }
 
-    async fn find_by_harness(&self, harness_id: Uuid) -> Result<Option<Computer>, PgComputerError> {
+    async fn find_by_harness(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<Computer>, PgComputerError> {
         sqlx::query_as!(
             ComputerRow,
             r#"
@@ -412,7 +422,7 @@ impl ComputerRepo for PgComputerRepo {
             FROM hosted_runtime
             WHERE harness_id = $1
             "#,
-            harness_id,
+            harness_id.as_uuid(),
         )
         .fetch_optional(&self.pool)
         .await?
@@ -422,13 +432,13 @@ impl ComputerRepo for PgComputerRepo {
 
     async fn set_harness(
         &self,
-        computer_id: Uuid,
-        harness_id: Uuid,
+        computer_id: ComputerId,
+        harness_id: HarnessId,
     ) -> Result<(), PgComputerError> {
         sqlx::query!(
             "UPDATE hosted_runtime SET harness_id = $2 WHERE id = $1",
-            computer_id,
-            harness_id,
+            computer_id.into_inner(),
+            harness_id.as_uuid(),
         )
         .execute(&self.pool)
         .await?;
@@ -437,12 +447,12 @@ impl ComputerRepo for PgComputerRepo {
 
     async fn mark_enrolled(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         now: DateTime<Utc>,
     ) -> Result<(), PgComputerError> {
         sqlx::query!(
             "UPDATE hosted_runtime SET enrolled_at = COALESCE(enrolled_at, $2) WHERE id = $1",
-            computer_id,
+            computer_id.into_inner(),
             now,
         )
         .execute(&self.pool)
@@ -465,7 +475,7 @@ impl ComputerRepo for PgComputerRepo {
         self.fetch_many(rows).await
     }
 
-    async fn coldest_frozen(&self, host: HostId) -> Result<Option<Uuid>, PgComputerError> {
+    async fn coldest_frozen(&self, host: HostId) -> Result<Option<ComputerId>, PgComputerError> {
         Ok(sqlx::query_scalar!(
             r#"
             SELECT id FROM hosted_runtime
@@ -473,10 +483,11 @@ impl ComputerRepo for PgComputerRepo {
             ORDER BY updated_at
             LIMIT 1
             "#,
-            host,
+            host.into_inner(),
         )
         .fetch_optional(&self.pool)
-        .await?)
+        .await?
+        .map(ComputerId::new))
     }
 
     async fn instances_expected(&self, host: HostId) -> Result<Vec<Computer>, PgComputerError> {
@@ -488,7 +499,7 @@ impl ComputerRepo for PgComputerRepo {
             FROM hosted_runtime
             WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'pending_payment'
             "#,
-            host,
+            host.into_inner(),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -536,7 +547,7 @@ impl ComputerRepo for PgComputerRepo {
             .map(|row| {
                 Ok(PendingEffect {
                     id: row.id,
-                    computer_id: row.computer_id,
+                    computer_id: ComputerId::new(row.computer_id),
                     effect: serde_json::from_value(row.effect)?,
                     attempts: u32::try_from(row.attempts)?,
                 })
@@ -596,7 +607,7 @@ impl ComputerRepo for PgComputerRepo {
                     PgComputerError::Corrupt(format!("unknown timer {:?}", row.kind))
                 })?;
                 Ok(DueTimer {
-                    computer_id: row.computer_id,
+                    computer_id: ComputerId::new(row.computer_id),
                     kind,
                     fire_at: row.fire_at,
                 })
@@ -616,7 +627,7 @@ impl ComputerRepo for PgComputerRepo {
             DELETE FROM hosted_runtime_timer
             WHERE computer_id = $1 AND kind = $2 AND fire_at = $3
             "#,
-            timer.computer_id,
+            timer.computer_id.into_inner(),
             timer.kind.as_ref(),
             timer.fire_at,
         )
@@ -653,7 +664,7 @@ impl ComputerRepo for PgComputerRepo {
         .await?;
 
         Ok(Host {
-            id: row.id,
+            id: HostId::new(row.id),
             name: row.name,
             awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
             sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
