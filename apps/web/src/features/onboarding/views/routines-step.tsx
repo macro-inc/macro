@@ -1,4 +1,5 @@
 import { RoutineSparkGlyph } from '@app/features/routine-suggestions/components/routine-spark-glyph';
+import { SuggestionIcon } from '@app/features/routine-suggestions/components/suggestion-icon';
 import {
   ROUTINE_SURFACES,
   SURFACE_COPY,
@@ -51,6 +52,10 @@ function RoutineChoice(props: {
             class="mt-1 shrink-0"
             label={<span class="sr-only">Turn on {entry().title}</span>}
             onChange={(on) => props.step.setOn(props.suggestion, on)}
+          />
+          <SuggestionIcon
+            surface={props.suggestion.surface}
+            catalogKey={props.suggestion.key}
           />
           <div class="min-w-0 flex-1">
             <p class="text-sm font-medium text-ink">{entry().title}</p>
