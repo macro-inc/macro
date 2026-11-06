@@ -46,6 +46,8 @@ pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
 pub mod get_text;
+#[cfg(feature = "ai_tools")]
+pub mod markdown_body;
 pub mod put_interaction;
 pub mod put_snapshot;
 pub mod skill_description;
@@ -201,6 +203,9 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// Editing worker for revision-checked markdown body reads and writes.
+    #[cfg(feature = "ai_tools")]
+    pub editing_worker: Arc<DefaultEditingWorker>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
     /// Whether a team bot with no acting user may own what it creates.
@@ -221,6 +226,8 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             creator: self.creator.clone(),
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
+            #[cfg(feature = "ai_tools")]
+            editing_worker: self.editing_worker.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             non_user_owners: self.non_user_owners,
         }
@@ -326,6 +333,13 @@ where
     let document_id_routes = document_id_routes.route(
         "/{document_id}/ai-edit",
         axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
+    );
+
+    #[cfg(feature = "ai_tools")]
+    let document_id_routes = document_id_routes.route(
+        "/{document_id}/markdown",
+        axum::routing::get(markdown_body::get_markdown_handler::<T, Svc, Auth>)
+            .put(markdown_body::write_markdown_handler::<T, Svc, Auth>),
     );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(

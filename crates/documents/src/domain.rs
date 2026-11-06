@@ -21,6 +21,9 @@ pub mod entity_mutation;
 pub mod events;
 #[cfg(feature = "ports")]
 pub mod markdown_backfill;
+/// Revision-checked reads and writes of a markdown document's body.
+#[cfg(feature = "ai_tools")]
+pub mod markdown_body;
 
 #[cfg(feature = "document_create")]
 pub mod create;
