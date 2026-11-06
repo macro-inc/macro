@@ -15821,6 +15821,10 @@ export interface ShareWithChannelResponse {
  */
 export interface Subagent {
   /**
+   * A short (3-6 word) summary of the task, shown to the user while the subagent works, e.g. "List open pull requests". Always set it.
+   */
+  description?: string | null;
+  /**
    * A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take.
    */
   task: string;
