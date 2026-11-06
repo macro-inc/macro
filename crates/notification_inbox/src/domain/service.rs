@@ -9,7 +9,7 @@ use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
         Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, FeedError, FeedKey,
-        FeedRevision, FeedViewer, Loaded, MailFacts,
+        FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
@@ -200,6 +200,7 @@ impl<E> Group<E> {
         let observed_all = notification_ids.len() == row.all_notifications().count();
         Acknowledgment {
             key: self.key.clone(),
+            unseen_ids: unseen_among(row.all_notifications(), &notification_ids),
             notification_ids,
             archive_thread: (observed_all
                 && row.row_type == InboxRowType::Email
@@ -216,6 +217,7 @@ struct ClearedGroup {
     sort_at: DateTime<Utc>,
     rows: usize,
     notification_ids: Vec<Uuid>,
+    unseen_ids: Vec<Uuid>,
 }
 
 impl InboxClearRequest {
@@ -408,6 +410,7 @@ where
                 None => Acknowledgment {
                     key: target.id.group,
                     notification_ids: Vec::new(),
+                    unseen_ids: Vec::new(),
                     archive_thread: None,
                 },
             };
@@ -451,14 +454,19 @@ where
             Some((group, found)) if found.shows_only(notification) => {
                 group.row_acknowledgment(found, found.revision())
             }
-            Some((group, found)) => Acknowledgment {
-                key: group.key.clone(),
-                notification_ids: rows::speaks_for(found, notification, &viewer.user),
-                archive_thread: None,
-            },
+            Some((group, found)) => {
+                let notification_ids = rows::speaks_for(found, notification, &viewer.user);
+                Acknowledgment {
+                    key: group.key.clone(),
+                    unseen_ids: unseen_among(found.all_notifications(), &notification_ids),
+                    notification_ids,
+                    archive_thread: None,
+                }
+            }
             None => Acknowledgment {
                 key: row.group.clone(),
                 notification_ids: Vec::new(),
+                unseen_ids: Vec::new(),
                 archive_thread: None,
             },
         };
@@ -507,12 +515,17 @@ where
                     .iter()
                     .filter(|row| request.clears(row))
                     .collect();
+                let notification_ids: Vec<Uuid> = cleared
+                    .iter()
+                    .flat_map(|row| row.all_notifications().map(|n| n.notification_id))
+                    .collect();
                 Some(ClearedGroup {
                     rows: cleared.len(),
-                    notification_ids: cleared
-                        .iter()
-                        .flat_map(|row| row.all_notifications().map(|n| n.notification_id))
-                        .collect(),
+                    unseen_ids: unseen_among(
+                        cleared.iter().flat_map(|row| row.all_notifications()),
+                        &notification_ids,
+                    ),
+                    notification_ids,
                     key: group.key,
                     sort_at: group.sort_at,
                 })
@@ -533,6 +546,7 @@ where
             .map(|group| Acknowledgment {
                 key: group.key,
                 notification_ids: group.notification_ids,
+                unseen_ids: group.unseen_ids,
                 archive_thread: None,
             })
             .collect();

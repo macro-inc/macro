@@ -619,7 +619,7 @@ async fn clear_since_a_time_ends_at_the_first_older_group() {
 }
 
 #[tokio::test]
-async fn undo_restores_a_done_and_recomputes_its_groups() {
+async fn undo_restores_a_done_as_it_was_and_recomputes_its_groups() {
     let harness = inbox();
     let outcome = harness
         .service
@@ -643,15 +643,54 @@ async fn undo_restores_a_done_and_recomputes_its_groups() {
         )
         .await
         .unwrap();
+    // It was unseen before the done, so it comes back unseen.
     assert_eq!(
         harness.notifications.state_of(uuid(1)),
-        NotificationState::Seen
+        NotificationState::Unseen
     );
     assert_eq!(changes.len(), 1);
     let InboxChange::Upserted(entry) = &changes[0] else {
         panic!("the channel comes back");
     };
     assert_eq!(entry.rows.len(), 2);
+    assert!(entry.rows.iter().all(|row| row.unseen));
+}
+
+#[tokio::test]
+async fn undo_brings_seen_notifications_back_seen_and_unseen_ones_unseen() {
+    let harness = inbox();
+    harness
+        .service
+        .mark_seen(
+            viewer(),
+            InboxScope::default(),
+            vec![row(&channel(), &thread_slot())],
+        )
+        .await
+        .unwrap();
+    let outcome = harness
+        .service
+        .clear(viewer(), clear_request(InboxScope::default()))
+        .await
+        .unwrap();
+
+    harness
+        .service
+        .undo_done(viewer(), InboxScope::default(), outcome.receipt)
+        .await
+        .unwrap();
+
+    // The thread was read before the clear; the top level and the email
+    // were not.
+    for id in [uuid(2), uuid(3), uuid(4)] {
+        assert_eq!(harness.notifications.state_of(id), NotificationState::Seen);
+    }
+    for id in [uuid(1), uuid(5)] {
+        assert_eq!(
+            harness.notifications.state_of(id),
+            NotificationState::Unseen
+        );
+    }
 }
 
 #[tokio::test]
