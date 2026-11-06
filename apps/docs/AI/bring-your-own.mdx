@@ -108,6 +108,14 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
 
 In **New agent**, set the name, **@tag**, and instructions. Under **Where it runs**, choose **In your harness** and pick the machine under **Harness**. Under **Who can use it**, choose **Private** or **Team**, then save. @mention the agent to start a session on your machine. A **Private** agent can only be mentioned by you.
 
+## Approve your agent's actions
+
+Until you allow bypass, the agent asks before it runs a command or edits a file. The request appears in the session with **Deny**, **Always allow** (this tool, for the rest of the session), and **Allow once**.
+
+If you manage the runtime, the request also offers **Allow, and stop asking on this runtime**. After the same confirmation as the runtime's switch in **Settings → Runtimes**, it allows the action, turns on **Allow bypassing permission requests** for the runtime, and sets the agent to **Always bypass** if you manage the agent and it was set to ask. The agent stops asking from the next action, including in the turn that asked. If bypass can't be turned on, the action is still allowed once and the agent keeps asking.
+
+The option isn't shown when turning on bypass wouldn't stop the asking: when you can't change the runtime or the agent, or in a direct conversation that started while its agent was set to ask. Turn bypass off again in **Settings → Runtimes**.
+
 ## Keep your runtime connected
 
 Leave `macrod` running and your computer awake while you use the runtime. Its terminal shows your sessions, configuration, and logs. You can also check the runtime in **Settings → Runtimes**.
