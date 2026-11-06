@@ -22,6 +22,8 @@ consumer talks to.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
   capped to 25 sessions before folding their logs.
 - `src/outbound/postgres.rs`: the session repository.
+- `src/domain/scrub_log_credentials.rs` and `src/outbound/postgres/scrub_log_credentials.rs`:
+  bounded cleanup of stored protocol frames; the CLI is `src/bin/scrub_log_credentials.rs`.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
 

@@ -14,6 +14,7 @@ mod auto_archive;
 mod pull_request;
 mod queue;
 mod recovery;
+mod scrub_log_credentials;
 mod session_task;
 mod sharing;
 mod source;

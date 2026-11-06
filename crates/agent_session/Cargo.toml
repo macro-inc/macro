@@ -11,7 +11,7 @@ admission = ["dep:ai_billing", "dep:ai_usage", "dep:jev"]
 ai_tools = ["inbound", "dep:ai_toolset", "dep:async-trait", "dep:schemars"]
 # The `seed_jsonl` replay binary: an argument parser, and the Postgres
 # adapter it writes through.
-cli = ["dep:clap", "outbound"]
+cli = ["dep:clap", "outbound", "tokio/time"]
 # The axum router serving sessions over HTTP.
 inbound = [
   "admission",
@@ -136,4 +136,9 @@ tower = { workspace = true, features = ["util"] }
 [[bin]]
 name = "backfill_turn_states"
 path = "src/bin/backfill_turn_states.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "scrub_log_credentials"
+path = "src/bin/scrub_log_credentials.rs"
 required-features = ["cli"]
