@@ -1,6 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { trackSubscriptionStart } from '@app/lib/analytics/subscriptionStart';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
@@ -416,6 +417,11 @@ export function createAppOnboardingContext(): OnboardingContext {
       return () => (queryReadyGate(stars) ? stars.data : undefined);
     },
     track: (event, data) => analytics.track(event, data),
+    trackSubscriptionStarted: (viewerId, tier) =>
+      fireAndForget(
+        trackSubscriptionStart(analytics, viewerId, tier),
+        'onboarding'
+      ),
     notifyFailure: (message) => toast.failure(message),
   };
 }

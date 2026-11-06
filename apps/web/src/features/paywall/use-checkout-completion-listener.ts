@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { trackSubscriptionStart } from '@app/lib/analytics/subscriptionStart';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useUserInfoQuery } from '@queries/auth/user-info';
@@ -30,13 +31,22 @@ export function useCheckoutCompletionListener() {
       for (let attempt = 0; attempt < CHECKOUT_REFRESH_ATTEMPTS; attempt++) {
         if (cancelled) break;
         const result = await userInfoQuery.refetch();
+        if (cancelled) break;
         const licenseStatus = result.data?.licenseStatus;
-        if (
-          cancelled ||
-          licenseStatus === 'active' ||
-          licenseStatus === 'trialing'
-        )
+        if (licenseStatus === 'active' || licenseStatus === 'trialing') {
+          if (result.data)
+            fireAndForget(
+              trackSubscriptionStart(
+                analytics,
+                result.data.userId,
+                typeof searchParams.type === 'string'
+                  ? searchParams.type
+                  : undefined
+              ),
+              'paywall'
+            );
           break;
+        }
         if (attempt < CHECKOUT_REFRESH_ATTEMPTS - 1) {
           await new Promise((resolve) =>
             setTimeout(resolve, CHECKOUT_REFRESH_INTERVAL_MS)

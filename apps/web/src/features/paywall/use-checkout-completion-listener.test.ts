@@ -5,13 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   track: vi.fn(),
+  trackGoogleConversion: vi.fn(),
   success: vi.fn(),
   refetch: vi.fn(),
   setSearch: (_value: string) => {},
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
-  useAnalytics: () => ({ track: mocks.track }),
+  useAnalytics: () => ({
+    track: mocks.track,
+    trackGoogleConversion: mocks.trackGoogleConversion,
+  }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.success },
@@ -44,7 +48,10 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
+import { subscriptionStartTransactionId } from '@app/lib/analytics/subscriptionStart';
 import { useCheckoutCompletionListener } from './use-checkout-completion-listener';
+
+const ADA = 'macro|ada@acme.com';
 
 let dispose: (() => void) | undefined;
 function mount() {
@@ -57,7 +64,9 @@ function mount() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.setSearch('');
-  mocks.refetch.mockResolvedValue({ data: { licenseStatus: 'active' } });
+  mocks.refetch.mockResolvedValue({
+    data: { licenseStatus: 'active', userId: 'macro|ada@acme.com' },
+  });
 });
 afterEach(() => {
   dispose?.();
@@ -67,7 +76,9 @@ afterEach(() => {
 
 describe('checkout completion query changes', () => {
   it('gates a late success immediately, refreshes, and handles it only once', async () => {
-    let finish!: (value: { data: { licenseStatus: string } }) => void;
+    let finish!: (value: {
+      data: { licenseStatus: string; userId: string };
+    }) => void;
     mocks.refetch.mockReturnValue(
       new Promise((resolve) => {
         finish = resolve;
@@ -82,14 +93,45 @@ describe('checkout completion query changes', () => {
     expect(mocks.track).toHaveBeenCalledWith('subscription_success', {
       type: 'pro',
     });
-    finish({ data: { licenseStatus: 'active' } });
+    expect(mocks.trackGoogleConversion).not.toHaveBeenCalled();
+    finish({
+      data: { licenseStatus: 'trialing', userId: 'macro|ada@acme.com' },
+    });
     await vi.waitFor(() => expect(pending()).toBe(false));
+    await vi.waitFor(() =>
+      expect(mocks.trackGoogleConversion).toHaveBeenCalledOnce()
+    );
+    expect(mocks.trackGoogleConversion).toHaveBeenCalledExactlyOnceWith(
+      'subscription_start',
+      {
+        value: 300,
+        currency: 'USD',
+        transaction_id: await subscriptionStartTransactionId(ADA),
+      }
+    );
 
     mocks.setSearch('');
     mocks.setSearch('?subscriptionSuccess=true&type=team');
     expect(mocks.refetch).toHaveBeenCalledTimes(1);
     expect(mocks.success).toHaveBeenCalledTimes(1);
     expect(pending()).toBe(false);
+  });
+
+  it('values a Max checkout above a Pro trial', async () => {
+    mocks.setSearch('?subscriptionSuccess=true&type=max');
+    const pending = mount();
+    await vi.waitFor(() => expect(pending()).toBe(false));
+    await vi.waitFor(() =>
+      expect(mocks.trackGoogleConversion).toHaveBeenCalledOnce()
+    );
+    expect(mocks.trackGoogleConversion).toHaveBeenCalledExactlyOnceWith(
+      'subscription_start',
+      {
+        value: 1000,
+        currency: 'USD',
+        transaction_id: await subscriptionStartTransactionId(ADA),
+      }
+    );
   });
 
   it('retains initial-query refresh behavior', async () => {
@@ -125,4 +167,10 @@ describe('checkout completion query changes', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
+});
+
+it('keeps the email in the user id out of the Google Ads transaction id', async () => {
+  const id = await subscriptionStartTransactionId(ADA);
+  expect(id).toMatch(/^[0-9a-f]{64}$/);
+  expect(id).toBe(await subscriptionStartTransactionId(ADA));
 });
