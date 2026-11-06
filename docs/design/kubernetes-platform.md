@@ -378,12 +378,12 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   unmodified, behind `lambda-runner`. Search indexing has not been verified.
 - **Phase 5, in part:** Gitea, its runners, and CI checks. See CI status below.
 - **Phase 7, in part:** `cargo x platform chart --release` builds the Helm chart and
-  release images from an instance's manifests. A plain `helm install` on a stock kind
-  cluster, with no Argo CD, forge, or ingress in the path, provisioned itself, served the
-  app, and delivered a login email to Mailpit. `cargo x platform secrets` generates the
-  Secrets it needs, with fresh credentials and no Doppler values. Services wait in an
-  init container for a marker provisioning creates last, since the chart has no sync
-  waves.
+  release images from an instance's manifests. On a stock kind cluster, a plain
+  `helm install` with only `cargo x platform secrets` output reaches every pod ready,
+  and the app, sign-in mail, and key management work. The E2E suite has not run against
+  a release.
+- **Queue scaling:** KEDA takes a queue worker from zero to its maximum as messages
+  arrive and back to zero after they drain, on the local cluster.
 - **Generated credentials:** a new instance bootstraps from nothing with its own, reaches
   sign-up, and rejects the old development values.
 - **Rust E2E suite:** 16 pass, on queues in Kafka and with generated credentials. One assertion in
