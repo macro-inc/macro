@@ -329,3 +329,66 @@ async fn guest_loss_during_create_reserves_a_new_generation() {
     );
     assert_eq!(operator.credentials.issues.lock().unwrap().len(), 2);
 }
+
+proptest::proptest! {
+    #[test]
+    fn random_events_and_effect_retries_never_rekey_a_claimed_generation(
+        steps in proptest::collection::vec(0u8..7, 1..100),
+    ) {
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let operator = operator(FakeFleet::default()).await;
+            let id = paid_computer(&operator).await;
+            let mut effects: Vec<Effect> = Vec::new();
+            let mut claimed_generations = std::collections::BTreeSet::new();
+            for step in steps {
+                let computer = operator.repo.get(id).await.unwrap().unwrap();
+                match step {
+                    0 => {
+                        // A claim belongs to the current extant guest, not a future recreate.
+                        if operator.fleet.created.lock().unwrap().contains_key(&id) {
+                            operator.harnesses.claimed.store(true, Ordering::SeqCst);
+                            claimed_generations.insert(computer.enrollment_generation);
+                        }
+                    }
+                    1 => {
+                        operator.fleet.created.lock().unwrap().remove(&id);
+                        operator.harnesses.claimed.store(false, Ordering::SeqCst);
+                        operator.repo.apply(id, Event::InstanceLost, now()).await.unwrap();
+                    }
+                    2 => {
+                        operator.repo.apply(id, Event::MacrodConnected, now()).await.unwrap();
+                    }
+                    3 => {
+                        operator.repo.apply(id, Event::PaymentConfirmed, now()).await.unwrap();
+                    }
+                    _ => {
+                        let effect = if step == 4 && !effects.is_empty() {
+                            effects.first().unwrap().clone()
+                        } else {
+                            Effect::Create {
+                                host: HOST,
+                                start: true,
+                                generation: computer.enrollment_generation,
+                            }
+                        };
+                        let claimed = operator.harnesses.claimed.load(Ordering::SeqCst)
+                            && operator.fleet.created.lock().unwrap().contains_key(&id);
+                        let issues = operator.credentials.issues.lock().unwrap().len();
+                        let pairings = operator.harnesses.enrollments.lock().unwrap().len();
+                        operator.carry_out(id, &effect).await.unwrap();
+                        let issued = operator.credentials.issues.lock().unwrap();
+                        for (generation, _, _) in issued.iter().skip(issues) {
+                            assert!(!claimed_generations.contains(generation));
+                        }
+                        drop(issued);
+                        if claimed {
+                            assert_eq!(operator.credentials.issues.lock().unwrap().len(), issues);
+                            assert_eq!(operator.harnesses.enrollments.lock().unwrap().len(), pairings);
+                        }
+                        effects.push(effect);
+                    }
+                }
+            }
+        });
+    }
+}
