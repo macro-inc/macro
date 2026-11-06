@@ -423,7 +423,7 @@ async fn run_server() -> anyhow::Result<()> {
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         db.clone(),
     );
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
@@ -589,22 +589,22 @@ async fn run_server() -> anyhow::Result<()> {
 
     let plan_customer = CustomerRepositoryImpl::new(
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         db.clone(),
     );
     let stripe_client = Arc::new(stripe_client);
     let plan_gateway = crate::outbound::subscription_plan::StripePlanGateway::new(
         db.clone(),
         stripe_client.clone(),
-        stripe_prices.seat_prices(),
+        stripe_prices.seat_prices()?,
         plan_customer,
         crate::outbound::subscription_billing::StripeBillingReader::new(
             db.clone(),
             teams_repo_impl.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
             team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
-            stripe_prices.seat_prices(),
-            config.computer_prices(),
+            stripe_prices.seat_prices()?,
+            config.computer_prices()?,
         ),
     );
     let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(
@@ -626,7 +626,7 @@ async fn run_server() -> anyhow::Result<()> {
                 db.clone(),
                 stripe_client.clone(),
                 gtm_invite_service.clone(),
-                stripe_prices.seat_prices(),
+                stripe_prices.seat_prices()?,
             ),
         ));
     let ai_payment_gateway = ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone());
@@ -701,7 +701,7 @@ async fn run_server() -> anyhow::Result<()> {
     .with_agent_invite_rollout(Arc::new(
         team_agents::domain::rollout::TeamAgentRollout::new(feature_flags.clone()),
     ));
-    let computer_prices = config.computer_prices();
+    let computer_prices = config.computer_prices()?;
     let computer_repo = hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone());
     let teams_service = Arc::new(teams_service_impl);
     let team_agents_repository =

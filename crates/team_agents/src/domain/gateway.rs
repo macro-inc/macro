@@ -1,5 +1,6 @@
 //! Authorization for a standalone brain's model gateway requests.
 
+use hosted_runtimes::domain::ids::ComputerId;
 use std::{future::Future, pin::Pin};
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -54,12 +55,12 @@ pub trait BrainGatewayComputers: Send + Sync + 'static {
     /// Current computer facts, or None for a missing computer.
     fn get(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<Option<BrainGatewayComputer>, BrainGatewayError>> + Send;
     /// Wake an existing frozen computer, returning its resulting facts.
     fn wake(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<Option<BrainGatewayComputer>, BrainGatewayError>> + Send;
 }
 
@@ -71,7 +72,7 @@ pub struct BrainGatewayIdentity {
     /// The agent's sole current team, whose allowance pays for its work.
     pub team_id: Uuid,
     /// Its running computer.
-    pub computer_id: Uuid,
+    pub computer_id: ComputerId,
 }
 
 /// Sanitized gateway access failures.

@@ -4,9 +4,9 @@
 //! and writes the new state plus its effects (an outbox) in one transaction.
 //! Effect workers carry the effects out and report back with events.
 
+pub use crate::domain::ids::HostId;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::domain::models::SubscriptionItem;
 
@@ -29,9 +29,6 @@ pub const RETENTION: Duration = Duration::days(14);
 pub const WAKE_RETRY: Duration = Duration::seconds(20);
 /// First restart backoff after a crash; doubles per recent crash.
 pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
-
-/// Opaque id of a fleet host.
-pub type HostId = Uuid;
 
 /// Where a computer is and what it is doing, as last observed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

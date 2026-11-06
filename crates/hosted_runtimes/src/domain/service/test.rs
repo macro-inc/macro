@@ -153,7 +153,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         )]
     );
     let status = service.status(TEAM, computer_id).await.unwrap();
-    assert_eq!(status.name, "Ada");
+    assert_eq!(status.name.as_str(), "Ada");
     assert_eq!(status.persona_name.as_deref(), Some("Ada"));
     assert_eq!(
         status.status,
@@ -412,11 +412,11 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         state.phase = Phase::Running { host: HOST };
         state.payment = PaymentOutcome::Paid;
         repo.computers.lock().unwrap().insert(
-            Uuid::from_u128(index as u128 + 1),
+            ComputerId::new(Uuid::from_u128(index as u128 + 1)),
             Computer {
-                id: Uuid::from_u128(index as u128 + 1),
+                id: ComputerId::new(Uuid::from_u128(index as u128 + 1)),
                 team_id: TEAM,
-                name: format!("Computer {index}"),
+                name: ComputerName::try_new(&format!("Computer {index}")).unwrap(),
                 size: ComputerSize::Standard,
                 state,
                 harness_id: None,
@@ -436,9 +436,17 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
 
     assert_eq!(
         *service.repo.events.lock().unwrap(),
-        vec![(Uuid::from_u128(2), Event::SubscriptionCanceled)]
+        vec![(
+            ComputerId::new(Uuid::from_u128(2)),
+            Event::SubscriptionCanceled
+        )]
     );
-    let newest = service.repo.get(Uuid::from_u128(2)).await.unwrap().unwrap();
+    let newest = service
+        .repo
+        .get(ComputerId::new(Uuid::from_u128(2)))
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(newest.state.power, Power::Off);
     assert!(matches!(
         newest.state.billing,
@@ -448,14 +456,14 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
 
 #[tokio::test]
 async fn retry_failed_computer_restarts_without_billing() {
-    let computer_id = Uuid::from_u128(1);
+    let computer_id = ComputerId::new(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
         Computer {
             id: computer_id,
             team_id: TEAM,
-            name: "Build box".to_owned(),
+            name: ComputerName::try_new("Build box").unwrap(),
             size: ComputerSize::Standard,
             state: ComputerState {
                 phase: Phase::Failed { host: HOST },
@@ -509,14 +517,14 @@ async fn retry_failed_computer_restarts_without_billing() {
 
 #[tokio::test]
 async fn retry_running_computer_is_rejected_without_applying_events() {
-    let computer_id = Uuid::from_u128(1);
+    let computer_id = ComputerId::new(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
         Computer {
             id: computer_id,
             team_id: TEAM,
-            name: "Build box".to_owned(),
+            name: ComputerName::try_new("Build box").unwrap(),
             size: ComputerSize::Standard,
             state: ComputerState {
                 phase: Phase::Running { host: HOST },
@@ -548,14 +556,14 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
 
 #[tokio::test]
 async fn retry_another_teams_computer_is_not_found() {
-    let computer_id = Uuid::from_u128(1);
+    let computer_id = ComputerId::new(Uuid::from_u128(1));
     let repo = FakeRepo::default();
     repo.computers.lock().unwrap().insert(
         computer_id,
         Computer {
             id: computer_id,
             team_id: TEAM,
-            name: "Build box".to_owned(),
+            name: ComputerName::try_new("Build box").unwrap(),
             size: ComputerSize::Standard,
             state: ComputerState {
                 phase: Phase::Failed { host: HOST },
@@ -762,7 +770,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
         },
         FixedClock,
     );
-    let id = Uuid::from_u128(17);
+    let id = ComputerId::new(Uuid::from_u128(17));
     service
         .repo
         .reserve(
@@ -770,7 +778,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
                 billing: crate::domain::models::PurchaseBilling::Stripe,
                 id,
                 team_id: TEAM,
-                name: "Build box".to_owned(),
+                name: ComputerName::try_new("Build box").unwrap(),
                 size: ComputerSize::Standard,
                 persona: None,
                 created_by: "test-admin".to_owned(),

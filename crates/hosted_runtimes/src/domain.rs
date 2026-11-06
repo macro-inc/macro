@@ -3,6 +3,7 @@
 pub mod enrollment;
 #[cfg(test)]
 pub(crate) mod fakes;
+pub mod ids;
 pub mod lifecycle;
 pub mod models;
 #[cfg(feature = "ports")]

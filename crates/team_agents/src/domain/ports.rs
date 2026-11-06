@@ -1,6 +1,7 @@
 //! Ports for the team agents domain.
 
 use agent_credentials::RepoToken;
+use hosted_runtimes::domain::ids::ComputerId;
 
 use crate::domain::mail::{MailMessageId, MailboxId};
 use std::future::Future;
@@ -68,7 +69,7 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
     fn set_computer(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Records the durable computer state. Transient `Unhealthy` observations
@@ -187,40 +188,40 @@ pub trait Computers: Send + Sync + 'static {
     fn purchase(
         &self,
         purchase: ComputerPurchase,
-    ) -> impl Future<Output = Result<Uuid, TeamAgentError>> + Send;
+    ) -> impl Future<Output = Result<ComputerId, TeamAgentError>> + Send;
 
     /// Provision an included computer without subscription lookup or Stripe.
     fn provision_comped(
         &self,
         purchase: ComputerPurchase,
-    ) -> impl Future<Output = Result<Uuid, TeamAgentError>> + Send;
+    ) -> impl Future<Output = Result<ComputerId, TeamAgentError>> + Send;
 
     /// One of the team's computers.
     fn status(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<ComputerStatus, TeamAgentError>> + Send;
 
     /// Paired runtime for a team-owned computer; missing computers return NotFound.
     fn harness_id(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<Option<harness_id::HarnessId>, TeamAgentError>> + Send;
 
     /// Original bootstrap persona, scoped to the owning team.
     fn persona(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<Persona, TeamAgentError>> + Send;
 
     /// Re-drive provisioning on the existing paid computer without a purchase.
     fn retry(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<ComputerStatus, TeamAgentError>> + Send;
 
     /// Releases the computer now and stops billing it. Releasing one already
@@ -228,7 +229,7 @@ pub trait Computers: Send + Sync + 'static {
     fn release(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
 }
 

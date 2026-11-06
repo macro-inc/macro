@@ -1,3 +1,4 @@
+use hosted_runtimes::domain::ids::ComputerId;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -75,7 +76,7 @@ fn account(team_id: Uuid) -> NewAgentAccount {
 async fn a_created_agent_reads_back_and_tracks_its_computer(pool: PgPool) {
     let team_id = seed(&pool).await;
     let repo = PgTeamAgentsRepo::new(pool.clone());
-    let computer_id = Uuid::now_v7();
+    let computer_id = ComputerId::new(Uuid::now_v7());
 
     repo.create_account(&account(team_id))
         .await

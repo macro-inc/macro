@@ -1,25 +1,28 @@
 //! Macro computers billed as items on the team subscription: their prices,
 //! and the port that keeps purchased computers in step with what Stripe bills.
 
+use stripe_price_id::StripePriceId;
+
 use hosted_runtimes::domain::{models::BillingInterval, size::ComputerSize};
 
 /// One size's price per billing interval; `None` when not sold at it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntervalPrices {
-    pub monthly: Option<String>,
-    pub yearly: Option<String>,
+    pub monthly: Option<StripePriceId>,
+    pub yearly: Option<StripePriceId>,
 }
 
 impl IntervalPrices {
-    fn price_id(&self, interval: BillingInterval) -> Option<&str> {
+    fn price_id(&self, interval: BillingInterval) -> Option<&StripePriceId> {
         match interval {
-            BillingInterval::Month => self.monthly.as_deref(),
-            BillingInterval::Year => self.yearly.as_deref(),
+            BillingInterval::Month => self.monthly.as_ref(),
+            BillingInterval::Year => self.yearly.as_ref(),
         }
     }
 
     fn contains(&self, price_id: &str) -> bool {
-        self.monthly.as_deref() == Some(price_id) || self.yearly.as_deref() == Some(price_id)
+        self.monthly.as_ref().map(StripePriceId::as_str) == Some(price_id)
+            || self.yearly.as_ref().map(StripePriceId::as_str) == Some(price_id)
     }
 }
 
@@ -50,7 +53,11 @@ impl ComputerPrices {
     }
 
     /// The price one `size` computer bills at on an `interval` subscription.
-    pub fn price_id(&self, size: ComputerSize, interval: BillingInterval) -> Option<&str> {
+    pub fn price_id(
+        &self,
+        size: ComputerSize,
+        interval: BillingInterval,
+    ) -> Option<&StripePriceId> {
         self.of(size).price_id(interval)
     }
 

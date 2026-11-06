@@ -2,6 +2,9 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::domain::enrollment::DeviceSecret;
+use crate::domain::ids::PairingId;
+use crate::domain::models::ComputerName;
 use uuid::Uuid;
 
 use super::*;
@@ -14,7 +17,8 @@ use crate::domain::models::{ControlPlaneId, HostRegistration, NewComputer};
 use crate::domain::ports::HostedPairing;
 use crate::domain::size::ComputerSize;
 
-const HARNESS: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0c0c);
+const HARNESS: HarnessId =
+    HarnessId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0c0c));
 
 #[derive(Debug, thiserror::Error)]
 enum FakeFleetError {
@@ -69,17 +73,17 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
-    async fn start(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn start(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("start {id}"));
         Ok(())
     }
 
-    async fn stop(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn stop(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("stop {id}"));
         Ok(())
     }
 
-    async fn restart(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn restart(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("restart {id}"));
         if self.missing {
             return Err(FakeFleetError::Missing);
@@ -87,32 +91,32 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
-    async fn freeze(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn freeze(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("freeze {id}"));
         Ok(())
     }
 
-    async fn unfreeze(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn unfreeze(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("unfreeze {id}"));
         Ok(())
     }
 
-    async fn suspend(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn suspend(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("suspend {id}"));
         Ok(())
     }
 
-    async fn resume(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn resume(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("resume {id}"));
         Ok(())
     }
 
-    async fn destroy(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn destroy(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("destroy {id}"));
         Ok(())
     }
 
-    async fn clear_enrollment(&self, id: Uuid) -> Result<(), FakeFleetError> {
+    async fn clear_enrollment(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls
             .lock()
             .unwrap()
@@ -192,7 +196,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
 
 #[derive(Default)]
 struct FakeHarnesses {
-    enrollments: Mutex<Vec<Option<Uuid>>>,
+    enrollments: Mutex<Vec<Option<HarnessId>>>,
 }
 
 impl Harnesses for FakeHarnesses {
@@ -206,20 +210,22 @@ impl Harnesses for FakeHarnesses {
         let generation = enrollments.len() as u128;
         enrollments.push(computer.harness_id);
         Ok(HostedPairing {
-            pairing_id: Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0909 + generation),
-            device_secret: if generation == 0 {
+            pairing_id: PairingId::new(Uuid::from_u128(
+                0x0000_0000_0000_7000_8000_0000_0000_0909 + generation,
+            )),
+            device_secret: DeviceSecret::new(if generation == 0 {
                 "secret".to_owned()
             } else {
                 format!("secret-{generation}")
-            },
+            }),
         })
     }
 
-    async fn computer_for(&self, harness_id: Uuid) -> Result<Option<Uuid>, FakeError> {
-        Ok((harness_id == HARNESS).then_some(Uuid::from_u128(1)))
+    async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, FakeError> {
+        Ok((harness_id == HARNESS).then_some(ComputerId::new(Uuid::from_u128(1))))
     }
 
-    async fn revoke(&self, _computer_id: Uuid) -> Result<(), FakeError> {
+    async fn revoke(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
         Ok(())
     }
 }
@@ -248,8 +254,8 @@ async fn operator(
 
 async fn paid_computer(
     operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
-) -> Uuid {
-    let id = Uuid::from_u128(1);
+) -> ComputerId {
+    let id = ComputerId::new(Uuid::from_u128(1));
     operator
         .repo
         .reserve(
@@ -258,7 +264,7 @@ async fn paid_computer(
                 extra_items: vec![],
                 id,
                 team_id: TEAM,
-                name: "Ada".to_owned(),
+                name: ComputerName::try_new("Ada").unwrap(),
                 size: ComputerSize::Standard,
                 persona: None,
                 created_by: "macro|owner@example.com".to_owned(),
@@ -282,7 +288,7 @@ impl SessionActivity for IdleSessions {
 
     async fn is_idle_since(
         &self,
-        harness_id: Uuid,
+        harness_id: HarnessId,
         since: DateTime<Utc>,
     ) -> Result<bool, FakeError> {
         assert_eq!(harness_id, HARNESS);
@@ -364,9 +370,11 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
         vec![(
             Enrollment {
                 computer_id: id,
-                pairing_id: Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0909),
-                device_secret: "secret".to_owned(),
-                name: "Ada".to_owned(),
+                pairing_id: PairingId::new(Uuid::from_u128(
+                    0x0000_0000_0000_7000_8000_0000_0000_0909
+                )),
+                device_secret: DeviceSecret::new("secret".to_owned()),
+                name: ComputerName::try_new("Ada").unwrap(),
                 service_url_overrides: BTreeMap::from([(
                     "OVERRIDE_AGENT_HARNESS_SERVICE_URL".to_owned(),
                     "http://10.210.0.1:8080".to_owned(),
@@ -413,7 +421,7 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
 
 #[tokio::test]
 async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
-    let orphan = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead);
+    let orphan = ComputerId::new(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_dead));
     let operator = operator(FakeFleet {
         instances: Mutex::new(vec![FleetInstance {
             computer_id: orphan,
@@ -661,31 +669,31 @@ async fn reconcile_never_destroys_foreign_recent_or_unknown_age_instances() {
     let operator = operator(FakeFleet {
         instances: Mutex::new(vec![
             FleetInstance {
-                computer_id: Uuid::from_u128(1),
+                computer_id: ComputerId::new(Uuid::from_u128(1)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-b".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::hours(1)),
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(2),
+                computer_id: ComputerId::new(Uuid::from_u128(2)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::minutes(9)),
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(3),
+                computer_id: ComputerId::new(Uuid::from_u128(3)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(4),
+                computer_id: ComputerId::new(Uuid::from_u128(4)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() - Duration::minutes(10)),
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(5),
+                computer_id: ComputerId::new(Uuid::from_u128(5)),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some(now() + Duration::minutes(1)),

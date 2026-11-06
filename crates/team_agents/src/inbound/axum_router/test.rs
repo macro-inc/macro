@@ -1,5 +1,6 @@
 use crate::domain::models::TeamAgentComputer;
 use entity_access::domain::models::MemberTeamRole;
+use hosted_runtimes::domain::ids::ComputerId;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -80,7 +81,7 @@ impl TeamAgentService for FakeService {
         }
         self.record(format!("computer {}", receipt.entity().entity_id));
         Ok(TeamAgentComputer {
-            computer_id: uuid::Uuid::from_u128(0x40),
+            computer_id: ComputerId::new(uuid::Uuid::from_u128(0x40)),
             harness_id: None,
             is_agent_computer: true,
         })

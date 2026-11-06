@@ -3,11 +3,13 @@ use super::billing::{
     SubscriptionBilling, SubscriptionBillingLineItem, SubscriptionBillingLineKind,
     SubscriptionNextInvoice, SubscriptionSeatTotal,
 };
-use hosted_runtimes::domain::models::ComputerStatusKind;
+use hosted_runtimes::domain::{
+    ids::ComputerId,
+    models::{ComputerName, ComputerStatusKind},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use team_agents::domain::models::{BillingInterval, ComputerSize};
 use teams::domain::model::{SeatPlan, TeamRole};
-use uuid::Uuid;
 
 #[derive(Clone)]
 pub enum BillingAccess {
@@ -59,10 +61,10 @@ pub struct BillingSeat {
 
 #[derive(Clone)]
 pub struct BillingComputer {
-    pub id: Uuid,
+    pub id: ComputerId,
     pub agent_user_id: Option<MacroUserIdStr<'static>>,
     pub size: ComputerSize,
-    pub name: String,
+    pub name: ComputerName,
     pub status: ComputerStatusKind,
     pub included: bool,
 }
@@ -195,9 +197,9 @@ impl BillingComputer {
             quantity: 1,
             unit_amount: Some(unit_amount),
             amount: unit_amount,
-            computer_id: Some(self.id),
+            computer_id: Some(self.id.into_inner()),
             agent_user_id: self.agent_user_id.clone(),
-            name: self.name.clone(),
+            name: self.name.as_str().to_owned(),
             size: Some(self.size),
             status: Some(self.status),
             included: self.included,

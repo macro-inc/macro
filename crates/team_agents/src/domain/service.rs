@@ -1,6 +1,7 @@
 //! Team agent service implementation.
 
 use agent_credentials::RepoToken;
+use hosted_runtimes::domain::ids::ComputerId;
 
 use crate::domain::mail::{MailMessageId, MailboxId};
 use std::collections::BTreeMap;
@@ -352,7 +353,7 @@ where
         created_by: MacroUserIdStr<'static>,
         request: CreateTeamAgent,
         undo: &mut Undo,
-    ) -> Result<(MacroUserIdStr<'static>, Uuid), TeamAgentError> {
+    ) -> Result<(MacroUserIdStr<'static>, ComputerId), TeamAgentError> {
         let team_id = team_id(receipt)?;
         let included = self.is_included(team_id).await?;
         tracing::Span::current().record("billing_kind", if included { "comped" } else { "stripe" });
@@ -873,6 +874,14 @@ where
             seed.creator_id = agent.created_by.clone();
         }
         let persona = self.computers.persona(agent.team_id, computer_id).await?;
+        if !lazy_regex::regex_is_match!(
+            r"^agent-[a-z0-9][a-z0-9_-]{0,24}$",
+            persona.os_user.as_str()
+        ) {
+            return Err(TeamAgentError::BadRequest(
+                "stored persona requires an agent- name; re-invite the agent".to_owned(),
+            ));
+        }
         if persona
             .config
             .get(config_keys::AGENT_USER_ID)

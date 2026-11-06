@@ -1,6 +1,7 @@
 //! Postgres adapter for team agent accounts.
 
 use crate::domain::mail::{InvalidMailId, MailboxId};
+use hosted_runtimes::domain::ids::ComputerId;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -80,7 +81,7 @@ impl TryFrom<AgentRow> for TeamAgent {
             name: row.name,
             email: row.email,
             created_by: row.created_by.map(user_id).transpose()?,
-            computer_id: row.computer_id,
+            computer_id: row.computer_id.map(ComputerId::new),
             status,
             status_reason: row.status_reason,
             setup: None,
@@ -315,12 +316,12 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
     async fn set_computer(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"UPDATE team_agents SET computer_id = $2 WHERE user_id = $1"#,
             user_id.as_ref(),
-            computer_id,
+            computer_id.into_inner(),
         )
         .execute(&self.pool)
         .await?;

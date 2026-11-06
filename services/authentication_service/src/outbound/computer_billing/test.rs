@@ -72,8 +72,11 @@ impl TeamSubscriptionItems for FakeTeams {
         })
     }
 
-    async fn price(&self, price_id: &str) -> Result<PriceInfo, TeamSubscriptionItemsError> {
-        let amount = match price_id {
+    async fn price(
+        &self,
+        price_id: &stripe_price_id::StripePriceId,
+    ) -> Result<PriceInfo, TeamSubscriptionItemsError> {
+        let amount = match price_id.as_str() {
             "price_standard_month" => 2000,
             "price_standard_year" => 20000,
             other => panic!("unexpected price {other}"),
@@ -89,11 +92,11 @@ impl TeamSubscriptionItems for FakeTeams {
 fn prices() -> ComputerPrices {
     ComputerPrices {
         standard: IntervalPrices {
-            monthly: Some("price_standard_month".into()),
-            yearly: Some("price_standard_year".into()),
+            monthly: Some(stripe_price_id::StripePriceId::parse("price_standard_month").unwrap()),
+            yearly: Some(stripe_price_id::StripePriceId::parse("price_standard_year").unwrap()),
         },
         large: IntervalPrices {
-            monthly: Some("price_large_month".into()),
+            monthly: Some(stripe_price_id::StripePriceId::parse("price_large_month").unwrap()),
             yearly: None,
         },
         xl: IntervalPrices {
@@ -169,11 +172,12 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
                 team_id,
                 vec![
                     ItemQuantityChange {
-                        price_id: "price_standard_month".into(),
+                        price_id: stripe_price_id::StripePriceId::parse("price_standard_month")
+                            .unwrap(),
                         delta: 1,
                     },
                     ItemQuantityChange {
-                        price_id: "price_pro".into(),
+                        price_id: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
                         delta: 2,
                     },
                 ],
@@ -182,7 +186,8 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
             (
                 team_id,
                 vec![ItemQuantityChange {
-                    price_id: "price_standard_month".into(),
+                    price_id: stripe_price_id::StripePriceId::parse("price_standard_month")
+                        .unwrap(),
                     delta: -1,
                 }],
                 "computer-1-release".to_string(),

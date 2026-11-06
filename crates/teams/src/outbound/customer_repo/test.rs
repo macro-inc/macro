@@ -75,8 +75,8 @@ pub(super) fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositor
     CustomerRepositoryImpl::new(
         stripe::Client::from_url(server.uri().as_str(), "sk_test"),
         SeatPrices {
-            premium: "price_pro".into(),
-            max: Some("price_max".into()),
+            premium: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
+            max: Some(stripe_price_id::StripePriceId::parse("price_max").unwrap()),
         },
         pool,
     )
@@ -980,7 +980,7 @@ fn subscription_update(requests: &[wiremock::Request]) -> Vec<&wiremock::Request
 
 pub(super) fn computer(delta: i64) -> ItemQuantityChange {
     ItemQuantityChange {
-        price_id: "price_computer".into(),
+        price_id: stripe_price_id::StripePriceId::parse("price_computer").unwrap(),
         delta,
     }
 }
@@ -1061,7 +1061,7 @@ async fn seat_and_computer_changes_join_one_update(pool: sqlx::PgPool) {
             vec![
                 computer(1),
                 ItemQuantityChange {
-                    price_id: "price_pro".into(),
+                    price_id: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
                     delta: 1,
                 },
             ],
@@ -1197,7 +1197,9 @@ async fn subscription_terms_and_prices_are_read_from_stripe(pool: sqlx::PgPool) 
         }
     );
     assert_eq!(
-        repo.price("price_computer").await.unwrap(),
+        repo.price(&stripe_price_id::StripePriceId::parse("price_computer").unwrap())
+            .await
+            .unwrap(),
         PriceInfo {
             amount: 20000,
             currency: "usd".into(),
@@ -1207,23 +1209,27 @@ async fn subscription_terms_and_prices_are_read_from_stripe(pool: sqlx::PgPool) 
 }
 
 #[tokio::test]
-async fn malformed_agent_seat_price_is_rejected_before_any_provider_request() {
+async fn invalid_or_unavailable_agent_seat_prices_make_no_provider_request() {
+    assert!(stripe_price_id::StripePriceId::parse("price_bad/route").is_err());
     let server = MockServer::start().await;
     let repository = CustomerRepositoryImpl::new(
         stripe::Client::from_url(server.uri().as_str(), "sk_test"),
         SeatPrices {
-            premium: "price_bad/route".to_owned(),
-            max: Some("price_max".to_owned()),
+            premium: stripe_price_id::StripePriceId::parse("price_premium").unwrap(),
+            max: None,
         },
         sqlx::postgres::PgPoolOptions::new()
             .connect_lazy("postgres://unused:unused@localhost/unused")
             .unwrap(),
     );
-    assert!(repository.seat_price_id(SeatPlan::Premium).is_err());
-    assert!(repository.seat_quote(SeatPlan::Premium).await.is_err());
+    assert!(repository.seat_price_id(SeatPlan::Max).is_err());
+    assert!(repository.seat_quote(SeatPlan::Max).await.is_err());
     assert_eq!(
-        repository.seat_price_id(SeatPlan::Max).unwrap().as_str(),
-        "price_max"
+        repository
+            .seat_price_id(SeatPlan::Premium)
+            .unwrap()
+            .as_str(),
+        "price_premium"
     );
     assert!(server.received_requests().await.unwrap().is_empty());
 }

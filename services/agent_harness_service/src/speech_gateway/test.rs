@@ -1,6 +1,7 @@
 use super::*;
 use ai_billing::domain::admission::AdmissionFuture;
 use ai_usage::UsageEvent;
+use hosted_runtimes::domain::ids::ComputerId;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::sync::{
     Mutex,
@@ -20,7 +21,7 @@ impl BrainGatewayAccess for Access {
                         .unwrap()
                         .into_owned(),
                     team_id: Uuid::from_u128(1),
-                    computer_id: Uuid::from_u128(2),
+                    computer_id: ComputerId::new(Uuid::from_u128(2)),
                 }),
                 value
                     if value == format!("mak_{}", "b".repeat(64))

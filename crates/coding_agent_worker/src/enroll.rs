@@ -117,11 +117,10 @@ pub struct SystemHost;
 
 impl Host for SystemHost {
     fn ensure_user(&self, os_user: &PersonaOsUser) -> rootcause::Result<Ownership> {
-        let os_user = os_user.as_str();
         if id(os_user, "-u")?.is_none() {
             run(
                 "useradd",
-                &["--create-home", "--shell", "/bin/bash", os_user],
+                &["--create-home", "--shell", "/bin/bash", os_user.as_str()],
             )?;
         }
         let uid = id(os_user, "-u")?
@@ -143,9 +142,9 @@ impl Host for SystemHost {
 }
 
 /// `id <flag> <user>`: `None` when the user does not exist.
-fn id(os_user: &str, flag: &str) -> rootcause::Result<Option<u32>> {
+fn id(os_user: &PersonaOsUser, flag: &str) -> rootcause::Result<Option<u32>> {
     let output = std::process::Command::new("id")
-        .args([flag, os_user])
+        .args([flag, os_user.as_str()])
         .output()
         .context("could not run id")?;
     if !output.status.success() {
@@ -400,7 +399,10 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
     let started = Instant::now();
     loop {
         match client
-            .claim(enrollment.pairing_id, &enrollment.device_secret)
+            .claim(
+                enrollment.pairing_id.into_inner(),
+                enrollment.device_secret.expose(),
+            )
             .await
         {
             Ok(ClaimStatus::Claimed(credentials)) => {
@@ -456,6 +458,11 @@ struct PersonaFiles {
 impl PersonaFiles {
     fn render(persona: &Persona, paths: &SystemPaths) -> rootcause::Result<Self> {
         let os_user = &persona.os_user;
+        if !lazy_regex::regex_is_match!(r"^agent-[a-z0-9][a-z0-9_-]{0,24}$", os_user.as_str()) {
+            rootcause::bail!(
+                "persona os_user must start with agent- and have a valid agent name; re-invite old preview agents"
+            );
+        }
 
         let unit_name = &persona.extra_service.unit_name;
         for (field, value) in [

@@ -1,4 +1,6 @@
 use crate::domain::models::{PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName};
+use hosted_runtimes::domain::ids::ComputerId;
+use hosted_runtimes::domain::models::ComputerName;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -20,7 +22,7 @@ use super::HostedRuntimesComputers;
 use crate::domain::{models as agent, ports::Computers};
 
 const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
-const HOST: HostId = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001);
+const HOST: HostId = HostId::new(Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001));
 
 fn now() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap()
@@ -43,16 +45,16 @@ struct FakeError;
 struct FakeRepo {
     sold_units: u32,
     fail_payment_confirmation: bool,
-    computers: Arc<Mutex<HashMap<Uuid, Computer>>>,
+    computers: Arc<Mutex<HashMap<ComputerId, Computer>>>,
     effects: Arc<Mutex<Vec<PendingEffect>>>,
-    events: Arc<Mutex<Vec<(Uuid, Event)>>>,
+    events: Arc<Mutex<Vec<(ComputerId, Event)>>>,
 }
 
 impl ComputerRepo for FakeRepo {
     type Err = FakeError;
     type PaymentGuard = ();
 
-    async fn lock_payment(&self, _computer_id: Uuid) -> Result<(), FakeError> {
+    async fn lock_payment(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
         Ok(())
     }
 
@@ -94,7 +96,7 @@ impl ComputerRepo for FakeRepo {
 
     async fn apply(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         event: Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
@@ -131,7 +133,7 @@ impl ComputerRepo for FakeRepo {
         Ok(Some(computer.clone()))
     }
 
-    async fn get(&self, computer_id: Uuid) -> Result<Option<Computer>, FakeError> {
+    async fn get(&self, computer_id: ComputerId) -> Result<Option<Computer>, FakeError> {
         Ok(self.computers.lock().unwrap().get(&computer_id).cloned())
     }
 
@@ -149,17 +151,24 @@ impl ComputerRepo for FakeRepo {
         Ok(computers)
     }
 
-    async fn find_by_harness(&self, _harness_id: Uuid) -> Result<Option<Computer>, FakeError> {
+    async fn find_by_harness(
+        &self,
+        _harness_id: harness_id::HarnessId,
+    ) -> Result<Option<Computer>, FakeError> {
         Ok(None)
     }
 
-    async fn set_harness(&self, _computer_id: Uuid, _harness_id: Uuid) -> Result<(), FakeError> {
+    async fn set_harness(
+        &self,
+        _computer_id: ComputerId,
+        _harness_id: harness_id::HarnessId,
+    ) -> Result<(), FakeError> {
         Ok(())
     }
 
     async fn mark_enrolled(
         &self,
-        _computer_id: Uuid,
+        _computer_id: ComputerId,
         _now: DateTime<Utc>,
     ) -> Result<(), FakeError> {
         Ok(())
@@ -169,7 +178,7 @@ impl ComputerRepo for FakeRepo {
         Ok(vec![])
     }
 
-    async fn coldest_frozen(&self, _host: HostId) -> Result<Option<Uuid>, FakeError> {
+    async fn coldest_frozen(&self, _host: HostId) -> Result<Option<ComputerId>, FakeError> {
         Ok(None)
     }
 
@@ -399,7 +408,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         Err(agent::TeamAgentError::NotFound)
     ));
     let harness_id = harness_id::HarnessId::new_from_uuid(Uuid::from_u128(0x50));
-    computers.lock().unwrap().get_mut(&id).unwrap().harness_id = Some(harness_id.as_uuid());
+    computers.lock().unwrap().get_mut(&id).unwrap().harness_id = Some(harness_id);
     assert_eq!(
         service.harness_id(TEAM, id).await.unwrap(),
         Some(harness_id)
@@ -488,7 +497,7 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
         agent::ComputerPayment::Paid
     );
     service
-        .release(TEAM, Uuid::now_v7())
+        .release(TEAM, ComputerId::new(Uuid::now_v7()))
         .await
         .expect("missing release");
 }
@@ -697,7 +706,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                 sold_units: 4,
                 ..Default::default()
             };
-            let id = Uuid::now_v7();
+            let id = ComputerId::new(Uuid::now_v7());
             let harness_id = "00000000-0000-4000-8000-0000000000aa".parse().unwrap();
             let mut computer = repo
                 .reserve(
@@ -706,7 +715,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                         extra_items: vec![],
                         id,
                         team_id: TEAM,
-                        name: "Agent".to_string(),
+                        name: ComputerName::try_new("Agent").unwrap(),
                         size: ComputerSize::Standard,
                         created_by: "macro|admin@example.com".to_string(),
                         persona: Some(enrollment::Persona {
@@ -731,7 +740,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
             repo.computers.lock().unwrap().insert(id, computer);
             let harness = Harness {
                 allow_permission_bypass: false,
-                id: harness_id::HarnessId::new_from_uuid(harness_id),
+                id: harness_id,
                 kind: "macrod".to_string(),
                 name: "Computer".to_string(),
                 owner: HarnessOwner::User {
@@ -759,7 +768,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                     ]),
                 },
                 computer_id: Some(if matching_computer {
-                    id
+                    id.into_inner()
                 } else {
                     Uuid::now_v7()
                 }),
@@ -769,7 +778,7 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
             harnesses
                 .expect_get_harness()
                 .times(1)
-                .withf(move |id| id.as_uuid() == harness_id)
+                .withf(move |id| *id == harness_id)
                 .return_once(move |_| Box::pin(async move { Ok(Some(harness)) }));
             let adapter = HostedRuntimesComputers::new(
                 Arc::new(ComputerService::new(
@@ -811,7 +820,7 @@ async fn catalog_is_available_without_billing_and_quote_preserves_no_subscriptio
     let specs = service.sizes();
     assert_eq!(specs.len(), ComputerSize::ALL.len());
     for (spec, size) in specs.iter().zip(ComputerSize::ALL) {
-        assert_eq!(super::computer_size(spec.size), size);
+        assert_eq!(spec.size, size);
         assert_eq!(
             (spec.vcpus, spec.memory_gb, spec.disk_gb),
             (size.vcpus(), size.memory_gb(), size.disk_gb())

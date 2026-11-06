@@ -41,11 +41,15 @@ impl StripePrices {
     }
 
     /// The same prices, for the teams crate's per-plan seat items.
-    pub fn seat_prices(&self) -> SeatPrices {
-        SeatPrices {
-            premium: self.premium.clone(),
-            max: self.max.clone(),
-        }
+    pub fn seat_prices(&self) -> Result<SeatPrices, stripe_price_id::StripePriceIdParseError> {
+        Ok(SeatPrices {
+            premium: stripe_price_id::StripePriceId::parse(&self.premium)?,
+            max: self
+                .max
+                .as_deref()
+                .map(stripe_price_id::StripePriceId::parse)
+                .transpose()?,
+        })
     }
 }
 

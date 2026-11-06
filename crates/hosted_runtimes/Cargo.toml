@@ -28,6 +28,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 incus_client = { path = "../incus_client", optional = true }
+harness_id = { path = "../harness_id" }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 macro_env = { path = "../macro_env", optional = true }
@@ -45,6 +46,7 @@ tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["serde", "v7"] }
+zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

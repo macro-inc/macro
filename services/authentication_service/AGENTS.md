@@ -52,6 +52,10 @@ key issuance, and account merge/link flows.
   `authentication-service` → verify with
   `authentication_service_doppler_config`.
 
+## Computer billing identifiers
+
+- Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when the fleet is disabled. `Config::computer_prices` returns a validation result.
+
 ## Checks
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).
@@ -88,6 +92,8 @@ metered AI usage policy.
 personal subscribers and team owners/admins. Allocation and access policy live in
 `service/subscription_status/billing_facts.rs`; the Stripe adapter supplies actual
 recurring prices, quantities, upcoming invoice amounts and owning-domain facts.
+Computer billing facts retain canonical `ComputerId` and `ComputerName` until
+the response renderer emits their UUID and string wire values.
 Included memberships contribute no paid seat amount. Comped computers appear as
 zero rows, and unmatched or ambiguous provider quantities remain `other` rather
 than invented per-account charges. Unsupported interval/price shapes have no

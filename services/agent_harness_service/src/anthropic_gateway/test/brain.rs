@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use chrono::{TimeZone, Utc};
+use hosted_runtimes::domain::ids::ComputerId;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use team_agents::domain::{
     gateway::{
@@ -14,7 +15,8 @@ use uuid::Uuid;
 use super::*;
 
 const TEAM: Uuid = Uuid::from_u128(0x00000000_0000_4000_8000_0000000000aa);
-const COMPUTER: Uuid = Uuid::from_u128(0x00000000_0000_4000_8000_0000000000bb);
+const COMPUTER: ComputerId =
+    ComputerId::new(Uuid::from_u128(0x00000000_0000_4000_8000_0000000000bb));
 
 fn agent_user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|brain@example.com")
@@ -77,7 +79,7 @@ struct Computers {
 }
 
 impl BrainGatewayComputers for Computers {
-    async fn get(&self, id: Uuid) -> Result<Option<BrainGatewayComputer>, BrainGatewayError> {
+    async fn get(&self, id: ComputerId) -> Result<Option<BrainGatewayComputer>, BrainGatewayError> {
         assert_eq!(id, COMPUTER);
         Ok(Some(BrainGatewayComputer {
             team_id: TEAM,
@@ -85,7 +87,10 @@ impl BrainGatewayComputers for Computers {
         }))
     }
 
-    async fn wake(&self, id: Uuid) -> Result<Option<BrainGatewayComputer>, BrainGatewayError> {
+    async fn wake(
+        &self,
+        id: ComputerId,
+    ) -> Result<Option<BrainGatewayComputer>, BrainGatewayError> {
         assert_eq!(*self.phase.lock().unwrap(), BrainComputerPhase::Frozen);
         self.wakes.fetch_add(1, Ordering::SeqCst);
         *self.phase.lock().unwrap() = BrainComputerPhase::Running;

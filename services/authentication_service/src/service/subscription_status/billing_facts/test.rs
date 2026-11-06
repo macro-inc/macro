@@ -1,4 +1,5 @@
 use super::*;
+use uuid::Uuid;
 
 fn billing() -> SubscriptionBillingFacts {
     SubscriptionBillingFacts {
@@ -44,20 +45,20 @@ fn billing() -> SubscriptionBillingFacts {
         ],
         computers: vec![
             BillingComputer {
-                id: Uuid::from_u128(1),
+                id: ComputerId::new(Uuid::from_u128(1)),
                 agent_user_id: Some(
                     MacroUserIdStr::parse_from_str("macro|agent@example.com").expect("agent id"),
                 ),
                 size: ComputerSize::Large,
-                name: "Agent".to_owned(),
+                name: ComputerName::try_new("Agent").unwrap(),
                 status: ComputerStatusKind::Ready,
                 included: false,
             },
             BillingComputer {
-                id: Uuid::from_u128(2),
+                id: ComputerId::new(Uuid::from_u128(2)),
                 agent_user_id: None,
                 size: ComputerSize::Standard,
-                name: "Included agent".to_owned(),
+                name: ComputerName::try_new("Included agent").unwrap(),
                 status: ComputerStatusKind::SettingUp,
                 included: true,
             },

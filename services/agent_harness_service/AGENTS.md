@@ -55,6 +55,8 @@ Pulumi stacks; they do not host extra agent processes.
   the persona; PostgreSQL inserts and grant changes use the shared
   `harness_grant_level` normalization for either a bound account or agent-computer
   classification.
+- Computer lifecycle and gateway adapters carry canonical `ComputerId` and
+  `HarnessId`; unwrap only at the harness/storage boundary.
 - `src/brain_gateway.rs` supplies computer facts and the same prompt-wake path
   to the standalone-brain Anthropic gateway authorization boundary in
   `team_agents::domain::gateway`. `/brain/anthropic/v1/messages` and
@@ -260,6 +262,8 @@ projection workers before draining sessions and pending publishes. Preview
 listener failure shuts down the process so ECS can replace the task.
 
 ## Gotchas
+
+- Keep computer domain IDs, harness IDs, and Incus resource names typed in `computers.rs`; unwrap only when calling the existing harness registry or SQL boundary.
 
 - Keep two tasks and rolling replacements in both environments. Preview
   control uses shared Postgres state. SSH claims a tunnel owner; browser HTTP/WS

@@ -28,6 +28,11 @@ use hosted_runtimes::domain::lifecycle::ComputerState;
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::ports::Fleet;
 use hosted_runtimes::domain::size::ComputerSize;
+use hosted_runtimes::domain::{
+    enrollment::DeviceSecret,
+    ids::{ComputerId, HostId, PairingId},
+    models::ComputerName,
+};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig, instance_name};
 use incus_client::{
     ImageProtocol, ImageReference, ImageRemote, ImageSource, IncusEndpoint, IncusTimeouts,
@@ -92,30 +97,30 @@ async fn main() -> Result<(), rootcause::Report> {
     };
     let config = IncusFleetConfig {
         image: ImageSource {
-            reference: ImageReference::Alias(args.image),
+            reference: ImageReference::Alias(incus_client::ImageAlias::try_new(&args.image)?),
             remote: args.image_server.map(|server| ImageRemote {
                 server,
                 protocol: ImageProtocol::Simplestreams,
             }),
         },
-        profile: args.profile,
+        profile: incus_client::ProfileName::try_new(&args.profile)?,
         endpoint,
         host_name: "smoke".to_owned(),
         control_plane_id: ControlPlaneId::parse(args.control_plane_id)?,
         reserve_gb: args.reserve_gb,
         oversell_factor: args.oversell_factor,
-        storage_pool: args.storage_pool,
+        storage_pool: incus_client::StoragePoolName::try_new(&args.storage_pool)?,
         shutdown_grace: std::time::Duration::from_secs(args.shutdown_grace_secs),
     };
     let fleet = IncusFleet::new(config)?;
 
     let now = Utc::now();
     let computer = Computer {
-        id: Uuid::now_v7(),
+        id: ComputerId::new(Uuid::now_v7()),
         team_id: Uuid::now_v7(),
-        name: "fleet smoke test".to_owned(),
+        name: ComputerName::try_new("fleet smoke test")?,
         size: ComputerSize::Standard,
-        state: ComputerState::reserved(Uuid::now_v7(), now),
+        state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
         harness_id: None,
         persona: None,
         created_by: "incus_fleet_smoke".to_owned(),
@@ -124,8 +129,8 @@ async fn main() -> Result<(), rootcause::Report> {
     };
     let enrollment = Enrollment {
         computer_id: computer.id,
-        pairing_id: Uuid::now_v7(),
-        device_secret: "smoke-test-not-a-secret".to_owned(),
+        pairing_id: PairingId::new(Uuid::now_v7()),
+        device_secret: DeviceSecret::new("smoke-test-not-a-secret".to_owned()),
         name: computer.name.clone(),
         service_url_overrides: BTreeMap::new(),
         persona: None,
@@ -186,7 +191,7 @@ async fn run(
     Ok(())
 }
 
-async fn print_status(fleet: &IncusFleet, id: Uuid) -> Result<(), rootcause::Report> {
+async fn print_status(fleet: &IncusFleet, id: ComputerId) -> Result<(), rootcause::Report> {
     let status = fleet
         .instances()
         .await?

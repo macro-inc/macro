@@ -159,7 +159,7 @@ async fn stub_gateway(
         Arc::new(stripe::Client::from_url(url.as_str(), "sk_test_fixture")),
         Arc::new(()),
         SeatPrices {
-            premium: "price_test".into(),
+            premium: stripe_price_id::StripePriceId::parse("price_test").unwrap(),
             max: None,
         },
     );

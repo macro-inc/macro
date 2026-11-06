@@ -1,3 +1,4 @@
+use crate::{ImageAlias, InstanceName, ProfileName, StoragePoolName};
 use std::time::Duration;
 
 /// Explicit Incus transport and operation limits.
@@ -57,7 +58,7 @@ pub enum InstanceKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImageReference {
     /// An alias such as `ubuntu/24.04`.
-    Alias(String),
+    Alias(ImageAlias),
     /// A full image fingerprint.
     Fingerprint(String),
 }
@@ -93,7 +94,7 @@ pub struct ImageSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootDisk {
     /// Storage pool, which Incus requires on a root device override.
-    pub pool: String,
+    pub pool: StoragePoolName,
     /// Size such as `40GiB`.
     pub size: String,
 }
@@ -102,13 +103,13 @@ pub struct RootDisk {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateInstance {
     /// Instance name (a hostname-like label).
-    pub name: String,
+    pub name: InstanceName,
     /// Image to create it from.
     pub image: ImageSource,
     /// Container or VM.
     pub kind: InstanceKind,
     /// Profiles applied in order.
-    pub profiles: Vec<String>,
+    pub profiles: Vec<ProfileName>,
     /// Instance config such as `limits.cpu`, `limits.memory`, `user.*`.
     pub config: BTreeMap<String, String>,
     /// Root disk override.
@@ -223,7 +224,7 @@ pub struct ImageInfo {
     /// Full fingerprint.
     pub fingerprint: String,
     /// Alias names pointing at it.
-    pub aliases: Vec<String>,
+    pub aliases: Vec<ImageAlias>,
     /// Container or VM image.
     pub kind: InstanceKind,
     /// Size in bytes.
@@ -234,7 +235,7 @@ pub struct ImageInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageAliasInfo {
     /// Alias name.
-    pub name: String,
+    pub name: ImageAlias,
     /// Fingerprint the alias points at.
     pub target_fingerprint: String,
     /// Container or VM image.

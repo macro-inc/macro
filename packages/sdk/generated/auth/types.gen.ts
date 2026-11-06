@@ -343,7 +343,7 @@ export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
 export type ComputerPayment = 'pending' | 'paid' | 'comped' | 'unbilled';
 
 /**
- * The size of a Macro computer, from the computers catalog.
+ * A size a team can buy.
  */
 export type ComputerSize = 'standard' | 'large' | 'xl';
 

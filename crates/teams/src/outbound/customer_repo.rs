@@ -491,7 +491,7 @@ impl CustomerRepositoryImpl {
             .filter(|item| {
                 item.price
                     .as_ref()
-                    .is_some_and(|price| price.id.as_str() == max)
+                    .is_some_and(|price| price.id.as_str() == max.as_str())
             })
             .collect();
         let mut quantity = max_items
@@ -503,7 +503,7 @@ impl CustomerRepositoryImpl {
         }
         for update in items {
             if let Some(price) = &update.price {
-                if price.as_str() == max {
+                if price.as_str() == max.as_str() {
                     quantity = quantity.saturating_add(update.quantity.unwrap_or(1));
                 }
                 continue;
@@ -578,8 +578,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         plan: SeatPlan,
     ) -> Result<stripe_price_id::StripePriceId, CustomerError> {
-        stripe_price_id::StripePriceId::parse(self.seat_prices.price_id(plan)?)
-            .map_err(|_| anyhow::anyhow!("configured seat price id is malformed").into())
+        self.seat_prices.price_id(plan).cloned()
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -931,8 +930,12 @@ impl CustomerRepository for CustomerRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn price(&self, price_id: &str) -> Result<PriceInfo, CustomerError> {
+    async fn price(
+        &self,
+        price_id: &stripe_price_id::StripePriceId,
+    ) -> Result<PriceInfo, CustomerError> {
         let id: stripe::PriceId = price_id
+            .as_str()
             .parse()
             .map_err(|e| CustomerError::StorageLayerError(anyhow::Error::from(e)))?;
         let price = stripe::Price::retrieve(&self.client, &id, &[])
@@ -1089,14 +1092,14 @@ fn item_quantity_updates(
     for change in changes {
         match deltas
             .iter_mut()
-            .find(|(price, _)| *price == change.price_id)
+            .find(|(price, _)| *price == change.price_id.as_str())
         {
             Some((_, delta)) => {
                 *delta = delta
                     .checked_add(change.delta)
                     .context("item quantity overflow")?
             }
-            None => deltas.push((&change.price_id, change.delta)),
+            None => deltas.push((change.price_id.as_str(), change.delta)),
         }
     }
     let mut updates = Vec::new();

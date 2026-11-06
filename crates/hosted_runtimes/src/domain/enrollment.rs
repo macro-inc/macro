@@ -6,11 +6,13 @@
 //! These types are the contract between the control plane and
 //! `macrod enroll`; macrod depends on this crate with default features off.
 
+use crate::domain::ids::{ComputerId, PairingId};
+
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
+use crate::domain::models::ComputerName;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Instance config key carrying the JSON [`Enrollment`].
 pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
@@ -19,11 +21,12 @@ pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
 /// pairing exactly once; a copy read after that claim is useless.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Enrollment {
-    pub computer_id: Uuid,
-    pub pairing_id: Uuid,
-    pub device_secret: String,
+    pub computer_id: ComputerId,
+    pub pairing_id: PairingId,
+    #[serde(serialize_with = "serialize_device_secret")]
+    pub device_secret: DeviceSecret,
     /// Display name the harness shows in Settings → Runtimes.
-    pub name: String,
+    pub name: ComputerName,
     /// `OVERRIDE_*` service URL variables (see `macro_service_urls`) macrod
     /// must use, for stacks that are not the computer's default environment.
     pub service_url_overrides: BTreeMap<String, String>,
@@ -43,6 +46,7 @@ pub struct Persona {
     pub extra_service: PersonaService,
     /// Written to `/etc/macro/personas/<os_user>.env` and loaded by the
     /// persona's unit as its `EnvironmentFile`.
+    #[serde(deserialize_with = "deserialize_persona_values")]
     pub config: BTreeMap<PersonaConfigKey, String>,
 }
 
@@ -57,6 +61,7 @@ pub struct PersonaService {
     /// `ExecStart` command line.
     pub exec: String,
     /// Extra `Environment=` values, on top of the `EnvironmentFile`.
+    #[serde(deserialize_with = "deserialize_persona_values")]
     pub env: BTreeMap<PersonaConfigKey, String>,
 }
 
@@ -93,8 +98,10 @@ mod test;
 /// A persona field that violates its construction rule.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum PersonaFieldError {
-    /// The OS user must be a safe Linux user name with the persona prefix.
-    #[error("persona users must start with `agent-` and match ^agent-[a-z0-9][a-z0-9_-]{{0,24}}$")]
+    /// The OS user must be a safe, non-reserved Linux user name.
+    #[error(
+        "persona os_user must match ^[a-z_][a-z0-9_-]{{0,30}}$ and must not be root, macro or macrod*"
+    )]
     OsUser,
     /// The unit name must be safe and must not replace a macrod unit.
     #[error(
@@ -106,9 +113,9 @@ pub enum PersonaFieldError {
     ConfigKey,
 }
 
-/// A validated Linux user name for a persona, starting with `agent-`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+/// A validated, non-reserved Linux user name for a persona.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "inbound", schema(value_type = String))]
 pub struct PersonaOsUser(String);
@@ -116,7 +123,10 @@ pub struct PersonaOsUser(String);
 impl PersonaOsUser {
     /// Parse a value, rejecting invalid persona fields.
     pub fn parse(value: &str) -> Result<Self, PersonaFieldError> {
-        if !lazy_regex::regex_is_match!(r"^agent-[a-z0-9][a-z0-9_-]{0,24}$", value) {
+        if !lazy_regex::regex_is_match!(r"^[a-z_][a-z0-9_-]{0,30}$", value)
+            || matches!(value, "root" | "macro")
+            || value.starts_with("macrod")
+        {
             return Err(PersonaFieldError::OsUser);
         }
         Ok(Self(value.to_owned()))
@@ -154,8 +164,8 @@ impl std::fmt::Display for PersonaOsUser {
 }
 
 /// A validated systemd unit name, without the `.service` suffix.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "inbound", schema(value_type = String))]
 pub struct SystemdUnitName(String);
@@ -203,8 +213,8 @@ impl std::fmt::Display for SystemdUnitName {
 }
 
 /// A validated environment variable name for persona config or service env.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "inbound", schema(value_type = String))]
 pub struct PersonaConfigKey(String);
@@ -253,4 +263,75 @@ impl Borrow<str> for PersonaConfigKey {
     fn borrow(&self) -> &str {
         self.as_str()
     }
+}
+
+/// A pairing credential, exposed only explicitly and wiped when dropped.
+#[derive(Clone, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+pub struct DeviceSecret(String);
+
+impl DeviceSecret {
+    /// Take ownership of a credential received from the harness registry.
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+    /// Expose the credential for enrollment transport or pairing.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Drop for DeviceSecret {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.0);
+    }
+}
+
+impl std::fmt::Debug for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DeviceSecret(**redacted**)")
+    }
+}
+
+impl std::fmt::Display for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+fn serialize_device_secret<S: serde::Serializer>(
+    secret: &DeviceSecret,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(secret.expose())
+}
+
+impl<'de> Deserialize<'de> for PersonaOsUser {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+impl<'de> Deserialize<'de> for SystemdUnitName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+impl<'de> Deserialize<'de> for PersonaConfigKey {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+fn deserialize_persona_values<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<PersonaConfigKey, String>, D::Error> {
+    let values = BTreeMap::<PersonaConfigKey, String>::deserialize(deserializer)?;
+    if values.values().any(|value| value.contains(['\n', '\r'])) {
+        return Err(serde::de::Error::custom(
+            "persona values must be single lines",
+        ));
+    }
+    Ok(values)
 }

@@ -1,8 +1,10 @@
 use incus_client::{ImageProtocol, ImageRemote, IncusTimeouts};
 
 use super::*;
+use uuid::Uuid;
 
-const COMPUTER_ID: Uuid = Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001);
+const COMPUTER_ID: ComputerId =
+    ComputerId::new(Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001));
 
 fn endpoint() -> IncusEndpoint {
     IncusEndpoint {
@@ -40,7 +42,7 @@ fn instance(
 #[test]
 fn instance_names_start_with_a_letter_and_fit_a_hostname_label() {
     assert_eq!(
-        instance_name(COMPUTER_ID),
+        instance_name(COMPUTER_ID).as_str(),
         "mc-01900000000070008000000000000001"
     );
 }
@@ -55,11 +57,13 @@ fn a_large_computer_gets_its_limits_disk_and_state_room() {
         oversell_factor: 3,
         shutdown_grace: Duration::from_secs(60),
         image: ImageSource {
-            reference: ImageReference::Alias("macro-box".to_owned()),
+            reference: ImageReference::Alias(
+                incus_client::ImageAlias::try_new("macro-box").unwrap(),
+            ),
             remote: None,
         },
-        profile: "macro-box".to_owned(),
-        storage_pool: "default".to_owned(),
+        profile: ProfileName::try_new("macro-box").unwrap(),
+        storage_pool: StoragePoolName::try_new("default").unwrap(),
     };
 
     let body = instance_body(
@@ -105,7 +109,9 @@ fn a_large_computer_gets_its_limits_disk_and_state_room() {
 fn a_remote_image_names_its_server_and_protocol() {
     let config = IncusFleetConfig {
         image: ImageSource {
-            reference: ImageReference::Alias("ubuntu/24.04".to_owned()),
+            reference: ImageReference::Alias(
+                incus_client::ImageAlias::try_new("ubuntu/24.04").unwrap(),
+            ),
             remote: Some(ImageRemote {
                 server: "https://images.linuxcontainers.org".to_owned(),
                 protocol: ImageProtocol::Simplestreams,
@@ -117,8 +123,8 @@ fn a_remote_image_names_its_server_and_protocol() {
         reserve_gb: 4,
         oversell_factor: 3,
         shutdown_grace: Duration::from_secs(60),
-        profile: "macro-box".to_owned(),
-        storage_pool: "default".to_owned(),
+        profile: ProfileName::try_new("macro-box").unwrap(),
+        storage_pool: StoragePoolName::try_new("default").unwrap(),
     };
 
     let body = instance_body(
@@ -191,19 +197,25 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
         .unwrap(),
         [
             FleetInstance {
-                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0001),
+                computer_id: ComputerId::new(Uuid::from_u128(
+                    0x0190_0000_0000_7000_8000_0000_0000_0001
+                )),
                 status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0002),
+                computer_id: ComputerId::new(Uuid::from_u128(
+                    0x0190_0000_0000_7000_8000_0000_0000_0002
+                )),
                 status: InstanceStatus::Frozen,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
             FleetInstance {
-                computer_id: Uuid::from_u128(0x0190_0000_0000_7000_8000_0000_0000_0003),
+                computer_id: ComputerId::new(Uuid::from_u128(
+                    0x0190_0000_0000_7000_8000_0000_0000_0003
+                )),
                 status: InstanceStatus::Stopped,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,

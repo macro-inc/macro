@@ -6,7 +6,7 @@
  */
 
 /**
- * The size of a Macro computer, from the computers catalog.
+ * A size a team can buy.
  */
 export type ComputerSize = (typeof ComputerSize)[keyof typeof ComputerSize];
 

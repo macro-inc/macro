@@ -218,28 +218,28 @@ impl std::fmt::Display for SeatPlan {
 #[derive(Debug, Clone)]
 pub struct SeatPrices {
     /// Premium seat price.
-    pub premium: String,
+    pub premium: StripePriceId,
     /// Max seat price, when the plan is sold.
-    pub max: Option<String>,
+    pub max: Option<StripePriceId>,
 }
 
 impl SeatPrices {
     /// The price a seat on `plan` is billed at.
-    pub fn price_id(&self, plan: SeatPlan) -> Result<&str, CustomerError> {
+    pub fn price_id(&self, plan: SeatPlan) -> Result<&StripePriceId, CustomerError> {
         match plan {
             SeatPlan::Premium => Ok(&self.premium),
             SeatPlan::Max => self
                 .max
-                .as_deref()
+                .as_ref()
                 .ok_or(CustomerError::PlanUnavailable(plan)),
         }
     }
 
     /// Which plan a subscription item's price belongs to, if any.
     pub fn plan_for_price(&self, price_id: &str) -> Option<SeatPlan> {
-        if price_id == self.premium {
+        if price_id == self.premium.as_str() {
             Some(SeatPlan::Premium)
-        } else if self.max.as_deref() == Some(price_id) {
+        } else if self.max.as_ref().map(StripePriceId::as_str) == Some(price_id) {
             Some(SeatPlan::Max)
         } else {
             None
@@ -247,7 +247,7 @@ impl SeatPrices {
     }
 
     /// Every price that carries a seat item.
-    pub fn all(&self) -> Vec<String> {
+    pub fn all(&self) -> Vec<StripePriceId> {
         std::iter::once(self.premium.clone())
             .chain(self.max.clone())
             .collect()
@@ -259,7 +259,7 @@ impl SeatPrices {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemQuantityChange {
     /// The Stripe price whose item changes.
-    pub price_id: String,
+    pub price_id: StripePriceId,
     /// Added to the item's quantity: a new item when the price is absent,
     /// removed when the quantity reaches zero.
     pub delta: i64,

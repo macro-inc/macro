@@ -1,9 +1,12 @@
 //! What the computer services need from the outside world.
 
+use harness_id::HarnessId;
+
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::domain::enrollment::Enrollment;
+use crate::domain::enrollment::{DeviceSecret, Enrollment};
+use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
 use crate::domain::models::{
     BillingInterval, Computer, ControlPlaneId, Host, HostRegistration, NewComputer, Quote,
@@ -22,7 +25,7 @@ pub trait FleetError: std::error::Error + Send + Sync + 'static {
 pub struct PendingEffect {
     /// Outbox id; workers key idempotency on it.
     pub id: i64,
-    pub computer_id: Uuid,
+    pub computer_id: ComputerId,
     pub effect: Effect,
     pub attempts: u32,
 }
@@ -30,7 +33,7 @@ pub struct PendingEffect {
 /// A timer that came due.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DueTimer {
-    pub computer_id: Uuid,
+    pub computer_id: ComputerId,
     pub kind: TimerKind,
     pub fire_at: DateTime<Utc>,
 }
@@ -54,7 +57,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
 
     fn lock_payment(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<Self::PaymentGuard, Self::Err>> + Send;
 
     /// Hold the computer's units on the host with the most sold capacity
@@ -71,14 +74,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
     /// `None` when the computer does not exist.
     fn apply(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         event: Event,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
     fn get(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
     /// The team's computers that are not released, oldest first.
@@ -90,19 +93,19 @@ pub trait ComputerRepo: Send + Sync + 'static {
     /// The computer whose harness this is.
     fn find_by_harness(
         &self,
-        harness_id: Uuid,
+        harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
     fn set_harness(
         &self,
-        computer_id: Uuid,
-        harness_id: Uuid,
+        computer_id: ComputerId,
+        harness_id: HarnessId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Record the first macrod connection; later calls keep the first time.
     fn mark_enrolled(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -113,7 +116,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
     fn coldest_frozen(
         &self,
         host: HostId,
-    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
     /// Computers the fleet should hold an instance for on `host`.
     fn instances_expected(
@@ -246,24 +249,38 @@ pub trait Fleet: Send + Sync + 'static {
         start: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    fn start(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    fn stop(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    fn restart(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    fn freeze(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    fn unfreeze(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn start(&self, computer_id: ComputerId) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn stop(&self, computer_id: ComputerId) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn restart(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn freeze(&self, computer_id: ComputerId)
+    -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn unfreeze(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Save RAM to disk and stop. A fleet without stateful stop stops cold
     /// and its resume boots fresh; the lifecycle does not need to know.
-    fn suspend(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    fn resume(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn suspend(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn resume(&self, computer_id: ComputerId)
+    -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete the instance and its disk. A missing instance is not an error.
-    fn destroy(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn destroy(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete the one-time enrollment once macrod has used it.
     fn clear_enrollment(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Only instances stamped with this fleet's control-plane identity.
@@ -276,7 +293,7 @@ pub trait Fleet: Send + Sync + 'static {
 /// Ownership and age observed on the guest, independent of the computer row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FleetInstance {
-    pub computer_id: Uuid,
+    pub computer_id: ComputerId,
     pub status: InstanceStatus,
     pub control_plane_id: ControlPlaneId,
     /// Missing or malformed timestamps never permit orphan deletion.
@@ -294,8 +311,8 @@ pub enum InstanceStatus {
 /// A harness pre-approved for a computer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostedPairing {
-    pub pairing_id: Uuid,
-    pub device_secret: String,
+    pub pairing_id: PairingId,
+    pub device_secret: DeviceSecret,
 }
 
 /// The harness registry macrod pairs with.
@@ -311,11 +328,12 @@ pub trait Harnesses: Send + Sync + 'static {
     /// The computer a harness runs on, if it is a computer's.
     fn computer_for(
         &self,
-        harness_id: Uuid,
-    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
     /// Delete the computer's harness and its credential; absent is fine.
-    fn revoke(&self, computer_id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn revoke(&self, computer_id: ComputerId)
+    -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Server-side eligibility for complimentary computers.

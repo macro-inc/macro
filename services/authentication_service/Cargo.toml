@@ -40,6 +40,7 @@ return_passwordless_code = []
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+stripe_price_id = { path = "../../crates/stripe_price_id" }
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_billing = { path = "../../crates/ai_billing" }

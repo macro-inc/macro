@@ -19,10 +19,7 @@ use hosted_runtimes::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
-use team_agents::domain::{
-    models::{BillingInterval, ComputerSize},
-    ports::TeamAgentRepository,
-};
+use team_agents::domain::{models::BillingInterval, ports::TeamAgentRepository};
 use teams::domain::{
     model::{SeatPrices, TeamRole},
     team_repo::TeamRepository,
@@ -141,7 +138,7 @@ impl<Teams: TeamRepository, Computers: ComputerRepo, Agents: TeamAgentRepository
             let kind = if let Some(plan) = self.seat_prices.plan_for_price(price.id.as_str()) {
                 RecurringItemKind::Seat(plan)
             } else if let Some(size) = self.computer_prices.size_for_price(price.id.as_str()) {
-                RecurringItemKind::Computer(agent_size(size))
+                RecurringItemKind::Computer(size)
             } else {
                 RecurringItemKind::Other
             };
@@ -256,7 +253,7 @@ impl<Teams: TeamRepository, Computers: ComputerRepo, Agents: TeamAgentRepository
                     computers.push(BillingComputer {
                         id: computer.id,
                         agent_user_id: agent.map(|agent| agent.user_id.clone()),
-                        size: agent_size(computer.size),
+                        size: computer.size,
                         name: computer.name,
                         status,
                         included: computer.state.payment == PaymentOutcome::Comped,
@@ -265,14 +262,6 @@ impl<Teams: TeamRepository, Computers: ComputerRepo, Agents: TeamAgentRepository
                 Ok((BillingAccess::Team(role), seats, computers))
             }
         }
-    }
-}
-
-fn agent_size(size: hosted_runtimes::domain::size::ComputerSize) -> ComputerSize {
-    match size {
-        hosted_runtimes::domain::size::ComputerSize::Standard => ComputerSize::Standard,
-        hosted_runtimes::domain::size::ComputerSize::Large => ComputerSize::Large,
-        hosted_runtimes::domain::size::ComputerSize::Xl => ComputerSize::Xl,
     }
 }
 

@@ -98,11 +98,17 @@ brain gateway and git access never consult this rollout policy.
 
 ## Gotchas
 
+- Reuse canonical `ComputerId`, `ComputerSize`, `HostId` and `HarnessId` across
+  domain/adapter boundaries; unwrap UUIDs only for SQL or external repositories.
+  Do not introduce duplicate computer identity or size types.
+
 - Reuse `hosted_runtimes::domain::enrollment::{Persona, PersonaService,
   PersonaOsUser, SystemdUnitName, PersonaConfigKey}` and
   `stripe_price_id::StripePriceId` at domain/adapter boundaries. Construct
-  generated `agent-` usernames before provisioning effects; stored old names
-  fail deserialization and local preview agents require re-inviting.
+  generated `agent-` usernames before provisioning effects. The canonical
+  persona parser permits generic Linux names; team-agent recovery and enrollment
+  enforce the stricter `agent-` policy before effects. Local preview agents with
+  old names require re-inviting.
 
 - API keys and repository credentials use distinct validated `AgentApiKey` and
   `RepoToken` types from `agent_credentials`; never wrap arbitrary strings or

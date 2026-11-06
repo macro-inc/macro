@@ -507,3 +507,33 @@ fn enabled_computers_require_every_price_at_startup() {
         }
     }
 }
+
+#[test]
+fn computer_prices_reject_malformed_configured_ids_even_without_a_fleet() {
+    for value in [
+        "",
+        " ",
+        "prod_test",
+        "price_",
+        "price_bad id",
+        "price_bad\n",
+    ] {
+        let mut values = config_values();
+        values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!(value);
+        let config: Config = serde_json::from_value(values).unwrap();
+        assert!(config.computer_prices().is_err(), "{value:?}");
+    }
+    let mut values = config_values();
+    values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!("price_standard");
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert_eq!(
+        config
+            .computer_prices()
+            .unwrap()
+            .standard
+            .monthly
+            .unwrap()
+            .as_str(),
+        "price_standard"
+    );
+}

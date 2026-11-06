@@ -5,6 +5,8 @@
 //! Purchases, billing and the team routes live in authentication_service,
 //! which owns Stripe; both share the `hosted_runtime*` tables.
 
+use hosted_runtimes::domain::ids::{ComputerId, PairingId};
+
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::pin::Pin;
@@ -75,7 +77,11 @@ impl Operator {
     /// Queue the normal wake event and wait for the fleet to finish unfreezing.
     /// A Running database phase alone does not mean its Unfreeze effect ran.
     #[tracing::instrument(skip(self), err)]
-    pub async fn wake_brain(&self, harness_id: Uuid, computer_id: Uuid) -> anyhow::Result<()> {
+    pub async fn wake_brain(
+        &self,
+        harness_id: HarnessId,
+        computer_id: ComputerId,
+    ) -> anyhow::Result<()> {
         // Subscribe before enqueueing or inspecting so completion cannot be lost.
         let mut completed = self.effects_completed.subscribe();
         self.prompt_arrived(harness_id).await?;
@@ -97,7 +103,7 @@ impl Operator {
     /// Observe the machine as well as its optimistic database lifecycle phase.
     pub async fn instance_status(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> anyhow::Result<Option<InstanceStatus>> {
         Ok(self
             .observer
@@ -192,14 +198,17 @@ pub async fn operator(
                 reserve_gb,
                 oversell_factor,
                 image: ImageSource {
-                    reference: ImageReference::Alias(image),
+                    reference: ImageReference::Alias(incus_client::ImageAlias::try_new(&image)?),
                     remote: None,
                 },
-                profile: required(&config.computers_incus_profile, "COMPUTERS_INCUS_PROFILE")?,
-                storage_pool: required(
+                profile: incus_client::ProfileName::try_new(&required(
+                    &config.computers_incus_profile,
+                    "COMPUTERS_INCUS_PROFILE",
+                )?)?,
+                storage_pool: incus_client::StoragePoolName::try_new(&required(
                     &config.computers_incus_storage_pool,
                     "COMPUTERS_INCUS_STORAGE_POOL",
-                )?,
+                )?)?,
                 shutdown_grace: Duration::from_secs(required_value(
                     &config.computers_incus_shutdown_grace_secs,
                     "COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS",
@@ -411,8 +420,8 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
     }
 }
 
-/// [`Harnesses`] over the harnesses crate: a computer's harness is a team
-/// harness born approved, so macrod claims it without a pairing code.
+/// [`Harnesses`] over the harnesses crate: the buyer owns an approved harness
+/// shared with the team, so macrod claims it without a pairing code.
 pub struct HostedHarnesses {
     service: Arc<dyn HostedHarnessService>,
 }
@@ -440,28 +449,34 @@ impl Harnesses for HostedHarnesses {
                 } else {
                     HarnessTeamAccess::User
                 },
-                name: computer.name.clone(),
+                name: computer.name.as_str().to_owned(),
                 created_by,
                 // The computer is the team's own isolated VM, run for agents.
                 allow_permission_bypass: true,
-                computer_id: computer.id,
+                computer_id: computer.id.into_inner(),
             })
             .await?;
         Ok(HostedPairing {
-            pairing_id: pairing.pairing_id,
-            device_secret: pairing.device_secret,
+            pairing_id: PairingId::new(pairing.pairing_id),
+            device_secret: hosted_runtimes::domain::enrollment::DeviceSecret::new(
+                pairing.device_secret,
+            ),
         })
     }
 
-    async fn computer_for(&self, harness_id: Uuid) -> Result<Option<Uuid>, Self::Err> {
+    async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, Self::Err> {
         Ok(self
             .service
-            .harness_computer(HarnessId::new_from_uuid(harness_id))
-            .await?)
+            .harness_computer(harness_id)
+            .await?
+            .map(ComputerId::new))
     }
 
-    async fn revoke(&self, computer_id: Uuid) -> Result<(), Self::Err> {
-        Ok(self.service.revoke_hosted_harness(computer_id).await?)
+    async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
+        Ok(self
+            .service
+            .revoke_hosted_harness(computer_id.into_inner())
+            .await?)
     }
 }
 
@@ -482,7 +497,7 @@ impl SessionActivity for PgSessionActivity {
 
     async fn is_idle_since(
         &self,
-        harness_id: Uuid,
+        harness_id: HarnessId,
         since: DateTime<Utc>,
     ) -> Result<bool, sqlx::Error> {
         let busy = sqlx::query_scalar!(
@@ -496,7 +511,7 @@ impl SessionActivity for PgSessionActivity {
                   AND (s.turn_state = 'running' OR s.modified_at > $2)
             ) AS "busy!"
             "#,
-            harness_id,
+            harness_id.as_uuid(),
             since,
         )
         .fetch_one(&self.pool)
@@ -561,7 +576,7 @@ impl<Inner: CommandForwarder> CommandForwarder for WakingForwarder<Inner> {
     ) -> HarnessResult<CommandOutcome> {
         if let (Some(operator), CommandTarget::Harness(harness)) = (&self.operator, &target) {
             let must_wait = operator
-                .prompt_arrived(harness.as_uuid())
+                .prompt_arrived(*harness)
                 .await
                 .inspect_err(
                     |error| tracing::error!(%harness, error = ?error, "could not wake a computer"),
@@ -658,7 +673,7 @@ where
             }
             if let Some(operator) = &self.operator {
                 operator
-                    .macrod_connected(harness.as_uuid())
+                    .macrod_connected(harness)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
                     .ok();
@@ -693,7 +708,7 @@ where
             }
             if let Some(operator) = &self.operator {
                 operator
-                    .macrod_disconnected(harness.as_uuid())
+                    .macrod_disconnected(harness)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer disconnect event failed"))
                     .ok();

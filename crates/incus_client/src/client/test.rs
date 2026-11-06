@@ -11,7 +11,7 @@ use crate::model::{ImageProtocol, ImageRemote, ImageSource, RootDisk};
 async fn missing_instance_is_not_found() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/1.0/instances/box-1"))
+        .and(path("/1.0/instances/mc-01900000000070008000000000000001"))
         .respond_with(ResponseTemplate::new(404).set_body_json(json!({
             "type": "error",
             "status": "",
@@ -35,7 +35,9 @@ async fn missing_instance_is_not_found() {
         },
     );
 
-    let result = client.instance("box-1").await;
+    let result = client
+        .instance(&InstanceName::try_new("mc-01900000000070008000000000000001").unwrap())
+        .await;
 
     assert!(matches!(
         result,
@@ -47,7 +49,9 @@ async fn missing_instance_is_not_found() {
 async fn other_error_envelopes_are_rejected_with_status_and_message() {
     let server = MockServer::start().await;
     Mock::given(method("PUT"))
-        .and(path("/1.0/instances/box-1/state"))
+        .and(path(
+            "/1.0/instances/mc-01900000000070008000000000000001/state",
+        ))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "type": "error",
             "status": "",
@@ -71,7 +75,13 @@ async fn other_error_envelopes_are_rejected_with_status_and_message() {
         },
     );
 
-    let result = client.stop("box-1", false, false).await;
+    let result = client
+        .stop(
+            &InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
+            false,
+            false,
+        )
+        .await;
 
     assert!(matches!(
         result,
@@ -83,7 +93,7 @@ async fn other_error_envelopes_are_rejected_with_status_and_message() {
 async fn instance_decodes_the_sync_envelope() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/1.0/instances/box-1"))
+        .and(path("/1.0/instances/mc-01900000000070008000000000000001"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "type": "sync",
             "status": "Success",
@@ -106,7 +116,7 @@ async fn instance_decodes_the_sync_envelope() {
                 "created_at": "2026-11-04T22:10:03.123456789Z",
                 "expanded_config": {"limits.cpu": "2"},
                 "expanded_devices": {"root": {"path": "/", "pool": "default", "type": "disk"}},
-                "name": "box-1",
+                "name": "mc-01900000000070008000000000000001",
                 "status": "Frozen",
                 "status_code": 110,
                 "last_used_at": "2026-11-04T22:11:00Z",
@@ -129,12 +139,15 @@ async fn instance_decodes_the_sync_envelope() {
         },
     );
 
-    let instance = client.instance("box-1").await.unwrap();
+    let instance = client
+        .instance(&InstanceName::try_new("mc-01900000000070008000000000000001").unwrap())
+        .await
+        .unwrap();
 
     assert_eq!(
         instance,
         InstanceInfo {
-            name: "box-1".to_owned(),
+            name: "mc-01900000000070008000000000000001".to_owned(),
             status: InstanceStatus::Frozen,
             kind: InstanceKind::VirtualMachine,
             stateful: true,
@@ -153,7 +166,7 @@ async fn create_instance_maps_a_failed_operation() {
     Mock::given(method("POST"))
         .and(path("/1.0/instances"))
         .and(body_json(json!({
-            "name": "box-1",
+            "name": "mc-01900000000070008000000000000001",
             "type": "virtual-machine",
             "profiles": ["default", "macro-box"],
             "config": {"limits.cpu": "2", "user.macro.enrollment": "token-1"},
@@ -180,7 +193,7 @@ async fn create_instance_maps_a_failed_operation() {
                 "updated_at": "2026-11-04T22:10:03.123456789Z",
                 "status": "Running",
                 "status_code": 103,
-                "resources": {"instances": ["/1.0/instances/box-1"]},
+                "resources": {"instances": ["/1.0/instances/mc-01900000000070008000000000000001"]},
                 "metadata": null,
                 "may_cancel": false,
                 "err": "",
@@ -207,7 +220,7 @@ async fn create_instance_maps_a_failed_operation() {
                 "updated_at": "2026-11-04T22:10:09.5Z",
                 "status": "Failure",
                 "status_code": 400,
-                "resources": {"instances": ["/1.0/instances/box-1"]},
+                "resources": {"instances": ["/1.0/instances/mc-01900000000070008000000000000001"]},
                 "metadata": null,
                 "may_cancel": false,
                 "err": "Failed instance creation: Failed getting remote image info: Image not found",
@@ -230,22 +243,27 @@ async fn create_instance_maps_a_failed_operation() {
 
     let result = client
         .create_instance(CreateInstance {
-            name: "box-1".to_owned(),
+            name: InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
             image: ImageSource {
-                reference: ImageReference::Alias("macro-box/2026-11-04".to_owned()),
+                reference: ImageReference::Alias(
+                    ImageAlias::try_new("macro-box/2026-11-04").unwrap(),
+                ),
                 remote: Some(ImageRemote {
                     server: "https://images.example.test".to_owned(),
                     protocol: ImageProtocol::Simplestreams,
                 }),
             },
             kind: InstanceKind::VirtualMachine,
-            profiles: vec!["default".to_owned(), "macro-box".to_owned()],
+            profiles: vec![
+                crate::ProfileName::try_new("default").unwrap(),
+                crate::ProfileName::try_new("macro-box").unwrap(),
+            ],
             config: BTreeMap::from([
                 ("limits.cpu".to_owned(), "2".to_owned()),
                 ("user.macro.enrollment".to_owned(), "token-1".to_owned()),
             ]),
             root_disk: Some(RootDisk {
-                pool: "default".to_owned(),
+                pool: crate::StoragePoolName::try_new("default").unwrap(),
                 size: "40GiB".to_owned(),
             }),
         })
@@ -263,7 +281,9 @@ async fn create_instance_maps_a_failed_operation() {
 async fn stateful_stop_waits_for_the_operation_to_succeed() {
     let server = MockServer::start().await;
     Mock::given(method("PUT"))
-        .and(path("/1.0/instances/box-1/state"))
+        .and(path(
+            "/1.0/instances/mc-01900000000070008000000000000001/state",
+        ))
         .and(body_json(
             json!({"action": "stop", "stateful": true, "force": false, "timeout": 60}),
         ))
@@ -282,7 +302,7 @@ async fn stateful_stop_waits_for_the_operation_to_succeed() {
                 "updated_at": "2026-11-04T22:20:00Z",
                 "status": "Running",
                 "status_code": 103,
-                "resources": {"instances": ["/1.0/instances/box-1"]},
+                "resources": {"instances": ["/1.0/instances/mc-01900000000070008000000000000001"]},
                 "metadata": null,
                 "may_cancel": false,
                 "err": "",
@@ -311,7 +331,7 @@ async fn stateful_stop_waits_for_the_operation_to_succeed() {
                 "updated_at": "2026-11-04T22:20:04Z",
                 "status": "Success",
                 "status_code": 200,
-                "resources": {"instances": ["/1.0/instances/box-1"]},
+                "resources": {"instances": ["/1.0/instances/mc-01900000000070008000000000000001"]},
                 "metadata": null,
                 "may_cancel": false,
                 "err": "",
@@ -333,7 +353,13 @@ async fn stateful_stop_waits_for_the_operation_to_succeed() {
         },
     );
 
-    let result = client.stop("box-1", true, false).await;
+    let result = client
+        .stop(
+            &InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
+            true,
+            false,
+        )
+        .await;
 
     assert!(result.is_ok());
 }
@@ -342,7 +368,7 @@ async fn stateful_stop_waits_for_the_operation_to_succeed() {
 async fn remove_config_key_rewrites_the_instance_under_its_etag() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .and(path("/1.0/instances/box-1"))
+        .and(path("/1.0/instances/mc-01900000000070008000000000000001"))
         .respond_with(
             ResponseTemplate::new(200)
                 .insert_header("ETag", "\"5f1d2c\"")
@@ -358,7 +384,7 @@ async fn remove_config_key_rewrites_the_instance_under_its_etag() {
                         "profiles": ["default"],
                         "stateful": false,
                         "description": "",
-                        "name": "box-1",
+                        "name": "mc-01900000000070008000000000000001",
                         "status": "Running",
                         "status_code": 103,
                         "type": "virtual-machine"
@@ -368,7 +394,7 @@ async fn remove_config_key_rewrites_the_instance_under_its_etag() {
         .mount(&server)
         .await;
     Mock::given(method("PUT"))
-        .and(path("/1.0/instances/box-1"))
+        .and(path("/1.0/instances/mc-01900000000070008000000000000001"))
         .and(header("If-Match", "\"5f1d2c\""))
         .and(body_json(json!({
             "architecture": "x86_64",
@@ -408,7 +434,10 @@ async fn remove_config_key_rewrites_the_instance_under_its_etag() {
     );
 
     let result = client
-        .remove_config_key("box-1", "user.macro.enrollment")
+        .remove_config_key(
+            &InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
+            "user.macro.enrollment",
+        )
         .await;
 
     assert!(result.is_ok());

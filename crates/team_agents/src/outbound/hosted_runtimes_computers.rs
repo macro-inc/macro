@@ -1,5 +1,6 @@
 //! In-process computer purchases through the hosted runtimes domain service.
 
+use hosted_runtimes::domain::ids::ComputerId;
 use std::sync::Arc;
 
 use harnesses::domain::{models::PersonaHealth, ports::HarnessRepo};
@@ -53,11 +54,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
         size::ComputerSize::ALL
             .into_iter()
             .map(|size| ComputerSizeSpec {
-                size: match size {
-                    size::ComputerSize::Standard => ComputerSize::Standard,
-                    size::ComputerSize::Large => ComputerSize::Large,
-                    size::ComputerSize::Xl => ComputerSize::Xl,
-                },
+                size,
                 vcpus: size.vcpus(),
                 memory_gb: size.memory_gb(),
                 disk_gb: size.disk_gb(),
@@ -73,11 +70,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     ) -> Result<ComputerQuote, TeamAgentError> {
         let quote = self
             .service
-            .quote(
-                team_id,
-                computer_size(size),
-                &models::PurchaseBilling::Stripe,
-            )
+            .quote(team_id, size, &models::PurchaseBilling::Stripe)
             .await
             .map_err(error)?;
         let size = quote.size;
@@ -96,12 +89,15 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %purchase.team_id), err)]
-    async fn purchase(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+    async fn purchase(&self, purchase: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
         self.purchase_with_billing(purchase, models::PurchaseBilling::Stripe)
             .await
     }
 
-    async fn provision_comped(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+    async fn provision_comped(
+        &self,
+        purchase: ComputerPurchase,
+    ) -> Result<ComputerId, TeamAgentError> {
         self.purchase_with_billing(
             purchase,
             models::PurchaseBilling::Comped {
@@ -115,7 +111,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     async fn status(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<ComputerStatus, TeamAgentError> {
         let status = self
             .service
@@ -138,7 +134,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     async fn harness_id(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<Option<harness_id::HarnessId>, TeamAgentError> {
         let computer = self
             .repo
@@ -147,13 +143,15 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             .map_err(TeamAgentError::internal)?
             .filter(|computer| computer.team_id == team_id)
             .ok_or(TeamAgentError::NotFound)?;
-        Ok(computer
-            .harness_id
-            .map(harness_id::HarnessId::new_from_uuid))
+        Ok(computer.harness_id)
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
-    async fn persona(&self, team_id: Uuid, computer_id: Uuid) -> Result<Persona, TeamAgentError> {
+    async fn persona(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<Persona, TeamAgentError> {
         let computer = self
             .repo
             .get(computer_id)
@@ -171,7 +169,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     async fn retry(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<ComputerStatus, TeamAgentError> {
         self.service
             .retry(team_id, computer_id)
@@ -181,7 +179,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     }
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
-    async fn release(&self, team_id: Uuid, computer_id: Uuid) -> Result<(), TeamAgentError> {
+    async fn release(&self, team_id: Uuid, computer_id: ComputerId) -> Result<(), TeamAgentError> {
         let status = match self.service.status(team_id, computer_id).await {
             Ok(status) => status,
             Err(ComputerError::NotFound) => return Ok(()),
@@ -192,7 +190,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
         }
         match self
             .service
-            .release_now(team_id, computer_id, &status.name)
+            .release_now(team_id, computer_id, status.name.as_str())
             .await
         {
             Ok(_) | Err(ComputerError::NotFound) => Ok(()),
@@ -208,7 +206,7 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
     async fn brain_health(
         &self,
         team_id: Uuid,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<Option<BrainHealth>, TeamAgentError> {
         let Some(computer) = self
             .repo
@@ -224,10 +222,10 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
         };
         let Some(harness) = self
             .harnesses
-            .get_harness(harness_id::HarnessId::new_from_uuid(harness_id))
+            .get_harness(harness_id)
             .await
             .map_err(|_| TeamAgentError::internal_message("harness health is unavailable"))?
-            .filter(|harness| harness.computer_id == Some(computer_id))
+            .filter(|harness| harness.computer_id == Some(computer_id.into_inner()))
         else {
             return Ok(None);
         };
@@ -295,14 +293,6 @@ fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
     }
 }
 
-fn computer_size(size: ComputerSize) -> size::ComputerSize {
-    match size {
-        ComputerSize::Standard => size::ComputerSize::Standard,
-        ComputerSize::Large => size::ComputerSize::Large,
-        ComputerSize::Xl => size::ComputerSize::Xl,
-    }
-}
-
 fn error(source: ComputerError) -> TeamAgentError {
     match source {
         ComputerError::NotFound => TeamAgentError::NotFound,
@@ -327,7 +317,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
         &self,
         purchase: ComputerPurchase,
         billing: models::PurchaseBilling,
-    ) -> Result<Uuid, TeamAgentError> {
+    ) -> Result<ComputerId, TeamAgentError> {
         let team_id = purchase.team_id;
         let agent_user_id = purchase.persona.as_ref().and_then(|persona| {
             persona
@@ -341,7 +331,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
                 billing,
                 team_id: purchase.team_id,
                 created_by: purchase.created_by.as_ref().to_owned(),
-                size: computer_size(purchase.size),
+                size: purchase.size,
                 name: purchase.name,
                 persona: purchase.persona,
                 extra_items: purchase

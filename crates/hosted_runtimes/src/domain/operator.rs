@@ -2,12 +2,14 @@
 //! the fleet with the rows, sleeps idle computers and turns macrod presence
 //! into lifecycle events. Runs in agent_harness_service, next to the fleet.
 
+use harness_id::HarnessId;
+
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
-use uuid::Uuid;
 
 use crate::domain::enrollment::{Enrollment, PersonaConfigKey};
+use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
 use crate::domain::models::{Computer, EnrollmentDefaults};
 use crate::domain::ports::{
@@ -41,7 +43,7 @@ pub trait SessionActivity: Send + Sync + 'static {
     /// its sessions after `since`.
     fn is_idle_since(
         &self,
-        harness_id: Uuid,
+        harness_id: HarnessId,
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
@@ -216,7 +218,7 @@ where
     /// Do one effect; returns the event that reports its completion, if any.
     async fn carry_out(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         effect: &Effect,
     ) -> Result<Option<Event>, ComputerError> {
         let registered_host = self.host_id().await?;
@@ -353,7 +355,7 @@ where
     #[tracing::instrument(skip(self), err)]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
         let host = self.host_id().await?;
-        let instances: HashMap<Uuid, FleetInstance> = self
+        let instances: HashMap<ComputerId, FleetInstance> = self
             .fleet
             .instances()
             .await
@@ -449,7 +451,10 @@ where
     }
 
     /// The computer `harness_id` runs on, if any.
-    async fn computer_of(&self, harness_id: Uuid) -> Result<Option<Uuid>, ComputerError> {
+    async fn computer_of(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<ComputerId>, ComputerError> {
         self.harnesses
             .computer_for(harness_id)
             .await
@@ -458,7 +463,7 @@ where
 
     /// macrod connected on `harness_id`. Returns whether it is a computer's.
     #[tracing::instrument(skip(self), err)]
-    pub async fn macrod_connected(&self, harness_id: Uuid) -> Result<bool, ComputerError> {
+    pub async fn macrod_connected(&self, harness_id: HarnessId) -> Result<bool, ComputerError> {
         let Some(computer_id) = self.computer_of(harness_id).await? else {
             return Ok(false);
         };
@@ -492,7 +497,7 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    pub async fn macrod_disconnected(&self, harness_id: Uuid) -> Result<(), ComputerError> {
+    pub async fn macrod_disconnected(&self, harness_id: HarnessId) -> Result<(), ComputerError> {
         if let Some(computer_id) = self.computer_of(harness_id).await? {
             self.repo
                 .apply(computer_id, Event::MacrodDisconnected, self.clock.now())
@@ -505,7 +510,7 @@ where
     /// A prompt is waiting for `harness_id`. Wakes its computer when it is
     /// asleep; returns whether the prompt must wait for macrod to connect.
     #[tracing::instrument(skip(self), err)]
-    pub async fn prompt_arrived(&self, harness_id: Uuid) -> Result<bool, ComputerError> {
+    pub async fn prompt_arrived(&self, harness_id: HarnessId) -> Result<bool, ComputerError> {
         let Some(computer_id) = self.computer_of(harness_id).await? else {
             return Ok(false);
         };
@@ -517,7 +522,7 @@ where
         Ok(computer.is_some_and(|computer| !matches!(computer.state.phase, Phase::Running { .. })))
     }
 
-    async fn computer(&self, computer_id: Uuid) -> Result<Computer, ComputerError> {
+    async fn computer(&self, computer_id: ComputerId) -> Result<Computer, ComputerError> {
         self.repo
             .get(computer_id)
             .await

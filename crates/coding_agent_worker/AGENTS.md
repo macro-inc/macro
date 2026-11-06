@@ -161,6 +161,10 @@ Channel/document trigger prompts retain their source message ID through
 for initial mentions, existing-session follow-ups, and conflicted-create retries;
 external chat replies depend on it. Direct session controls still mint IDs.
 
+## Enrollment identities
+
+- Retain typed computer/pairing IDs and persona user/unit names until the pairing HTTP or OS command boundary. Expose the device secret only for the pairing claim. Persona user validation accepts non-reserved Linux names, including legacy names without an agent prefix.
+
 ## Checks
 
 - `cargo test -p coding_agent_worker` (`SQLX_OFFLINE` unset).
@@ -185,7 +189,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Paired credentials remain scope-free. Resolve webhook scope from current
   `shared_team_ids`, never a team owner variant; every harness has a human owner.
 
-- Persona enrollment requires an `agent-` Linux username. Reject old names before
+- Keep canonical persona/name/identity types; the generic persona parser permits
+  Linux names, but enrollment requires an `agent-` username. Reject old names before
   side effects; local preview agents with old names must be re-invited.
 
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add

@@ -197,10 +197,12 @@ fn persona_exec_is_validated_before_anything_is_written() {
     ] {
         let mut bad = serde_json::to_value(&persona).expect("persona");
         bad["os_user"] = serde_json::json!(os_user);
-        assert!(
-            serde_json::from_value::<Persona>(bad).is_err(),
-            "invalid OS user accepted"
-        );
+        if let Ok(bad) = serde_json::from_value::<Persona>(bad) {
+            assert!(
+                PersonaFiles::render(&bad, &paths).is_err(),
+                "invalid agent OS user accepted"
+            );
+        }
     }
     for unit_name in ["macrod", "macrod-enroll", "brain service", "../brain", ""] {
         let mut bad = serde_json::to_value(&persona).expect("persona");
@@ -323,7 +325,7 @@ token = "mhns_claimed"
         loaded.credentials.map(|credentials| credentials.token),
         Some("mhns_claimed".to_owned())
     );
-    assert_eq!(enrollment.pairing_id, Uuid::from_u128(0xa));
+    assert_eq!(enrollment.pairing_id.into_inner(), Uuid::from_u128(0xa));
 
     let host = FakeHost::default();
     own_like_parent(&config, &host).unwrap();

@@ -1,5 +1,6 @@
 use crate::domain::models::{PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName};
 use agent_credentials::RepoToken;
+use hosted_runtimes::domain::ids::ComputerId;
 
 use crate::domain::mail::{MailMessageId, MailboxId};
 use std::sync::{Arc, Mutex};
@@ -56,7 +57,7 @@ struct FakeRepositoryError(String);
 
 struct StoredAgent {
     account: NewAgentAccount,
-    computer_id: Option<Uuid>,
+    computer_id: Option<ComputerId>,
     status: TeamAgentStatus,
     status_reason: Option<String>,
 }
@@ -180,7 +181,7 @@ impl TeamAgentRepository for FakeRepository {
     async fn set_computer(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<(), Self::Err> {
         self.fail("account.set_computer")?;
         for agent in self.agents.lock().expect("lock").iter_mut() {
@@ -368,26 +369,29 @@ impl Computers for FakeComputers {
         })
     }
 
-    async fn purchase(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+    async fn purchase(&self, purchase: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
         self.journal.record("computer.purchase")?;
         self.purchases.lock().expect("lock").push(purchase);
         if self.journal.fail_at == Some("computer.purchase.uncertain") {
             return Err(TeamAgentError::ComputerIdentityUnavailable);
         }
-        Ok(Uuid::parse_str(COMPUTER_ID).expect("uuid"))
+        Ok(COMPUTER_ID.parse().expect("computer id"))
     }
 
-    async fn provision_comped(&self, purchase: ComputerPurchase) -> Result<Uuid, TeamAgentError> {
+    async fn provision_comped(
+        &self,
+        purchase: ComputerPurchase,
+    ) -> Result<ComputerId, TeamAgentError> {
         self.journal.record("computer.comped")?;
         assert!(purchase.extra_items.is_empty());
         self.purchases.lock().unwrap().push(purchase);
-        Ok(Uuid::parse_str(COMPUTER_ID).unwrap())
+        Ok(COMPUTER_ID.parse().unwrap())
     }
 
     async fn status(
         &self,
         _team_id: Uuid,
-        _computer_id: Uuid,
+        _computer_id: ComputerId,
     ) -> Result<ComputerStatus, TeamAgentError> {
         if self.unavailable {
             return Err(TeamAgentError::internal_message("status unavailable"));
@@ -398,7 +402,7 @@ impl Computers for FakeComputers {
     async fn harness_id(
         &self,
         _team_id: Uuid,
-        _computer_id: Uuid,
+        _computer_id: ComputerId,
     ) -> Result<Option<harness_id::HarnessId>, TeamAgentError> {
         if self.unavailable {
             return Err(TeamAgentError::NotFound);
@@ -406,7 +410,11 @@ impl Computers for FakeComputers {
         Ok(*self.harness_id.lock().expect("harness"))
     }
 
-    async fn persona(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<Persona, TeamAgentError> {
+    async fn persona(
+        &self,
+        _team_id: Uuid,
+        _computer_id: ComputerId,
+    ) -> Result<Persona, TeamAgentError> {
         self.journal.record("computer.persona")?;
         Ok(self
             .purchases
@@ -422,7 +430,7 @@ impl Computers for FakeComputers {
     async fn retry(
         &self,
         _team_id: Uuid,
-        _computer_id: Uuid,
+        _computer_id: ComputerId,
     ) -> Result<ComputerStatus, TeamAgentError> {
         self.journal.record("computer.retry")?;
         Ok(ComputerStatus {
@@ -437,7 +445,11 @@ impl Computers for FakeComputers {
         })
     }
 
-    async fn release(&self, _team_id: Uuid, _computer_id: Uuid) -> Result<(), TeamAgentError> {
+    async fn release(
+        &self,
+        _team_id: Uuid,
+        _computer_id: ComputerId,
+    ) -> Result<(), TeamAgentError> {
         self.journal.record("computer.release")
     }
 }
@@ -647,7 +659,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
             name: "Sam Rivera".to_string(),
             email: "sam@agents.example.com".to_string(),
             created_by: Some(user(ADMIN)),
-            computer_id: Some(Uuid::parse_str(COMPUTER_ID).expect("uuid")),
+            computer_id: Some(COMPUTER_ID.parse().expect("computer id")),
             status: TeamAgentStatus::Provisioning,
             status_reason: None,
             setup: Some(SetupProgress {
@@ -1255,10 +1267,7 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
         agent.setup.as_ref().map(|setup| setup.step),
         Some(SetupStep::Creating)
     );
-    assert_eq!(
-        agent.computer_id,
-        Some(Uuid::parse_str(COMPUTER_ID).unwrap())
-    );
+    assert_eq!(agent.computer_id, Some(COMPUTER_ID.parse().unwrap()));
     assert_eq!(
         journal.steps(),
         vec![
@@ -1292,6 +1301,32 @@ async fn retry_checks_team_ownership_and_leaves_a_running_agent_alone() {
     let agent = service.retry(receipt(TEAM_ID), &user(AGENT)).await.unwrap();
     assert_eq!(agent.status, TeamAgentStatus::Running);
     assert!(journal.steps().is_empty());
+}
+
+#[tokio::test]
+async fn retry_rejects_a_legacy_persona_before_repository_or_computer_effects() {
+    let (service, journal) = build(Setup {
+        computer_status: ComputerStatus {
+            payment: ComputerPayment::Paid,
+            brain: None,
+            status: ComputerStatusKind::Failed,
+            setup: None,
+        },
+        ..Setup::default()
+    });
+    service.create(receipt(TEAM_ID), request()).await.unwrap();
+    service.computers.purchases.lock().unwrap()[0]
+        .persona
+        .as_mut()
+        .unwrap()
+        .os_user = PersonaOsUser::parse("legacy-persona").expect("canonical generic Linux name");
+    journal.steps.lock().unwrap().clear();
+    let error = service
+        .retry(receipt(TEAM_ID), &user(AGENT))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, TeamAgentError::BadRequest(ref reason) if reason.contains("agent-")));
+    assert_eq!(journal.steps(), vec!["computer.persona"]);
 }
 
 #[tokio::test]

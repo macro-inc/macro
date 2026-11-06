@@ -150,8 +150,8 @@ async fn setup(
         Arc::new(stripe::Client::from_url(url.as_str(), "sk_test_fixture")),
         Arc::new(()),
         SeatPrices {
-            premium: "price_pro".into(),
-            max: Some("price_max".into()),
+            premium: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
+            max: Some(stripe_price_id::StripePriceId::parse("price_max").unwrap()),
         },
     );
     (gateway, provider_state, task)

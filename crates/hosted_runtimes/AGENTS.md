@@ -113,7 +113,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`
   as that user. `PersonaOsUser`, `SystemdUnitName`, and `PersonaConfigKey` in
   `domain::enrollment` validate names and keys on construction and JSON reads;
-  `PersonaOsUser` requires `^agent-[a-z0-9][a-z0-9_-]{0,24}$` with no legacy names;
+  `PersonaOsUser` requires `^[a-z_][a-z0-9_-]{0,30}$`, excluding root, macro and macrod*;
+  Team-agent construction/recovery and macrod enrollment additionally require
+  an `agent-` name with a nonempty suffix before side effects.
   `PersonaConfigKey` supports borrowed string map lookups. `Persona` and
   `PersonaService` Debug redact config and env values.
   `service::validate_persona` checks commands and values.
@@ -134,6 +136,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `entity`; the existing single-team membership constraint and shared entitlement
   resolver charge that team's allowance. The first-party API key is an auth
   credential, never a provider BYOK key or a reason to exempt usage from billing.
+
+## Typed boundaries
+
+- Use `domain::ids::{ComputerId, PairingId, HostId}` and `harness_id::HarnessId`; keep team IDs as UUIDs until a shared team identity exists. Convert only at external/storage boundaries.
+- Construct `ComputerName` to trim and validate display names. `DeviceSecret` redacts Debug/Display and zeroizes on drop; expose only for pairing or enrollment transport. It deliberately has no Serialize implementation.
+- Keep serde newtypes transparent and validate string deserialization through `TryFrom<String>`; serde does not allow `transparent` together with its `try_from` container attribute.
 
 ## Scope
 

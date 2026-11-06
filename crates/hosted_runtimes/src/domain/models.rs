@@ -1,5 +1,7 @@
 //! Computers, hosts, purchases and what the team sees.
 
+use harness_id::HarnessId;
+
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
@@ -8,11 +10,13 @@ pub use stripe_price_id::StripePriceId;
 use uuid::Uuid;
 
 use crate::domain::enrollment::Persona;
+use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
 use crate::domain::size::ComputerSize;
 
 /// Stable identity shared by replicas of one computer control plane.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct ControlPlaneId(String);
 
 /// An identity that cannot safely be used in fleet ownership metadata.
@@ -42,13 +46,13 @@ impl ControlPlaneId {
 /// One computer allocated to a team.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Computer {
-    pub id: Uuid,
+    pub id: ComputerId,
     pub team_id: Uuid,
-    pub name: String,
+    pub name: ComputerName,
     pub size: ComputerSize,
     pub state: ComputerState,
     /// The harness macrod claims, created when the instance is created.
-    pub harness_id: Option<Uuid>,
+    pub harness_id: Option<HarnessId>,
     pub persona: Option<Persona>,
     pub created_by: String,
     pub created_at: DateTime<Utc>,
@@ -62,9 +66,9 @@ pub struct NewComputer {
     pub billing: PurchaseBilling,
     /// Persisted in the payment confirmation outbox for exact purchase replay.
     pub extra_items: Vec<SubscriptionItem>,
-    pub id: Uuid,
+    pub id: ComputerId,
     pub team_id: Uuid,
-    pub name: String,
+    pub name: ComputerName,
     pub size: ComputerSize,
     pub persona: Option<Persona>,
     pub created_by: String,
@@ -217,8 +221,10 @@ pub struct SetupProgress {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ComputerStatus {
-    pub id: Uuid,
-    pub name: String,
+    #[cfg_attr(feature = "inbound", schema(value_type = Uuid))]
+    pub id: ComputerId,
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    pub name: ComputerName,
     pub size: ComputerSize,
     pub status: ComputerStatusKind,
     pub payment: PaymentOutcome,
@@ -231,7 +237,8 @@ pub struct ComputerStatus {
     pub cancels_at: Option<DateTime<Utc>>,
     /// When the disk is destroyed, for a canceled computer.
     pub retained_until: Option<DateTime<Utc>>,
-    pub harness_id: Option<Uuid>,
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
+    pub harness_id: Option<HarnessId>,
     pub persona_name: Option<String>,
     pub created_at: DateTime<Utc>,
 }
@@ -300,3 +307,67 @@ pub struct EnrollmentDefaults {
     /// can't reach (local stacks); empty in dev and prod.
     pub service_url_overrides: BTreeMap<String, String>,
 }
+
+/// A trimmed computer display name containing 1 through 64 Unicode characters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct ComputerName(String);
+
+/// An empty or overlong computer display name.
+#[derive(Debug, thiserror::Error)]
+#[error("name must be 1..=64 characters")]
+pub struct InvalidComputerName;
+
+impl ComputerName {
+    /// Trim and validate a display name.
+    pub fn try_new(value: &str) -> Result<Self, InvalidComputerName> {
+        let value = value.trim();
+        if value.is_empty() || value.chars().count() > 64 {
+            return Err(InvalidComputerName);
+        }
+        Ok(Self(value.to_owned()))
+    }
+    /// Borrow the display name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+    /// Take the display name.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl TryFrom<String> for ComputerName {
+    type Error = InvalidComputerName;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_new(&value)
+    }
+}
+
+impl std::fmt::Display for ComputerName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl TryFrom<String> for ControlPlaneId {
+    type Error = InvalidControlPlaneId;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for ComputerName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+impl<'de> Deserialize<'de> for ControlPlaneId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod test;

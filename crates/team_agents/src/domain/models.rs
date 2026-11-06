@@ -62,7 +62,8 @@ pub struct TeamAgent {
     #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
     pub created_by: Option<MacroUserIdStr<'static>>,
     /// The agent's Macro computer, once bought.
-    pub computer_id: Option<Uuid>,
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
+    pub computer_id: Option<ComputerId>,
     /// Where the computer is in coming up.
     pub status: TeamAgentStatus,
     /// Failure, transient health, or pending purchase-link recovery diagnostic.
@@ -94,7 +95,8 @@ pub struct TeamAgents {
 #[serde(rename_all = "camelCase")]
 pub struct TeamAgentComputer {
     /// Computer bound to the requested agent account.
-    pub computer_id: Uuid,
+    #[cfg_attr(feature = "inbound", schema(value_type = Uuid))]
+    pub computer_id: ComputerId,
     /// Paired runtime, absent until enrollment establishes it.
     #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
     pub harness_id: Option<harness_id::HarnessId>,
@@ -102,29 +104,9 @@ pub struct TeamAgentComputer {
     pub is_agent_computer: bool,
 }
 
-/// The size of a Macro computer, from the computers catalog.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum ComputerSize {
-    /// One capacity unit.
-    Standard,
-    /// Two capacity units.
-    Large,
-    /// Four capacity units.
-    Xl,
-}
+pub use hosted_runtimes::domain::ids::ComputerId;
+/// The canonical explicit computer size catalog.
+pub use hosted_runtimes::domain::size::ComputerSize;
 
 /// Input for inviting a team agent and buying its computer.
 #[derive(Debug, Clone, Deserialize)]

@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use hosted_runtimes::{
     domain::{
+        ids::ComputerId,
         lifecycle::Phase,
         models::Computer,
         ports::{ComputerRepo, InstanceStatus},
@@ -13,7 +14,6 @@ use hosted_runtimes::{
 use team_agents::domain::gateway::{
     BrainComputerPhase, BrainGatewayComputer, BrainGatewayComputers, BrainGatewayError,
 };
-use uuid::Uuid;
 
 /// Uses the fleet's existing prompt wake path; it never buys or bills a computer.
 pub struct GatewayComputers {
@@ -44,7 +44,7 @@ impl BrainGatewayComputers for GatewayComputers {
     #[tracing::instrument(skip(self), err)]
     async fn get(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<Option<BrainGatewayComputer>, BrainGatewayError> {
         let Some(computer) = self
             .repo
@@ -84,7 +84,7 @@ impl BrainGatewayComputers for GatewayComputers {
     #[tracing::instrument(skip(self), err)]
     async fn wake(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
     ) -> Result<Option<BrainGatewayComputer>, BrainGatewayError> {
         let Some(computer) = self
             .repo

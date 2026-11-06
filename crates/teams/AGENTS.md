@@ -72,6 +72,9 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- Carry the canonical `StripePriceId` through deferred agent-seat items and
+  generic item changes; validate once at configuration/provider boundaries.
+
 - Agent seat quotes and deferred seat items carry the shared
   `stripe_price_id::StripePriceId`; validate configured seat prices before
   returning deferred items or requesting a provider quote.
@@ -101,6 +104,10 @@ event contract (schema, sanitization, delivery semantics).
   `authentication_service`'s agent setup joins the team, so the seat is added
   without a separate acceptance. Existing accounts accept like any other invite.
   Its email links to the agent signup page (`/app/signup/agent?team_invite=<id>`).
+
+## Billing identifiers
+
+- Use `stripe_price_id::StripePriceId` for seat price configuration, item quantity changes, and price lookups; convert to provider strings only in the Stripe adapter.
 
 ## Checks
 

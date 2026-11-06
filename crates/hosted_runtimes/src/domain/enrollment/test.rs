@@ -1,18 +1,18 @@
 use super::*;
 
 #[test]
-fn os_users_accept_prefixed_names_and_exact_length_boundary() {
+fn os_users_accept_linux_names_and_length_boundary() {
     for value in [
+        "ada",
+        "worker_1",
+        "_worker",
         "agent-ada",
-        "agent-worker_1",
-        "agent-0",
-        "agent-a_b-c",
-        "agent-a234567890123456789012345",
+        "agent-",
+        "agent--worker",
+        "a234567890123456789012345678901",
     ] {
-        let user = PersonaOsUser::parse(value).unwrap();
-        assert_eq!(user.as_str(), value);
-        assert_eq!(user.to_string(), value);
-        assert_eq!(user.into_inner(), value);
+        assert!(PersonaOsUser::parse(value).is_ok(), "{value}");
+        assert!(serde_json::from_value::<PersonaOsUser>(serde_json::json!(value)).is_ok());
     }
 }
 
@@ -20,22 +20,10 @@ fn os_users_accept_prefixed_names_and_exact_length_boundary() {
 fn os_users_reject_invalid_or_reserved_names() {
     for value in [
         "",
-        "ada",
-        "worker_1",
-        "agent",
-        "agent-",
-        "agent-_worker",
-        "agent--worker",
-        "agent-Ada",
-        "agent-ada/../x",
-        "agent-ada.name",
-        "agent-ada\n",
-        "agent-ádá",
-        "agent-a2345678901234567890123456",
         "root",
         "macro",
         "macrod",
-        "macrod-agent",
+        "macrod-worker",
         "macrodaemon",
         "Ada",
         "1ada",
@@ -148,30 +136,6 @@ fn persona_json_is_byte_identical_after_validated_read() {
 }
 
 #[test]
-fn legacy_persona_users_are_rejected_on_parse_and_json_read() {
-    for value in ["ada", "worker_1", "macro-agent"] {
-        let error = PersonaOsUser::parse(value).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("persona users must start with `agent-`")
-        );
-        let json = serde_json::json!({
-            "name": "Worker",
-            "os_user": value,
-            "extra_service": {"unit_name": "worker_1", "exec": "/bin/worker", "env": {}},
-            "config": {}
-        });
-        let error = serde_json::from_value::<Persona>(json).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("persona users must start with `agent-`")
-        );
-    }
-}
-
-#[test]
 fn config_keys_support_borrowed_string_lookups() {
     let config = BTreeMap::from([
         (PersonaConfigKey::parse("REPO_URL").unwrap(), "repository"),
@@ -238,5 +202,18 @@ fn persona_debug_redacts_config_and_service_environment_values() {
         for value in persona.extra_service.env.values() {
             assert!(!output.contains(value));
         }
+    }
+}
+
+#[test]
+fn persona_values_reject_line_breaks_in_config_and_environment() {
+    for value in ["first\nsecond", "first\rsecond"] {
+        let mut json = serde_json::json!({
+            "name": "Worker", "os_user": "worker", "extra_service": {"unit_name": "worker", "exec": "/bin/worker", "env": {}}, "config": {"KEY": value}
+        });
+        assert!(serde_json::from_value::<Persona>(json.clone()).is_err());
+        json["config"] = serde_json::json!({});
+        json["extra_service"]["env"] = serde_json::json!({"KEY": value});
+        assert!(serde_json::from_value::<Persona>(json).is_err());
     }
 }

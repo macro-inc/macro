@@ -1,5 +1,8 @@
 //! In-memory fakes of the ports, for domain tests.
 
+use crate::domain::ids::ComputerId;
+use harness_id::HarnessId;
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -16,7 +19,7 @@ use crate::domain::service::Clock;
 use crate::domain::size::ComputerSize;
 
 pub const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
-pub const HOST: HostId = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001);
+pub const HOST: HostId = HostId::new(Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001));
 
 pub fn now() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap()
@@ -39,18 +42,18 @@ pub struct FakeError;
 pub struct FakeRepo {
     pub sold_units: u32,
     pub fail_next_apply: AtomicBool,
-    pub payment_locks: Mutex<HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>,
+    pub payment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
-    pub computers: Mutex<HashMap<Uuid, Computer>>,
+    pub computers: Mutex<HashMap<ComputerId, Computer>>,
     pub effects: Mutex<Vec<PendingEffect>>,
-    pub events: Mutex<Vec<(Uuid, Event)>>,
+    pub events: Mutex<Vec<(ComputerId, Event)>>,
 }
 
 impl ComputerRepo for FakeRepo {
     type Err = FakeError;
     type PaymentGuard = tokio::sync::OwnedMutexGuard<()>;
 
-    async fn lock_payment(&self, computer_id: Uuid) -> Result<Self::PaymentGuard, FakeError> {
+    async fn lock_payment(&self, computer_id: ComputerId) -> Result<Self::PaymentGuard, FakeError> {
         let lock = self
             .payment_locks
             .lock()
@@ -111,7 +114,7 @@ impl ComputerRepo for FakeRepo {
 
     async fn apply(
         &self,
-        computer_id: Uuid,
+        computer_id: ComputerId,
         event: Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
@@ -148,7 +151,7 @@ impl ComputerRepo for FakeRepo {
         Ok(Some(computer.clone()))
     }
 
-    async fn get(&self, computer_id: Uuid) -> Result<Option<Computer>, FakeError> {
+    async fn get(&self, computer_id: ComputerId) -> Result<Option<Computer>, FakeError> {
         Ok(self.computers.lock().unwrap().get(&computer_id).cloned())
     }
 
@@ -166,7 +169,7 @@ impl ComputerRepo for FakeRepo {
         Ok(computers)
     }
 
-    async fn find_by_harness(&self, harness_id: Uuid) -> Result<Option<Computer>, FakeError> {
+    async fn find_by_harness(&self, harness_id: HarnessId) -> Result<Option<Computer>, FakeError> {
         Ok(self
             .computers
             .lock()
@@ -176,7 +179,11 @@ impl ComputerRepo for FakeRepo {
             .cloned())
     }
 
-    async fn set_harness(&self, computer_id: Uuid, harness_id: Uuid) -> Result<(), FakeError> {
+    async fn set_harness(
+        &self,
+        computer_id: ComputerId,
+        harness_id: HarnessId,
+    ) -> Result<(), FakeError> {
         if let Some(computer) = self.computers.lock().unwrap().get_mut(&computer_id) {
             computer.harness_id = Some(harness_id);
         }
@@ -185,7 +192,7 @@ impl ComputerRepo for FakeRepo {
 
     async fn mark_enrolled(
         &self,
-        _computer_id: Uuid,
+        _computer_id: ComputerId,
         _now: DateTime<Utc>,
     ) -> Result<(), FakeError> {
         Ok(())
@@ -202,7 +209,7 @@ impl ComputerRepo for FakeRepo {
             .collect())
     }
 
-    async fn coldest_frozen(&self, _host: HostId) -> Result<Option<Uuid>, FakeError> {
+    async fn coldest_frozen(&self, _host: HostId) -> Result<Option<ComputerId>, FakeError> {
         Ok(None)
     }
 
