@@ -98,6 +98,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
 
   // Rows here live in the same split as the list, so its rows can drop on them.
   const createDropTarget = createFolderDropTargets();
+  const rootDropTarget = createDropTarget?.(() => null);
 
   const [folderSearch, setFolderSearch] = createSignal('');
 
@@ -202,15 +203,24 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
           </Show>
           <ViewSidebar.Nav aria-label="Folders">
             <DriveLocationMenu location={{ kind: 'folder', id: null }}>
-              <ViewSidebar.Item
-                active={selectedFolder() === null}
-                onClick={() => selectFolder(null)}
+              <div
+                ref={(element) => rootDropTarget?.ref(element)}
+                class={cn(
+                  'rounded-lg',
+                  rootDropTarget?.isOver() &&
+                    'outline-2 -outline-offset-2 outline-accent'
+                )}
               >
-                <ViewSidebar.Icon>
-                  <FolderIcon class="size-4" />
-                </ViewSidebar.Icon>
-                <span>Drive</span>
-              </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={selectedFolder() === null}
+                  onClick={() => selectFolder(null)}
+                >
+                  <ViewSidebar.Icon>
+                    <FolderIcon class="size-4" />
+                  </ViewSidebar.Icon>
+                  <span>Drive</span>
+                </ViewSidebar.Item>
+              </div>
             </DriveLocationMenu>
             <ViewSidebar.Branch>
               <Show
