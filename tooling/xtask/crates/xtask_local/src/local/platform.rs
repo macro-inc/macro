@@ -1038,7 +1038,22 @@ fn kubectl() -> Command {
     cmd
 }
 
+/// The prebuilt code-mode assets, as Rust CI uses them: otherwise `code_mode_assets`
+/// runs the SDK generator, which needs JavaScript installs a fresh checkout lacks.
+fn code_mode_assets(stage: &Stage) -> Result<String> {
+    let paths = nix_build(
+        stage,
+        "Building code-mode assets (nix)",
+        "f.packages.${builtins.currentSystem}.code-mode-assets",
+    )?;
+    paths
+        .into_iter()
+        .next()
+        .context("nix built no code-mode assets")
+}
+
 fn cargo_build(stage: &Stage, bins: &[&str]) -> Result<()> {
+    let assets = code_mode_assets(stage)?;
     let (isolated, unified): (Vec<&str>, Vec<&str>) = bins.iter().partition(|b| {
         inventory::RUST_SERVICES
             .iter()
@@ -1048,6 +1063,7 @@ fn cargo_build(stage: &Stage, bins: &[&str]) -> Result<()> {
         let mut cmd = Command::new("cargo");
         cmd.current_dir(repo_root())
             .env("SQLX_OFFLINE", "true")
+            .env("CODE_MODE_ASSETS_DIR", &assets)
             .arg("build")
             .args(["--target-dir", SERVICE_TARGET_DIR]);
         for b in &unified {
@@ -1067,6 +1083,7 @@ fn cargo_build(stage: &Stage, bins: &[&str]) -> Result<()> {
         let mut cmd = Command::new("cargo");
         cmd.current_dir(repo_root())
             .env("SQLX_OFFLINE", "true")
+            .env("CODE_MODE_ASSETS_DIR", &assets)
             .args([
                 "build",
                 "-p",
