@@ -74,8 +74,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
             .join("debug")
             .join(svc.cargo_bin);
         let dest = ws.join(target.debug_dir()).join(svc.cargo_bin);
-        std::fs::copy(&built, &dest)
-            .with_context(|| format!("copying {} to {}", built.display(), dest.display()))?;
+        publish_binary(&built, &dest)?;
     }
 
     Ok(())
@@ -197,4 +196,28 @@ fn ensure_target_installed(target: Target) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Replace the directory entry, never the inode a running container executes.
+fn publish_binary(built: &Path, dest: &Path) -> Result<()> {
+    let mut staging_name = dest.as_os_str().to_owned();
+    staging_name.push(format!(".stage-{}", std::process::id()));
+    let staging_dir = PathBuf::from(staging_name);
+    // Creating the directory exclusively also prevents concurrent publishers
+    // from sharing a staging file. Keep it beside dest for same-filesystem rename.
+    std::fs::create_dir(&staging_dir).with_context(|| {
+        format!(
+            "creating binary staging directory {}",
+            staging_dir.display()
+        )
+    })?;
+    let staged = staging_dir.join("binary");
+    let result = (|| {
+        std::fs::copy(built, &staged)
+            .with_context(|| format!("copying {} to {}", built.display(), staged.display()))?;
+        std::fs::rename(&staged, dest)
+            .with_context(|| format!("publishing binary {}", dest.display()))
+    })();
+    let _ = std::fs::remove_dir_all(&staging_dir);
+    result
 }

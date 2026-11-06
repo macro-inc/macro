@@ -592,6 +592,9 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a runtime image tagged by the Dockerfile and target-platform content hash. Generated compose files use that exact tag, so another worktree rebuilding a different runtime recipe cannot replace a running stack's image. The recipe includes git for agent workspace repositories. Docker does not compile these services during a normal `run_local`.
 
 Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
+Isolated build outputs are copied beside the mounted binaries and renamed into
+place, so a running executable never blocks publication with `ETXTBSY`. Running
+processes keep their old executable until their container restarts.
 
 Three services have Docker-built images. They are not rebuilt by default:
 

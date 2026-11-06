@@ -68,3 +68,53 @@ fn isolated_target_dirs_do_not_collide() {
         .collect();
     assert_eq!(dirs.len(), isolated_services().count());
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn published_binary_can_replace_a_running_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Stdio;
+
+    let root = std::env::temp_dir().join(format!("macro-publish-binary-{}", std::process::id()));
+    std::fs::create_dir(&root).expect("create test directory");
+    let built = root.join("built");
+    let dest = root.join("running");
+    // A separate, reaped copier prevents sibling tests' forked children from
+    // briefly inheriting a writable descriptor to this executable.
+    assert!(
+        Command::new("cp")
+            .arg("/bin/sh")
+            .arg(&dest)
+            .status()
+            .expect("copy executable")
+            .success()
+    );
+    std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))
+        .expect("set running executable permissions");
+    let mut child = Command::new(&dest)
+        .args(["-c", "read value"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("start executable with open stdin");
+    std::fs::write(&built, b"replacement binary").expect("write replacement");
+    std::fs::set_permissions(&built, std::fs::Permissions::from_mode(0o751))
+        .expect("set executable permissions");
+
+    let result = publish_binary(&built, &dest);
+    drop(child.stdin.take());
+    child.wait().expect("reap executable");
+    let contents = std::fs::read(&dest).expect("read published binary");
+    let mode = std::fs::metadata(&dest)
+        .expect("published metadata")
+        .permissions()
+        .mode()
+        & 0o777;
+    let entries = std::fs::read_dir(&root)
+        .expect("read test directory")
+        .count();
+    std::fs::remove_dir_all(root).expect("remove test directory");
+    result.expect("replace executable while its old inode is running");
+    assert_eq!(contents, b"replacement binary");
+    assert_eq!(mode, 0o751);
+    assert_eq!(entries, 2);
+}
