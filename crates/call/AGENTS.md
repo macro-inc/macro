@@ -20,6 +20,7 @@ in-call chat.
 - `src/outbound/pg_call_repo.rs`, `src/outbound/pg_voice_repo.rs`: Postgres.
 - `src/outbound/ai_call_summarizer.rs`, `src/outbound/s3_recording_storage.rs`:
   call recording/summarization.
+- Recording downloads use the call record's view-access receipt and stream S3 chunks through `RecordingStorage`.
 
 ## Scope
 

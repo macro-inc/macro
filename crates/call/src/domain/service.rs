@@ -62,7 +62,7 @@ use super::models::{
 };
 use super::ports::{
     CallRecordQueryService, CallRecordReader, CallRepository, CallRtcClient, CallService,
-    CallSummarizer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
+    CallSummarizer, NoOpVoiceRepository, RecordingDownload, RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -1437,6 +1437,23 @@ impl<
         };
 
         Ok(record)
+    }
+
+    #[tracing::instrument(err, skip(self, receipt), fields(call.id = %receipt.entity().entity_id))]
+    async fn get_call_recording(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<RecordingDownload, CallError> {
+        let record = authorized_call_record(&self.repo, &receipt).await?;
+        let key = record
+            .recording_key
+            .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))?;
+
+        self.recording_storage
+            .open_recording(&key)
+            .await
+            .map_err(|error| CallError::Internal(error.into()))?
+            .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))
     }
 
     #[tracing::instrument(err, skip(self))]
