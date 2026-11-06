@@ -78,6 +78,10 @@ pub(super) fn create(state: &Path, args: &InstanceArgs, params: &mut Value) -> R
     )?;
     let mut env = resolved.merged;
     normalize(&mut env);
+    // The shared local environment also supports host processes. Containers
+    // need this override for document initialization, as the Compose path does.
+    env.entry("OVERRIDE_SYNC_SERVICE_URL".into())
+        .or_insert_with(|| "http://sync-service:8787".into());
     params["enableGmail"] = json!(
         env.get("GMAIL_FORWARDER_SA_KEY")
             .is_some_and(|key| !key.is_empty())

@@ -286,6 +286,7 @@ in
         mkdir .wrangler
         ln -s /state .wrangler/state
         printf 'LOCAL_API_KEY=%s\nDOCUMENT_PERMISSIONS_SECRET=%s\nSPS_API_SECRET_KEY=%s\nDSS_INTERNAL_AUTH_KEY=%s\nLEXICAL_SERVICE_AUTH_KEY=%s\n' "$INTERNAL_API_SECRET_KEY" "$DOCUMENT_PERMISSION_JWT" "$INTERNAL_API_SECRET_KEY" "$DOCUMENT_STORAGE_SERVICE_AUTH_KEY" "$INTERNAL_API_SECRET_KEY" > .dev.vars
+        printf 'OTEL_EXPORTER_OTLP_ENDPOINT=%s\n' "''${OTEL_EXPORTER_OTLP_ENDPOINT:-}" >> .dev.vars
         wrangler d1 migrations apply USER_PEER_MAPPING --local --config wrangler.toml
         exec wrangler dev --local --ip 0.0.0.0 --port 8787 --config wrangler.toml
       '';

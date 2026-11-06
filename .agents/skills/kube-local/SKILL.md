@@ -43,6 +43,10 @@ Common failures:
 - MCP DNS-rebinding rejection: configured MCP service/public URLs must name the
   hyphenated Kubernetes service hostname; exact configured hosts are allowed.
 - DSS debug stack overflow: the dev overlay sets `RUST_MIN_STACK=16777216`.
+- Blank documents or sync timeouts: `OVERRIDE_SYNC_SERVICE_URL` must resolve to
+  `http://sync-service:8787` in the namespace; host localhost cannot initialize snapshots.
+- Collector DNS errors: set `OTEL_EXPORTER_OTLP_ENDPOINT` only for a reachable
+  collector; the local worker overlay disables the inherited default otherwise.
 - ZFS node statistics: keep the pinned kind node version until the kubelet /
   cAdvisor regression is resolved; changing the kubectl version alone cannot fix it.
 - Pending pods with `Too many pods`: the single node declares `maxPods: 250`
