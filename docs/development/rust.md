@@ -69,6 +69,29 @@ have the same build requirements.
 Command definitions live in [rust.just](../../tooling/just/rust.just) and
 [check.just](../../tooling/just/check.just).
 
+## Crate layers
+
+[`.config/layers.toml`](../../.config/layers.toml) puts every workspace crate
+in a layer (`types`, `platform`, `aws`, `clients`, `engines`, `client`,
+`domain`, `graphql`, `testing`, `services`, `tooling`) by directory glob, and
+says which layers each may depend on. `cargo x deps` (and CI's
+`cargo x deps --check`) prints the report after regenerating the dependency
+artifacts. It is report-only: nothing fails on a violation yet.
+
+- **New crate:** if the report lists it as `unassigned`, add its directory to
+  the layer it belongs in. A crate directory under a group (`crates/types/`,
+  `crates/email/`, …) is placed by that group's glob.
+- **`violation`:** a normal or build dependency from one layer into a layer it
+  may not use. Cut the edge (move the shared types down into a `types` crate,
+  or construct the adapter in the composition root). If the edge must stay for
+  now, add an `[[allow]]` with `from`, `to` (package names) and a `reason`.
+- **`stale allow`:** the edge is gone; delete the `[[allow]]` entry.
+- **`unmatched path`:** a literal path names a crate that moved or was
+  removed; update it.
+
+Dev-dependencies are exempt, except that only dev-dependencies may point at
+the `testing` layer.
+
 ## Test the affected packages
 
 Use the package name from the affected `Cargo.toml`, not a guessed spelling of
