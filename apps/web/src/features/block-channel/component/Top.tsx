@@ -4,7 +4,10 @@ import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { SplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import {
+  SplitLabel,
+  titleFileMenuMount,
+} from '@components/app/split-layout/components/SplitLabel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
@@ -55,7 +58,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
           <div
             class="shrink-0 flex items-center h-full"
-            ref={(ref) => panel.setTitleFileMenuRef(ref)}
+            ref={titleFileMenuMount(panel)}
           />
         </div>
       </HeaderIsland>

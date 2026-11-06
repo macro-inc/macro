@@ -5,6 +5,8 @@ use gh_workflow::{
     Event, Expression, Job, Level, Permissions, Step, Workflow, WorkflowRun, WorkflowRunType,
 };
 
+use crate::workflows::steps;
+
 #[cfg(test)]
 mod test;
 
@@ -21,6 +23,8 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Build Rust CI Image",
     "Build Web App",
     "Build macOS DMG",
+    "CI Gate Reminder",
+    "CI Gate for Forks",
     "CLA",
     "Cancel Stuck Cloud Storage Deploys",
     "Cleanup Preview",
@@ -40,6 +44,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Export Datadog observability definitions",
     "Migrate Macro Database",
     "Native Check Label",
+    "PR CI",
     "PR Privacy Check",
     "Publish Android to Google Play",
     "Publish SDK",
@@ -93,14 +98,6 @@ pub fn export_ci_telemetry() -> Workflow {
         .add_job("export", export())
 }
 
-/// Run embedded TypeScript on the hosted image's Node, which strips types itself, so
-/// the exporter needs no checkout, build or dependency.
-fn node_script(source: &str) -> String {
-    format!(
-        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'TELEMETRY_SCRIPT'\n{source}\nawait main();\nTELEMETRY_SCRIPT\n"
-    )
-}
-
 fn export() -> Job {
     Job::default()
         // GitHub's hosted image supplies AWS CLI, Python and Node without a checkout/setup step.
@@ -119,7 +116,9 @@ fn export() -> Job {
         // Before any credential exists, so nothing the run produced shares a step with it.
         .add_step(
             Step::new("Collect push, job and step events")
-                .run(node_script(include_str!("scripts/ci_telemetry_collect.ts")))
+                .run(steps::node_script(include_str!(
+                    "scripts/ci_telemetry_collect.ts"
+                )))
                 .shell("bash")
                 .if_condition(Expression::new("always()"))
                 .continue_on_error(true)
@@ -153,7 +152,9 @@ fn export() -> Job {
         // the only record of a run the trace exporter refuses.
         .add_step(
             Step::new("Send push, job and step events")
-                .run(node_script(include_str!("scripts/ci_telemetry_send.ts")))
+                .run(steps::node_script(include_str!(
+                    "scripts/ci_telemetry_send.ts"
+                )))
                 .shell("bash")
                 .if_condition(Expression::new("always()"))
                 .continue_on_error(true)

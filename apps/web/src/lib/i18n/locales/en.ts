@@ -1,3 +1,4 @@
+import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
@@ -28,6 +29,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  accountManager,
   agentSetup,
   agentWork,
   calls,

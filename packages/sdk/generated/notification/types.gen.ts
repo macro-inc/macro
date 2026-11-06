@@ -997,6 +997,11 @@ export type InviteToTeamMetadata = {
      */
     inviteePlan?: InviteePlan;
     /**
+     * The inviter's display name, when they have set one. It is user-provided, so it is shown
+     * on one line, capped, and escaped; the email falls back to the inviter's address.
+     */
+    inviterName?: string | null;
+    /**
      * Whether the invite creates an agent account.
      */
     isAgent?: boolean;

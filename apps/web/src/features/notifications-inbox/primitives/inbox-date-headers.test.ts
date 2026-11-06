@@ -21,7 +21,6 @@ const row = (id: string, latestAt: Date): NotificationInboxRow => ({
   content: {
     entity: { type: 'document', id, name: 'Plan' } as never,
     notifications: [],
-    entityAt: () => ({}) as never,
   },
 });
 
