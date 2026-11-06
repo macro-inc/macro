@@ -5,6 +5,7 @@ import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersiste
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import HistoryIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { useExternalChatsQuery } from '@queries/external-chats';
 import { useExternalChatListsSync } from '@queries/external-chats/sync';
 import { queryReadyGate } from '@queries/gate';
@@ -43,6 +44,7 @@ export function WhatsAppHistoryImportPrompt() {
     itemsLoaded: () => chats.isSuccess && userId() !== undefined,
     toast: (group) => ({
       title: 'Import WhatsApp history',
+      icon: HistoryIcon,
       dismissLabel: t('common.notNow'),
       content(): string {
         return historyPromptText(group);

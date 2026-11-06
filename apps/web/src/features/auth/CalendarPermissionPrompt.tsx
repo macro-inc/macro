@@ -7,6 +7,7 @@ import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersiste
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 
 /**
@@ -58,6 +59,7 @@ export function CalendarPermissionPrompt() {
       calendarUiEnabled() && linksQuery.isSuccess && userId() !== undefined,
     toast: (link, dismiss) => ({
       title: 'Enable calendar',
+      icon: CalendarIcon,
       dismissLabel: t('common.notNow'),
       content(): string {
         return `Macro can now sync your calendar. Grant calendar access for ${link.email_address} to turn it on.`;
