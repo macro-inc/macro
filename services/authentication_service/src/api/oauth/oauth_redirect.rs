@@ -143,8 +143,6 @@ pub async fn handler(
         .await
         .map_err(IntoResponse::into_response)?;
 
-    tracing::trace!("redirect url {redirect_url}");
-
     let decoded_user_id = decode_macro_access_token_allow_expired(&access_token, &ctx.jwt_args);
 
     let just_signed_up = match decoded_user_id.as_ref() {
@@ -243,11 +241,26 @@ impl IntoResponse for InnerErr {
     }
 }
 
-/// unit struct just to denote in the type system that a given string is a session code
-#[derive(Debug)]
+/// A freshly minted session code. It is a bearer credential until redeemed,
+/// so `Debug` never prints it.
 struct SessionCode(String);
 
-#[tracing::instrument(ret, err, skip(write_db))]
+impl std::fmt::Debug for SessionCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SessionCode(<redacted>)")
+    }
+}
+
+/// The redirect URL carries the session code, and `original_url` can carry a
+/// stale one, so the span records neither: only what kind of return this is.
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        has_state = state.is_some(),
+        is_mobile = state.as_ref().is_some_and(|state| state.is_mobile),
+    )
+)]
 async fn get_redirect_url(
     state: &Option<SsoState>,
     write_db: impl AsyncFnOnce(&SessionCode) -> Result<(), InnerErr>,
@@ -297,7 +310,11 @@ async fn get_redirect_url(
 
 /// given an input url, attaches a session code as a query param if required.
 /// Side effect: write the code to db
-#[tracing::instrument(ret, err, skip(write_db))]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(session_code_issued = session_code.is_some())
+)]
 async fn update_url_with_session_code(
     mut url: Url,
     session_code: Option<&SessionCode>,

@@ -172,6 +172,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   ("Invalid origin uri <origin>") means the page that sent the browser to
   FusionAuth is missing from `infra/stacks/fusionauth-instance/origins.ts`;
   these failures carry no user id.
+- A session code (`/session/login/{session_code}`, the native and dev-proxy
+  SSO handoff) redeems once: `take_mobile_login_session` reads and deletes it
+  in one Redis script, so concurrent redemptions yield one success. A failed
+  token refresh puts it back for the rest of its 5 minutes, so client retries
+  of a 500 work. Never record the code, the redirect URL carrying `token=`, or
+  a refresh token in spans, logs, or `Debug`; the span records `outcome`.
 - When the FusionAuth JWT populate lambda fails (its `fetch` to
   `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
   issues the access token, just without the Macro claims. `/jwt/refresh`
