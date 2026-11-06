@@ -1,16 +1,16 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            a.id,\n            a.message_id,\n            a.provider_attachment_id,\n            a.filename,\n            a.mime_type,\n            a.size_bytes,\n            a.content_id,\n            a.created_at,\n            m.thread_id\n        FROM\n            email_attachments a\n        JOIN\n            email_messages m ON a.message_id = m.id\n        WHERE\n            m.thread_id = ANY($1)\n        ORDER BY\n            a.created_at ASC\n        ",
+  "query": "SELECT\n    a.id AS \"id!\",\n    a.message_id AS \"message_id!\",\n    a.provider_attachment_id,\n    a.filename,\n    a.mime_type,\n    a.size_bytes,\n    a.content_id,\n    a.created_at AS \"created_at!\",\n    m.thread_id AS \"thread_id!\"\nFROM\n    (SELECT DISTINCT thread_id FROM UNNEST($1::uuid[]) AS ids(thread_id)) t\nCROSS JOIN LATERAL (\n    SELECT m.id, m.thread_id\n    FROM email_messages m\n    WHERE m.thread_id = t.thread_id\n    OFFSET 0\n) m\nCROSS JOIN LATERAL (\n    SELECT\n        a.id,\n        a.message_id,\n        a.provider_attachment_id,\n        a.filename,\n        a.mime_type,\n        a.size_bytes,\n        a.content_id,\n        a.created_at\n    FROM email_attachments a\n    WHERE a.message_id = m.id\n    OFFSET 0\n) a\nORDER BY\n    a.created_at ASC\n",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "id!",
         "type_info": "Uuid"
       },
       {
         "ordinal": 1,
-        "name": "message_id",
+        "name": "message_id!",
         "type_info": "Uuid"
       },
       {
@@ -40,12 +40,12 @@
       },
       {
         "ordinal": 7,
-        "name": "created_at",
+        "name": "created_at!",
         "type_info": "Timestamptz"
       },
       {
         "ordinal": 8,
-        "name": "thread_id",
+        "name": "thread_id!",
         "type_info": "Uuid"
       }
     ],
@@ -66,5 +66,5 @@
       false
     ]
   },
-  "hash": "2c1ca56683bc4ff97f5b9768e6da72ee6558c2ea8bb9b58237370e3cb80d309c"
+  "hash": "90c130c499300bb57b31231094fad2eef3cbf3df93c8ccd136aa6e59fe37f6cd"
 }
