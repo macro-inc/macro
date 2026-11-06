@@ -25,9 +25,10 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
-activity = { path = "../../crates/activity", default-features = false }
+activity = { path = "../../crates/activity", default-features = false, features = ["outbound", "schema"] }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
@@ -134,6 +135,7 @@ macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
+soup_realtime = { path = "../../crates/soup_realtime", default-features = false, features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = ["cloud_storage"] }
 macro_queues = { path = "../../crates/macro_queues" }
@@ -172,6 +174,7 @@ reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 rootcause = { workspace = true }
+routine_program = { path = "../../crates/routine_program" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }

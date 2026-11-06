@@ -44,6 +44,7 @@ fn id(n: u128) -> Uuid {
 
 fn message(n: u128, root: Option<u128>, content: &str) -> Message {
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: id(n),
         parent: MessageParent::parse("document", DOCUMENT).unwrap(),
         thread_id: root.map(id),

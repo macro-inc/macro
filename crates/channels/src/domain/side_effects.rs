@@ -146,6 +146,10 @@ pub struct ThreadNotificationContext {
     pub participants: Vec<MacroUserIdStr<'static>>,
     /// Sender of the thread parent message.
     pub parent_sender_id: Option<MacroUserIdStr<'static>>,
+    /// People connected to the call, when the thread belongs to a live call.
+    /// They read it in the call, so its notifications are dropped for them.
+    /// They stay followers, and later replies reach them once they leave.
+    pub connected_call_participants: Vec<MacroUserIdStr<'static>>,
 }
 
 /// Notification requested by the channel domain.
@@ -341,12 +345,12 @@ where
 {
     fn dispatch(&self, event: ChannelEvent) {
         let handler = self.handler.clone();
-        tokio::spawn(
+        tokio::spawn(agent_correlation::context::capture(
             async move {
                 handler.handle(event).await;
             }
             .instrument(tracing::info_span!("channel.side_effects")),
-        );
+        ));
     }
 }
 
@@ -710,6 +714,12 @@ where
             .map(|user_id| user_id.as_ref().to_string())
             .into_iter()
             .chain(user_mentions.iter().cloned())
+            .chain(
+                thread_context
+                    .connected_call_participants
+                    .iter()
+                    .map(|user_id| user_id.as_ref().to_string()),
+            )
             .collect::<Vec<_>>();
         let recipients_without_sender = recipients_excluding(
             participants
@@ -800,7 +810,12 @@ where
             },
             recipient_ids: recipients_excluding(
                 context.user_mentions.iter().map(String::as_str),
-                context.sender.as_user().map(|user_id| user_id.as_ref()),
+                context
+                    .sender
+                    .as_user()
+                    .map(|user_id| user_id.as_ref())
+                    .into_iter()
+                    .chain(context.connected_in_thread()),
             )
             .collect(),
         })
@@ -830,7 +845,12 @@ where
                     .participants
                     .iter()
                     .map(|participant| participant.as_ref()),
-                context.sender.as_user().map(|user_id| user_id.as_ref()),
+                context
+                    .sender
+                    .as_user()
+                    .map(|user_id| user_id.as_ref())
+                    .into_iter()
+                    .chain(context.connected_in_thread()),
             )
             .collect(),
             None => context.recipients_without_sender.clone(),
@@ -1050,6 +1070,16 @@ struct PostedMessageNotificationContext {
     recipients_without_sender: HashSet<MacroUserIdStr<'static>>,
     recipients_without_sender_and_mentions: HashSet<MacroUserIdStr<'static>>,
     is_first_top_level_message: bool,
+}
+
+impl PostedMessageNotificationContext {
+    /// Who the thread's call is showing this message to already.
+    fn connected_in_thread(&self) -> impl Iterator<Item = &str> {
+        self.thread_context
+            .connected_call_participants
+            .iter()
+            .map(|user_id| user_id.as_ref())
+    }
 }
 
 /// Whether a participant principal id refers to a bot (e.g. `bot|<uuid>`).

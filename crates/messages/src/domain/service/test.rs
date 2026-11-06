@@ -1,9 +1,11 @@
 use super::*;
 use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 mod call_retries;
+mod call_roots;
 mod event_posts;
 mod guest_chat;
 mod initiative;
@@ -21,6 +23,8 @@ struct Repo {
     file_type: Option<String>,
     concurrent_create: bool,
     client_message_id: Option<Uuid>,
+    call_thread: Option<CallThreadFacts>,
+    call_statuses: HashMap<Uuid, CallEntryStatus>,
 }
 
 impl Repo {
@@ -32,6 +36,17 @@ impl Repo {
 }
 
 impl MessageRepository for Repo {
+    async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+        Ok(self.call_thread.clone())
+    }
+
+    async fn call_entry_statuses(
+        &self,
+        _: &[Uuid],
+    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
+        Ok(self.call_statuses.clone())
+    }
+
     async fn document_file_type(&self, _: &str) -> Result<Option<String>, MessageError> {
         Ok(self.file_type.clone())
     }
@@ -244,6 +259,7 @@ fn fixture() -> Repo {
     let user = "macro|author@example.com";
     Repo {
         message: Message {
+            kind: MessageKind::Message,
             id,
             parent: MessageParent::parse("document", "doc").unwrap(),
             thread_id: None,
@@ -286,6 +302,8 @@ fn fixture() -> Repo {
         file_type: Some("md".into()),
         concurrent_create: false,
         client_message_id: None,
+        call_thread: None,
+        call_statuses: HashMap::new(),
     }
 }
 
@@ -1323,6 +1341,17 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
+    async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
+        self.inner.call_thread_facts(id).await
+    }
+
+    async fn call_entry_statuses(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, CallEntryStatus>, MessageError> {
+        self.inner.call_entry_statuses(ids).await
+    }
+
     async fn document_file_type(&self, id: &str) -> Result<Option<String>, MessageError> {
         self.inner.document_file_type(id).await
     }

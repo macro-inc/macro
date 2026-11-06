@@ -21,6 +21,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 #[derive(Clone)]
 pub struct JwtAccessToken(pub String);
 
+/// Managed session provenance from a verified Macro API JWT.
+#[derive(Clone, Copy)]
+pub struct ManagedAgentSession(pub uuid::Uuid);
+
 /// What the bearer middleware validates a request with.
 #[derive(Clone)]
 pub struct BearerAuth {
@@ -144,6 +148,14 @@ pub async fn validate_bearer(
         }
     };
 
+    if let JwtToken::MacroApiToken(api) = &jwt_token
+        && api.agent_id.is_some()
+        && let Some(session) = api.agent_session_id
+    {
+        request
+            .extensions_mut()
+            .insert(ManagedAgentSession(session));
+    }
     let (user_id, auth_method, caller) = match jwt_token {
         JwtToken::MacroAccessToken(access) => {
             let client = match auth.clients.client(&token).await {

@@ -6,6 +6,8 @@ use mcp_client_label::{McpClientKind, McpClientLabel};
 fn signed_execution_token_preserves_owner_agent_and_lifetime() {
     let agent = uuid::Uuid::from_u128(0xa2a2);
     let token = encode_macro_api_token(EncodeMacroApiTokenArgs {
+        agent_correlation_id: Some(uuid::Uuid::from_u128(123)),
+        agent_session_id: Some(uuid::Uuid::from_u128(456)),
         fusionauth_id: "fusion-owner".into(),
         macro_user_id: "macro|owner@example.com".into(),
         organization_id: Some(42),
@@ -32,6 +34,11 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
         panic!("expected Macro API token");
     };
     assert_eq!(claims.agent_id, Some(agent));
+    assert_eq!(
+        claims.agent_correlation_id,
+        Some(uuid::Uuid::from_u128(123))
+    );
+    assert_eq!(claims.agent_session_id, Some(uuid::Uuid::from_u128(456)));
     assert_eq!(claims.agent_via.as_deref(), Some("Claude Code"));
     assert_eq!(claims.agent_via_kind, Some(McpClientKind::ClaudeCode));
     assert_eq!(claims.macro_user_id, "macro|owner@example.com");
@@ -45,7 +52,7 @@ fn signed_execution_token_preserves_owner_agent_and_lifetime() {
 
     // An edited attribution cannot be signed with a user's HMAC credential.
     let mut forged = claims;
-    forged.agent_id = Some(uuid::Uuid::from_u128(0xb0b));
+    forged.agent_correlation_id = Some(uuid::Uuid::from_u128(0xb0b));
     let mut header = jsonwebtoken::Header::new(Algorithm::HS256);
     header.kid = Some("macro".into());
     let token = jsonwebtoken::encode(
@@ -66,4 +73,6 @@ fn legacy_user_token_has_no_agent_attribution() {
     .unwrap();
     assert_eq!(claims.agent_id, None);
     assert_eq!(claims.agent_via, None);
+    assert_eq!(claims.agent_correlation_id, None);
+    assert_eq!(claims.agent_session_id, None);
 }

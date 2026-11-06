@@ -2,6 +2,8 @@
 
 ## Surface
 
+The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.
+
 `Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
@@ -629,6 +631,7 @@ It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
 `Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
 `Involves me` is selected by default. The selected tab is stored in the URL and
 survives opening a PR and returning through the breadcrumb.
+The top of the Reviews list (List layout) holds the GitHub `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog.
 The list contains accessible GitHub pull requests of any status. `Involves me`
 uses the server's participant filter for your linked GitHub account: author,
 requested reviewer, assignee, commenter, or reviewer. Participant IDs are retained
@@ -1190,6 +1193,21 @@ Each GitHub pull request linked to an open task shows a pill beside its property
 with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens the PR in
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
+
+Assignees lists and searches current team members and available agents, keeping
+each surface's existing search placeholder, styling, and selected-first ordering
+when opening the picker. Rows stay in place while selecting or deselecting.
+Existing selected outsiders remain visible and removable,
+including references absent from contacts. The picker has no contact discovery;
+a removed outsider cannot be added again unless they join the team.
+
+The same scope applies to task/project creation and editing, bulk Set assignee,
+and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
+keep their semantics; Created by and custom people fields keep their contact lists.
+Check that a teammate absent from contacts appears and can be selected, that
+searching by email cannot select an unassigned outsider, and that an existing
+outsider can be removed. Repeat with keyboard navigation and a touch picker
+sheet; Cancel still discards drafts and Done still applies them.
 
 The Assignees picker offers people and available agents together. Agent rows show
 their name and an `Agent` label; saved agents also show their `@handle`. Search by

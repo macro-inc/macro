@@ -13,6 +13,15 @@
       padding: 7.5px;
       --input-editor-padding: 4.6875px 3.75px;
 
+      /* The single-line editor is taller than the 32px buttons, so bottom
+         alignment alone would sit them below the text's center. Give the
+         action rows the single-line editor's height (the row's min-height
+         less its padding) so they center on the last line instead. */
+      > [data-input-actions-left],
+      > [data-input-actions-right] {
+        min-height: calc(48.75px - 2 * 7.5px);
+      }
+
       /* On touch this row replaces the CollapsedInput pill, so it keeps the
          pill's height, gutter, and gap (h-12.5, px-2, gap-1.5) rather than
          growing when the editor takes over. The single line (with the

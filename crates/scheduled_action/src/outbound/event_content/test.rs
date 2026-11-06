@@ -114,6 +114,7 @@ fn long_text_is_cut_on_a_character_boundary() {
 fn message(content: &str) -> Message {
     let at = Utc.with_ymd_and_hms(2026, 10, 5, 9, 30, 0).unwrap();
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: Uuid::nil(),
         parent: MessageParent::Channel(Uuid::nil()),
         thread_id: None,
@@ -148,6 +149,18 @@ fn channel_messages_are_plain_text_from_their_sender() {
         avatar_url: None,
     });
     assert_eq!(message_json(&bot)["sender"], "CI");
+}
+
+#[test]
+fn replies_go_to_the_root_of_the_message_thread() {
+    let mut root = message("Launch plan");
+    root.id = Uuid::now_v7();
+    assert_eq!(message_json(&root)["thread_id"], json!(root.id));
+
+    let mut reply = message("Looks good");
+    reply.id = Uuid::now_v7();
+    reply.thread_id = Some(root.id);
+    assert_eq!(message_json(&reply)["thread_id"], json!(root.id));
 }
 
 fn task() -> DocumentBasic {
@@ -232,6 +245,9 @@ fn calls_show_who_joined_and_what_they_said() {
     use call::domain::models::{CallRecordParticipant, CallRecordTranscriptSegment};
     let at = Utc.with_ymd_and_hms(2026, 10, 8, 14, 0, 0).unwrap();
     let record = CallRecord {
+        discussion: call::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::nil(),
+        },
         call_id: Uuid::nil(),
         channel_id: None,
         room_name: Some("room".into()),

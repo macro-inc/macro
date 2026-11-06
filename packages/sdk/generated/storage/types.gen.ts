@@ -101,6 +101,73 @@ export type AccessiblePipeline = Pipeline & {
 };
 
 /**
+ * A response to a request.
+ */
+export type AccountManagerDecision = 'approve' | 'decline';
+
+/**
+ * A request for manager access and what became of it.
+ */
+export type AccountManagerGrant = {
+    /**
+     * When the manager claimed the credential.
+     */
+    claimedAt?: string | null;
+    /**
+     * When the request was made.
+     */
+    createdAt: string;
+    /**
+     * When the pending request or unclaimed approval stops being usable.
+     */
+    expiresAt?: string | null;
+    /**
+     * Grant id.
+     */
+    id: string;
+    /**
+     * When the credential was last used, to the minute.
+     */
+    lastUsedAt?: string | null;
+    /**
+     * The account being managed.
+     */
+    managedUserId: string;
+    /**
+     * The agent account doing the managing.
+     */
+    managerUserId: string;
+    /**
+     * The side that asked.
+     */
+    requestedBy: AccountManagerRole;
+    /**
+     * Lifecycle status.
+     */
+    status: AccountManagerGrantStatus;
+};
+
+/**
+ * Where a grant is in its lifecycle.
+ */
+export type AccountManagerGrantStatus = 'pending' | 'approved' | 'declined' | 'active' | 'revoked' | 'expired';
+
+/**
+ * One side of a grant.
+ */
+export type AccountManagerRole = 'managed' | 'manager';
+
+/**
+ * The managers of the caller's account.
+ */
+export type AccountManagersList = {
+    /**
+     * Approved and active grants on the caller's account.
+     */
+    grants: Array<AccountManagerGrant>;
+};
+
+/**
  * A currently active call, as returned by the batch active-calls listing.
  */
 export type ActiveCallSummary = {
@@ -161,6 +228,16 @@ export type ActiveMeetingsResponse = {
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
+
+/**
+ * Request to add a bot to a channel.
+ */
+export type AddChannelBotRequest = {
+    /**
+     * Bot id.
+     */
+    bot_id: BotId;
+};
 
 /**
  * Request body for favoriting an entity.
@@ -2111,6 +2188,47 @@ export type CallActiveResponse = {
 };
 
 /**
+ * Where a call's discussion lives, decided once when the call is created.
+ * `channel_id` cannot decide this: past channel calls keep their own thread.
+ */
+export type CallDiscussion = {
+    /**
+     * The channel holding the thread.
+     */
+    channel_id: string;
+    kind: 'channel_thread';
+    /**
+     * The thread's root message.
+     */
+    root_id: string;
+} | {
+    /**
+     * The call owning the thread.
+     */
+    call_id: string;
+    kind: 'call_chat';
+};
+
+/**
+ * A channel call's life, as its timeline row shows it.
+ */
+export type CallEntryStatus = {
+    state: 'live';
+} | {
+    /**
+     * How long it lasted.
+     */
+    duration_ms: number;
+    /**
+     * When it ended.
+     */
+    ended_at: string;
+    state: 'ended';
+} | {
+    state: 'record_deleted';
+};
+
+/**
  * Filters for call records.
  */
 export type CallFilters = {
@@ -2134,6 +2252,106 @@ export type CallFilters = {
      */
     speaker_ids?: Array<string>;
     status?: null | CallStatus;
+};
+
+/**
+ * Public call events. Private variants carry a recipient on the broker only.
+ */
+export type CallNotificationEvent = {
+    event_type: 'call.started';
+    /**
+     * A call started.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.ended';
+    /**
+     * A call ended.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.participant_joined';
+    /**
+     * A participant entered the RTC room.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.participant_left';
+    /**
+     * A participant left the RTC room.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.recording_ready';
+    /**
+     * A recording became available.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.summarized';
+    /**
+     * A summary became available.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.ringing';
+    /**
+     * The recipient is being rung.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.answered';
+    /**
+     * The recipient answered.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.declined';
+    /**
+     * The recipient declined.
+     */
+    metadata: CallNotificationMetadata;
+} | {
+    event_type: 'call.invited';
+    /**
+     * The recipient was invited.
+     */
+    metadata: CallNotificationMetadata;
+};
+
+/**
+ * Identifiers and actors for a public call notification. Optional fields are
+ * absent when they do not apply to the event.
+ */
+export type CallNotificationMetadata = {
+    /**
+     * Call identifier.
+     */
+    call_id: string;
+    /**
+     * Channel containing the call, if any.
+     */
+    channel_id?: string | null;
+    /**
+     * User who created the call.
+     */
+    created_by?: string | null;
+    /**
+     * Room identity of the joining or departing participant.
+     */
+    identity?: string | null;
+    /**
+     * User who sent an invitation.
+     */
+    invited_by?: string | null;
+    /**
+     * Meeting associated with an invitation.
+     */
+    meeting_id?: string | null;
+    /**
+     * Account identifier of the participant or answering user.
+     */
+    user_id?: string | null;
 };
 
 /**
@@ -2167,6 +2385,10 @@ export type CallRecord = {
      * archived `call_records`; active calls always return `None`.
      */
     customName?: string | null;
+    /**
+     * Where this call's discussion lives.
+     */
+    discussion: CallDiscussion;
     /**
      * Call duration in milliseconds (None if still active).
      */
@@ -2414,6 +2636,10 @@ export type CallTokenResponse = {
      * Meeting link capability, when joined using a link.
      */
     shareToken?: string | null;
+    /**
+     * Whether this request allocated the call.
+     */
+    started: boolean;
     /**
      * The RTC token for connecting to the room.
      */
@@ -3301,6 +3527,20 @@ export type ClaimPairingRequest = {
 };
 
 /**
+ * The credential, returned only by the claim that issued it.
+ */
+export type ClaimedAccountManagerToken = {
+    /**
+     * The grant, now active.
+     */
+    grant: AccountManagerGrant;
+    /**
+     * The secret. Shown only once.
+     */
+    token: string;
+};
+
+/**
  * The credential released to the daemon when a pairing is claimed.
  */
 export type ClaimedPairing = {
@@ -4038,6 +4278,34 @@ export type CreateBotRequest = {
     team_id?: string | null;
 };
 
+/**
+ * Request to create a bot token.
+ */
+export type CreateBotTokenRequest = {
+    /**
+     * Optional expiration timestamp.
+     */
+    expires_at?: string | null;
+    /**
+     * Token label.
+     */
+    label?: string | null;
+};
+
+/**
+ * Response containing a newly minted token.
+ */
+export type CreateBotTokenResponse = {
+    /**
+     * Raw bearer token.
+     */
+    bearer_token: string;
+    /**
+     * Token metadata.
+     */
+    token: BotToken;
+};
+
 export type CreateBulkDocumentResponse = {
     /**
      * Data to be returned
@@ -4547,17 +4815,15 @@ export type CreatePairingRequest = {
 };
 
 /**
- * Request to create an empty pipeline with the standard CRM columns.
+ * Request to create an empty pipeline: the standard CRM columns for a tracked
+ * record, or one Name column, like a new database, for a generic pipeline.
  */
 export type CreatePipeline = {
     /**
      * Pipeline name.
      */
     name: string;
-    /**
-     * Company or contact entries.
-     */
-    recordType: PipelineRecordType;
+    recordType?: null | PipelineRecordType;
     /**
      * Defaults to private.
      */
@@ -6127,6 +6393,10 @@ export type DocumentSyncEditor = {
      * User or bot that performed the edit.
      */
     actor: string;
+    /**
+     * Invocation from the editor's signed document grant.
+     */
+    agent_correlation_id?: string | null;
     on_behalf_of?: null | MacroUserIdStr;
 };
 
@@ -9976,6 +10246,24 @@ export type JobId = string;
 export type JobStatus = 'uploading' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelling' | 'cancelled';
 
 /**
+ * Options for an authenticated call join.
+ */
+export type JoinCallRequest = {
+    /**
+     * Optional display name in the RTC room.
+     */
+    name?: string | null;
+    /**
+     * What to do when this account is participating in another call.
+     */
+    onOtherCall?: OnOtherCall;
+    /**
+     * Disconnect an existing RTC connection for this identity.
+     */
+    replace?: boolean;
+};
+
+/**
  * Single safe source folder/key segment; never a path or authorization proof.
  */
 export type KeySegment = string;
@@ -10153,6 +10441,135 @@ export type ListedForm = {
      */
     form: Form;
 };
+
+/**
+ * Whether a live call is associated with a channel.
+ */
+export type LiveCallKind = 'channel' | 'standalone';
+
+/**
+ * A connected participant in an RTC room.
+ */
+export type LiveCallParticipant = {
+    /**
+     * Name displayed to room members.
+     */
+    displayName: string;
+    /**
+     * RTC identity.
+     */
+    identity: string;
+    /**
+     * Whether the caller is a program.
+     */
+    isProgram: boolean;
+    /**
+     * RTC connection time.
+     */
+    joinedAt?: string | null;
+    /**
+     * User or guest.
+     */
+    kind: LiveParticipantKind;
+    /**
+     * Published media tracks.
+     */
+    tracks: Array<LiveCallTrack>;
+    /**
+     * Macro account identifier, if this is a user.
+     */
+    userId?: string | null;
+};
+
+/**
+ * A live RTC room roster.
+ */
+export type LiveCallParticipantsResponse = {
+    /**
+     * Connected participants.
+     */
+    participants: Array<LiveCallParticipant>;
+};
+
+/**
+ * A live call visible to an account that can join it.
+ */
+export type LiveCallSummary = {
+    /**
+     * Session identifier.
+     */
+    callId: string;
+    /**
+     * Channel identifier, if present.
+     */
+    channelId?: string | null;
+    /**
+     * When the session was created.
+     */
+    createdAt: string;
+    /**
+     * Caller identifier.
+     */
+    createdBy: string;
+    /**
+     * Channel or standalone call.
+     */
+    kind: LiveCallKind;
+    /**
+     * Invitation identifier, if present.
+     */
+    meetingId?: string | null;
+    /**
+     * Number of active people and guests.
+     */
+    participantCount: number;
+    /**
+     * Whether this account is currently being rung.
+     */
+    ringing: boolean;
+    /**
+     * Invitation capability, if present.
+     */
+    shareToken?: string | null;
+    /**
+     * Invitation title, if present.
+     */
+    title?: string | null;
+};
+
+/**
+ * A live media track.
+ */
+export type LiveCallTrack = {
+    /**
+     * Whether the track is muted.
+     */
+    muted: boolean;
+    /**
+     * Microphone, camera, or screen source.
+     */
+    source: LiveTrackSource;
+};
+
+/**
+ * Response containing every live call this account may join.
+ */
+export type LiveCallsResponse = {
+    /**
+     * Joinable live calls.
+     */
+    calls: Array<LiveCallSummary>;
+};
+
+/**
+ * Participant kind in the live room.
+ */
+export type LiveParticipantKind = 'user' | 'guest' | 'bot';
+
+/**
+ * A live media track.
+ */
+export type LiveTrackSource = 'microphone' | 'camera' | 'screen_share' | 'screen_share_audio' | 'unknown';
 
 export type LocationResponseData = {
     /**
@@ -10364,6 +10781,10 @@ export type Message = {
     id: string;
     imported_author?: null | ImportedAuthor;
     /**
+     * What this message is.
+     */
+    kind?: MessageKind;
+    /**
      * Tracked mentions, retained when a caller changes attachments only.
      */
     mentions: Array<SimpleMention>;
@@ -10546,6 +10967,12 @@ export type MessageChange = {
     type: 'reaction_changed';
 } | {
     /**
+     * Persisted root.
+     */
+    message: Message;
+    type: 'call_root_posted';
+} | {
+    /**
      * Persisted thread state.
      */
     state: ThreadState;
@@ -10655,6 +11082,11 @@ export type MessageEventAttachment = {
      */
     entity_type: string;
 };
+
+/**
+ * What a persisted message is. Set by the server, never by a client.
+ */
+export type MessageKind = 'message' | 'call_root';
 
 /**
  * Root message with its small thread preview, independent of its parent type.
@@ -10920,6 +11352,16 @@ export type MessageTimelineEntry = {
      */
     activity: TimelineActivity;
     type: 'activity';
+} | {
+    /**
+     * The call's root message, its thread state and its reply preview.
+     */
+    message: MessageListItem;
+    /**
+     * Where the call is in its life.
+     */
+    status: CallEntryStatus;
+    type: 'call';
 };
 
 /**
@@ -11242,6 +11684,11 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  * How a number cell compares to a number.
  */
 export type NumberOperator = 'is' | 'isNot' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
+
+/**
+ * Policy for another active call.
+ */
+export type OnOtherCall = 'fail' | 'switch';
 
 /**
  * A batch of ops for one database and the versions its tables must be at.
@@ -11679,13 +12126,11 @@ export type Pipeline = {
      */
     name: string;
     /**
-     * Protected primary column.
+     * A tracked pipeline's protected record reference. A generic pipeline's
+     * Name, which names no column once someone deletes it.
      */
     primaryColumnId: string;
-    /**
-     * Kind of the primary reference.
-     */
-    recordType: PipelineRecordType;
+    recordType: null | PipelineRecordType;
     /**
      * Whether the pipeline has a team grant.
      */
@@ -12288,6 +12733,11 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
+ * OpenAPI representation of streamed recording bytes.
+ */
+export type RecordingBytes = Blob | File;
+
+/**
  * Batched registration, also used to renew an unchanged descriptor's grant.
  */
 export type RegisterUploads = {
@@ -12379,6 +12829,20 @@ export type RequestAccess = {
 };
 
 /**
+ * Request body for asking for a grant.
+ */
+export type RequestAccountManagerBody = {
+    /**
+     * The side the caller takes.
+     */
+    callerRole: AccountManagerRole;
+    /**
+     * The other account (`macro|...`).
+     */
+    counterpartyId: string;
+};
+
+/**
  * Durable outcome; reading a notification never changes it.
  */
 export type RequestStatus = 'pending' | 'granted' | 'denied' | 'cancelled';
@@ -12463,6 +12927,16 @@ export type ResolveRequest = {
      * Request revision being reviewed.
      */
     revision: number;
+};
+
+/**
+ * Request body for responding to a request.
+ */
+export type RespondToAccountManagerRequestBody = {
+    /**
+     * The response.
+     */
+    decision: AccountManagerDecision;
 };
 
 /**
@@ -16378,6 +16852,20 @@ export type UploadExtractFolderRequest = {
     sha: string;
 };
 
+/**
+ * The document created from the uploaded bytes.
+ */
+export type UploadFileResponse = {
+    /**
+     * The new document.
+     */
+    documentId: string;
+    /**
+     * Number of bytes stored.
+     */
+    sizeBytes: number;
+};
+
 export type UploadFolderRequest = {
     /**
      * The content of the folder
@@ -16915,7 +17403,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -17240,6 +17728,160 @@ export type WithProjectId = {
     id: string;
 };
 
+export type ListAccountManagersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type ListAccountManagersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListAccountManagersError = ListAccountManagersErrors[keyof ListAccountManagersErrors];
+
+export type ListAccountManagersResponses = {
+    200: AccountManagersList;
+};
+
+export type ListAccountManagersResponse = ListAccountManagersResponses[keyof ListAccountManagersResponses];
+
+export type RequestAccountManagerData = {
+    body: RequestAccountManagerBody;
+    path?: never;
+    query?: never;
+    url: '/account-managers';
+};
+
+export type RequestAccountManagerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RequestAccountManagerError = RequestAccountManagerErrors[keyof RequestAccountManagerErrors];
+
+export type RequestAccountManagerResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RequestAccountManagerResponse = RequestAccountManagerResponses[keyof RequestAccountManagerResponses];
+
+export type RevokeAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type RevokeAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeAccountManagerGrantError = RevokeAccountManagerGrantErrors[keyof RevokeAccountManagerGrantErrors];
+
+export type RevokeAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RevokeAccountManagerGrantResponse = RevokeAccountManagerGrantResponses[keyof RevokeAccountManagerGrantResponses];
+
+export type GetAccountManagerGrantData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}';
+};
+
+export type GetAccountManagerGrantErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetAccountManagerGrantError = GetAccountManagerGrantErrors[keyof GetAccountManagerGrantErrors];
+
+export type GetAccountManagerGrantResponses = {
+    200: AccountManagerGrant;
+};
+
+export type GetAccountManagerGrantResponse = GetAccountManagerGrantResponses[keyof GetAccountManagerGrantResponses];
+
+export type RespondToAccountManagerRequestData = {
+    body: RespondToAccountManagerRequestBody;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/response';
+};
+
+export type RespondToAccountManagerRequestErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RespondToAccountManagerRequestError = RespondToAccountManagerRequestErrors[keyof RespondToAccountManagerRequestErrors];
+
+export type RespondToAccountManagerRequestResponses = {
+    200: AccountManagerGrant;
+};
+
+export type RespondToAccountManagerRequestResponse = RespondToAccountManagerRequestResponses[keyof RespondToAccountManagerRequestResponses];
+
+export type ClaimAccountManagerTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Grant id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/account-managers/{id}/token';
+};
+
+export type ClaimAccountManagerTokenErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimAccountManagerTokenError = ClaimAccountManagerTokenErrors[keyof ClaimAccountManagerTokenErrors];
+
+export type ClaimAccountManagerTokenResponses = {
+    200: ClaimedAccountManagerToken;
+};
+
+export type ClaimAccountManagerTokenResponse = ClaimAccountManagerTokenResponses[keyof ClaimAccountManagerTokenResponses];
+
 export type ListAgentsData = {
     body?: never;
     path?: never;
@@ -17402,6 +18044,47 @@ export type CreateAnchorResponses = {
 
 export type CreateAnchorResponse = CreateAnchorResponses[keyof CreateAnchorResponses];
 
+export type ListBotsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type ListBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotsError = ListBotsErrors[keyof ListBotsErrors];
+
+export type ListBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListBotsResponse = ListBotsResponses[keyof ListBotsResponses];
+
+export type CreateBotData = {
+    body: CreateBotRequest;
+    path?: never;
+    query?: never;
+    url: '/bots';
+};
+
+export type CreateBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotError = CreateBotErrors[keyof CreateBotErrors];
+
+export type CreateBotResponses = {
+    201: Bot;
+};
+
+export type CreateBotResponse = CreateBotResponses[keyof CreateBotResponses];
+
 export type GetSelfBotData = {
     body?: never;
     path?: never;
@@ -17449,6 +18132,85 @@ export type GetBotOwnerProfilesResponses = {
 };
 
 export type GetBotOwnerProfilesResponse = GetBotOwnerProfilesResponses[keyof GetBotOwnerProfilesResponses];
+
+export type DeleteBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type DeleteBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteBotError = DeleteBotErrors[keyof DeleteBotErrors];
+
+export type DeleteBotResponses = {
+    204: void;
+};
+
+export type DeleteBotResponse = DeleteBotResponses[keyof DeleteBotResponses];
+
+export type GetBotData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type GetBotErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetBotError = GetBotErrors[keyof GetBotErrors];
+
+export type GetBotResponses = {
+    200: Bot;
+};
+
+export type GetBotResponse = GetBotResponses[keyof GetBotResponses];
+
+export type PatchBotData = {
+    body: PatchBotRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}';
+};
+
+export type PatchBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchBotError = PatchBotErrors[keyof PatchBotErrors];
+
+export type PatchBotResponses = {
+    200: Bot;
+};
+
+export type PatchBotResponse = PatchBotResponses[keyof PatchBotResponses];
 
 export type ListBotChannelsData = {
     body?: never;
@@ -17505,6 +18267,89 @@ export type RemoveBotFromChannelByBotResponses = {
 };
 
 export type RemoveBotFromChannelByBotResponse = RemoveBotFromChannelByBotResponses[keyof RemoveBotFromChannelByBotResponses];
+
+export type ListBotTokensData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type ListBotTokensErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBotTokensError = ListBotTokensErrors[keyof ListBotTokensErrors];
+
+export type ListBotTokensResponses = {
+    200: Array<BotToken>;
+};
+
+export type ListBotTokensResponse = ListBotTokensResponses[keyof ListBotTokensResponses];
+
+export type CreateBotTokenData = {
+    body: CreateBotTokenRequest;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens';
+};
+
+export type CreateBotTokenErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateBotTokenError = CreateBotTokenErrors[keyof CreateBotTokenErrors];
+
+export type CreateBotTokenResponses = {
+    201: CreateBotTokenResponse;
+};
+
+export type CreateBotTokenResponse2 = CreateBotTokenResponses[keyof CreateBotTokenResponses];
+
+export type RevokeBotTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Bot ID
+         */
+        bot_id: BotId;
+        /**
+         * Token ID
+         */
+        token_id: string;
+    };
+    query?: never;
+    url: '/bots/{bot_id}/tokens/{token_id}';
+};
+
+export type RevokeBotTokenErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeBotTokenError = RevokeBotTokenErrors[keyof RevokeBotTokenErrors];
+
+export type RevokeBotTokenResponses = {
+    204: void;
+};
+
+export type RevokeBotTokenResponse = RevokeBotTokenResponses[keyof RevokeBotTokenResponses];
 
 export type ListOccurrencesData = {
     body?: never;
@@ -17811,6 +18656,19 @@ export type GetActiveCallsResponses = {
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
 
+export type GetLiveCallsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/active/all';
+};
+
+export type GetLiveCallsResponses = {
+    200: LiveCallsResponse;
+};
+
+export type GetLiveCallsResponse = GetLiveCallsResponses[keyof GetLiveCallsResponses];
+
 export type GuestCallChatReadData = {
     body?: never;
     path: {
@@ -18075,7 +18933,7 @@ export type MeetingInviteUsersResponses = {
 export type MeetingInviteUsersResponse = MeetingInviteUsersResponses[keyof MeetingInviteUsersResponses];
 
 export type MeetingJoinData = {
-    body?: never;
+    body?: JoinCallRequest;
     path: {
         token: string;
     };
@@ -18357,6 +19215,50 @@ export type DeclineCallResponses = {
 
 export type DeclineCallResponse = DeclineCallResponses[keyof DeclineCallResponses];
 
+export type JoinCallData = {
+    body: JoinCallRequest;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/join';
+};
+
+export type JoinCallErrors = {
+    403: ErrorResponse;
+    409: unknown;
+    410: unknown;
+};
+
+export type JoinCallError = JoinCallErrors[keyof JoinCallErrors];
+
+export type JoinCallResponses = {
+    200: CallTokenResponse;
+};
+
+export type JoinCallResponse = JoinCallResponses[keyof JoinCallResponses];
+
+export type LeaveCallData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/leave';
+};
+
+export type LeaveCallErrors = {
+    404: ErrorResponse;
+};
+
+export type LeaveCallError = LeaveCallErrors[keyof LeaveCallErrors];
+
+export type LeaveCallResponses = {
+    200: LeaveCallResponse;
+};
+
+export type LeaveCallResponse2 = LeaveCallResponses[keyof LeaveCallResponses];
+
 export type MeetingShareData = {
     body?: never;
     path: {
@@ -18380,6 +19282,67 @@ export type MeetingShareResponses = {
 };
 
 export type MeetingShareResponse = MeetingShareResponses[keyof MeetingShareResponses];
+
+export type GetCallParticipantsData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/participants';
+};
+
+export type GetCallParticipantsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type GetCallParticipantsResponses = {
+    200: LiveCallParticipantsResponse;
+};
+
+export type GetCallParticipantsResponse = GetCallParticipantsResponses[keyof GetCallParticipantsResponses];
+
+export type GetCallRecordingData = {
+    body?: never;
+    path: {
+        /**
+         * Call ID
+         */
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/recording';
+};
+
+export type GetCallRecordingErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCallRecordingError = GetCallRecordingErrors[keyof GetCallRecordingErrors];
+
+export type GetCallRecordingResponses = {
+    200: RecordingBytes;
+};
+
+export type GetCallRecordingResponse = GetCallRecordingResponses[keyof GetCallRecordingResponses];
+
+export type GetCallRingStateData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/ring';
+};
+
+export type GetCallRingStateResponses = {
+    200: RingStatusResponse;
+};
+
+export type GetCallRingStateResponse = GetCallRingStateResponses[keyof GetCallRingStateResponses];
 
 export type ToggleShareWithTeamData = {
     body?: never;
@@ -18584,6 +19547,28 @@ export type GetOrCreateCallResponses = {
 };
 
 export type GetOrCreateCallResponse = GetOrCreateCallResponses[keyof GetOrCreateCallResponses];
+
+export type StartCallData = {
+    body: JoinCallRequest;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/call/{channel_id}';
+};
+
+export type StartCallErrors = {
+    403: ErrorResponse;
+    409: unknown;
+};
+
+export type StartCallError = StartCallErrors[keyof StartCallErrors];
+
+export type StartCallResponses = {
+    200: CallTokenResponse;
+};
+
+export type StartCallResponse = StartCallResponses[keyof StartCallResponses];
 
 export type CheckActiveCallData = {
     body?: never;
@@ -19319,6 +20304,58 @@ export type GetChannelAttachmentsResponses = {
 };
 
 export type GetChannelAttachmentsResponse = GetChannelAttachmentsResponses[keyof GetChannelAttachmentsResponses];
+
+export type ListChannelBotsData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type ListChannelBotsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelBotsError = ListChannelBotsErrors[keyof ListChannelBotsErrors];
+
+export type ListChannelBotsResponses = {
+    200: Array<Bot>;
+};
+
+export type ListChannelBotsResponse = ListChannelBotsResponses[keyof ListChannelBotsResponses];
+
+export type AddChannelBotData = {
+    body: AddChannelBotRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/bots';
+};
+
+export type AddChannelBotErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddChannelBotError = AddChannelBotErrors[keyof AddChannelBotErrors];
+
+export type AddChannelBotResponses = {
+    204: void;
+};
+
+export type AddChannelBotResponse = AddChannelBotResponses[keyof AddChannelBotResponses];
 
 export type CreateChannelScopedBotData = {
     body: CreateChannelScopedBotRequest;
@@ -21836,6 +22873,58 @@ export type GetSystemSkillsHandlerResponses = {
 };
 
 export type GetSystemSkillsHandlerResponse = GetSystemSkillsHandlerResponses[keyof GetSystemSkillsHandlerResponses];
+
+export type UploadFileData = {
+    /**
+     * The file's bytes, at most 25 MiB.
+     */
+    body: Blob | File;
+    path?: never;
+    query: {
+        /**
+         * Filename including its extension, such as `report.pdf`; the extension
+         * sets the file type. No directory components.
+         */
+        fileName: string;
+        /**
+         * Destination project. Requires edit access; omit for top-level files.
+         */
+        projectId?: string;
+    };
+    url: '/documents/upload';
+};
+
+export type UploadFileErrors = {
+    /**
+     * Invalid filename or content
+     */
+    400: ErrorResponse;
+    /**
+     * No edit access to the destination project
+     */
+    401: ErrorResponse;
+    /**
+     * The caller cannot create documents
+     */
+    403: unknown;
+    /**
+     * The file exceeds 25 MiB
+     */
+    413: unknown;
+    /**
+     * Document name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UploadFileError = UploadFileErrors[keyof UploadFileErrors];
+
+export type UploadFileResponses = {
+    200: UploadFileResponse;
+};
+
+export type UploadFileResponse2 = UploadFileResponses[keyof UploadFileResponses];
 
 export type DeleteDocumentData = {
     body?: never;

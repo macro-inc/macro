@@ -150,6 +150,7 @@ export * from './initiativeDiscussionMetadataSenderProfilePictureUrl';
 export * from './initiativeDiscussionReason';
 export * from './inviteePlan';
 export * from './inviteToTeamMetadata';
+export * from './inviteToTeamMetadataInviterName';
 export * from './inviteToTeamMetadataRole';
 export * from './inviteToTeamMetadataSenderProfilePictureUrl';
 export * from './itemSharedMetadata';

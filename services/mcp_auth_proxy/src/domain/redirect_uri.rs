@@ -7,6 +7,11 @@ use std::collections::BTreeSet;
 /// machine, so it never leaves the user who authorized it.
 pub(crate) const LOOPBACK_HOSTS: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
 
+/// Punctuation a redirect URI may hold for its callback URL to be shown to the
+/// user. None of it means anything inside a single-quoted shell string, or
+/// changes where `curl` and a URL parser disagree the host is.
+const MANUAL_DELIVERY_URI_PUNCTUATION: &str = "-._~:/?&=%[]";
+
 /// How far the broker trusts a redirect URI it is willing to deliver a code to.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RedirectTrust {
@@ -78,6 +83,31 @@ impl RedirectUriPolicy {
             "https" => Some(RedirectTrust::RequiresConsent),
             _ => None,
         }
+    }
+
+    /// Returns whether the user may be shown the callback URL for `uri` to
+    /// carry to the client themselves, instead of being redirected there.
+    ///
+    /// Only a loopback listener needs that: its browser may be on another
+    /// machine. The URL ends up in a command the user is told to run, and
+    /// registration is open, so a URI that could break out of the quotes around
+    /// it is refused.
+    pub fn allows_manual_delivery(&self, uri: &str) -> bool {
+        let safe_to_show = uri.chars().all(|character| {
+            character.is_ascii_alphanumeric() || MANUAL_DELIVERY_URI_PUNCTUATION.contains(character)
+        });
+        if !safe_to_show {
+            return false;
+        }
+
+        let Ok(parsed) = url::Url::parse(uri) else {
+            return false;
+        };
+
+        parsed.scheme() == "http"
+            && parsed
+                .host_str()
+                .is_some_and(|host| LOOPBACK_HOSTS.contains(&host))
     }
 
     /// Returns the trusted `https` hosts, for logging at startup.

@@ -433,6 +433,20 @@ impl std::fmt::Display for SimpleMention {
     }
 }
 
+/// What a persisted message is. Set by the server, never by a client.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MessageKind {
+    /// Something someone wrote.
+    #[default]
+    Message,
+    /// The root of a channel call's thread. Its id is the call id, and it
+    /// stands for the call rather than for anything the caller said.
+    CallRoot,
+}
+
 /// Shared message representation for channel timelines and entity discussions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -444,6 +458,9 @@ pub struct Message {
     pub parent: MessageParent,
     /// Root message UUID for replies; absent on roots.
     pub thread_id: Option<Uuid>,
+    /// What this message is.
+    #[serde(default)]
+    pub kind: MessageKind,
     /// Authenticated actor or owner of imported content.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     #[cfg_attr(feature = "json-schema", schemars(with = "String"))]
@@ -541,6 +558,12 @@ pub enum MessageAttribution {
         /// The client's label, for display only.
         client: McpClientLabel,
     },
+    /// An account manager posted with its credential for the sender's account;
+    /// the post records the manager's account.
+    AccountManager {
+        /// The agent account holding the credential.
+        manager_user_id: String,
+    },
     /// Autonomous webhook delivery has no invoking user.
     Unprompted,
 }
@@ -550,7 +573,7 @@ impl MessageAttribution {
     pub fn has_acting_user(&self) -> bool {
         match self {
             Self::ActingUser | Self::ActingUserVia { .. } => true,
-            Self::Unprompted => false,
+            Self::AccountManager { .. } | Self::Unprompted => false,
         }
     }
 }

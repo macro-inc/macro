@@ -32,6 +32,7 @@ async fn setup(pool: &PgPool) {
 
 fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
     CreateMessage {
+        kind: MessageKind::Message,
         guest_name: None,
         canonical_root_id: None,
         parent: MessageParent::parse("document", document).unwrap(),

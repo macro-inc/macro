@@ -45,3 +45,5 @@ and with it an `agent_via` client label ("Claude Code") and its verified
 ## Related
 
 - Rules: `.agents/rules/rust/security.md`
+
+- SDK JWTs optionally carry signed `agent_correlation_id` and managed-MCP `agent_session_id`; these are attribution, never additional authorization.

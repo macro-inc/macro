@@ -379,6 +379,9 @@ where
                 .tools
                 .try_tool_call(
                     UserCodeModeToolContext {
+                        session: context.extensions.get::<http::request::Parts>()
+                            .and_then(|parts| parts.extensions.get::<mcp_auth_proxy::inbound::middleware::ManagedAgentSession>())
+                            .map(|session| session.0),
                         service: code_mode.service.clone(),
                         cognition: code_mode.cognition.clone(),
                         caller,

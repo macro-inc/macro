@@ -41,6 +41,7 @@ fn root() -> Uuid {
 fn message(id: Uuid, deleted: bool) -> Message {
     let now = chrono::Utc::now();
     Message {
+        kind: messages::domain::models::MessageKind::Message,
         id,
         parent: parent(),
         thread_id: (id != root()).then_some(root()),

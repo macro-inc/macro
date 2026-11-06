@@ -8,6 +8,7 @@ import type {
 import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
+import { rowEntity } from '../primitives/row-entity';
 import { commentNotification, inboxEntry } from '../tests/wire';
 import { encodeInboxScope, toInboxGroup } from './decode';
 
@@ -88,13 +89,13 @@ describe('toInboxGroup', () => {
         })
       )?.rows ?? [];
 
-    expect(row && isWithNotification(row.content.entity)).toBe(true);
+    expect(row && isWithNotification(rowEntity(row))).toBe(true);
   });
 
   it('points a channel row at the message its newest notification names', () => {
     const [row] = toInboxGroup(threadRowEntry())?.rows ?? [];
 
-    expect(row?.content.entity).toMatchObject({
+    expect(row && rowEntity(row)).toMatchObject({
       type: 'channel',
       target: { messageId: 'reply', threadId: 'root' },
     });
@@ -119,11 +120,11 @@ describe('toInboxGroup', () => {
     } as unknown as NotificationInboxEntryFieldsFragment);
     const decoded = group?.rows[0];
     if (!decoded) throw new Error('row missing');
-    expect(decoded.content.entity).toMatchObject({
+    expect(rowEntity(decoded)).toMatchObject({
       target: { messageId: 'reply', threadId: 'root' },
     });
 
-    const aimed = decoded.content.entityAt(decoded.content.notifications[1]);
+    const aimed = rowEntity(decoded, decoded.content.notifications[1]);
 
     expect(aimed).toMatchObject({
       target: { messageId: 'older-reply', threadId: 'root' },
@@ -165,7 +166,7 @@ describe('toInboxGroup', () => {
         count: row.count,
         notifications: row.content.notifications.map((n) => n.id),
         entityNotifications: (
-          row.content.entity.notifications as () => { id: string }[]
+          rowEntity(row).notifications as () => { id: string }[]
         )().map((n) => n.id),
       }))
     ).toEqual([
@@ -332,5 +333,11 @@ describe('encodeInboxScope', () => {
     expect(encodeInboxScope({ rowTypes: ['email', 'channel_thread'] })).toEqual(
       { rowTypes: ['EMAIL', 'CHANNEL_THREAD'] }
     );
+  });
+
+  it('asks the server for unread rows only when the scope is unread', () => {
+    expect(
+      encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+    ).toEqual({ rowTypes: [], unreadOnly: true });
   });
 });

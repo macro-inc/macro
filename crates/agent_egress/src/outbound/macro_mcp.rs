@@ -45,6 +45,7 @@ pub trait MacroApiTokens: Send + Sync {
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
+        session: uuid::Uuid,
     ) -> impl Future<Output = Result<String, EgressError>> + Send;
 }
 
@@ -60,11 +61,11 @@ pub struct WithMacroMcp<Inner, Tokens> {
     /// Whether [`UpstreamCall::bearer_over_local_cleartext`] is permitted.
     /// Set only by a composition root that has checked `ENVIRONMENT=local`.
     local_cleartext: bool,
-    /// Keyed by owner and agent: the token *is* both identities, so a cache
-    /// hit for one owner or agent can never answer for another. Bounded, so
+    /// Keyed by owner, agent, and session: a cached credential cannot attribute
+    /// another session's code-mode invocation to this one. Bounded, so
     /// the map cannot grow with every owner ever seen; freshness still comes
     /// from each token's own expiry, never from cache residency.
-    cached: Mutex<LruCache<(MacroUserIdStr<'static>, BotId), CachedToken>>,
+    cached: Mutex<LruCache<(MacroUserIdStr<'static>, BotId, uuid::Uuid), CachedToken>>,
 }
 
 /// How many owners' tokens are kept at once. Far past any real concurrency;
@@ -117,8 +118,9 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
+        session: uuid::Uuid,
     ) -> Result<String, EgressError> {
-        let key = (owner.clone(), agent);
+        let key = (owner.clone(), agent, session);
         {
             let mut cached = self.cached.lock().expect("token cache poisoned");
             match usable(cached.get(&key).cloned()) {
@@ -135,7 +137,7 @@ where
             }
         }
 
-        let token = self.tokens.mint(owner, agent).await?;
+        let token = self.tokens.mint(owner, agent, session).await?;
         let expires_at = token_expiry(&token)?;
         self.cached.lock().expect("token cache poisoned").put(
             key,
@@ -159,13 +161,14 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
+        session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         if *destination != McpDestination::Macro {
-            return self.inner.resolve(owner, agent, destination).await;
+            return self.inner.resolve(owner, agent, session, destination).await;
         }
 
-        let token = BearerToken::new(self.token(owner, agent).await?);
+        let token = BearerToken::new(self.token(owner, agent, session).await?);
         // Every session has Macro's own server; there is no grant to lack.
         let call = if self.local_cleartext && self.url.scheme() != "https" {
             UpstreamCall::bearer_over_local_cleartext(self.url.clone(), token)
@@ -264,7 +267,7 @@ impl MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
     ) -> Result<String, EgressError> {
-        self.mint_for_agent(owner, lifetime_seconds, None, None)
+        self.mint_for_agent(owner, lifetime_seconds, None, None, None, None)
             .await
     }
 
@@ -277,6 +280,8 @@ impl MacroApiTokenSigner {
         lifetime_seconds: usize,
         agent_id: Option<macro_uuid::Uuid>,
         agent_via: Option<mcp_client_label::McpClientLabel>,
+        agent_session_id: Option<uuid::Uuid>,
+        agent_correlation_id: Option<uuid::Uuid>,
     ) -> Result<String, EgressError> {
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
@@ -311,6 +316,8 @@ impl MacroApiTokenSigner {
         })?;
 
         encode_macro_api_token(EncodeMacroApiTokenArgs {
+            agent_correlation_id,
+            agent_session_id,
             fusionauth_id: fusion_root_id.to_string(),
             macro_user_id,
             organization_id,
@@ -333,11 +340,14 @@ impl MacroApiTokens for MacroApiTokenSigner {
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
+        session: uuid::Uuid,
     ) -> Result<String, EgressError> {
         self.mint_for_agent(
             owner,
             MINTED_TOKEN_LIFETIME_SECONDS,
             Some(agent.as_uuid()),
+            None,
+            Some(session),
             None,
         )
         .await

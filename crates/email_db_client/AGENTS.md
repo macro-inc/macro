@@ -70,6 +70,13 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   (`label_present_before`, passed on by older writes given up). Code that
   stages, confirms or abandons a Gmail label write takes
   `lock_thread_label_writes` for its threads first.
+- The mailbox purge (`links::delete`) is bound by storage latency: a
+  500-message batch reads about as many pages as its rows, TOAST and child
+  rows occupy, so its time tracks per-read latency. A covering
+  `(link_id, thread_id, id)` index for its walk only moves the SELECT's heap
+  reads into the DELETE; it was benchmarked and rejected. A restarted purge
+  rescans the dead index entries the earlier run left until vacuum can remove
+  them.
 - SQLx can't see that a column read through a `LEFT JOIN` inside a `LATERAL`
   subquery can be NULL and types it non-null from the table. Alias such
   columns `"name?"`, and never force `"name!"` on one; `from_contact_id` is
@@ -84,3 +91,5 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+- Scheduled-message reads and upserts preserve nullable agent correlation across delivery claims and retries.

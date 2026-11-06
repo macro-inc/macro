@@ -30,12 +30,48 @@ client may sign in is decided only by its redirect URI.
 
 ## How a user signs in
 
-`/authorize` sends the browser straight to Google through FusionAuth. Clients on
-`SIGN_IN_CHOICE_HOSTS` (ChatGPT) get a small chooser first: Google, or
-FusionAuth's own login page, where an account with a password can sign in.
-OpenAI's reviewers need that path, because a shared Google account trips
-Google's challenges. The chooser stores nothing; each link is the same
-`/authorize` request with `sign_in` added.
+`/authorize` first shows every client's user a chooser, because the client cannot
+know how that user's account signs in. The chooser stores nothing; its form is
+the same `/authorize` request with `sign_in` added.
+
+- **Google** goes straight to Google through FusionAuth.
+- **Email** is the one-time code the Macro app uses. `/authorize` records the
+  pending flow and redirects to `email-sign-in`, the broker's own form. The form
+  calls the authentication service's public endpoints
+  (`outbound/email_sign_in.rs`), so its address checks, per-address rate limits,
+  and signup policy apply as they do in the app. An address on a single sign-on
+  domain is sent to its provider instead, on the same pending flow. The form is
+  tied to the browser like the consent form, and a mistyped code leaves the flow
+  pending: only a redeemed code consumes it.
+- **Password** goes to FusionAuth's own login page. Accounts created by an emailed
+  code have only a random password, so this is for accounts that set one, such as
+  shared review accounts that cannot pass Google's challenges.
+
+## Signing in from another machine
+
+An MCP client on a server, reached over SSH or in a container, registers a
+loopback redirect URI, but the user's browser is on a different machine, so a
+redirect to it goes nowhere. The chooser therefore offers loopback clients an
+option to finish elsewhere (`delivery=manual`). After sign-in, the broker shows
+the client's callback URL instead of redirecting to it, for the user to either:
+
+- paste into a client that asks for it, as `claude mcp login <name> --no-browser`
+  does, or
+- fetch with `curl` on the client's machine, which reaches the listener of any
+  waiting loopback client, such as `codex mcp login <name>`, with no client support
+  needed.
+
+The authorization code still needs the client's PKCE verifier. Because the code
+leaves the user's own machine, which is what made a loopback redirect trustworthy,
+manual delivery goes through the consent screen first. The URL is shown inside a
+command the user is told to run and registration is open, so a redirect URI with
+anything that could break out of the quotes, or make `curl` and the broker
+disagree about its host, cannot use it (`RedirectUriPolicy::allows_manual_delivery`).
+
+The broker does not implement the device authorization grant (RFC 8628). The MCP
+authorization spec does not include it and no client we checked requests it for
+MCP servers, so advertising a `device_authorization_endpoint` would not change what
+any user sees. Add it if a client starts using it.
 
 ## Which redirect URIs are usable
 
@@ -58,7 +94,8 @@ groups, and a registration can only narrow what it allows:
   not themselves trusted.
 - **Delivered after consent.** `https` on any other host, such as a self-hosted
   MCP gateway. `/authorize` shows the consent screen described below before
-  sending the user to sign in.
+  sending the user to sign in. So does a loopback redirect when the user asks to
+  carry the code to another machine.
 - **Refused.** Every other scheme, `http` off loopback, and any URI carrying a
   fragment or credentials in its authority.
 
@@ -89,7 +126,8 @@ becomes a redirector to a host the user just refused.
 
 Two checks keep a flow tied to the person approving it, using one random secret
 in the `__Host-macro_mcp_oauth` cookie (`Secure`, `HttpOnly`, `SameSite=Lax`),
-which `/authorize` sets on every flow (`domain/browser_binding.rs`):
+which `/authorize` sets on every flow past the chooser
+(`domain/browser_binding.rs`). The email sign-in form is held to the same checks:
 
 - **The consent form only counts from the browser that was shown it.** It
   carries a token derived from the cookie's secret, compared in constant time.
@@ -168,6 +206,24 @@ its own callback host keeps its name and gets a letter. Claude Code appends the
 user's own name for the server in parentheses ("Claude Code (macro)"), which is
 ignored when matching. The kind is computed when a token is resolved, so it
 needs no backfill and a change to the rules applies to every registration.
+
+## Token endpoint errors
+
+`/token` answers errors in the RFC 6749 section 5.2 JSON shape
+(`{"error", "error_description"}`, `Cache-Control: no-store`). The status says
+who has to act:
+
+- `400 invalid_request` or `unsupported_grant_type`: the request is malformed.
+- `400 invalid_grant`: the code or refresh token is unusable, whether the
+  broker refused it (unbound, another client's, revoked grant) or FusionAuth
+  did (for example `refresh_token_not_found`). Retrying cannot help; the client
+  must authorize again.
+- `503 temporarily_unavailable`: FusionAuth is down or throttling. A `Retry-After`
+  from a throttling response (429) is passed on; one on a 5xx is not.
+- `502 server_error`: FusionAuth answered with something else.
+
+FusionAuth's error and reason are logged with the client and grant ids,
+never the token itself, and are not returned to the client.
 
 ## Disconnecting a client
 

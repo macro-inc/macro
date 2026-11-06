@@ -78,6 +78,8 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 
 ## Gotchas
 
+- `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
+  they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check

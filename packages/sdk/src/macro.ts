@@ -1,4 +1,5 @@
 import type { MacroOpts } from './config';
+import { AccountManagerNamespace } from './entities/account-managers/namespace';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
@@ -8,6 +9,7 @@ import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
+import { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 import { CrmNamespace } from './entities/crm/namespace';
 import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
@@ -50,7 +52,22 @@ export type {
   StructuredCompletionRequest,
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
+export { CallRecord } from './entities/calls/call-record';
+export { CallConnection, type JoinOptions } from './entities/calls/connection';
+export {
+  AlreadyConnectedError,
+  CallEndedError,
+  InOtherCallError,
+} from './entities/calls/errors';
 export type { CallMessage } from './entities/calls/message';
+export type { CallSummary } from './entities/calls/namespace';
+export { CallParticipant } from './entities/calls/participant';
+export {
+  ConnectedApp,
+  ConnectedTool,
+} from './entities/connected-apps/connected-app';
+export { Connector } from './entities/connected-apps/connector';
+export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
@@ -116,6 +133,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** apiKeys resources and operations. */
   readonly apiKeys: ApiKeyNamespace;
 
+  /** accountManagers resources and operations. */
+  readonly accountManagers: AccountManagerNamespace;
+
   /** harnesses resources and operations. */
   readonly harnesses: HarnessNamespace;
 
@@ -155,6 +175,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly documents: DocumentNamespace;
 
   readonly email: EmailNamespace;
+
+  /** Call the user's connected apps and MCP servers from a code execution. */
+  readonly connectedApps: ConnectedAppNamespace;
 
   readonly favorites: FavoritesNamespace;
 
@@ -214,6 +237,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.agents = new AgentNamespace(client);
     this.initiatives = new InitiativeNamespace(client);
     this.apiKeys = new ApiKeyNamespace(client);
+    this.accountManagers = new AccountManagerNamespace(client);
     this.me = new MeNamespace(client);
     this.harnesses = new HarnessNamespace(client);
     this.meetings = new MeetingNamespace(client);
@@ -232,6 +256,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.databases = new DatabaseNamespace(client);
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
+    this.connectedApps = new ConnectedAppNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
@@ -268,6 +293,11 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
+export {
+  type AgentActivity,
+  type AgentActivityOptions,
+  AgentInvocation,
+} from './entities/agent-sessions/activity';
 export type {
   ArchiveCause,
   AutoArchiveOverrides,
@@ -280,6 +310,12 @@ export {
   ConversationTurn,
 } from './entities/agent-sessions/conversation';
 export type {
+  SessionOrigin,
+  SessionOriginCaller,
+  SessionOriginLineage,
+  SessionOriginRoot,
+} from './entities/agent-sessions/origin';
+export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
   ReviewDraft,
@@ -290,10 +326,27 @@ export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
 export { Agent, type AgentOptions } from './entities/agents/agent';
 export { UserApiKey } from './entities/api-keys/api-key';
+export {
+  Bot,
+  type BotOwner,
+  type BotWebhook,
+  type CreateBotOptions,
+  type UpdateBotOptions,
+} from './entities/bots/bot';
+export { BotToken } from './entities/bots/token';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
+export type {
+  ConnectedAppKind,
+  ConnectedToolResult,
+} from './entities/connected-apps/connected-app';
+export type {
+  ConnectorAction,
+  ConnectorInspection,
+} from './entities/connected-apps/connector';
+export type { ConnectMcpServerResponse } from './entities/connected-apps/namespace';
 export {
   CrmPipeline,
   PipelineColumn,
@@ -317,10 +370,12 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
+export type { FileContent } from './entities/documents/namespace';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
   type DraftOptions,
+  type DraftSendOptions,
   EmailDraft,
 } from './entities/email/draft';
 export { EmailFilter, type EmailFilterOptions } from './entities/email/filter';
