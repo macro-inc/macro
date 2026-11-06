@@ -43,7 +43,7 @@ export function UserGroup(props: UserGroupProps) {
             showTooltip={props.showTooltip ?? false}
             class={
               props.isHighlighted?.(userId)
-                ? 'relative z-10 outline-2 -outline-offset-2 outline-success'
+                ? 'outline-2 -outline-offset-2 outline-success'
                 : undefined
             }
           />

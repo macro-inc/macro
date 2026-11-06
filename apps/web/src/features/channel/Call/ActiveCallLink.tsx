@@ -53,8 +53,8 @@ function ActiveCallLinkContent(props: {
         disabled={!call.activeCallId() || link.isFetching}
         onSelect={() => fireAndForget(copyFromMenu(), 'call-link')}
       >
-        <LinkIcon class="size-4" />
-        {t('calls.copyLink')}
+        <LinkIcon class="size-4 shrink-0" />
+        <span class="flex-1 truncate">{t('calls.copyLink')}</span>
       </Dropdown.Item>
     </Show>
   );

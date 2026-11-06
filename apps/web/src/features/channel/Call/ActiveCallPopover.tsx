@@ -33,23 +33,25 @@ export function ActiveCallPopover(props: {
           hideWave
           startedAt={record.isSuccess ? record.data.startedAt : undefined}
         />
-        <Dropdown placement="right-start">
+        <Dropdown placement="bottom-end">
           <Dropdown.Trigger
-            as={Button}
             variant="ghost"
             size="icon-sm"
             aria-label={t('calls.more')}
+            tooltip={t('calls.more')}
           >
-            <DotsThree class="size-4" />
+            <DotsThree class="size-4 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
-          <Dropdown.Content>
-            <Show when={props.onShowPlayer}>
-              <Dropdown.Item onSelect={props.onShowPlayer}>
-                <PictureInPicture class="size-4" />
-                {t('calls.showPlayer')}
-              </Dropdown.Item>
-            </Show>
-            <ActiveCallLink menuItem />
+          <Dropdown.Content class="min-w-56">
+            <Dropdown.Group>
+              <Show when={props.onShowPlayer}>
+                <Dropdown.Item onSelect={props.onShowPlayer}>
+                  <PictureInPicture class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">{t('calls.showPlayer')}</span>
+                </Dropdown.Item>
+              </Show>
+              <ActiveCallLink menuItem />
+            </Dropdown.Group>
           </Dropdown.Content>
         </Dropdown>
         <Button
