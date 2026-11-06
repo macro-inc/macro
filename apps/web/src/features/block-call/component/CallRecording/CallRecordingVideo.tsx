@@ -2,9 +2,12 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 
+import type { RecordingPlayback } from '../../primitives/recording-playback';
+import { CallRecordingControls } from './CallRecordingControls';
 export function CallRecordingVideo(props: {
   url: string;
   posterUrl?: string;
+  playback?: RecordingPlayback;
   onTimeUpdate?: (
     seconds: number,
     source: 'playback' | 'seeking' | 'seeked'
@@ -100,18 +103,19 @@ export function CallRecordingVideo(props: {
   onCleanup(stopTicking);
 
   return (
-    <div class="p-4 flex flex-col justify-center items-center gap-3 overflow-hidden">
+    <div class="relative flex w-full flex-col overflow-hidden rounded-2xl bg-panel">
       <video
         ref={(element) => {
           videoRef = element;
           props.setVideoRef?.(element);
         }}
-        class="max-w-full max-h-full rounded transition-opacity duration-200"
+        class="aspect-video w-full object-contain transition-opacity duration-200"
         classList={{
           'opacity-0': !hasVisibleVideo(),
           'opacity-100': hasVisibleVideo(),
         }}
-        controls
+        controls={!props.playback}
+        playsinline
         preload="metadata"
         crossorigin="anonymous"
         poster={posterBlobUrl()}
@@ -142,6 +146,9 @@ export function CallRecordingVideo(props: {
           props.onTimeUpdate?.(event.currentTarget.currentTime, 'playback')
         }
       />
+      <Show when={props.playback}>
+        {(playback) => <CallRecordingControls playback={playback()} />}
+      </Show>
       <Show when={playbackError()}>
         <div
           role="alert"

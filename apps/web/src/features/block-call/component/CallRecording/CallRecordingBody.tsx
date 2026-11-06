@@ -17,6 +17,7 @@ import {
   Suspense,
 } from 'solid-js';
 import type { CallTranscriptTarget } from '../../constants';
+import { createRecordingPlayback } from '../../primitives/recording-playback';
 import { CallTranscript } from '../CallTranscript';
 import {
   getActiveTranscriptSequenceNum,
@@ -46,6 +47,7 @@ export function CallRecordingBody(props: {
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
   const [allowFutureLead, setAllowFutureLead] = createSignal(true);
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
+  const playback = createRecordingPlayback(videoRef);
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const sortedTranscript = createMemo(() =>
     sortTranscriptSegments(record().transcript)
@@ -180,15 +182,13 @@ export function CallRecordingBody(props: {
               </Button>
             </Show>
 
-            <CallRecordingSummarySection record={props.record} />
-
             <Show when={record().recordingUrl}>
               {(url) => (
                 <section class="flex flex-col gap-3">
-                  <h3 class="text-sm font-semibold text-ink">Recording</h3>
-                  <div class="overflow-hidden rounded border border-edge-muted/50">
+                  <div class="overflow-hidden rounded-2xl">
                     <CallRecordingVideo
                       url={url()}
+                      playback={playback}
                       posterUrl={record().recordingPreviewUrl ?? undefined}
                       onTimeUpdate={handleTimeUpdate}
                       setVideoRef={setVideoRef}
@@ -197,6 +197,8 @@ export function CallRecordingBody(props: {
                 </section>
               )}
             </Show>
+
+            <CallRecordingSummarySection record={props.record} />
 
             <Show when={hasTranscripts()}>
               <section class="flex flex-col gap-3">
