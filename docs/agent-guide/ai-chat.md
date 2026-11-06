@@ -1194,7 +1194,10 @@ through the SDK, including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
 `render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image), and
+`RenderCanvas` stays direct so the model can see the image),
+native spreadsheets (`macro.documents.spreadsheet(document)` reads, calculates
+and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
+`EditSpreadsheet` are hidden in code mode), and
 results are presented with `execution.views.present`. Workspace feeds and
 mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
 including agent sessions. `ContentSearch` supports session history. The legacy

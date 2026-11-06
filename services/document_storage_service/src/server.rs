@@ -1498,6 +1498,16 @@ async fn run_server() -> anyhow::Result<()> {
             ),
         )),
     };
+    // The spreadsheet tools' engine, for SDK spreadsheet reads and edits.
+    let document_spreadsheet = Arc::new(documents_hex::domain::spreadsheet::SpreadsheetService::new(
+        document_service.clone(),
+        Arc::new(
+            documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                AiEditingWorkerUrl::new()?.to_string(),
+            ),
+        ),
+        config.document_permission_jwt.as_ref().to_string(),
+    ));
     // The file-document routes read and write what the matching AI tools do.
     let document_files = Arc::new(
         documents_hex::outbound::s3_document_files::S3DocumentFiles::new(
@@ -2491,6 +2501,7 @@ async fn run_server() -> anyhow::Result<()> {
             creator: document_creator,
             ai_editing: document_ai_editing,
             canvas: canvas_routes,
+            spreadsheet: document_spreadsheet,
             presentations: Arc::new(
                 documents_hex::domain::presentation::PresentationService::new(
                     document_files.clone(),

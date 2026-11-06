@@ -14,6 +14,10 @@ enforced by the ordinary backend APIs.
   reads (`scene`), edits (`apply` code against a revision, `edit` by instructions) and
   renders the live scene over DSS `/documents/{id}/canvas/*`; `render` returns a
   `StaticImage` the server stored, since static file storage rejects API keys.
+- `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
+  `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
+  `calculate` and `applyEdits` run the spreadsheet tools' engine; code mode
+  hides `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet`.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`

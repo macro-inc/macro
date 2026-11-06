@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Font family.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SpreadsheetFont {
     /// Sans.
@@ -16,6 +17,7 @@ pub enum SpreadsheetFont {
 
 /// Horizontal alignment.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SpreadsheetHorizontalAlign {
     /// Auto.
@@ -30,6 +32,7 @@ pub enum SpreadsheetHorizontalAlign {
 
 /// Vertical alignment.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SpreadsheetVerticalAlign {
     /// Top.
@@ -42,6 +45,7 @@ pub enum SpreadsheetVerticalAlign {
 
 /// Number interpretation and display; currency and accounting are USD and dates use UTC.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SpreadsheetNumberFormat {
     /// General.
@@ -66,6 +70,7 @@ pub enum SpreadsheetNumberFormat {
 
 /// Excel border line style.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum SpreadsheetBorderStyle {
     /// Restore the default border style.
@@ -101,6 +106,7 @@ pub enum SpreadsheetBorderStyle {
 
 /// Sparse cell styling patch. Omitted fields remain unchanged.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetStyle {
     /// Exact Excel number format, up to 512 characters; it overrides the display of `format`.
@@ -199,6 +205,7 @@ pub struct SpreadsheetStyle {
 
 /// Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetCellInput {
     /// A1 address, from A1 through XFD100000.
@@ -214,6 +221,7 @@ pub struct SpreadsheetCellInput {
 
 /// A scratch formula evaluated without persisting it.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetFormula {
     /// Optional label echoed with the result.
@@ -225,6 +233,7 @@ pub struct SpreadsheetFormula {
 
 /// Hypothetical inputs applied only to the calculation's disposable workbook.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetOverride {
     /// Stable sheet ID or exact sheet name from ReadSpreadsheet.
@@ -235,6 +244,7 @@ pub struct SpreadsheetOverride {
 
 /// A column width.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetColumnWidth {
     /// Column letter A through XFD.
@@ -245,6 +255,7 @@ pub struct SpreadsheetColumnWidth {
 
 /// A dropdown choice's color. Cells showing the choice draw it as a chip of this color.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetDropdownColor {
     /// The choice, matched to cell text ignoring case.
@@ -255,14 +266,11 @@ pub struct SpreadsheetDropdownColor {
 
 /// One operation in an atomic workbook edit. All operations validate before any write.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[serde(
-    tag = "type",
-    rename_all = "snake_case",
-    rename_all_fields = "camelCase",
-    deny_unknown_fields
-)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SpreadsheetOperation {
     /// Set raw values/formulas while preserving existing formatting.
+    #[serde(rename_all = "camelCase")]
     SetCells {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -270,6 +278,7 @@ pub enum SpreadsheetOperation {
         cells: Vec<SpreadsheetCellInput>,
     },
     /// Apply a sparse formatting patch to a rectangle.
+    #[serde(rename_all = "camelCase")]
     FormatCells {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -279,6 +288,7 @@ pub enum SpreadsheetOperation {
         style: SpreadsheetStyle,
     },
     /// Clear a rectangle's inputs, optionally its formatting too.
+    #[serde(rename_all = "camelCase")]
     ClearCells {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -289,6 +299,7 @@ pub enum SpreadsheetOperation {
         clear_formatting: Option<bool>,
     },
     /// Repeat a source rectangle into a target using relative formula translation.
+    #[serde(rename_all = "camelCase")]
     FillCells {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -298,11 +309,13 @@ pub enum SpreadsheetOperation {
         target_range: String,
     },
     /// Add an empty sheet; later operations may address it by this name.
+    #[serde(rename_all = "camelCase")]
     AddSheet {
         /// Unique Excel-compatible name, at most 31 characters.
         name: String,
     },
     /// Rename a sheet; rejected when existing formulas directly reference its current name.
+    #[serde(rename_all = "camelCase")]
     RenameSheet {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -310,6 +323,7 @@ pub enum SpreadsheetOperation {
         name: String,
     },
     /// Duplicate a sheet, including values, formulas, styles, and layout.
+    #[serde(rename_all = "camelCase")]
     DuplicateSheet {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -318,11 +332,13 @@ pub enum SpreadsheetOperation {
         name: Option<String>,
     },
     /// Delete a sheet; the final sheet and directly referenced sheets are protected.
+    #[serde(rename_all = "camelCase")]
     DeleteSheet {
         /// Stable sheet ID or exact name.
         sheet_id: String,
     },
     /// Append rows, up to the 100,000-row sheet limit.
+    #[serde(rename_all = "camelCase")]
     AppendRows {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -330,6 +346,7 @@ pub enum SpreadsheetOperation {
         count: u16,
     },
     /// Resize one or more columns.
+    #[serde(rename_all = "camelCase")]
     ResizeColumns {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -338,6 +355,7 @@ pub enum SpreadsheetOperation {
     },
     /// Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.
     /// Give exactly one of items or source. Cell values are unchanged; set them separately.
+    #[serde(rename_all = "camelCase")]
     SetDropdown {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -357,6 +375,7 @@ pub enum SpreadsheetOperation {
         colors: Option<Vec<SpreadsheetDropdownColor>>,
     },
     /// Remove dropdowns and any other data validation from a rectangle.
+    #[serde(rename_all = "camelCase")]
     ClearValidation {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -365,6 +384,7 @@ pub enum SpreadsheetOperation {
     },
     /// Turn a rectangle into checkboxes backed by TRUE/FALSE values: blank cells become FALSE
     /// (unchecked) and other values are kept. Check or uncheck them with set_cells TRUE or FALSE.
+    #[serde(rename_all = "camelCase")]
     InsertCheckboxes {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -375,6 +395,7 @@ pub enum SpreadsheetOperation {
     /// row; blank or repeated headers are named. Formulas can then use structured references
     /// such as Table1[Amount], [@Amount] or Table1 for its data, and each header gets sort and
     /// filter controls. Columns take the type their values suggest unless column_types says.
+    #[serde(rename_all = "camelCase")]
     CreateTable {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -396,6 +417,7 @@ pub enum SpreadsheetOperation {
 
 /// A table column's type, by its header name.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetTableColumnType {
     /// Header name of the column, ignoring case.
@@ -407,6 +429,7 @@ pub struct SpreadsheetTableColumnType {
 
 /// What a table column holds, as Google Sheets types table columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum SpreadsheetColumnType {
     /// Any text.
@@ -433,13 +456,11 @@ pub enum SpreadsheetColumnType {
 
 /// The deterministic spreadsheet execution request.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[serde(
-    tag = "action",
-    rename_all = "snake_case",
-    rename_all_fields = "camelCase"
-)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(tag = "action", rename_all = "snake_case")]
 pub enum SpreadsheetRequest {
     /// Inspect the live workbook.
+    #[serde(rename_all = "camelCase")]
     Read {
         /// Stable sheet ID or exact name; defaults to the first sheet.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -452,6 +473,7 @@ pub enum SpreadsheetRequest {
         include_styles: Option<bool>,
     },
     /// Evaluate scratch formulas and optional hypothetical inputs.
+    #[serde(rename_all = "camelCase")]
     Calculate {
         /// Sheet in whose context unqualified references resolve.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -463,6 +485,7 @@ pub enum SpreadsheetRequest {
         overrides: Option<Vec<SpreadsheetOverride>>,
     },
     /// Apply a guarded atomic mutation.
+    #[serde(rename_all = "camelCase")]
     Edit {
         /// Revision returned by ReadSpreadsheet; a mismatch changes nothing.
         expected_revision: String,
@@ -473,6 +496,7 @@ pub enum SpreadsheetRequest {
 
 /// A calculated scalar with its display text and optional error explanation.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetValue {
     /// Scalar kind: blank, number, text, boolean, or error.
@@ -489,6 +513,7 @@ pub struct SpreadsheetValue {
 
 /// The calculation result kind.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SpreadsheetValueKind {
     /// Empty cell.
@@ -505,6 +530,7 @@ pub enum SpreadsheetValueKind {
 
 /// Cell source and calculated result.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetReadCell {
     /// A1 address.
@@ -524,6 +550,7 @@ pub struct SpreadsheetReadCell {
 
 /// Compact metadata for a sheet.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetSheetSummary {
     /// Stable sheet identity for future calls.
@@ -549,6 +576,7 @@ pub struct SpreadsheetSheetSummary {
 
 /// A named table (an Excel table) that formulas address with structured references.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetTableSummary {
     /// Table name, as in Sales[Amount].
@@ -569,6 +597,7 @@ pub struct SpreadsheetTableSummary {
 
 /// Addressed range with explicit truncation.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetReadRange {
     /// Stable sheet identity.
@@ -588,6 +617,7 @@ pub struct SpreadsheetReadRange {
 
 /// A data validation rule; list rules are dropdowns.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetReadValidation {
     /// Cells the rule covers, as space-separated A1 ranges.
@@ -619,6 +649,7 @@ pub struct SpreadsheetReadValidation {
 
 /// One hypothetical formula result.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetFormulaResult {
     /// Caller-supplied label.
@@ -633,6 +664,7 @@ pub struct SpreadsheetFormulaResult {
 
 /// Applied edit summary.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SpreadsheetChange {
     /// Operation type.
@@ -649,13 +681,11 @@ pub struct SpreadsheetChange {
 
 /// Structured output from a deterministic workbook operation.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[serde(
-    tag = "action",
-    rename_all = "snake_case",
-    rename_all_fields = "camelCase"
-)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(tag = "action", rename_all = "snake_case")]
 pub enum SpreadsheetResponse {
     /// Workbook inspection result.
+    #[serde(rename_all = "camelCase")]
     Read {
         /// Opaque revision required for EditSpreadsheet.
         revision: String,
@@ -667,6 +697,7 @@ pub enum SpreadsheetResponse {
         warnings: Vec<String>,
     },
     /// Scratch calculation result. No persistent changes were made.
+    #[serde(rename_all = "camelCase")]
     Calculate {
         /// Revision used for these calculations.
         revision: String,
@@ -676,6 +707,7 @@ pub enum SpreadsheetResponse {
         warnings: Vec<String>,
     },
     /// Result of a persisted atomic edit.
+    #[serde(rename_all = "camelCase")]
     Edit {
         /// Revision after the edit; use a fresh read before further editing.
         revision: String,

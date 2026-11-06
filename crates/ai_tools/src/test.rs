@@ -780,6 +780,9 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ReadCanvas",
         "EditCanvas",
         "ApplyCanvasEdits",
+        "ReadSpreadsheet",
+        "CalculateSpreadsheet",
+        "EditSpreadsheet",
         "ListSkills",
         "SearchSkills",
         "ReadSkill",
@@ -791,7 +794,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "EditSpreadsheet",
         "RenderCanvas",
         "Subagent",
         "SearchTools",

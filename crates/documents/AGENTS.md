@@ -51,6 +51,12 @@ word docs, Illustrator/Photoshop files).
   `edit_rejected` when nothing committed, 502 `edit_failed` when it may have;
   `render` stores the PNG through the `CanvasImageStore` port (DSS adapter:
   `outbound/canvas_images.rs`).
+- `src/inbound/axum_router/spreadsheet.rs`: SDK spreadsheets over the
+  spreadsheet tools' `SpreadsheetService`: `POST /create_spreadsheet` and
+  `POST /{id}/spreadsheet/read|calculate|edits`. Their tokens name the
+  receipt's user and bot (`SpreadsheetCaller::Receipt`); the tools name the
+  agent (`SpreadsheetCaller::Agent`). Worker 400/413 map to 400, 409 to a
+  revision conflict, and anything else to 502 (an edit may have saved).
 - `axum_router/presentation.rs`, `word_document.rs`, `design_files.rs`: the
   presentation, Word, design, Photoshop and Illustrator tools over HTTP
   (`/{id}/presentation`, `/word`, `/design`, `/photoshop`, `/illustrator`),
