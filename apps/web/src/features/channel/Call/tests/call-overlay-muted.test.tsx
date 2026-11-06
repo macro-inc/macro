@@ -212,6 +212,60 @@ beforeEach(() => {
   );
 });
 
+describe('CallOverlay screen share', () => {
+  it('hides participant tiles without remounting them while maximized', () => {
+    const screenShare: MockTrackPublication = {
+      isMuted: false,
+      isSubscribed: true,
+      track: createTrack('remote-screen'),
+    };
+    const sharer = createRemoteParticipant(
+      'sharer',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('remote-camera'),
+        },
+        screen_share: screenShare,
+      },
+      'Sam Sharer'
+    );
+    const controls = setUpCallState([sharer]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    const camera = screen.getByTestId('track-remote-camera');
+    expect(
+      screen.getByRole('button', { name: 'Focus Sam Sharer' })
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Maximize screen share' })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Focus Sam Sharer' })
+    ).toBeNull();
+    expect(screen.getByTestId('track-remote-camera')).toBe(camera);
+    expect(screen.getByTestId('track-remote-screen')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show participants' }));
+    expect(
+      screen.getByRole('button', { name: 'Focus Sam Sharer' })
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Maximize screen share' })
+    );
+    screenShare.track = undefined;
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      screen.getByRole('button', { name: 'Focus Sam Sharer' })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Show participants' })
+    ).toBeNull();
+  });
+});
+
 describe('CallOverlay muted microphone badges', () => {
   it('excludes standalone calls from team sharing even when the caller enables the control', () => {
     const controls = setUpCallState();

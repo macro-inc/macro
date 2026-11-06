@@ -19,6 +19,7 @@ use mcp_auth_proxy::{
         service::{McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
     },
     outbound::{
+        email_sign_in::AuthServiceEmailCodes,
         fusionauth::FusionAuthOAuthProvider,
         postgres::PostgresAuthStore,
         redis::{RedisClientRegistry, RedisInflightAuth},
@@ -166,6 +167,11 @@ async fn build_auth_proxy(
 )> {
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
+    let email_codes = AuthServiceEmailCodes::new(
+        &macro_service_urls::AuthServiceUrl::new()?,
+        mcp_oauth_redirect_uri.clone(),
+    )
+    .context("failed to initialize MCP email sign-in")?;
 
     let fusionauth_api_key = LocalOrRemoteSecret::new_from_secret_manager(
         config.fusionauth_api_key_secret_key.as_ref().to_owned(),
@@ -243,6 +249,7 @@ async fn build_auth_proxy(
         client_registrations: store.clone(),
         refresh_token_bindings: store,
         oauth_provider: Arc::new(auth_provider),
+        email_codes: Arc::new(email_codes),
     });
     Ok((auth_proxy, backfill))
 }

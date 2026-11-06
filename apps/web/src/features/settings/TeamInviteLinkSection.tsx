@@ -25,6 +25,46 @@ async function copyTeamInviteLink(token: string) {
 }
 
 /**
+ * Copies the team's invite link, creating the first one when the team has
+ * none. While the link is unknown (it never loaded) the button stays disabled:
+ * creating one would replace a link people already share.
+ */
+export function CopyTeamInviteLinkButton(props: {
+  teamId: string;
+  class?: string;
+}) {
+  const linkQuery = useTeamInviteLinkQuery(
+    () => props.teamId,
+    () => true
+  );
+  const createLink = useCreateTeamInviteLinkMutation({
+    onSuccess: (token) => copyTeamInviteLink(token),
+  });
+  const token = () =>
+    linkQuery.isPending ? undefined : (linkQuery.data?.token ?? null);
+  const unknown = () => !linkQuery.isPending && linkQuery.data === undefined;
+  const handleCopy = () => {
+    const current = token();
+    if (current) {
+      fireAndForget(copyTeamInviteLink(current), 'team-invite-link');
+    } else if (current === null && !unknown()) {
+      createLink.mutate({ teamId: props.teamId });
+    }
+  };
+  return (
+    <Button
+      variant="secondary"
+      class={props.class}
+      disabled={linkQuery.isPending || createLink.isPending || unknown()}
+      onClick={handleCopy}
+    >
+      <LinkIcon class="size-4" />
+      Copy invite link
+    </Button>
+  );
+}
+
+/**
  * The team's shareable invite link: anyone who opens it can join the team.
  * Anyone who may invite can copy it or create the first one; admins can
  * reset it or turn it off, which breaks links already shared.

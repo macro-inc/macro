@@ -468,7 +468,7 @@ ensure-ai-engine-wasm:
 # that, every regeneration would be a diff-format mismatch even with no real
 # change.
 gen-agent-fold-types:
-    cargo run -p agent_fold --bin export_types
+    if [ -n "${SPECTA_BIN_DIR:-}" ]; then "$SPECTA_BIN_DIR/agent_fold_types"; else cargo run -p agent_fold --bin agent_fold_types; fi
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-fold/generated/types.ts
 
 # Regenerate src/lib/service-clients/service-agent-reviews/generated/types.ts
@@ -478,7 +478,7 @@ gen-agent-fold-types:
 # their responses, the import report); biome reformats specta's output for the
 # same reason as gen-agent-fold-types.
 gen-agent-review-types:
-    SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types
+    if [ -n "${SPECTA_BIN_DIR:-}" ]; then "$SPECTA_BIN_DIR/export_review_types"; else SQLX_OFFLINE=true cargo run -p agent_code_mode --bin export_review_types; fi
     bunx biome format --write {{justfile_directory()}}/src/lib/service-clients/service-agent-reviews/generated/types.ts
 
 # Regenerate the dynamic-UI view types (src/features/dynamic-ui/generated/types.ts

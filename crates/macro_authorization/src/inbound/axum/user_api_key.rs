@@ -26,13 +26,18 @@ where
 {
     let api_key = user_api_key(&parts.headers)?;
     let authorization = MacroAuthorizationState::<Svc>::from_ref(state);
-    let user_context = authorization
+    let authorized = authorization
         .service
         .authorize_user_api_key(&api_key)
         .await
         .map_err(user_api_key_authorization_rejection)?;
 
-    authenticated_user(user_context, CredentialOrigin::UserApiKey)
+    let origin = match authorized.account_manager {
+        Some(credential) => CredentialOrigin::AccountManager(credential),
+        None => CredentialOrigin::UserApiKey,
+    };
+
+    authenticated_user(authorized.user_context, origin)
 }
 
 fn user_api_key(headers: &HeaderMap) -> Result<String, MacroAuthorizationRejection> {

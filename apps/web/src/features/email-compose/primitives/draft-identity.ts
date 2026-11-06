@@ -4,6 +4,7 @@ import type {
   EmailComposeFeedback,
   EmailDraftStorage,
 } from '../context/compose-capabilities';
+import type { LocalDraft } from '../core/local-draft';
 import type { DraftSession } from './draft-session';
 
 /** Refresh identity only: a cache settlement must never reseed a dirty editor. */
@@ -13,7 +14,8 @@ export function observeDraftIdentity(
   notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
   recover: () => void,
   onAlreadySent: () => void,
-  onConfirmed?: () => Promise<boolean | void>
+  onConfirmed?: () => Promise<boolean | void>,
+  onAcknowledged?: (local: LocalDraft) => void
 ) {
   createEffect(
     on(
@@ -28,7 +30,8 @@ export function observeDraftIdentity(
             recover,
             onAlreadySent,
             !!storage.retryDraft,
-            onConfirmed
+            onConfirmed,
+            onAcknowledged
           );
       }
     )
@@ -43,7 +46,8 @@ function observeAvailableDraftIdentity(
   recover: () => void,
   onAlreadySent: () => void,
   durableRecovery: boolean,
-  onConfirmed?: () => Promise<boolean | void>
+  onConfirmed?: () => Promise<boolean | void>,
+  onAcknowledged?: (local: LocalDraft) => void
 ) {
   let generation = 0;
   let mutationUuid: string | undefined;
@@ -82,6 +86,9 @@ function observeAvailableDraftIdentity(
       if (!result.draft) return;
       const current = session.identity();
       const confirmed = result.persistence === 'committed';
+      // Before the session confirms: a confirmed session lets delivery
+      // observers compare edits, and a queued save's edits must count by then.
+      if (confirmed && result.local) onAcknowledged?.(result.local);
       const handoff = async () => {
         const version = `${result.draft!.db_id}:${result.local?.generation ?? ''}:${result.local?.acknowledgedRevision ?? result.draft!.updated_at}`;
         if (version === uploadHandoff) return;

@@ -201,6 +201,7 @@ async fn authorize_for_an_unlisted_host_asks_for_consent_and_stores_nothing() {
         AuthorizationStart::ConsentRequired(ConsentPrompt {
             client_name: "test-client".to_owned(),
             redirect_host: "gateway.example".to_owned(),
+            delivery: crate::domain::models::CodeDelivery::Redirect,
         })
     );
     assert!(
@@ -258,7 +259,8 @@ async fn approved_client_on_an_unlisted_host_completes_the_flow() {
             Some(harness.browser.clone()),
         )
         .await
-        .expect("callback should succeed");
+        .expect("callback should succeed")
+        .url;
 
     assert!(
         redirect.starts_with(&format!("{GATEWAY_REDIRECT_URI}?code=")),
@@ -355,6 +357,7 @@ async fn an_unbound_pending_flow_completes_only_to_a_trusted_redirect_uri() {
                     client_state: "client-state".to_owned(),
                     client_redirect_uri: redirect_uri.to_owned(),
                     browser_binding_digest: None,
+                    delivery: crate::domain::models::CodeDelivery::Redirect,
                 },
             )
             .await
@@ -1039,7 +1042,8 @@ async fn callback_redirect_preserves_a_query_on_the_registered_redirect_uri() {
             Some(harness.browser.clone()),
         )
         .await
-        .expect("callback should succeed");
+        .expect("callback should succeed")
+        .url;
 
     assert!(
         redirect.starts_with("https://claude.ai/api/mcp/auth_callback?tenant=macro&code="),
