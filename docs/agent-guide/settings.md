@@ -205,6 +205,19 @@ and its email and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
+After a person invite sends, the dialog's second step, **Let them know it's
+coming**, lists the addresses and offers **Copy invite link** (creating the
+first link when there is none) and **Done**; agent invites close the dialog
+instead. **Team → Members** also shows **Copy invite link** beside **Invite**,
+and onboarding's team confirmation asks a creator who just invited teammates
+to send them the link too.
+A signed-out invitee who opens an emailed or link invite is sent to
+`/app/login?redirect=/team-invite?…`; once signed in or signed up (including
+desktop Google sign-in, whose `macro:///login` callback carries the redirect)
+they return to the invite before onboarding, so they join first and onboarding
+opens on the team. Channel invites (`/channel-invite`) also open before
+onboarding. Other `?redirect=` deep links, such as meetings, return there after
+sign-in, or after onboarding for a new account.
 An unanswered invite gets up to two reminder emails, with subjects starting
 **Reminder:**, 3 days after the last email and 4 days after that. Invites more
 than 14 days old, already-members, and invites whose sender left the team get none.
@@ -243,10 +256,11 @@ like any other rail item, and Shift-click opens it in a new split.
 `/app/settings/<tab>` opens it as the only split with the app rail still
 visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
-**Search settings** field, the grouped section pills, and a team action pinned
-to the bottom: **Invite your team** (opens the invite dialog; hidden for members
-when the team limits invites to admins) or, with no team, **Create a team**
-(opens the create-team dialog). Unlike other views, it cannot be hidden at
+**Search settings** field, a team action at the top of the list (hidden while
+searching): **Invite your team** in rainbow text (opens the invite dialog;
+hidden for members when the team limits invites to admins) or, with no team,
+**Create a team** (opens the create-team dialog), then the grouped section
+pills. Unlike other views, it cannot be hidden at
 desktop widths: there is no **Hide navigation** toggle and `Cmd .` does
 nothing, even if it was hidden before. Below 720px the sidebar becomes an overlay opened from **Show
 navigation** (or `Cmd .`), which starts closed. Escape closes a

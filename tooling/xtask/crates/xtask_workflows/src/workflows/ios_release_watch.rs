@@ -101,6 +101,7 @@ fn rerun_approved_checks() -> Step<Run> {
     Step::new("Re-run the check on PRs whose release Apple approved")
         .run(concat!(
             include_str!("scripts/ios_native_tree.sh"),
+            include_str!("scripts/pr_ci_run.sh"),
             include_str!("scripts/ios_release_watch.sh")
         ))
         .shell("bash")
