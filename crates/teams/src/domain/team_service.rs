@@ -1472,9 +1472,9 @@ where
                 .await
                 .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?,
         );
-        // Colleagues who sign up with the owner's work domain join the team
-        // automatically unless the owner opted out. Owners can change it in
-        // settings.
+        // Colleagues on the owner's work domain are offered the team and join
+        // it when they accept, unless the owner opted out. Owners can change
+        // it in settings.
         let owner_email = user_id.email_part().lowercase();
         let auto_join_domain = (allow_domain_join
             && !is_generic_email_domain(owner_email.domain_part()))

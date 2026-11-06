@@ -15,8 +15,8 @@ export interface Team {
   /** Whether non-admin members may invite users to the team. Defaults to
 true; admins can turn it off so only admins/owners may invite. */
   allow_non_admin_invites: boolean;
-  /** The email domain new users are automatically joined to this team
-with, when automatic domain joining is enabled (None otherwise). */
+  /** The email domain whose users may join this team without an invite,
+once they accept it (None when domain joining is off). */
   auto_join_domain?: TeamAutoJoinDomain;
   /** Whether the CRM is enabled for this team (from `team_crm_settings`;
 `false` when no row exists). */

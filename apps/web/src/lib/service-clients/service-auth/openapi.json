@@ -9124,7 +9124,7 @@
           },
           "auto_join_domain": {
             "type": ["string", "null"],
-            "description": "The email domain new users are automatically joined to this team\nwith, when automatic domain joining is enabled (None otherwise)."
+            "description": "The email domain whose users may join this team without an invite,\nonce they accept it (None when domain joining is off)."
           },
           "crm_enabled": {
             "type": "boolean",

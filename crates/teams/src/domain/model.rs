@@ -466,8 +466,8 @@ pub struct Team {
     /// Whether the CRM is enabled for this team (from `team_crm_settings`;
     /// `false` when no row exists).
     pub(crate) crm_enabled: bool,
-    /// The email domain new users are automatically joined to this team
-    /// with, when automatic domain joining is enabled (None otherwise).
+    /// The email domain whose users may join this team without an invite,
+    /// once they accept it (None when domain joining is off).
     pub(crate) auto_join_domain: Option<String>,
     /// Whether this team is on an enterprise license. Enterprise teams are
     /// billed out-of-band; membership changes skip all Stripe subscription

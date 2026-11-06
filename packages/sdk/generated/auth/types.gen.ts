@@ -1920,8 +1920,8 @@ export type Team = {
      */
     allow_non_admin_invites: boolean;
     /**
-     * The email domain new users are automatically joined to this team
-     * with, when automatic domain joining is enabled (None otherwise).
+     * The email domain whose users may join this team without an invite,
+     * once they accept it (None when domain joining is off).
      */
     auto_join_domain?: string | null;
     /**
