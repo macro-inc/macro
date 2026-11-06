@@ -3,9 +3,9 @@
 //!
 //! The user's most recently updated skills are the candidates. Jev answers one
 //! yes/no question per candidate, built from its "Use when …" description, at
-//! most 32 per call, so candidates are split into parallel calls
-//! ([`decide_in_batches`]), at most [`MAX_CALLS`]. A skill redirects the
-//! agent, so only a confident match loads.
+//! most 32 per call, so candidates are split into parallel calls, at most
+//! [`MAX_CALLS`]. A skill redirects the agent, so only a confident match
+//! loads.
 
 #[cfg(test)]
 mod test;
@@ -13,7 +13,7 @@ mod test;
 use std::sync::Arc;
 use std::time::Duration;
 
-use cognition::domain::{Answer, BatchedOutcome, Cognition, MAX_QUESTIONS, decide_in_batches};
+use cognition::domain::{Cognition, DecisionRequest};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
@@ -22,11 +22,12 @@ use uuid::Uuid;
 use crate::domain::model::{SkillError, SkillSummary};
 use crate::domain::ports::SkillService;
 
+/// Questions Jev answers in one call.
+const QUESTIONS_PER_CALL: usize = 32;
 /// Parallel Jev calls per turn; candidates past `MAX_CALLS * 32` are not
 /// routed, and stay reachable through `ReadSkill`.
 pub const MAX_CALLS: usize = 8;
-/// How long the turn waits for Jev; calls that miss it lose only their own
-/// candidates.
+/// How long the turn waits for Jev.
 const DECISION_DEADLINE: Duration = Duration::from_secs(1);
 /// How long the turn waits for the chosen skills' instructions.
 const READ_DEADLINE: Duration = Duration::from_secs(1);
@@ -80,7 +81,7 @@ pub enum SelectionStatus {
     Cancelled,
     /// Listing skills or every Jev call failed.
     ProviderError,
-    /// No Jev call answered before the deadline.
+    /// Jev did not answer before the deadline.
     Timeout,
 }
 
@@ -216,16 +217,19 @@ async fn select<Svc: SkillService>(
     if candidates.is_empty() {
         return SkillSelection::nothing(0, SelectionStatus::NoCandidates);
     }
-    let scores = tokio::select! {
+    let scored = tokio::select! {
         biased;
         _ = cancel.cancelled() => {
             return SkillSelection::nothing(candidates.len(), SelectionStatus::Cancelled);
         }
-        scores = score(cognition.as_ref(), user, request, &candidates) => scores,
+        scored = tokio::time::timeout(DECISION_DEADLINE, score(cognition.as_ref(), user, request, &candidates)) => scored,
     };
-    let scores = match scores {
-        Ok(scores) => scores,
-        Err(status) => return SkillSelection::nothing(candidates.len(), status),
+    let scores = match scored {
+        Ok(Some(scores)) => scores,
+        Ok(None) => {
+            return SkillSelection::nothing(candidates.len(), SelectionStatus::ProviderError);
+        }
+        Err(_) => return SkillSelection::nothing(candidates.len(), SelectionStatus::Timeout),
     };
     let top_score = scores.iter().map(|(_, score)| *score).reduce(f32::max);
     let (chosen, suggested) = choose(scores);
@@ -257,42 +261,49 @@ fn candidates(
         .filter(|skill| !already_loaded.contains(&skill.document_id))
         .filter(|skill| !request.latest.contains(&skill.document_id.to_string()))
         .collect();
-    candidates.truncate(MAX_CALLS * MAX_QUESTIONS);
+    candidates.truncate(MAX_CALLS * QUESTIONS_PER_CALL);
     candidates
 }
 
-/// Every candidate's score from the calls that answered by the deadline, or
-/// why none did.
+/// Every candidate's score, or `None` when no call succeeded.
 async fn score(
     cognition: &dyn Cognition,
     user: &MacroUserIdStr<'static>,
     request: SkillRequest<'_>,
     candidates: &[SkillSummary],
-) -> Result<Vec<(SkillSummary, f32)>, SelectionStatus> {
+) -> Option<Vec<(SkillSummary, f32)>> {
     let mut input = serde_json::json!({ "request": clip(request.latest, MAX_REQUEST_CHARS) });
     if let Some(previous) = request.previous {
         input["previousRequest"] = clip(previous, MAX_REQUEST_CHARS).into();
     }
-    let questions: Vec<String> = candidates.iter().map(question).collect();
-    let decision = decide_in_batches(&input, &questions, DECISION_DEADLINE, |request| {
+    let calls = candidates.chunks(QUESTIONS_PER_CALL).map(|chunk| {
+        let request = DecisionRequest {
+            input: input.clone(),
+            questions: chunk
+                .iter()
+                .map(|skill| (skill.document_id.to_string(), question(skill)))
+                .collect(),
+        };
         cognition.decide(user, request)
-    })
-    .await;
-
-    match decision.outcome() {
-        BatchedOutcome::Answered => {}
-        BatchedOutcome::TimedOut => return Err(SelectionStatus::Timeout),
-        BatchedOutcome::Failed => return Err(SelectionStatus::ProviderError),
+    });
+    let answers = join_all(calls).await;
+    let mut scores = Vec::new();
+    let mut answered = false;
+    for answer in answers {
+        match answer {
+            Ok(answer) => {
+                answered = true;
+                scores.extend(answer.probabilities.into_iter().filter_map(|(key, score)| {
+                    let skill = candidates
+                        .iter()
+                        .find(|skill| skill.document_id.to_string() == key)?;
+                    score.is_finite().then(|| (skill.clone(), score))
+                }));
+            }
+            Err(error) => tracing::warn!(error = %error, "Jev could not route skills"),
+        }
     }
-
-    Ok(candidates
-        .iter()
-        .zip(decision.answers)
-        .filter_map(|(skill, answer)| match answer {
-            Answer::Probability(score) if score.is_finite() => Some((skill.clone(), score)),
-            Answer::Probability(_) | Answer::Failed | Answer::TimedOut => None,
-        })
-        .collect())
+    answered.then_some(scores)
 }
 
 fn question(skill: &SkillSummary) -> String {

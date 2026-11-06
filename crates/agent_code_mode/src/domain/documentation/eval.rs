@@ -8,9 +8,7 @@
 
 use super::*;
 use async_trait::async_trait;
-use cognition::domain::{
-    DecisionRequest, DecisionResponse, GenerateObjectRequest, GenerateObjectResponse,
-};
+use cognition::domain::{DecisionResponse, GenerateObjectRequest, GenerateObjectResponse};
 use jev::domain::{JevProvider as _, YesNoQuestion};
 use rootcause::Report;
 
@@ -27,11 +25,11 @@ const PROMPTS: &[(&str, &[&str])] = &[
     ),
     (
         "Catch me up on what changed in my workspace today",
-        &["workspace"],
+        &["search"],
     ),
     (
         "What did I ask Macro in my AI chat about the offsite?",
-        &["chats"],
+        &["search"],
     ),
     (
         "Every Monday at 9, send me a summary of my open tasks",
@@ -82,25 +80,14 @@ const PROMPTS: &[(&str, &[&str])] = &[
     ),
     ("Thanks, that's perfect!", &[]),
     ("What's 15% of 2,340?", &[]),
-    ("Pin the roadmap doc to my home view", &["pins"]),
-    ("Add the Q3 plan to my favorites", &["favorites"]),
-    (
-        "What title and preview image does https://example.com/launch show?",
-        &["unfurls"],
-    ),
 ];
 
 const RUNS: usize = 3;
 /// What a turn loads: entities at 0.5 or higher, at most four.
 const LOADED: usize = 4;
 
-/// The real Jev behind the cognition port, counting its calls and the input
-/// tokens they bill.
-struct RealJev {
-    jev: jev::outbound::SystemOneJev,
-    calls: std::sync::atomic::AtomicU64,
-    input_tokens: std::sync::atomic::AtomicU64,
-}
+/// The real Jev behind the cognition port.
+struct RealJev(jev::outbound::SystemOneJev);
 
 #[async_trait]
 impl Cognition for RealJev {
@@ -128,16 +115,10 @@ impl Cognition for RealJev {
             })
             .unzip();
         let evaluation = self
-            .jev
+            .0
             .evaluate(&request.input, &questions)
             .await
             .map_err(|error| rootcause::report!("{error}"))?;
-        self.calls
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.input_tokens.fetch_add(
-            evaluation.input_tokens,
-            std::sync::atomic::Ordering::Relaxed,
-        );
         Ok(DecisionResponse {
             probabilities: keys
                 .into_iter()
@@ -152,20 +133,17 @@ impl Cognition for RealJev {
 #[ignore = "calls TypeSafe's Jev; needs TYPESAFE_API_KEY"]
 async fn entity_route_evaluation() {
     let key = jev::outbound::TypesafeApiKey::new().expect("TYPESAFE_API_KEY is set");
-    let jev = Arc::new(RealJev {
-        jev: jev::outbound::SystemOneJev::typesafe(key.value().expect("TYPESAFE_API_KEY is set"))
+    let cognition: Arc<dyn Cognition> = Arc::new(RealJev(
+        jev::outbound::SystemOneJev::typesafe(key.value().expect("TYPESAFE_API_KEY is set"))
             .expect("a valid TypeSafe key"),
-        calls: std::sync::atomic::AtomicU64::new(0),
-        input_tokens: std::sync::atomic::AtomicU64::new(0),
-    });
-    let cognition: Arc<dyn Cognition> = jev.clone();
+    ));
     let owner = MacroUserIdStr::parse_from_str("macro|eval@example.com").expect("a user id");
     let docs = sdk_documentation();
     let (mut recalled, mut expected_total, mut exact, mut spurious, mut loaded_total) =
         (0, 0, 0, 0, 0);
     for (prompt, expected) in PROMPTS {
         for run in 0..RUNS {
-            let ranking = rank_entities(
+            let (ranked, status) = rank_entities(
                 &owner,
                 prompt,
                 docs,
@@ -174,9 +152,8 @@ async fn entity_route_evaluation() {
                 &CancellationToken::new(),
             )
             .await;
-            assert_eq!(ranking.status, SelectionStatus::Selected, "{prompt}");
-            let loaded: Vec<&str> = ranking
-                .entities
+            assert_eq!(status, SelectionStatus::Selected, "{prompt}");
+            let loaded: Vec<&str> = ranked
                 .iter()
                 .take(LOADED)
                 .map(|doc| doc.name.as_str())
@@ -209,12 +186,5 @@ async fn entity_route_evaluation() {
     println!(
         "recall {recalled}/{expected_total}, exact set {exact}/{runs}, loads on prompts needing none {spurious}/{none_runs}, mean entities loaded {:.2}",
         loaded_total as f64 / runs as f64
-    );
-    let calls = jev.calls.load(std::sync::atomic::Ordering::Relaxed);
-    let input_tokens = jev.input_tokens.load(std::sync::atomic::Ordering::Relaxed);
-    println!(
-        "Jev calls {calls} ({:.2} per routing), input tokens {input_tokens} ({:.0} per routing)",
-        calls as f64 / runs as f64,
-        input_tokens as f64 / runs as f64
     );
 }

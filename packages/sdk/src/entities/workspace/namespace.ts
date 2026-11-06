@@ -79,8 +79,6 @@ import type {
  * (owner principal), `src` and `vis`. Filters remain server-validated.
  * CRM, initiatives and database rows have their own namespaces and are not
  * included in this browsing surface.
- *
- * @routing Use when browsing the user's recent or filtered workspace items, such as what changed today; not keyword search (`macro.search`).
  */
 export class WorkspaceNamespace {
   constructor(private readonly client: MacroClient) {}

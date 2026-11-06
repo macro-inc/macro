@@ -15,7 +15,7 @@ import { ChannelLabelsNamespace } from './labels';
 const CHANNEL_PAGE_SIZE = 100;
 
 /**
- * @routing Use when reading or sending channel and direct messages, posting a poll, reacting or managing members; not email, or WhatsApp and other external chats (`macro.externalChats`).
+ * @routing Use when reading or sending channel and direct messages, posting a poll, reacting, managing members, or WhatsApp and external chats; not email.
  *
  * @agent
  * ## Polls

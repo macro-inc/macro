@@ -30,7 +30,7 @@ code-mode agent turn ────┤  prompt = cross-cutting rules + inline_guid
                             prompt = cross-cutting rules (routed_prompt)          │
                             turn   = select_documentation(Selected):              │
                                      Jev over every entity's @routing sentence,   │
-                                     parallel calls of 32, 1 s, ≥0.5, top 4 →     │
+                                     32 per call, ≤8 calls, 1 s, ≥0.5, top 4 →    │
                                      index + @agent guide per entity              │
 direct-tool hosts (chat, channel bot): prompt + inline guides that do not need the SDK
 database-only host: base prompt + the databases guide
@@ -39,9 +39,7 @@ public MCP: shared rules + databases, CRM and document-content guides;
 ```
 
 The selection runs in the turn's pre-turn join, alongside the memory fetch.
-Its span records the Jev calls (`batches`), selected entities, bytes and
-status. A call that fails or misses the deadline loses only its own entities;
-the turn keeps what the other calls ranked.
+Its span records the selected entities, bytes and status.
 
 ## Where to change things
 

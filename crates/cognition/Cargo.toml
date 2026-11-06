@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 ai_toolset = { path = "../ai_toolset" }
 async-trait = { workspace = true }
-jev = { path = "../jev", features = ["batches"] }
+jev = { path = "../jev" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }

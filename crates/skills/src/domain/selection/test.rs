@@ -2,20 +2,11 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use cognition::domain::{
-    DecisionRequest, DecisionResponse, GenerateObjectRequest, GenerateObjectResponse,
-};
+use cognition::domain::{DecisionResponse, GenerateObjectRequest, GenerateObjectResponse};
 use rootcause::Report;
 
 use super::*;
 use crate::domain::model::{SkillContent, SkillMatchType};
-
-/// The numbered skill a question asks about (`Skills::numbered` names them
-/// "Skill <id>").
-fn asked_about(question: &str) -> Option<Uuid> {
-    let id = question.split("\"Skill ").nth(1)?.split('"').next()?;
-    Some(Uuid::from_u128(id.parse().ok()?))
-}
 
 /// Answers each question with the score its skill was given, 0.1 otherwise.
 struct Jev {
@@ -43,13 +34,7 @@ impl Jev {
             .lock()
             .unwrap()
             .iter()
-            .map(|request| {
-                request
-                    .questions
-                    .values()
-                    .map(|question| asked_about(question).unwrap().to_string())
-                    .collect()
-            })
+            .map(|request| request.questions.keys().cloned().collect())
             .collect()
     }
 }
@@ -71,12 +56,10 @@ impl Cognition for Jev {
     ) -> Result<DecisionResponse, Report> {
         let probabilities = request
             .questions
-            .iter()
-            .map(|(key, question)| {
-                let score = asked_about(question)
-                    .and_then(|id| self.scores.get(&id).copied())
-                    .unwrap_or(0.1);
-                (key.clone(), score)
+            .keys()
+            .map(|key| {
+                let id: Uuid = key.parse().unwrap();
+                (key.clone(), self.scores.get(&id).copied().unwrap_or(0.1))
             })
             .collect();
         self.calls.lock().unwrap().push(request);
@@ -382,14 +365,14 @@ async fn the_classifier_sees_the_request_and_each_description() {
         request.input,
         serde_json::json!({"request": "now do it for Q3", "previousRequest": "summarise Q2 revenue"})
     );
-    let questions: Vec<&String> = request.questions.values().collect();
     assert_eq!(
-        questions,
-        [
-            "Would the skill \"Release notes\" help with this request? Use when drafting release notes; not changelogs",
-            // A skill made before descriptions existed routes on its name.
-            "Would the skill \"Old skill\" help with this request?",
-        ]
+        request.questions[&Uuid::from_u128(1).to_string()],
+        "Would the skill \"Release notes\" help with this request? Use when drafting release notes; not changelogs"
+    );
+    // A skill made before descriptions existed routes on its name.
+    assert_eq!(
+        request.questions[&Uuid::from_u128(2).to_string()],
+        "Would the skill \"Old skill\" help with this request?"
     );
 }
 

@@ -86,7 +86,26 @@ export function packageEntityDocs(
           : directory.replace(/-([a-z])/g, (_, letter: string) =>
               letter.toUpperCase()
             ),
-      prefixes: [`src/entities/${directory}/`],
+      // Agent and host setup share one discovery topic, as do AI calls and
+      // image generation, searching, browsing and AI chats, the web and URL
+      // previews, and favorites and pins, keeping the classifier request
+      // within its 32-question contract as the public API grows.
+      prefixes: (directory === 'agents'
+        ? ['agents', 'harnesses']
+        : directory === 'channels'
+          ? ['channels', 'external-chat', 'whatsapp']
+          : directory === 'ai'
+            ? ['ai', 'images']
+            : directory === 'users'
+              ? ['users', 'me']
+              : directory === 'search'
+                ? ['search', 'workspace', 'chats']
+                : directory === 'web'
+                  ? ['web', 'unfurls']
+                  : directory === 'favorites'
+                    ? ['favorites', 'pins']
+                    : [directory]
+      ).map((value) => `src/entities/${value}/`),
     })),
     { name: 'core', prefixes: core },
   ];
