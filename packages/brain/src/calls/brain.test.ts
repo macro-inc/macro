@@ -64,3 +64,51 @@ test('SDK process failure rejects warm-up and every later queued turn', async ()
   ]);
   await brain.close();
 });
+
+test('persistent call sessions account only new SDK spend, including zeroed error results', async () => {
+  const { claudeBrain } = await import('./brain.ts');
+  const costs: unknown[] = [];
+  const brain = claudeBrain({
+    callId: 'call',
+    channel: 'channel',
+    operating: 'Agent',
+    options: {},
+    emit(type, data) {
+      if (type === 'brain.result') costs.push(data?.cost);
+    },
+    onHangUp() {},
+    async handOff() {
+      return 'task';
+    },
+    async briefing() {
+      return 'Briefing';
+    },
+    session(prompt) {
+      return {
+        async *[Symbol.asyncIterator]() {
+          const totals = [0.125, 0.25, 0, 0.375];
+          let turn = 0;
+          for await (const _ of prompt) {
+            const total = totals[turn++]!;
+            yield {
+              type: 'result',
+              subtype: total === 0 ? 'error_during_execution' : 'success',
+              duration_ms: 1,
+              total_cost_usd: total,
+            };
+          }
+        },
+        async interrupt() {},
+        close() {},
+      };
+    },
+  });
+  try {
+    await brain.start();
+    for (const turn of [1, 2, 3])
+      await Array.fromAsync(brain.ask(turn, 'Question?'));
+    assert.deepEqual(costs, [0.125, 0.125, 0, 0.125]);
+  } finally {
+    await brain.close();
+  }
+});

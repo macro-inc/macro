@@ -80,7 +80,13 @@ export type CallBrainOptions = {
     options: Options
   ): CallModelSession;
 };
-export interface CallModelSession extends AsyncIterable<SDKMessage> {
+type CallModelMessage =
+  | Exclude<SDKMessage, { type: 'result' }>
+  | Pick<
+      Extract<SDKMessage, { type: 'result' }>,
+      'type' | 'subtype' | 'duration_ms' | 'total_cost_usd'
+    >;
+export interface CallModelSession extends AsyncIterable<CallModelMessage> {
   interrupt(): Promise<unknown>;
   close(): void;
 }
@@ -127,6 +133,7 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
   let warming = false;
   let q: CallModelSession | null = null;
   let terminal: Error | null = null;
+  let accountedCost = 0;
   const terminate = (error: Error) => {
     terminal = error;
     ready();
@@ -209,10 +216,13 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
       } else if (m.type === 'result') {
         if (buf.trim()) sink?.({ kind: 'text', text: buf.trim() });
         buf = '';
+        // Streaming results repeat the running total; crash results may be zero.
+        const cost = Math.max(0, m.total_cost_usd - accountedCost);
+        accountedCost += cost;
         emit('brain.result', {
           subtype: m.subtype,
           ms: m.duration_ms,
-          cost: m.total_cost_usd,
+          cost,
         });
         sink?.({ kind: 'end' });
       } else if (m.type === 'system' && m.subtype === 'init') {
