@@ -23,14 +23,15 @@ import {
 import {
   type ContactDirectoryCursor,
   type ContactDirectoryHost,
-  ContactDirectoryOfflineError,
   type ContactDirectoryRequest,
   ContactDirectoryScopeError,
+  ContactDirectoryUnavailableError,
   type ContactPeoplePolicy,
   readContactDirectory,
 } from './directory';
 import { contactsKeys } from './keys';
 import { createContactQueryEpoch } from './query-epoch';
+import { requestContactRefresh } from './refresh';
 
 export type ContactWindowHost = ContactDirectoryHost &
   Pick<CacheHost, 'onCacheChanged' | 'onCacheGenerationChanged'>;
@@ -49,7 +50,7 @@ function contactWindowOptions(
     queryKey: contactsKeys.window(
       owner,
       userId ?? '',
-      host?.clientId ?? 'network',
+      host?.clientId ?? 'unavailable',
       generation,
       request
     ).queryKey,
@@ -121,12 +122,10 @@ export function createContactDirectoryWindow(
     input: ReturnType<typeof input>;
     value: ContactDirectoryCursor;
   }>();
-  const [fresh, setFresh] = createSignal<ReturnType<typeof input>>();
   const { epoch: generation, invalidate } = createContactQueryEpoch(
     scope,
     () => {
       setCursor(undefined);
-      setFresh(undefined);
     }
   );
   const request = createMemo<ContactDirectoryRequest>(() => {
@@ -142,7 +141,6 @@ export function createContactDirectoryWindow(
         current.value.userId === scope().userId
           ? current.value
           : undefined,
-      fresh: fresh() === selection,
       ...(policy ? { policy } : {}),
     };
   });
@@ -160,6 +158,7 @@ export function createContactDirectoryWindow(
     if (
       !enabled() ||
       query.error instanceof ContactDirectoryScopeError ||
+      query.error instanceof ContactDirectoryUnavailableError ||
       !queryReadyGate(query)
     )
       return undefined;
@@ -182,17 +181,17 @@ export function createContactDirectoryWindow(
       subscribeToVisibleCacheChanges(
         host,
         () => {
-          // Do not re-fetch the network for every background hydration page. A
-          // server continuation stays on its original source until Restart.
+          // Re-read locally as synchronization/context publication progresses.
           if (!enabled()) return;
-          const page = untrack(data);
-          if (
-            page?.source === 'cache' ||
-            (!page &&
-              untrack(() => query.error) instanceof
-                ContactDirectoryOfflineError)
-          )
-            return query.refetch({ cancelRefetch: false });
+          const error = untrack(() => query.error);
+          if (!error || error instanceof ContactDirectoryUnavailableError) {
+            // A reply from before this write must not publish under the same
+            // input again. Restart keyset paging against the new local version.
+            batch(() => {
+              setCursor(undefined);
+              invalidate();
+            });
+          }
         },
         { searchBuckets: () => ['person'] }
       )
@@ -204,7 +203,6 @@ export function createContactDirectoryWindow(
       (error) => {
         if (
           error instanceof ContactDirectoryScopeError &&
-          options.policy &&
           untrack(cursor)?.value.source === 'people'
         ) {
           setCursor(undefined);
@@ -216,15 +214,11 @@ export function createContactDirectoryWindow(
   const advance = () => {
     const next = data()?.nextCursor;
     if (!next || !enabled()) return false;
-    setFresh(undefined);
     // The input identity changes even when an external query/policy returns to
     // an earlier value. Never revive its old continuation or retain a proxy.
     setCursor({
       input: input(),
-      value:
-        next.source === 'cache'
-          ? { ...next, after: { ...next.after } }
-          : { ...next },
+      value: { ...next },
     });
     return true;
   };
@@ -235,7 +229,6 @@ export function createContactDirectoryWindow(
     search,
     setSearch: (value: string) => {
       setCursor(undefined);
-      setFresh(undefined);
       setSearch(value);
     },
     data,
@@ -262,7 +255,7 @@ export function createContactDirectoryWindow(
     restart: () =>
       batch(() => {
         setCursor(undefined);
-        setFresh(input());
+        requestContactRefresh();
         invalidate();
       }),
     retry: () => query.refetch({ cancelRefetch: false }),

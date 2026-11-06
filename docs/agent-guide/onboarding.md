@@ -26,8 +26,8 @@ do not see it.
 
 When the server suggests a team domain, the create form pre-adds up to six
 same-domain contacts, excluding the user's own email and duplicates regardless
-of case. Suggestions come from bounded search pages, including empty continuation
-pages, rather than downloading the address book. Without an approved domain,
+of case. Suggestions filter bounded local browse pages to that domain, including
+empty continuations, rather than downloading or remotely searching the address book. Without an approved domain,
 no contacts are fetched. A failed lookup opens the plain editable form.
 
 The form takes its first settled seed only. Renaming the workspace, removing a

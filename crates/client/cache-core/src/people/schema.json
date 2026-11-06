@@ -6,7 +6,8 @@
   "maxSqlColumns": 64,
   "maxSqlInputBytes": 262144,
   "maxSqlRows": 500,
-  "policyVersion": 4,
+  "policyVersion": 5,
+  "referencePolicyVersion": 4,
   "schemas": {
     "ContactReconcile": {
       "$defs": {
@@ -708,22 +709,22 @@
           "oneOf": [
             {
               "const": "command",
-              "description": "Exact/prefix labels, then deterministic relevance/recency and DM boosts.",
+              "description": "Name tiers, then recent-first ordering using the substituted DM timestamp.",
               "type": "string"
             },
             {
               "const": "recipient",
-              "description": "Exact addresses, address prefixes, word prefixes, then recipient weights.",
+              "description": "Name tiers and recent-first ordering, with automated-address exclusions.",
               "type": "string"
             },
             {
               "const": "mention",
-              "description": "Name/email relevance and user interaction recency for mentions.",
+              "description": "Name tiers and user interaction recency for personal mentions.",
               "type": "string"
             },
             {
               "const": "property",
-              "description": "Property user pickers: personal interaction, domain preference and self pinning.",
+              "description": "Name tiers and personal recency; empty browsing pins self.",
               "type": "string"
             }
           ]
@@ -731,7 +732,7 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "A ranked window over the current cached directory, not a completeness claim.\nContinuations pin the ranking clock and context epoch; concurrent row updates\nhave ordinary keyset semantics, not a transactional snapshot guarantee.",
+      "description": "A ranked window over the current cached directory, not a completeness claim.\nContinuations bind membership/owner and context tokens as well as the\npublication epoch. Changed eligible data requires restarting the window.",
       "properties": {
         "cursor": {
           "description": "Opaque continuation from this same account, generation and search policy.",
@@ -760,12 +761,12 @@
           "description": "Surface ranking policy."
         },
         "nowMs": {
-          "description": "Injected wall clock for reproducible scoring.",
+          "description": "Retained wire input for older hosts; recent-first order needs no clock.",
           "format": "int64",
           "type": "integer"
         },
         "query": {
-          "description": "Shared subsequence input, capped at 512 UTF-8 bytes.",
+          "description": "Name/explicit-identity input, capped at 512 UTF-8 bytes.",
           "type": "string"
         },
         "scope": {
@@ -773,7 +774,7 @@
           "description": "Account/storage fence."
         },
         "senderDomain": {
-          "description": "Sending-account domain for recipient/mention preference.",
+          "description": "Retained wire input for older hosts; policy 5 has no domain boost.",
           "type": [
             "string",
             "null"
@@ -861,12 +862,12 @@
               "type": "string"
             },
             "score": {
-              "description": "Corpus-independent blended score within a priority tier.",
+              "description": "Retained wire field for older hosts; zero under policy 5.",
               "format": "double",
               "type": "number"
             },
             "timestampMs": {
-              "description": "Final recency tie-breaker.",
+              "description": "Recent-first ordering within a matching tier; identity breaks ties.",
               "format": "int64",
               "type": "integer"
             },

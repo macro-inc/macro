@@ -1,10 +1,11 @@
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
+import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
 import type { CommandMenuItem } from './useCommandItems';
 
 // Command keyword eligibility is not a database-person lookup. Keep its existing
-// matcher while entity/person rows share the native token-subsequence contract.
+// matcher for commands and ordinary entities; personal windows retain core order.
 const COMMAND_MATCHER = new uFuzzy({});
 
 /** The label a row shows; its search text can add emails, aliases, or command keywords. */
@@ -108,7 +109,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     options.preservedIds?.has(item.id) ||
     (options.preserveAdditionalEntityMatches && item.kind === 'entity');
   if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
-    return prioritizeInternalPeople(ranked);
+    return preservePersonOrder(prioritizeInternalPeople(ranked), items);
 
   // Cache search accepts broader subsequences than the menu's fuzzy matcher.
   // Keep these additional matches reachable after the regular ranked results.
@@ -116,5 +117,8 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const additional = items
     .filter((item) => preserved(item) && !matchedIds.has(item.id))
     .sort(compareRecency);
-  return prioritizeInternalPeople([...ranked, ...additional]);
+  return preservePersonOrder(
+    prioritizeInternalPeople([...ranked, ...additional]),
+    items
+  );
 }

@@ -50,7 +50,7 @@ const readDirectory: typeof readContactDirectory = async (
 ) => {
   setDirectoryReads((count) => count + 1);
   const offset =
-    request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+    request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
   const ids =
     request.query === 'late'
       ? [99_999]
@@ -64,8 +64,8 @@ const readDirectory: typeof readContactDirectory = async (
             );
   setDirectoryRows(ids.length);
   return {
-    source: 'server',
-    sync: 'unavailable',
+    source: 'cache',
+    sync: 'partial',
     offline: false,
     query: request.query,
     users: ids.map((id) =>
@@ -84,7 +84,8 @@ const readDirectory: typeof readContactDirectory = async (
     nextCursor:
       !request.query && offset + ids.length < 100_000
         ? {
-            source: 'server',
+            source: 'people',
+            generation: 'fixture',
             after: String(offset + ids.length),
             userId: viewer,
             query: request.query,

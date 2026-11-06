@@ -126,7 +126,7 @@ export function CachedPeoplePolicyFixture(props: { host: CacheHost }) {
       new Map([
         ...facts,
         [
-          'macro|person5@example.com',
+          'macro|person50@example.com',
           { ...EMPTY_PERSON_FACTS, lastInteractionMs: now },
         ],
       ])

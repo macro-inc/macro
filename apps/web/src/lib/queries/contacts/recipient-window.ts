@@ -33,14 +33,18 @@ export function createContactRecipientSource(
     items: createMemo(() =>
       (directory.data()?.users ?? [])
         // Normal rosters are excluded before native limiting. A roster larger
-        // than the IPC budget, like server fallback, can yield a short/empty
+        // than the IPC budget can yield a short/empty
         // window; retain its continuation rather than accumulating more rows.
         .filter(
           (user) =>
             !exclusions.ids().has(user.id) &&
             !isSecondaryInbox(user.id) &&
             (!isAutomatedAddress(user.email) ||
-              input.search().trim().toLowerCase() === user.email.toLowerCase())
+              input
+                .search()
+                .trim()
+                .replace(/^macro\|/, '')
+                .toLowerCase() === user.email.toLowerCase())
         )
         // Selected chips outlive this query window: retain scalar display data,
         // not the query-store objects from which it was materialized.

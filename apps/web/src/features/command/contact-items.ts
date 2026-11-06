@@ -70,6 +70,7 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
     const resolved = conversation
       ? {
           ...conversation,
+          ...(item.kind === 'user' ? { personOrder: item.personOrder } : {}),
           ...('searchKey' in item && item.searchKey
             ? { searchKey: item.searchKey }
             : {}),
@@ -82,6 +83,9 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
       previous
         ? {
             ...resolved,
+            ...('personOrder' in previous && previous.personOrder !== undefined
+              ? { personOrder: previous.personOrder }
+              : {}),
             searchText: `${previous.searchText} | ${resolved.searchText}`,
           }
         : resolved

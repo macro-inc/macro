@@ -219,10 +219,9 @@ impl<S: Storage> Engine<S> {
         }
     }
 
-    /// Scoped entry point for the indexed name-first contract. Host activation
-    /// follows the coordinated consumer cutover; the existing menu entry point
-    /// remains separate until then, never an implicit fallback for this read.
-    pub async fn search_people_named(
+    /// Account-fenced indexed name tiers, recent-first within each tier.
+    /// Storage evaluates the bounded plan; core validates every eligible winner.
+    pub async fn search_people(
         &mut self,
         request: &PeopleSearch,
     ) -> Result<PeopleSearchResult, EngineError<S::Error>> {
@@ -243,42 +242,5 @@ impl<S: Storage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
         read.finish().map_err(EngineError::from)
-    }
-
-    /// Stream SQL-filtered records into one bounded heap. Secondary inboxes,
-    /// explicit exclusions, DM substitution and surface scores apply before K.
-    /// Contact records are server-owned/read-only; context stubs do not rank.
-    pub async fn search_people(
-        &mut self,
-        request: &PeopleSearch,
-    ) -> Result<PeopleSearchResult, EngineError<S::Error>> {
-        if request.limit == 0
-            || request.limit > MAX_PEOPLE_BATCH
-            || request.query.len() > subsequence_match::MAX_QUERY_BYTES
-            || request.excluded.len() > MAX_PEOPLE_BATCH
-            || request
-                .sender_domain
-                .as_ref()
-                .is_some_and(|domain| domain.len() > 255)
-        {
-            return Err(PeopleError::InvalidInput.into());
-        }
-        self.people_scope(&request.scope).await?;
-        let ContextState::Ready { epoch } = self.people_context().await? else {
-            return Ok(PeopleSearchResult::ContextPending);
-        };
-        let query = SearchQuery::new(&request.query);
-        let mut ranker = people::ranking::PeopleRanker::new(request, epoch)?;
-        self.storage
-            .visit_contact_records(&query, |key, record| ranker.push(key, record))
-            .await
-            .map_err(EngineError::Storage)?;
-        if ranker.scan_prior_conversations() {
-            self.storage
-                .visit_contact_records(&query, |key, record| ranker.push(key, record))
-                .await
-                .map_err(EngineError::Storage)?;
-        }
-        ranker.finish().map_err(EngineError::from)
     }
 }

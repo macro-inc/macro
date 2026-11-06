@@ -30,10 +30,9 @@ export function ContactDirectoryInspector(props: {
         <Show when={page()}>
           {(value) => (
             <>
-              {value().source === 'cache' ? 'Cached snapshot' : 'Server page'} ·{' '}
-              Cache {value().sync}
+              Local contacts · Cache {value().sync}
               <Show when={value().offline}> · Offline</Show>
-              <Show when={value().source === 'cache' && value().query}>
+              <Show when={value().query}>
                 {' '}
                 · Top cached matches; refine to narrow
               </Show>
@@ -86,7 +85,7 @@ export function ContactDirectoryInspector(props: {
           disabled={props.directory.loading()}
           onClick={props.directory.restart}
         >
-          Restart from server
+          Refresh contacts
         </Button>
         <Button
           variant="secondary"

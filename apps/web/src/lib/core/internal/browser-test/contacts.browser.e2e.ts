@@ -39,20 +39,17 @@ test('bounds pages and search history, preserves target IDs, and isolates accoun
   ).toBe(true);
 });
 
-test('allows continuing an empty server budget page and labels offline partial results', async ({
-  page,
-}) => {
+test('keeps online and offline partial results local', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('[data-contact-id]')).toHaveCount(50);
-  await page.getByRole('button', { name: 'Server mode' }).click();
-  await expect(page.getByRole('status')).toContainText('Server page');
-  await expect(
-    page.getByText('No matches on this page. Continue searching the directory.')
-  ).toBeVisible();
+  await page.getByRole('button', { name: 'Partial cache' }).click();
+  await expect(page.getByRole('status')).toContainText('partial');
+  await expect(page.getByRole('status')).toContainText('Local contacts');
   await page.getByRole('button', { name: 'Next page', exact: true }).click();
-  await expect(page.locator('[data-contact-id]')).toHaveCount(1);
-  await expect(page.locator('[data-contact-id]').first()).toContainText(
-    'Server match'
+  await expect(page.locator('[data-contact-id]')).toHaveCount(50);
+  await expect(page.locator('[data-contact-id]').first()).toHaveAttribute(
+    'data-contact-id',
+    'macro|account-a-50@example.com'
   );
   await page.getByRole('button', { name: 'Offline partial' }).click();
   await expect(page.getByRole('status')).toContainText('partial');

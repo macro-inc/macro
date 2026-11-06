@@ -1,11 +1,11 @@
 import type { IUser } from '@core/user/types';
 import { normalizeNameText } from '@core/util/name-match-score';
-import { matchesTokenSubsequences } from '@core/util/string';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import type { CacheHost } from '@graphql-cache/host/types';
+import { PEOPLE_POLICY_VERSION } from '@graphql-cache/people/generated';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { contactRecordKey } from '@queries/contacts/contact-key';
-import type {
-  ContactDirectoryPageQueryVariables,
-  ContactReferencePageQueryVariables,
-} from '@service-storage/graphql/generated/graphql';
+import type { ContactReferencePageQueryVariables } from '@service-storage/graphql/generated/graphql';
 import { createSignal } from 'solid-js';
 
 const VIEWER = 'macro|viewer@example.com';
@@ -23,33 +23,64 @@ export function registerContactFixture(rows: readonly IUser[]) {
   people = rows;
 }
 export const useQueryAccount = () => () => ({ userId: VIEWER, session: 0 });
-export const getGraphqlSoupCacheHost = () => undefined;
+export const getGraphqlSoupCacheHost = () => host;
 const contact = (user: IUser) => ({
   id: contactRecordKey(VIEWER, user.id).slice('GraphqlContact:'.length),
   userId: user.id,
   name: user.name,
   email: user.email,
 });
-export async function fetchContactDirectoryPage(
-  args: ContactDirectoryPageQueryVariables,
-  signal: AbortSignal
-) {
-  signal.throwIfAborted();
-  const matched = people.filter((user) =>
-    matchesTokenSubsequences(`${user.name} | ${user.email}`, args.search ?? '')
-  );
-  const offset = Number(args.after ?? 0);
-  const end = offset + (args.limit ?? 50);
-  return {
-    user: {
-      id: VIEWER,
-      contacts: {
-        nodes: matched.slice(offset, end).map(contact),
-        nextCursor: end < matched.length ? String(end) : null,
-      },
+const host: CacheHost = {
+  ...createNoopCacheHost(),
+  disabled: false,
+  currentStorageGeneration: async () => '00000000-0000-4000-8000-000000000001',
+  readQuery: async () => ({ kind: 'hit', data: { user: { id: VIEWER } } }),
+  people: {
+    ...unsupportedContactSync,
+    context: async () => ({ kind: 'unsupported' }),
+    update: async () => {
+      throw new Error('Fixture has no publisher');
     },
-  };
-}
+    readSql: async () => ({ kind: 'unsupported' }),
+    resolveReferences: async () => ({ kind: 'unsupported' }),
+    search: async (request) => {
+      const query = normalizeNameText(request.query);
+      const words = query.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      const matched = people.filter((user) => {
+        if (request.excluded.includes(user.id)) return false;
+        if (query.includes('@'))
+          return user.id === query || user.email.toLowerCase() === query;
+        const name = normalizeNameText(user.name);
+        const nameWords = name.split(/[^\p{L}\p{N}]+/u);
+        return (
+          !query ||
+          (words.length > 0 &&
+            words.every((word) =>
+              nameWords.some((name) => name.startsWith(word))
+            )) ||
+          query.split(' ').every((term) => name.includes(term))
+        );
+      });
+      const offset = Number(request.cursor ?? 0),
+        end = offset + request.limit;
+      return {
+        kind: 'page',
+        policyVersion: PEOPLE_POLICY_VERSION,
+        truncated: end < matched.length,
+        nextCursor: end < matched.length ? String(end) : null,
+        people: matched.slice(offset, end).map((user) => ({
+          recordKey: contactRecordKey(VIEWER, user.id),
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          matchRank: 0,
+          score: 0,
+          timestampMs: 0,
+        })),
+      };
+    },
+  },
+};
 export async function fetchContactDirectoryByIds(
   ids: string[],
   signal: AbortSignal

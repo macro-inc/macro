@@ -6,7 +6,7 @@ import { useComboboxContext } from '@kobalte/core/combobox';
 import { Button } from '@ui';
 import { createEffect, Show } from 'solid-js';
 
-/** Pagination remains available even when a bounded server window has no rows. */
+/** Pagination remains available even when a bounded local window has no rows. */
 export function RecipientSourceControls(props: {
   source: RecipientSource<CombinedRecipientKind>;
   resetScroll: () => void;

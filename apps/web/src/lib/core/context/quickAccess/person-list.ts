@@ -40,7 +40,7 @@ export function createPersonList(options: {
     );
     return page.users
       .filter((user) => !options.excluded(user.id))
-      .map((user): UserItem => {
+      .map((user, personOrder): UserItem => {
         const item = contactUserItem({
           id: user.id,
           email: user.email,
@@ -53,7 +53,11 @@ export function createPersonList(options: {
           dm && options.policy().mode === 'command' && options.search().trim()
             ? options.conversation(dm.id)
             : undefined;
-        return target ? { ...item, commandTarget: target } : item;
+        return {
+          ...item,
+          personOrder,
+          ...(target ? { commandTarget: target } : {}),
+        };
       });
   });
   return {

@@ -5,7 +5,7 @@ import {
   MAX_PEOPLE_BATCH,
   MAX_PEOPLE_QUERY_BYTES,
   MAX_REFERENCE_WITNESSES,
-  PEOPLE_POLICY_VERSION,
+  PEOPLE_REFERENCE_POLICY_VERSION,
   type PeopleReferenceRequest,
   PeopleReferenceRequestSchema,
   type PeopleReferenceResult,
@@ -263,7 +263,7 @@ export async function resolveContactReferences(
           };
           if (
             native.kind === 'resolved' &&
-            native.policyVersion >= PEOPLE_POLICY_VERSION
+            native.policyVersion >= PEOPLE_REFERENCE_POLICY_VERSION
           ) {
             if (
               native.matches.length !== nameIndexes.length ||

@@ -21,6 +21,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { matches } from '@core/util/match';
+import { preserveOrderedWindow } from '@core/util/ordered-window';
 import { truncateString } from '@core/util/string';
 import CheckIcon from '@icon/system/regular/check.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
@@ -524,14 +525,21 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     const options: CombinedRecipientItem[] = [];
     const emails = new Set<string>();
 
-    for (const option of [
-      ...(props.options?.() ?? []),
+    const personal: CombinedRecipientItem[] = [];
+    const personalIds = new Set(
+      (source?.items() ?? [])
+        .filter((item) => item.kind === 'user')
+        .map((item) => item.id)
+    );
+    for (const option of uniqueRecipientMatches([
       ...(source?.items() ?? []),
-    ]) {
+      ...(props.options?.() ?? []),
+    ])) {
       const item = option as CombinedRecipientItem;
       const email = getRecipientOptionEmail(item);
 
       if (
+        !(item.kind === 'user' && personalIds.has(item.id)) &&
         (item.kind === 'contact' || item.kind === 'user') &&
         email &&
         isAutomatedAddress(email) &&
@@ -558,8 +566,10 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         emails.add(email.toLowerCase());
       }
 
-      if (item.kind === 'user') {
-        item.data = augmentUserWithDmActivity(item.data);
+      if (item.kind === 'user' && personalIds.has(item.id)) personal.push(item);
+      if (item.kind === 'user' && !personalIds.has(item.id)) {
+        options.push({ ...item, data: augmentUserWithDmActivity(item.data) });
+        continue;
       }
 
       options.push(item);
@@ -573,11 +583,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       raw: options,
       emails,
       sorted,
+      personal,
     };
   });
 
   const options = createMemo(() => {
-    const { raw, emails, sorted } = recipients();
+    const { raw, emails, sorted, personal } = recipients();
     const currentUserInput = inputValue();
 
     // Check if currentUserInput matches any existing email
@@ -606,10 +617,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       typed.push(recipientEntityMapper('custom')(customUserInput));
     }
 
-    // Typed recipients already chosen stay out of the suggestions, where Enter
-    // on text matching nothing would toggle one off and clear the text.
+    // Selected custom chips stay hidden; an async result must not toggle one.
     return uniqueRecipientMatches<CombinedRecipientItem | WithCustomUserInput<K>>(
-      rankRecipientMatches([...searched, ...typed], searchTerm),
+      preserveOrderedWindow(
+        rankRecipientMatches([...searched, ...typed], searchTerm),
+        personal,
+        getRecipientOptionValue
+      ),
       props.selectedOptions
     ) as CombinedRecipientItem<K>[];
   });

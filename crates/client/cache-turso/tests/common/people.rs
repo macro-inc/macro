@@ -112,10 +112,10 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         now_ms: 2_000,
         cursor: None,
     };
-    assert!(matches!(
-        engine.search_people(&request).await.unwrap(),
-        PeopleSearchResult::ContextPending
-    ));
+    assert!(
+        engine.search_people(&request).await.is_err(),
+        "search cannot bind an unowned cache"
+    );
     let epoch = Uuid::now_v7();
     engine
         .update_people_context(&ContextUpdate {
@@ -230,7 +230,7 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         WINNER,
         "DM ranking and exclusions must happen before LIMIT"
     );
-    assert!(people[0].score > 5.0);
+    assert_eq!(people[0].score, 0.0);
     let first_cursor = next_cursor.unwrap();
     request.cursor = Some(first_cursor.clone());
     let PeopleSearchResult::Page {
@@ -255,7 +255,7 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
     assert_eq!(
         before,
         serde_json::to_value(engine.search_people(&request).await.unwrap()).unwrap(),
-        "the cursor pins the scoring clock"
+        "recent-first ordering is independent of the scoring clock"
     );
     request.query = "other".into();
     assert!(engine.search_people(&request).await.is_err());
@@ -354,7 +354,7 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         panic!("ready")
     };
     assert_eq!(people[0].user_id.as_ref(), "macro|p000001@example.com");
-    assert_eq!(people[0].match_rank, 3);
+    assert_eq!(people[0].match_rank, 5);
     request.mode = PeopleMode::Mention;
     request.query = "al".into();
     let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()
@@ -375,8 +375,8 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
     };
     assert_eq!(
         people[0].user_id.as_ref(),
-        VIEWER,
-        "property self boost applies before the window limit"
+        DUPLICATE,
+        "typed property matches use interaction recency, not a self boost"
     );
     request.query.clear();
     let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()

@@ -1,6 +1,5 @@
 import { contactRecordKey } from '@queries/contacts/contact-key';
 import { createSignal } from 'solid-js';
-import { fetchTeamContactPage } from './onboarding-contact-network';
 
 export const [lookupIds, setLookupIds] = createSignal<readonly string[]>([]);
 export const [lookupSizes, setLookupSizes] = createSignal<number[]>([]);
@@ -32,8 +31,6 @@ export async function fetchContactDirectoryPage(
   variables: ContactDirectoryPageQueryVariables,
   signal: AbortSignal
 ): Promise<ContactDirectoryPageQuery> {
-  if (new URLSearchParams(location.search).has('onboarding-contacts'))
-    return fetchTeamContactPage(variables, signal);
   signal.throwIfAborted();
   return {
     user: {

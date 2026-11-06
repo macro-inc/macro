@@ -1,8 +1,8 @@
 //! Bounded evidence for resolving inferred labels across the cached directory.
 
 use super::{
-    CONTEXT_FIELD, MAX_PEOPLE_BATCH, MAX_REFERENCE_WITNESSES, PEOPLE_POLICY_VERSION, PeopleError,
-    StoredFacts,
+    CONTEXT_FIELD, MAX_PEOPLE_BATCH, MAX_REFERENCE_WITNESSES, PEOPLE_REFERENCE_POLICY_VERSION,
+    PeopleError, StoredFacts,
 };
 use crate::{
     engine::HydrationScope,
@@ -257,7 +257,7 @@ impl<'a> ReferenceCollector<'a> {
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(PeopleReferenceResult::Resolved {
-            policy_version: PEOPLE_POLICY_VERSION,
+            policy_version: PEOPLE_REFERENCE_POLICY_VERSION,
             matches,
         })
     }

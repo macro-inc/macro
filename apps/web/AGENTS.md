@@ -56,7 +56,9 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error or server continuation. Resolve self separately
+window, never an authorization error. Interactive contact suggestions stay local:
+partial sync returns partial local results; unavailable or older hosts never fall
+back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Contact invalidations from messages, native sharing and websocket events call
@@ -64,13 +66,15 @@ Contact invalidations from messages, native sharing and websocket events call
 runner owns the work. Full-list hooks, query keys and handwritten GET clients
 are retired; no compatibility query should be created by an invalidation.
 Ranked person
-cursors and contact reconciliation use coordinator protocol 17; native menu policy version 4 retains
-mention scoring/property boosts and excludes automated recipient addresses before
-the limit unless their full address was typed. Generate the policy floor from Rust
-with the transport schema; older policy replies are not ranked
-native windows. Cursors bind scope/policy/epoch and retain
-only a scoring position/clock, not previous result IDs. Honor continuations on
-short/empty pages and keep server fallback explicitly source-ordered.
+cursors and contact reconciliation use coordinator protocol 17; native menu policy 5
+orders exact names, all-word prefixes, then literal contains by recency and identity.
+Explicit addresses/IDs never match name aliases; empty property browsing pins self.
+Exclude automated recipient addresses before limiting unless explicitly addressed.
+Generate separate suggestion/reference policy floors from Rust; reference evidence
+stays policy 4. Preserve personal window order through command/DM merging, mentions,
+properties and recipient composition. Cursors bind scope/policy/layout and live
+membership/context tokens, not previous result IDs or a scoring clock. Contact
+changes invalidate pending replies and restart paging; honor short/empty continuations.
 Quick Access person lists are per-observer windows, never global item-cache rows.
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for their current window. Reset virtual focus/scroll on window
@@ -142,8 +146,8 @@ any constraints. Preserve semantic Me separately from fixed self and resolve sav
 summary labels from their own IDs. Inline checklist labels resolve only referenced
 task assignees, in lookup-sized batches whose owners disappear with those references;
 never populate a personal-directory map or the shared name cache for them.
-Onboarding team prefill searches only the server-approved domain, follows bounded
-continuations until six distinct non-self emails or exhaustion, and retains only
+Onboarding team prefill filters local browse windows to the server-approved domain,
+follows bounded continuations until six distinct non-self emails or exhaustion, and retains only
 that seed. No approved domain means no contact reads. Scope the source by account,
 session and cache generation; preserve the form's first settled seed through refreshes.
 Linear import resolves only current CSV assignees, serially in 500-label exact-reference
@@ -346,20 +350,21 @@ Keep the shared uploader from restoring removed attachments or publishing after
 the composer is disposed. The Share button and shortcut use the same upload guard.
 Keep Share composers free of a paperclip button on desktop and mobile; preserve image paste and file drop.
 
-Menus that find entities by typed name (Command-K, mobile name search, @
+Non-personal entity rows in typed-name menus (Command-K, mobile name search, @
 mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
 to the query first, then names starting with it, then other matches, with tight
 matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
-match. Tune name relevance there for every menu.
+match. Personal contact rows instead preserve policy-5 source order; tune only
+ordinary entity relevance here.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
-Cmd+K and mobile name search widen the first group: a query equal to the first
-word of a DM or person name counts as exact, so a person's first name reaches
-their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+Ordinary DM entity matching in Cmd+K and mobile name search treats the first
+name as exact, so it reaches a full-name DM; personal contact windows keep their
+independent policy-5 tiers. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
 Quick Access, and Soup search including the Chat sidebar) matches channels and
 DMs by terms in any order, adding to uFuzzy's in-order matches, because names
 are generated from participants and people type them in any order. It also

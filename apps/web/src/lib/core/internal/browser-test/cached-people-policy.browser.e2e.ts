@@ -51,12 +51,12 @@ test('real cached recipients preserve custom selections and react to published D
     .getByRole('button', { name: 'Update recency', exact: true })
     .click();
   await input.fill('person');
-  await expect(page.getByRole('option').first()).toContainText('Person 5');
+  await expect(page.getByRole('option').first()).toContainText('Person 50');
   await expect(
     page.getByRole('option', { name: /person3@example.com/ })
   ).toHaveCount(0);
   await input.press('Enter');
   await expect(page.getByTestId('policy-selections')).toHaveText(
-    '["macro|outside@example.com","macro|person4@example.com","macro|person5@example.com"]'
+    '["macro|outside@example.com","macro|person4@example.com","macro|person50@example.com"]'
   );
 });

@@ -1519,8 +1519,10 @@ recency-led; existing People preview slots and phone pinning remain. Name-match
 tuning is shared with Cmd+K in `NAME_MATCH_RANKING` (`@core/util/freshSort`);
 recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
-Broader cache/server matches remain reachable even when the local fuzzy matcher
-would omit them. To verify, type `@task` with a project named `Task planning`
+Broader entity matches remain reachable even when the local fuzzy matcher would
+omit them. Personal contacts preserve their local exact/word-prefix/contains and
+recent-first window order; mixed menu scoring never reorders that window or drops
+reverse-word matches. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
 preview rows and stay near the top in **View all**. Select it with Enter or a
 phone tap and confirm a project mention is inserted.

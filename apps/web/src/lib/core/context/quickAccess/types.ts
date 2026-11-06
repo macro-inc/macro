@@ -101,6 +101,8 @@ type QuickAccessBase = {
   searchKey?: string;
   searchText: string;
   sortTimestamp: number;
+  /** Position in the current matched personal window; never a history index. */
+  personOrder?: number;
   timestamps: ItemTimestamps;
 };
 

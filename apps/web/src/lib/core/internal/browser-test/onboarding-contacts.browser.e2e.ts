@@ -17,7 +17,7 @@ test('team onboarding caps same-domain prefill and preserves manual edits throug
   ).toHaveValue('member5@team.example.com');
   await expect(page.getByTestId('onboarding-contact-count')).toHaveText('6');
   await expect(page.getByTestId('onboarding-contact-requests')).toContainText(
-    '"search":"@team.example.com"'
+    '"query":""'
   );
   await page.getByLabel('Workspace name').fill('Edited workspace');
   await page

@@ -16,10 +16,10 @@ beforeEach(() => {
 it('follows empty continuations and bounds retained suggestions, excluding self and domain aliases', async () => {
   read.mockImplementation(async (viewer, _host, request) => {
     const page =
-      request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+      request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
     return {
       query: request.query,
-      source: 'server',
+      source: 'cache',
       sync: 'unavailable',
       offline: false,
       users:
@@ -45,7 +45,9 @@ it('follows empty continuations and bounds retained suggestions, excluding self 
       nextCursor: {
         userId: viewer,
         query: request.query,
-        source: 'server',
+        source: 'people',
+        generation: 'fixture',
+        policyKey: '',
         after: String(page + 1),
       },
     };
@@ -64,7 +66,7 @@ it('follows empty continuations and bounds retained suggestions, excluding self 
   expect(read).toHaveBeenCalledTimes(6);
   expect(
     read.mock.calls.every(
-      (call) => call[2].query === '@team.example.com' && call[2].limit === 50
+      (call) => call[2].query === '' && call[2].limit === 50
     )
   ).toBe(true);
 });
@@ -84,7 +86,7 @@ it('deduplicates addresses case-insensitively and stops at source exhaustion', a
         name: 'One',
       },
     ],
-    source: 'server',
+    source: 'cache',
     sync: 'unavailable',
     offline: false,
     nextCursor: null,
@@ -122,9 +124,9 @@ it('discards an aborted response without advancing or publishing suggestions', a
   await started.promise;
   controller.abort();
   page.resolve({
-    query: '@team.example.com',
+    query: '',
     users: [],
-    source: 'server',
+    source: 'cache',
     sync: 'unavailable',
     offline: false,
     nextCursor: null,
@@ -135,15 +137,17 @@ it('discards an aborted response without advancing or publishing suggestions', a
 
 it('rejects a nonadvancing continuation without accumulating history', async () => {
   read.mockResolvedValue({
-    query: '@team.example.com',
+    query: '',
     users: [],
-    source: 'server',
+    source: 'cache',
     sync: 'unavailable',
     offline: false,
     nextCursor: {
       userId: 'viewer',
-      query: '@team.example.com',
-      source: 'server',
+      query: '',
+      source: 'people',
+      generation: 'fixture',
+      policyKey: '',
       after: 'same',
     },
   });

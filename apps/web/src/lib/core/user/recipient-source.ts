@@ -6,6 +6,8 @@ import type {
 
 /** One picker owns one replaceable page; selected chips belong to its caller. */
 export type RecipientSource<K extends CombinedRecipientKind> = {
+  /** User rows are already query-matched and ordered; non-user scoped extras
+   * are matched locally. Do not rescore or drop personal rows in the picker. */
   items: Accessor<CombinedRecipientItem<K>[]>;
   loading: Accessor<boolean>;
   error: Accessor<Error | null>;

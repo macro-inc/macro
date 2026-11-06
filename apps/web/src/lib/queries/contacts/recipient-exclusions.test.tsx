@@ -30,7 +30,7 @@ it('excludes scoped rosters within the IPC budget and restarts when overflow exc
     .mockImplementation(async (viewer, _host, request) => {
       const excluded = new Set(request.policy?.excluded);
       let index =
-        request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+        request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
       const users = [];
       while (index < 100_000 && users.length < 50) {
         const number = index++;
@@ -44,14 +44,15 @@ it('excludes scoped rosters within the IPC budget and restarts when overflow exc
       }
       return {
         users,
-        source: 'server',
+        source: 'cache',
         sync: 'unavailable',
         offline: false,
         query: request.query,
         nextCursor:
           index < 100_000
             ? {
-                source: 'server',
+                source: 'people',
+                generation: 'fixture',
                 after: String(index),
                 userId: viewer,
                 query: request.query,
@@ -120,7 +121,7 @@ it('retains an empty continuation after filtering an oversized scoped roster', a
     .fn<typeof readContactDirectory>()
     .mockImplementation(async (viewer, _host, request) => ({
       query: request.query,
-      source: 'server',
+      source: 'cache',
       sync: 'unavailable',
       offline: false,
       users: [
@@ -131,7 +132,8 @@ it('retains an empty continuation after filtering an oversized scoped roster', a
         },
       ],
       nextCursor: {
-        source: 'server',
+        source: 'people',
+        generation: 'fixture',
         after: 'next',
         userId: viewer,
         query: request.query,

@@ -138,7 +138,7 @@ async fn parity(
     epoch: Uuid,
 ) -> PeopleSearchResult {
     let reference = reference(engine, request, epoch).await;
-    let indexed = engine.search_people_named(request).await.unwrap();
+    let indexed = engine.search_people(request).await.unwrap();
     assert_eq!(
         serde_json::to_value(&indexed).unwrap(),
         serde_json::to_value(reference).unwrap(),
@@ -288,7 +288,7 @@ fn current_epoch_overrides_inboxes_and_dm_aliases_do_not_weaken_membership() {
             .unwrap();
         assert!(matches!(
             engine
-                .search_people_named(&request(&scope, "late", PeopleMode::Recipient))
+                .search_people(&request(&scope, "late", PeopleMode::Recipient))
                 .await
                 .unwrap(),
             PeopleSearchResult::ContextPending
@@ -309,7 +309,7 @@ fn current_epoch_overrides_inboxes_and_dm_aliases_do_not_weaken_membership() {
         .await;
         let mut foreign = request(&scope, "", PeopleMode::Recipient);
         foreign.scope.identity = "macro|foreign@example.com".into();
-        assert!(engine.search_people_named(&foreign).await.is_err());
+        assert!(engine.search_people(&foreign).await.is_err());
     });
 }
 #[test]
@@ -328,7 +328,7 @@ fn indexed_name_search_100k() {
         ] {
             let request = request(&scope, query, PeopleMode::Recipient);
             let start = std::time::Instant::now();
-            let result = engine.search_people_named(&request).await.unwrap();
+            let result = engine.search_people(&request).await.unwrap();
             let elapsed = start.elapsed();
             let expected = reference(&engine, &request, EPOCH).await;
             assert_eq!(
@@ -384,7 +384,7 @@ fn stale_projection_refuses_instead_of_reporting_empty_membership() {
         .unwrap();
         assert!(
             engine
-                .search_people_named(&request(&scope, "", PeopleMode::Recipient))
+                .search_people(&request(&scope, "", PeopleMode::Recipient))
                 .await
                 .is_err()
         );

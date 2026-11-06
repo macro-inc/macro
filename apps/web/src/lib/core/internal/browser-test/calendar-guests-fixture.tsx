@@ -59,7 +59,7 @@ function useList(
       setLastExclusions(request.policy?.excluded ?? []);
       const excluded = new Set(request.policy?.excluded);
       let start =
-        request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+        request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
       if (request.query === 'late') start = 99_999;
       if (request.query === 'broader') start = 99_998;
       const users = [];
@@ -93,13 +93,14 @@ function useList(
       return {
         query: request.query,
         users,
-        source: 'server',
-        sync: 'unavailable',
+        source: 'cache',
+        sync: 'partial',
         offline: false,
         nextCursor:
           !request.query && start < 100_000
             ? {
-                source: 'server',
+                source: 'people',
+                generation: 'fixture',
                 userId: viewer,
                 query: request.query,
                 after: String(start),

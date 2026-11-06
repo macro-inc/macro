@@ -51,7 +51,7 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
                 .await
                 .unwrap();
             let expected = expected.finish().unwrap();
-            let actual = engine.search_people_named(&request).await.unwrap();
+            let actual = engine.search_people(&request).await.unwrap();
             assert_eq!(
                 serde_json::to_value(&actual).unwrap(),
                 serde_json::to_value(expected).unwrap(),
@@ -77,7 +77,7 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
         cursor: None,
     };
     let PeopleSearchResult::Page { next_cursor, .. } =
-        engine.search_people_named(&request).await.unwrap()
+        engine.search_people(&request).await.unwrap()
     else {
         panic!("page");
     };
@@ -99,7 +99,7 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
         )])
         .unwrap();
     assert_eq!(version, engine.people_read_version());
-    engine.search_people_named(&request).await.unwrap();
+    engine.search_people(&request).await.unwrap();
     engine
         .update_people_context(&ContextUpdate {
             scope: scope.clone(),
@@ -117,11 +117,11 @@ pub async fn contract<S: Storage>(engine: &mut Engine<S>, scope: &HydrationScope
         .await
         .unwrap();
     assert_ne!(version, engine.people_read_version());
-    assert!(engine.search_people_named(&request).await.is_err());
+    assert!(engine.search_people(&request).await.is_err());
     engine.clear().await.unwrap();
     assert!(
         engine
-            .search_people_named(&PeopleSearch {
+            .search_people(&PeopleSearch {
                 scope: scope.clone(),
                 mode: PeopleMode::Recipient,
                 query: String::new(),

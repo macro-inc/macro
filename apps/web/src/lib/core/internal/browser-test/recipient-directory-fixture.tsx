@@ -34,7 +34,7 @@ export function RecipientDirectoryFixture() {
   ) => {
     setReads((value) => value + 1);
     const offset =
-      request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+      request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
     const ids =
       request.query === 'rare'
         ? [99_999]
@@ -53,8 +53,8 @@ export function RecipientDirectoryFixture() {
       (request.query === 'empty' && !offset);
     setLoaded(ids.length);
     return {
-      source: 'server',
-      sync: 'unavailable',
+      source: 'cache',
+      sync: 'partial',
       offline: false,
       query: request.query,
       users: ids.map((id) => ({
@@ -69,7 +69,8 @@ export function RecipientDirectoryFixture() {
       })),
       nextCursor: hasNext
         ? {
-            source: 'server',
+            source: 'people',
+            generation: 'fixture',
             after: String(offset + 50),
             userId: viewer,
             query: request.query,

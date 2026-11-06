@@ -14,8 +14,6 @@ use std::collections::HashSet;
 use subsequence_match::{normalize_text, ranking::is_automated_recipient_local_part};
 use uuid::Uuid;
 
-/// New reader contract; the host floor is switched in the coordinated cutover.
-pub const NAME_POLICY_VERSION: u32 = 5;
 /// Bound query planning as well as raw text.
 pub const MAX_QUERY_WORDS: usize = 32;
 
@@ -110,7 +108,7 @@ impl<'a> NameSearchRead<'a> {
         let fingerprint = format!(
             "{:x}",
             Sha256::digest(serde_json::to_vec(&(
-                NAME_POLICY_VERSION,
+                crate::people::PEOPLE_POLICY_VERSION,
                 crate::people::sql::projection::VERSION,
                 &request.scope,
                 epoch,
@@ -445,7 +443,7 @@ impl<'a> NameSearchRead<'a> {
             None
         };
         Ok(PeopleSearchResult::Page {
-            policy_version: NAME_POLICY_VERSION,
+            policy_version: crate::people::PEOPLE_POLICY_VERSION,
             people: self
                 .best
                 .into_iter()

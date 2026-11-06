@@ -1241,21 +1241,21 @@ Remaining ranking end-to-end validation and whole-app acceptance are tracked in
 
 ### Deterministic person-policy foundation
 
-`subsequence_match::ranking` and the browser name scorer use corpus-independent
-quality and the same recipient tiers, rather than scaling a row against the
-strongest result currently loaded. Surface weights and boosts remain explicit;
-command keywords retain their dedicated eligibility matcher.
+Ordinary entity/name scoring remains corpus-independent. Personal suggestions use
+policy 5: exact names, all-word prefixes, then literal contains, recent-first with
+identity ties. Complete addresses and Macro IDs cannot match display-name aliases.
+Command keywords keep their separate matcher; reference evidence stays policy 4.
 
 The core's new person-policy API stores local DM recency/command-target and
 secondary-inbox facts as private fields on existing normalized record keys. Only
 server-supplied complete contact records can rank. Context snapshots use scoped,
 compare-and-set begin/patch/commit epochs; patches cap at 500 and incomplete
-snapshots report pending, not an empty directory. Search streams matching records
-into at most `limit + 1` unique winners, applying exclusions and DM deduplication
-before that limit. This joined-record path explicitly uses the partial covering
-contact-payload index included in the unpublished schema-12 cutover. It still costs
-more than ordinary covering-only title search, but avoids a second record-table
-lookup; no final SQL candidate limit, new database or format/version bump is added.
+snapshots report pending, not an empty directory. The indexed reader probes bounded
+posting/rank windows in the existing predicate index and retains at most `limit + 1`
+winners, applying exclusions and DM deduplication before stopping. Complete matching
+streams handle insufficient rank probes; arbitrary candidate truncation is not valid.
+Point reads use the covering contact-payload index in unpublished schema 12. There
+is no new database/table, schema cutover or remote search fallback.
 The core hoists viewer namespace hashing and keeps exact key validation with a
 stack buffer. Shared automated-mailbox eligibility retains all existing semantics
 while fast-rejecting nonmatching local parts. `CacheHost.people` now exposes state,
@@ -1278,10 +1278,10 @@ Cache hints wake readiness transitions, not an HTTP rescan on every hydrated pag
 The app's retiring-host wrapper forwards this capability through the current host,
 including methods captured before disposal. Retired reads report unsupported;
 retired context writes reject instead of acknowledging a discarded publication.
-Ranked person continuations bind the scope, policy and publication epoch and pin
-the first window's scoring clock. A bounded-memory second pass suppresses prior
-DM aliases; short/empty pages can still continue. Ordinary incremental changes
-have keyset semantics; this is not a transactional directory snapshot.
+Ranked continuations bind scope, policy/layout, publication epoch and live contact/
+context tokens. Same-epoch patches invalidate pages without staling them on unrelated
+cache writes. Bounded target lookups suppress prior DM aliases; short/empty pages
+still continue. Frontend person invalidations fence pending replies and restart paging.
 Rust-derived Zod contracts validate ingress and bounded replies; missing native
 commands/older WASM report unsupported reads and reject writes. Scope and storage
 errors are never swallowed. Context updates publish person hydration hints only.
@@ -1308,13 +1308,14 @@ without directory-sized maps. Unassigned is a local value, not membership.
 Query-driven comboboxes retain typed input across page/metadata replacement.
 CRM Owner chips use the same lazy source/selected-label separation, while header
 options stay team-scoped. Local empty values never enter membership lookup.
-Native policy version 4 retains mention
-scoring and property self/domain boosts. Document/project/call discussion mentions
+Native policy 5 order survives command/DM merging, mention ranking, recipient
+composition and property selection. Empty property browsing alone pins self. Document/project/call discussion mentions
 also delegate to that window; channel/CRM/explicit rosters stay scoped even while
 empty. Agent transforms decorate only current rows, keeping original native
 metadata for unchanged people. Recipient policy excludes automated mailboxes
 before the result limit unless a full address was typed. The policy floor is generated
-from Rust alongside the transport schemas; older replies use bounded server fallback.
+from Rust alongside the transport schemas; older replies remain unavailable. Partial
+sync returns local partial windows, and explicit refresh schedules background sync.
 Creation/sharing and main email recipient controls now own paged sources; email
 threads retain scoped addresses, not an address book. Channel invitations and
 participant pickers also use those sources, with existing roster IDs excluded and
@@ -1323,8 +1324,8 @@ Universal Input recipient/search/guest references now use complete per-label evi
 and independent picker/mention windows. Tasks filters use lazy windows too; their
 planner extracts references without a personal catalog and resolves complete evidence
 before applying any constraints. Inline checklist labels resolve only task-referenced
-IDs in bounded batches, not a directory map. Onboarding searches only its approved
-domain and retains at most six non-self emails, with zero-history scoped queries.
+IDs in bounded batches, not a directory map. Onboarding filters bounded local browse
+windows to its approved domain and retains at most six non-self emails, with zero-history scoped queries.
 Linear import resolves only uploaded assignee labels in serial bounded exact batches;
 manual mapping uses personal property windows and keeps explicit choices separate.
 Its retained names scale with the uploaded file, not the personal directory.

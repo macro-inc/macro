@@ -118,7 +118,7 @@ function useList(
       const start =
         request.query === 'late'
           ? 99_999
-          : request.cursor?.source === 'server'
+          : request.cursor?.source === 'people'
             ? Number(request.cursor.after)
             : 0;
       const ids =
@@ -129,8 +129,8 @@ function useList(
             )
           : [];
       return {
-        source: 'server',
-        sync: 'unavailable',
+        source: 'cache',
+        sync: 'partial',
         offline: false,
         query: request.query,
         users: ids.map((i) => ({
@@ -144,7 +144,9 @@ function useList(
         nextCursor:
           ids.length && start + ids.length < 100_000
             ? {
-                source: 'server',
+                source: 'people',
+                generation: 'fixture',
+                policyKey: '',
                 userId: viewer,
                 query: request.query,
                 after: String(start + ids.length),

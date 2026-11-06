@@ -7,6 +7,7 @@ import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
 import { isEditableInput } from '@core/util/isEditableInput';
+import { preserveOrderedWindow } from '@core/util/ordered-window';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -357,20 +358,29 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (props.config.specificEntityType === 'USER' && !props.config.users) {
       const eligible = allEntities.filter(excludeFilter);
-      if (!term) return sortEntitiesWithSelfFirst(eligible, userId);
-      const matched = entitySearch(eligible, term).map((result) => result.item);
-      const found = new Set(matched.map((entity) => entity.id));
-      const page = new Set(quickAccessItems().map((item) => item.id));
-      // A person page is already bounded. Do not discard its tail behind a
-      // second cap, or drop broader native/server matches in a local matcher.
+      const byId = new Map(eligible.map((entity) => [entity.id, entity]));
+      const page = quickAccessItems().flatMap((item) => {
+        const entity = byId.get(item.id);
+        return entity ? [entity] : [];
+      });
+      const pageIds = new Set(page.map((entity) => entity.id));
+      const extras = eligible.filter((entity) => !pageIds.has(entity.id));
+      // Selected/scoped extras remain independent; personal windows retain the
+      // storage order and eligibility rather than being rescored or capped.
       return [
-        ...matched,
-        ...eligible.filter(
-          (entity) => page.has(entity.id) && !found.has(entity.id)
-        ),
+        ...page,
+        ...(term ? entitySearch(extras, term).map(({ item }) => item) : extras),
       ];
     }
 
+    const eligibleById = new Map(
+      allEntities.filter(excludeFilter).map((entity) => [entity.id, entity])
+    );
+    const personal = quickAccessItems().flatMap((item) => {
+      if (item.kind !== 'user' || item.personOrder === undefined) return [];
+      const entity = eligibleById.get(item.id);
+      return entity ? [entity] : [];
+    });
     // Get visible entities based on search
     // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     let localResults: CombinedEntity[];
@@ -391,10 +401,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         .filter((entity) => !excludedIds?.has(entity.id))
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
-      return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
+      return preserveOrderedWindow(
+        [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS),
+        personal,
+        (entity) => entity.id
+      );
     }
 
-    return localResults;
+    return preserveOrderedWindow(localResults, personal, (entity) => entity.id);
   });
 
   // Sort entities with selected items first when not searching. Self is

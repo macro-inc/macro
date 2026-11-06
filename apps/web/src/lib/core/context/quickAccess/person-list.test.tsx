@@ -24,7 +24,7 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
       const id = request.cursor ? 'next' : 'first';
       return {
         kind: 'page',
-        policyVersion: 4,
+        policyVersion: 5,
         people: [
           {
             recordKey: `GraphqlContact:${id}`,

@@ -1,7 +1,7 @@
 # Name-focused contact search — approved, implementation in progress
 
-The current contact search is memory-bounded, but broad subsequence reads still
-score most of the directory. This proposal changes the interactive **people search
+The previous contact search was memory-bounded, but broad subsequence reads still
+scored most of the directory. This proposal changes the interactive **people search
 contract**, not ordinary document/title search, SQL capability, membership authority,
 or exact-reference ambiguity evidence. The matching/recent-first contract is approved.
 
@@ -15,17 +15,20 @@ or exact-reference ambiguity evidence. The matching/recent-first contract is app
   epoch-scoped activity/DM/inbox facts in the existing owned predicate projection.
 - [x] Fact-delta persistence and bounded derived-version rebuild preserving records,
   pending writes and storage generation; context changes do not rewrite name words.
-- [x] Staged indexed hybrid reader, before-limit exclusions and query-dependent DM
-  alias handling, and scope/projection/context-safe continuations. Native and OPFS
-  paths match a complete streaming reference. The active host still calls policy 4.
-- [ ] Coordinated browser/native/server-fallback policy cutover, preventing consumer
-  re-ranking from replacing the new ordering; exact-reference APIs remain separate.
+- [x] Indexed hybrid reader, before-limit exclusions and query-dependent DM alias
+  handling, and scope/projection/context-safe continuations. Native and OPFS paths
+  match a complete streaming reference.
+- [x] Local-only browser/native policy-5 cutover. Consumers preserve the returned
+  personal order; interactive server fallback and the old person scorer are removed.
+  Exact-reference APIs retain their independent policy-4 contract.
 - [ ] Full browser/native/OPFS correctness and fresh 1k/100k performance comparison.
 
-**Active picker behavior is not switched yet.** `Engine::search_people_named` and
-`NameSearchRead` implement the staged policy-5 path; hosts still use policy 4 until
-consumer ordering and bounded server fallback are switched coherently. The old
-collector is temporary during this cutover, not a new fallback.
+`Engine::search_people` now uses `NameSearchRead` and the indexed storage path.
+Suggestions never call server search or downgrade to generic text search. Partial
+hydration returns partial local windows; missing/older capabilities and unpublished
+context remain explicitly unavailable. Refresh schedules the existing background
+sync lane. Live contact changes invalidate pending replies and restart paging.
+Scoped extras and selected labels remain separate; ordinary entity scoring is unchanged.
 
 The reader uses at most 129 probe IDs and K+1 winners. Broad probes inspect at most
 4096 rank keys per default/current-epoch stream; when that is insufficient, complete
@@ -161,8 +164,9 @@ array. A naive longest-token seed was inferior to a more selective posting range
 - Bound per-name index derivation and input work. Long/malformed names and short or
   punctuation-only input need explicit behavior, not dropped membership or a
   directory-sized fallback buffer.
-- Make the bounded server fallback follow the chosen matching contract while keeping
-  its source-ordered/completeness semantics honest. This is not PostgreSQL SQL parity.
+- Keep interactive suggestions local-only. Server access supplies authorized
+  synchronization/removal evidence, not a fallback search request. Preserve deployed
+  SDK/backend search compatibility independently.
 - Benchmark the complete browser/OPFS path, realistic activity distributions and
   adversarial name/rank correlation before claiming the prototype gain. Measure
   index-write cost, disk, WASM capacity and retained JS again.

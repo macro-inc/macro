@@ -2,6 +2,7 @@ import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
 import { useEmail } from '@core/context/user';
 import type { IUser } from '@core/user';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
@@ -83,6 +84,7 @@ export function useUsersMention(
     return users.map((user): UserItem => {
       const row = rows.get(user.id);
       if (row?.data === user) return row;
+      if (row) return { ...row, data: user };
       return {
         id: user.id,
         data: user,
@@ -123,6 +125,14 @@ export function useUsersMention(
   const users = createLazyMemo(() => {
     const term = searchTerm();
     const list = usersList();
+    if (usesDirectory()) {
+      const personal = list.filter((item) => item.personOrder !== undefined);
+      const extras = userSearch()(
+        list.filter((item) => item.personOrder === undefined),
+        term
+      ).map(({ item }) => item);
+      return preservePersonOrder([...personal, ...extras], list);
+    }
     return userSearch()(list, term).map(({ item }) => item);
   });
 
