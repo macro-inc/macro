@@ -9,6 +9,7 @@ import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { CallMediaControls } from './CallControls/CallMediaControls';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { useActiveCallCompanion } from './use-active-call-companion';
@@ -21,6 +22,7 @@ export function CallQuickControls(props: {
   controls: readonly QuickControl[];
   size?: 'icon-md' | 'icon-lg';
   channelName?: string;
+  settings?: boolean;
 }) {
   const call = useCallContext();
   const sharing = useActiveCallTeamShare();
@@ -41,85 +43,105 @@ export function CallQuickControls(props: {
       })
     );
   };
+  const SharingControl = () => (
+    <Show when={props.controls.includes('sharing') && sharing.canToggle()}>
+      <CallSharingMenu
+        size="md"
+        compact={props.settings}
+        channelName={props.channelName}
+        sharedWithTeam={call.isSharedWithTeam()}
+        disabled={call.isConnecting() || sharing.isPending()}
+        onToggle={() => fireAndForget(sharing.toggle(), 'call-quick-controls')}
+        onOpenChange={() => {}}
+      />
+    </Show>
+  );
   return (
-    <div class="flex items-center gap-1.5 p-2">
-      <Button
-        variant="secondary"
-        size={props.size ?? 'icon-md'}
-        aria-label={
-          call.isAudioMuted()
-            ? t('calls.microphoneOn')
-            : t('calls.microphoneOff')
-        }
-        disabled={call.isConnecting()}
-        onClick={() => fireAndForget(call.toggleAudio(), 'call-quick-controls')}
-      >
-        <Show
-          when={call.isAudioMuted()}
-          fallback={<Microphone class="size-4" />}
-        >
-          <MicrophoneSlash class="size-4 text-failure" />
-        </Show>
-      </Button>
-      <Show when={props.controls.includes('camera')}>
-        <Button
-          variant="secondary"
-          size={props.size ?? 'icon-md'}
-          aria-label={
-            call.isVideoMuted() ? t('calls.cameraOn') : t('calls.cameraOff')
-          }
-          disabled={call.isConnecting()}
-          onClick={() =>
-            fireAndForget(call.toggleVideo(), 'call-quick-controls')
-          }
-        >
-          <Show
-            when={call.isVideoMuted()}
-            fallback={<VideoCamera class="size-4" />}
+    <Show
+      when={props.settings}
+      fallback={
+        <div class="flex items-center gap-1.5 p-2">
+          <Button
+            variant="secondary"
+            size={props.size ?? 'icon-md'}
+            aria-label={
+              call.isAudioMuted()
+                ? t('calls.microphoneOn')
+                : t('calls.microphoneOff')
+            }
+            disabled={call.isConnecting()}
+            onClick={() =>
+              fireAndForget(call.toggleAudio(), 'call-quick-controls')
+            }
           >
-            <VideoCameraSlash class="size-4 text-failure" />
+            <Show
+              when={call.isAudioMuted()}
+              fallback={<Microphone class="size-4" />}
+            >
+              <MicrophoneSlash class="size-4 text-failure" />
+            </Show>
+          </Button>
+          <Show when={props.controls.includes('camera')}>
+            <Button
+              variant="secondary"
+              size={props.size ?? 'icon-md'}
+              aria-label={
+                call.isVideoMuted() ? t('calls.cameraOn') : t('calls.cameraOff')
+              }
+              disabled={call.isConnecting()}
+              onClick={() =>
+                fireAndForget(call.toggleVideo(), 'call-quick-controls')
+              }
+            >
+              <Show
+                when={call.isVideoMuted()}
+                fallback={<VideoCamera class="size-4" />}
+              >
+                <VideoCameraSlash class="size-4 text-failure" />
+              </Show>
+            </Button>
           </Show>
-        </Button>
-      </Show>
-      <Show when={props.controls.includes('screen')}>
-        <Button
-          variant={call.isScreenSharing() ? 'accent' : 'secondary'}
-          size={props.size ?? 'icon-md'}
-          aria-label={t('calls.shareScreenTitle')}
-          disabled={call.isConnecting() || screenUnavailable()}
-          onClick={() =>
-            fireAndForget(call.toggleScreenShare(), 'call-quick-controls')
-          }
-        >
-          <Screencast class="size-4" />
-        </Button>
-      </Show>
-      <Show when={props.controls.includes('sharing') && sharing.canToggle()}>
-        <CallSharingMenu
-          size="md"
-          channelName={props.channelName}
-          sharedWithTeam={call.isSharedWithTeam()}
-          disabled={call.isConnecting() || sharing.isPending()}
-          onToggle={() =>
-            fireAndForget(sharing.toggle(), 'call-quick-controls')
-          }
-          onOpenChange={() => {}}
-        />
-      </Show>
-      <span class="flex-1" />
-      <Show when={companion.canLeave()}>
-        <Button
-          variant="danger"
-          size={props.size ?? 'icon-md'}
-          class="min-w-11"
-          aria-label={t('calls.leave')}
-          onClick={() =>
-            fireAndForget(companion.leave(), 'call-quick-controls')
-          }
-        >
-          <PhoneDisconnect class="size-4" />
-        </Button>
-      </Show>
-    </div>
+          <Show when={props.controls.includes('screen')}>
+            <Button
+              variant={call.isScreenSharing() ? 'accent' : 'secondary'}
+              size={props.size ?? 'icon-md'}
+              aria-label={t('calls.shareScreenTitle')}
+              disabled={call.isConnecting() || screenUnavailable()}
+              onClick={() =>
+                fireAndForget(call.toggleScreenShare(), 'call-quick-controls')
+              }
+            >
+              <Screencast class="size-4" />
+            </Button>
+          </Show>
+          <SharingControl />
+          <span class="flex-1" />
+          <Show when={companion.canLeave()}>
+            <Button
+              variant="danger"
+              size={props.size ?? 'icon-md'}
+              class="min-w-11"
+              aria-label={t('calls.leave')}
+              onClick={() =>
+                fireAndForget(companion.leave(), 'call-quick-controls')
+              }
+            >
+              <PhoneDisconnect class="size-4" />
+            </Button>
+          </Show>
+        </div>
+      }
+    >
+      <CallMediaControls
+        compact
+        unframed
+        media={call}
+        screenUnavailable={screenUnavailable()}
+        canLeave={companion.canLeave()}
+        onLeave={() => companion.leave()}
+      >
+        <SharingControl />
+      </CallMediaControls>
+    </Show>
   );
 }

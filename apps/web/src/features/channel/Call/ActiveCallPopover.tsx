@@ -69,6 +69,7 @@ export function ActiveCallPopover(props: {
       </div>
       <div class="border-t border-edge-muted">
         <CallQuickControls
+          settings
           controls={['camera', 'screen', 'sharing']}
           channelName={
             record.isSuccess && record.data.discussion.kind === 'channel_thread'

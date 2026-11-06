@@ -387,7 +387,7 @@ export function CallMiniPlayer(props: {
             </div>
           )}
         </Show>
-        <CallQuickControls controls={['camera', 'screen']} />
+        <CallQuickControls settings controls={['camera', 'screen']} />
         <For
           each={
             [

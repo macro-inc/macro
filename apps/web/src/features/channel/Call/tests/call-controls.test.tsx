@@ -19,7 +19,7 @@ afterEach(cleanup);
 const device = (deviceId: string, label: string) =>
   ({ deviceId, label }) as MediaDeviceInfo;
 
-function setup() {
+function setup(unframed = false) {
   const [audioMuted, setAudioMuted] = createSignal(false);
   const [shareAudio, setShareAudio] = createSignal(false);
   const [background, setBackground] = createSignal<BackgroundEffect>({
@@ -54,7 +54,14 @@ function setup() {
     }),
   } satisfies CallMediaControlsState;
   const leave = vi.fn();
-  render(() => <CallMediaControls media={media} onLeave={leave} />);
+  render(() => (
+    <CallMediaControls
+      media={media}
+      onLeave={leave}
+      unframed={unframed}
+      compact={unframed}
+    />
+  ));
   return { media, leave };
 }
 
@@ -73,6 +80,13 @@ async function choose(role: string, name: string) {
 }
 
 describe('call controls', () => {
+  it('switches the microphone from the unframed quick row', async () => {
+    const { media } = setup(true);
+    await openMenu('Audio settings');
+    await choose('menuitemradio', 'Desk microphone');
+    expect(media.switchAudioInput).toHaveBeenCalledWith('mic-1');
+  });
+
   it('toggles the microphone without opening its settings', () => {
     const { media } = setup();
     const toggle = screen.getByRole('button', { name: 'Mute microphone' });

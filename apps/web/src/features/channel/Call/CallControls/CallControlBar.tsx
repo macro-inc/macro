@@ -87,6 +87,8 @@ function MediaSplitButton(props: {
 export function CallControlBar(props: {
   disabled: boolean;
   compact?: boolean;
+  unframed?: boolean;
+  canLeave?: boolean;
   audioMuted: boolean;
   videoMuted: boolean;
   screenSharing: boolean;
@@ -115,8 +117,10 @@ export function CallControlBar(props: {
     <div data-call-controls class="@container relative z-20 w-fit max-w-full">
       <div
         class={cn(
-          isMobile() ? 'island' : 'border border-edge-muted bg-panel',
-          'mx-auto flex w-fit max-w-full items-center justify-center gap-2 rounded-full p-1.5 text-ink'
+          !props.unframed &&
+            (isMobile() ? 'island' : 'border border-edge-muted bg-panel'),
+          'mx-auto flex w-fit max-w-full items-center justify-center text-ink',
+          props.unframed ? 'gap-1 p-2' : 'gap-2 rounded-full p-1.5'
         )}
       >
         <MediaSplitButton
@@ -191,16 +195,18 @@ export function CallControlBar(props: {
           </MediaSplitButton>
         </Show>
         {props.children}
-        <Button
-          size={props.compact ? 'icon-md' : 'icon-lg'}
-          variant="danger"
-          aria-label="Leave call"
-          class="min-w-14 rounded-full"
-          tooltip={{ content: 'Leave call', placement: 'top' }}
-          onClick={props.onLeave}
-        >
-          <PhoneDisconnect class="size-5" />
-        </Button>
+        <Show when={props.canLeave !== false}>
+          <Button
+            size={props.compact ? 'icon-md' : 'icon-lg'}
+            variant="danger"
+            aria-label="Leave call"
+            class={cn('rounded-full', !props.unframed && 'min-w-14')}
+            tooltip={{ content: 'Leave call', placement: 'top' }}
+            onClick={props.onLeave}
+          >
+            <PhoneDisconnect class="size-5" />
+          </Button>
+        </Show>
       </div>
       <Show when={props.error}>
         <p

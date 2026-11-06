@@ -68,6 +68,8 @@ channel.
 
 The rail's live waveform opens a 300px popover without leaving the current view.
 It shows the call title and duration, current attendees and compact media controls.
+The popup and floating player reuse the full call's microphone, camera/background
+and screen-audio caret menus, without the full toolbar container.
 Open call returns to the existing meeting/channel route; Copy meeting link is in
 More and creates the link only after explicit selection. More also offers
 **Show floating player**. This is the standard grouped dropdown, anchored below
