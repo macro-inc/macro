@@ -8,6 +8,7 @@ import type {
 import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import { commentNotification, inboxEntry } from '../tests/wire';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { encodeInboxScope, toInboxGroup } from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
@@ -55,6 +56,7 @@ const threadRowEntry = () =>
               channelReplyMessageId: 'reply',
               channelReplyUserId: 'macro|colleague@example.com',
               channelReplySenderDisplayName: null,
+              channelReplySenderClientKind: null,
               channelReplyMessageContent: 'on it',
               channelReplyHasAttachments: false,
               channelReplyThreadParentSenderId: null,
@@ -283,6 +285,39 @@ describe('toInboxGroup', () => {
     expect(
       toInboxGroup(inboxEntry({ docId: 'doc-a', sortAt: 'never', rows: [] }))
     ).toBeNull();
+  });
+});
+
+describe('mapGraphqlNotification', () => {
+  it('carries the verified MCP client of a bot reply', () => {
+    const notification = mapGraphqlNotification({
+      ...commentNotification('ch-a', 'n-1', '2026-02-01T10:09:00Z'),
+      eventType: 'channel_message_reply',
+      entityType: 'CHANNEL',
+      targetEntityType: 'CHANNEL',
+      metadata: {
+        __typename: 'GraphqlChannelReplyMetadata',
+        channelReplyThreadId: 'root',
+        channelReplyMessageId: 'reply',
+        channelReplyUserId: null,
+        channelReplySenderDisplayName: 'Claude Code (macro)',
+        channelReplySenderClientKind: 'CLAUDE_CODE',
+        channelReplyMessageContent: 'on it',
+        channelReplyHasAttachments: false,
+        channelReplyThreadParentSenderId: null,
+        channelReplyChannelType: 'PUBLIC',
+        channelReplyChannelName: 'General',
+        channelReplySenderProfilePictureUrl: null,
+      },
+    } as unknown as Parameters<typeof mapGraphqlNotification>[0]);
+
+    expect(notification.notification_metadata).toMatchObject({
+      tag: 'channel_message_reply',
+      content: {
+        senderDisplayName: 'Claude Code (macro)',
+        senderClientKind: 'claude_code',
+      },
+    });
   });
 });
 

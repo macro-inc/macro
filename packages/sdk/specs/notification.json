@@ -1598,6 +1598,17 @@
                 "type": "string",
                 "description": "The message you were mentioned in"
               },
+              "senderClientKind": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/McpClientKind",
+                    "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+                  }
+                ]
+              },
               "senderDisplayName": {
                 "type": ["string", "null"],
                 "description": "Display name for non-user senders such as bots"
@@ -1668,6 +1679,17 @@
                 "type": ["string", "null"],
                 "description": "The user who sent the message, when sent by a user"
               },
+              "senderClientKind": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/McpClientKind",
+                    "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+                  }
+                ]
+              },
               "senderDisplayName": {
                 "type": ["string", "null"],
                 "description": "Display name for non-user senders such as bots"
@@ -1695,6 +1717,17 @@
               "messageId": {
                 "type": "string",
                 "description": "The id of the new message"
+              },
+              "senderClientKind": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/McpClientKind",
+                    "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+                  }
+                ]
               },
               "senderDisplayName": {
                 "type": ["string", "null"],
@@ -1758,6 +1791,17 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderClientKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/McpClientKind",
+                "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+              }
+            ]
           },
           "senderDisplayName": {
             "type": ["string", "null"],
@@ -1846,6 +1890,17 @@
           "recordName": {
             "type": "string",
             "description": "Company or contact display name."
+          },
+          "senderClientKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/McpClientKind",
+                "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+              }
+            ]
           },
           "senderDisplayName": {
             "type": ["string", "null"],
@@ -2461,6 +2516,17 @@
             "$ref": "#/components/schemas/InitiativeDiscussionReason",
             "description": "Semantic reason selected by the message delivery domain."
           },
+          "senderClientKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/McpClientKind",
+                "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+              }
+            ]
+          },
           "senderDisplayName": {
             "type": ["string", "null"],
             "description": "Public display name for a bot author."
@@ -2571,6 +2637,18 @@
       "MacroUserIdStr": {
         "type": "string"
       },
+      "McpClientKind": {
+        "type": "string",
+        "description": "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it.",
+        "enum": [
+          "claude",
+          "claude_code",
+          "chatgpt",
+          "cursor",
+          "codex",
+          "opencode"
+        ]
+      },
       "MentionedInDocumentCommentMetadata": {
         "type": "object",
         "description": "Notification sent when a user is mentioned in a document comment.",
@@ -2602,6 +2680,17 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderClientKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/McpClientKind",
+                "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+              }
+            ]
           },
           "senderDisplayName": {
             "type": ["string", "null"],
@@ -3425,6 +3514,17 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderClientKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/McpClientKind",
+                "description": "Verified product of the MCP client a bot author posted through, whose\nmark clients show."
+              }
+            ]
           },
           "senderDisplayName": {
             "type": ["string", "null"],

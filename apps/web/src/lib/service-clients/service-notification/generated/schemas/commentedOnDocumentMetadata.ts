@@ -6,6 +6,7 @@
  */
 
 import type { CommentedOnDocumentMetadataFileType } from './commentedOnDocumentMetadataFileType';
+import type { CommentedOnDocumentMetadataSenderClientKind } from './commentedOnDocumentMetadataSenderClientKind';
 import type { CommentedOnDocumentMetadataSenderDisplayName } from './commentedOnDocumentMetadataSenderDisplayName';
 import type { CommentedOnDocumentMetadataSenderProfilePictureUrl } from './commentedOnDocumentMetadataSenderProfilePictureUrl';
 import type { CommentedOnDocumentMetadataSubType } from './commentedOnDocumentMetadataSubType';
@@ -23,6 +24,7 @@ export interface CommentedOnDocumentMetadata {
   fileType?: CommentedOnDocumentMetadataFileType;
   /** The owner of the document. */
   owner: string;
+  senderClientKind?: CommentedOnDocumentMetadataSenderClientKind;
   /** Public bot name when the author is an agent rather than a Macro user. */
   senderDisplayName?: CommentedOnDocumentMetadataSenderDisplayName;
   senderProfilePictureUrl?: CommentedOnDocumentMetadataSenderProfilePictureUrl;

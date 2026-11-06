@@ -327,6 +327,7 @@ export type ChannelMentionMetadata = CommonChannelMetadata & {
      * The message you were mentioned in
      */
     messageId: string;
+    senderClientKind?: null | McpClientKind;
     /**
      * Display name for non-user senders such as bots
      */
@@ -377,6 +378,7 @@ export type ChannelMessageSendMetadata = CommonChannelMetadata & {
      * The user who sent the message, when sent by a user
      */
     sender?: string | null;
+    senderClientKind?: null | McpClientKind;
     /**
      * Display name for non-user senders such as bots
      */
@@ -393,6 +395,7 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
      * The id of the new message
      */
     messageId: string;
+    senderClientKind?: null | McpClientKind;
     /**
      * Display name for non-user senders such as bots
      */
@@ -441,6 +444,7 @@ export type CommentedOnDocumentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    senderClientKind?: null | McpClientKind;
     /**
      * Public bot name when the author is an agent rather than a Macro user.
      */
@@ -505,6 +509,7 @@ export type CrmDiscussionMetadata = {
      * Company or contact display name.
      */
     recordName: string;
+    senderClientKind?: null | McpClientKind;
     /**
      * Public display name for a bot author.
      */
@@ -961,6 +966,7 @@ export type InitiativeDiscussionMetadata = {
      * Semantic reason selected by the message delivery domain.
      */
     reason: InitiativeDiscussionReason;
+    senderClientKind?: null | McpClientKind;
     /**
      * Public display name for a bot author.
      */
@@ -1061,6 +1067,16 @@ export type ItemSharedMetadata = {
 export type MacroUserIdStr = string;
 
 /**
+ * A known MCP client product whose mark Macro shows on its posts.
+ *
+ * Only set when the client's registration is consistent with the product (see
+ * `mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by
+ * its serialized name in `comms_messages.triggered_via_kind`, so a variant is
+ * never renamed or removed while rows carry it.
+ */
+export type McpClientKind = 'claude' | 'claude_code' | 'chatgpt' | 'cursor' | 'codex' | 'opencode';
+
+/**
  * Notification sent when a user is mentioned in a document comment.
  */
 export type MentionedInDocumentCommentMetadata = {
@@ -1084,6 +1100,7 @@ export type MentionedInDocumentCommentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    senderClientKind?: null | McpClientKind;
     /**
      * Public bot name when the author is an agent rather than a Macro user.
      */
@@ -1507,6 +1524,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * The owner of the document.
      */
     owner: string;
+    senderClientKind?: null | McpClientKind;
     /**
      * Public bot name when the author is an agent rather than a Macro user.
      */

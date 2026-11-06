@@ -58,6 +58,7 @@ import type { GithubPrEventAction } from '@service-notification/generated/schema
 import type { GithubPrEventStatus } from '@service-notification/generated/schemas/githubPrEventStatus';
 import type { GithubPrMentionLocation } from '@service-notification/generated/schemas/githubPrMentionLocation';
 import type { GithubPrReviewState } from '@service-notification/generated/schemas/githubPrReviewState';
+import type { McpClientKind } from '@service-notification/generated/schemas/mcpClientKind';
 import type { NotifEvent } from '@service-notification/generated/schemas/notifEvent';
 import type { NotificationDocumentSubType } from '@service-notification/generated/schemas/notificationDocumentSubType';
 import { raceTimeout } from '@solid-primitives/promise';
@@ -99,6 +100,7 @@ import {
   type ChannelListItemFieldsFragment,
   type ChannelListNotificationFieldsFragment,
   type GraphqlEmailView,
+  type GraphqlMcpClientKind,
   type GroupedSoupInput,
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
@@ -1054,6 +1056,22 @@ function mapChannelMessage(
   };
 }
 
+const MCP_CLIENT_KINDS: Record<GraphqlMcpClientKind, McpClientKind> = {
+  CLAUDE: 'claude',
+  CLAUDE_CODE: 'claude_code',
+  CHATGPT: 'chatgpt',
+  CURSOR: 'cursor',
+  CODEX: 'codex',
+  OPENCODE: 'opencode',
+};
+
+/** A kind this build does not know yet maps to none, which draws a letter. */
+function mcpClientKindFromGraphql(
+  kind: GraphqlMcpClientKind | null | undefined
+): McpClientKind | null {
+  return kind ? (MCP_CLIENT_KINDS[kind] ?? null) : null;
+}
+
 function normalizeChannelType(channelType: string) {
   return channelType.toLowerCase();
 }
@@ -1140,6 +1158,9 @@ function mapGraphqlNotificationMetadata(
             hasAttachments: metadata.channelMentionHasAttachments,
             threadId: metadata.channelMentionThreadId,
             senderDisplayName: metadata.channelMentionSenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.channelMentionSenderClientKind
+            ),
             channelType:
               metadata.channelMentionChannelType.toLowerCase() as ChannelType,
             channelName: metadata.channelMentionChannelName,
@@ -1193,6 +1214,9 @@ function mapGraphqlNotificationMetadata(
               metadata.mentionedInDocumentCommentSenderProfilePictureUrl,
             senderDisplayName:
               metadata.mentionedInDocumentCommentSenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.mentionedInDocumentCommentSenderClientKind
+            ),
           },
         }) satisfies NotifEventMember<'mentioned_in_document_comment'>
     )
@@ -1215,6 +1239,9 @@ function mapGraphqlNotificationMetadata(
               metadata.repliedToDocumentCommentThreadSenderProfilePictureUrl,
             senderDisplayName:
               metadata.repliedToDocumentCommentThreadSenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.repliedToDocumentCommentThreadSenderClientKind
+            ),
           },
         }) satisfies NotifEventMember<'replied_to_document_comment_thread'>
     )
@@ -1268,6 +1295,9 @@ function mapGraphqlNotificationMetadata(
             senderProfilePictureUrl:
               metadata.commentedOnDocumentSenderProfilePictureUrl,
             senderDisplayName: metadata.commentedOnDocumentSenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.commentedOnDocumentSenderClientKind
+            ),
           },
         }) satisfies NotifEventMember<'commented_on_document'>
     )
@@ -1289,6 +1319,9 @@ function mapGraphqlNotificationMetadata(
             threadId: metadata.initiativeDiscussionThreadId,
             text: metadata.initiativeDiscussionText,
             senderDisplayName: metadata.initiativeDiscussionSenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.initiativeDiscussionSenderClientKind
+            ),
             senderProfilePictureUrl:
               metadata.initiativeDiscussionSenderProfilePictureUrl,
           },
@@ -1310,6 +1343,9 @@ function mapGraphqlNotificationMetadata(
             threadId: metadata.crmDiscussionThreadId,
             text: metadata.crmDiscussionText,
             senderDisplayName: metadata.crmDiscussionSenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.crmDiscussionSenderClientKind
+            ),
             senderProfilePictureUrl:
               metadata.crmDiscussionSenderProfilePictureUrl,
           },
@@ -1337,6 +1373,9 @@ function mapGraphqlNotificationMetadata(
           content: {
             sender: metadata.channelMessageSendSender,
             senderDisplayName: metadata.channelMessageSendSenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.channelMessageSendSenderClientKind
+            ),
             messageContent: metadata.channelMessageSendMessageContent,
             messageId: metadata.channelMessageSendMessageId,
             hasAttachments: metadata.channelMessageSendHasAttachments,
@@ -1391,6 +1430,9 @@ function mapGraphqlNotificationMetadata(
             messageId: metadata.channelReplyMessageId,
             userId: metadata.channelReplyUserId,
             senderDisplayName: metadata.channelReplySenderDisplayName,
+            senderClientKind: mcpClientKindFromGraphql(
+              metadata.channelReplySenderClientKind
+            ),
             messageContent: metadata.channelReplyMessageContent,
             hasAttachments: metadata.channelReplyHasAttachments,
             threadParentSenderId: metadata.channelReplyThreadParentSenderId,

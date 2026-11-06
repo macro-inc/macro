@@ -1,5 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { dssFetch } from './client';
+import type { McpClientKind } from './generated/schemas/mcpClientKind';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
 import type { MessageParent } from './generated/schemas/messageParent';
@@ -28,6 +29,8 @@ export type MessageSender = {
   triggered_by?: string | null;
   /** The client the user triggered it through, such as "Claude Code". */
   triggered_via?: string | null;
+  /** The product the server verified that client as, for its mark. */
+  triggered_via_kind?: McpClientKind | null;
 };
 
 export type Message = StoredMessage & { sender?: MessageSender };

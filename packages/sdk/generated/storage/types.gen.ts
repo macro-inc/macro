@@ -10222,6 +10222,16 @@ export type MarkRead = {
 };
 
 /**
+ * A known MCP client product whose mark Macro shows on its posts.
+ *
+ * Only set when the client's registration is consistent with the product (see
+ * `mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by
+ * its serialized name in `comms_messages.triggered_via_kind`, so a variant is
+ * never renamed or removed while rows carry it.
+ */
+export type McpClientKind = 'claude' | 'claude_code' | 'chatgpt' | 'cursor' | 'codex' | 'opencode';
+
+/**
  * Persistent meeting metadata. No channel contents or archived media are exposed.
  */
 export type Meeting = {
@@ -10382,6 +10392,7 @@ export type Message = {
      * as "Claude Code"; a display label only.
      */
     triggered_via?: string | null;
+    triggered_via_kind?: null | McpClientKind;
     /**
      * Last persisted update.
      */

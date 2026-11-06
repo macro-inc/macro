@@ -365,6 +365,23 @@ export const listTypedNotificationsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -404,6 +421,23 @@ export const listTypedNotificationsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -491,6 +525,23 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -577,6 +628,23 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -665,6 +733,23 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -803,6 +888,23 @@ export const listTypedNotificationsResponse = zod
                             .describe(
                               'Why a project discussion notification was delivered.'
                             ),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -843,6 +945,23 @@ export const listTypedNotificationsResponse = zod
                           recordName: zod
                             .string()
                             .describe('Company or contact display name.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -932,6 +1051,23 @@ export const listTypedNotificationsResponse = zod
                               .describe(
                                 'The user who sent the message, when sent by a user'
                               ),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -967,6 +1103,23 @@ export const listTypedNotificationsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The id of the new message'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -2458,6 +2611,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -2497,6 +2667,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -2584,6 +2771,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -2670,6 +2874,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -2758,6 +2979,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -2896,6 +3134,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .describe(
                               'Why a project discussion notification was delivered.'
                             ),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -2936,6 +3191,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           recordName: zod
                             .string()
                             .describe('Company or contact display name.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -3025,6 +3297,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                               .describe(
                                 'The user who sent the message, when sent by a user'
                               ),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -3060,6 +3349,23 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The id of the new message'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -4545,6 +4851,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -4584,6 +4907,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -4671,6 +5011,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -4757,6 +5114,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -4845,6 +5219,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -4983,6 +5374,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .describe(
                               'Why a project discussion notification was delivered.'
                             ),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -5023,6 +5431,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           recordName: zod
                             .string()
                             .describe('Company or contact display name.'),
+                          senderClientKind: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum([
+                                  'claude',
+                                  'claude_code',
+                                  'chatgpt',
+                                  'cursor',
+                                  'codex',
+                                  'opencode',
+                                ])
+                                .describe(
+                                  "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                ),
+                            ])
+                            .optional(),
                           senderDisplayName: zod
                             .string()
                             .nullish()
@@ -5112,6 +5537,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                               .describe(
                                 'The user who sent the message, when sent by a user'
                               ),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -5147,6 +5589,23 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             messageId: zod
                               .string()
                               .describe('The id of the new message'),
+                            senderClientKind: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum([
+                                    'claude',
+                                    'claude_code',
+                                    'chatgpt',
+                                    'cursor',
+                                    'codex',
+                                    'opencode',
+                                  ])
+                                  .describe(
+                                    "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                                  ),
+                              ])
+                              .optional(),
                             senderDisplayName: zod
                               .string()
                               .nullish()
@@ -6635,6 +7094,23 @@ export const getTypedNotificationByIdResponse = zod
                     messageId: zod
                       .string()
                       .describe('The message you were mentioned in'),
+                    senderClientKind: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'claude',
+                            'claude_code',
+                            'chatgpt',
+                            'cursor',
+                            'codex',
+                            'opencode',
+                          ])
+                          .describe(
+                            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                          ),
+                      ])
+                      .optional(),
                     senderDisplayName: zod
                       .string()
                       .nullish()
@@ -6672,6 +7148,23 @@ export const getTypedNotificationByIdResponse = zod
                     messageId: zod
                       .string()
                       .describe('The message you were mentioned in'),
+                    senderClientKind: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'claude',
+                            'claude_code',
+                            'chatgpt',
+                            'cursor',
+                            'codex',
+                            'opencode',
+                          ])
+                          .describe(
+                            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                          ),
+                      ])
+                      .optional(),
                     senderDisplayName: zod
                       .string()
                       .nullish()
@@ -6751,6 +7244,23 @@ export const getTypedNotificationByIdResponse = zod
                     .describe('The file type of the document.'),
                   mentionId: zod.string().describe('The mention ID.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderClientKind: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'claude',
+                          'claude_code',
+                          'chatgpt',
+                          'cursor',
+                          'codex',
+                          'opencode',
+                        ])
+                        .describe(
+                          "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                        ),
+                    ])
+                    .optional(),
                   senderDisplayName: zod
                     .string()
                     .nullish()
@@ -6829,6 +7339,23 @@ export const getTypedNotificationByIdResponse = zod
                     .nullish()
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderClientKind: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'claude',
+                          'claude_code',
+                          'chatgpt',
+                          'cursor',
+                          'codex',
+                          'opencode',
+                        ])
+                        .describe(
+                          "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                        ),
+                    ])
+                    .optional(),
                   senderDisplayName: zod
                     .string()
                     .nullish()
@@ -6909,6 +7436,23 @@ export const getTypedNotificationByIdResponse = zod
                     .nullish()
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderClientKind: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'claude',
+                          'claude_code',
+                          'chatgpt',
+                          'cursor',
+                          'codex',
+                          'opencode',
+                        ])
+                        .describe(
+                          "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                        ),
+                    ])
+                    .optional(),
                   senderDisplayName: zod
                     .string()
                     .nullish()
@@ -7023,6 +7567,23 @@ export const getTypedNotificationByIdResponse = zod
                     .describe(
                       'Why a project discussion notification was delivered.'
                     ),
+                  senderClientKind: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'claude',
+                          'claude_code',
+                          'chatgpt',
+                          'cursor',
+                          'codex',
+                          'opencode',
+                        ])
+                        .describe(
+                          "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                        ),
+                    ])
+                    .optional(),
                   senderDisplayName: zod
                     .string()
                     .nullish()
@@ -7061,6 +7622,23 @@ export const getTypedNotificationByIdResponse = zod
                   recordName: zod
                     .string()
                     .describe('Company or contact display name.'),
+                  senderClientKind: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum([
+                          'claude',
+                          'claude_code',
+                          'chatgpt',
+                          'cursor',
+                          'codex',
+                          'opencode',
+                        ])
+                        .describe(
+                          "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                        ),
+                    ])
+                    .optional(),
                   senderDisplayName: zod
                     .string()
                     .nullish()
@@ -7144,6 +7722,23 @@ export const getTypedNotificationByIdResponse = zod
                       .describe(
                         'The user who sent the message, when sent by a user'
                       ),
+                    senderClientKind: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'claude',
+                            'claude_code',
+                            'chatgpt',
+                            'cursor',
+                            'codex',
+                            'opencode',
+                          ])
+                          .describe(
+                            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                          ),
+                      ])
+                      .optional(),
                     senderDisplayName: zod
                       .string()
                       .nullish()
@@ -7177,6 +7772,23 @@ export const getTypedNotificationByIdResponse = zod
                     messageId: zod
                       .string()
                       .describe('The id of the new message'),
+                    senderClientKind: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'claude',
+                            'claude_code',
+                            'chatgpt',
+                            'cursor',
+                            'codex',
+                            'opencode',
+                          ])
+                          .describe(
+                            "A known MCP client product whose mark Macro shows on its posts.\n\nOnly set when the client's registration is consistent with the product (see\n`mcp_auth_proxy`'s `client_kind`); a name alone never earns one. Stored by\nits serialized name in `comms_messages.triggered_via_kind`, so a variant is\nnever renamed or removed while rows carry it."
+                          ),
+                      ])
+                      .optional(),
                     senderDisplayName: zod
                       .string()
                       .nullish()
