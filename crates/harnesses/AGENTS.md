@@ -69,3 +69,5 @@ already authorized the team admin, never for an HTTP route.
 - Pairing and computer ports use the leaf `pairing_id::PairingId` and `computer_id::ComputerId`; unwrap UUIDs only at adapter boundaries.
 
 - New hosted-registration and metadata persistence failures use typed adapter errors with rootcause reports; existing repository callers retain their error contract.
+
+- `pg_harness_repo/hosted_pairing.rs` owns hosted enrollment and computer lookups; `metadata.rs` persists capabilities and Claude mode.

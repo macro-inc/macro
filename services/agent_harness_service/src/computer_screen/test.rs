@@ -160,7 +160,9 @@ async fn computer_routes_require_harness_management_and_mode_reads_persisted_sta
                 connected: false,
                 last_connected_at: None,
                 capabilities: Default::default(),
-                computer_id: Some(uuid::Uuid::from_u128(1)),
+                computer_id: Some(computer_id::ComputerId::new_from_uuid(
+                    uuid::Uuid::from_u128(1),
+                )),
                 claude_mode: ClaudeMode::OwnAccount,
             }))
         })

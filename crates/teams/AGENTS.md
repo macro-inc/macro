@@ -104,3 +104,5 @@ event contract (schema, sanitization, delivery semantics).
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
 
 - Subscription item/pricing data errors are typed in `customer_repo/subscription_error.rs`, bridged to the existing customer error contract.
+
+- `customer_repo/billing.rs` handles subscription locks, schedules, and request construction; `subscription_items.rs` handles item quantities and provider value mapping.
