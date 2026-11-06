@@ -9,6 +9,7 @@ use subsequence_match::{
 use uuid::Uuid;
 
 pub mod projection;
+pub mod reader;
 
 /// Matching stages, highest priority last. Suggestions are not uniqueness proof.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

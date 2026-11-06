@@ -79,7 +79,22 @@ pub(crate) fn query_each_prepared(
     values: Values,
     visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
-    visit_prepared(statement, values, visit)
+    let mut visit = visit;
+    visit_prepared(statement, values, |row| visit(row).map(|()| true))
+        .map(|_| ())
+        .map_err(|failure| failure.error)
+}
+
+/// Stops a read when the visitor proves later ordered rows cannot improve its
+/// bounded result. The same checked reset runs on both early stop and exhaustion.
+pub(crate) fn query_until(
+    connection: &Arc<Connection>,
+    sql: &str,
+    values: Values,
+    visit: impl FnMut(&Row) -> Result<bool, TursoStorageError>,
+) -> Result<(), TursoStorageError> {
+    let mut statement = prepare(connection, sql)?;
+    visit_prepared(&mut statement, values, visit)
         .map(|_| ())
         .map_err(|failure| failure.error)
 }
@@ -113,7 +128,7 @@ fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64)
     let mut rows = Vec::new();
     let changed = visit_prepared(statement, values, |row| {
         rows.push(row.get_values().cloned().collect());
-        Ok(())
+        Ok(true)
     })?;
     Ok((rows, changed))
 }
@@ -121,7 +136,7 @@ fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64)
 fn visit_prepared(
     statement: &mut Statement,
     values: Values,
-    mut visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
+    mut visit: impl FnMut(&Row) -> Result<bool, TursoStorageError>,
 ) -> Result<i64, RunFailure> {
     // Time binding, stepping/I/O, row processing, and cleanup, not worker queue
     // wait or statement preparation. Reused statements are timed per execution.
@@ -158,7 +173,9 @@ fn visit_prepared(
                     let row = statement
                         .row()
                         .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Corruption))?;
-                    visit(row)?;
+                    if !visit(row)? {
+                        break;
+                    }
                 }
                 StepResult::IO => {
                     #[cfg(all(test, not(target_arch = "wasm32")))]

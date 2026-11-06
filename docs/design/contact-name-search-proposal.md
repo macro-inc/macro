@@ -15,14 +15,33 @@ or exact-reference ambiguity evidence. The matching/recent-first contract is app
   epoch-scoped activity/DM/inbox facts in the existing owned predicate projection.
 - [x] Fact-delta persistence and bounded derived-version rebuild preserving records,
   pending writes and storage generation; context changes do not rewrite name words.
-- [ ] Indexed hybrid reader, before-limit exclusions and query-dependent DM alias
-  handling, and scope/projection/context-safe continuations.
+- [x] Staged indexed hybrid reader, before-limit exclusions and query-dependent DM
+  alias handling, and scope/projection/context-safe continuations. Native and OPFS
+  paths match a complete streaming reference. The active host still calls policy 4.
 - [ ] Coordinated browser/native/server-fallback policy cutover, preventing consumer
   re-ranking from replacing the new ordering; exact-reference APIs remain separate.
 - [ ] Full browser/native/OPFS correctness and fresh 1k/100k performance comparison.
 
-**Active picker behavior is not switched by this foundation.** Host policy version 4
-remains in use until reader and consumer integration can change together.
+**Active picker behavior is not switched yet.** `Engine::search_people_named` and
+`NameSearchRead` implement the staged policy-5 path; hosts still use policy 4 until
+consumer ordering and bounded server fallback are switched coherently. The old
+collector is temporary during this cutover, not a new fallback.
+
+The reader uses at most 129 probe IDs and K+1 winners. Broad probes inspect at most
+4096 rank keys per default/current-epoch stream; when that is insufficient, complete
+matching streams preserve correctness. Small posting sets reuse their bounded IDs.
+Contains predicates filter the covering name value before record lookup. Epoch-tagged
+overrides cannot contaminate the default order after context replacement; cursor
+ties use canonical user IDs, never index row IDs. Continuations also bind the live
+contact admission token and a separate context token: same-epoch patches invalidate
+pages, while no-op publication and unrelated cache writes do not. Name-word overflow and incomplete
+projections have explicit streaming paths. At most K+1 DM targets need prior-alias
+lookups; no earlier-page identity catalog is retained.
+
+A 100k native **in-memory Turso** test of this actual reader measured roughly 2–3 ms
+for broad/exact/empty reads, 20 ms for a late sparse prefix and 27 ms for no match,
+with each answer checked against a complete streaming reference. These are engine
+measurements, not browser/OPFS latency or whole-app acceptance.
 
 ## Recommendation
 

@@ -1111,6 +1111,14 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        self.latch_result(name_search::read(&self.connection(), read))
+    }
+
     async fn visit_contact_records(
         &self,
         query: &SearchQuery,
@@ -5323,6 +5331,7 @@ mod conjunction;
 mod contact_search;
 mod integrity;
 mod mutation_retry;
+mod name_search;
 mod page_retention;
 mod people_sql;
 mod record_batch;

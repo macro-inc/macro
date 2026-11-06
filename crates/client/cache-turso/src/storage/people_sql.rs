@@ -9,7 +9,7 @@ use cache_core::value::CacheValue;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
-const VERSION_KEY: &str = "people_sql_projection_version";
+pub(super) const VERSION_KEY: &str = "people_sql_projection_version";
 fn statement(plan: &PeopleSqlPlan) -> String {
     let mut sql = "WITH __people AS (SELECT d.id AS __document, NULL AS row_position".to_owned();
     let mut joins = String::new();
@@ -30,7 +30,7 @@ fn statement(plan: &PeopleSqlPlan) -> String {
     sql
 }
 
-fn viewer(connection: &Arc<Connection>) -> Result<Option<String>, TursoStorageError> {
+pub(super) fn viewer(connection: &Arc<Connection>) -> Result<Option<String>, TursoStorageError> {
     let key = RecordKey::from_entity(&EntityKey(cache_core::engine::IDENTITY_META_KEY.into()))?;
     let rows = driver::query(
         connection,
@@ -47,7 +47,7 @@ fn viewer(connection: &Arc<Connection>) -> Result<Option<String>, TursoStorageEr
     }
 }
 
-fn stamp(viewer: Option<&str>) -> String {
+pub(super) fn stamp(viewer: Option<&str>) -> String {
     format!(
         "{}:{}",
         projection::VERSION,

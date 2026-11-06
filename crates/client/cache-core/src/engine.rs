@@ -383,6 +383,7 @@ pub struct Engine<S: Storage> {
     storage: S,
     revision: CacheRevision,
     contact_fence: Uuid,
+    people_context_fence: Uuid,
     hot: LruCache<EntityKey<'static>, Record>,
     docs: LruCache<String, Document>,
     deps: DepIndex,
@@ -415,6 +416,7 @@ impl<S: Storage> Engine<S> {
             storage,
             revision: CacheRevision::ZERO,
             contact_fence: Uuid::now_v7(),
+            people_context_fence: Uuid::now_v7(),
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
@@ -3055,6 +3057,9 @@ impl<S: Storage> Engine<S> {
         for key in keys {
             if key.typename() == Some("GraphqlContact") {
                 self.contact_fence = Uuid::now_v7();
+            }
+            if key.as_ref() == crate::people::CONTEXT_META {
+                self.people_context_fence = Uuid::now_v7();
             }
             self.hot.pop(key);
             affected.extend(self.deps.ops_for_keys([key]));

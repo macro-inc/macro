@@ -17,10 +17,36 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod contact_sync;
 #[path = "common/contacts.rs"]
 mod contacts;
+#[path = "common/name_search.rs"]
+mod name_search;
 #[path = "common/people.rs"]
 mod people;
 #[path = "common/people_sql.rs"]
 mod people_sql;
+
+#[wasm_bindgen_test(async)]
+async fn indexed_name_windows_match_the_streaming_reference_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-name-search.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "name-search").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    let scope = people_sql::seed(&mut engine, 1_000).await;
+    name_search::contract(&mut engine, &scope).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
 
 #[wasm_bindgen_test(async)]
 async fn authoritative_contact_removal_is_scoped_and_fenced_over_opfs() {

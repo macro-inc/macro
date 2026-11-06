@@ -1,8 +1,20 @@
 #![cfg(not(target_arch = "wasm32"))]
 #[path = "common/contact_sync.rs"]
 mod contact_sync;
+#[path = "common/name_search.rs"]
+mod name_search;
 #[path = "common/people_sql.rs"]
 mod people_sql;
+
+#[test]
+fn indexed_name_windows_match_the_streaming_reference() {
+    block_on(async {
+        let mut engine =
+            Engine::with_capacity(TursoStorage::open_in_memory("name-windows").unwrap(), 16);
+        let scope = people_sql::seed(&mut engine, 1_000).await;
+        name_search::contract(&mut engine, &scope).await;
+    });
+}
 
 #[test]
 fn authoritative_contact_removal_rejects_stale_writes_and_survives_reopening() {

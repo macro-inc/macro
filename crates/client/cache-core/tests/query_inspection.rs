@@ -106,6 +106,13 @@ impl Storage for OwnerOnlyStorage {
         self.0.scan_contact_records(after, limit, visit).await
     }
 
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.0.visit_name_search(read).await
+    }
+
     async fn visit_contact_records(
         &self,
         query: &cache_core::search::SearchQuery,

@@ -161,6 +161,9 @@ impl<S: Storage> Engine<S> {
             self.bind_identity(&update.scope.identity).await?;
         }
         let changed = self.persist_updates(updates, vec![]).await?;
+        if changed.revision_advanced {
+            self.people_context_fence = Uuid::now_v7();
+        }
         Ok(WriteResult {
             field_changes: Some(changed.field_changes),
             identity_errors: vec![],
@@ -205,6 +208,41 @@ impl<S: Storage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
         collector.finish().map_err(EngineError::from)
+    }
+
+    /// Snapshot the admission used by the core collector and reference readers.
+    /// This is local to this engine owner, not a durable directory revision.
+    pub fn people_read_version(&self) -> people::name_search::reader::PeopleReadVersion {
+        people::name_search::reader::PeopleReadVersion {
+            contacts: self.contact_fence,
+            context: self.people_context_fence,
+        }
+    }
+
+    /// Scoped entry point for the indexed name-first contract. Host activation
+    /// follows the coordinated consumer cutover; the existing menu entry point
+    /// remains separate until then, never an implicit fallback for this read.
+    pub async fn search_people_named(
+        &mut self,
+        request: &PeopleSearch,
+    ) -> Result<PeopleSearchResult, EngineError<S::Error>> {
+        self.people_scope(&request.scope).await?;
+        if self.current_identity().await?.as_deref() != Some(request.scope.identity.as_str()) {
+            return Err(EngineError::StaleHydrationScope);
+        }
+        let ContextState::Ready { epoch } = self.people_context().await? else {
+            return Ok(PeopleSearchResult::ContextPending);
+        };
+        let mut read = people::name_search::reader::NameSearchRead::new(
+            request,
+            epoch,
+            self.people_read_version(),
+        )?;
+        self.storage
+            .visit_name_search(&mut read)
+            .await
+            .map_err(EngineError::Storage)?;
+        read.finish().map_err(EngineError::from)
     }
 
     /// Stream SQL-filtered records into one bounded heap. Secondary inboxes,
