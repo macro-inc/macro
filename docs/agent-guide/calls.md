@@ -295,8 +295,8 @@ to rename it, then Save or press Enter; Cancel or Escape discards the edit. Gues
 read-only name.
 
 Join-preview and in-call controls use the standard Macro icon buttons. In a
-call, one filled, fully rounded panel contains mic, camera, screen sharing,
-Team and Leave. The chat toggle stays outside this panel. The microphone and camera
+call, one floating-menu surface with a hairline edge, soft shadow, 8px padding
+and 8px gaps contains mic, camera, screen sharing, Team, More and Leave. The chat toggle stays outside this panel. The microphone and camera
 are split buttons (`ButtonGroup`): the left half
 toggles the device, with a failure-colored slashed icon when off, and the caret
 opens a settings menu above the toolbar on click only; hovering opens nothing.

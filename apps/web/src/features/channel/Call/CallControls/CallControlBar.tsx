@@ -123,10 +123,11 @@ export function CallControlBar(props: {
     >
       <div
         class={cn(
-          !props.unframed &&
-            (isMobile() ? 'island' : 'border border-edge-muted bg-panel'),
+          !props.unframed && (isMobile() ? 'island' : 'menu-surface'),
           'mx-auto flex w-fit max-w-full items-center justify-center text-ink',
-          props.unframed ? 'gap-1 p-2' : 'gap-2 rounded-full p-1.5'
+          props.unframed
+            ? 'gap-1 p-2'
+            : cn('gap-2 rounded-full', isMobile() ? 'p-1.5' : 'p-2')
         )}
       >
         <MediaSplitButton
