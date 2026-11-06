@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -111,6 +112,30 @@ def cluster():
 
 def dns(name):
     return name.replace('_', '-')
+
+
+def load_image(image):
+    # Docker's containerd store retains multi-platform indexes with only native
+    # blobs. Export one platform, as kind's known-issues guide recommends.
+    node = f'{CLUSTER}-control-plane'
+    node_id = run(['docker', 'inspect', node, '--format', '{{.Id}}'], capture=True).strip()
+    image_id = run(['docker', 'image', 'inspect', image, '--format', '{{.Id}}'], capture=True).strip()
+    record = STATE / 'image-imports.json'
+    cache = json.loads(record.read_text()) if record.exists() else {}
+    if cache.get('node') != node_id:
+        cache = {'node': node_id, 'images': {}}
+    if cache['images'].get(image) == image_id:
+        exists = subprocess.run(['docker', 'exec', node, 'crictl', 'inspecti', image],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+        if exists:
+            return
+    arch = json.loads(kube('get', 'node', node, '-o', 'json', capture=True))['status']['nodeInfo']['architecture']
+    with tempfile.TemporaryDirectory(prefix='macro-eks-image-', dir=scratch_path()) as directory:
+        archive = Path(directory) / 'image.tar'
+        run(['docker', 'image', 'save', '--platform', f'linux/{arch}', '--output', archive, image])
+        run([tools() / 'kind', 'load', 'image-archive', '--name', CLUSTER, archive])
+    cache['images'][image] = image_id
+    record.write_text(json.dumps(cache))
 
 
 def normalize(value, names):
@@ -349,7 +374,7 @@ def up(args):
             exists = subprocess.run(['docker', 'image', 'inspect', image], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
             if not exists:
                 run(['docker', 'pull', image])
-            run([tools() / 'kind', 'load', 'docker-image', '--name', CLUSTER, image])
+            load_image(image)
         objects = manifests(config, namespace, args.slot)
         path = state.with_name('kubernetes-manifests.json')
         path.write_text(json.dumps(objects, indent=2))

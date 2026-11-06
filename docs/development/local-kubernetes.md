@@ -79,6 +79,8 @@ statistics on this ZFS-backed Docker host. See the
 [kind image digests](https://github.com/kubernetes-sigs/kind/releases/tag/v0.32.0).
 The dedicated Docker subnet is `10.252.250.0/24`; creation fails on an overlap.
 The runner never prunes networks, resets Docker, or uses the default kubeconfig.
+Images are exported for the node's native platform before import, following
+[kind's containerd image-store workaround](https://github.com/kubernetes-sigs/kind/blob/main/site/content/docs/user/known-issues.md#unable-to-kind-load-docker-images).
 
 ## Validation status
 
