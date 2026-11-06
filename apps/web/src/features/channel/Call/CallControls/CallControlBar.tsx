@@ -114,7 +114,13 @@ export function CallControlBar(props: {
   let videoOpen = false;
   let screenOpen = false;
   return (
-    <div data-call-controls class="@container relative z-20 w-fit max-w-full">
+    <div
+      data-call-controls
+      class={cn(
+        'relative z-20 max-w-full',
+        props.unframed ? 'w-full' : 'w-fit'
+      )}
+    >
       <div
         class={cn(
           !props.unframed &&

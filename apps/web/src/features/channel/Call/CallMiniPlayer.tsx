@@ -97,7 +97,9 @@ export function CallMiniPlayer(props: {
     observer.observe(root);
     onCleanup(() => observer.disconnect());
   });
-  let drag: { x: number; y: number; left: number; top: number } | undefined;
+  let drag:
+    | { pointer: number; x: number; y: number; left: number; top: number }
+    | undefined;
   let resize:
     | {
         pointer: number;
@@ -157,14 +159,7 @@ export function CallMiniPlayer(props: {
       ? record.data.channelName || t('nav.returnToCall')
       : t('nav.returnToCall');
   const width = () => {
-    const maximum = Math.max(
-      0,
-      Math.min(
-        640,
-        viewport().width - 24,
-        audioOnly() ? Infinity : ((viewport().height - 180) * 16) / 9 + 16
-      )
-    );
+    const maximum = Math.max(0, Math.min(640, viewport().width - 24));
     return Math.max(
       Math.min(256, maximum),
       Math.min(previewSize()?.width ?? storedWidth(), maximum)
@@ -178,8 +173,8 @@ export function CallMiniPlayer(props: {
       [corner().startsWith('top') ? 'top' : 'bottom']: '20px',
     };
   };
-  const finishDrag = (cancelled = false) => {
-    if (!drag) return;
+  const finishDrag = (event: PointerEvent, cancelled = false) => {
+    if (!drag || drag.pointer !== event.pointerId) return;
     const box = root.getBoundingClientRect();
     const target = cancelled
       ? undefined
@@ -233,7 +228,7 @@ export function CallMiniPlayer(props: {
         role="region"
         aria-label={title()}
         class={cn(
-          'menu-surface fixed z-modal max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl',
+          'menu-surface fixed z-modal max-w-[calc(100vw-24px)] max-h-[calc(100dvh-24px)] overflow-x-hidden overflow-y-auto rounded-2xl',
           snapping() &&
             'transition-[left,top] duration-200 ease-out motion-reduce:transition-none'
         )}
@@ -247,6 +242,9 @@ export function CallMiniPlayer(props: {
           onPointerDown={(event) => {
             if (
               event.button !== 0 ||
+              event.isPrimary === false ||
+              drag ||
+              resize ||
               (event.target instanceof Element &&
                 event.target.closest('button'))
             )
@@ -256,6 +254,7 @@ export function CallMiniPlayer(props: {
             const box = root.getBoundingClientRect();
             setPosition({ x: box.x, y: box.y });
             drag = {
+              pointer: event.pointerId,
               x: event.clientX,
               y: event.clientY,
               left: box.left,
@@ -264,7 +263,7 @@ export function CallMiniPlayer(props: {
             event.currentTarget.setPointerCapture(event.pointerId);
           }}
           onPointerMove={(event) => {
-            if (!drag) return;
+            if (!drag || drag.pointer !== event.pointerId) return;
             const box = root.getBoundingClientRect();
             const point = constrainCallPlayerPosition(
               drag.left + event.clientX - drag.x,
@@ -286,9 +285,9 @@ export function CallMiniPlayer(props: {
               )
             );
           }}
-          onPointerUp={() => finishDrag()}
-          onPointerCancel={() => finishDrag(true)}
-          onLostPointerCapture={() => finishDrag(true)}
+          onPointerUp={(event) => finishDrag(event)}
+          onPointerCancel={(event) => finishDrag(event, true)}
+          onLostPointerCapture={(event) => finishDrag(event, true)}
         >
           <span class="min-w-0 flex-1 truncate text-sm font-semibold">
             {title()}
@@ -428,7 +427,13 @@ export function CallMiniPlayer(props: {
                   edge === 'top-right' || edge === 'bottom-left',
               }}
               onPointerDown={(event) => {
-                if (event.button !== 0) return;
+                if (
+                  event.button !== 0 ||
+                  event.isPrimary === false ||
+                  drag ||
+                  resize
+                )
+                  return;
                 event.preventDefault();
                 event.stopPropagation();
                 setSnapping(false);

@@ -82,7 +82,9 @@ to keep the dropped position. Reduced motion snaps without animation. Collapse
 tucks it back into the rail.
 Resize from any edge or corner; video/screens remain 16:9 and audio retains its
 minimum height. Width and audio height persist as local preferences; the player
-reclamps to the viewport when media or window size changes.
+reclamps to the viewport when media or window size changes. Short windows cap
+the player's outer height and allow its contents to scroll; only the pointer
+that began a drag or resize can update or finish that gesture.
 Audio-only calls keep a 144px minimum stage with a neutral 48px avatar and name,
 rather than collapsing to a thin row. Channel and standalone
 calls navigate and leave through their existing session owner; standalone calls
