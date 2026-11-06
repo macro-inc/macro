@@ -338,7 +338,7 @@ async fn create_call_starts_with_toggle_on_and_no_canonical_state(
     give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
     let id = Uuid::now_v7();
 
-    repo.create_call(&id, &CH2, "room-ch2", USER_A.copied())
+    repo.create_call(&id, &CH2, "room-ch2", USER_A.copied(), false)
         .await?
         .expect("call created");
 
@@ -365,7 +365,7 @@ async fn create_call_lost_race_leaves_no_permission_or_grant_rows(
 
     // CH1 already has an active call (the fixture's CALL1).
     let created = repo
-        .create_call(&id, &CH1, "room-dup", USER_A.copied())
+        .create_call(&id, &CH1, "room-dup", USER_A.copied(), false)
         .await?;
 
     assert!(created.is_none());
@@ -536,7 +536,7 @@ async fn archive_adopts_legacy_view_grant_and_leaves_other_levels(
 
     // An older archive (or `shareWithTeam` edit) already wrote the View row.
     let adopted = Uuid::now_v7();
-    repo.create_call(&adopted, &CH2, "adopted", USER_A.copied())
+    repo.create_call(&adopted, &CH2, "adopted", USER_A.copied(), false)
         .await?
         .expect("call created");
     insert_legacy_team_row(&pool, adopted, AccessLevel::View).await?;

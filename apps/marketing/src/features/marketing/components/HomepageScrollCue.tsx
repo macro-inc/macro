@@ -46,6 +46,7 @@ export function HomepageScrollCue() {
         });
       }}
     >
+      <span>Explore</span>
       <ArrowDown aria-hidden="true" />
     </button>
   );

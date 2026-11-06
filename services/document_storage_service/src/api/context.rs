@@ -2,6 +2,13 @@ use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 
 use crate::{config::Config, service::s3::S3};
+use account_manager::{
+    domain::service::AccountManagerServiceImpl,
+    inbound::axum_router::AccountManagerRouterState,
+    outbound::{
+        dm_delivery::DmAccountManagerDelivery, pg_account_manager_repo::PgAccountManagerRepo,
+    },
+};
 use axum::extract::FromRef;
 use bots::{
     domain::service::BotServiceImpl,
@@ -646,6 +653,16 @@ pub(crate) type DssChannelLabelsState =
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the account manager service.
+pub(crate) type AccountManagerServiceType = AccountManagerServiceImpl<
+    PgAccountManagerRepo,
+    DmAccountManagerDelivery<DssChannelService, EntityAccessService>,
+>;
+
+/// Type alias for the account manager router state.
+pub(crate) type DssAccountManagerState =
+    AccountManagerRouterState<AccountManagerServiceType, AuthorizationService>;
+
 /// Type alias for the user API key service.
 pub(crate) type UserApiKeyServiceType = UserApiKeyServiceImpl<PgUserApiKeysRepo>;
 
@@ -936,6 +953,7 @@ pub(crate) struct ApiContext {
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub channel_labels_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
+    pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
     pub access_requests_state: AccessRequestsState,
     pub slack_state: DssSlackState,
@@ -948,6 +966,7 @@ pub(crate) struct ApiContext {
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
+    pub graphql_registered_work_context: complete_graph::RegisteredWorkGraphqlContext,
     pub graphql_notification_inbox_context: complete_graph::NotificationInboxGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,

@@ -268,7 +268,12 @@ where
             ) => {
                 let (call, answer): (UpstreamCall, Option<Answer>) = match self
                     .credentials
-                    .resolve(&grant.owner, grant.agent, destination)
+                    .resolve(
+                        &grant.owner,
+                        grant.agent,
+                        grant.session.as_uuid(),
+                        destination,
+                    )
                     .await?
                 {
                     McpResolution::Connected(call) => (call, None),

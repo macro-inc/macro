@@ -61,6 +61,7 @@ pub trait McpCredentials: Send + Sync {
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: bot_id::BotId,
+        session: uuid::Uuid,
         destination: &McpDestination,
     ) -> impl Future<Output = Result<McpResolution, EgressError>> + Send;
 }

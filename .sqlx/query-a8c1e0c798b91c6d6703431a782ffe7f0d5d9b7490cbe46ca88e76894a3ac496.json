@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT id, agent_correlation_id, actor_id, action, action_payload,\n                           subject_id, entity_type, entity_id, occurred_at\n                    FROM activity_events\n                    WHERE subject_id = $1 AND (occurred_at, id) < ($2, $3)\n                    ORDER BY occurred_at DESC, id DESC\n                    LIMIT $4\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "agent_correlation_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "actor_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "action_payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "subject_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a8c1e0c798b91c6d6703431a782ffe7f0d5d9b7490cbe46ca88e76894a3ac496"
+}

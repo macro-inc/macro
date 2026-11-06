@@ -14320,6 +14320,7 @@ export const SessionConversation = z.object({
   harness: z.string(),
   model: z.string(),
   status: z.string(),
+  origin: z.any(),
   messages: z.array(
     z.object({
       turn: z.number().int().gte(0),

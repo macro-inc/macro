@@ -46,7 +46,6 @@ const row = (
   content: {
     entity: { type: 'task', id: 'task-a', name: 'Task' } as never,
     notifications: [notification],
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -122,7 +121,6 @@ const stack = (
   content: {
     entity: { type: 'channel', id: 'entity', name: 'The entity' } as never,
     notifications,
-    entityAt: () => ({}) as never,
   },
 });
 
