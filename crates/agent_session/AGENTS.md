@@ -127,6 +127,12 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+Activity: `domain/lifecycle_activity.rs` maps lifecycle events for DSS's activity
+consumer. `opened` for a person-started session is their Created activity,
+which places it in Home's own work as soon as its row commits; `deleted` purges
+it. The harness publishes `opened` before provisioning the sandbox, so keep it
+there.
+
 ## Checks
 
 - `cargo test -p agent_session` (`SQLX_OFFLINE` unset).
