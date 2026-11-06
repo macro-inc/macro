@@ -1302,8 +1302,8 @@ coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
 compatible. Quick Access reads a replaceable person window rather than a global
 contact item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
-pickers preserve selections separately. General Soup assignee/creator menus and
-chips also use lazy windows; closed-chip labels resolve explicit IDs independently,
+pickers preserve selections separately. General Soup creator menus and chips use
+lazy contact windows; assignees stay team/agent-scoped. Closed-chip labels resolve explicit IDs independently,
 without directory-sized maps. Unassigned is a local value, not membership.
 Query-driven comboboxes retain typed input across page/metadata replacement.
 CRM Owner chips use the same lazy source/selected-label separation, while header

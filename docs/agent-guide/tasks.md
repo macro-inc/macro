@@ -13,9 +13,10 @@ its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
 checkboxes toggle and stay open, rows add and close, and Shift/Only selects just
-one option and stays open. Escape dismisses the menu. Assignee and Created by load
-only while their submenu or mobile accordion is open; search and Next options
-replace the current window without losing selections. Me is a semantic viewer
+one option and stays open. Escape dismisses the menu. Assignee uses the team/agent
+roster and retains selected outsiders. Created by loads bounded personal windows
+only while its submenu or mobile accordion is open; search and Next options replace
+that window without losing selections. Me is a semantic viewer
 choice, distinct from the named fixed self option. Unavailable selected IDs remain
 selected, and Only changes its own group without clearing other restrictions.
 The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English

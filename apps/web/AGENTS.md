@@ -141,7 +141,8 @@ snapshots preserve selected labels without becoming inference evidence or revivi
 on a later return to the same text. Capture submission identities before async
 work and recheck the account before dependent writes. The `task-references` and
 `input-references` browser cases cover the real adapters/composers on desktop/phone.
-Tasks filters also use lazy desktop/mobile sources; their planner extracts references
+Tasks creator filters also use lazy desktop/mobile contact sources; Assignee keeps
+its explicit team/agent roster and selected outsiders. The planner extracts references
 without a people catalog, then resolves complete per-label evidence before applying
 any constraints. Preserve semantic Me separately from fixed self and resolve saved
 summary labels from their own IDs. Inline checklist labels resolve only referenced
