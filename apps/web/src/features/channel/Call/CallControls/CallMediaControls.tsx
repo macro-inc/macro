@@ -48,6 +48,7 @@ function backgroundChoice(effect: BackgroundEffect): BackgroundChoice {
 
 export function CallMediaControls(props: {
   media: CallMediaControlsState;
+  screenUnavailable?: boolean;
   onLeave: () => void | Promise<void>;
   onSettingsOpenChange?: (open: boolean) => void;
   children?: JSX.Element;
@@ -117,6 +118,7 @@ export function CallMediaControls(props: {
         audioMuted={call.isAudioMuted()}
         videoMuted={call.isVideoMuted()}
         screenSharing={call.isScreenSharing()}
+        screenUnavailable={props.screenUnavailable}
         onToggleAudio={() => fire(call.toggleAudio)}
         onToggleVideo={() => fire(call.toggleVideo)}
         onToggleScreen={() => fire(call.toggleScreenShare)}

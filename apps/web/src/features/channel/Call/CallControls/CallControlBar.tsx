@@ -57,6 +57,7 @@ function MediaSplitButton(props: {
           <ButtonGroup.Divider />
           <ButtonGroup.Button
             {...triggerProps}
+            disabled={props.disabled}
             variant="ghost"
             size={isMobile() ? 'icon-md' : 'icon-lg'}
             aria-label={props.menuLabel}
@@ -85,6 +86,7 @@ export function CallControlBar(props: {
   audioMuted: boolean;
   videoMuted: boolean;
   screenSharing: boolean;
+  screenUnavailable?: boolean;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
   onToggleScreen: () => void;
@@ -169,7 +171,7 @@ export function CallControlBar(props: {
             }
             menuLabel="Screen share settings"
             pressed={props.screenSharing}
-            disabled={props.disabled}
+            disabled={props.disabled || props.screenUnavailable}
             onToggle={props.onToggleScreen}
             icon={<Screencast class="size-5" />}
           >
