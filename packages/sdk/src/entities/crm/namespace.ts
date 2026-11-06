@@ -30,17 +30,29 @@ export class CrmNamespace {
     this.pipelines = new PipelineNamespace(client);
   }
 
-  /** A handle to a CRM company by id. */
+  /**
+   * A handle to a CRM company by id.
+   *
+   * @readonly
+   */
   companyById(id: string): Company {
     return Company.byId(this.client, id);
   }
 
-  /** A handle to a CRM contact by id. */
+  /**
+   * A handle to a CRM contact by id.
+   *
+   * @readonly
+   */
   contactById(id: string): Contact {
     return Contact.byId(this.client, id);
   }
 
-  /** Resolve a CRM contact by email in the caller's current team, if present. */
+  /**
+   * Resolve a CRM contact by email in the caller's current team, if present.
+   *
+   * @readonly
+   */
   async contactByEmail(email: string): Promise<Contact | undefined> {
     const { contact } = unwrap(
       await this.client.storage.getContactByEmail({
@@ -56,6 +68,8 @@ export class CrmNamespace {
    * An empty query lists the most recent contacts.
    *
    * @param opts.limit Maximum contacts to return (1-500, default 20).
+   *
+   * @readonly
    */
   async searchContacts(
     query: string,
@@ -69,7 +83,11 @@ export class CrmNamespace {
     return contacts.map((contact) => Contact.from(this.client, contact));
   }
 
-  /** Create a CRM company for the caller's current team. */
+  /**
+   * Create a CRM company for the caller's current team.
+   *
+   * @write
+   */
   async createCompany(opts: CreateCrmCompanyRequest): Promise<Company> {
     return Company.from(
       this.client,
@@ -81,6 +99,8 @@ export class CrmNamespace {
    * Create a contact without a company for the caller's current team. The
    * email is optional and may be at any domain. To add someone to a company,
    * use {@link Company.createContact}.
+   *
+   * @write
    */
   async createContact(opts: CreateCrmTeamContactRequest): Promise<Contact> {
     return Contact.from(
@@ -89,7 +109,11 @@ export class CrmNamespace {
     );
   }
 
-  /** The domains the caller's current team keeps out of email sync. */
+  /**
+   * The domains the caller's current team keeps out of email sync.
+   *
+   * @readonly
+   */
   async blockedDomains(): Promise<string[]> {
     return unwrap(await this.client.storage.listCrmBlockedDomains()).map(
       (blocked) => blocked.domain,
@@ -101,6 +125,9 @@ export class CrmNamespace {
    * that owns it, that company's contacts, and contacts without a company at
    * the domain are hidden. A contact attached to another company follows that
    * company's domains. Requires a team admin or owner.
+   *
+   * @destructive
+   * @idempotent
    */
   async blockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.blockCrmDomain({ path: { domain } }));
@@ -112,17 +139,29 @@ export class CrmNamespace {
    * company at this domain are shown again. Its company and attached contacts
    * stay hidden until the company's last blocked domain is removed, then are
    * shown even if hidden by hand before blocking. Requires a team admin or owner.
+   *
+   * @write
+   * @idempotent
    */
   async unblockDomain(domain: string): Promise<void> {
     unwrap(await this.client.storage.unblockCrmDomain({ path: { domain } }));
   }
 
-  /** The caller's current team's CRM settings. */
+  /**
+   * The caller's current team's CRM settings.
+   *
+   * @readonly
+   */
   async settings(): Promise<CrmTeamSettingsResponse> {
     return unwrap(await this.client.storage.getCrmTeamSettings());
   }
 
-  /** Partially update the caller's current team's CRM settings. */
+  /**
+   * Partially update the caller's current team's CRM settings.
+   *
+   * @write
+   * @idempotent
+   */
   async updateSettings(
     settings: UpdateCrmTeamSettingsRequest,
   ): Promise<CrmTeamSettingsResponse> {
@@ -131,17 +170,31 @@ export class CrmNamespace {
     );
   }
 
-  /** Replace the caller's current team's deal stages, in pipeline order. */
+  /**
+   * Replace the caller's current team's deal stages, in pipeline order.
+   *
+   * @destructive
+   * @idempotent
+   */
   async setStages(stages: ReplaceCrmStagesRequest): Promise<CrmStagesResponse> {
     return unwrap(await this.client.storage.putCrmTeamStages({ body: stages }));
   }
 
-  /** Reset the caller's current team's deal stages to the defaults. */
+  /**
+   * Reset the caller's current team's deal stages to the defaults.
+   *
+   * @destructive
+   * @idempotent
+   */
   async resetStages(): Promise<void> {
     unwrap(await this.client.storage.resetCrmTeamStages());
   }
 
-  /** Search CRM companies by name/domain, most relevant first, auto-paginated. */
+  /**
+   * Search CRM companies by name/domain, most relevant first, auto-paginated.
+   *
+   * @readonly
+   */
   searchCompanies(query: string): AsyncGenerator<Company> {
     return Company.search(this.client, query);
   }

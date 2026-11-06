@@ -99,7 +99,12 @@ export class MessageThread extends MacroEntity<ThreadState> {
   /** Whether the thread is resolved. */
   readonly resolved = this.field('resolved');
 
-  /** Resolve the thread or detach its annotation anchor. */
+  /**
+   * Resolve the thread or detach its annotation anchor.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: {
     resolved?: boolean;
     detachAnchor?: boolean;
@@ -115,7 +120,12 @@ export class MessageThread extends MacroEntity<ThreadState> {
     );
   }
 
-  /** Delete the entire thread, including replies. */
+  /**
+   * Delete the entire thread, including replies.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(nonce?: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.entityMessageDeleteThread({

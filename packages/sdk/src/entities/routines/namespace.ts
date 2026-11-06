@@ -51,6 +51,8 @@ export class RoutineNamespace {
    *   model: 'anthropic/claude-sonnet-5-5',
    *   trigger: { type: 'cron', schedule: '0 30 14 3 11 * 2027', timezone: 'UTC' },
    * });
+   *
+   * @write
    */
   async create(options: RoutineOptions): Promise<Routine> {
     return Routine.from(
@@ -63,7 +65,11 @@ export class RoutineNamespace {
     );
   }
 
-  /** List routines, optionally including event triggers. */
+  /**
+   * List routines, optionally including event triggers.
+   *
+   * @readonly
+   */
   async list(options?: { includeEvents?: boolean }): Promise<Routine[]> {
     return unwrap(
       await this.client.scheduledAction.listScheduledActions({

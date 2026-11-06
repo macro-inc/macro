@@ -204,7 +204,11 @@ export class Canvas {
     return this.document.id;
   }
 
-  /** The canvas's URL in the Macro web app. */
+  /**
+   * The canvas's URL in the Macro web app.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return this.document.webUrl();
   }
@@ -226,6 +230,8 @@ export class Canvas {
    * const risks = scene.items.filter((item) => item.text?.includes('Risk'));
    * return { data: { revision: scene.revision, risks: risks.map((item) => ({ id: item.id, bounds: item.bounds })) } };
    * ```
+   *
+   * @readonly
    */
   async scene(options: CanvasSceneOptions = {}): Promise<CanvasScene> {
     const { scene } = unwrap(
@@ -288,6 +294,8 @@ export class Canvas {
    *   await move(await canvas.scene());
    * }
    * ```
+   *
+   * @write
    */
   async apply(
     code: string,
@@ -337,6 +345,8 @@ export class Canvas {
    * );
    * return { data: { summary, scene: await canvas.scene({ format: 'overview' }) } };
    * ```
+   *
+   * @write
    */
   async edit(
     instructions: string,
@@ -374,6 +384,8 @@ export class Canvas {
    * const image = await document.canvas().render();
    * await channel.send(`Current plan: ${document.webUrl()}`, { images: [image] });
    * ```
+   *
+   * @write
    */
   async render(options: CanvasRenderOptions = {}): Promise<CanvasRenderImage> {
     const render = unwrap(

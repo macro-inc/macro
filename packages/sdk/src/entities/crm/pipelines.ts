@@ -12,14 +12,22 @@ export class PipelineNamespace {
     return CrmPipeline.byId(this.client, id);
   }
 
-  /** List accessible pipelines. */
+  /**
+   * List accessible pipelines.
+   *
+   * @readonly
+   */
   async list(): Promise<CrmPipeline[]> {
     return unwrap(await this.client.storage.listCrmPipelines()).map((p) =>
       CrmPipeline.from(this.client, p),
     );
   }
 
-  /** Create a pipeline and its backing storage. */
+  /**
+   * Create a pipeline and its backing storage.
+   *
+   * @write
+   */
   async create(options: CreatePipeline): Promise<CrmPipeline> {
     return CrmPipeline.from(
       this.client,

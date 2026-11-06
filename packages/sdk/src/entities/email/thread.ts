@@ -65,7 +65,11 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'email_thread', this);
 
-  /** Read follow-up state for this thread. */
+  /**
+   * Read follow-up state for this thread.
+   *
+   * @readonly
+   */
   async followup() {
     return unwrap(
       await this.client.storage.getEmailFollowup({
@@ -74,7 +78,12 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Set or remove a follow-up using a persisted operation id and revision. */
+  /**
+   * Set or remove a follow-up using a persisted operation id and revision.
+   *
+   * @write
+   * @idempotent
+   */
   async setFollowup(command: EmailFollowupCommand) {
     return unwrap(
       await this.client.storage.setEmailFollowup({
@@ -84,7 +93,11 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Calendar invitations resolved from this thread's messages. */
+  /**
+   * Calendar invitations resolved from this thread's messages.
+   *
+   * @readonly
+   */
   async calendarInvitations() {
     return unwrap(
       await this.client.email.getThreadCalendarInvitations({
@@ -104,7 +117,11 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * instead, `already_on_calendar` when the meeting is already on one of
    * their calendars, whichever calendar is named (it cannot be added to
    * another of theirs either), and `copy_refused` when Google will not
-   * import it. */
+   * import it.
+   *
+   * @write
+   * @openworld
+   */
   async addEventToCalendar(
     message: EmailMessage,
     invitation: CalendarInvitation,
@@ -127,6 +144,8 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * Opens recorded for messages sent from the caller's own or delegated
    * inboxes with read receipts on, newest message first. Counts are
    * approximate: some mail apps prefetch images and others block them.
+   *
+   * @readonly
    */
   async readReceipts(): Promise<EmailReadReceipt[]> {
     const { receipts } = unwrap(
@@ -142,7 +161,12 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     }));
   }
 
-  /** Change project membership or share permissions for this thread. */
+  /**
+   * Change project membership or share permissions for this thread.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: {
     project?: Project | null;
     sharePermission?: SharePermissionOptions;
@@ -179,7 +203,11 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     return thread;
   }
 
-  /** The thread's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The thread's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/mail/${this.id}`;
   }
@@ -231,7 +259,11 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** Timestamp of the latest non-spam message, if any. */
   readonly latestNonSpamAt = this.field('latest_non_spam_message_ts');
 
-  /** The thread's subject, from its first message with one. */
+  /**
+   * The thread's subject, from its first message with one.
+   *
+   * @readonly
+   */
   async subject(): Promise<string | undefined> {
     const { messages } = await this.detail.get();
     for (const m of messages) if (m.subject) return m.subject;
@@ -241,6 +273,8 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /**
    * Everyone on the thread (senders and recipients), deduped by email.
    * Derived from the thread's first 100 messages.
+   *
+   * @readonly
    */
   async participants(): Promise<ApiContactInfo[]> {
     const { messages } = await this.detail.get();
@@ -253,7 +287,11 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     return [...seen.values()];
   }
 
-  /** The messages in this thread, pre-seeded from the list endpoint. */
+  /**
+   * The messages in this thread, pre-seeded from the list endpoint.
+   *
+   * @readonly
+   */
   async messages(opts?: {
     since?: string;
     limit?: number;
@@ -270,7 +308,11 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     return records.map((r) => EmailMessage.from(this.client, r));
   }
 
-  /** The attachments across this thread's first 100 messages, pre-seeded from the thread detail. */
+  /**
+   * The attachments across this thread's first 100 messages, pre-seeded from the thread detail.
+   *
+   * @readonly
+   */
   async attachments(): Promise<EmailAttachment[]> {
     const { messages } = await this.detail.get();
     return messages.flatMap((m) =>
@@ -283,6 +325,9 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * (403) and replies through a review or `email.sendConfirmed` with
    * `replyingTo` instead. Returns a handle when the API reports the created
    * message's id.
+   *
+   * @destructive
+   * @openworld
    */
   async reply(opts: ReplyEmailOptions): Promise<EmailMessage | undefined> {
     const subject = opts.subject ?? (await this.subject()) ?? '';
@@ -306,7 +351,13 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       : undefined;
   }
 
-  /** Archive the thread (or unarchive with `false`). */
+  /**
+   * Archive the thread (or unarchive with `false`).
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async archive(archived = true): Promise<void> {
     await this.mutate((c) =>
       c.email.archiveThread({
@@ -345,26 +396,47 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     return unchanged;
   }
 
-  /** Update provider-neutral read, trash, spam, or star state. */
+  /**
+   * Update provider-neutral read, trash, spam, or star state.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async updateState(request: UpdateThreadStateRequest): Promise<void> {
     await this.mutate((c) =>
       c.email.updateThreadState({ path: { id: this.id }, body: request }),
     );
   }
 
-  /** Read pending or failed mailbox changes without initiating a retry. */
+  /**
+   * Read pending or failed mailbox changes without initiating a retry.
+   *
+   * @readonly
+   */
   async operations(): Promise<MailboxOperation[]> {
     return unwrap(
       await this.client.email.threadOperations({ path: { id: this.id } }),
     );
   }
 
-  /** Mark the thread as seen. */
+  /**
+   * Mark the thread as seen.
+   *
+   * @write
+   * @idempotent
+   */
   async markSeen(): Promise<void> {
     await this.mutate((c) => c.email.threadSeen({ path: { id: this.id } }));
   }
 
-  /** Add a label to every message in the thread. */
+  /**
+   * Add a label to every message in the thread.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async addLabel(label: Label): Promise<void> {
     await this.mutate((c) =>
       c.email.addRemoveThreadLabel({
@@ -374,7 +446,13 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Remove a label from every message in the thread. */
+  /**
+   * Remove a label from every message in the thread.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async removeLabel(label: Label): Promise<void> {
     await this.mutate((c) =>
       c.email.addRemoveThreadLabel({
@@ -384,7 +462,12 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     );
   }
 
-  /** Attach the thread to a project, or clear the project with `null`. */
+  /**
+   * Attach the thread to a project, or clear the project with `null`.
+   *
+   * @write
+   * @idempotent
+   */
   async moveToProject(project: Project | null): Promise<void> {
     await this.mutate((c) =>
       c.email.updateThreadProject({
