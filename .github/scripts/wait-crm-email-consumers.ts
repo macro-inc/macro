@@ -147,6 +147,50 @@ export function isCliTimeout(error: unknown): boolean {
 	return /^(?:Read|Connect) timeout on endpoint URL:/m.test(text);
 }
 
+/** Only one recognized ECS diagnostic is retryable; mixed/unknown failures are fatal. */
+export function isRetryableAwsFailure(error: unknown): boolean {
+	if (!error || typeof error !== "object") return false;
+	const stderr = "stderr" in error ? error.stderr : undefined;
+	const text = (
+		typeof stderr === "string"
+			? stderr
+			: Buffer.isBuffer(stderr)
+				? stderr.toString("utf8")
+				: ""
+	).trim();
+	if (!text) return isCliTimeout(error);
+	if (/^(?:Read|Connect) timeout on endpoint URL:[^\r\n]*$/.test(text))
+		return isCliTimeout(error);
+	const diagnostic = text.match(
+		/^An error occurred \(([^)]+)\) when calling the (?:DescribeServices|ListTasks|DescribeTasks) operation(?: \(reached max retries: \d+\))?:[^\r\n]*$/,
+	);
+	if (!diagnostic) return false;
+	return new Set([
+		"Throttling",
+		"ThrottlingException",
+		"ThrottledException",
+		"RequestThrottledException",
+		"RequestThrottled",
+		"RequestLimitExceeded",
+		"TooManyRequestsException",
+		"ServerException",
+		"InternalFailure",
+		"InternalError",
+		"ServiceUnavailable",
+		"ServiceUnavailableException",
+		"500",
+		"502",
+		"503",
+		"504",
+	]).has(diagnostic[1]);
+}
+
+export function rethrowAwsFailure(error: unknown): never {
+	if (isRetryableAwsFailure(error))
+		throw new TransientSnapshotError("Temporary AWS CLI snapshot failure");
+	throw error;
+}
+
 export function snapshotTasks(
 	requested: string[],
 	described: { tasks?: Task[]; failures?: { reason?: string }[] },
@@ -190,9 +234,7 @@ function aws<T>(args: string[]): T {
 			),
 		);
 	} catch (error) {
-		if (isCliTimeout(error))
-			throw new TransientSnapshotError("AWS CLI snapshot request timed out");
-		throw error;
+		rethrowAwsFailure(error);
 	}
 }
 

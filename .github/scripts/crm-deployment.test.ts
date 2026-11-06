@@ -3,6 +3,8 @@ import { checkDeploymentResults } from "./check-service-deployment-results";
 import {
 	consumersReady,
 	isCliTimeout,
+	isRetryableAwsFailure,
+	rethrowAwsFailure,
 	snapshotTasks,
 	TransientSnapshotError,
 	type ExpectedConsumer,
@@ -233,6 +235,115 @@ describe("deployment summary", () => {
 });
 
 describe("transient snapshot retry", () => {
+	const cliFailure = (code: string, operation = "DescribeServices") => ({
+		stderr: `An error occurred (${code}) when calling the ${operation} operation (reached max retries: 2): Request failed`,
+	});
+	test("classifies exact ECS throttle/server diagnostics and preserves timeout handling", () => {
+		for (const code of [
+			"ThrottlingException",
+			"ServerException",
+			"InternalFailure",
+			"ServiceUnavailable",
+			"500",
+			"502",
+			"503",
+			"504",
+		]) {
+			for (const operation of [
+				"DescribeServices",
+				"ListTasks",
+				"DescribeTasks",
+			])
+				expect(isRetryableAwsFailure(cliFailure(code, operation))).toBe(true);
+		}
+		expect(
+			isRetryableAwsFailure({
+				stderr: Buffer.from(`\n${cliFailure("ThrottlingException").stderr}\n`),
+			}),
+		).toBe(true);
+		expect(isRetryableAwsFailure({ code: "ETIMEDOUT" })).toBe(true);
+		expect(
+			isRetryableAwsFailure({
+				stderr: 'Read timeout on endpoint URL: "https://ecs.example.com"',
+			}),
+		).toBe(true);
+	});
+	test.each(["ThrottlingException", "ServerException"])(
+		"fresh snapshots recover from exhausted %s retries without extending the deadline",
+		async (code) => {
+			let clock = 0;
+			let reads = 0;
+			await waitForConsumers(
+				expected,
+				() => {
+					if (reads++ === 0) rethrowAwsFailure(cliFailure(code));
+					return ready();
+				},
+				() => clock,
+				async () => {
+					clock += 10;
+				},
+				30,
+			);
+			expect(reads).toBe(2);
+			clock = 0;
+			reads = 0;
+			await expect(
+				waitForConsumers(
+					expected,
+					() => {
+						reads++;
+						rethrowAwsFailure(cliFailure(code));
+					},
+					() => clock,
+					async () => {
+						clock += 10;
+					},
+					30,
+				),
+			).rejects.toThrow("Timed out");
+			expect(reads).toBe(3);
+			expect(clock).toBe(30);
+		},
+	);
+	test("permanent, unknown and mixed CLI failures retain the original error and stop immediately", async () => {
+		for (const error of [
+			cliFailure("AccessDeniedException"),
+			cliFailure("InvalidParameterException"),
+			cliFailure("UnknownFailure"),
+			cliFailure("ThrottlingException", "AssumeRole"),
+			{ code: "ENOENT" },
+			new SyntaxError("Unexpected token"),
+			{
+				stderr: `${cliFailure("ThrottlingException").stderr}\n${cliFailure("AccessDeniedException").stderr}`,
+			},
+			{ code: "ETIMEDOUT", stderr: cliFailure("AccessDeniedException").stderr },
+			{
+				stderr:
+					'Unable to locate credentials\nRead timeout on endpoint URL: "https://ecs.example.com"',
+			},
+		]) {
+			expect(isRetryableAwsFailure(error)).toBe(false);
+			let reads = 0;
+			let pauses = 0;
+			await expect(
+				waitForConsumers(
+					expected,
+					() => {
+						reads++;
+						rethrowAwsFailure(error);
+					},
+					() => 0,
+					async () => {
+						pauses++;
+					},
+					30,
+				),
+			).rejects.toBe(error);
+			expect(reads).toBe(1);
+			expect(pauses).toBe(0);
+		}
+	});
 	test.each(["missing", "incomplete", "timeout"])(
 		"retries %s with a fresh complete snapshot",
 		async (kind) => {
@@ -299,7 +410,7 @@ describe("transient snapshot retry", () => {
 			),
 		).rejects.toThrow("Timed out");
 	});
-	test("only CLI timeouts are transient, never credentials or other command failures", () => {
+	test("recognizes CLI timeouts without mistaking credentials or other command failures", () => {
 		expect(isCliTimeout({ code: "ETIMEDOUT" })).toBe(true);
 		expect(
 			isCliTimeout({
