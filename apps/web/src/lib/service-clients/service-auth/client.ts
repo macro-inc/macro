@@ -40,6 +40,7 @@ import type {
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
+  PutCursorDefaultModelRequest,
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
@@ -1142,15 +1143,16 @@ export const authServiceClient = {
   },
 
   /**
-   * Chooses the model the user's sessions start on.
+   * Chooses the model, and optionally its effort, the user's sessions start on.
+   * Saving a model without an effort clears the previous one.
    */
-  async putCursorDefaultModel(modelId: string) {
+  async putCursorDefaultModel(request: PutCursorDefaultModelRequest) {
     return (
       await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
         `${authHost}/cursor-api-key/default-model`,
         {
           method: 'PUT',
-          body: JSON.stringify({ modelId }),
+          body: JSON.stringify(request),
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
         }
       )
