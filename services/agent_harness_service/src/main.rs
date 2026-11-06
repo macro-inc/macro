@@ -1362,6 +1362,8 @@ async fn run() -> anyhow::Result<()> {
                 Arc::clone(&command_forwarder),
                 computer_operator.clone(),
                 Arc::clone(&parked_commands),
+                computer_tasks.clone(),
+                service_shutdown.clone(),
             ),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),

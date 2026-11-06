@@ -36,6 +36,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::config::{ComputerFleetConfig, Config};
@@ -418,6 +419,8 @@ pub struct WakingForwarder<Inner> {
     inner: Arc<Inner>,
     operator: Option<Arc<Operator>>,
     parked: Arc<ParkedCommands>,
+    tracker: TaskTracker,
+    shutdown: CancellationToken,
 }
 
 impl<Inner> WakingForwarder<Inner> {
@@ -425,11 +428,15 @@ impl<Inner> WakingForwarder<Inner> {
         inner: Arc<Inner>,
         operator: Option<Arc<Operator>>,
         parked: Arc<ParkedCommands>,
+        tracker: TaskTracker,
+        shutdown: CancellationToken,
     ) -> Self {
         Self {
             inner,
             operator,
             parked,
+            tracker,
+            shutdown,
         }
     }
 }
@@ -457,10 +464,19 @@ impl<Inner: CommandForwarder> CommandForwarder for WakingForwarder<Inner> {
                 let inner = Arc::clone(&self.inner);
                 let parked = Arc::clone(&self.parked);
                 let harness = *harness;
-                tokio::spawn(async move {
-                    tokio::time::sleep(PARK_LIMIT).await;
-                    flush(&*inner, &parked, harness).await;
-                });
+                let shutdown = self.shutdown.clone();
+                let span = tracing::info_span!("computer.prompt_wait", %harness, %session);
+                self.tracker.spawn(
+                    async move {
+                        shutdown
+                            .run_until_cancelled(async {
+                                tokio::time::sleep(PARK_LIMIT).await;
+                                flush(&*inner, &parked, harness).await;
+                            })
+                            .await;
+                    }
+                    .instrument(span),
+                );
                 return Ok(CommandOutcome::Queued);
             }
         }
