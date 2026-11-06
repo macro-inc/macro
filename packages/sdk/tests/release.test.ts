@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   callsPeerRange,
+  firstPublishProblem,
   lockstepProblem,
   readCallsManifest,
   readManifest,
@@ -92,5 +93,19 @@ describe('lockstep with @macro-inc/sdk-calls', () => {
     expect(callsManifest.peerDependencies?.['@macro-inc/sdk']).toBe(
       callsPeerRange(sdkManifest.version),
     );
+  });
+});
+
+describe('firstPublishProblem', () => {
+  test('stops a package that has never been published', () => {
+    expect(firstPublishProblem('@macro-inc/new', [])).toContain(
+      'One-time npm setup',
+    );
+  });
+
+  test('lets a placeholder through', () => {
+    expect(
+      firstPublishProblem('@macro-inc/new', ['0.0.0-bootstrap.0']),
+    ).toBeUndefined();
   });
 });

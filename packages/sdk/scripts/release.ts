@@ -109,6 +109,19 @@ export async function publishedVersions(name: string): Promise<string[]> {
   return Object.keys(packument.versions ?? {});
 }
 
+/**
+ * Why a package can't release yet, if it can't. Trusted publishing needs a
+ * publisher registered on an existing package, so publishing a new name fails with
+ * a bare 404. Asked before anything publishes, this stops the release whole.
+ */
+export function firstPublishProblem(
+  name: string,
+  published: readonly string[],
+): string | undefined {
+  if (published.length > 0) return undefined;
+  return `${name} isn't on npm, so it can't publish over OIDC yet. Do the "One-time npm setup" in packages/sdk/RELEASING.md, then re-run this job`;
+}
+
 export type Resolution =
   | { kind: 'release'; version: string; tag: string; distTag: string }
   | { kind: 'published'; version: string }

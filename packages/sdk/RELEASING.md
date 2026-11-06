@@ -139,6 +139,10 @@ npm publish --access public --tag bootstrap # a folder holding only package.json
 ```
 
 Then register the publisher, and let `Release SDK` publish the first real version.
+`Release SDK` refuses to publish either package until both names exist on npm, so a
+missing placeholder stops the release before anything ships. Without that check npm
+answers `E404` on the PUT, which means no publisher is registered, not that something
+is missing from the repository.
 
 `packages/sdk/package.json` must keep repository metadata matching
 `https://github.com/macro-inc/macro`.
@@ -160,6 +164,10 @@ git push origin "refs/tags/sdk-v${version}"
 It re-checks that the tag version matches that package's manifest and that the commit
 is on `main`. Tags pushed by `Release SDK` use `GITHUB_TOKEN`, which does not start
 another workflow run, so the two paths never double-publish.
+
+If the SDK published and sdk-calls didn't, re-run the failed job once the cause is
+fixed (`gh run rerun <run-id> --failed`). The SDK resolves as already published, and
+only sdk-calls publishes.
 
 On failure, read the job logs and check npm before retrying: a run may have
 published before a later step failed. Code fixes go through a new PR and a new

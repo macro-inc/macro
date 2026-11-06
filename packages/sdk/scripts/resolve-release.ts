@@ -5,6 +5,7 @@
  */
 import { match } from 'ts-pattern';
 import {
+  firstPublishProblem,
   lockstepProblem,
   publishedVersions,
   type Resolution,
@@ -36,13 +37,21 @@ const calls = await readCallsManifest();
 const problem = lockstepProblem(sdk, calls);
 if (problem !== undefined) throw new Error(problem);
 
-const sdkResolution = resolveRelease(
-  sdk.version,
-  await publishedVersions(sdk.name),
-);
+const sdkPublished = await publishedVersions(sdk.name);
+const callsPublished = await publishedVersions(calls.name);
+
+for (const [name, published] of [
+  [sdk.name, sdkPublished],
+  [calls.name, callsPublished],
+] as const) {
+  const firstPublish = firstPublishProblem(name, published);
+  if (firstPublish !== undefined) throw new Error(firstPublish);
+}
+
+const sdkResolution = resolveRelease(sdk.version, sdkPublished);
 const callsResolution = resolveRelease(
   calls.version,
-  await publishedVersions(calls.name),
+  callsPublished,
   'sdk-calls',
 );
 
