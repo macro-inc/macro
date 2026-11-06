@@ -3753,6 +3753,7 @@ version = "0.1.0"
 dependencies = [
  "cache-core",
  "chrono",
+ "maybe_send",
  "miniz_oxide",
  "pollster",
  "predicate-index",
@@ -6774,6 +6775,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "thiserror 2.0.18",
  "utoipa",
 ]
 
@@ -12585,6 +12587,7 @@ dependencies = [
  "serde",
  "sqlx",
  "thiserror 2.0.18",
+ "tracing",
  "utoipa",
 ]
 

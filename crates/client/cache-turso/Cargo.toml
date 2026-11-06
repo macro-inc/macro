@@ -10,6 +10,7 @@ browser-test-hooks = []
 
 [dependencies]
 cache-core = { path = "../cache-core" }
+maybe_send = { path = "../../maybe_send" }
 predicate-index = { path = "../../predicate_index" }
 thiserror = { workspace = true }
 uuid = { workspace = true }
@@ -33,3 +34,9 @@ tempfile = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = { workspace = true }
+
+[package.metadata.cargo-shear]
+# Unused, but apps/web/tauri locks this crate by path, and changing its
+# lockfiles trips the native store-release version gates. Remove with the
+# next native release.
+ignored = ["maybe_send"]
