@@ -175,20 +175,28 @@ export class AgentSession {
    * The shared instance for `id`, created on first acquisition. Every
    * acquisition needs a matching {@link release}; the last one closes the
    * machine and drops the subscriptions. `hold` keeps a session open for a
-   * later view without being one, so it is not traced as an open.
+   * later view without being one, and `prefetch` opens one ahead of a view
+   * that may never come; neither is traced as an open.
    */
-  static acquire(id: string, purpose: 'view' | 'hold' = 'view'): AgentSession {
+  static acquire(
+    id: string,
+    purpose: 'view' | 'hold' | 'prefetch' = 'view'
+  ): AgentSession {
     const open = AgentSession.open.get(id);
-    const session = open ?? new AgentSession(id);
+    const session = open ?? new AgentSession(id, purpose === 'prefetch');
     AgentSession.open.set(id, session);
     session.references += 1;
-    if (purpose === 'hold') return session;
+    if (purpose !== 'view') return session;
     traceAcquire(id, open === undefined, session.references);
+    const prefetched = session.unviewedPrefetch;
+    session.unviewedPrefetch = false;
     // A surface opening a session that is already folded waits for nothing;
     // its render is measured from now, not from the load long ago.
     if (session.loaded) {
-      session.trace = new SessionLoadTrace(id);
+      session.trace = new SessionLoadTrace(id, prefetched);
       session.trace.end('reused');
+    } else {
+      session.trace.viewed();
     }
     return session;
   }
@@ -220,6 +228,8 @@ export class AgentSession {
   readonly id: string;
 
   private references = 0;
+  /** A prefetch opened this instance and no view has acquired it yet. */
+  private unviewedPrefetch: boolean;
   private closed = false;
   /** The fetched snapshot has been folded; inputs no longer wait for it. */
   private ready = false;
@@ -285,8 +295,9 @@ export class AgentSession {
     publishSessionTurn(this.id, next);
   }
 
-  private constructor(id: string) {
+  private constructor(id: string, prefetched: boolean) {
     this.id = id;
+    this.unviewedPrefetch = prefetched;
     // Subscribed before the fetch so no row between the two is lost: rows
     // that arrive during the load are buffered and folded after the snapshot.
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
@@ -303,7 +314,7 @@ export class AgentSession {
           fireAndForget(this.resync(), 'agent-session')
         )
       : () => undefined;
-    this.trace = new SessionLoadTrace(id);
+    this.trace = new SessionLoadTrace(id, prefetched);
     this.watch = this.openWatch();
     this.sessionRow = agentHarnessServiceClient.get(id);
     this.warming = this.startWarm();

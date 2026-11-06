@@ -1061,6 +1061,16 @@ one takes the keyed path. Never `produce` the whole array per append; it makes
 initial projection quadratic. Check with the
 [session-open runner](src/features/block-agent/browser-test/README.md).
 
+### Agent session switching
+
+Agent session rows (`AgentSessionListItem`, Home and Agents) prefetch the session
+on a 100 ms pointer rest or keyboard focus (`core/agent-session/prefetch.ts`),
+and the 8 last viewed stay open (`recently-viewed.ts`). Open sessions only
+through `AgentSession.acquire`, so a view shares the prefetched or held
+instance instead of fetching again; touch rows do not prefetch. The
+backend-free desktop check is
+`bunx playwright test --config src/features/block-agent/browser-test/session-switch.playwright.config.ts`.
+
 ### Agent system events
 
 Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global

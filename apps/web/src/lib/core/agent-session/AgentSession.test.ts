@@ -1218,6 +1218,55 @@ describe('AgentSession', () => {
       live.release();
     });
 
+    it('marks a prefetched load, and measures a view that joins it from the view', async () => {
+      const log = deferred<LogSnapshot>();
+      logSource.fetched.mockReturnValue(log.promise);
+      const prefetched = AgentSession.acquire(SESSION, 'prefetch');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const viewed = AgentSession.acquire(SESSION);
+      log.resolve(logOf([row(1)]));
+      await viewed.load();
+      viewed.rendered('fetched', []);
+
+      expect(logSource.watch).toHaveBeenCalledOnce();
+      const [load] = loadSpans();
+      expect(load.attributes).toMatchObject({
+        'agent.session.load.outcome': 'loaded',
+        'agent.session.load.prefetched': true,
+      });
+      const lead = load.attributes[
+        'agent.session.load.prefetch_lead_ms'
+      ] as number;
+      expect(lead).toBeGreaterThanOrEqual(15);
+      // What the person waited: from the view, not from the hover.
+      const [render] = renderSpans();
+      expect(
+        render.attributes['agent.session.render.since_load_ms']
+      ).toBeLessThan(load.attributes['agent.session.load.total_ms'] as number);
+      viewed.release();
+      prefetched.release();
+    });
+
+    it('reports a view of a prefetched session that has loaded as reused', async () => {
+      const prefetched = AgentSession.acquire(SESSION, 'prefetch');
+      await prefetched.load();
+      const viewed = AgentSession.acquire(SESSION);
+      await viewed.load();
+
+      expect(logSource.watch).toHaveBeenCalledOnce();
+      expect(
+        loadSpans().map((span) => [
+          span.attributes['agent.session.load.outcome'],
+          span.attributes['agent.session.load.prefetched'],
+        ])
+      ).toEqual([
+        ['loaded', true],
+        ['reused', true],
+      ]);
+      viewed.release();
+      prefetched.release();
+    });
+
     it('says why a load failed', async () => {
       harness.get.mockResolvedValueOnce(err([{ code: 'HTTP_ERROR' }]));
       const live = AgentSession.acquire(SESSION);

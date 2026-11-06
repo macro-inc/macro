@@ -6,6 +6,12 @@ import {
   conversationStateLabel,
 } from '../core/conversation-state';
 
+/** What a row reports ahead of a press: a resting pointer, or focus. */
+export type AgentSessionRowIntent = Pick<
+  JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+  'onPointerEnter' | 'onPointerLeave' | 'onFocus'
+>;
+
 /** Shared row geometry; the host supplies the Home icon or Agents status. */
 export function AgentSessionRow(props: {
   id: string;
@@ -22,6 +28,8 @@ export function AgentSessionRow(props: {
   hideLeading?: boolean;
   children?: JSX.Element;
   onOpen?: (event: MouseEvent) => void;
+  /** Signs the row is about to be opened, for the host to prepare it. */
+  intent?: AgentSessionRowIntent;
 }) {
   const metadata = children(() => props.children);
   return (
@@ -51,6 +59,7 @@ export function AgentSessionRow(props: {
           .filter(Boolean)
           .join(' · ')}
         aria-current={props.active ? 'page' : undefined}
+        {...props.intent}
         {...pressHandlers((event) => props.onOpen?.(event))}
       />
       <Show when={!props.hideLeading}>

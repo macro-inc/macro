@@ -155,15 +155,28 @@ export class SessionLoadTrace {
   readonly #span: Span | undefined;
   readonly #sessionId: string;
   readonly #startedAt = performance.now();
+  /**
+   * When a person asked for the session: the start, unless a prefetch began
+   * the load and a view joined it later. What a render is measured from.
+   */
+  #waitedFrom = this.#startedAt;
+  readonly #prefetched: boolean;
+  #viewed = false;
   readonly #recorded: Record<string, string | number | boolean> = {};
   readonly #frames = observeLongFrames();
   #ended = false;
   #failure: LoadFailure | undefined;
   #stallTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(sessionId: string) {
+  /**
+   * `prefetched` marks a load started ahead of any view (`prefetch.ts`), and
+   * a reuse of a session one opened that no view has shown yet.
+   */
+  constructor(sessionId: string, prefetched = false) {
     this.#sessionId = sessionId;
+    this.#prefetched = prefetched;
     this.#span = start('agent.session.load', sessionId);
+    if (prefetched) this.#set('agent.session.load.prefetched', true);
     this.#stallTimer = setTimeout(
       () => this.end('stalled'),
       STALL_THRESHOLD_MS
@@ -218,6 +231,21 @@ export class SessionLoadTrace {
     });
   }
 
+  /**
+   * A view joined a load a prefetch started. Renders are measured from here,
+   * since this is when a person began to wait; `prefetch_lead_ms` is the
+   * head start the prefetch gave them.
+   */
+  viewed(): void {
+    if (!this.#prefetched || this.#viewed || this.#ended) return;
+    this.#viewed = true;
+    this.#waitedFrom = performance.now();
+    this.#set(
+      'agent.session.load.prefetch_lead_ms',
+      this.#waitedFrom - this.#startedAt
+    );
+  }
+
   /** Why the load is about to fail; read by `end('failed')`. */
   failing(failure: LoadFailure): void {
     this.#failure ??= failure;
@@ -255,7 +283,8 @@ export class SessionLoadTrace {
   /**
    * A surface handed a transcript to the DOM. `cached` is the warm paint
    * from the cached log; the other is the fetched one. Measured from the
-   * start of the load, which is what a person waited. Its own span rather
+   * start of the load, or from the view that joined a prefetched one: what
+   * a person waited. Its own span rather
    * than a stage: the load span has usually ended by the time a surface
    * paints, and an ended span drops what is set on it.
    *
@@ -268,7 +297,7 @@ export class SessionLoadTrace {
   rendered(kind: 'cached' | 'fetched', size: TranscriptSize): void {
     const stage: LoadStage = kind === 'cached' ? 'warm_render' : 'render';
     const now = performance.now();
-    const ms = now - this.#startedAt;
+    const ms = now - this.#waitedFrom;
     this.#recorded[`agent.session.load.${stage}_ms`] = Math.round(ms);
     const span = start('agent.session.render', this.#sessionId);
     const record: Record<string, string | number | boolean> = {
@@ -285,7 +314,7 @@ export class SessionLoadTrace {
         span?.setAttr(name, value);
       }
       performance.measure(`agent.session.load.${stage}`, {
-        start: this.#startedAt,
+        start: this.#waitedFrom,
         end: now,
         detail: { sessionId: this.#sessionId, kind },
       });
@@ -301,7 +330,7 @@ export class SessionLoadTrace {
             const painted: LoadStage =
               kind === 'cached' ? 'warm_painted' : 'painted';
             record['agent.session.load.painted_at_ms'] = Math.round(
-              paintedAt - this.#startedAt
+              paintedAt - this.#waitedFrom
             );
             record['agent.session.load.paint_ms'] = Math.round(paintedAt - now);
             Object.assign(
@@ -309,15 +338,15 @@ export class SessionLoadTrace {
               summarizeFrames(
                 this.#frames,
                 'agent.session.load',
-                this.#startedAt,
+                this.#waitedFrom,
                 paintedAt
               )
             );
             this.#recorded[`agent.session.load.${painted}_ms`] = Math.round(
-              paintedAt - this.#startedAt
+              paintedAt - this.#waitedFrom
             );
             performance.measure(`agent.session.load.${painted}`, {
-              start: this.#startedAt,
+              start: this.#waitedFrom,
               end: paintedAt,
               detail: { sessionId: this.#sessionId, kind },
             });

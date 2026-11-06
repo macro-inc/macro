@@ -1,5 +1,6 @@
 import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { prefetchOnIntent } from '@core/agent-session/prefetch';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { AgentSessionEntity } from '@entity';
 import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
@@ -33,6 +34,8 @@ type Props = {
 /** Persisted list metadata stays fresh through the session update events. */
 export function AgentSessionListItem(props: Props) {
   const { openWithSplit } = useSplitLayout();
+  // Opening the session takes two round trips; start them before the press.
+  const intent = prefetchOnIntent(() => props.entity.id);
   const mode = () =>
     props.entity.harness
       ? modeForKind(kindForHarness(props.entity.harness))
@@ -91,6 +94,7 @@ export function AgentSessionListItem(props: Props) {
       unread={props.unread}
       hideLeading={hideLeading()}
       onOpen={props.onOpen}
+      intent={intent}
       timestamp={compactAge(conversationTimestamp(props.entity))}
       leading={
         <Show
