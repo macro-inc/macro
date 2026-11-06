@@ -6,10 +6,23 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CallMoreMenu } from '../CallControls/CallMoreMenu';
 
-afterEach(cleanup);
+beforeEach(() =>
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  )
+);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 async function openShortcuts() {
   const openChanged = vi.fn();
   render(() => (
@@ -73,4 +86,41 @@ it('preserves focus on an outside control when the popover dismisses', async () 
   other.focus();
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(other));
+});
+
+it('keeps layout descriptions concise without a heading or persistence footer', async () => {
+  render(() => (
+    <CallMoreMenu
+      layout="auto"
+      onLayoutChange={() => {}}
+      hasScreenShare
+      hideParticipants={false}
+      onHideParticipantsChange={() => {}}
+      onOpenChange={() => {}}
+    />
+  ));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  const layout = await screen.findByRole('menuitem', { name: /Layout/ });
+  expect(screen.queryByText('For this call')).toBeNull();
+  expect(
+    document.querySelector('[data-macro-icon="users-slash"]')
+  ).toBeTruthy();
+  layout.focus();
+  fireEvent.keyDown(layout, { key: 'ArrowRight' });
+  await screen.findByRole('menuitemradio', { name: /^Auto/ });
+  for (const text of [
+    'Grid until someone shares',
+    'Everyone the same size',
+    'Speaker on stage, others below',
+    'Speaker on stage, others to the side',
+  ]) {
+    expect(screen.getByText(text).classList.contains('whitespace-nowrap')).toBe(
+      true
+    );
+  }
+  expect(
+    screen.queryByText('Your choice is kept for your next calls')
+  ).toBeNull();
 });

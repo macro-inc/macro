@@ -12,15 +12,11 @@ export default {
   layoutGrid: 'Grid',
   layoutSpeaker: 'Speaker',
   layoutSidebar: 'Sidebar',
-  layoutAutoDescription: 'Grid, or the shared screen when someone shares',
+  layoutAutoDescription: 'Grid until someone shares',
   layoutGridDescription: 'Everyone the same size',
-  layoutSpeakerDescription:
-    "Who's talking or sharing on stage, everyone else below",
-  layoutSidebarDescription:
-    "Who's talking or sharing on stage, everyone else on the right",
-  layoutRemembered: 'Your choice is kept for your next calls',
+  layoutSpeakerDescription: 'Speaker on stage, others below',
+  layoutSidebarDescription: 'Speaker on stage, others to the side',
   hideParticipants: 'Hide participants',
-  forThisCall: 'For this call',
   whileSharing: "While someone's sharing",
   inProgress: 'Call in progress',
   callingYou: 'Calling you',

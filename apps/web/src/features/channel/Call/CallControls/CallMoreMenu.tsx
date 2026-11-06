@@ -6,7 +6,9 @@ import CornersOut from '@icon/system/regular/corners-out.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Keyboard from '@icon/system/regular/keyboard.svg';
 import LayoutIcon from '@icon/system/regular/sidebar-simple.svg';
+import UsersSlash from '@icon/system/regular/users-slash.svg';
 import { Popover } from '@kobalte/core/popover';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, Dropdown, Hotkey, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { type CallLayout, normalizeCallLayout } from '../call-layout';
@@ -91,6 +93,9 @@ export function CallMoreMenu(props: {
     layouts.find((item) => item.value === props.layout)?.label ??
     'calls.layoutAuto';
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
+  const [menuElement, setMenuElement] = createSignal<HTMLDivElement>();
+  const [layoutMenu, setLayoutMenu] = createSignal<HTMLDivElement>();
+  const layoutMenuSize = createElementSize(layoutMenu);
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
   let shortcutsInteractedOutside = false;
@@ -131,6 +136,7 @@ export function CallMoreMenu(props: {
         </Dropdown.Trigger>
         <Show when={menuOpen() && !shortcutsOpen()}>
           <Dropdown.Content
+            ref={setMenuElement}
             portalScope="local"
             class="min-w-64"
             onCloseAutoFocus={(event) => {
@@ -159,18 +165,32 @@ export function CallMoreMenu(props: {
               </Dropdown.Group>
             </Show>
             <Dropdown.Group>
-              <Dropdown.Sub>
+              <Dropdown.Sub
+                shift={0}
+                gutter={4}
+                getAnchorRect={() => {
+                  const rect = menuElement()?.getBoundingClientRect();
+                  if (!rect) return undefined;
+                  return {
+                    x: rect.x,
+                    y: rect.bottom - (layoutMenuSize.height ?? 0),
+                    width: rect.width,
+                    height: 0,
+                  };
+                }}
+              >
                 <Dropdown.SubTrigger>
                   <LayoutIcon class="size-4" />
                   <span class="flex-1">{t('calls.layout')}</span>
                   <span class="text-ink-muted">{t(label())}</span>
                   <CaretRight class="size-3" />
                 </Dropdown.SubTrigger>
-                <Dropdown.SubContent portalScope="local" class="w-80">
+                <Dropdown.SubContent
+                  ref={setLayoutMenu}
+                  portalScope="local"
+                  class="w-80 min-w-max"
+                >
                   <Dropdown.Group>
-                    <Dropdown.GroupLabel>
-                      {t('calls.layout')}
-                    </Dropdown.GroupLabel>
                     <Dropdown.RadioGroup
                       value={props.layout}
                       onChange={(value) =>
@@ -187,7 +207,7 @@ export function CallMoreMenu(props: {
                             <LayoutThumbnail layout={item.value} />
                             <span class="min-w-0 flex-1">
                               <span class="block">{t(item.label)}</span>
-                              <span class="block text-xs text-ink-muted">
+                              <span class="block whitespace-nowrap text-xs text-ink-muted">
                                 {t(item.description)}
                               </span>
                             </span>
@@ -198,11 +218,6 @@ export function CallMoreMenu(props: {
                         )}
                       </For>
                     </Dropdown.RadioGroup>
-                  </Dropdown.Group>
-                  <Dropdown.Group>
-                    <p class="px-2 py-1 text-xs text-ink-muted">
-                      {t('calls.layoutRemembered')}
-                    </p>
                   </Dropdown.Group>
                 </Dropdown.SubContent>
               </Dropdown.Sub>
@@ -222,14 +237,14 @@ export function CallMoreMenu(props: {
                 }
               >
                 <span class="flex flex-1 items-center gap-1.5">
-                  <CornersIn class="size-4" />
+                  <UsersSlash class="size-4" />
                   <span class="flex-1">
                     <span class="block">{t('calls.hideParticipants')}</span>
-                    <span class="block text-xs text-ink-muted">
-                      {props.hasScreenShare
-                        ? t('calls.forThisCall')
-                        : t('calls.whileSharing')}
-                    </span>
+                    <Show when={!props.hasScreenShare}>
+                      <span class="block text-xs text-ink-muted">
+                        {t('calls.whileSharing')}
+                      </span>
+                    </Show>
                   </span>
                 </span>
               </Dropdown.CheckboxItem>
