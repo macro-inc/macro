@@ -74,11 +74,26 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
             .join("debug")
             .join(svc.cargo_bin);
         let dest = ws.join(target.debug_dir()).join(svc.cargo_bin);
-        std::fs::copy(&built, &dest)
-            .with_context(|| format!("copying {} to {}", built.display(), dest.display()))?;
+        replace_binary(&built, &dest)?;
     }
 
     Ok(())
+}
+
+/// Put a copy of `built` at `dest` by renaming over it. Writing into `dest`
+/// fails with "Text file busy" while another instance from this checkout runs
+/// it; after a rename that instance keeps running the old file until it
+/// restarts, as with the binaries cargo links into the same directory.
+fn replace_binary(built: &Path, dest: &Path) -> Result<()> {
+    let mut staged = dest.as_os_str().to_owned();
+    staged.push(format!(".{}.tmp", std::process::id()));
+    let staged = PathBuf::from(staged);
+    std::fs::copy(built, &staged)
+        .with_context(|| format!("copying {} to {}", built.display(), staged.display()))?;
+    std::fs::rename(&staged, dest).with_context(|| {
+        let _ = std::fs::remove_file(&staged);
+        format!("moving {} to {}", staged.display(), dest.display())
+    })
 }
 
 /// Where a `--no-default-features` service builds. Under `target/` so it is

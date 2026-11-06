@@ -4,7 +4,7 @@ use std::process::Command;
 
 use anyhow::{Result, bail};
 
-use super::{arch, cli::InstanceArgs, instance::Instance, stage::Stage};
+use super::{allocator, arch, cli::InstanceArgs, instance::Instance, stage::Stage};
 
 enum Status {
     Ok(String),
@@ -15,7 +15,7 @@ enum Status {
 /// Run all checks, print results, and fail if any check failed.
 pub fn run(args: &InstanceArgs) -> Result<()> {
     let stage = Stage::from_env();
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
     stage.section(&format!("doctor-local — instance {}", instance.name()));
 
     let checks: Vec<(&str, Status)> = vec![
@@ -44,6 +44,7 @@ pub fn run(args: &InstanceArgs) -> Result<()> {
         ("rust target", check_rust_target()),
         ("ports", check_ports(&instance)),
         ("port forwarding", check_port_forwarding(&instance)),
+        ("instances", check_instances()),
     ];
 
     let mut failed = false;
@@ -226,17 +227,36 @@ fn check_port_forwarding(instance: &Instance) -> Status {
 }
 
 fn check_ports(instance: &Instance) -> Status {
-    let busy = instance.busy_ports();
+    let busy = match allocator::busy_ports(instance) {
+        Ok(busy) => busy,
+        Err(error) => return Status::Warn(format!("could not check: {error:#}")),
+    };
     if busy.is_empty() {
-        Status::Ok(format!(
-            "all {} ports free",
-            super::instance::Port::all().count()
-        ))
+        return Status::Ok(format!(
+            "window {} free or this instance's own",
+            instance.port_base()
+        ));
+    }
+
+    let list: Vec<String> = busy.iter().map(|p| p.to_string()).collect();
+    let consequence = if instance.is_default() {
+        "the default instance's ports are fixed; use --instance <name> for a free window"
     } else {
-        let list: Vec<String> = busy.iter().map(|p| p.to_string()).collect();
-        Status::Warn(format!(
-            "in use: {} (may be this instance's own running containers; otherwise pass --port-base)",
-            list.join(", ")
-        ))
+        "a start moves to a free window, unless --port-base pins this one"
+    };
+    Status::Warn(format!("in use: {} ({consequence})", list.join(", ")))
+}
+
+/// Report named instances that hold ports or subnets with nothing running. They
+/// may be someone's data, so this names them and removes nothing.
+fn check_instances() -> Status {
+    let census = match allocator::census() {
+        Ok(census) => census,
+        Err(error) => return Status::Warn(format!("could not list: {error:#}")),
+    };
+    let running = census.running.len();
+    match census.leftovers_message() {
+        Some(leftovers) => Status::Warn(format!("{running} running; {leftovers}")),
+        None => Status::Ok(format!("{running} running, nothing left over")),
     }
 }

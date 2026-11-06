@@ -126,3 +126,24 @@ fn failed_restart_reports_output_and_releases_the_port() {
     assert!(error.to_string().contains("vite-startup-failed"));
     assert!(TcpStream::connect(("127.0.0.1", frontend.port)).is_err());
 }
+
+#[test]
+fn a_second_frontend_build_in_a_checkout_waits_for_the_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = lock_build_in(dir.path(), || panic!("nothing holds the lock yet")).unwrap();
+    let (waiting_tx, waiting_rx) = std::sync::mpsc::channel();
+    let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+    let path = dir.path().to_path_buf();
+    let second = std::thread::spawn(move || {
+        let _lock = lock_build_in(&path, || waiting_tx.send(()).unwrap()).unwrap();
+        locked_tx.send(()).unwrap();
+    });
+    waiting_rx.recv().unwrap();
+    assert!(
+        locked_rx.try_recv().is_err(),
+        "the second build ran while the first held the lock"
+    );
+    drop(first);
+    locked_rx.recv().unwrap();
+    second.join().unwrap();
+}
