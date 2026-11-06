@@ -233,6 +233,14 @@ def manifests(config, namespace, slot):
             pod['initContainers'] = [{'name': 'worker-config', 'image': container['image'],
                 'imagePullPolicy': 'Never', 'command': ['sh', '-c', 'touch /config/dev.vars'],
                 'volumeMounts': [{'name': 'worker-config', 'mountPath': '/config'}]}]
+        if key == 'fusionauth':
+            # Docker populates an empty named volume from image contents;
+            # Kubernetes PVCs start empty and need the same initial config.
+            config_mount = next(m for m in mounts if m['mountPath'] == '/usr/local/fusionauth/config')
+            pod['initContainers'] = [{'name': 'seed-config', 'image': container['image'],
+                'imagePullPolicy': 'Never', 'command': ['sh', '-c',
+                    'test -f /config/fusionauth.properties || cp -a /usr/local/fusionauth/config/. /config/'],
+                'volumeMounts': [{'name': config_mount['name'], 'mountPath': '/config'}]}]
         if value.get('ulimits', {}).get('memlock'):
             container['securityContext'] = {'capabilities': {'add': ['IPC_LOCK']}}
         if value.get('user'):

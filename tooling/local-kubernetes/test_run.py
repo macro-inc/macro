@@ -61,6 +61,16 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(worker['initContainers'][0]['command'], ['sh', '-c', 'touch /config/dev.vars'])
             self.assertEqual(worker['containers'][0]['volumeMounts'][-1]['subPath'], 'dev.vars')
 
+    def test_fusionauth_seeds_image_defaults_without_overwriting_existing_config(self):
+        config = {'name': 'macro-example', 'services': {'fusionauth': {
+            'image': 'fusionauth:local', 'volumes': [{'type': 'volume', 'source': 'config',
+                'target': '/usr/local/fusionauth/config'}]}}}
+        objects = manifests(config, 'macro-kube-example', 0)
+        pod = next(o for o in objects if o['kind'] == 'Deployment')['spec']['template']['spec']
+        seed = pod['initContainers'][0]
+        self.assertEqual(seed['volumeMounts'][0]['mountPath'], '/config')
+        self.assertIn('test -f /config/fusionauth.properties || cp -a', seed['command'][-1])
+
 
 if __name__ == '__main__':
     unittest.main()

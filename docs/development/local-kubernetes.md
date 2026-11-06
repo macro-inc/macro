@@ -80,6 +80,8 @@ Application Deployments use rolling updates; single-replica backing stores use
 Recreate and persistent claims. This is a development adapter, not an EKS stack.
 Kafka publishes its service endpoints before readiness so its KRaft controller
 can connect during bootstrap.
+FusionAuth seeds image-default configuration into a fresh PVC, matching Docker's
+named-volume initialization; later starts preserve that configuration.
 The existing deployed ECS runtime and its AWS backing services are unchanged.
 
 ## Host compatibility
