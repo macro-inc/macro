@@ -95,7 +95,6 @@ export default {
   detailAttended: 'Attended',
   detailMissed: 'Missed',
   detailUnattended: 'Unattended',
-  detailSharing: 'Sharing',
   detailProperties: 'Properties',
   detailReferences: 'References',
   detailShareWithTeam: 'Share with team',
@@ -103,7 +102,9 @@ export default {
     "Lets everyone on the creator's team view this call's chat, transcript, and AI summary once it ends.",
   detailOwnerSharing:
     "Lets everyone on your team view this call's chat, transcript, and AI summary.",
-  detailSharedSharing:
-    "Everyone on the creator's team can view this call's chat, transcript, and AI summary.",
-  detailPrivateSharing: "Only the call's creator can share it with their team.",
+  detailSharedWithTeam: 'Shared with the team',
+  detailChannelMembersOnly: 'Channel members only',
+  detailSharingStarterNamed:
+    'Only {{name}}, who started the call, can change this.',
+  detailSharingStarter: 'Only the person who started the call can change this.',
 };

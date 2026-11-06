@@ -59,6 +59,11 @@ status, channel, team sharing, properties, activity and references on their
 existing permission-scoped readers. Only team sharing has a card, always visible below metadata with no collapsible
 Sharing section; other sections use the shared unframed side-panel rows, separated
 by spacing rather than divider lines.
+After a call ends, only its starter can change team sharing. Other viewers see
+the current state and an explanation naming the starter, not a disabled switch.
+Until a display name is available, the explanation says only the person who
+started the call can change sharing; it never substitutes their email.
+An editable switch stays disabled while its change is pending.
 
 Close the side panel to widen and center the recording column and expose
 Summary/Transcript tabs. Stored summary attribution sits below the Summary
@@ -480,8 +485,9 @@ as instant and scheduled calls. Clicking it creates the share link and copies it
 opening the call tab alone does not create a link. If loading fails, click again
 to retry. If clipboard access fails, a selectable URL appears below the button.
 
-A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
-team share. Its side panel has a `Sharing` card with one `Share with team` switch.
+A channel call's **Share** dialog has a `Team access` control (None or View) for the
+same canonical team share. Saved-call Details keeps an always-visible **Share
+with team** card below metadata.
 While a call is live, the controls bar instead has a **Call sharing** dropdown with
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
@@ -492,7 +498,7 @@ participants see it update live. When the call ends, **Team sharing** lets the
 creator's team open the recorded call, read the transcript and AI summary, and find
 it under Calls and in search; **Private** grants no automatic team access.
 Afterwards only the call's **creator** can change it; everyone else sees the
-side-panel switch read-only with a note saying so.
+current sharing state and an explanation naming the starter, without a switch.
 Team sharing is independent of channel access and of link sharing.
 
 Standalone instant and scheduled calls are excluded from team memory. They have no

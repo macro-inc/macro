@@ -10,6 +10,8 @@ import {
 import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
+import { getDisplayNameParts } from '@core/user';
+import { tryMacroId } from '@core/user/macroId';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { OwnerLabel } from '@entity/owner/owner-display';
@@ -169,11 +171,10 @@ function SharingSectionContent(props: { record: CallRecord }) {
   // once archived only the creator may change it (the backend enforces both).
   const canEdit = () => record().isActive || record().createdBy === userId();
   const isPending = () => toggleLiveShare.isPending || setTeamShare.isPending;
-  const isDisabled = () => isPending() || !canEdit();
 
   const handleChange = async (checked: boolean) => {
     const current = record();
-    if (!current.channelId) return;
+    if (!canEdit() || isPending() || !current.channelId) return;
     try {
       const newValue = current.isActive
         ? await toggleLiveShare.mutateAsync(current.callId)
@@ -192,32 +193,48 @@ function SharingSectionContent(props: { record: CallRecord }) {
     }
   };
 
-  const description = () => {
-    if (record().isActive) {
-      return t('calls.detailLiveSharing');
-    }
-    if (canEdit()) {
-      return t('calls.detailOwnerSharing');
-    }
-    return isShared()
-      ? t('calls.detailSharedSharing')
-      : t('calls.detailPrivateSharing');
+  const description = () =>
+    record().isActive
+      ? t('calls.detailLiveSharing')
+      : t('calls.detailOwnerSharing');
+  const readOnlyReason = () => {
+    const name = getDisplayNameParts(tryMacroId(record().createdBy));
+    return name.firstName || name.lastName
+      ? t('calls.detailSharingStarterNamed', { name: name.fullName })
+      : t('calls.detailSharingStarter');
   };
 
   return (
     <div class="flex flex-col gap-2 rounded-xl bg-hover p-3 text-xs">
-      <ToggleSwitch
-        label={t('calls.detailShareWithTeam')}
-        class="w-full flex-row-reverse justify-between"
-        size="xs"
-        checked={isShared()}
-        disabled={isDisabled()}
-        readOnly={!canEdit()}
-        onChange={(checked) =>
-          fireAndForget(handleChange(checked), 'call-sharing')
+      <Show
+        when={canEdit()}
+        fallback={
+          <>
+            <span class="font-medium text-ink">
+              {t('calls.detailShareWithTeam')}
+            </span>
+            <span>
+              {isShared()
+                ? t('calls.detailSharedWithTeam')
+                : t('calls.detailChannelMembersOnly')}
+            </span>
+          </>
         }
-      />
-      <p class="text-ink-muted leading-5">{description()}</p>
+      >
+        <ToggleSwitch
+          label={t('calls.detailShareWithTeam')}
+          class="w-full flex-row-reverse justify-between"
+          size="xs"
+          checked={isShared()}
+          disabled={isPending()}
+          onChange={(checked) =>
+            fireAndForget(handleChange(checked), 'call-sharing')
+          }
+        />
+      </Show>
+      <p class="text-ink-muted leading-5">
+        {canEdit() ? description() : readOnlyReason()}
+      </p>
     </div>
   );
 }
