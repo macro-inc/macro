@@ -1,3 +1,4 @@
+import { ssoFallbackNotice } from '../core/sso-fallback';
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { For, Match, onMount, Show, Switch } from 'solid-js';
@@ -175,6 +176,7 @@ function Fixture() {
             compact={false}
             initialEmail={params.email}
             token={sessionTokenParam(params.token)}
+            ssoFallbackNotice={ssoFallbackNotice(params.sso_error)}
             signupJourney={
               page === 'signup'
                 ? (slots) => <SignupJourney {...slots} />

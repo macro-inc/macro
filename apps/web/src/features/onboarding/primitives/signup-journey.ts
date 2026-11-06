@@ -1,10 +1,7 @@
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { SignupStep } from '../core/signup-draft';
+import type { SignupProvider, SignupStep } from '../core/signup-draft';
 import { readSignupDraft, saveSignupDraft } from './flow-storage';
-
-/** The identity providers a new account can sign up with. */
-export type SignupProvider = 'google' | 'microsoft';
 
 /**
  * The signed-out slides. Only the step and accent cross the Google or
@@ -12,6 +9,11 @@ export type SignupProvider = 'google' | 'microsoft';
  */
 export function createSignupJourney(options: { showingEmail: boolean }) {
   const draft = readSignupDraft();
+  // The email form means this account will not come from a provider sign-up
+  // (an emailed link, or the fallback after one failed), so nothing chains
+  // into that provider's inbox consent once it exists.
+  if (options.showingEmail && draft?.provider)
+    saveSignupDraft({ ...draft, provider: undefined });
   const [step, setStep] = createSignal<SignupStep>(
     options.showingEmail ? 'work' : (draft?.step ?? 'welcome')
   );
@@ -30,7 +32,12 @@ export function createSignupJourney(options: { showingEmail: boolean }) {
     startSignup: () => Promise<void>
   ) => {
     if (connecting()) return;
-    saveSignupDraft({ step: 'work', accent: accent(), authenticating: true });
+    saveSignupDraft({
+      step: 'work',
+      accent: accent(),
+      authenticating: true,
+      provider,
+    });
     setConnecting(provider);
     setError();
     try {

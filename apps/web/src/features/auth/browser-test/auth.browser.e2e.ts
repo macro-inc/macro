@@ -212,3 +212,20 @@ test('a mobile-web visitor gets a desktop link instead of signing up', async ({
   ).toBeVisible();
   expect(await fakeCalls(page)).toContain('lead:visitor@acme.com');
 });
+
+test('a failed provider sign-up falls back to the email form with the reason', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=signup&sso_error=admin_consent_required', {
+    ssoEmail: 'founder@acme.com',
+  });
+  await expect(
+    page.getByText(
+      'Your organization needs an admin to approve Macro. Continue with your email instead.'
+    )
+  ).toBeVisible();
+  await expect(page.getByPlaceholder('you@company.com')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Continue with Microsoft' })
+  ).toHaveCount(0);
+});

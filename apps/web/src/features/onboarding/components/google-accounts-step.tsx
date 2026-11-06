@@ -5,7 +5,7 @@ import HandIcon from '@icon/system/regular/hand-palm.svg';
 import LockIcon from '@icon/system/regular/lock-key.svg';
 import ShieldIcon from '@icon/system/regular/shield-check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { ContinueButton } from './controls';
 import { animateOnboardingStep } from './motion/step-transition';
 
@@ -77,10 +77,15 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
           )}
         </h1>
         <p class="mt-7 max-w-[440px] font-[Inter_Variable] text-sm font-normal leading-6 text-ink-muted max-[359px]:text-[13px] sm:text-[15px] [text-wrap:balance]">
-          {withMicrosoft() ? (
-            // Fixed breaks: line 2 is 60–80% of line 1, and line 1 is no wider
-            // than the heading's last line. Phones only fit the short version.
-            <>
+          <Switch
+            fallback={
+              'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'
+            }
+          >
+            <Match when={withMicrosoft()}>
+              {/* Fixed breaks: line 2 is 60–80% of line 1, and line 1 is no
+                  wider than the heading's last line. Phones only fit the
+                  short version. */}
               <span class="sm:hidden">
                 Sync your inbox and calendar.
                 <br /> Disconnect anytime.
@@ -89,12 +94,13 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
                 Sync your inbox and calendar securely.
                 <br /> You can disconnect anytime.
               </span>
-            </>
-          ) : personal() ? (
-            'Add a personal account for email and calendar in Macro. This is optional; your Macro sign-in stays the same. Agents ask for approval before sending email, and you can disconnect anytime.'
-          ) : (
-            'Connect through Google to read, send, and organize email and manage your calendars in Macro. Agents ask for your approval before sending email. Your password stays with Google, and you can disconnect anytime.'
-          )}
+            </Match>
+            <Match when={personal()}>
+              Add a personal account for email and calendar in Macro. This is
+              optional; your Macro sign-in stays the same. Agents ask for
+              approval before sending email, and you can disconnect anytime.
+            </Match>
+          </Switch>
         </p>
       </header>
 
@@ -163,7 +169,7 @@ export function GoogleAccountsStep(props: GoogleAccountsStepProps) {
             type="button"
             disabled={blocked()}
             onClick={() => props.onConnectMicrosoft?.()}
-            class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-edge bg-surface px-6 py-4 text-base font-medium text-ink transition-colors hover:bg-ink/5 dark-mode:border-[#ffffff14] dark-mode:bg-[oklch(0.17_0.002_250)] dark-mode:shadow-[inset_1px_1px_0_#ffffff12,0_10px_40px_-8px_#0004] dark-mode:hover:bg-[oklch(0.2_0.002_250)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
+            class="flex min-h-14 w-full items-center justify-center gap-3 rounded-full border border-edge bg-surface px-6 py-4 text-base font-medium text-ink transition-colors hover:bg-ink/5 dark-mode:border-transparent dark-mode:bg-composer dark-mode:glass-input focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:opacity-40"
           >
             <Show
               when={props.microsoftConnecting}

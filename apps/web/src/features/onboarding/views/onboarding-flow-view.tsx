@@ -205,6 +205,9 @@ export function OnboardingFlowView(props: {
           <Match when={step() === 'work' || step() === 'personal'}>
             <EmailStep
               mode={step() === 'personal' ? 'personal' : 'work'}
+              signupProvider={
+                step() === 'work' ? flow.signupProvider() : undefined
+              }
               onContinue={() => advance()}
               onSkip={() => advance('skipped')}
             />

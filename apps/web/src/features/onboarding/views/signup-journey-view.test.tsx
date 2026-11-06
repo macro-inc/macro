@@ -69,6 +69,7 @@ describe('sign-up starts before authentication', () => {
       step: 'work',
       accent: '#f77d67',
       authenticating: true,
+      provider: 'google',
     });
   });
 
@@ -98,6 +99,7 @@ describe('sign-up starts before authentication', () => {
       step: 'work',
       accent: '#65d8ac',
       authenticating: true,
+      provider: 'microsoft',
     });
   });
 

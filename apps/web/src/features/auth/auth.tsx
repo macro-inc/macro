@@ -14,6 +14,7 @@ import { useNavigate, useSearchParams } from '@solidjs/router';
 import { onMount, Show } from 'solid-js';
 import { AuthProvider, type AuthUser } from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
+import { ssoFallbackNotice } from './core/sso-fallback';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
 import { MobileWebSignupView } from './views/mobile-web-signup-view';
@@ -38,6 +39,9 @@ export function Login(props: { signupMode?: boolean }) {
         // Dev persona links (`?email=`) sign straight in against a local backend.
         autoStart={import.meta.env.DEV && email !== undefined}
         token={sessionTokenParam(params.token)}
+        ssoFallbackNotice={ssoFallbackNotice(
+          typeof params.sso_error === 'string' ? params.sso_error : undefined
+        )}
         onVerified={() => {
           const referral = new URLSearchParams(window.location.search).get(
             'referral'

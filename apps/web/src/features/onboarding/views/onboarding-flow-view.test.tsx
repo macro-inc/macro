@@ -683,3 +683,45 @@ describe('onboarding flow', () => {
     ).toBeTruthy();
   });
 });
+
+describe('after a Microsoft sign-up', () => {
+  const connects = (calls: readonly string[]) =>
+    calls.filter((call) => call.startsWith('connectInbox'));
+
+  it('continues once into Outlook consent when the user may connect Outlook', async () => {
+    saveSignupDraft({
+      step: 'work',
+      authenticating: true,
+      provider: 'microsoft',
+    });
+    const { fake } = setup({ world: { outlookAvailable: true } });
+    await heading(/Continue with your work/);
+    await waitFor(() =>
+      expect(connects(fake.calls())).toEqual(['connectInbox:microsoft'])
+    );
+  });
+
+  it('stays on the work step with Skip when Outlook is not available', async () => {
+    saveSignupDraft({
+      step: 'work',
+      authenticating: true,
+      provider: 'microsoft',
+    });
+    const { fake } = setup({ world: { outlookAvailable: false } });
+    await heading(/Connect your work/);
+    expect(connects(fake.calls())).toEqual([]);
+    expect(
+      screen.queryByRole('button', { name: 'Continue with Microsoft' })
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: 'Skip for now' })).toBeTruthy();
+  });
+
+  it('leaves a Google sign-up to choose, with both providers offered', async () => {
+    saveSignupDraft({ step: 'work', authenticating: true, provider: 'google' });
+    const { fake } = setup({ world: { outlookAvailable: true } });
+    await heading(/Continue with your work/);
+    expect(connects(fake.calls())).toEqual([]);
+    click('Continue with Microsoft');
+    expect(connects(fake.calls())).toEqual(['connectInbox:microsoft']);
+  });
+});

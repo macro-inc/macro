@@ -136,7 +136,8 @@ export function SignupJourneyView(props: {
                 tabindex="-1"
                 class="text-center font-[Roboto_Slab_Variable] text-3xl font-[315] leading-tight tracking-tight"
               >
-                Sign up with your work email.
+                Sign up with your
+                <br /> work email.
               </h1>
               {props.emailForm}
             </div>

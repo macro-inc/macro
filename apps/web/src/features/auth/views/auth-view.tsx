@@ -42,6 +42,8 @@ export function AuthView(props: {
   compact: boolean;
   initialEmail?: string;
   autoStart?: boolean;
+  /** Why a provider sign-in just failed; the email step opens instead. */
+  ssoFallbackNotice?: string;
   /** The session code an SSO return put on the URL. */
   token?: string;
   onVerified?: () => void;
@@ -65,6 +67,7 @@ export function AuthView(props: {
     initialEmail: props.initialEmail,
     autoStart: props.autoStart,
     onVerified: props.onVerified,
+    fallbackNotice: props.ssoFallbackNotice,
   });
   createSessionIdentity(context);
   redeemSessionToken(context, () => props.token);
