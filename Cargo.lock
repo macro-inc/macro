@@ -16090,7 +16090,6 @@ name = "queue_gateway"
 version = "0.1.0"
 dependencies = [
  "axum",
- "http 1.4.0",
  "kafka_util",
  "macro_config",
  "macro_entrypoint",

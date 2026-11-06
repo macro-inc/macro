@@ -10,7 +10,6 @@ path = "src/main.rs"
 
 [dependencies]
 axum = { workspace = true }
-http = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_config = { path = "../../crates/macro_config" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }

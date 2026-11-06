@@ -427,6 +427,8 @@ jobs:
         fi
     - name: fmt
       run: cargo fmt --check
+    - name: unused dependencies
+      run: cargo shear --format github
     - name: clippy
       run: |
         set -euo pipefail
