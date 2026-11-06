@@ -70,7 +70,10 @@ export type UseEmailDataSourceOptions = {
   tagSetsReady: Accessor<boolean>;
   /** A saved view's tag bindings, kept even when the tag's set is unreadable. */
   tagBindings?: Accessor<ReadonlyMap<string, string> | undefined>;
-  /** The open saved view's resolved conditions. */
+  /**
+   * Conditions resolved for one query: an open view's, or a tab's once its
+   * filters leave what the tab itself selects. Either lists mail as a view.
+   */
   savedView?: Accessor<EmailSavedViewScope | undefined>;
   /** False while the list must not query, such as a loading saved view. */
   enabled?: Accessor<boolean>;

@@ -18,6 +18,10 @@ import {
   EMAIL_FOCUS_SORT_IDS,
   EMAIL_TAB_IDS,
 } from './constants';
+import {
+  emailViewConditionsSchema,
+  restoreEmailTabFilters,
+} from './filters/email-saved-view';
 import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
@@ -30,6 +34,11 @@ const emailLocalStateStorage = createUserScopedStorage(
 const emailTabSchema = z.enum(EMAIL_TAB_IDS).catch(DEFAULT_EMAIL_TAB);
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
+// Absent in state from before tabs kept conditions; its facets then refine
+// the tab's own filters.
+const emailConditionsSchema = emailViewConditionsSchema
+  .optional()
+  .catch(undefined);
 const aliasFilterSchema = z
   .object({ inboxId: z.string().min(1), emailAddress: z.string().email() })
   .optional()
@@ -45,6 +54,7 @@ const emailEntryStateSchemaWithDefaults = z.object({
   search: z.string().default(''),
   aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
+  conditions: emailConditionsSchema,
 });
 
 type EmailEntryState = z.infer<typeof emailEntryStateSchemaWithDefaults>;
@@ -103,7 +113,11 @@ function createEmailEntryStorage(options: {
         tab: restored.tab,
         search: restored.search,
         aliasFilter: restored.aliasFilter,
-        facets: normalizeFacetSelection(restored.facets),
+        ...restoreEmailTabFilters(
+          restored.tab,
+          restored.facets,
+          restored.conditions
+        ),
       };
     },
     select: (state): EmailEntryState => ({
@@ -112,6 +126,10 @@ function createEmailEntryStorage(options: {
       search: state.search,
       aliasFilter: state.aliasFilter,
       facets: normalizeFacetSelection(state.facets),
+      // An open view's conditions come back from its definition.
+      ...(state.beforeSavedView || !state.conditions
+        ? {}
+        : { conditions: state.conditions }),
     }),
   });
 }
@@ -125,6 +143,7 @@ const emailLocalStateSchemaWithDefaults = z.object({
   inboxIds: inboxIdsEntrySchema,
   aliasFilter: aliasFilterSchema,
   facets: emailFacetsSchema.default({}),
+  conditions: emailConditionsSchema,
   focusSort: emailFocusSortSchema.default(DEFAULT_EMAIL_FOCUS_SORT),
 });
 
@@ -146,6 +165,9 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
     inboxIds: normalizeInboxSelection(scope.inboxIds),
     aliasFilter: scope.aliasFilter,
     facets: state.beforeSavedView ? {} : normalizeFacetSelection(state.facets),
+    ...(state.beforeSavedView || !state.conditions
+      ? {}
+      : { conditions: state.conditions }),
     focusSort: state.focusSort,
   };
 }
@@ -177,7 +199,11 @@ function createEmailLocalStateStorage(options: {
             ? [restored.aliasFilter.inboxId]
             : restored.inboxIds,
           aliasFilter: restored.aliasFilter,
-          facets: normalizeFacetSelection(restored.facets),
+          ...restoreEmailTabFilters(
+            restored.tab,
+            restored.facets,
+            restored.conditions
+          ),
           focusSort: restored.focusSort,
         };
       } catch {

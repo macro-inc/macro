@@ -60,8 +60,13 @@ import {
   emailTabSearchCodec,
 } from './email-route';
 import {
+  type EmailFilterState,
+  emailFilterStatesEqual,
+  emailTabFilterState,
+  emailTabRefinements,
   type MaterializedEmailSavedView,
   resolveEmailSavedViewScope,
+  restoreEmailTabFilters,
 } from './filters/email-saved-view';
 import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
@@ -70,9 +75,9 @@ import {
   type EmailSavedViewDraft,
 } from './primitives/create-email-saved-view-draft';
 import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
-import type { EmailSavedViewScope } from './queries/email-query';
 import {
   type EmailDataSource,
+  type EmailDataSourceInput,
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
@@ -117,6 +122,13 @@ export type EmailViewContext = {
   setInboxIds: (ids: string[] | undefined) => void;
   setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
+  /** Replaces any of the list's filters: facets, conditions, or inboxes. */
+  setFilters: (filters: Partial<EmailListFilters>) => void;
+  /** What Clear returns to: the tab's own filters, or none in a view. */
+  filterBaseline: Accessor<EmailFilterState>;
+  /** Whether facets or conditions differ from what Clear returns to. */
+  filtersChanged: Accessor<boolean>;
+  clearFilters: () => void;
   setFocusSort: (sort: EmailFocusSort) => void;
   /**
    * Shows the given tags across the whole mailbox: a non-empty selection
@@ -171,6 +183,10 @@ export type EmailViewContext = {
   inboxOptions: Accessor<readonly { id: string; label: string }[]>;
 };
 
+/** Everything the Filters menu edits; aliases stay with the inbox picker. */
+export type EmailListFilters = EmailFilterState &
+  Pick<EmailViewState, 'inboxIds'>;
+
 export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   EmailViewContext,
   EmailViewProviderProps
@@ -190,15 +206,20 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const availableTab = (tab: EmailTab) =>
     isTabOff(tab) ? DEFAULT_EMAIL_TAB : tab;
 
+  const initialTab = availableTab(initial.tab ?? DEFAULT_EMAIL_TAB);
   const [persistedState, setState] = makePersistedState(
     createStore<EmailViewState>({
-      tab: availableTab(initial.tab ?? DEFAULT_EMAIL_TAB),
+      tab: initialTab,
       search: initial.search ?? '',
       inboxIds: initial.aliasFilter
         ? [initial.aliasFilter.inboxId]
         : normalizeInboxSelection(initial.inboxIds),
       ...(initial.aliasFilter ? { aliasFilter: initial.aliasFilter } : {}),
-      facets: normalizeFacetSelection(initial.facets),
+      ...restoreEmailTabFilters(
+        initialTab,
+        initial.facets ?? {},
+        initial.conditions
+      ),
       focusSort: initial.focusSort ?? DEFAULT_EMAIL_FOCUS_SORT,
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
@@ -260,9 +281,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
           draft.inboxIds = before.inboxIds;
           draft.aliasFilter = before.aliasFilter;
         }
-        draft.facets = {};
+        Object.assign(draft, emailTabFilterState(draft.tab));
         draft.search = '';
-        draft.conditions = undefined;
         draft.beforeSavedView = undefined;
       })
     );
@@ -307,7 +327,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
             );
           return;
         }
-        if (state.conditions || state.beforeSavedView) clearSavedViewState();
+        if (state.beforeSavedView) clearSavedViewState();
         // Another account's view is not this one's: leave its URL too.
         if (id && accountChanged) navigateToList(undefined);
       }
@@ -324,7 +344,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
             if (draft.tab === 'reminders' || tab === 'reminders')
               draft.search = '';
             draft.tab = tab;
-            draft.facets = {};
+            Object.assign(draft, emailTabFilterState(tab));
           })
         );
       }
@@ -333,17 +353,50 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   createEffect(() => {
     if (isTabOff(state.tab)) {
-      setState({ tab: DEFAULT_EMAIL_TAB, search: '', facets: {} });
+      setState({
+        tab: DEFAULT_EMAIL_TAB,
+        search: '',
+        ...emailTabFilterState(DEFAULT_EMAIL_TAB),
+      });
     }
   });
 
   // This belongs to the view lifecycle, even while every inbox picker is unmounted.
   const linksQuery = useEmailLinksQuery();
-  const savedViewQuery = createMemo((): EmailSavedViewScope | undefined => {
+  // A tab whose own restrictions still stand keeps its query; once they or a
+  // condition change, the filters list mail as an open view's would.
+  const listFilters = createMemo(() => {
+    const refinements = savedViewActive()
+      ? undefined
+      : emailTabRefinements(state.tab, state);
+    if (refinements) return { tab: state.tab, facets: refinements };
     const conditions = state.conditions;
-    if (!savedViewActive() || !conditions) return undefined;
-    return resolveEmailSavedViewScope(conditions, new Date());
+    return {
+      tab: 'all' as const,
+      facets: state.facets,
+      scope: conditions && resolveEmailSavedViewScope(conditions, new Date()),
+    };
   });
+  const listInput: EmailDataSourceInput = {
+    get tab() {
+      return listFilters().tab;
+    },
+    get facets() {
+      return listFilters().facets;
+    },
+    get search() {
+      return state.search;
+    },
+    get inboxIds() {
+      return state.inboxIds;
+    },
+    get aliasFilter() {
+      return state.aliasFilter;
+    },
+    get focusSort() {
+      return state.focusSort;
+    },
+  };
   // A view never lists mail before its definition has loaded: that would
   // show all mail under the view's name.
   const savedViewQueryReady = () =>
@@ -351,11 +404,14 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     (savedViews?.view().kind === 'saved' && !!state.conditions);
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useEmailDataSource(state, {
+    useEmailDataSource(listInput, {
       tagSets,
       tagSetsReady,
       tagBindings: () => savedViews?.tagBindings(),
-      savedView: savedViewQuery,
+      savedView: () => {
+        const filters = listFilters();
+        return 'scope' in filters ? filters.scope : undefined;
+      },
       enabled: savedViewQueryReady,
     })
   );
@@ -541,7 +597,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
           if (draft.tab === 'reminders' || tab === 'reminders')
             draft.search = '';
           draft.tab = tab;
-          draft.facets = {};
+          Object.assign(draft, emailTabFilterState(tab));
         })
       );
       closeThread();
@@ -604,6 +660,27 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread();
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
+  const setFilters = (filters: Partial<EmailListFilters>) => {
+    closeThread();
+    batch(() => {
+      if (filters.facets)
+        setState('facets', reconcile(normalizeFacetSelection(filters.facets)));
+      if (filters.conditions)
+        setState('conditions', reconcile(filters.conditions));
+      if ('inboxIds' in filters)
+        setState({
+          inboxIds: normalizeInboxSelection(filters.inboxIds),
+          aliasFilter: undefined,
+        });
+    });
+  };
+  const filterBaseline = () =>
+    emailTabFilterState(savedViewActive() ? 'all' : state.tab);
+  const filtersChanged = createMemo(
+    () => !emailFilterStatesEqual(state, filterBaseline())
+  );
+  const clearFilters = () =>
+    setFilters({ ...filterBaseline(), inboxIds: undefined });
 
   const setFocusSort = (sort: EmailFocusSort) => setState('focusSort', sort);
 
@@ -622,9 +699,12 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setState(
       produce((draft) => {
         const movesToAll = tagIds.length > 0 && draft.tab !== 'all';
-        if (movesToAll) draft.tab = 'all';
+        if (movesToAll) {
+          draft.tab = 'all';
+          Object.assign(draft, emailTabFilterState('all'));
+        }
         draft.facets = normalizeFacetSelection({
-          ...(movesToAll ? {} : draft.facets),
+          ...draft.facets,
           tags: tagIds,
         });
       })
@@ -638,7 +718,12 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread();
     setState(
       'facets',
-      reconcile(normalizeFacetSelection({ tags: [optionId] }))
+      reconcile(
+        normalizeFacetSelection({
+          ...filterBaseline().facets,
+          tags: [optionId],
+        })
+      )
     );
   };
 
@@ -672,6 +757,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setInboxIds,
     setAliasFilter,
     setFacets,
+    setFilters,
+    filterBaseline,
+    filtersChanged,
+    clearFilters,
     setFocusSort,
     showTags,
     filterByTag,

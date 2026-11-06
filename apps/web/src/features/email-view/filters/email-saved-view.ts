@@ -1,4 +1,5 @@
 import type { FacetSelection, TagFacetContext } from '@app/features/soup';
+import { normalizeFacetSelection } from '@app/features/soup/filters/facets/selection';
 import { DOMAIN_PATTERN } from '@core/util/domain';
 import { startOfDay, subDays } from 'date-fns';
 import { err, ok, type Result } from 'neverthrow';
@@ -327,8 +328,124 @@ function tabFilters(tab: EmailTab): Partial<EmailSavedViewFilters> | undefined {
   );
 }
 
-export function canSaveEmailTab(tab: EmailTab): boolean {
-  return tabFilters(tab) !== undefined;
+/**
+ * A tab's own restrictions as the definition a view would hold, so the tab
+ * reads as a built-in view; undefined for tabs a view can't hold.
+ */
+export function emailTabFilters(
+  tab: EmailTab
+): EmailSavedViewFilters | undefined {
+  const own = tabFilters(tab);
+  return own && { ...EMPTY_EMAIL_SAVED_VIEW_FILTERS, ...own };
+}
+
+/** The list's editable filters: menu facets plus the other conditions. */
+export type EmailFilterState = Pick<EmailViewState, 'facets' | 'conditions'>;
+
+/**
+ * What a tab's filters start from and Clear returns to: its own restrictions,
+ * shown as editable filters. Tabs a view can't hold have no conditions.
+ */
+export function emailTabFilterState(tab: EmailTab): EmailFilterState {
+  const filters = emailTabFilters(tab);
+  if (!filters) return { facets: {}, conditions: undefined };
+  const { facets, conditions } = materializeEmailSavedView({
+    kind: EMAIL_SAVED_VIEW_KIND,
+    version: 1,
+    filters,
+  });
+  return { facets: normalizeFacetSelection(facets), conditions };
+}
+
+/**
+ * A tab's filters as restored or handed in. Older state kept only the
+ * refinements chosen on top of the tab, without conditions, so those land on
+ * the tab's own restrictions.
+ */
+export function restoreEmailTabFilters(
+  tab: EmailTab,
+  facets: FacetSelection,
+  conditions?: EmailViewConditions
+): EmailFilterState {
+  const own = emailTabFilterState(tab);
+  if (!own.conditions || conditions)
+    return {
+      facets: normalizeFacetSelection(facets),
+      conditions: own.conditions && conditions,
+    };
+  const refinements = Object.entries(facets).filter(([, ids]) => ids.length);
+  return {
+    facets: normalizeFacetSelection({
+      ...own.facets,
+      ...Object.fromEntries(refinements),
+    }),
+    conditions: own.conditions,
+  };
+}
+
+/** Stored conditions, as the definition accepts them. */
+export const emailViewConditionsSchema = filtersSchema.pick({
+  importance: true,
+  participants: true,
+  participantFields: true,
+  subject: true,
+  receivedWithinDays: true,
+  starred: true,
+});
+
+const sameValues = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length && left.every((value) => right.includes(value));
+
+const conditionsConfig = (
+  conditions: EmailViewConditions
+): EmailSavedViewConfig => ({
+  kind: EMAIL_SAVED_VIEW_KIND,
+  version: 1,
+  filters: { ...EMPTY_EMAIL_SAVED_VIEW_FILTERS, ...conditions },
+});
+
+/** Whether two filter states select the same mail. */
+export function emailFilterStatesEqual(
+  left: EmailFilterState,
+  right: EmailFilterState
+): boolean {
+  if (
+    JSON.stringify(normalizeFacetSelection(left.facets)) !==
+    JSON.stringify(normalizeFacetSelection(right.facets))
+  )
+    return false;
+  if (!left.conditions || !right.conditions)
+    return left.conditions === right.conditions;
+  return emailSavedViewsEqual(
+    conditionsConfig(left.conditions),
+    conditionsConfig(right.conditions)
+  );
+}
+
+/**
+ * The refinements the tab's own query adds for these filters, or undefined
+ * when they change what the tab itself selects (Done on Signal, say): only a
+ * definition can list that, as an open view does.
+ */
+export function emailTabRefinements(
+  tab: EmailTab,
+  filters: EmailFilterState
+): FacetSelection | undefined {
+  const own = emailTabFilterState(tab);
+  if (!own.conditions || !filters.conditions) return filters.facets;
+  if (
+    !emailSavedViewsEqual(
+      conditionsConfig(own.conditions),
+      conditionsConfig(filters.conditions)
+    )
+  )
+    return undefined;
+  const refinements = { ...filters.facets };
+  for (const [id, values] of Object.entries(own.facets)) {
+    if (!sameValues(filters.facets[id] ?? [], values)) return undefined;
+    delete refinements[id];
+  }
+  return refinements;
 }
 
 type CaptureInput = Pick<

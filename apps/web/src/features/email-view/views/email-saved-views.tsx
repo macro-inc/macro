@@ -65,7 +65,6 @@ import {
 } from '../components/EmailSavedViewFields';
 import { useEmailView } from '../email-view-context';
 import {
-  canSaveEmailTab,
   decodeEmailSavedView,
   EMAIL_SAVED_VIEW_KIND,
   EMPTY_EMAIL_SAVED_VIEW_FILTERS,
@@ -746,18 +745,13 @@ export function EmailSavedViewMenu() {
   );
 }
 
-/** Whether the list shows filters a built-in tab could be saved with. */
+/** Whether a built-in tab's filters have left its own, as Tasks offers. */
 function useCanSaveCurrentFilters() {
-  const { state, savedViews, savedViewsEnabled, savedViewActive } =
-    useEmailView();
-  return () =>
-    Boolean(savedViews) &&
-    savedViewsEnabled() &&
-    !savedViewActive() &&
-    canSaveEmailTab(state.tab) &&
-    (Object.values(state.facets).some((ids) => ids.length > 0) ||
-      state.inboxIds !== undefined ||
-      !!state.aliasFilter);
+  const { savedViews, savedViewsEnabled } = useEmailView();
+  return () => {
+    const view = savedViews?.view();
+    return savedViewsEnabled() && view?.kind === 'default' && view.changed;
+  };
 }
 
 /** Desktop: left of Filters when the list's filters could become a view. */

@@ -12,9 +12,11 @@ import type { SavedView } from '../../saved-views/core/saved-view';
 import {
   captureEmailSavedView,
   decodeEmailSavedView,
+  EMAIL_SAVED_VIEW_KIND,
   type EmailSavedViewIssue,
   type EmailSavedViewRead,
   emailSavedViewsEqual,
+  emailTabFilters,
   type MaterializedEmailSavedView,
   materializeEmailSavedView,
   readEmailSavedView,
@@ -22,7 +24,8 @@ import {
 import type { EmailViewState } from '../types';
 
 export type EmailSavedViewSelection =
-  | { kind: 'default' }
+  /** A built-in tab; `changed` once its filters leave the tab's own. */
+  | { kind: 'default'; changed: boolean }
   | { kind: 'loading' }
   | { kind: 'unavailable' }
   | {
@@ -82,6 +85,17 @@ export function createEmailSavedViewDraft(options: {
   const current = createMemo(() => {
     const result = capture();
     return result.isOk() ? result.value : undefined;
+  });
+  // A tab is a built-in view: its own restrictions are its definition.
+  const tabBaseline = createMemo(() => {
+    const filters = emailTabFilters(options.state.tab);
+    if (!filters) return undefined;
+    const decoded = decodeEmailSavedView({
+      kind: EMAIL_SAVED_VIEW_KIND,
+      version: 1,
+      filters,
+    });
+    return decoded.isOk() ? decoded.value : undefined;
   });
   const dirty = () => {
     const baseline = confirmed()?.config;
@@ -157,7 +171,18 @@ export function createEmailSavedViewDraft(options: {
   };
   const view = createMemo<EmailSavedViewSelection>(() => {
     const id = options.selectedId();
-    if (!id) return { kind: 'default' };
+    if (!id) {
+      const baseline = tabBaseline();
+      const definition = current();
+      // Filters that can't be captured still differ; saving explains why.
+      return {
+        kind: 'default',
+        changed: Boolean(
+          baseline &&
+            (!definition || !emailSavedViewsEqual(baseline, definition))
+        ),
+      };
+    }
     const detailViewer = options.source.viewerId();
     if (
       (detailViewer === undefined || detailViewer === options.viewerId()) &&

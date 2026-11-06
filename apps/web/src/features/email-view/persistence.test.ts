@@ -104,4 +104,59 @@ describe('createEmailViewPersistence', () => {
     expect(state.tab).toBe('focus');
     expect(state.focusSort).toBe('recent');
   });
+
+  const restoreFrom = (stored: unknown) => {
+    const handle: EntryPersistenceHandle = {
+      currentEntryState: () => ({ 'email.view': stored }),
+      registerEntryStateCaptor: () => () => {},
+    };
+    const { storages } = createEmailViewPersistence({
+      handle,
+      userId: () => undefined,
+      restoreLocalState: false,
+      restorePreferences: false,
+    });
+    let state = current();
+    for (const storage of Array.isArray(storages) ? storages : [storages]) {
+      const next = storage.restore(state);
+      if (next !== undefined) state = next;
+    }
+    return state;
+  };
+
+  it('lands filters saved before tabs kept conditions on the tab’s own', () => {
+    const state = restoreFrom({
+      version: 1,
+      tab: 'important',
+      search: '',
+      facets: { read: ['unread'] },
+    });
+
+    expect(state.facets).toEqual({ done: ['not-done'], read: ['unread'] });
+    expect(state.conditions?.importance).toBe('signal');
+  });
+
+  it('restores a tab’s changed conditions as they were', () => {
+    const state = restoreFrom({
+      version: 1,
+      tab: 'favorites',
+      search: '',
+      facets: {},
+      conditions: {
+        participants: [{ type: 'domain', domain: 'Example.com' }],
+        participantFields: ['from'],
+        subject: [],
+        starred: false,
+      },
+    });
+
+    expect(state.facets).toEqual({});
+    expect(state.conditions).toEqual({
+      participants: [{ type: 'domain', domain: 'example.com' }],
+      participantFields: ['from'],
+      subject: [],
+      starred: false,
+    });
+  });
 });
+

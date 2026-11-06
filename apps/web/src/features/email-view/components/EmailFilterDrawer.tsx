@@ -3,7 +3,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Accordion } from '@kobalte/core/accordion';
 import type { DialogHandle } from '@ui';
-import { batch, createSignal, For, getOwner, onCleanup, Show } from 'solid-js';
+import { createSignal, For, getOwner, onCleanup, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import { useEmailFilters } from '../filters/use-email-filters';
 import {
@@ -15,7 +15,7 @@ import { EmailInboxDrawerSection } from './EmailInboxSelector';
 const INBOX_SECTION_ID = 'inbox';
 
 export function EmailFilterDrawer() {
-  const { state, setInboxIds, savedViews, savedViewScope } = useEmailView();
+  const { state, clearFilters, savedViews, savedViewScope } = useEmailView();
   const filters = useEmailFilters();
   const showFacetFilters = () => state.tab !== 'scheduled';
   const [open, setOpen] = createSignal(false);
@@ -77,12 +77,7 @@ export function EmailFilterDrawer() {
         (showFacetFilters() ? filters.activeCount() : 0) +
         (state.inboxIds === undefined ? 0 : 1)
       }
-      onClear={() =>
-        batch(() => {
-          filters.clear();
-          setInboxIds(undefined);
-        })
-      }
+      onClear={clearFilters}
     >
       <MobileDrawer.Label class="pt-4">
         {showFacetFilters() ? 'Filters' : 'Inboxes'}
@@ -100,7 +95,11 @@ export function EmailFilterDrawer() {
                 <MobileFilterDrawer.Section
                   value={group.id}
                   label={group.label}
-                  activeCount={state.facets[group.id]?.length ?? 0}
+                  activeCount={
+                    filters.isGroupActive(group.id)
+                      ? Math.max(1, filters.selectedIds(group.id).length)
+                      : 0
+                  }
                 >
                   <div
                     role={

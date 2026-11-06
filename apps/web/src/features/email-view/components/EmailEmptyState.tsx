@@ -70,7 +70,7 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
 }
 
 export function EmailEmptyState() {
-  const { state, setFacets, setInboxIds } = useEmailView();
+  const { state, setInboxIds, filtersChanged, clearFilters } = useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   // Scheduled has no search or filters; text typed on another tab stays behind.
@@ -79,8 +79,6 @@ export function EmailEmptyState() {
       ? ''
       : state.search.trim();
   const noInboxesSelected = () => state.inboxIds?.length === 0;
-  const hasActiveFilters = () =>
-    Object.values(state.facets).some((optionIds) => optionIds.length > 0);
 
   return (
     <Switch>
@@ -126,7 +124,7 @@ export function EmailEmptyState() {
         )}
       </Match>
 
-      <Match when={hasActiveFilters()}>
+      <Match when={filtersChanged()}>
         <EmptyStatePanel
           centered
           graphic={EmptyStateNoFilterMatchGraphic}
@@ -135,7 +133,7 @@ export function EmailEmptyState() {
         >
           <FilteredHiddenBanner
             hasHiddenItems={false}
-            onClearFilters={() => setFacets({})}
+            onClearFilters={clearFilters}
           />
         </EmptyStatePanel>
       </Match>

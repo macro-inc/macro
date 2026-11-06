@@ -4,7 +4,7 @@ import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { type Accessor, createMemo } from 'solid-js';
-import { useEmailView } from '../email-view-context';
+import { type EmailListFilters, useEmailView } from '../email-view-context';
 import type { EmailFilterGroupId } from '../types';
 import { EMAIL_FILTER_GROUPS, EMAIL_FOCUS_FILTER_GROUP } from './email-facets';
 
@@ -35,41 +35,53 @@ const FOCUS_FILTER_GROUPS: EmailFilterGroup[] = [
   ),
 ];
 
-/** Shared selection semantics for the desktop menu and mobile drawer. */
-export function useEmailFilters() {
-  const { state, setFacets } = useEmailView();
-  return createEmailFilters(
-    () => state.facets,
-    setFacets,
-    () => state.tab === 'focus'
-  );
-}
+/** One group's selection, read from and written into the list's filters. */
+type EmailFilterField = {
+  read: (filters: EmailListFilters) => readonly string[];
+  write: (
+    filters: EmailListFilters,
+    ids: string[]
+  ) => Partial<EmailListFilters>;
+};
 
-/** Shared Email filters without coupling an embedded list to the Email host. */
-export function createEmailFilters(
-  facets: Accessor<FacetSelection>,
-  setFacets: (facets: FacetSelection) => void,
-  /** Whether the list is Focus, which has its own filter groups. */
-  isFocus: Accessor<boolean> = () => false
-) {
-  const tagGroup = useTagFilterGroup();
-  // Tags come last: the static groups are short, the tag list grows with use.
-  const groups = createMemo((): EmailFilterGroup[] => [
-    ...(isFocus() ? FOCUS_FILTER_GROUPS : STATIC_FILTER_GROUPS),
-    ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
-  ]);
+const facetField = (id: string): EmailFilterField => ({
+  read: (filters) => filters.facets[id] ?? [],
+  write: (filters, ids) => ({ facets: { ...filters.facets, [id]: ids } }),
+});
+
+const sameValues = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length && left.every((value) => right.includes(value));
+
+/**
+ * Selection semantics for the desktop menu and mobile drawer. A group counts
+ * as active once it differs from what Clear returns to, so a tab's own
+ * restrictions show as selected without reading as extra filters.
+ */
+function createEmailFilterModel(options: {
+  groups: Accessor<EmailFilterGroup[]>;
+  field: (groupId: string) => EmailFilterField;
+  filters: Accessor<EmailListFilters>;
+  baseline: Accessor<EmailListFilters>;
+  setFilters: (filters: Partial<EmailListFilters>) => void;
+}) {
   const groupFor = (groupId: string) =>
-    groups().find((group) => group.id === groupId);
-  const activeFilterCount = createMemo(() =>
-    Object.values(facets()).reduce(
-      (count, optionIds) => count + optionIds.length,
-      0
-    )
-  );
+    options.groups().find((group) => group.id === groupId);
+  const selectedIds = (groupId: string) => [
+    ...options.field(groupId).read(options.filters()),
+  ];
+  const setGroupSelection = (groupId: string, ids: readonly string[]) =>
+    options.setFilters(
+      options.field(groupId).write(options.filters(), [...ids])
+    );
+  const isGroupActive = (groupId: string) =>
+    !sameValues(
+      options.field(groupId).read(options.filters()),
+      options.field(groupId).read(options.baseline())
+    );
 
   // Single-select groups carry an "All" option that stands for no selection.
   const isSelected = (groupId: string, optionId: string) => {
-    const selected = facets()[groupId] ?? [];
+    const selected = selectedIds(groupId);
     const group = groupFor(groupId);
     if (
       group?.selectionMode === 'single' &&
@@ -89,11 +101,10 @@ export function createEmailFilters(
     const group = groupFor(groupId);
     if (group?.selectionMode === 'single') {
       if (!selected) return;
-
-      setFacets({
-        ...facets(),
-        [groupId]: optionId === group.defaultOptionId ? [] : [optionId],
-      });
+      setGroupSelection(
+        groupId,
+        optionId === group.defaultOptionId ? [] : [optionId]
+      );
       return;
     }
 
@@ -101,18 +112,55 @@ export function createEmailFilters(
     const update = selected
       ? addUnique<string>(optionId)
       : removeValue<string>(optionId);
-    setFacets({
-      ...facets(),
-      [groupId]: update(facets()[groupId]),
-    });
+    setGroupSelection(groupId, update(selectedIds(groupId)));
   };
 
   return {
-    groups,
-    activeCount: activeFilterCount,
+    groups: options.groups,
+    activeCount: () =>
+      options.groups().filter((group) => isGroupActive(group.id)).length,
+    isGroupActive,
     isSelected,
-    selectedIds: (groupId: string) => facets()[groupId] ?? [],
+    selectedIds,
     setSelected,
-    clear: () => setFacets({}),
+    setGroupSelection,
+    clear: () => options.setFilters(options.baseline()),
   };
+}
+
+/** The Email view's Filters, over the tab's or open view's full filters. */
+export function useEmailFilters() {
+  const { state, setFilters, filterBaseline } = useEmailView();
+  const tagGroup = useTagFilterGroup();
+  return createEmailFilterModel({
+    groups: createMemo((): EmailFilterGroup[] => [
+      ...(state.tab === 'focus' ? FOCUS_FILTER_GROUPS : STATIC_FILTER_GROUPS),
+      // Tags come last: the static groups are short, the tag list grows with use.
+      ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
+    ]),
+    field: facetField,
+    filters: () => state,
+    baseline: () => ({ ...filterBaseline(), inboxIds: undefined }),
+    setFilters,
+  });
+}
+
+/** Shared Email filters without coupling an embedded list to the Email host. */
+export function createEmailFilters(
+  facets: Accessor<FacetSelection>,
+  setFacets: (facets: FacetSelection) => void
+) {
+  const tagGroup = useTagFilterGroup();
+  return createEmailFilterModel({
+    groups: createMemo((): EmailFilterGroup[] => [
+      ...STATIC_FILTER_GROUPS,
+      ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
+    ]),
+    field: facetField,
+    filters: () => ({ facets: facets(), inboxIds: undefined }),
+    baseline: () => ({ facets: {}, inboxIds: undefined }),
+    setFilters: (filters) => {
+      if (filters.facets) setFacets(filters.facets);
+    },
+  });
 }

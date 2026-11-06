@@ -5,6 +5,8 @@ import {
   decodeEmailSavedView,
   EMPTY_EMAIL_SAVED_VIEW_FILTERS,
   emailSavedViewsEqual,
+  emailTabFilterState,
+  emailTabRefinements,
   materializeEmailSavedView,
   readEmailSavedView,
 } from './email-saved-view';
@@ -208,5 +210,60 @@ describe('emailSavedViewsEqual', () => {
         filters: { ...base.filters, starred: true },
       })
     ).toBe(false);
+  });
+});
+
+describe('emailTabFilterState', () => {
+  it('shows each tab’s own restrictions as editable filters', () => {
+    expect(emailTabFilterState('important')).toEqual({
+      facets: { done: ['not-done'] },
+      conditions: expect.objectContaining({
+        importance: 'signal',
+        starred: false,
+      }),
+    });
+    expect(emailTabFilterState('favorites').conditions?.starred).toBe(true);
+    expect(emailTabFilterState('calendar').facets).toEqual({
+      calendar: ['has-calendar-invite'],
+    });
+    expect(emailTabFilterState('sent')).toEqual({
+      facets: {},
+      conditions: undefined,
+    });
+  });
+});
+
+describe('emailTabRefinements', () => {
+  const signal = emailTabFilterState('important');
+
+  it('keeps the tab’s own query while its restrictions stand', () => {
+    expect(emailTabRefinements('important', signal)).toEqual({});
+    expect(
+      emailTabRefinements('important', {
+        ...signal,
+        facets: { ...signal.facets, read: ['unread'] },
+      })
+    ).toEqual({ read: ['unread'] });
+  });
+
+  it('needs a definition once a tab’s own restriction or a condition changes', () => {
+    expect(
+      emailTabRefinements('important', { ...signal, facets: {} })
+    ).toBeUndefined();
+    expect(
+      emailTabRefinements('important', {
+        ...signal,
+        conditions: signal.conditions && {
+          ...signal.conditions,
+          subject: ['invoice'],
+        },
+      })
+    ).toBeUndefined();
+  });
+
+  it('leaves tabs a view can’t hold to their own filters', () => {
+    expect(
+      emailTabRefinements('sent', { facets: { read: ['unread'] } })
+    ).toEqual({ read: ['unread'] });
   });
 });

@@ -17,6 +17,16 @@ const mocks = vi.hoisted(() => ({
   tab: (): string => 'important',
   savedView: (): string | undefined => undefined,
   tagSets: (): TagSetResponse[] => [],
+  /** What the view hands its list: the tab or definition it queries. */
+  list: undefined as
+    | {
+        input: { tab: string; facets: Record<string, string[]> };
+        options: {
+          savedView?: () => unknown;
+          enabled?: () => boolean;
+        };
+      }
+    | undefined,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -83,7 +93,13 @@ vi.mock('@queries/email/link', () => ({
 }));
 vi.mock('./persistence', () => ({ createEmailViewPersistence: () => ({}) }));
 vi.mock('./queries/use-email-query', () => ({
-  useEmailDataSource: () => ({ items: () => [] }),
+  useEmailDataSource: (
+    input: NonNullable<typeof mocks.list>['input'],
+    options: NonNullable<typeof mocks.list>['options']
+  ) => {
+    mocks.list = { input, options };
+    return { items: () => [] };
+  },
 }));
 vi.mock('./route', () => ({
   emailSplitRoute: { id: 'view-mail' },
@@ -102,6 +118,7 @@ afterEach(() => {
   mocks.tab = () => 'important';
   mocks.savedView = () => undefined;
   mocks.tagSets = () => [];
+  mocks.list = undefined;
 });
 
 function mount() {
@@ -346,9 +363,10 @@ describe('saved views', () => {
 
     expect(view.savedViewActive()).toBe(false);
     expect(view.state.tab).toBe('noise');
-    expect(view.state.conditions).toBeUndefined();
+    expect(view.state.conditions?.importance).toBe('noise');
+    expect(view.state.conditions?.participants).toEqual([]);
     expect(view.state.inboxIds).toEqual(['saved-inbox']);
-    expect(view.state.facets).toEqual({});
+    expect(view.state.facets).toEqual({ done: ['not-done'] });
   });
 
   it('keeps a view scoped to an inbox that is no longer linked', () => {
@@ -365,10 +383,64 @@ describe('saved views', () => {
     view.selectSavedView(VIEW_ID);
 
     expect(view.savedViews?.view().kind).toBe('unavailable');
-    expect(view.state.conditions).toBeUndefined();
+    expect(mocks.list?.options.enabled?.()).toBe(false);
 
     view.leaveSavedView();
     expect(view.state.tab).toBe('important');
     expect(view.savedViewActive()).toBe(false);
+  });
+});
+
+describe('tab filters', () => {
+  it('starts a tab from its own filters and queries the tab while they stand', () => {
+    const { view } = mount();
+
+    expect(view.state.facets).toEqual({ done: ['not-done'] });
+    expect(view.state.conditions?.importance).toBe('signal');
+    expect(mocks.list?.input.tab).toBe('important');
+    expect(mocks.list?.input.facets).toEqual({});
+    expect(mocks.list?.options.savedView?.()).toBeUndefined();
+
+    view.setFacets({ ...view.state.facets, read: ['unread'] });
+    expect(mocks.list?.input.tab).toBe('important');
+    expect(mocks.list?.input.facets).toEqual({ read: ['unread'] });
+  });
+
+  it('lists mail as a view would once a tab’s own filter changes', () => {
+    const { view } = mount();
+
+    view.setFilters({ facets: {} });
+
+    expect(view.state.tab).toBe('important');
+    expect(mocks.list?.input.tab).toBe('all');
+    expect(mocks.list?.options.savedView?.()).toMatchObject({
+      conditions: { importance: 'signal' },
+    });
+  });
+
+  it('clears back to the tab’s own filters and every inbox', () => {
+    const { view } = mount();
+    const conditions = view.state.conditions;
+    if (!conditions) throw new Error('Signal has conditions');
+    view.setFilters({
+      facets: { read: ['read'] },
+      conditions: { ...conditions, subject: ['invoice'] },
+    });
+
+    view.clearFilters();
+
+    expect(view.state.facets).toEqual({ done: ['not-done'] });
+    expect(view.state.conditions?.subject).toEqual([]);
+    expect(view.state.inboxIds).toBeUndefined();
+  });
+
+  it('gives each tab its own filters', () => {
+    const { view } = mount();
+    view.setFacets({ read: ['unread'] });
+
+    view.setTab('favorites');
+
+    expect(view.state.facets).toEqual({});
+    expect(view.state.conditions?.starred).toBe(true);
   });
 });
