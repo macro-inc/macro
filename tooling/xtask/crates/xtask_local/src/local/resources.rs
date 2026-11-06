@@ -203,16 +203,18 @@ pub const QUEUES: &[Queue] = &[
     },
     // Their workers may be scaled to zero until the first message, on the platform.
     Queue {
-        name: macro_queues::ChatDeleteQueue::LOCAL,
-        bindings: &[],
-    },
-    Queue {
         name: macro_queues::OrganizationRetentionQueue::LOCAL,
-        bindings: &[],
+        bindings: &[(
+            macro_queues::OrganizationRetentionQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
     },
     Queue {
         name: macro_queues::UploadExtractorQueue::LOCAL,
-        bindings: &[],
+        bindings: &[(
+            macro_queues::UploadExtractorQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
     },
     Queue {
         name: macro_queues::DocumentTextExtractorQueue::LOCAL,
