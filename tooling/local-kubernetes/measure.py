@@ -86,14 +86,18 @@ def process_stats(pid):
     return ram, cpu
 
 
-def latency(url):
+def latency(url, cookie_file=None):
     result = {}
     # Fixed successful gateway requests. Browser navigation is a separate check;
     # an HTML transfer must never be described as a rendered page load.
-    for path in ['/auth/health', '/connection-gateway/health', '/contacts/health', '/dss/health', '/app/']:
+    routes = ['/auth/health', '/connection-gateway/health', '/contacts/health', '/dss/health', '/app/']
+    if cookie_file:
+        routes.append('/auth/user/me')
+    for path in routes:
         samples = []
         for _ in range(100):
-            value = output(['curl', '--fail', '--silent', '--show-error', '--max-time', '30',
+            cookies = ['--cookie', str(cookie_file)] if cookie_file else []
+            value = output(['curl', *cookies, '--fail', '--silent', '--show-error', '--max-time', '30',
                             '--cacert', str(ROOT / 'infra/local/certs/ca.pem'),
                             '--output', '/dev/null', '--write-out', '%{time_total}', url.rstrip('/') + path])
             samples.append(float(value) * 1000)
@@ -110,10 +114,13 @@ def main():
     parser.add_argument('--instance', required=True)
     parser.add_argument('--label', required=True)
     parser.add_argument('--url')
+    parser.add_argument('--cookie-file', type=Path, help='private curl cookie jar for an authenticated API probe')
     parser.add_argument('--sample-seconds', type=int, default=60)
     parser.add_argument('--process-root', type=int, help='PID of this instance run_local launcher; includes Vite descendants')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.sample_seconds < 10:
+        parser.error('--sample-seconds must be at least 10')
     entry = {'commit': output(['git', 'rev-parse', 'HEAD']).strip(),
              'at': datetime.now(timezone.utc).isoformat(), 'runtime': args.runtime,
              'instance': args.instance, 'label': args.label, 'host_before': host()}
@@ -125,7 +132,7 @@ def main():
         subprocess.run(command, cwd=ROOT, check=True)
         entry['seconds'] = time.monotonic() - started
     elif args.url:
-        entry['latency'] = latency(args.url)
+        entry['latency'] = latency(args.url, args.cookie_file)
     else:
         samples = []
         started = time.monotonic()
@@ -149,6 +156,8 @@ def main():
             elapsed = samples[-1]['sampled_at'] - samples[0]['sampled_at']
             entry['cpu_cores'] += (samples[-1]['host_cpu_core_seconds'] - samples[0]['host_cpu_core_seconds']) / elapsed
         entry['ram_bytes'] = statistics.median(s['ram_bytes'] for s in samples)
+        if entry['cpu_cores'] < 0:
+            raise RuntimeError('CPU counters reset during sampling; repeat with stable pods')
     entry['host_after'] = host()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('a') as target:
