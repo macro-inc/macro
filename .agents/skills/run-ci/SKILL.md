@@ -23,9 +23,8 @@ instead of local checks: every run costs CI compute.
 CI runs when someone asks for it, not on every push. Adding the `run-ci` label
 to a PR runs every check on its head commit (the `PR CI` workflow), and the
 label disappears as the run starts. The result is the `CI gate` commit status on
-that commit. The merge gate is `CI gate` passing on the PR's latest commit, so
-every push needs a new run before the PR can merge (see the end of this page
-for the switch-over).
+that commit. `main` requires `CI gate` to pass on the PR's latest commit, so
+every push needs a new run before the PR can merge.
 
 ## Run it
 
@@ -86,9 +85,3 @@ A fork run uses the fork's workflow files, so a fork that changes `.github/` or
 `tooling/xtask/crates/xtask_workflows` gets `CI gate` failure (`fork changes CI
 workflows`). To test it, a maintainer reviews it, pushes it to a branch here,
 and runs CI on a PR from that branch.
-
-## While the switch is in progress
-
-The checks still run on every push as well, and `main` still requires their
-old status checks (`Web App Status Check`, `Cloud Storage Status Check`,
-`Infra Status Check`) until its ruleset requires `CI gate`.

@@ -2,12 +2,6 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/test_macrod_update.rs
 name: Test macrod update
 'on':
-  pull_request:
-    branches:
-    - main
-    paths:
-    - crates/coding_agent_worker/**
-    - '.github/workflows/test_macrod_update.yml'
   workflow_call: {}
   workflow_dispatch: {}
 permissions:

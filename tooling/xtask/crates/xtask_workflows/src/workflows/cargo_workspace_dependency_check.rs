@@ -9,14 +9,12 @@
 //! (which drifted from the workspace toolchain) and gives the `cargo install`
 //! and xtask builds warm caches instead of compiling cold on every run.
 
-use gh_workflow::{
-    Event, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow, WorkflowCall,
-};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
 
-/// Files whose change runs the workflow, on a push and in `PR CI`.
+/// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("Cargo.toml"),
     xtask_paths::repo_glob!("crates/**/Cargo.toml"),
@@ -35,22 +33,8 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 
 /// Build the workflow.
 pub fn cargo_workspace_dependency_check() -> Workflow {
-    let pull_request = PullRequest::default()
-        .add_branch("main")
-        .add_type(PullRequestType::Opened)
-        .add_type(PullRequestType::Synchronize)
-        .add_type(PullRequestType::Reopened)
-        .add_type(PullRequestType::ReadyForReview);
-
     Workflow::new("cargo workspace dependency check")
-        .on(Event::default()
-            .pull_request(
-                PATHS
-                    .iter()
-                    .fold(pull_request, |trigger, path| trigger.add_path(*path)),
-            )
-            .workflow_call(WorkflowCall::default()))
-        .concurrency(vars::concurrency("cargo-workspace-dependency-check"))
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("dependency-check", dependency_check())
         .add_job("hakari-and-dep-closures", hakari_and_dep_closures())
 }
