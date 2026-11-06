@@ -5,4 +5,11 @@ export default {
   startedWorking: '{{name}} started working',
   viewActiveWork: 'View active work',
   dismissActiveWork: 'Dismiss',
+  recentlyShared: 'Recently shared',
+  newActivity: { one: '{{count}} new', other: '{{count}} new' },
+  loadMoreActivity: 'Load more',
+  entityType: '{{type}}',
+  verbCount: { other: '{{verb}} (x{{count}})' },
+  showEntityActivity: 'Show activity for {{name}}',
+  unseenActivity: 'New activity',
 };

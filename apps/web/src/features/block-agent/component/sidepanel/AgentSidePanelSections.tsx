@@ -10,11 +10,16 @@
  */
 
 import { DiffCounts } from '@app/components/diff-view';
+import { AgentActivitySourceProvider } from '@app/features/agent-session-activity/context/agent-activity-source';
+import { createAgentActivitySource } from '@app/features/agent-session-activity/queries/create-agent-activity-source';
+import { AgentActivitySection } from '@app/features/agent-session-activity/views/agent-activity-section';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { References } from '@core/component/References';
+import { enableAgentSessionActivity } from '@core/constant/featureFlags';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@icon/system/regular/git-branch.svg';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
@@ -40,6 +45,7 @@ export function AgentSidePanelSections() {
   const files = () => changes?.model.files() ?? [];
   const activity = createMemo(() => activityCounts(messages()));
   const totals = () => changes?.changeCounts();
+  const sessionActivityFlag = useFeatureFlag(enableAgentSessionActivity);
 
   return (
     <>
@@ -50,6 +56,9 @@ export function AgentSidePanelSections() {
           updatedAt={session()?.modifiedAt}
         />
       </SidePanel.Footer>
+      <Show when={sessionActivityFlag().enabled && sessionId()}>
+        {(id) => <SessionActivitySection sessionId={id()} />}
+      </Show>
       <SidePanel.Section id="session" title="Session" defaultOpen order={10}>
         <SidePanel.Grid>
           <SidePanel.Row label="Status">
@@ -180,6 +189,15 @@ export function AgentSidePanelSections() {
 
       <ReferencesSectionConditional sessionId={sessionId()} />
     </>
+  );
+}
+
+function SessionActivitySection(props: { sessionId: string }) {
+  const source = createAgentActivitySource(() => props.sessionId);
+  return (
+    <AgentActivitySourceProvider value={source}>
+      <AgentActivitySection />
+    </AgentActivitySourceProvider>
   );
 }
 

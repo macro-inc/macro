@@ -1,5 +1,6 @@
 import type { EntityType } from '@service-agent-harness/generated/schemas';
 import type { Accessor } from 'solid-js';
+import { createContext, useContext } from 'solid-js';
 
 export type AgentActivityRow = {
   id: string;
@@ -16,3 +17,13 @@ export type AgentActivitySource = {
   hasMore: Accessor<boolean>;
   loadMore: () => void;
 };
+
+const AgentActivitySourceContext = createContext<AgentActivitySource>();
+
+export const AgentActivitySourceProvider = AgentActivitySourceContext.Provider;
+
+export function useAgentActivitySource(): AgentActivitySource {
+  const source = useContext(AgentActivitySourceContext);
+  if (!source) throw new Error('AgentActivitySourceProvider is missing');
+  return source;
+}
