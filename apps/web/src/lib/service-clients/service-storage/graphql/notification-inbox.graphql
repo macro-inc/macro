@@ -70,6 +70,25 @@ mutation MarkNotificationInboxRowsDone(
 	}
 }
 
+mutation MarkNotificationInboxNotificationDone(
+	$input: MarkNotificationInboxNotificationDoneInput!
+) {
+	markNotificationInboxNotificationDone(input: $input) {
+		patches {
+			...NotificationInboxPatchFields
+		}
+		undoToken
+	}
+}
+
+mutation ClearNotificationInbox($input: ClearNotificationInboxInput!) {
+	clearNotificationInbox(input: $input) {
+		rowCount
+		undoToken
+		nextCursor
+	}
+}
+
 mutation UndoNotificationInboxRowsDone(
 	$input: UndoNotificationInboxRowsDoneInput!
 ) {

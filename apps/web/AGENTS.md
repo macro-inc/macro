@@ -98,6 +98,13 @@ meter on every row except on phones, with the direction in its label while
 importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 
+A channel call's row and its call panel (the real `Channel` over synthetic service
+responses) have a backend-free desktop and phone regression: the collapsed row, the
+blank slate, composer pinning, quote replies and the outside-message popup:
+`bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
+On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
+Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -545,6 +552,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
   backlog, not the engine's per-message queue; keep reset fences, mutation
   settlements, and query-specific invalidations immediate.
+- Open tabs share one cache engine, so a source that reads on cache changes must
+  not read while hidden: use `createVisibleRefresh` to throttle too, or
+  `createHiddenDeferral` when its own reads already coalesce. Initial and
+  explicit reads still run.
+- Report cache operation failures through `createCacheErrorThrottle`: one owner
+  loss rejects every queued operation, and each report reaches the console and
+  session replay. The next report for that kind carries `cache.suppressed_count`.
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.

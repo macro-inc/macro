@@ -130,6 +130,14 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
+- What opened a session is an `agent_session_source` row, referenced by
+  `agent_session.source_id` and written in the transaction that writes the session
+  (`outbound/postgres/source.rs`). It holds references only, as
+  `trigger_context::TriggerOrigin`. Null means unknown: a session older than this,
+  an unclaimed warm session, or an older runtime. It describes a session; `source`
+  and `visibility` decide what happens to it, and a runtime's claim never sets them.
+  Whoever can view a session reads its origin: `AgentSessionResponse`, the SDK's
+  `AgentSession.origin()`, and `ReadAgentSession`.
 - Where a session is shown is `agent_session.visibility` (`listed`,
   `unlisted`, `hidden`), set at creation and changed later only by warm
   claims and the DM-context backfill (`list_visibility.rs`).

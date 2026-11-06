@@ -36,6 +36,9 @@ threads, pins, recents, notifications, folders, activity.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
+- Authenticated call routes are composed from `crates/call` under `/call`;
+  `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
+  `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
   across item types. Folder duplication runs on its own task and copies
   documents and chats through `entity_mutation/project_contents.rs`, the
@@ -85,6 +88,11 @@ threads, pins, recents, notifications, folders, activity.
 - After query changes: `nix develop --command just prepare_db` from the repo root.
 
 ## Gotchas
+
+- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
+  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
+- The same flag client evaluates `enable-programmatic-calls` per caller for the
+  explicit call start, join, and leave routes; failures disable those routes.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 

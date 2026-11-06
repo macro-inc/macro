@@ -63,7 +63,9 @@ export function SplitPanel(props: SplitPanelProps) {
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
-  let pointerTarget: Element | undefined;
+  // Weak, so the last element pressed doesn't keep a view this split has
+  // left alive.
+  let pointerTarget: WeakRef<Element> | undefined;
 
   const layoutRefs = createMutable<SplitPanelContextType['layoutRefs']>({});
   const headerCollapseController = createPriorityCollapseController();
@@ -240,7 +242,10 @@ export function SplitPanel(props: SplitPanelProps) {
             replaceOwnedSlot: ownedSlots.replace,
             panelSize,
             panelRef,
-            pointerTarget: () => pointerTarget,
+            pointerTarget: () => {
+              const target = pointerTarget?.deref();
+              return target?.isConnected ? target : undefined;
+            },
           }}
         >
           <SplitDrawerGroup panelSize={panelSize}>
@@ -276,7 +281,9 @@ export function SplitPanel(props: SplitPanelProps) {
                 capture: true,
                 handleEvent: (e) => {
                   pointerTarget =
-                    e.target instanceof Element ? e.target : undefined;
+                    e.target instanceof Element
+                      ? new WeakRef(e.target)
+                      : undefined;
                 },
               }}
               // A split opened from the keyboard has no pressed element to keep

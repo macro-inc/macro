@@ -38,6 +38,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "account_manager"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "channels",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "messages",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "user_api_key",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "activity"
 version = "0.1.0"
 dependencies = [
@@ -790,6 +817,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "trigger_context",
  "url",
  "uuid",
  "workspace-hack",
@@ -3954,6 +3982,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
  "wiremock",
  "workspace-hack",
@@ -4024,6 +4053,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "base64 0.22.1",
+ "bot_id",
  "channels",
  "chrono",
  "cloudfront_sign",
@@ -4031,6 +4061,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
+ "feature_flags",
  "filter_ast",
  "futures",
  "invite_email",
@@ -4049,6 +4080,7 @@ dependencies = [
  "mockall",
  "model-entity",
  "model-error-response",
+ "model_user",
  "models_pagination",
  "models_permissions",
  "notification",
@@ -6633,6 +6665,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "access_requests",
+ "account_manager",
  "activity",
  "agent_changes",
  "agent_correlation",
@@ -6698,6 +6731,7 @@ dependencies = [
  "entity_registry_db_utils",
  "external_chat",
  "favorites",
+ "feature_flags",
  "flate2",
  "foreign_entity",
  "forms",
@@ -9484,6 +9518,7 @@ dependencies = [
  "async-graphql",
  "async-stream",
  "attention_feed",
+ "chrono",
  "futures",
  "graphql_common",
  "graphql_notification",
@@ -9492,6 +9527,7 @@ dependencies = [
  "notification_inbox",
  "soup",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -11386,6 +11422,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "async-trait",
+ "futures",
  "macro_env_var",
  "macro_user_id",
  "reqwest 0.13.4",
@@ -15756,6 +15793,7 @@ dependencies = [
  "skrifa",
  "thiserror 2.0.18",
  "tiny-skia",
+ "utoipa",
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
@@ -21033,8 +21071,10 @@ version = "0.1.0"
 dependencies = [
  "bot_id",
  "chrono",
+ "macro_user_id",
  "serde",
  "serde_json",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -22208,6 +22248,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "bot_id",
+ "call",
  "channel_sender",
  "channels",
  "chrono",
@@ -22239,6 +22280,7 @@ dependencies = [
  "tokio-retry",
  "tower 0.5.3",
  "tracing",
+ "trigger_context",
  "url",
  "utoipa",
  "uuid",

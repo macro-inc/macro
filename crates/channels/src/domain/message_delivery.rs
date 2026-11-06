@@ -376,6 +376,11 @@ where
                 side_effect_error = Some(repo_error(error));
             }
         }
+        if matches!(event.change, MessageChange::CallRootPosted { .. })
+            && let Err(error) = self.repo.touch_channel_updated_at(channel_id).await
+        {
+            side_effect_error = Some(repo_error(error));
+        }
         // Notifications derive from a post, or from an edit that must notify like one.
         let posted = match &event.change {
             MessageChange::Posted {
@@ -434,6 +439,7 @@ where
             MessageChange::Edited { .. }
             | MessageChange::MessageDeleted { .. }
             | MessageChange::Typing { .. }
+            | MessageChange::CallRootPosted { .. }
             | MessageChange::ThreadUpdated { .. } => None,
         };
         if let Some((message, mentions, notification_policy)) = posted {

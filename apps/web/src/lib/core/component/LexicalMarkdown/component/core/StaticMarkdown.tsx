@@ -11,6 +11,7 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AccountManagerRequestNode,
   type AgentActivityNode,
   type AgentContextNode,
   type AgentSessionMentionNode,
@@ -85,6 +86,7 @@ import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchN
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { AccountManagerRequest as AccountManagerRequestDecorator } from '../decorator/AccountManagerRequest';
 import { AgentActivity as AgentActivityDecorator } from '../decorator/AgentActivity';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
@@ -485,6 +487,21 @@ const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
     </span>
   ),
 };
+
+const AccountManagerRequest: TypedRenderableEntity<AccountManagerRequestNode> =
+  {
+    guard: (node: LexicalNode): node is AccountManagerRequestNode =>
+      node.__type === 'account-manager-request',
+    render: (props) => (
+      <span>
+        {AccountManagerRequestDecorator({
+          ...props.node.exportComponentProps(),
+          key: props.node.getKey(),
+          theme: props.theme,
+        })}
+      </span>
+    ),
+  };
 
 const DatabaseQuery: TypedRenderableEntity<DatabaseQueryNode> = {
   guard: (node: LexicalNode): node is DatabaseQueryNode =>
@@ -1050,6 +1067,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
   eraseRenderableEntity(ConnectApp),
+  eraseRenderableEntity(AccountManagerRequest),
   eraseRenderableEntity(DatabaseQuery),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),
