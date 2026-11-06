@@ -30,7 +30,7 @@ vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
 vi.mock('@channel/Call/chat/CallChatHistory', () => ({
   CallDiscussionHistory: (props: {
     render: (source: unknown) => JSX.Element;
-  }) => props.render({}),
+  }) => props.render({ thread: () => undefined, loading: () => false }),
 }));
 vi.mock('@components/app/HeaderActionGroup', () => ({
   HeaderActionGroup: () => null,

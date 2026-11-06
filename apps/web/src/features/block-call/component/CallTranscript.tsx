@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { guestDisplayName, isCallGuestId } from '@channel/Call/call-identity';
 import { Message } from '@channel/Message';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -181,7 +182,9 @@ export function CallTranscript(props: {
         }}
       >
         <Show when={!props.hideHeader}>
-          <h3 class="px-4 py-3 text-sm font-semibold">Transcript</h3>
+          <h3 class="px-4 py-3 text-sm font-semibold">
+            {t('calls.detailTranscript')}
+          </h3>
         </Show>
         <StaticMarkdownContext>
           <div class="flex flex-col gap-1 px-3 pb-6">
@@ -201,7 +204,7 @@ export function CallTranscript(props: {
                           <Message.SenderName />
                           <span class="flex items-center gap-1 rounded bg-hover px-1.5 py-0.5 text-ink-muted">
                             <ChatIcon class="size-3" />
-                            Chat
+                            {t('calls.detailChat')}
                           </span>
                           <Button
                             variant="ghost"
@@ -226,7 +229,7 @@ export function CallTranscript(props: {
                   isCallGuestId(props.record, segment().speakerId);
                 const name = () =>
                   guestDisplayName(props.record, segment().speakerId) ||
-                  'Guest';
+                  t('calls.detailGuest');
                 const message = (): MessageData => ({
                   id: item.key,
                   content: segment().content,
@@ -319,7 +322,7 @@ export function CallTranscript(props: {
             }}
           >
             <CrosshairIcon class="size-4" />
-            Sync to video
+            {t('calls.detailSyncToVideo')}
           </Button>
         </div>
       </Show>

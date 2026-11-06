@@ -86,6 +86,10 @@ recording, standalone guests, private channel access, owner/non-owner sharing,
 a direct link, both old link formats, repeated transcript targets, Calls-list
 return, a second split, and Back/Forward.
 
+Saved call route loading records `call.record` and `call.discussion` phases on the
+existing view trace. Reading-tab selections record `call.detail.tab`; attributes
+contain only the call ID and tab kind, never transcript or message contents.
+
 ### Imported Granola meetings
 
 Adding Granola in **Settings → Agent connections** (Pipedream Connect, Granola

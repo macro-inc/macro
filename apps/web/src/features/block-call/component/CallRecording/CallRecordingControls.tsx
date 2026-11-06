@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import { formatVideoTimestamp } from '@core/util/duration';
 import ForwardIcon from '@icon/system/regular/arrow-clockwise.svg';
@@ -19,8 +20,12 @@ function DesktopRecordingControls(props: { playback: RecordingPlayback }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={state().paused() ? 'Play' : 'Pause'}
-          tooltip={state().paused() ? 'Play' : 'Pause'}
+          aria-label={
+            state().paused() ? t('calls.detailPlay') : t('calls.detailPause')
+          }
+          tooltip={
+            state().paused() ? t('calls.detailPlay') : t('calls.detailPause')
+          }
           onClick={state().toggle}
         >
           <Show when={state().paused()} fallback={<PauseIcon class="size-4" />}>
@@ -30,8 +35,8 @@ function DesktopRecordingControls(props: { playback: RecordingPlayback }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Skip back"
-          tooltip="Skip back"
+          aria-label={t('calls.detailSkipBack')}
+          tooltip={t('calls.detailSkipBack')}
           onClick={() => state().skip(-10)}
         >
           <BackIcon class="size-4" />
@@ -39,8 +44,8 @@ function DesktopRecordingControls(props: { playback: RecordingPlayback }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Skip forward"
-          tooltip="Skip forward"
+          aria-label={t('calls.detailSkipForward')}
+          tooltip={t('calls.detailSkipForward')}
           onClick={() => state().skip(10)}
         >
           <ForwardIcon class="size-4" />
@@ -54,8 +59,8 @@ function DesktopRecordingControls(props: { playback: RecordingPlayback }) {
         <Button
           variant="ghost"
           size="sm"
-          aria-label="Playback speed"
-          tooltip="Playback speed"
+          aria-label={t('calls.detailSpeed')}
+          tooltip={t('calls.detailSpeed')}
           onClick={state().cycleRate}
         >
           {state().rate()}×
@@ -63,8 +68,12 @@ function DesktopRecordingControls(props: { playback: RecordingPlayback }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={state().muted() ? 'Unmute' : 'Mute'}
-          tooltip={state().muted() ? 'Unmute' : 'Mute'}
+          aria-label={
+            state().muted() ? t('calls.detailUnmute') : t('calls.detailMute')
+          }
+          tooltip={
+            state().muted() ? t('calls.detailUnmute') : t('calls.detailMute')
+          }
           onClick={state().toggleMute}
         >
           <VolumeIcon class="size-4" />
@@ -72,8 +81,8 @@ function DesktopRecordingControls(props: { playback: RecordingPlayback }) {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Fullscreen"
-          tooltip="Fullscreen"
+          aria-label={t('calls.detailFullscreen')}
+          tooltip={t('calls.detailFullscreen')}
           onClick={state().fullscreen}
         >
           <FullscreenIcon class="size-4" />
@@ -86,7 +95,7 @@ function DesktopRecordingControls(props: { playback: RecordingPlayback }) {
 function RecordingScrubber(props: { playback: RecordingPlayback }) {
   return (
     <Slider
-      aria-label="Recording position"
+      aria-label={t('calls.detailPosition')}
       minValue={0}
       maxValue={props.playback.duration() || 1}
       step={0.1}
@@ -97,7 +106,7 @@ function RecordingScrubber(props: { playback: RecordingPlayback }) {
       <Slider.Track>
         <Slider.Fill />
         <Slider.Thumb
-          aria-label="Recording position"
+          aria-label={t('calls.detailPosition')}
           aria-valuetext={formatVideoTimestamp(props.playback.time())}
         >
           <Slider.Input />
@@ -115,7 +124,11 @@ function MobileRecordingControls(props: { playback: RecordingPlayback }) {
           class="pointer-events-auto"
           variant="secondary"
           size="icon-xl"
-          aria-label={props.playback.paused() ? 'Play' : 'Pause'}
+          aria-label={
+            props.playback.paused()
+              ? t('calls.detailPlay')
+              : t('calls.detailPause')
+          }
           onClick={props.playback.toggle}
         >
           <Show
@@ -137,7 +150,7 @@ function MobileRecordingControls(props: { playback: RecordingPlayback }) {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Fullscreen"
+            aria-label={t('calls.detailFullscreen')}
             onClick={props.playback.fullscreen}
           >
             <FullscreenIcon class="size-4" />

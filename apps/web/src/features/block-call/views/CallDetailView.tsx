@@ -1,6 +1,8 @@
 import { ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { getPermissions } from '@core/component/SharePermissions';
@@ -39,12 +41,15 @@ import { CallDetailMobileHeader } from './CallDetailMobileHeader';
 export type CallDetailData = { record: CallRecord; name: string };
 
 function callDetailName(record: CallRecord): string {
-  return record.customName ?? record.channelName ?? 'Call Recording';
+  return (
+    record.customName ?? record.channelName ?? t('calls.detailFallbackName')
+  );
 }
 
 /** Share the call query without owning either host's header. */
 export function useCallDetail(callId: Accessor<string>) {
   const query = useCallRecordQuery(callId);
+  usePending('call.record', () => query.isPending);
 
   const data = (): CallDetailData | undefined => {
     if (query.isPending) return undefined;
@@ -158,7 +163,7 @@ export function CallDetailContent(props: {
               <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <SpinnerIcon
                   aria-hidden={false}
-                  aria-label="Loading call recording"
+                  aria-label={t('calls.detailLoadingRecording')}
                   class="size-5 animate-spin"
                 />
               </div>
@@ -166,7 +171,7 @@ export function CallDetailContent(props: {
             <Match when={props.query.status === 'error'}>
               <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <div class="flex flex-col items-center gap-3 text-sm">
-                  <span>This call recording could not be displayed.</span>
+                  <span>{t('calls.detailFailedRecording')}</span>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -174,7 +179,7 @@ export function CallDetailContent(props: {
                       fireAndForget(props.query.refetch(), 'call-detail')
                     }
                   >
-                    Retry
+                    {t('calls.detailRetry')}
                   </Button>
                 </div>
               </div>
@@ -188,7 +193,7 @@ export function CallDetailContent(props: {
               <div class="grid size-full place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <SpinnerIcon
                   aria-hidden={false}
-                  aria-label="Loading call recording"
+                  aria-label={t('calls.detailLoadingRecording')}
                   class="size-5 animate-spin"
                 />
               </div>
@@ -247,7 +252,7 @@ export function CallDetailView(props: {
                     <>
                       <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
                       <span class="min-w-0 truncate text-sm font-semibold">
-                        {detail.data()?.name ?? 'Call Recording'}
+                        {detail.data()?.name ?? t('calls.detailFallbackName')}
                       </span>
                     </>
                   }
@@ -260,7 +265,7 @@ export function CallDetailView(props: {
                       <div class="hidden min-w-0 items-center gap-1.5 @max-[600px]/split-header:flex">
                         <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
                         <span class="truncate text-sm font-medium">
-                          {detail.data()?.name ?? 'Call Recording'}
+                          {detail.data()?.name ?? t('calls.detailFallbackName')}
                         </span>
                       </div>
                     </>

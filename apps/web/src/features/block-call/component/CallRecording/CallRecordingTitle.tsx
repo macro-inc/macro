@@ -1,3 +1,4 @@
+import { formatLocale, t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -5,7 +6,7 @@ import HashIcon from '@icon/system/regular/hash.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
-import { format, isSameDay } from 'date-fns';
+import { isSameDay } from 'date-fns';
 import { createSignal, Show } from 'solid-js';
 import { useCallAgain } from '../use-call-again';
 import {
@@ -29,12 +30,24 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
       end &&
       isSameDay(start, end) &&
       start.getHours() < 12 === end.getHours() < 12;
-    const from = format(
-      start,
-      samePeriod ? 'EEE, MMM d, h:mm' : 'EEE, MMM d, h:mm a'
-    );
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    };
+    const from = new Intl.DateTimeFormat(formatLocale(), options)
+      .formatToParts(start)
+      .filter((part) => !samePeriod || part.type !== 'dayPeriod')
+      .map((part) => part.value)
+      .join('')
+      .trim();
     if (!end || !Number.isFinite(end.getTime())) return from;
-    return `${from} – ${format(end, isSameDay(start, end) ? 'h:mm a' : 'EEE, MMM d, h:mm a')}`;
+    const endOptions = isSameDay(start, end)
+      ? ({ hour: 'numeric', minute: '2-digit' } as const)
+      : options;
+    return `${from} – ${new Intl.DateTimeFormat(formatLocale(), endOptions).format(end)}`;
   };
 
   return (
@@ -50,7 +63,7 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
       <h1 class="text-2xl font-semibold tracking-tight text-ink text-balance">
         {props.record.customName ??
           props.record.channelName ??
-          'Call Recording'}
+          t('calls.detailFallbackName')}
       </h1>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
         <span class="mr-auto">{dateRange()}</span>
@@ -61,7 +74,7 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
           <Button
             variant="ghost"
             size="sm"
-            aria-label="Participants"
+            aria-label={t('calls.detailParticipants')}
             onClick={() => setParticipantsOpen(true)}
           >
             <CallRecordingAvatars record={props.record} suppressClick />
@@ -73,11 +86,13 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
             variant="ghost"
             size="sm"
             onClick={callAgain}
-            tooltip="Call again"
-            aria-label="Call again"
+            tooltip={t('calls.detailCallAgain')}
+            aria-label={t('calls.detailCallAgain')}
           >
             <PhoneCallIcon class="size-4" />
-            <span class="@max-[440px]/call-title:hidden">Call again</span>
+            <span class="@max-[440px]/call-title:hidden">
+              {t('calls.detailCallAgain')}
+            </span>
           </Button>
         </Show>
       </div>
@@ -88,7 +103,7 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
-          <MobileDrawer.Content aria-label="Participants">
+          <MobileDrawer.Content aria-label={t('calls.detailParticipants')}>
             <MobileDrawer.Handle />
             <MobileDrawer.ScrollBody>
               <div class="p-5">

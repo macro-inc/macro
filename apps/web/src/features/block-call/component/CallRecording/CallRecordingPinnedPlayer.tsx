@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { formatVideoTimestamp } from '@core/util/duration';
 import ForwardIcon from '@icon/system/regular/arrow-clockwise.svg';
 import BackIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
@@ -23,7 +24,7 @@ export function CallRecordingPinnedPlayer(props: {
         props.mobile ? 'island rounded-full' : 'menu-surface rounded-2xl'
       )}
       role="group"
-      aria-label="Recording playback"
+      aria-label={t('calls.detailPlayback')}
     >
       <div class="relative flex size-11 shrink-0 items-center justify-center">
         <div class="pointer-events-none absolute inset-0">
@@ -37,7 +38,9 @@ export function CallRecordingPinnedPlayer(props: {
         <Button
           variant="primary"
           size="icon-sm"
-          aria-label={state().paused() ? 'Play' : 'Pause'}
+          aria-label={
+            state().paused() ? t('calls.detailPlay') : t('calls.detailPause')
+          }
           onClick={state().toggle}
         >
           <Show when={state().paused()} fallback={<PauseIcon class="size-4" />}>
@@ -55,8 +58,8 @@ export function CallRecordingPinnedPlayer(props: {
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Skip back"
-        tooltip="Skip back"
+        aria-label={t('calls.detailSkipBack')}
+        tooltip={t('calls.detailSkipBack')}
         onClick={() => state().skip(-10)}
       >
         <BackIcon class="size-4" />
@@ -64,8 +67,8 @@ export function CallRecordingPinnedPlayer(props: {
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Skip forward"
-        tooltip="Skip forward"
+        aria-label={t('calls.detailSkipForward')}
+        tooltip={t('calls.detailSkipForward')}
         onClick={() => state().skip(10)}
       >
         <ForwardIcon class="size-4" />
@@ -73,11 +76,15 @@ export function CallRecordingPinnedPlayer(props: {
       <Button
         variant="ghost"
         size={props.mobile ? 'icon-sm' : 'sm'}
-        aria-label={props.mobile ? 'Fullscreen' : 'Show video'}
+        aria-label={
+          props.mobile
+            ? t('calls.detailFullscreen')
+            : t('calls.detailShowVideo')
+        }
         onClick={props.mobile ? state().fullscreen : props.onShowVideo}
       >
         <FullscreenIcon class="size-4" />
-        <Show when={!props.mobile}>Show video</Show>
+        <Show when={!props.mobile}>{t('calls.detailShowVideo')}</Show>
       </Button>
     </div>
   );

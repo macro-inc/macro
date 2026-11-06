@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
@@ -146,7 +147,7 @@ export function CallRecordingVideo(props: {
           props.onTimeUpdate?.(event.currentTarget.currentTime, 'playback')
         }
       />
-      <Show when={props.playback}>
+      <Show when={!playbackError() && props.playback}>
         {(playback) => <CallRecordingControls playback={playback()} />}
       </Show>
       <Show when={playbackError()}>
@@ -154,11 +155,8 @@ export function CallRecordingVideo(props: {
           role="alert"
           class="w-full max-w-lg rounded border border-alert/30 bg-alert-bg px-3 py-2 text-sm text-alert-ink"
         >
-          <p class="font-medium">This recording couldn't be played.</p>
-          <p class="mt-1 text-alert-ink/80">
-            Reload the page to try again, or open or download the recording to
-            play it in another app.
-          </p>
+          <p class="font-medium">{t('calls.detailMediaFailed')}</p>
+          <p class="mt-1 text-alert-ink/80">{t('calls.detailMediaRecovery')}</p>
           <a
             href={props.url}
             target="_blank"
@@ -166,7 +164,7 @@ export function CallRecordingVideo(props: {
             download=""
             class="mt-2 inline-flex font-medium text-alert-ink underline underline-offset-2 hover:text-alert-ink/80"
           >
-            Open or download recording
+            {t('calls.detailOpenRecording')}
           </a>
         </div>
       </Show>

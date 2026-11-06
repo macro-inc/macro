@@ -20,6 +20,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Read discussion through `CallDiscussionHistory`'s source slot; preserve channel authorization and canonical call-chat roots.
 - Keep one media element across summary, transcript, chat and pinned controls.
 - Render summary Markdown unchanged; do not infer sections, chapters, tasks or events.
+- Let CallRecordingBody own the only SidePanel.Layout; native and legacy hosts provide the root and header, never a second layout.
 - Keep the recorded composite; separate historical camera tracks and captions are not exposed by the record contract.
 - Keep properties, sharing, activity and references on existing SidePanel sections.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.

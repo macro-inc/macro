@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { CallDiscussionSource } from '@channel/Call/chat/CallChatHistory';
 import { Message } from '@channel/Message';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -35,7 +36,10 @@ export function CallRecordingChat(props: {
     )
   );
   return (
-    <section class="flex min-w-0 flex-col gap-5" aria-label="Call chat">
+    <section
+      class="flex min-w-0 flex-col gap-5"
+      aria-label={t('calls.detailCallChat')}
+    >
       <Show when={!props.hideHeading}>
         <h3 class="flex items-center gap-2 text-base font-semibold">
           Call chat{' '}
@@ -43,7 +47,7 @@ export function CallRecordingChat(props: {
         </h3>
       </Show>
       <Show when={props.source.loading()}>
-        <p class="text-sm text-ink-muted">Loading chat…</p>
+        <p class="text-sm text-ink-muted">{t('calls.detailLoadingChat')}</p>
       </Show>
       <Show
         when={
@@ -52,13 +56,11 @@ export function CallRecordingChat(props: {
           messages().length === 0
         }
       >
-        <p class="text-sm text-ink-muted">
-          No messages were sent during this call.
-        </p>
+        <p class="text-sm text-ink-muted">{t('calls.detailEmptyChat')}</p>
       </Show>
       <Show when={props.source.failed()}>
         <p role="alert" class="text-sm text-ink-muted">
-          Could not load chat.
+          {t('calls.detailFailedChat')}
         </p>
         <Button
           variant="ghost"
@@ -67,7 +69,7 @@ export function CallRecordingChat(props: {
             fireAndForget(props.source.refresh(), 'call-recording-chat')
           }
         >
-          Retry
+          {t('calls.detailRetry')}
         </Button>
       </Show>
       <StaticMarkdownContext>
@@ -102,7 +104,9 @@ export function CallRecordingChat(props: {
                           size="xs"
                           class="ml-auto shrink-0"
                           onClick={() => props.onSeek?.(seconds()!)}
-                          aria-label={`Play ${formatVideoTimestamp(seconds() ?? 0)}`}
+                          aria-label={t('calls.detailPlayAt', {
+                            time: formatVideoTimestamp(seconds() ?? 0),
+                          })}
                         >
                           <PlayIcon class="size-3" />
                           {formatVideoTimestamp(seconds() ?? 0)}

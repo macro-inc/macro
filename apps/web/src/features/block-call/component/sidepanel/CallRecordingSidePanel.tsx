@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import CloseIcon from '@icon/system/regular/x.svg';
@@ -24,12 +25,12 @@ export function CallRecordingSidePanel(props: {
       <Show when={!isMobile()}>
         <div class="flex shrink-0 items-center justify-between gap-2 px-3 py-2">
           <Tabs
-            aria-label="Call side panel"
+            aria-label={t('calls.detailSidePanel')}
             variant="pills"
             size="sm"
             options={[
-              { value: 'transcript', label: 'Transcript' },
-              { value: 'details', label: 'Details' },
+              { value: 'transcript', label: t('calls.detailTranscript') },
+              { value: 'details', label: t('calls.detailDetails') },
             ]}
             value={tab()}
             onChange={setTab}
@@ -61,11 +62,11 @@ export function CallDetailsSheetHeader() {
   return (
     <Show when={isMobile()}>
       <div class="flex shrink-0 items-center justify-between px-5 pb-2">
-        <h2 class="text-lg font-semibold">Details</h2>
+        <h2 class="text-lg font-semibold">{t('calls.detailDetails')}</h2>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Close details"
+          aria-label={t('calls.detailCloseDetails')}
           onClick={() => panel?.setIsOpen(false)}
         >
           <CloseIcon class="size-5" />

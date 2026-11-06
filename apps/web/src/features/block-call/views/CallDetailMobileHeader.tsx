@@ -28,7 +28,7 @@ export function CallDetailMobileHeader(props: {
   callId: string;
   data?: CallDetailData;
 }) {
-  const name = () => props.data?.name ?? 'Call Recording';
+  const name = () => props.data?.name ?? t('calls.detailFallbackName');
   const openShare = useShareModal(() => ({
     id: props.callId,
     blockAlias: 'call',

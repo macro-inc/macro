@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
@@ -31,11 +32,13 @@ export function CallRecordingSummarySection(props: {
       <section class="flex flex-col gap-5">
         <Show when={!props.hideHeading}>
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h3 class="text-base font-semibold text-ink">Summary</h3>
+            <h3 class="text-base font-semibold text-ink">
+              {t('calls.detailSummary')}
+            </h3>
             <Show when={summary()}>
               <span class="flex items-center gap-1 text-xs text-ink-muted">
                 <SparkleIcon class="size-3.5" />
-                Written by Macro after the call
+                {t('calls.detailAttribution')}
               </span>
             </Show>
           </div>
@@ -45,7 +48,9 @@ export function CallRecordingSummarySection(props: {
           fallback={
             <div class="flex items-center gap-2">
               <Spinner />
-              <span class="text-sm text-ink-subtle">Generating summary…</span>
+              <span class="text-sm text-ink-subtle">
+                {t('calls.detailGeneratingSummary')}
+              </span>
             </div>
           }
         >

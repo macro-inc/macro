@@ -36,7 +36,12 @@ vi.mock('@core/component/DocumentBlockContainer', () => ({
   DocumentBlockContainer: (props: { children: unknown }) => props.children,
 }));
 vi.mock('@components/app/side-panel', () => ({
-  SidePanel: { Layout: (props: { children: unknown }) => props.children },
+  SidePanel: {
+    Root: (props: { children: unknown }) => props.children,
+    Layout: () => {
+      throw new Error('The recording body owns its panel layout');
+    },
+  },
 }));
 vi.mock('./CallRecording/CallRecordingSplitHeader', () => ({
   CallRecordingSplitHeader: () => null,
