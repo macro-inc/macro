@@ -96,7 +96,18 @@ async function open(
   const posted: unknown[] = [];
   const entries = [
     ...(scenario.outside
-      ? [{ type: 'message', message: listItem(after, []) }]
+      ? [
+          {
+            type: 'message',
+            message: listItem(
+              {
+                ...after,
+                created_at: new Date(Date.now() + 60_000).toISOString(),
+              },
+              []
+            ),
+          },
+        ]
       : []),
     {
       type: 'call',
@@ -201,6 +212,8 @@ async function open(
   await page.goto(
     `${path}?view=${view}&shell=${scenario.shell ?? ''}&work=${scenario.work ?? 'off'}&chat=${scenario.chat ?? 'on'}&baseline=${scenario.baseline ? 'main' : 'branch'}&unread=${scenario.unread ?? false}&theme=${scenario.theme ?? 'dark'}`
   );
+  // Let the cold entry-module graph mount before timing an interaction.
+  await page.getByRole('main').waitFor({ state: 'attached', timeout: 60_000 });
   return { posted, replies };
 }
 
@@ -224,9 +237,7 @@ test('a live call is a row with its thread collapsed under it and a way in', asy
   await expect(page.getByText('First reply')).toHaveCount(0);
   // Touch replies through the one floating composer rather than under the row.
   if (testInfo.project.name === 'desktop') {
-    await expect(
-      page.locator('[data-input-id^="thread-reply-input"]')
-    ).toHaveCount(1);
+    await expect(page.locator('[data-markdown-editable]')).toHaveCount(1);
   }
 
   await page.getByRole('button', { name: /1 reply/ }).click();
@@ -628,4 +639,78 @@ for (const baseline of [false, true]) {
         });
     });
   }
+}
+
+for (const width of [1280, 600]) {
+  for (const theme of ['dark', 'light']) {
+    test(`the real chat toggle has a 20px icon: ${width} ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name === 'phone');
+      test.skip(process.env.CALL_FULL_HOST !== 'true');
+      await page.setViewportSize({ width, height: 860 });
+      await open(page, 'messages', {
+        status: { state: 'live' },
+        fullOverlay: true,
+        unread: true,
+        theme,
+      });
+      const button = page.getByRole('button', {
+        name: 'Open chat and participants',
+      });
+      await expect(button).toBeVisible({ timeout: 30_000 });
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/L-81-${width}-${theme}-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+        });
+      const icon = button.locator('svg').first();
+      const box = await icon.boundingBox();
+      expect(box?.width).toBe(20);
+      expect(box?.height).toBe(20);
+      const frame = await button.boundingBox();
+      expect(frame?.width).toBe(width === 1280 ? 56 : 52);
+      const dot = await button.locator('.bg-accent').boundingBox();
+      expect(dot).not.toBeNull();
+      const distance = Math.hypot(
+        dot!.x + dot!.width / 2 - frame!.x - frame!.width / 2,
+        dot!.y + dot!.height / 2 - frame!.y - frame!.height / 2
+      );
+      expect(Math.abs(distance - frame!.width / 2)).toBeLessThan(1);
+      await button.click();
+      await expect(
+        page.locator('[data-input-id^="thread-reply-input"]')
+      ).toBeVisible();
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/L-81-${width}-${theme}-open-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+        });
+    });
+  }
+}
+
+for (const phone of [false, true]) {
+  test(`the ${phone ? 'phone' : 'participants-only'} toggle icon retains its size`, async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      process.env.CALL_FULL_HOST !== 'true' ||
+        (testInfo.project.name === 'phone') !== phone
+    );
+    await open(page, 'messages', {
+      status: { state: 'live' },
+      fullOverlay: true,
+      chat: phone ? 'on' : 'off',
+    });
+    const toggle = page.getByRole('button', {
+      name: 'Open chat and participants',
+    });
+    await expect(toggle).toBeVisible({ timeout: 30_000 });
+    const box = await toggle.locator('svg').first().boundingBox();
+    expect(box?.width).toBe(phone ? 24 : 20);
+    expect(box?.height).toBe(phone ? 24 : 20);
+    if (process.env.CALL_REPRO_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_REPRO_DIR}/L-81-${phone ? 'phone' : 'participants'}-after.png`,
+      });
+  });
 }

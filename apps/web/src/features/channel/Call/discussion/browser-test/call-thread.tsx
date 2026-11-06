@@ -8,6 +8,7 @@ import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { EntityProvider } from '@entity';
 import type { NotificationSource } from '@notifications';
@@ -35,6 +36,7 @@ const NO_NOTIFICATIONS = {
 const NO_BLOCKS = {} as BlockOrchestrator;
 
 // A signed-in viewer, without a session: nothing here reaches a real account.
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   authenticated: true,
   id: 'macro|me@example.com',

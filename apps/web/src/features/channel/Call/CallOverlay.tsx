@@ -197,9 +197,9 @@ export function CallOverlay(props: {
     >
       <Show
         when={canChat()}
-        fallback={<UsersIcon class="size-4 mobile:size-6" />}
+        fallback={<UsersIcon class="size-5 mobile:size-6" />}
       >
-        <ChatIcon class="size-4 mobile:size-6" />
+        <ChatIcon class="size-5 mobile:size-6" />
       </Show>
       <Show
         when={
@@ -209,7 +209,7 @@ export function CallOverlay(props: {
       >
         <span
           aria-hidden="true"
-          class="absolute top-0 right-0 size-1.5 rounded-full bg-accent"
+          class="absolute top-[15%] right-[15%] size-1.5 translate-x-1/2 -translate-y-1/2 rounded-full bg-accent"
         />
       </Show>
     </Button>

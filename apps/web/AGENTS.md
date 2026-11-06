@@ -108,6 +108,8 @@ threads, tab changes, and reopening; check composer geometry in the browser, not
 Set `CALL_FULL_HOST=true` for the real CallOverlay host, Work gating against
 `origin/main`, and desktop toggle geometry; only call media and Work transport
 boundaries are substituted. No hosted account data is accessed.
+Initialize browser fixtures with the app's `data-touch-device` root attribute and
+`applyTheme`; setting `data-theme-light` alone does not apply the theme tokens.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
 
