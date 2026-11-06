@@ -170,6 +170,8 @@ pub enum ComputerCommand {
         /// The pasted code or callback URL.
         code: String,
     },
+    /// Kill any pending Claude setup-token process.
+    ClaudeSignInCancel,
     /// Forget the Claude account and return to Macro credits.
     ClaudeSignOut,
     /// Open a screen stream: dial the service's screen socket for `stream_id`
@@ -189,6 +191,8 @@ pub enum ComputerControlResult {
         /// Where the user signs in to Claude.
         url: String,
     },
+    /// The pending setup-token process was cancelled.
+    SignInCancelled,
     /// The pasted OAuth code was rejected; start a fresh sign-in.
     InvalidCode,
     /// Claude Code now runs on the user's own account.

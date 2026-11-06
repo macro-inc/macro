@@ -3070,6 +3070,44 @@
         }
       }
     },
+    "/harnesses/{harness_id}/claude-sign-in/cancel": {
+      "post": {
+        "tags": ["computers"],
+        "summary": "Cancel the pending setup-token process. Its terminal completion releases\nthe original request's account lease, including on another replica.",
+        "operationId": "cancel_claude_sign_in",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          },
+          "504": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/harnesses/{harness_id}/claude-sign-in/complete": {
       "post": {
         "tags": ["computers"],

@@ -60,6 +60,8 @@ The command is tagged by `command` in snake_case; results by `status`.
 Only enrolled computers implement it; other runtimes return `failed`.
 A rejected Claude code returns `invalid_code` so callers can request a fresh
 sign-in instead of treating it as an unspecified runtime failure.
+`claude_sign_in_cancel` cancels the hidden setup-token process and returns
+`sign_in_cancelled`, also returned to an interrupted start or completion.
 
 ## Checks
 

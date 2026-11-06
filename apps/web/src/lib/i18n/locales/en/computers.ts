@@ -26,6 +26,7 @@ export default {
   cancels: 'Cancels {{date}}',
   claudeSignInConflict:
     'Another sign-in is in progress on this computer — try again shortly',
+  claudeCancelFailed: 'Could not cancel Claude sign-in. Please try again.',
   claudeStartFailed: 'Could not start Claude sign-in. Please try again.',
   claudeCompleteFailed:
     'Could not complete Claude sign-in. Check the code and try again.',

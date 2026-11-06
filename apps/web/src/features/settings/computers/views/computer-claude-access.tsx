@@ -5,13 +5,14 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import {
+  useClaudeCancelMutation,
   useClaudeCompleteMutation,
   useClaudeModeQuery,
   useClaudeSignInMutation,
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
 import { Button, Input } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 
 export function ComputerClaudeAccess(props: {
   harnessId: string;
@@ -25,20 +26,42 @@ export function ComputerClaudeAccess(props: {
   const start = useClaudeSignInMutation();
   const complete = useClaudeCompleteMutation();
   const signOut = useClaudeSignOutMutation();
+  const cancel = useClaudeCancelMutation();
+  let request: AbortController | undefined;
+  let generation = 0;
   const [url, setUrl] = createSignal<string>();
   const [code, setCode] = createSignal('');
   const [error, setError] = createSignal<string>();
   const pending = () =>
-    start.isPending || complete.isPending || signOut.isPending;
+    start.isPending ||
+    complete.isPending ||
+    signOut.isPending ||
+    cancel.isPending;
   const currentMode = () => (mode.isSuccess ? mode.data.mode : props.mode);
 
+  onCleanup(() => {
+    generation++;
+    request?.abort();
+    if (url() || start.isPending || complete.isPending) {
+      fireAndForget(cancel.mutateAsync(props.harnessId), 'computer-claude');
+    }
+  });
+
   const begin = async () => {
+    if (pending() || url()) return;
+    const current = ++generation;
+    request = new AbortController();
     setError(undefined);
     try {
-      const result = await start.mutateAsync(props.harnessId);
+      const result = await start.mutateAsync({
+        harnessId: props.harnessId,
+        signal: request.signal,
+      });
+      if (current !== generation) return;
       setUrl(result.url);
       openExternalUrl(result.url);
     } catch (error) {
+      if (current !== generation) return;
       setError(
         thrownResultErrorHasCode(error, 'CONFLICT')
           ? t('computers.claudeSignInConflict')
@@ -48,15 +71,20 @@ export function ComputerClaudeAccess(props: {
   };
   const submit = async () => {
     if (!code().trim() || pending()) return;
+    const current = ++generation;
+    request = new AbortController();
     setError(undefined);
     try {
       await complete.mutateAsync({
         harnessId: props.harnessId,
         code: code().trim(),
+        signal: request.signal,
       });
+      if (current !== generation) return;
       setCode('');
       setUrl(undefined);
     } catch (error) {
+      if (current !== generation) return;
       if (thrownResultErrorHasCode(error, 'CLAUDE_INVALID_CODE')) {
         setCode('');
         setUrl(undefined);
@@ -68,6 +96,17 @@ export function ComputerClaudeAccess(props: {
           ? t('computers.claudeSignInConflict')
           : t('computers.claudeCompleteFailed')
       );
+    }
+  };
+  const cancelSignIn = async () => {
+    generation++;
+    setError(undefined);
+    try {
+      await cancel.mutateAsync(props.harnessId);
+      setCode('');
+      setUrl(undefined);
+    } catch {
+      setError(t('computers.claudeCancelFailed'));
     }
   };
   const useCredits = async () => {
@@ -98,7 +137,7 @@ export function ComputerClaudeAccess(props: {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={pending()}
+                disabled={pending() || !!url()}
                 onClick={() => fireAndForget(begin(), 'computer-claude')}
               >
                 {t('computers.claudeSignIn')}
@@ -146,6 +185,17 @@ export function ComputerClaudeAccess(props: {
                   disabled={pending() || !code().trim()}
                 >
                   {t('computers.completeSignIn')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={cancel.isPending}
+                  onClick={() =>
+                    fireAndForget(cancelSignIn(), 'computer-claude')
+                  }
+                >
+                  {t('common.cancel')}
                 </Button>
               </form>
             )}

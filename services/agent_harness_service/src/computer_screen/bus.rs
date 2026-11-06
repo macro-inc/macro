@@ -47,7 +47,9 @@ fn command_timeout(command: &ComputerCommand) -> Duration {
     match command {
         ComputerCommand::ClaudeSignInStart => Duration::from_secs(45),
         ComputerCommand::ClaudeSignInComplete { .. } => Duration::from_secs(100),
-        ComputerCommand::ClaudeSignOut => Duration::from_secs(15),
+        ComputerCommand::ClaudeSignInCancel | ComputerCommand::ClaudeSignOut => {
+            Duration::from_secs(15)
+        }
         ComputerCommand::ScreenOpen { .. } => Duration::from_secs(20),
     }
 }
@@ -56,6 +58,7 @@ fn command_name(command: &ComputerCommand) -> &'static str {
     match command {
         ComputerCommand::ClaudeSignInStart => "claude_sign_in_start",
         ComputerCommand::ClaudeSignInComplete { .. } => "claude_sign_in_complete",
+        ComputerCommand::ClaudeSignInCancel => "claude_sign_in_cancel",
         ComputerCommand::ClaudeSignOut => "claude_sign_out",
         ComputerCommand::ScreenOpen { .. } => "screen_open",
     }
@@ -523,6 +526,7 @@ pub(super) struct AccountChange {
     token: String,
     cleanup: TaskTracker,
     released: bool,
+    cancel: Option<(ComputerControl, HarnessId)>,
 }
 
 impl AccountChange {
@@ -543,6 +547,7 @@ impl AccountChange {
             token,
             cleanup: cleanup.clone(),
             released: false,
+            cancel: None,
         };
         // Arm cleanup before SET: dropping the request during the Redis write
         // must release a lease the server may already have accepted.
@@ -567,6 +572,12 @@ impl AccountChange {
         Ok(lease)
     }
 
+    /// Abandon the runtime process before releasing a dropped sign-in request.
+    pub(super) fn cancel_on_drop(mut self, control: ComputerControl, harness: HarnessId) -> Self {
+        self.cancel = Some((control, harness));
+        self
+    }
+
     /// Release only our own lease after its runtime result and mode write.
     pub(super) async fn release(mut self) -> Result<(), ComputerRouteError> {
         release_account_lease(&mut self.connection, &self.key, &self.token).await?;
@@ -583,7 +594,12 @@ impl Drop for AccountChange {
         let mut connection = self.connection.clone();
         let key = self.key.clone();
         let token = self.token.clone();
+        let cancel = self.cancel.take();
         self.cleanup.spawn(async move {
+            if let Some((control, harness)) = cancel
+                && let Err(error) = control.send(harness, ComputerCommand::ClaudeSignInCancel).await {
+                tracing::warn!(error = ?error, "could not cancel the abandoned sign-in");
+            }
             if let Err(error) = release_account_lease(&mut connection, &key, &token).await {
                 tracing::error!(error = ?error, "could not release the abandoned account lease");
             }
@@ -596,7 +612,7 @@ async fn release_account_lease(
     key: &str,
     token: &str,
 ) -> Result<(), ComputerRouteError> {
-    const RELEASE: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end";
+    const RELEASE: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('DEL', KEYS[1]); redis.call('PUBLISH', KEYS[1] .. '.released', ARGV[1]); return 1 else return 0 end";
     redis::cmd("EVAL")
         .arg(RELEASE)
         .arg(1)
@@ -605,6 +621,63 @@ async fn release_account_lease(
         .query_async::<()>(connection)
         .await
         .map_err(redis_error)
+}
+
+/// Waits for the account operation observed before Cancel to finish its mode
+/// write and lease release. Subscribing before GET avoids a missed release.
+pub(super) struct AccountChangeRelease {
+    subscriber: redis::aio::PubSub,
+    connection: MultiplexedConnection,
+    key: String,
+    token: Option<String>,
+}
+
+impl AccountChangeRelease {
+    pub(super) async fn watch(
+        redis: &redis::Client,
+        harness: HarnessId,
+    ) -> Result<Self, ComputerRouteError> {
+        let key = format!("agent-harness.computer-account.{harness}");
+        let mut subscriber = redis.get_async_pubsub().await.map_err(redis_error)?;
+        subscriber
+            .subscribe(format!("{key}.released"))
+            .await
+            .map_err(redis_error)?;
+        let mut connection = redis
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(redis_error)?;
+        let token = connection.get(&key).await.map_err(redis_error)?;
+        Ok(Self {
+            subscriber,
+            connection,
+            key,
+            token,
+        })
+    }
+
+    pub(super) async fn wait(mut self) -> Result<(), ComputerRouteError> {
+        if self.token.is_none() {
+            return Ok(());
+        }
+        let mut messages = self.subscriber.into_on_message();
+        tokio::time::timeout(Duration::from_secs(15), async {
+            loop {
+                let current: Option<String> =
+                    self.connection.get(&self.key).await.map_err(redis_error)?;
+                if current != self.token {
+                    return Ok(());
+                }
+                if messages.next().await.is_none() {
+                    return Err(ComputerRouteError::Internal(rootcause::report!(
+                        "account release subscription ended"
+                    )));
+                }
+            }
+        })
+        .await
+        .map_err(|_| ComputerRouteError::Timeout)?
+    }
 }
 
 #[cfg(test)]

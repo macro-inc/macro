@@ -274,6 +274,7 @@ async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
         ("POST", "claude-sign-in", ""),
         ("POST", "claude-sign-in/complete", r#"{"code":"test-code"}"#),
         ("POST", "claude-sign-out", ""),
+        ("POST", "claude-sign-in/cancel", ""),
     ] {
         if only_route.is_some_and(|route| route != suffix) {
             continue;
@@ -336,4 +337,123 @@ async fn computer_invalid_code_is_a_typed_retryable_response() {
             "message": "That code didn't work — sign in again to get a new one"
         })
     );
+}
+
+#[tokio::test]
+async fn computer_claude_cancel_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-in/cancel")).await;
+}
+
+#[tokio::test]
+async fn computer_dropped_submit_reconciles_a_committed_runtime_result() {
+    dropped_submit_reconciles(true).await;
+}
+
+#[tokio::test]
+async fn computer_dropped_submit_reconciles_even_if_cancellation_disconnects() {
+    dropped_submit_reconciles(false).await;
+}
+
+async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
+    use agent_runtime_protocol::domain::channel::Channel;
+    use agent_runtime_protocol::domain::schema::v0::{
+        ComputerCommand, ComputerControlResult, ToRuntimeMessage, ToServerMessage,
+    };
+    use harness_id::HarnessId;
+    use harnesses::domain::{
+        models::ClaudeMode, ports::MockHarnessRepo, service::HarnessServiceImpl,
+    };
+    use std::sync::Arc;
+
+    let redis = redis::Client::open(macro_env_var::read_env_var("REDIS_URI").unwrap()).unwrap();
+    let harness_id = HarnessId::new_from_uuid(uuid::Uuid::now_v7());
+    let runtimes = agent_harness::outbound::runtime_registry::RuntimeRegistry::new();
+    let (carrier, mut runtime) = Channel::duplex();
+    runtimes.attach(harness_id, carrier);
+    let cleanup = tokio_util::task::TaskTracker::new();
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let control =
+        super::ComputerControl::start(runtimes, redis.clone(), &cleanup, shutdown.clone());
+    let (mode_saved, saved) = tokio::sync::oneshot::channel();
+    let mut repo = MockHarnessRepo::new();
+    repo.expect_set_claude_mode()
+        .times(1)
+        .return_once(move |id, mode| {
+            assert_eq!(id, harness_id);
+            assert_eq!(mode, ClaudeMode::OwnAccount);
+            Box::pin(async move {
+                mode_saved.send(()).unwrap();
+                Ok(true)
+            })
+        });
+    let state = super::ComputerScreenState {
+        harnesses: Arc::new(HarnessServiceImpl::new(repo)),
+        rollout: hosted_runtimes::domain::rollout::ComputerRollout::new(
+            feature_flags::outbound::fake::FakeFeatureFlags::default(),
+        ),
+        control,
+        redis: redis.clone(),
+        cleanup: cleanup.clone(),
+        authorization_state: macro_authorization::MacroAuthorizationState::new(Arc::new(())),
+    };
+    let request = tokio::spawn(async move {
+        state
+            .complete_sign_in(harness_id, "test-code".to_owned())
+            .await
+    });
+    let ToRuntimeMessage::ComputerControl {
+        request_id: completion_id,
+        command,
+        ..
+    } = runtime.rx.recv().await.unwrap()
+    else {
+        panic!("expected completion command");
+    };
+    assert!(matches!(
+        command,
+        ComputerCommand::ClaudeSignInComplete { .. }
+    ));
+    request.abort();
+    assert!(request.await.unwrap_err().is_cancelled());
+    let ToRuntimeMessage::ComputerControl {
+        request_id: cancel_id,
+        command,
+        ..
+    } = runtime.rx.recv().await.unwrap()
+    else {
+        panic!("expected cancel command");
+    };
+    assert_eq!(command, ComputerCommand::ClaudeSignInCancel);
+    // macrod committed just before cancellation; its result still owns the mode write.
+    runtime
+        .tx
+        .send(ToServerMessage::ComputerControlResponse {
+            request_id: completion_id,
+            result: ComputerControlResult::SignedIn,
+        })
+        .unwrap();
+    if acknowledge_cancel {
+        runtime
+            .tx
+            .send(ToServerMessage::ComputerControlResponse {
+                request_id: cancel_id,
+                result: ComputerControlResult::SignInCancelled,
+            })
+            .unwrap();
+    } else {
+        drop(runtime);
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(2), saved)
+        .await
+        .unwrap()
+        .unwrap();
+    shutdown.cancel();
+    cleanup.close();
+    cleanup.wait().await;
+    super::bus::AccountChange::claim(&redis, harness_id, &cleanup)
+        .await
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
 }

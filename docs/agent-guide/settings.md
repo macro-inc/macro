@@ -824,7 +824,12 @@ on each row:
   exact name is typed.
 
 **Sign in with Claude** opens Claude's OAuth page. Paste the code or localhost
-callback URL back into the form and press **Complete sign-in**. A rejected code
+callback URL back into the form and press **Complete sign-in**. **Cancel**
+kills the pending sign-in on the computer and closes the paste form, including
+while a code is being submitted. **Sign in with Claude** stays disabled while
+starting, while the paste form is open, and while its result is pending. Leaving
+the controls aborts the request and cancels the pending sign-in. These controls
+behave the same way on desktop and mobile. A rejected code
 shows “That code didn't work — sign in again to get a new one”; start again to
 obtain a fresh code. A 409 shows “Another sign-in is in progress on this computer
 — try again shortly”. New sessions then use that Claude account. **Use Macro

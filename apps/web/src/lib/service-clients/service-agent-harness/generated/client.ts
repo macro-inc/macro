@@ -3573,6 +3573,81 @@ export const startClaudeSignIn = async (
 };
 
 /**
+ * @summary Cancel the pending setup-token process. Its terminal completion releases
+the original request's account lease, including on another replica.
+ */
+export type cancelClaudeSignInResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type cancelClaudeSignInResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type cancelClaudeSignInResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type cancelClaudeSignInResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type cancelClaudeSignInResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type cancelClaudeSignInResponse504 = {
+  data: void;
+  status: 504;
+};
+
+export type cancelClaudeSignInResponseSuccess =
+  cancelClaudeSignInResponse204 & {
+    headers: Headers;
+  };
+export type cancelClaudeSignInResponseError = (
+  | cancelClaudeSignInResponse403
+  | cancelClaudeSignInResponse404
+  | cancelClaudeSignInResponse409
+  | cancelClaudeSignInResponse422
+  | cancelClaudeSignInResponse504
+) & {
+  headers: Headers;
+};
+
+export type cancelClaudeSignInResponse =
+  | cancelClaudeSignInResponseSuccess
+  | cancelClaudeSignInResponseError;
+
+export const getCancelClaudeSignInUrl = (harnessId: string) => {
+  return `/harnesses/${harnessId}/claude-sign-in/cancel`;
+};
+
+export const cancelClaudeSignIn = async (
+  harnessId: string,
+  options?: RequestInit
+): Promise<cancelClaudeSignInResponse> => {
+  const res = await fetch(getCancelClaudeSignInUrl(harnessId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelClaudeSignInResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelClaudeSignInResponse;
+};
+
+/**
  * @summary Finish the Claude sign-in with what the user pasted.
  */
 export type completeClaudeSignInResponse200 = {

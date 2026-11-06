@@ -58,13 +58,14 @@ export function useClaudeModeQuery(harnessId: () => string | undefined) {
 export function useClaudeSignInMutation() {
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: (harnessId: string) =>
+    mutationFn: (vars: { harnessId: string; signal: AbortSignal }) =>
       Telemetry.span('computer.claude.sign_in', async (span) => {
+        const { harnessId, signal } = vars;
         span.setAttr('harness.id', harnessId);
         return await throwOnErr(() =>
           fetchWithToken<ClaudeSignInStarted>(
             harnessUrl(harnessId, 'claude-sign-in'),
-            { method: 'POST' }
+            { method: 'POST', signal }
           )
         );
       }),
@@ -74,7 +75,11 @@ export function useClaudeSignInMutation() {
 export function useClaudeCompleteMutation() {
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: (vars: { harnessId: string; code: string }) =>
+    mutationFn: (vars: {
+      harnessId: string;
+      code: string;
+      signal: AbortSignal;
+    }) =>
       Telemetry.span('computer.claude.complete', async (span) => {
         span.setAttr('harness.id', vars.harnessId);
         const body: ClaudeSignInComplete = { code: vars.code.trim() };
@@ -86,6 +91,7 @@ export function useClaudeCompleteMutation() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(body),
               errorResponseHandler: claudeSignInError,
+              signal: vars.signal,
             }
           )
         );
@@ -94,10 +100,31 @@ export function useClaudeCompleteMutation() {
         return result;
       }),
     onSuccess: (_result, vars) => {
+      if (vars.signal.aborted) return;
       queryClient.setQueryData<ClaudeModeResponse>(modeKey(vars.harnessId), {
         mode: 'own_account',
       });
       // Refresh shared harness metadata without making a successful sign-in fail.
+      return invalidateHarnesses();
+    },
+  }));
+}
+
+export function useClaudeCancelMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (harnessId: string) =>
+      Telemetry.span('computer.claude.cancel', async (span) => {
+        span.setAttr('harness.id', harnessId);
+        return await throwOnErr(() =>
+          fetchWithToken<Record<string, never>>(
+            harnessUrl(harnessId, 'claude-sign-in/cancel'),
+            { method: 'POST', keepalive: true }
+          )
+        );
+      }),
+    onSuccess: (_result, harnessId) => {
+      queryClient.invalidateQueries({ queryKey: modeKey(harnessId) });
       return invalidateHarnesses();
     },
   }));
