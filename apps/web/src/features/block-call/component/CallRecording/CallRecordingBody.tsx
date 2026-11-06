@@ -341,12 +341,11 @@ export function CallRecordingBody(props: {
                         </Show>
 
                         <Show when={columnTabs()}>
-                          <div class="sticky top-0 z-10 bg-surface py-2 mobile:order-3">
+                          <div class="mobile:order-3">
                             <Tabs
                               aria-label={t('calls.detailContent')}
                               size={isMobile() ? 'md' : 'sm'}
                               fullWidth={isMobile()}
-                              touch="inset"
                               options={[
                                 {
                                   value: 'summary',
