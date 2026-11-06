@@ -137,6 +137,7 @@ fn a_task_joining_a_project_decodes_as_a_project_addition() {
 #[test]
 fn completed_bot_reply_mentions_reach_the_existing_trigger_path() {
     let posted = MessagePostedMetadata {
+        visibility: Default::default(),
         parent: MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: Some(Uuid::from_u128(3)),

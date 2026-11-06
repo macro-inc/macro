@@ -495,6 +495,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 actor: actor.clone(),
                 guest_name: None,
                 kind: MessageKind::CallRoot,
+                // A call's thread is always shared.
+                visibility: MessageVisibility::Public,
                 triggered_by: None,
                 triggered_via: None,
                 input: PostMessage {

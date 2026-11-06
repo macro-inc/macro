@@ -707,6 +707,6 @@ async fn private_messages_reach_only_the_initiator_without_shared_channel_effect
     let live = log.live.lock().unwrap();
     assert_eq!(live.len(), 1);
     assert_eq!(live[0].1, HashSet::from([SENDER.to_owned()]));
-    assert_eq!(*log.shares.lock().unwrap(), 0);
+    assert!(log.shares.lock().unwrap().is_empty());
     assert!(log.events.lock().unwrap().is_empty());
 }

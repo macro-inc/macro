@@ -753,7 +753,8 @@ impl MessageEvent {
             MessageChange::Posted { message, .. }
             | MessageChange::Edited { message, .. }
             | MessageChange::MessageDeleted { message }
-            | MessageChange::ReactionChanged { message, .. } => &message.visibility,
+            | MessageChange::ReactionChanged { message, .. }
+            | MessageChange::CallRootPosted { message } => &message.visibility,
             MessageChange::ThreadUpdated { state } => &state.visibility,
             MessageChange::Typing { visibility, .. } => visibility,
         }
