@@ -38,15 +38,6 @@ impl<Flags: FeatureFlags> TeamAgentRollout<Flags> {
     }
 }
 
-#[cfg(feature = "outbound")]
-impl<Flags: FeatureFlags + 'static> agent_secrets::domain::admin::AgentAdminRollout
-    for TeamAgentRollout<Flags>
-{
-    async fn enabled(&self, caller: &MacroUserIdStr<'_>) -> bool {
-        self.enabled(caller).await
-    }
-}
-
 #[cfg(test)]
 mod test;
 

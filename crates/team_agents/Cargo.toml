@@ -18,7 +18,6 @@ inbound = [
 outbound = [
   "dep:macro_authorization",
   "dep:agent_git",
-  "dep:agent_secrets",
   "hosted_runtimes/ports",
   "dep:harnesses",
   "dep:reqwest",
@@ -31,7 +30,6 @@ outbound = [
 stripe_price_id = { path = "../stripe_price_id" }
 agent_credentials = { path = "../agent_credentials" }
 agent_git = { path = "../agent_git", optional = true, default-features = false, features = ["client"] }
-agent_secrets = { path = "../agent_secrets", optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }

@@ -24,52 +24,6 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
- * A secret with its value, for the agent that owns it.
- */
-export type AgentSecret = {
-    /**
-     * The secret's name.
-     */
-    name: string;
-    /**
-     * When it was last replaced.
-     */
-    updatedAt: string;
-    /**
-     * The plaintext value.
-     */
-    value: string;
-};
-
-/**
- * An agent's secrets, by name.
- */
-export type AgentSecretSummaries = {
-    /**
-     * The secrets, by name.
-     */
-    secrets: Array<AgentSecretSummary>;
-};
-
-/**
- * A secret's name and timestamps, without its value.
- */
-export type AgentSecretSummary = {
-    /**
-     * When it was first stored.
-     */
-    createdAt: string;
-    /**
-     * The secret's name.
-     */
-    name: string;
-    /**
-     * When it was last replaced.
-     */
-    updatedAt: string;
-};
-
-/**
  * What an agent needs to start using the SDK.
  */
 export type AgentSetupResponse = {
@@ -1922,16 +1876,6 @@ export type PutAgentApiKeyRequest = {
      * the agent's model.
      */
     apiKey: string;
-};
-
-/**
- * Body of `PUT /team_agents/me/secrets/{name}`.
- */
-export type PutAgentSecret = {
-    /**
-     * The secret's value, 1 to 4096 bytes.
-     */
-    value: string;
 };
 
 /**
@@ -5529,87 +5473,6 @@ export type SendTeamAgentEmailResponses = {
 
 export type SendTeamAgentEmailResponse = SendTeamAgentEmailResponses[keyof SendTeamAgentEmailResponses];
 
-export type DeleteMyTeamAgentSecretData = {
-    body?: never;
-    path: {
-        /**
-         * The secret's name.
-         */
-        name: string;
-    };
-    query?: never;
-    url: '/team_agents/me/secrets/{name}';
-};
-
-export type DeleteMyTeamAgentSecretErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteMyTeamAgentSecretError = DeleteMyTeamAgentSecretErrors[keyof DeleteMyTeamAgentSecretErrors];
-
-export type DeleteMyTeamAgentSecretResponses = {
-    204: void;
-};
-
-export type DeleteMyTeamAgentSecretResponse = DeleteMyTeamAgentSecretResponses[keyof DeleteMyTeamAgentSecretResponses];
-
-export type GetMyTeamAgentSecretData = {
-    body?: never;
-    path: {
-        /**
-         * The secret's name.
-         */
-        name: string;
-    };
-    query?: never;
-    url: '/team_agents/me/secrets/{name}';
-};
-
-export type GetMyTeamAgentSecretErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetMyTeamAgentSecretError = GetMyTeamAgentSecretErrors[keyof GetMyTeamAgentSecretErrors];
-
-export type GetMyTeamAgentSecretResponses = {
-    200: AgentSecret;
-};
-
-export type GetMyTeamAgentSecretResponse = GetMyTeamAgentSecretResponses[keyof GetMyTeamAgentSecretResponses];
-
-export type PutMyTeamAgentSecretData = {
-    body: PutAgentSecret;
-    path: {
-        /**
-         * The secret's name.
-         */
-        name: string;
-    };
-    query?: never;
-    url: '/team_agents/me/secrets/{name}';
-};
-
-export type PutMyTeamAgentSecretErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PutMyTeamAgentSecretError = PutMyTeamAgentSecretErrors[keyof PutMyTeamAgentSecretErrors];
-
-export type PutMyTeamAgentSecretResponses = {
-    200: AgentSecretSummary;
-};
-
-export type PutMyTeamAgentSecretResponse = PutMyTeamAgentSecretResponses[keyof PutMyTeamAgentSecretResponses];
-
 export type QuoteTeamAgentData = {
     body?: never;
     path?: never;
@@ -5747,66 +5610,6 @@ export type RetryTeamAgentResponses = {
 };
 
 export type RetryTeamAgentResponse = RetryTeamAgentResponses[keyof RetryTeamAgentResponses];
-
-export type ListTeamAgentSecretsData = {
-    body?: never;
-    path: {
-        /**
-         * The agent's Macro user id.
-         */
-        agent_user_id: string;
-    };
-    query?: never;
-    url: '/team_agents/{agent_user_id}/secrets';
-};
-
-export type ListTeamAgentSecretsErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListTeamAgentSecretsError = ListTeamAgentSecretsErrors[keyof ListTeamAgentSecretsErrors];
-
-export type ListTeamAgentSecretsResponses = {
-    200: AgentSecretSummaries;
-};
-
-export type ListTeamAgentSecretsResponse = ListTeamAgentSecretsResponses[keyof ListTeamAgentSecretsResponses];
-
-export type DeleteTeamAgentSecretData = {
-    body?: never;
-    path: {
-        /**
-         * The agent's Macro user id.
-         */
-        agent_user_id: string;
-        /**
-         * The secret's name.
-         */
-        name: string;
-    };
-    query?: never;
-    url: '/team_agents/{agent_user_id}/secrets/{name}';
-};
-
-export type DeleteTeamAgentSecretErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteTeamAgentSecretError = DeleteTeamAgentSecretErrors[keyof DeleteTeamAgentSecretErrors];
-
-export type DeleteTeamAgentSecretResponses = {
-    204: void;
-};
-
-export type DeleteTeamAgentSecretResponse = DeleteTeamAgentSecretResponses[keyof DeleteTeamAgentSecretResponses];
 
 export type GetTeamAgentVoiceData = {
     body?: never;

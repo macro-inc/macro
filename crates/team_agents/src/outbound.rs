@@ -3,7 +3,6 @@
 
 pub mod agent_api_keys;
 pub mod agent_git_repos;
-pub mod agent_secrets_directory;
 pub mod brain_gateway_directory;
 pub mod dead_simple_email;
 pub mod hosted_runtimes_computers;

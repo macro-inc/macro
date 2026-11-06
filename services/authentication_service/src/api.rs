@@ -181,14 +181,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                     entity_access_service: state.entity_access_service.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
-            )
-            .merge(agent_secrets::inbound::axum_router::agent_secrets_router(
-                agent_secrets::inbound::axum_router::AgentSecretsRouterState {
-                    service: state.agent_secrets_service.clone(),
-                    entity_access_service: state.entity_access_service.clone(),
-                    authorization_state: state.authorization_state.clone(),
-                },
-            )),
+            ),
         )
         .merge(
             teams::inbound::axum_router::domain_notice::domain_notice_router(

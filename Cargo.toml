@@ -8,7 +8,6 @@ members = [
   "crates/agent_git",
   "crates/agent_credentials",
   "crates/agent_api_keys",
-  "crates/agent_secrets",
   "crates/team_agents",
   "crates/routines",
   "crates/routine_program",

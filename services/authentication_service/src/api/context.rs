@@ -148,19 +148,6 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
     feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
-pub(crate) type AgentSecretsServiceType = agent_secrets::domain::service::AgentSecretServiceImpl<
-    agent_secrets::outbound::pg_agent_secrets_repo::PgAgentSecretsRepo,
-    agent_secrets::outbound::kms_secret_cipher::KmsSecretCipher<
-        cursor_api_key::cipher::AwsKmsCiphertexts,
-    >,
-    team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory<
-        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
-    >,
-    team_agents::domain::rollout::TeamAgentRollout<
-        feature_flags::outbound::posthog::PostHogFeatureFlags,
-    >,
->;
-
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
@@ -303,7 +290,6 @@ pub(crate) struct ApiContext {
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub team_agents_service: Arc<TeamAgentsServiceType>,
-    pub agent_secrets_service: Arc<AgentSecretsServiceType>,
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
     pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,

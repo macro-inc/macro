@@ -237,11 +237,6 @@ use model::user::{
                 team_agents::inbound::axum_router::list_my_email_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::get_my_email_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 team_agents::inbound::axum_router::send_my_email_handler::<crate::api::context::TeamAgentsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
-                agent_secrets::inbound::axum_router::put_my_secret_handler::<crate::api::context::AgentSecretsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
-                agent_secrets::inbound::axum_router::get_my_secret_handler::<crate::api::context::AgentSecretsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
-                agent_secrets::inbound::axum_router::delete_my_secret_handler::<crate::api::context::AgentSecretsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
-                agent_secrets::inbound::axum_router::list_agent_secrets_handler::<crate::api::context::AgentSecretsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
-                agent_secrets::inbound::axum_router::delete_agent_secret_handler::<crate::api::context::AgentSecretsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
                 /// /user/language
                 user_language::inbound::axum_router::get_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
@@ -435,10 +430,6 @@ use model::user::{
                         team_agents::domain::models::EmailMessages,
                         team_agents::domain::models::SendEmail,
                         team_agents::domain::models::SentEmail,
-                        agent_secrets::domain::models::PutAgentSecret,
-                        agent_secrets::domain::models::AgentSecret,
-                        agent_secrets::domain::models::AgentSecretSummary,
-                        agent_secrets::domain::models::AgentSecretSummaries,
                         TeamInviteLinkResponse,
                         CreatedTeamInviteLinkResponse,
                         JoinTeamByInviteLinkResponse,

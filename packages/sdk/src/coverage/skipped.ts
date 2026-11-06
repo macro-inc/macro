@@ -71,10 +71,8 @@ export const authExcluded = [
   'deleteAgentApiKey',
   'deleteCursorApiKey',
   'deleteGithubLink',
-  'deleteMyTeamAgentSecret',
   'deleteTeam',
   'deleteTeamAgent',
-  'deleteTeamAgentSecret',
   'deleteTeamInviteLink',
   'deleteUser',
   'disconnectCodex',
@@ -90,7 +88,6 @@ export const authExcluded = [
   'getLegacyUserPermissions',
   'getMyTeamAgent',
   'getMyTeamAgentEmail',
-  'getMyTeamAgentSecret',
   'getPermissions',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
@@ -125,7 +122,6 @@ export const authExcluded = [
   'listGtmInviteLinks',
   'listMyTeamAgentEmail',
   'listSystemStatusHistory',
-  'listTeamAgentSecrets',
   'listTeamAgents',
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
@@ -150,7 +146,6 @@ export const authExcluded = [
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
-  'putMyTeamAgentSecret',
   'putProfilePicture',
   // Internal to the web app's agent signup; the token is shown in its modal.
   'agentSetup',

@@ -768,15 +768,6 @@ async fn run_server() -> anyhow::Result<()> {
         format!("{}/brain/anthropic", computer_urls.egress),
         config.team_agents_included_email_domain.clone(),
     ));
-    let agent_secrets_service =
-        Arc::new(agent_secrets::domain::service::AgentSecretServiceImpl::new(
-            agent_secrets::outbound::pg_agent_secrets_repo::PgAgentSecretsRepo::new(db.clone()),
-            agent_secrets::outbound::kms_secret_cipher::KmsSecretCipher::new(cursor_kms.clone()),
-            team_agents::outbound::agent_secrets_directory::TeamAgentsDirectory::new(
-                team_agents_repository,
-            ),
-            team_agents::domain::rollout::TeamAgentRollout::new(feature_flags.clone()),
-        ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
@@ -908,7 +899,6 @@ async fn run_server() -> anyhow::Result<()> {
             computer_billing_observer: computer_service.clone(),
             computer_service,
             team_agents_service,
-            agent_secrets_service,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
