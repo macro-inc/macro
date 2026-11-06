@@ -27,7 +27,7 @@ path = "src/scheduling_openapi.rs"
 [dependencies]
 universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
-activity = { path = "../../crates/activity", default-features = false }
+activity = { path = "../../crates/activity", default-features = false, features = ["axum"] }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }

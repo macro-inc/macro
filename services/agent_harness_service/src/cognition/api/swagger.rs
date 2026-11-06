@@ -28,7 +28,9 @@ use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
 };
-use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryResponse};
+use memory::inbound::axum_router::{
+    self as memory_api, MemoryErrorBody, MemoryResponse, UpdateExplicitMemoryRequest,
+};
 use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 use pipedream_mcp::inbound::axum_router::{
     self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
@@ -100,6 +102,10 @@ use utoipa::OpenApi;
             web_search::inbound::axum_router::fetch_handler,
             database_query::generate_database_query,
             memory_api::get_memory_handler,
+            memory_api::get_explicit_memory_handler,
+            memory_api::update_explicit_memory_handler,
+            memory_api::get_user_activity_handler,
+            activity::inbound::axum_router::read_activity_handler,
             import_api::get_state_handler,
             import_api::run_import_handler,
             import_api::discover_handler,
@@ -225,6 +231,17 @@ use utoipa::OpenApi;
                 // Memory
                 MemoryResponse,
                 MemoryErrorBody,
+                UpdateExplicitMemoryRequest,
+                memory::domain::models::ExplicitMemory,
+                memory::domain::models::MemoryEdit,
+                memory::domain::models::ActivityReports,
+                memory::domain::models::Activity,
+                memory::domain::models::Granularity,
+                // Activity
+                activity::inbound::toolset::ReadActivityResponse,
+                activity::inbound::toolset::ToolActivityEvent,
+                activity::inbound::toolset::ToolActivityAction,
+                activity::inbound::axum_router::ActivityErrorBody,
 
                 // Import pipeline
                 import::domain::models::ImportState,

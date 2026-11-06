@@ -109,6 +109,15 @@ fn api_router(api_context: ApiContext) -> Router {
         authorization_state.clone(),
     );
 
+    let activity_state = activity::inbound::axum_router::ActivityRouterState::new(
+        api_context
+            .tool_service_context
+            .activity_tool_context
+            .service
+            .clone(),
+        authorization_state.clone(),
+    );
+
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
         .nest("/stream", stream::router())
@@ -160,6 +169,9 @@ fn api_router(api_context: ApiContext) -> Router {
             image_generation::inbound::axum_router::image_generation_router(image_generation_state),
         )
         .merge(web_search::inbound::axum_router::web_router(web_state))
+        .merge(activity::inbound::axum_router::activity_router(
+            activity_state,
+        ))
         .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
         .merge(pipedream_mcp::inbound::pipedream_mcp_router(
             api_context.pipedream_state.clone(),

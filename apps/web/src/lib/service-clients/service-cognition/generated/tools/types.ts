@@ -10873,6 +10873,9 @@ export interface GetUserActivity {
    */
   end: string;
 }
+/**
+ * Activity reports for one user, ordered by period.
+ */
 export interface ActivityReports {
   reports: Activity[];
 }

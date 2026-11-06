@@ -722,3 +722,105 @@ async fn task_membership_routes_are_gone() {
     }
     assert!(service.calls().is_empty());
 }
+
+#[derive(Clone)]
+struct FakeActivityReads;
+
+impl activity::domain::ports::EntityActivityReads for FakeActivityReads {
+    type Err = std::io::Error;
+
+    async fn entity_feed(
+        &self,
+        entity_type: EntityType,
+        _entity_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        _limit: std::num::NonZeroU32,
+    ) -> Result<activity::ActivityFeedPage, Self::Err> {
+        assert_eq!(entity_type, EntityType::Initiative);
+        assert_eq!(cursor, None);
+        let record = |id: u128, occurred_at: &str| activity::domain::models::ActivityRecord {
+            id: Uuid::from_u128(id),
+            actor: activity::domain::models::Actor::new_from_user(user()),
+            subject_id: USER_ID.to_string(),
+            entity_type: EntityType::Initiative,
+            entity_id: existing_id().to_string(),
+            action: activity::domain::models::RecordedAction::Known(
+                activity::domain::models::Action::Edited,
+            ),
+            occurred_at: DateTime::parse_from_rfc3339(occurred_at)
+                .expect("valid timestamp")
+                .with_timezone(&Utc),
+        };
+        Ok(activity::ActivityFeedPage {
+            records: vec![
+                record(3, "2026-09-15T11:00:00Z"),
+                record(2, "2026-09-14T11:00:00Z"),
+            ],
+            next: Some((
+                DateTime::parse_from_rfc3339("2026-09-14T11:00:00Z")
+                    .expect("valid timestamp")
+                    .with_timezone(&Utc),
+                Uuid::from_u128(2),
+            )),
+        })
+    }
+}
+
+fn build_activity_router() -> axum::Router {
+    let access = Arc::new(FakeEntityAccessService::default());
+    initiative_activity_router(InitiativeActivityRouterState::new(
+        Arc::new(crate::domain::history::InitiativeHistory::new(
+            FakeActivityReads,
+            access.clone(),
+        )),
+        access,
+        MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+    ))
+}
+
+#[tokio::test]
+async fn activity_keeps_records_and_cursor_inside_the_window() {
+    let response = send(
+        build_activity_router(),
+        authed(axum::http::Request::get(format!(
+            "/{}/activity?after=2026-09-15T00:00:00Z",
+            existing_id()
+        )))
+        .body(axum::body::Body::empty())
+        .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        read_json(response).await,
+        serde_json::json!({
+            "records": [{
+                "id": Uuid::from_u128(3).to_string(),
+                "actorId": USER_ID,
+                "subjectId": USER_ID,
+                "action": "edited",
+                "actionPayload": null,
+                "occurredAt": "2026-09-15T11:00:00Z",
+            }],
+            "nextCursor": null,
+        })
+    );
+}
+
+#[tokio::test]
+async fn activity_rejects_half_a_cursor() {
+    let response = send(
+        build_activity_router(),
+        authed(axum::http::Request::get(format!(
+            "/{}/activity?cursorId={}",
+            existing_id(),
+            Uuid::from_u128(2)
+        )))
+        .body(axum::body::Body::empty())
+        .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
