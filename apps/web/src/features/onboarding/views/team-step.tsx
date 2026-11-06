@@ -284,7 +284,7 @@ function TeamForm(props: {
                 disabled={!form.allowDomainJoin()}
                 onChange={form.setNotifyDomain}
                 infoLabel="About the team email"
-                info={`We'll email up to 25 of your @${domain()} contacts who aren't on Macro yet to say the team exists, once, after your invites. Needs domain join on.`}
+                info={`We'll email your @${domain()} contacts who aren't on Macro yet to let them know the team exists. Needs domain join on.`}
               >
                 Notify your team via email
               </RecommendedSwitch>

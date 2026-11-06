@@ -173,7 +173,7 @@ describe('onboarding flow', () => {
       screen
         .getByRole('button', { name: 'About the team email' })
         .getAttribute('aria-description')
-    ).toMatch(/up to 25/);
+    ).toMatch(/contacts who aren't on Macro yet/);
 
     fireEvent.click(joinInfo);
     expect(domainJoin.checked).toBe(true);
