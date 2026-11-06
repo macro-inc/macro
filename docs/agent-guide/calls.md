@@ -74,6 +74,9 @@ More and creates the link only after explicit selection. More also offers
 the More button and aligned to its right edge. Away from the channel's Call tab, the desktop player
 starts bottom-right, follows the speaker and gives screen sharing priority.
 Drag its header to snap to a corner; Collapse tucks it back into the rail.
+Resize from any edge or corner; video/screens remain 16:9 and audio retains its
+minimum height. Width and audio height persist as local preferences; the player
+reclamps to the viewport when media or window size changes.
 Audio-only calls keep a 144px minimum stage with a neutral 48px avatar and name,
 rather than collapsing to a thin row. Channel and standalone
 calls navigate and leave through their existing session owner; standalone calls
