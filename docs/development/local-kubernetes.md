@@ -78,7 +78,8 @@ The node mounts this worktree, the Nix store and the local Docker sandbox socket
 Containers with unlimited Compose memlock receive the `IPC_LOCK` capability.
 Binaries and source mounts
 remain identical to Compose. Auxiliary images are loaded into kind's containerd.
-Compose underscore service hostnames become hyphens for Kubernetes DNS.
+Compose underscore service hostnames become hyphens for Kubernetes DNS in
+environment values and normalized Caddy/Nginx configuration files.
 Application Deployments use rolling updates; single-replica backing stores use
 Recreate and persistent claims. This is a development adapter, not an EKS stack.
 Kafka publishes its service endpoints before readiness so its KRaft controller

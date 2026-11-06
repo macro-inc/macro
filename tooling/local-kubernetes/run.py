@@ -192,9 +192,10 @@ def manifests(config, namespace, slot):
                     else:
                         raise RuntimeError(f'host mount is missing: {source}; prepare the instance first')
                 volume['hostPath'] = {'path': str(source), 'type': ''}
-                if source.is_file() and target == '/etc/caddy/Caddyfile':
+                if source.is_file() and target in ['/etc/caddy/Caddyfile', '/etc/nginx/conf.d/default.conf']:
                     # Compose permits underscore DNS names; Kubernetes uses RFC 1123.
-                    rendered = source.with_name('Caddyfile.kubernetes')
+                    rendered = STATE / 'normalized' / namespace / f'{name}-{index}.conf'
+                    rendered.parent.mkdir(parents=True, exist_ok=True)
                     rendered.write_text(normalize(source.read_text(), services))
                     volume['hostPath']['path'] = str(rendered)
             else:

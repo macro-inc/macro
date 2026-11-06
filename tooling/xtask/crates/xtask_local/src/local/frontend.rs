@@ -347,8 +347,8 @@ pub fn start(
     prepare_dependencies(stage)?;
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
-    // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies
-    // and builds: https://github.com/oven-sh/bun/issues/10441.
+    // 1.3.13). Use Node for Vite, while keeping Bun for dependency management
+    // and package scripts: https://github.com/oven-sh/bun/issues/10441.
     let mut cmd = Command::new("node");
     cmd.current_dir(app_dir())
         .arg(repo_root().join("node_modules/vite/bin/vite.js"))
