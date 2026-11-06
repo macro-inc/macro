@@ -254,3 +254,123 @@ async fn transient_health_cannot_be_stored_as_failure(pool: PgPool) {
     assert_eq!(agent.status, TeamAgentStatus::Running);
     assert_eq!(agent.status_reason, None);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn enrollment_key_replacement_revokes_the_previous_bootstrap_key(pool: PgPool) {
+    use crate::domain::ports::AgentApiKeys;
+    use std::sync::Arc;
+    use user_api_key::domain::{
+        models::UserApiKey, ports::UserApiKeysRepo, service::UserApiKeyServiceImpl,
+    };
+    use user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo;
+    let team = seed(&pool).await;
+    PgTeamAgentsRepo::new(pool.clone())
+        .create_account(&account(team))
+        .await
+        .unwrap();
+    let keys = PgUserApiKeysRepo::new(pool);
+    let adapter = crate::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+        UserApiKeyServiceImpl::new(keys.clone()),
+    ));
+    let first = adapter.mint(&user(AGENT)).await.unwrap();
+    let second = adapter.mint(&user(AGENT)).await.unwrap();
+    assert!(
+        keys.find_user_id_by_key(&UserApiKey::from_raw(first.expose()))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        keys.find_user_id_by_key(&UserApiKey::from_raw(second.expose()))
+            .await
+            .unwrap(),
+        Some(user(AGENT))
+    );
+    assert_eq!(keys.list_keys(&user(AGENT)).await.unwrap().len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn enrollment_locks_the_agent_and_claims_an_unbound_purchase_before_the_invite_returns(
+    pool: PgPool,
+) {
+    use crate::domain::enrollment::EnrollmentAccounts;
+    use chrono::TimeZone;
+    use hosted_runtimes::domain::{
+        enrollment::{Persona, PersonaConfigKey, PersonaOsUser, PersonaService, SystemdUnitName},
+        models::{ComputerName, HostRegistration, NewComputer, PurchaseBilling},
+        ports::ComputerRepo,
+        size::current_catalog,
+    };
+    let team = seed(&pool).await;
+    let agents = PgTeamAgentsRepo::new(pool.clone());
+    agents.create_account(&account(team)).await.unwrap();
+    let computers = hosted_runtimes::outbound::pg::PgComputerRepo::new(pool.clone());
+    computers
+        .register_host(HostRegistration {
+            name: "fixture-host".to_owned(),
+            memory_gb: 32,
+            reserve_gb: 8,
+            oversell_factor: 2,
+        })
+        .await
+        .unwrap();
+    let catalog = current_catalog();
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(0xc0de));
+    computers
+        .reserve(
+            NewComputer {
+                id,
+                team_id: team,
+                created_by: ADMIN.to_owned(),
+                name: ComputerName::try_new("Agent").unwrap(),
+                size: catalog[0].size,
+                resources: catalog[0].resources,
+                catalog_entry: catalog[0].id.clone(),
+                price_id: None,
+                billing: PurchaseBilling::Comped {
+                    reason: "Included".to_owned(),
+                },
+                extra_items: vec![],
+                persona: Some(Persona {
+                    name: "Agent".to_owned(),
+                    os_user: PersonaOsUser::parse("agent-example").unwrap(),
+                    extra_service: PersonaService {
+                        unit_name: SystemdUnitName::parse("brain@agent-example").unwrap(),
+                        exec: "/opt/macro/brain run".to_owned(),
+                        env: Default::default(),
+                    },
+                    config: std::collections::BTreeMap::from([(
+                        PersonaConfigKey::parse("MACRO_AGENT_USER_ID").unwrap(),
+                        AGENT.to_owned(),
+                    )]),
+                }),
+            },
+            chrono::Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap(),
+        )
+        .await
+        .unwrap();
+    let context = agents
+        .enrollment_context(id, Some(&user(AGENT)), team)
+        .await
+        .unwrap();
+    assert_eq!(context.agent.as_ref().unwrap().user_id, user(AGENT));
+    let blocked = sqlx::query!(
+        r#"SELECT user_id FROM team_agents WHERE user_id = $1 FOR UPDATE NOWAIT"#,
+        AGENT
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        blocked.as_database_error().unwrap().code().as_deref(),
+        Some("55P03")
+    );
+    agents
+        .finish_enrollment(context.guard, id, &user(AGENT))
+        .await
+        .unwrap();
+    assert_eq!(
+        agents.get(&user(AGENT)).await.unwrap().unwrap().computer_id,
+        Some(id)
+    );
+}

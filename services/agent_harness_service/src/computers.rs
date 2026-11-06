@@ -25,7 +25,7 @@ use harness_id::HarnessId;
 use harnesses::domain::models::{CreateHostedPairing, HarnessTeamAccess};
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId, EnrollmentDefaults};
-use hosted_runtimes::domain::no_persona_credentials::NoPersonaCredentials;
+mod persona_credentials;
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
 use hosted_runtimes::domain::ports::{Fleet, Harnesses, HostedPairing, InstanceStatus};
 use hosted_runtimes::domain::service::SystemClock;
@@ -35,6 +35,7 @@ use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
 use macro_user_id::user_id::MacroUserIdStr;
+use persona_credentials::AuthPersonaCredentials;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
@@ -60,7 +61,7 @@ type FleetOperator = ComputerOperator<
     ConfiguredFleet,
     HostedHarnesses,
     SystemClock,
-    NoPersonaCredentials<PgComputerRepo>,
+    AuthPersonaCredentials,
 >;
 
 /// Shares fleet observation with the gateway without changing the operator's
@@ -210,7 +211,10 @@ pub(crate) async fn operator(
         EnrollmentDefaults {
             service_url_overrides,
         },
-        NoPersonaCredentials::new(PgComputerRepo::new(pool.clone())),
+        AuthPersonaCredentials::new(
+            config.authentication_service_secret_key.value(),
+            PgComputerRepo::new(pool.clone()),
+        )?,
     )
     .await
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;

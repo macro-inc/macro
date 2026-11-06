@@ -10,13 +10,13 @@ email over `/team_agents` in the auth service.
 ## How it works
 
 Creation uses `AccountHolderOrInternal`: account-manager credentials may not
-provision lasting agent credentials. Retry reuses existing bootstrap credentials
-and never mints an API key.
+provision lasting agent credentials. Retry reuses the computer and non-secret seed; the fleet issues fresh
+credentials only when it actually creates or recreates an unclaimed guest.
 
 `POST /team_agents` (team admins using their own credential, `enable-team-agents`) → validate → mailbox
 → account rows + `team_agents` row (one transaction, `"User"."isAgent"`) →
 `TeamService::add_team_agent` (joins without a Stripe call; returns the seat
-item) → user API key → workspace repo (`agent_git`) → `Computers::purchase`
+item) → workspace repo (`agent_git`) → `Computers::purchase`
 with the persona and the seat item, so seat and computer share one Stripe
 update. Failures known to precede billing undo the repo, membership, account
 and mailbox. Repository creation failures return a safe server reason explaining
@@ -110,7 +110,7 @@ and git access never consult this rollout policy.
 
 - API keys and repository credentials use distinct validated `AgentApiKey` and
   `RepoToken` types from `agent_credentials`; never wrap arbitrary strings or
-  log their contents. Saved credentials are parsed again before recovery.
+  log their contents. Never persist them in a persona, lifecycle state, outbox or saved seed.
 - The config file `/etc/macro/personas/<os_user>.env` holds the bootstrap
   credentials: `MACRO_API_KEY` (also `ANTHROPIC_AUTH_TOKEN`) and the repo-scoped
   `MACRO_REPO_TOKEN`. Write it with mode 600, owned by `os_user`.
@@ -121,7 +121,7 @@ and git access never consult this rollout policy.
   `BRAIN_WORKSPACE=/home/<os_user>/workspace`, `BRAIN_HEALTH_PORT=7801`,
   `MACRO_REPO_URL`, `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID`, `MACRO_API_KEY`,
   `ANTHROPIC_BASE_URL=<egress>/brain/anthropic`, and `ANTHROPIC_AUTH_TOKEN`
-  in the persona config. The Anthropic token is that agent's own revocable API
+  in the one-time enrollment env. The Anthropic token is that agent's own revocable API
   key, reused from `MACRO_API_KEY`.
 - `outbound/hosted_runtimes_computers.rs` calls `ComputerService` in process;
   its purchase forwards the persona and seat in `extra_items` for one Stripe
@@ -131,7 +131,7 @@ and git access never consult this rollout policy.
   the saved computer's `harness_id`, matching team ownership, computer identity,
   and the enrolled persona OS user; it never reads another persona's report.
 - Quote reports billing-provider outages as 502. Saved purchases retain their
-  agent and bootstrap credentials through payment resolution. Provider details
+  agent and non-secret persona through payment resolution. Provider details
   are never exposed in the agent's failure reason.
 - Delete runs computer → repo → seat → mailbox → account; the row goes last
   so a retry after a partial failure still finds the agent.
@@ -162,20 +162,26 @@ admins release that agent or re-invite. Deletion returns 409 while payment is
 pending. Hosted runtimes' durable payment fact survives release and partial
 deletion: membership undo removes an unbilled agent without decrementing a paid
 seat. Paid deletion releases the computer and removes the billed agent seat.
-Failed computers reuse the saved computer ID, persona bootstrap
-credentials, and `team_agents.persona_seed`; recovery never buys another computer,
-adds a seat, creates an account, or mints an API key. Repo recovery calls the git
-service's `ensure` API, which preserves live tokens and repo contents. A missing
-repo is reseeded, not restored from deleted history. Older rows with no saved seed
-or computer return 409. Retry errors leave the agent available for another attempt.
+Failed computers reuse the saved computer ID and `team_agents.persona_seed`;
+recovery never buys another computer, adds a seat or creates an account. The
+fleet's `PersonaCredentialSource` calls the auth service's InternalOnly
+`POST /internal/team_agent_enrollment/{computer}/{generation}`. Each issuance
+rotates the agent's named Brain key with `replace_key` and reissues its repository
+token while preserving existing repository contents. Only hashes are persisted.
+Missing repos are reseeded from the saved inputs. The original creator is recovered
+from `created_by` when an older seed lacks it.
 
-The outbound adapter calls the shared `ComputerService::retry(team_id, computer_id)`
-in process, maps `NotFailed` to 409 and other-team computers to 404, and returns the
-fresh computer status and setup progress on the agent. Bootstrap credentials remain
-in the existing computer persona; the seed column contains the original name,
-job, personality and optional creator user ID. New seeds set `creator_id` from
-the creating admin; older saved JSON defaults it to absent and retry recovers it
-from the account's `created_by` before repo recovery.
+Computer facts come through hosted runtimes' `ComputerRepo`; this crate reads
+only its own account binding and rechecks the generation after locking the agent.
+The auth service holds the agent row lock across both providers. If the fleet
+runs before the invite handler saves its computer ID, it atomically claims only
+the matching unbound agent on that computer's team; it never replaces another
+computer's binding. Stale generations and mismatched accounts fail closed.
+The fleet owns claimed-generation checks: a live claimed guest never re-keys;
+an unclaimed retry rotates again, and a recreate advances the generation.
+The returned `PersonaEnrollment` is transient, redacted and zeroizing. The three
+bootstrap env values are written only to the guest's mode-0600 file before claim.
+Retry errors retain the agent for another attempt. No stored plaintext is reused.
 
 `PendingPayment` is durable before Stripe and has no reservation-expiry timer.
 Hosted runtimes replays its original payment effect with the original idempotency

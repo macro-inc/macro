@@ -1,4 +1,6 @@
-use crate::domain::models::{PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName};
+use crate::domain::models::{
+    AgentApiKey, PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName,
+};
 use agent_credentials::RepoToken;
 use hosted_runtimes::domain::ids::ComputerId;
 
@@ -679,7 +681,6 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
             "mailbox.create",
             "account.create",
             "team.add",
-            "api_key.mint",
             "repo.create",
             "computer.purchase",
             "account.set_computer",
@@ -717,10 +718,6 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                             .to_string()
                     ),
                     (
-                        PersonaConfigKey::parse("ANTHROPIC_AUTH_TOKEN").expect("config key"),
-                        format!("mak_{}", "a".repeat(64))
-                    ),
-                    (
                         PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
                         "macro|sam@agents.example.com".to_string(),
                     ),
@@ -740,14 +737,6 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                         PersonaConfigKey::parse("BRAIN_HEALTH_PORT").expect("config key"),
                         "7801".to_string()
                     ),
-                    (
-                        PersonaConfigKey::parse("MACRO_REPO_TOKEN").expect("config key"),
-                        format!("mrt_{}", "b".repeat(64))
-                    ),
-                    (
-                        PersonaConfigKey::parse("MACRO_API_KEY").expect("config key"),
-                        format!("mak_{}", "a".repeat(64))
-                    ),
                 ]),
             }),
             extra_items: vec![SubscriptionItem {
@@ -760,7 +749,7 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
 
 #[tokio::test]
 async fn a_failure_before_the_purchase_undoes_everything_made_so_far() {
-    let cases: [(&str, Vec<&str>); 6] = [
+    let cases: [(&str, Vec<&str>); 5] = [
         ("mailbox.create", vec!["mailbox.create"]),
         (
             "account.create",
@@ -777,24 +766,11 @@ async fn a_failure_before_the_purchase_undoes_everything_made_so_far() {
             ],
         ),
         (
-            "api_key.mint",
-            vec![
-                "mailbox.create",
-                "account.create",
-                "team.add",
-                "api_key.mint",
-                "team.undo",
-                "account.delete",
-                "mailbox.delete",
-            ],
-        ),
-        (
             "repo.create",
             vec![
                 "mailbox.create",
                 "account.create",
                 "team.add",
-                "api_key.mint",
                 "repo.create",
                 "team.undo",
                 "account.delete",
@@ -807,7 +783,6 @@ async fn a_failure_before_the_purchase_undoes_everything_made_so_far() {
                 "mailbox.create",
                 "account.create",
                 "team.add",
-                "api_key.mint",
                 "repo.create",
                 "computer.purchase",
                 "repo.delete",
@@ -851,7 +826,6 @@ async fn a_failure_after_the_purchase_keeps_the_paid_agent() {
             "mailbox.create",
             "account.create",
             "team.add",
-            "api_key.mint",
             "repo.create",
             "computer.purchase",
             "account.set_computer",
@@ -1270,12 +1244,7 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
     assert_eq!(agent.computer_id, Some(COMPUTER_ID.parse().unwrap()));
     assert_eq!(
         journal.steps(),
-        vec![
-            "computer.persona",
-            "repo.ensure",
-            "computer.retry",
-            "account.set_status"
-        ]
+        vec!["computer.persona", "computer.retry", "account.set_status"]
     );
     assert_eq!(service.computers.purchases.lock().unwrap().len(), 1);
 }
@@ -1348,16 +1317,10 @@ async fn failed_computer_retry_preserves_the_agent_for_another_attempt() {
         service.agent(&user(AGENT)).await.unwrap().status,
         TeamAgentStatus::Failed
     );
-    assert_eq!(
-        journal.steps(),
-        vec!["computer.persona", "repo.ensure", "computer.retry"]
-    );
+    assert_eq!(journal.steps(), vec!["computer.persona", "computer.retry"]);
     journal.steps.lock().unwrap().clear();
     assert!(service.retry(receipt(TEAM_ID), &user(AGENT)).await.is_err());
-    assert_eq!(
-        journal.steps(),
-        vec!["computer.persona", "repo.ensure", "computer.retry"]
-    );
+    assert_eq!(journal.steps(), vec!["computer.persona", "computer.retry"]);
 }
 
 #[tokio::test]
@@ -1980,3 +1943,167 @@ async fn voice_management_requires_admin_receipts_and_the_same_team() {
 mod rollout;
 
 mod discovery;
+
+#[tokio::test]
+async fn a_real_invite_persona_passes_hosted_runtime_validation_without_bootstrap_secrets() {
+    use hosted_runtimes::domain::{
+        enrollment::{DeviceSecret, Enrollment},
+        models::ComputerName,
+        persona_credentials::EnrollmentGeneration,
+        ports::PersonaCredentialSource,
+    };
+    let (service, _) = build(Setup::default());
+    let agent = service
+        .create(
+            receipt(TEAM_ID),
+            CreateTeamAgent {
+                voice: None,
+                expected_included: false,
+                name: "Agent Example".to_owned(),
+                job_description: "Maintain the workspace.".to_owned(),
+                personality: "Direct.".to_owned(),
+                size: ComputerSize::Large,
+                avatar_url: None,
+            },
+        )
+        .await
+        .unwrap();
+    let persona = service.computers.purchases.lock().unwrap()[0]
+        .persona
+        .clone()
+        .unwrap();
+    let stored = serde_json::to_value(&persona).unwrap();
+    serde_json::from_value::<Persona>(stored.clone())
+        .expect("the real invite persona must pass hosted-runtimes validation");
+    let material = service
+        .issue(agent.computer_id.unwrap(), EnrollmentGeneration::new(1))
+        .await
+        .unwrap();
+    let enrollment = Enrollment {
+        generation: EnrollmentGeneration::new(1),
+        computer_id: agent.computer_id.unwrap(),
+        pairing_id: "00000000-0000-0000-0000-00000000000a".parse().unwrap(),
+        device_secret: DeviceSecret::new("mhds_fixture".to_owned()),
+        name: ComputerName::try_new("Agent Example").unwrap(),
+        service_url_overrides: Default::default(),
+        persona: Some(persona),
+        persona_enrollment: material,
+    };
+    let delivered = serde_json::to_value(enrollment).unwrap();
+    for (key, expected) in [
+        ("MACRO_API_KEY", format!("mak_{}", "a".repeat(64))),
+        ("ANTHROPIC_AUTH_TOKEN", format!("mak_{}", "a".repeat(64))),
+        ("MACRO_REPO_TOKEN", format!("mrt_{}", "b".repeat(64))),
+    ] {
+        assert!(stored["config"].get(key).is_none());
+        assert_eq!(delivered["persona_enrollment"]["secrets"][key], expected);
+    }
+}
+
+impl crate::domain::enrollment::EnrollmentAccounts for FakeRepository {
+    type Guard = ();
+    async fn enrollment_context(
+        &self,
+        computer: ComputerId,
+        _candidate: Option<&MacroUserIdStr<'_>>,
+        _team: Uuid,
+    ) -> Result<
+        crate::domain::enrollment::EnrollmentContext<()>,
+        hosted_runtimes::domain::persona_credentials::PersonaCredentialError,
+    > {
+        use crate::domain::enrollment::{EnrollmentAgent, EnrollmentContext};
+        use hosted_runtimes::domain::persona_credentials::PersonaCredentialError;
+        let agents = self.agents.lock().unwrap();
+        let agent = agents
+            .iter()
+            .find(|a| a.computer_id == Some(computer))
+            .ok_or(PersonaCredentialError::NotFound)?;
+        Ok(EnrollmentContext {
+            guard: (),
+            agent: Some(EnrollmentAgent {
+                user_id: agent.account.user_id.clone(),
+                team_id: agent.account.team_id,
+                is_agent: true,
+                seed: agent.account.persona_seed.clone(),
+            }),
+        })
+    }
+    async fn finish_enrollment(
+        &self,
+        _guard: (),
+        _computer: ComputerId,
+        _agent: &MacroUserIdStr<'_>,
+    ) -> Result<(), hosted_runtimes::domain::persona_credentials::PersonaCredentialError> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn each_unclaimed_issuance_rotates_both_credentials_and_stale_generations_do_nothing() {
+    use hosted_runtimes::domain::{
+        persona_credentials::{EnrollmentGeneration, PersonaCredentialError},
+        ports::PersonaCredentialSource,
+    };
+    let (service, journal) = build(Setup::default());
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    journal.steps.lock().unwrap().clear();
+    let computer = agent.computer_id.unwrap();
+    service
+        .issue(computer, EnrollmentGeneration::new(1))
+        .await
+        .unwrap();
+    service
+        .issue(computer, EnrollmentGeneration::new(1))
+        .await
+        .unwrap();
+    assert_eq!(
+        journal.steps(),
+        vec!["api_key.mint", "repo.create", "api_key.mint", "repo.create"]
+    );
+    assert!(matches!(
+        service.issue(computer, EnrollmentGeneration::new(2)).await,
+        Err(PersonaCredentialError::NotFound)
+    ));
+    assert_eq!(
+        journal.steps(),
+        vec!["api_key.mint", "repo.create", "api_key.mint", "repo.create"]
+    );
+}
+
+impl crate::domain::enrollment::EnrollmentComputers for FakeComputers {
+    async fn enrollment_computer(
+        &self,
+        computer: ComputerId,
+    ) -> Result<
+        hosted_runtimes::domain::models::Computer,
+        hosted_runtimes::domain::persona_credentials::PersonaCredentialError,
+    > {
+        use hosted_runtimes::domain::{
+            lifecycle::{ComputerState, HostId},
+            models::{Computer, ComputerName},
+            persona_credentials::{EnrollmentGeneration, PersonaCredentialError},
+            size::current_catalog,
+        };
+        let purchases = self.purchases.lock().unwrap();
+        let purchase = purchases.last().ok_or(PersonaCredentialError::NotFound)?;
+        let catalog = current_catalog();
+        let entry = catalog.iter().find(|e| e.size == purchase.size).unwrap();
+        let now = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        Ok(Computer {
+            id: computer,
+            team_id: purchase.team_id,
+            name: ComputerName::try_new("Agent").unwrap(),
+            size: purchase.size,
+            resources: entry.resources,
+            catalog_entry: entry.id.clone(),
+            price_id: None,
+            state: ComputerState::reserved(HostId::new(Uuid::from_u128(1)), now),
+            harness_id: None,
+            persona: purchase.persona.clone(),
+            enrollment_generation: EnrollmentGeneration::new(1),
+            created_by: purchase.created_by.as_ref().to_owned(),
+            created_at: now,
+            enrolled_at: None,
+        })
+    }
+}

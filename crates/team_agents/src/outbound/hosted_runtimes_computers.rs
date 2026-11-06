@@ -386,3 +386,28 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
         }
     }
 }
+
+impl<
+    Repo: ComputerRepo,
+    Bill: Send + Sync + 'static,
+    Time: Send + Sync + 'static,
+    Harness: Send + Sync + 'static,
+    Policy: Send + Sync + 'static,
+> crate::domain::enrollment::EnrollmentComputers
+    for HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
+{
+    async fn enrollment_computer(
+        &self,
+        computer: ComputerId,
+    ) -> Result<
+        models::Computer,
+        hosted_runtimes::domain::persona_credentials::PersonaCredentialError,
+    > {
+        use hosted_runtimes::domain::persona_credentials::PersonaCredentialError;
+        self.repo
+            .get(computer)
+            .await
+            .map_err(|_| PersonaCredentialError::IssuanceFailed)?
+            .ok_or(PersonaCredentialError::NotFound)
+    }
+}
