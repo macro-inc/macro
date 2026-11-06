@@ -75,7 +75,7 @@ function RecoveryEditor() {
                 color: 'var(--color-failure)',
                 actions: options.actions,
               },
-              { persistent: true }
+              { persistent: true, dismissStyle: 'icon' }
             );
           toast.failure(message, options);
           return undefined;

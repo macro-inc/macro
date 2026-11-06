@@ -254,9 +254,9 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       'A queued draft save was rejected while edits remain in the editor.',
     behavior: 'Persistent · fallback when inline recovery is unavailable',
     create: (dismiss) => ({
+      dismissStyle: 'icon',
       custom: {
         title: 'Draft could not be saved',
-        dismissLabel: t('common.maybeLater'),
         icon: ExclamationIcon,
         color: 'var(--color-failure)',
         content: () =>

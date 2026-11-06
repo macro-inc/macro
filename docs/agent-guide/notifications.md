@@ -295,7 +295,9 @@ Not now, and Maybe later remain text-only. Desktop Undo and navigation toasts
 replace **Dismiss** with a close icon on the right. On phones, swipe left or right
 to dismiss. Closing the toast does not perform Undo or change its expiry. Optional
 setup prompts use **Not now** instead of **Dismiss**. Recovery and update-ready
-prompts use **Maybe later**. Dismissal keeps the same suppression behavior.
+prompts use **Maybe later**, except draft-save recovery uses a desktop close icon
+and keeps **Save as new draft** as its only action. Dismissal keeps the same
+suppression behavior.
 
 Staff Noise emails still create in-app notification rows, but do not send a new-notification
 event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.

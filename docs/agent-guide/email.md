@@ -1373,6 +1373,11 @@ Recovery re-uploads local attachment files and restores forwarded attachments.
 Remote-only draft attachments cannot be copied after the original draft is gone;
 their pills are removed and a notice asks you to attach those files again.
 
+The fallback **Draft could not be saved** toast keeps **Save as new draft** as its
+only action, with a desktop close icon and mobile swipe dismissal. Dismissing the
+toast does not save the draft or resume autosave; keep the editor open to preserve
+its unsaved contents.
+
 A successful initial schedule shows an **Email scheduled** notice whose description
 gives the full send time, with secondary **View message** on the left and primary
 **Undo** on the right in their own row below it; a rescheduled email shows

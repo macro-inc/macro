@@ -314,7 +314,14 @@ export function createEmailComposeContext(
                 color: 'var(--color-failure)',
                 actions: notice(options).actions,
               },
-              { persistent: true }
+              {
+                persistent: true,
+                dismissStyle: options.actions?.some(
+                  ({ kind }) => kind === 'save'
+                )
+                  ? 'icon'
+                  : undefined,
+              }
             );
           toast.failure(message, notice(options));
           return undefined;
