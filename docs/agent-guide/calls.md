@@ -440,8 +440,8 @@ it opens a request: the people it waits on get a prompt with **Approve** and **D
 during the call, and the Call sharing menu and the side panel's `Sharing` section keep
 those choices, live or after the call. One decline drops the request; the requester can
 **Cancel request**. "Everyone" means each person who has joined, even if they left, and
-in a DM its other member before they join. Bots and guests have no say, and an agent run
-cannot answer for its person. If nobody else is on the call, the change applies at once.
+in a DM its other member before they join. Bots and guests have no say, and an agent can
+propose a change for its person but never approve one. If nobody else is on the call, the change applies at once.
 
 Any participant with edit access can propose a change during the call. When the call
 ends, **Team sharing** lets the creator's team open the recorded call, read the
