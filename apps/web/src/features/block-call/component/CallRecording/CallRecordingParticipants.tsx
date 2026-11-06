@@ -71,7 +71,10 @@ export function CallRecordingParticipantsSection(props: {
 }
 
 /** Compact identity row; the full participant list remains available in details. */
-export function CallRecordingAvatars(props: { record: CallRecord }) {
+export function CallRecordingAvatars(props: {
+  record: CallRecord;
+  suppressClick?: boolean;
+}) {
   const participants = createMemo(() =>
     dedupeCallRecordingParticipants(
       props.record.participants,
@@ -85,7 +88,12 @@ export function CallRecordingAvatars(props: { record: CallRecord }) {
     >
       <For each={participants()}>
         {(participant) => (
-          <UserIcon id={participant.userId} size="sm" isDeleted={false} />
+          <UserIcon
+            id={participant.userId}
+            size="sm"
+            isDeleted={false}
+            suppressClick={props.suppressClick}
+          />
         )}
       </For>
       <For each={props.record.guests}>

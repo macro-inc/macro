@@ -5,6 +5,7 @@ import { CallDiscussionHistory } from '@channel/Call/chat/CallChatHistory';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
@@ -14,9 +15,11 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  Match,
   on,
   onCleanup,
   Show,
+  Switch,
 } from 'solid-js';
 import type { CallTranscriptTarget } from '../../constants';
 import { recordingChatMessages } from '../../core/recording-chat';
@@ -30,6 +33,7 @@ import {
 } from '../transcript-playback';
 import { useCallAgain } from '../use-call-again';
 import { CallRecordingChat } from './CallRecordingChat';
+import { CallRecordingMobileActions } from './CallRecordingMobileActions';
 import { CallRecordingPinnedPlayer } from './CallRecordingPinnedPlayer';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingTitle } from './CallRecordingTitle';
@@ -51,10 +55,13 @@ export function CallRecordingBody(props: {
 }) {
   const record = () => props.record;
   const panel = useSidePanel();
-  const [contentTab, setContentTab] = createSignal<'summary' | 'transcript'>(
-    'summary'
-  );
-  const columnTabs = () => panel?.isOverlayMode() || !panel?.isOpen();
+  const [contentTab, setContentTab] = createSignal<
+    'summary' | 'transcript' | 'chat'
+  >('summary');
+  const columnTabs = () =>
+    isMobile() || panel?.isOverlayMode() || !panel?.isOpen();
+  const selectedTab = () =>
+    !isMobile() && contentTab() === 'chat' ? 'summary' : contentTab();
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
   const [allowFutureLead, setAllowFutureLead] = createSignal(true);
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
@@ -253,9 +260,11 @@ export function CallRecordingBody(props: {
                   class="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-hidden"
                   ref={setScrollRef}
                 >
-                  <div class="mx-auto max-w-[800px] min-w-0 px-6 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                  <div class="mx-auto max-w-[800px] min-w-0 px-6 mobile:px-5 @[760px]/call-column:px-10 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                     <div class="flex flex-col gap-7">
-                      <CallRecordingTitle record={record()} />
+                      <div class="mobile:order-2">
+                        <CallRecordingTitle record={record()} />
+                      </div>
                       <Show when={canJoin()}>
                         <Button
                           variant="success"
@@ -272,7 +281,7 @@ export function CallRecordingBody(props: {
                         {(url) => (
                           <section
                             ref={setPlayerRef}
-                            class="flex flex-col gap-3"
+                            class="flex flex-col gap-3 mobile:order-1"
                           >
                             <div class="overflow-hidden rounded-2xl">
                               <CallRecordingVideo
@@ -290,57 +299,99 @@ export function CallRecordingBody(props: {
                       </Show>
 
                       <Show when={columnTabs()}>
-                        <div class="sticky top-0 z-10 bg-surface py-2">
+                        <div class="sticky top-0 z-10 bg-surface py-2 mobile:order-3">
                           <Tabs
                             aria-label="Call content"
-                            size="sm"
+                            size={isMobile() ? 'md' : 'sm'}
+                            fullWidth={isMobile()}
+                            touch="inset"
                             options={[
                               { value: 'summary', label: 'Summary' },
                               { value: 'transcript', label: 'Transcript' },
+                              ...(isMobile()
+                                ? [
+                                    {
+                                      value: 'chat' as const,
+                                      label: 'Chat',
+                                      count: recordingChatMessages(
+                                        discussion.thread()
+                                      ).length,
+                                    },
+                                  ]
+                                : []),
                             ]}
-                            value={contentTab()}
+                            value={selectedTab()}
                             onChange={setContentTab}
                           />
                         </div>
                       </Show>
-                      <Show
-                        when={!columnTabs() || contentTab() === 'summary'}
-                        fallback={
-                          <CallTranscript
-                            transcript={record().transcript}
-                            channelId={record().channelId}
-                            record={record()}
-                            timelineStartMs={timelineStartMs()}
-                            activeSequenceNum={activeSequenceNum()}
-                            videoSeekGeneration={videoSeekGeneration()}
-                            onSeekToSeconds={seekToSeconds}
-                            messages={recordingChatMessages(
-                              discussion.thread()
-                            )}
-                            scrollElement={scrollRef()}
-                            hideHeader
-                          />
-                        }
-                      >
-                        <CallRecordingSummarySection
-                          record={props.record}
-                          hideHeading={columnTabs()}
-                        />
-
-                        <CallRecordingChat
-                          source={discussion}
-                          timelineStartMs={timelineStartMs()}
-                          onSeek={
-                            record().recordingUrl ? seekToSeconds : undefined
-                          }
-                          targetId={props.messageTarget}
-                          requestKey={props.messageTargetRequestKey}
-                          onClearTarget={props.onClearMessageTarget}
-                        />
-                      </Show>
+                      <div class="flex min-w-0 flex-col gap-7 mobile:order-4">
+                        <Switch>
+                          <Match
+                            when={!columnTabs() || selectedTab() === 'summary'}
+                          >
+                            <CallRecordingSummarySection
+                              record={props.record}
+                              hideHeading={columnTabs()}
+                            />
+                            <Show when={!isMobile()}>
+                              <CallRecordingChat
+                                source={discussion}
+                                timelineStartMs={timelineStartMs()}
+                                onSeek={
+                                  record().recordingUrl
+                                    ? seekToSeconds
+                                    : undefined
+                                }
+                                targetId={props.messageTarget}
+                                requestKey={props.messageTargetRequestKey}
+                                onClearTarget={props.onClearMessageTarget}
+                              />
+                            </Show>
+                          </Match>
+                          <Match when={selectedTab() === 'transcript'}>
+                            <CallTranscript
+                              transcript={record().transcript}
+                              channelId={record().channelId}
+                              record={record()}
+                              timelineStartMs={timelineStartMs()}
+                              activeSequenceNum={activeSequenceNum()}
+                              videoSeekGeneration={videoSeekGeneration()}
+                              onSeekToSeconds={seekToSeconds}
+                              messages={recordingChatMessages(
+                                discussion.thread()
+                              )}
+                              scrollElement={scrollRef()}
+                              hideHeader
+                            />
+                          </Match>
+                          <Match when={selectedTab() === 'chat'}>
+                            <CallRecordingChat
+                              source={discussion}
+                              timelineStartMs={timelineStartMs()}
+                              onSeek={
+                                record().recordingUrl
+                                  ? seekToSeconds
+                                  : undefined
+                              }
+                              targetId={props.messageTarget}
+                              requestKey={props.messageTargetRequestKey}
+                              onClearTarget={props.onClearMessageTarget}
+                              hideHeading
+                            />
+                          </Match>
+                        </Switch>
+                      </div>
                     </div>
                   </div>
                 </div>
+                <Show when={isMobile()}>
+                  <CallRecordingMobileActions
+                    callId={props.callId}
+                    name={callTitle()}
+                    active={selectedTab() !== 'transcript' && !panel?.isOpen()}
+                  />
+                </Show>
                 <CustomScrollbar scrollContainer={scrollRef} />
                 <Show when={playerOffscreen() && record().recordingUrl}>
                   <div class="absolute inset-x-4 bottom-4 z-20">

@@ -1,14 +1,20 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
 import { format, isSameDay } from 'date-fns';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { useCallAgain } from '../use-call-again';
-import { CallRecordingAvatars } from './CallRecordingParticipants';
+import {
+  CallRecordingAvatars,
+  CallRecordingParticipantsSection,
+} from './CallRecordingParticipants';
 
 export function CallRecordingTitle(props: { record: CallRecord }) {
+  const [participantsOpen, setParticipantsOpen] = createSignal(false);
   const { canCallAgain, callAgain } = useCallAgain(
     () => props.record.callId,
     () => props.record.channelId
@@ -19,7 +25,14 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
       ? new Date(props.record.endedAt)
       : undefined;
     if (!Number.isFinite(start.getTime())) return '';
-    const from = format(start, 'EEE, MMM d, h:mm a');
+    const samePeriod =
+      end &&
+      isSameDay(start, end) &&
+      start.getHours() < 12 === end.getHours() < 12;
+    const from = format(
+      start,
+      samePeriod ? 'EEE, MMM d, h:mm' : 'EEE, MMM d, h:mm a'
+    );
     if (!end || !Number.isFinite(end.getTime())) return from;
     return `${from} – ${format(end, isSameDay(start, end) ? 'h:mm a' : 'EEE, MMM d, h:mm a')}`;
   };
@@ -41,7 +54,20 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
       </h1>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
         <span class="mr-auto">{dateRange()}</span>
-        <CallRecordingAvatars record={props.record} />
+        <Show
+          when={isMobile()}
+          fallback={<CallRecordingAvatars record={props.record} />}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Participants"
+            onClick={() => setParticipantsOpen(true)}
+          >
+            <CallRecordingAvatars record={props.record} suppressClick />
+            <CaretRightIcon class="size-4" />
+          </Button>
+        </Show>
         <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
           <Button
             variant="ghost"
@@ -55,6 +81,23 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
           </Button>
         </Show>
       </div>
+      <MobileDrawer
+        side="bottom"
+        open={participantsOpen()}
+        onOpenChange={setParticipantsOpen}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content aria-label="Participants">
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody>
+              <div class="p-5">
+                <CallRecordingParticipantsSection record={props.record} />
+              </div>
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
     </header>
   );
 }
