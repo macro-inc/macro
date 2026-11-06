@@ -3,8 +3,8 @@ import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
 import { createEmailsInfiniteQuery } from '@entity';
-import { useSearchSoupQuery } from '@queries/soup/search';
 import { usePinnedContactUsers } from '@queries/contacts/use-directory';
+import { useSearchSoupQuery } from '@queries/soup/search';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,

@@ -46,8 +46,9 @@ Incomplete typed addresses use email-prefix matching.
 Personal-contact suggestions now use bounded windows. Paging replaces the person
 window and resets its virtual focus/scroll instead of retaining the directory.
 CRM aliases resolve against personal contacts for only their current window;
-late resolution must preserve the row's UI identity. Sender/speaker/assignee/creator
-facets search local contact windows while open and retain selected labels independently.
+late resolution must preserve the row's UI identity. Sender/speaker/creator facets
+search local contact windows while open and retain selected labels independently.
+Assignee facets keep their team/agent roster, including selected outsiders.
 Verify off-page selection and Only on desktop and phone. A short/empty window
 may still offer Next; it is not proof that the directory is exhausted.
 Returning to a previously paged query or exclusion policy restarts at its first

@@ -15,7 +15,7 @@ const ALIAS_WINDOW_SIZE = 50;
  * CRM's own source owns its loaded pages; private contact resolutions/history do not grow with them. */
 export function createContactAliasWindow<T extends { id: string }>(options: {
   rows: Accessor<readonly T[]>;
-  email: (row: T) => string;
+  email: (row: T) => string | null | undefined;
   search: Accessor<string>;
   enabled: Accessor<boolean>;
   resolveUsers?: Accessor<boolean>;
@@ -58,7 +58,12 @@ export function createContactAliasWindow<T extends { id: string }>(options: {
     scope,
     () => ({
       kind: 'emails',
-      values: rows().map(options.email).filter(Boolean),
+      values: rows()
+        .map(options.email)
+        .filter(
+          (email): email is string =>
+            typeof email === 'string' && email.length > 0
+        ),
     }),
     () => options.enabled() && options.resolveUsers?.() !== false
   );

@@ -162,7 +162,11 @@ describe('createDatabaseSqlQuery', () => {
           client: () =>
             createClient({ url: 'http://test.invalid', exchanges: [] }),
           cacheHost: () => undefined,
-          people: async () => [],
+          account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+          describe: async (catalog) => ({
+            readTables: catalog.tables.map((table) => table.id),
+            columns: [],
+          }),
           catalog: build,
           open,
         }

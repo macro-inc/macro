@@ -107,8 +107,9 @@ empty continuations. Bind paging to the complete roster's reset key, including
 changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
 cancel a recipient option's pointerup default so synchronous popup removal cannot
 be interpreted as an outside press that dismisses the containing drawer.
-Soup's general Assignee/Created by submenus, mobile accordion sections and
-consolidated chips use lazy contact sources too. Resolve closed-chip labels with
+Soup's Created by submenus, mobile accordion sections and consolidated chips
+use lazy contact sources. Assignee options stay team/agent-scoped and retain selected
+outsiders; do not replace an explicit roster with personal-directory suggestions. Resolve closed-chip labels with
 `useContactFilterLabels`, never by constructing a browse window or a directory map.
 Keep Unassigned outside contact lookups and restore the Owned preset when clearing
 its creator refinement. A query-driven combobox takes search edits from native input

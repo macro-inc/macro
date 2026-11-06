@@ -1190,7 +1190,7 @@ can gate contact search rather than interpreting unsupported projection as empty
 
 `ContactDirectoryBackfill` persists nodes through hydration and returns the
 generated cursor-only projection. Hydration omits viewer contact-page and exact
-lookup wrappers. Foreground contact query variants share Soup's 64-page / 512 KiB
+lookup wrappers. Foreground contact query variants share Soup/database views' 64-page / 2 MiB
 budget; retention version 2 compacts older viewers without clearing entities,
 queue state, or storage generation.
 

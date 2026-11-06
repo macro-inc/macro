@@ -241,10 +241,21 @@ function Fixture() {
                           id: `channel-input-${CHANNEL_ID}`,
                           placeholder: 'Message #planning',
                         }}
-                        participants={discussion && !scoped ? undefined : () => {
-                          if (CRM_SCENARIO) return [{ id: 'macro|member@example.com', email: 'member@example.com', name: 'Acme member' }];
-                          return [];
-                        }}
+                        participants={
+                          discussion && !scoped
+                            ? undefined
+                            : () => {
+                                if (CRM_SCENARIO)
+                                  return [
+                                    {
+                                      id: 'macro|member@example.com',
+                                      email: 'member@example.com',
+                                      name: 'Acme member',
+                                    },
+                                  ];
+                                return [];
+                              }
+                        }
                         bots={() => []}
                         persistenceKey={makeInputValuePersistenceKey({
                           channelId: `${CHANNEL_ID}-${discussion ? (scoped ? 'scoped' : 'directory') : 'channel'}`,

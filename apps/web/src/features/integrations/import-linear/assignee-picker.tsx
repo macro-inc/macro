@@ -53,6 +53,15 @@ export function ImportAssigneePicker(props: {
       <Popover.Portal>
         <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-1rem)] menu-open-animation">
           <Popover.Title class="sr-only">Map assignee</Popover.Title>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              props.onChange(null);
+              setOpen(false);
+            }}
+          >
+            Unassigned
+          </Button>
           <PropertyEntitySelector
             config={{
               specificEntityType: 'USER',
@@ -63,7 +72,6 @@ export function ImportAssigneePicker(props: {
             selectedOptions={() =>
               new Set(props.person ? [props.person.id] : [''])
             }
-            pinnedOptions={[{ id: '', label: 'Unassigned' }]}
             onUserSelected={(user) => {
               picked = { id: user.id, email: user.email, name: user.name };
             }}

@@ -22,7 +22,6 @@ import {
 } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
   AssigneePickerStatus,
-  buildContactLabel,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
@@ -557,7 +556,7 @@ export const UnifiedFilterDropdown = (
     if (!v) {
       setAssigneeOpen(false);
       setCreatedByOpen(false);
-      assigneeSource.setSearch('');
+      assigneePicker.onOpenChange(false);
       createdBySource.setSearch('');
     }
     props.onOpenChange?.(v);

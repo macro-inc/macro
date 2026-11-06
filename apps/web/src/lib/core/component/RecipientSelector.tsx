@@ -618,7 +618,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     }
 
     // Selected custom chips stay hidden; an async result must not toggle one.
-    return uniqueRecipientMatches<CombinedRecipientItem | WithCustomUserInput<K>>(
+    return uniqueRecipientMatches<
+      CombinedRecipientItem | WithCustomUserInput<K>
+    >(
       preserveOrderedWindow(
         rankRecipientMatches([...searched, ...typed], searchTerm),
         personal,
