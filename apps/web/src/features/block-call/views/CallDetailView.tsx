@@ -1,15 +1,12 @@
 import { ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createSearchParams } from '@app/lib/split-router';
-import { HeaderActionButton } from '@components/app/HeaderActionButton';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -35,7 +32,6 @@ import {
 import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
-import { useCallAgain } from '../component/use-call-again';
 import type { CallTranscriptTarget } from '../constants';
 
 export type CallDetailData = { record: CallRecord; name: string };
@@ -63,10 +59,6 @@ export function CallDetailActions(props: {
   name: string;
 }) {
   const panel = useSplitPanelOrThrow();
-  const { canCallAgain, callAgain } = useCallAgain(
-    () => props.callId,
-    () => props.record.channelId
-  );
   const openShare = useShareModal(() => ({
     id: props.callId,
     blockAlias: 'call',
@@ -78,16 +70,6 @@ export function CallDetailActions(props: {
 
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-      <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
-        <HeaderActionGroup label="Call actions">
-          <HeaderActionButton
-            grouped
-            label="Call Again"
-            icon={<PhoneCallIcon class="size-3.5 touch:size-4" />}
-            onClick={callAgain}
-          />
-        </HeaderActionGroup>
-      </Show>
       <SidePanel.HeaderActionsOutlet />
       <ShareTrigger
         onClick={openShare}
