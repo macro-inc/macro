@@ -1,4 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+import * as childProcess from "node:child_process";
+import { once } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -245,35 +247,67 @@ describe("real child lifecycle (synthetic CLI only)", () => {
 			).problem,
 		).toBe("Upload process could not run");
 	});
-	test("hung child is killed and reaped before return", async () => {
-		const result = await runCommand(
-			process.execPath,
-			["-e", "console.log(process.pid); setInterval(() => {}, 1000)"],
-			200,
-			new AbortController().signal,
-		);
-		expect(result.problem).toBe("Upload process deadline exceeded");
-		expect(result.code).not.toBe(0);
-		const pid = Number(result.stdout.trim());
-		expect(pid).toBeGreaterThan(0);
-		expect(() => process.kill(pid, 0)).toThrow();
-	});
-	test("abort kills and reaps the running child", async () => {
-		const controller = new AbortController();
-		const timer = setTimeout(() => controller.abort(), 200);
+	test("hung child is killed and reaped even before producing output", async () => {
+		const spawned = spyOn(childProcess, "spawn");
+		let child: childProcess.ChildProcess | undefined;
 		try {
-			const result = await runCommand(
+			const pending = runCommand(
 				process.execPath,
-				["-e", "console.log(process.pid); setInterval(() => {}, 1000)"],
-				2000,
-				controller.signal,
+				["-e", "setInterval(() => {}, 1000)"],
+				200,
+				AbortSignal.timeout(5_000),
 			);
-			expect(result.problem).toBe("Upload cancelled");
-			expect(() => process.kill(Number(result.stdout.trim()), 0)).toThrow();
+			// Observe the real OS child, without depending on startup/stdout speed.
+			const observed = spawned.mock.results[0].value;
+			if (!(observed instanceof childProcess.ChildProcess))
+				throw new Error("Expected a real ChildProcess");
+			child = observed;
+			const pid = child?.pid;
+			if (!pid) throw new Error("Expected a real spawned child");
+			const result = await pending;
+			expect(result.problem).toBe("Upload process deadline exceeded");
+			expect(result.code).not.toBe(0);
+			expect(result.stdout).toBe("");
+			expect(child?.signalCode).toBe("SIGKILL");
+			expect(() => process.kill(pid, 0)).toThrow();
 		} finally {
-			clearTimeout(timer);
+			child?.kill("SIGKILL");
+			spawned.mockRestore();
 		}
-	});
+	}, 10_000);
+	test("abort waits for OS child readiness and reaps it", async () => {
+		const spawned = spyOn(childProcess, "spawn");
+		const controller = new AbortController();
+		const failSafe = AbortSignal.timeout(5_000);
+		let child: childProcess.ChildProcess | undefined;
+		try {
+			const pending = runCommand(
+				process.execPath,
+				["-e", "setInterval(() => {}, 1000)"],
+				5_000,
+				AbortSignal.any([controller.signal, failSafe]),
+			);
+			const observed = spawned.mock.results[0].value;
+			if (!(observed instanceof childProcess.ChildProcess))
+				throw new Error("Expected a real ChildProcess");
+			child = observed;
+			if (!child) throw new Error("Expected a real child");
+			await once(child, "spawn", { signal: failSafe });
+			const pid = child.pid;
+			if (!pid) throw new Error("Expected child PID after spawn");
+			controller.abort();
+			const result = await pending;
+			expect(controller.signal.aborted).toBe(true);
+			expect(failSafe.aborted).toBe(false);
+			expect(result.problem).toBe("Upload cancelled");
+			expect(child.signalCode).toBe("SIGKILL");
+			expect(() => process.kill(pid, 0)).toThrow();
+		} finally {
+			controller.abort();
+			child?.kill("SIGKILL");
+			spawned.mockRestore();
+		}
+	}, 10_000);
 	test("unbounded output is stopped and cannot classify as transient", async () => {
 		const result = await runCommand(
 			process.execPath,
