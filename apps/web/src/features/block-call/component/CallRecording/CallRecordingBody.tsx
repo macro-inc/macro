@@ -473,7 +473,7 @@ export function CallRecordingBody(props: {
                     />
                   </Show>
                   <Show when={!isMobile() && floatingPlayback()}>
-                    <div class="absolute inset-x-4 bottom-4 z-20">
+                    <div class="absolute inset-x-0 bottom-4 z-20 mx-auto w-full max-w-[800px] px-4 @[640px]/call-column:px-6 @[760px]/call-column:px-10">
                       <CallRecordingPinnedPlayer
                         playback={playback}
                         speaker={currentSpeaker()}

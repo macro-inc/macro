@@ -60,7 +60,8 @@ Summary/Transcript tabs. Stored summary attribution remains visible in both
 layouts. Below 960px of call-pane width the panel starts closed;
 opening it covers the content with Back to content, keeping the same tabs.
 Playback remains reachable in a pinned bar after the recording scrolls above the
-viewport. Show video returns to the recording; all controls drive one media
+viewport. On wide panes its width follows the centered content column; only
+narrow panes use the available width. Show video returns to the recording; all controls drive one media
 element. Chat jump chips use message time relative to recording start and appear
 only within the known recording duration. Attachments retain their usual cards.
 There is no caption control without a caption track or synthetic speaker video
