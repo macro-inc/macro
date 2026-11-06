@@ -14,6 +14,7 @@ import { TraceFlow } from '@app/observability/flow';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
+import { ActiveCallHeader } from '@channel/Call/ActiveCallHeader';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
@@ -331,6 +332,16 @@ function NewTop(props: { channelId: string }) {
             <div class="flex items-center gap-1.5">
               <ChannelCallButton channelId={props.channelId} />
             </div>
+          </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
+      <Show when={call.isInThisChannel() && !isActivePhoneCall()}>
+        <SplitHeaderRight>
+          <HeaderIsland>
+            <ActiveCallHeader
+              channelId={props.channelId}
+              link={activeTab() === 'call'}
+            />
           </HeaderIsland>
         </SplitHeaderRight>
       </Show>
