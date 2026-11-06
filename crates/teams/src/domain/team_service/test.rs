@@ -4352,55 +4352,40 @@ fn build_crm_enable_service(
     (service, populated)
 }
 
-/// Enabling with backfill enqueues a populate per team member.
+/// A legacy team toggle can no longer authorize other members' mailboxes.
 #[tokio::test]
-async fn test_enable_crm_with_backfill_enqueues_members() {
+async fn legacy_enable_never_enqueues_mailbox_backfill() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let (service, populated) = build_crm_enable_service(
         team_id,
         &["macro|owner@example.com", "macro|member@example.com"],
     );
-
-    let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, true)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 2);
-    assert_eq!(response.backfill_failed, 0);
-    assert_eq!(
-        *populated.lock().unwrap(),
-        vec![
-            "macro|owner@example.com".to_string(),
-            "macro|member@example.com".to_string()
-        ]
-    );
+    for backfill in [true, false] {
+        let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
+        let response = service
+            .set_team_crm_enabled(receipt, true, backfill)
+            .await
+            .unwrap();
+        assert!(response.enabled);
+        assert!(!response.changed);
+        assert_eq!(response.backfill_enqueued, 0);
+        assert_eq!(response.backfill_failed, 0);
+    }
+    assert!(populated.lock().unwrap().is_empty());
 }
 
-/// Enabling without backfill flips the flag but enqueues nothing.
+/// Old clients cannot invoke the destructive team-wide disable/purge flow.
 #[tokio::test]
-async fn test_enable_crm_without_backfill_skips_enqueue() {
+async fn legacy_disable_is_rejected_without_purging_crm() {
     let team_id = uuid::Uuid::from_u128(7);
     let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-    let (service, populated) = build_crm_enable_service(
-        team_id,
-        &["macro|owner@example.com", "macro|member@example.com"],
-    );
-
+    let (service, populated) = build_crm_enable_service(team_id, &["macro|owner@example.com"]);
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
-    let response = service
-        .set_team_crm_enabled(receipt, true, false)
-        .await
-        .unwrap();
-
-    assert!(response.enabled);
-    assert!(response.changed);
-    assert_eq!(response.backfill_enqueued, 0);
-    assert_eq!(response.backfill_failed, 0);
+    assert!(matches!(
+        service.set_team_crm_enabled(receipt, false, false).await,
+        Err(TeamError::BadRequest(_))
+    ));
     assert!(populated.lock().unwrap().is_empty());
 }
 

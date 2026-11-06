@@ -5981,8 +5981,8 @@ export type CrmStagesResponse = {
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`
- * except the `crm_enabled` killswitch, which is managed via
- * `PATCH /team/crm` on the auth service).
+ * except the retired `crm_enabled` flag). Email contribution consent and
+ * exclusions are managed separately through `/crm/email-privacy`.
  */
 export type CrmTeamSettingsResponse = {
     /**
@@ -8703,6 +8703,11 @@ export type EffectSpecSoftEdgeOptions = string | {
 };
 
 /**
+ * The audience affected by a domain exclusion.
+ */
+export type EmailBlockScope = 'team' | 'personal';
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
@@ -8866,6 +8871,71 @@ export type EmailFollowupCommand = {
  */
 export type EmailFollowupResponse = {
     followup?: null | EmailFollowup;
+};
+
+/**
+ * One explicit privacy change, avoiding lost updates to whole blocklists.
+ */
+export type EmailPrivacyChange = {
+    action: 'set_consent';
+    /**
+     * False withdraws this mailbox's CRM contribution without deleting records.
+     */
+    enabled: boolean;
+    /**
+     * Required when enabling; must match the displayed primary connection.
+     */
+    link_id?: string | null;
+} | {
+    action: 'add_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which contributions the exclusion affects.
+     */
+    scope: EmailBlockScope;
+} | {
+    action: 'remove_domain';
+    /**
+     * Bare company domain.
+     */
+    domain: string;
+    /**
+     * Which list to edit.
+     */
+    scope: EmailBlockScope;
+};
+
+/**
+ * Current consent and exclusions, readable by any team member.
+ */
+export type EmailPrivacySettings = {
+    /**
+     * Whether the caller can remove a team exclusion.
+     */
+    can_remove_team_domains: boolean;
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute; absent before email connection.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary connection; clients bind opt-in to this identifier.
+     */
+    mailbox_link_id?: string | null;
+    /**
+     * Domains excluded only for the caller's contributions.
+     */
+    personal_domains: Array<string>;
+    /**
+     * Domains excluded across the team, including legacy company exclusions.
+     */
+    team_domains: Array<string>;
 };
 
 /**
@@ -16342,12 +16412,11 @@ export type SetDocumentTeamShareRequest = {
  */
 export type SetEmailSyncRequest = {
     /**
-     * New value for `crm_companies.email_sync`. Purely a read-side
-     * visibility/permission gate — `soup` queries and email-permission
-     * checks require `email_sync = true` before exposing the
-     * company's emails team-wide. Populate continues to write CRM
-     * history regardless, so toggling never destroys data and
-     * re-enabling never requires a backfill.
+     * Allow eligible email contributions for this company's domains.
+     * Disabling excludes new ingestion and CRM thread access while preserving
+     * records. Re-enabling requires an admin, removes exact team exclusions,
+     * and schedules backfill only for explicitly consenting primary mailboxes.
+     * Personal and broader team exclusions continue to apply.
      */
     email_sync: boolean;
 };
@@ -25195,6 +25264,32 @@ export type SetCrmContactNameResponses = {
 };
 
 export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
+
+export type GetCrmEmailPrivacyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type GetCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
+
+export type UpdateCrmEmailPrivacyData = {
+    body: EmailPrivacyChange;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy';
+};
+
+export type UpdateCrmEmailPrivacyResponses = {
+    200: EmailPrivacySettings;
+};
+
+export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;

@@ -1,8 +1,8 @@
 //! Resolve CRM records and activity scope to the records their items match.
 //!
-//! Record visibility mirrors viewer-scoped contact listing, including hidden
-//! rows for admins and owners. Activity always excludes hidden companies and
-//! contacts. Both require CRM-enabled teams and membership or a team receipt.
+//! Record visibility follows team membership and record visibility.
+//! Activity excludes hidden records, including for admins. Email consent
+//! and exclusions do not hide CRM records.
 
 use uuid::Uuid;
 
@@ -55,7 +55,6 @@ impl CompaniesRepositoryImpl {
             SELECT co.id AS "company_id?", ct.id AS "contact_id?",
                    LOWER(BTRIM(d.domain)) AS "domain?", LOWER(BTRIM(ct.email)) AS "email?"
             FROM crm_companies co
-            JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
             LEFT JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
             LEFT JOIN crm_contacts ct ON ct.company_id = co.id AND NOT ct.hidden
             LEFT JOIN crm_domains d ON d.company_id = co.id
@@ -66,7 +65,6 @@ impl CompaniesRepositoryImpl {
             -- Contacts without a company.
             SELECT NULL, ct.id, NULL, LOWER(BTRIM(ct.email))
             FROM crm_contacts ct
-            JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
             LEFT JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
             WHERE ct.company_id IS NULL
               AND NOT ct.hidden
@@ -108,7 +106,6 @@ impl CompaniesRepositoryImpl {
                     r#"
                     SELECT ct.id AS "contact_id?"
                     FROM crm_companies co
-                    JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
                     JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id
@@ -131,7 +128,6 @@ impl CompaniesRepositoryImpl {
                     r#"
                     SELECT ct.id AS "contact_id?"
                     FROM crm_companies co
-                    JOIN team_crm_settings tcs ON tcs.team_id = co.team_id AND tcs.crm_enabled
                     LEFT JOIN crm_contacts ct
                         ON ct.company_id = co.id AND (NOT ct.hidden OR $3)
                     WHERE co.id = $1
@@ -163,7 +159,6 @@ impl CompaniesRepositoryImpl {
                         SELECT 1
                         FROM crm_contacts ct
                         LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
                         JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
                         WHERE ct.id = $2
                           AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
@@ -185,7 +180,6 @@ impl CompaniesRepositoryImpl {
                         SELECT 1
                         FROM crm_contacts ct
                         LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
                         WHERE ct.id = $1
                           AND ct.team_id = $2
                           AND (NOT (ct.hidden OR co.hidden IS TRUE) OR $3)

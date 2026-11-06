@@ -114,7 +114,7 @@ impl TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
-                crm_enabled: false,
+                crm_enabled: true,
                 auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
@@ -137,10 +137,9 @@ impl TeamRepositoryImpl {
         .execute(&mut *transaction)
         .await?;
 
-        // Seed the team's CRM settings row. `crm_enabled` defaults to
-        // FALSE — toggled on later via `PATCH /team/crm`. Created in
-        // the same tx as the team itself so the row always exists for
-        // any team that exists.
+        // Seed governance/view settings. The retired `crm_enabled` column
+        // stays false for compatibility with old workers during rollout;
+        // current CRM access is independent of mailbox contribution consent.
         sqlx::query!(
             r#"
             INSERT INTO team_crm_settings (team_id)
@@ -1231,7 +1230,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
-                COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
+                TRUE AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
             WHERE t.id = $1
@@ -1299,7 +1298,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
-                COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
+                TRUE AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id

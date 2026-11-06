@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                SELECT 1 FROM crm_email_consent c\n                JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL\n                JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = c.user_id\n                WHERE c.team_id = $1 AND c.link_id = $2 AND c.enabled\n                  AND NOT crm_email_domain_blocked($1, c.user_id, split_part($3, '@', 2))\n            ) AS \"consented!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "consented!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "626c85c4550c6a2a2016e64f1564c3d56063e45c95c26fb982a9128af51d360d"
+}
