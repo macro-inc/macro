@@ -18,8 +18,6 @@ const tags = {
 export const coparse_api_vpc = get_coparse_api_vpc();
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
-const INTERNAL_AUTH_KEY = config.require(`internal_auth_key`);
-const MACRO_DB_URL_SECRET_NAME = config.require(`macro_db_secret_key`);
 
 const secretArn = (secretId: string): pulumi.Output<string> =>
   aws.secretsmanager
@@ -32,8 +30,6 @@ const MACRO_API_TOKENS = getMacroApiToken();
 // and the Macro API token public key from Secrets Manager at boot.
 const secretKeyArns = [
   secretArn(JWT_SECRET_KEY),
-  secretArn(INTERNAL_AUTH_KEY),
-  secretArn(MACRO_DB_URL_SECRET_NAME),
   MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
 ];
 
