@@ -194,8 +194,6 @@ function SidebarCard(props: { surface: RoutineSurface; class?: string }) {
       return current === undefined ? undefined : current.length > 0;
     }
   );
-  const layout = useSplitLayout();
-  const [open, setOpen] = createSignal(false);
   const catalog = useRoutineCatalog();
   const teaser = () => {
     const [first] = rows(forSurface() ?? [], catalog());
@@ -203,29 +201,58 @@ function SidebarCard(props: { surface: RoutineSurface; class?: string }) {
   };
   return (
     <Show when={visibility.shown()}>
-      <RoutineSuggestionsCard
+      <CardAndDialog
+        surface={props.surface}
         class={props.class}
+        suggestions={forSurface() ?? []}
         teaser={teaser()}
-        more={Math.max(0, (forSurface()?.length ?? 0) - 1)}
-        onOpen={() => {
-          analytics.track('routine_suggestions_opened', {
-            surface: props.surface,
-            suggestions: forSurface()?.length ?? 0,
-          });
-          setOpen(true);
-        }}
-        onDismiss={() => {
+        refreshing={source.generating()}
+        onDismissCard={() => {
           analytics.track('routine_suggestions_card_dismissed', {
             surface: props.surface,
           });
           visibility.dismiss();
         }}
       />
+    </Show>
+  );
+}
+
+/**
+ * The card and its dialog. The dialog's open state lives here, so it closes
+ * when the card goes away (its last suggestion dismissed) and doesn't come
+ * back open with the card.
+ */
+function CardAndDialog(props: {
+  surface: RoutineSurface;
+  class?: string;
+  suggestions: readonly RoutineSuggestion[];
+  teaser: string;
+  refreshing: boolean;
+  onDismissCard(): void;
+}) {
+  const layout = useSplitLayout();
+  const [open, setOpen] = createSignal(false);
+  return (
+    <>
+      <RoutineSuggestionsCard
+        class={props.class}
+        teaser={props.teaser}
+        more={Math.max(0, props.suggestions.length - 1)}
+        onOpen={() => {
+          analytics.track('routine_suggestions_opened', {
+            surface: props.surface,
+            suggestions: props.suggestions.length,
+          });
+          setOpen(true);
+        }}
+        onDismiss={() => props.onDismissCard()}
+      />
       <RoutineSuggestionsDialog
         open={open()}
         onOpenChange={setOpen}
         title={`Routines for ${SURFACE_COPY[props.surface].label}`}
-        refreshing={source.generating()}
+        refreshing={props.refreshing}
         onRefresh={() =>
           fireAndForget(refreshRoutineSuggestions(), 'routine-suggestions')
         }
@@ -235,11 +262,11 @@ function SidebarCard(props: { surface: RoutineSurface; class?: string }) {
         }}
       >
         <SuggestionList
-          suggestions={forSurface() ?? []}
+          suggestions={props.suggestions}
           onLeave={() => setOpen(false)}
         />
       </RoutineSuggestionsDialog>
-    </Show>
+    </>
   );
 }
 
@@ -278,9 +305,14 @@ function SuggestedForYou(props: { fallback: JSX.Element }) {
       ranked().some((suggestion) => suggestion.surface === each)
     ).map((each) => ({ value: each, label: SURFACE_COPY[each].label })),
   ]);
+  // A chosen area whose last suggestion was dismissed falls back to All.
+  const shownSurface = () =>
+    filterOptions().some((option) => option.value === surface())
+      ? surface()
+      : 'all';
   const visible = () => {
     if (!expanded()) return ranked().slice(0, ROUTINES_PAGE_SHOWN);
-    const current = surface();
+    const current = shownSurface();
     return current === 'all'
       ? ranked()
       : ranked().filter((suggestion) => suggestion.surface === current);
@@ -311,14 +343,14 @@ function SuggestedForYou(props: { fallback: JSX.Element }) {
               size="sm"
               wrap
               options={filterOptions()}
-              value={surface()}
+              value={shownSurface()}
               onChange={setSurface}
             />
           </Show>
         </div>
         <SuggestionList
           suggestions={visible()}
-          showSurface={surface() === 'all'}
+          showSurface={shownSurface() === 'all'}
         />
         <Show when={more() > 0}>
           <Button

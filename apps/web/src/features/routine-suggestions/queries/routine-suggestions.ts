@@ -126,10 +126,13 @@ export function useDismissRoutineSuggestionMutation() {
   }));
 }
 
-/** A suggestion saved as a routine leaves the list without a refetch. */
-export function removeAcceptedSuggestion(suggestionId: string) {
-  queryClient.setQueryData(
-    routineSuggestionKeys.all.queryKey,
-    withoutSuggestion(suggestionId)
-  );
+/**
+ * A suggestion saved as a routine leaves the list at once. A read already
+ * in flight could still hold it, so it is cancelled first; the server
+ * leaves saved suggestions out of later reads.
+ */
+export async function removeAcceptedSuggestion(suggestionId: string) {
+  const key = routineSuggestionKeys.all.queryKey;
+  await queryClient.cancelQueries({ queryKey: key });
+  queryClient.setQueryData(key, withoutSuggestion(suggestionId));
 }

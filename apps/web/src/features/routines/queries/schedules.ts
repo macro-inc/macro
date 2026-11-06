@@ -1,3 +1,4 @@
+import { removeAcceptedSuggestion } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { analytics } from '@app/lib/analytics';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
@@ -189,6 +190,8 @@ export function useCreateScheduleMutation(
             targetKind: routineTargetKind(schedule),
           });
           upsertSchedule(schedule);
+          if (request.suggestionId)
+            await removeAcceptedSuggestion(request.suggestionId);
           await invalidateSchedules();
         },
       },
