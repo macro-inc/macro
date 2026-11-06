@@ -350,7 +350,7 @@ async fn a_message_for_a_version_the_pdf_is_not_served_from_changes_nothing(pool
     assert_eq!(*requests.lock().unwrap(), Vec::new());
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 #[sqlx::test(
     migrations = "../../crates/macro_db_client/migrations",
     fixtures(
