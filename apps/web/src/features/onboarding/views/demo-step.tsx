@@ -66,8 +66,8 @@ export function DemoStep(props: {
         <p class="mx-auto mt-6 max-w-[440px] text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
           <Switch>
             <Match when={stage().t === 'offer'}>
-              Thanks for starting a trial. You're entitled to 1 live onboarding
-              for you and your team.
+              Thanks for starting a trial — we'd love to give you a live
+              walkthrough for you and your team!
             </Match>
             <Match when={stage().t === 'calendar'}>
               Choose a time that works for you and your team.
