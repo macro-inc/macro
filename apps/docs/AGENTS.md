@@ -37,6 +37,7 @@ expose.
 - Bold for UI elements: Click **Settings**
 - Code formatting for file names, commands, paths, and code references
 - Keyboard shortcuts use `<kbd>` tags, e.g. press <kbd>g</kbd> + <kbd>h</kbd>
+- Block tutorial videos embed from `https://macro.com/video/tutorials/<id>.mp4` (with `<id>-poster.jpg`), the copy the website publishes from `apps/marketing/public/video/tutorials/`; don't commit them here
 - Product UI in the guides uses the same light cards as Unified Tagging (`.search-preview` and `.tag-mock` in `style.css`). Diagrams and brand graphics stay in `images/` and need descriptive alt text — never the filename
 
 ## Content boundaries

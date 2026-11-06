@@ -262,6 +262,27 @@ export type AppEvents = {
     action: 'add' | 'remove';
   };
 
+  // In-product tutorial videos (the pinned row at the top of an inbox).
+  tutorial_video: {
+    /** `macro-<id>` for each id in features/video-tutorials/core/tutorial-id.ts. */
+    tutorial:
+      | 'macro-mail'
+      | 'macro-home'
+      | 'macro-chat'
+      | 'macro-tasks'
+      | 'macro-docs'
+      | 'macro-drive'
+      | 'macro-crm'
+      | 'macro-calendar'
+      | 'macro-calls'
+      | 'macro-agents'
+      | 'macro-github'
+      | 'macro-scheduling'
+      | 'macro-whatsapp';
+    /** `support_clicked`: the dialog's "Talk to us" link under the video. */
+    action: 'opened' | 'played' | 'dismissed' | 'support_clicked';
+  };
+
   // --- Calls ---------------------------------------------------------------
   // Frontend call interactions only. Recordings, transcripts and summaries
   // are produced server-side and send no PostHog events yet; the call service

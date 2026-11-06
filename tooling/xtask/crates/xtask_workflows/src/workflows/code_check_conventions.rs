@@ -9,8 +9,7 @@
 //! conventions from `docs/development/style-guide.md` at the repo root.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Use, Workflow,
+    Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -29,18 +28,7 @@ pub fn code_check_conventions() -> Workflow {
             contents: Some(Level::Read),
             ..Default::default()
         })
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
-        .concurrency(
-            Concurrency::new(Expression::new("code-check-conventions-${{ github.ref }}"))
-                .cancel_in_progress(true),
-        )
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("path-check", path_check())
         .add_job("ast-grep", ast_grep())
         .add_job("status-check", status_check())
