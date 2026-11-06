@@ -6,7 +6,7 @@
 # is written without sound as macro-ui-<ad>-<fmt>-silent.mp4.
 # MUSIC=score uses the kit's composed score (audio/score.py, no download) instead of the stock track. AUDIO_ONLY=1
 # skips the render and puts a new soundtrack on the existing -silent.mp4 files.
-#   KIT=/path/to/meta-ads/daily-video/_kit ADS="pr mention search email cmdk" FMTS="45 916 11" WORKERS=4 SEG=/tmp/x ./ubuild.sh
+#   KIT=/path/to/meta-ads/daily-video/_kit ADS="pr mention search email cmdk cmdkpr gh" FMTS="45 916 11" WORKERS=4 SEG=/tmp/x ./ubuild.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 FF=${FF:-ffmpeg}; WORKERS=${WORKERS:-4}; SEG=${SEG:-/tmp/macro-ui}; KIT=${KIT:-}; MQ=""
