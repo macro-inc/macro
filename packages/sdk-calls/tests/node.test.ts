@@ -2,15 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 
 const published: Array<{ kind: number; options: { dtx?: boolean; source?: number; videoEncoding?: { maxBitrate?: bigint } } }> = [];
 const captured: Array<{ width: number; height: number; type: number }> = [];
-
-mock.module('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: (_name: string, action?: (span: object) => Promise<unknown>) => {
-      const span = { setAttr: () => {}, error: () => {}, end: () => {} };
-      return action ? action(span) : span;
-    },
-  },
-}));
+const unpublished: string[] = [];
 
 mock.module('@livekit/rtc-node', () => ({
   TrackKind: { KIND_AUDIO: 1 },
@@ -37,8 +29,9 @@ mock.module('@livekit/rtc-node', () => ({
     localParticipant = {
       publishTrack: async (track: { kind: number }, options: { dtx?: boolean; source?: number }) => {
         published.push({ kind: track.kind, options });
+        return { sid: 'publication-1' };
       },
-      unpublishTrack: async () => {},
+      unpublishTrack: async (sid: string) => { unpublished.push(sid); },
     };
     on(_event: string, _callback: () => void) {}
     async connect() {}
@@ -55,7 +48,7 @@ describe('Node room helpers', () => {
       leave: async () => ({ callEnded: false }),
     };
     const { room } = await connectRoom({ join: async () => connection });
-    Reflect.apply(room.localParticipant!.publishTrack, room.localParticipant, [
+    await Reflect.apply(room.localParticipant!.publishTrack, room.localParticipant, [
       { kind: 1 },
       { dtx: true },
     ]);
@@ -77,5 +70,6 @@ describe('Node room helpers', () => {
     expect(published.at(-1)?.options.source).toBe(3);
     expect(published.at(-1)?.options.videoEncoding?.maxBitrate).toBe(2_500_000n);
     expect(captured.at(-1)).toMatchObject({ width: 2, height: 2, type: 0 });
+    expect(unpublished.at(-1)).toBe('publication-1');
   });
 });

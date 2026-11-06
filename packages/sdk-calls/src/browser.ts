@@ -1,4 +1,3 @@
-import { Telemetry } from '@macro-inc/observability';
 import { Room, RoomEvent, Track } from 'livekit-client';
 import {
   type CallTarget,
@@ -6,6 +5,7 @@ import {
   connectRoomWith,
   type JoinOptions,
 } from './common';
+import { reportError, withSpan } from './telemetry';
 
 export type { CallConnection, CallTarget, JoinOptions } from './common';
 
@@ -33,10 +33,10 @@ export async function publishScreen(
   source?: MediaStream,
   options: ScreenOptions = {},
 ): Promise<ScreenShare> {
-  return Telemetry.span('call.sdk.publish_screen', async (span) => {
+  return withSpan('call.sdk.publish_screen', async (span) => {
     const callId = callIdForRoom(room);
-    if (callId) span.setAttr('call.id', callId);
-    span.setAttr('call.sdk.source_kind', source ? 'stream' : 'picker');
+    if (callId) span.setAttribute('call.id', callId);
+    span.setAttribute('call.sdk.source_kind', source ? 'stream' : 'picker');
     const owned = !source;
     const stream = source ?? await navigator.mediaDevices.getDisplayMedia({
       video: true,
@@ -50,17 +50,15 @@ export async function publishScreen(
     }
     const audio = stream.getAudioTracks()[0];
     const settings = video.getSettings();
-    if (settings.width) span.setAttr('call.sdk.width', settings.width);
-    if (settings.height) span.setAttr('call.sdk.height', settings.height);
-    if (settings.frameRate) span.setAttr('call.sdk.fps', settings.frameRate);
+    if (settings.width) span.setAttribute('call.sdk.width', settings.width);
+    if (settings.height) span.setAttribute('call.sdk.height', settings.height);
+    if (settings.frameRate) span.setAttribute('call.sdk.fps', settings.frameRate);
 
-    let stopped = false;
+    let stopping: Promise<void> | undefined;
     let resolveStopped: () => void = () => {};
     const stoppedPromise = new Promise<void>((resolve) => { resolveStopped = resolve; });
     const published: MediaStreamTrack[] = [];
-    const stop = async () => {
-      if (stopped) return;
-      stopped = true;
+    const stop = () => stopping ??= (async () => {
       try {
         for (const track of published) {
           await room.localParticipant.unpublishTrack(track, false);
@@ -69,9 +67,13 @@ export async function publishScreen(
         if (owned) stream.getTracks().forEach((track) => track.stop());
         resolveStopped();
       }
-    };
-    video.addEventListener('ended', () => { void stop(); }, { once: true });
-    room.on(RoomEvent.Disconnected, () => { void stop(); });
+    })();
+    video.addEventListener('ended', () => {
+      stop().catch((error: unknown) => reportError('call.sdk.publish_screen', error, callId));
+    }, { once: true });
+    room.on(RoomEvent.Disconnected, () => {
+      stop().catch((error: unknown) => reportError('call.sdk.publish_screen', error, callId));
+    });
 
     try {
       await room.localParticipant.publishTrack(video, {
@@ -85,9 +87,8 @@ export async function publishScreen(
         });
         published.push(audio);
       }
-      span.setAttr('call.sdk.outcome', 'published');
+      span.setAttribute('call.sdk.outcome', 'published');
     } catch (error) {
-      span.error(error);
       await stop();
       throw error;
     }

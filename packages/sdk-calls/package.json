@@ -31,7 +31,7 @@
     "livekit-client": { "optional": true }
   },
   "dependencies": {
-    "@macro-inc/observability": "workspace:*"
+    "@opentelemetry/api": "^1.9.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",

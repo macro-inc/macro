@@ -3,15 +3,6 @@ import { describe, expect, mock, test } from 'bun:test';
 const published: Array<{ track: MediaStreamTrack; options: { source: string; dtx?: boolean } }> = [];
 const unpublished: MediaStreamTrack[] = [];
 
-mock.module('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: (_name: string, action?: (span: object) => Promise<unknown>) => {
-      const span = { setAttr: () => {}, error: () => {}, end: () => {} };
-      return action ? action(span) : span;
-    },
-  },
-}));
-
 mock.module('livekit-client', () => ({
   RoomEvent: { Disconnected: 'disconnected' },
   Track: { Source: { ScreenShare: 'screen_share', ScreenShareAudio: 'screen_share_audio' } },

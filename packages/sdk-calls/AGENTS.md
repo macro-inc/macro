@@ -19,7 +19,7 @@ screen-share publishing for Node and browsers.
 ## Boundaries
 
 - Depends on: `@macro-inc/sdk` as a peer, one optional LiveKit runtime peer,
-  and the observability facade.
+  and `@opentelemetry/api`. Spans are no-ops without a host tracer provider.
 - Used by: programs that participate in calls outside the app.
 
 ## Checks
@@ -29,8 +29,10 @@ screen-share publishing for Node and browsers.
 ## Gotchas
 
 - Never log, attach to spans, or serialize the room token.
-- rtc-node has no room-wide publish defaults, so its local audio publication
-  path sets `dtx` false after connection.
+- rtc-node has no room-wide publish defaults or publish hook, so the local
+  participant's `publishTrack` is wrapped to set `dtx` false for audio.
+- Unpublish Node tracks by their publication SID; browser unpublish takes the
+  `MediaStreamTrack` itself.
 - Frame capture is supplied by the caller; rtc-node has no capture engine.
 
 ## Related

@@ -1,18 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
 
-mock.module('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: (_name: string, action?: (span: object) => Promise<unknown>) => {
-      const span = {
-        setAttr: () => {},
-        error: () => {},
-        end: () => {},
-      };
-      return action ? action(span) : span;
-    },
-  },
-}));
-
 const { connectRoomWith } = await import('../src/common');
 
 describe('connectRoomWith', () => {
@@ -63,6 +50,28 @@ describe('connectRoomWith', () => {
 
     await expect(connectRoomWith(
       { join },
+      undefined,
+      {},
+      async () => { throw new Error('connect failed'); },
+      () => {},
+    )).rejects.toThrow('connect failed');
+    expect(leave).toHaveBeenCalledTimes(1);
+  });
+
+  test('preserves the connection error when leaving also fails', async () => {
+    const leave = mock(async () => { throw new Error('leave failed'); });
+    const connection = {
+      call: { id: 'call-3' },
+      url: 'wss://example.invalid',
+      token: 'secret',
+      identity: 'account-3',
+      roomName: 'room-3',
+      started: false,
+      leave,
+    };
+
+    await expect(connectRoomWith(
+      { join: async () => connection },
       undefined,
       {},
       async () => { throw new Error('connect failed'); },
