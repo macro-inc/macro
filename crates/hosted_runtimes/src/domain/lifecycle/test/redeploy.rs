@@ -80,3 +80,23 @@ fn reconnect_resets_misses_and_stale_timer_cannot_restart_macrod() {
     assert_eq!(next, connected);
     assert!(effects.is_empty());
 }
+
+#[test]
+fn early_macrod_connection_survives_replayed_creation_completion() {
+    let mut state = ComputerState::reserved(HOST, now());
+    state.phase = Phase::Provisioning {
+        host: HOST,
+        start: true,
+    };
+    state.payment = PaymentOutcome::Paid;
+    let context = Context {
+        now: now(),
+        host_has_room: true,
+        enrollment_generation: Default::default(),
+    };
+    let (connected, _) = transition(&state, &Event::MacrodConnected, context);
+    let (completed, effects) = transition(&connected, &Event::InstanceStarted, context);
+    assert_eq!(completed.phase, Phase::Running { host: HOST });
+    assert!(completed.macrod_connected);
+    assert!(effects.is_empty());
+}

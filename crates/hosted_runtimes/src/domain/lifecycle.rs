@@ -384,7 +384,7 @@ pub enum Effect {
         /// Host holding the computer.
         host: HostId,
     },
-    /// Force-stop and start.
+    /// Recover a crashed guest with an idempotent start.
     Restart {
         /// Host holding the computer.
         host: HostId,
@@ -551,7 +551,12 @@ pub fn transition(
         Event::InstanceStarted => {
             if let Phase::Provisioning { start: true, .. } = state.phase {
                 if state.power == Power::On {
-                    boot(&mut next, &mut effects, host, now, None);
+                    if state.macrod_connected {
+                        next.phase = Phase::Running { host };
+                        next.wake_requested = false;
+                    } else {
+                        boot(&mut next, &mut effects, host, now, None);
+                    }
                 } else {
                     stop(&mut next, &mut effects, host);
                 }

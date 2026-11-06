@@ -92,7 +92,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   current effect for up to thirty seconds, drop its future, then return only
   this batch's unfinished leases with their original deadline to `run_after =
   now`. Preserve recorded retry backoffs and replacement replicas' leases.
-  Persist fleet completion, its lifecycle event, effects and timers atomically.
+  Persist fleet completion, its lifecycle event, effects and timers atomically;
+  preserve a macrod connection observed before creation completion.
   SIGKILL cannot release leases; replacements recover them at lease expiry.
   RPC cancellation does not cancel an Incus operation already accepted by the
   host (or a Docker daemon operation). Fleet create/start idempotence and
