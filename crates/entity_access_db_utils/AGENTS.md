@@ -19,10 +19,13 @@ top of it.
 - `src/project_grants.rs`: the grants an entity inherits from the folders it
   is filed in, written when it enters or leaves one; databases and forms call
   it in the same transaction as their `project_id` write.
+- `src/project_modified.rs`: `bump_projects_modified`, which marks the folders
+  an item left and joined edited in that same transaction.
 
 ## Scope
 
-- Owns: writes to the `entity_access` table.
+- Owns: writes to the `entity_access` table, and the folder `updatedAt` bump
+  that goes with filing an item in a folder.
 - Not here: read-side access-level checks → `crates/entity_access`; the
   owner-grant policy that decides *which* grants to write on creation →
   `crates/entity_access_management`.
