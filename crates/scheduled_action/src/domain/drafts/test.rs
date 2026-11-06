@@ -8,7 +8,6 @@ use super::*;
 use crate::domain::code_check::test::Checker;
 
 const OWNER: &str = "macro|owner@example.com";
-const LABEL: Uuid = Uuid::from_u128(1);
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(OWNER).unwrap()
@@ -25,6 +24,8 @@ struct Model {
     symbol_requests: Mutex<Vec<String>>,
     /// The names it lists for lookup.
     lookups: Vec<Value>,
+    /// Never answers a draft.
+    hangs: bool,
 }
 
 impl Model {
@@ -55,6 +56,9 @@ impl DraftModel for Model {
                 .unwrap()
                 .push(completion.instructions.to_owned());
             return Some(json!({ "symbols": self.symbols }));
+        }
+        if self.hangs {
+            std::future::pending::<()>().await;
         }
         self.asked.lock().unwrap().push((
             completion.instructions.to_owned(),
@@ -88,14 +92,7 @@ fn context() -> DraftContext {
         agent_model: "anthropic/claude-sonnet-5-5".into(),
         code: true,
         conditions: true,
-        workspace: Workspace {
-            labels: vec!["Finance".into()],
-            channels: vec![NamedItem {
-                name: "eng".into(),
-                id: LABEL.to_string(),
-            }],
-            ..Default::default()
-        },
+        ignored_workspace: serde::de::IgnoredAny,
     }
 }
 
@@ -136,7 +133,7 @@ fn drafted_step(draft: Draft) -> DraftedStep {
 }
 
 #[tokio::test]
-async fn drafts_an_event_routine_with_named_code_and_tells_the_model_the_workspace() {
+async fn drafts_an_event_routine_with_named_code() {
     let model = Model::answering([answer(
         json!([{ "type": "event", "events": ["email.message_received", "github", "nope"], "ids": [] }]),
         json!([code_step(
@@ -159,8 +156,6 @@ async fn drafts_an_event_routine_with_named_code_and_tells_the_model_the_workspa
     let (instructions, prompt, schema) = &asked[0];
     assert_eq!(prompt, "label invoices");
     assert!(instructions.contains(&format!(r#""me":"{OWNER}""#)));
-    assert!(instructions.contains(r#""emailLabels":["Finance"]"#));
-    assert!(instructions.contains(&format!(r#"{{"name":"eng","id":"{LABEL}"}}"#)));
     assert!(instructions.contains("TaskNamespace methods for: label invoices"));
     assert!(instructions.contains("\"timezone\":\"America/New_York\""));
     // In the scheduler's cron, weekday 1 is Sunday: "1-5" would skip Friday.
@@ -654,7 +649,11 @@ async fn a_large_workspace_drafts_the_channel_the_description_names() {
     let bug_reports = Uuid::from_u128(4_000);
     let channels: Vec<Value> = (0..5_000u128)
         .map(|n| {
-            let name = if n == 4_000 { "bug-reports".to_owned() } else { format!("channel-{n}") };
+            let name = if n == 4_000 {
+                "bug-reports".to_owned()
+            } else {
+                format!("channel-{n}")
+            };
             json!({ "name": name, "id": Uuid::from_u128(n).to_string() })
         })
         .collect();
@@ -702,4 +701,90 @@ async fn a_large_workspace_drafts_the_channel_the_description_names() {
         serde_json::to_value(&routine.trigger).unwrap(),
         json!({ "type": "events", "filters": [{ "events": ["channel.message_posted"], "ids": [bug_reports] }] })
     );
+}
+
+#[tokio::test]
+async fn looks_up_the_names_as_a_dry_run_and_counts_its_turns() {
+    let model = Arc::new(Model {
+        answers: Mutex::new(VecDeque::from([answer(json!([]), json!([agent_step()]))])),
+        lookups: vec![
+            json!({ "kind": "label", "name": "Finance" }),
+            json!({ "kind": "person", "name": "  " }),
+        ],
+        ..Default::default()
+    });
+    let checker = Arc::new(Checker {
+        runs: Some(
+            json!([{ "kind": "label", "name": "Finance", "matches": [{ "name": "Finance", "id": "l1" }] }]),
+        ),
+        ..Default::default()
+    });
+    let drafts = RoutineDrafts::new(
+        Arc::clone(&checker),
+        Arc::clone(&model),
+        Arc::new(DisabledAiAdmissionService),
+    );
+
+    drafted_routine(draft(&drafts, routine("label finance mail")).await);
+
+    // Blank names are dropped before the lookup runs.
+    let ran = checker.ran.lock().unwrap().clone();
+    assert_eq!(ran.len(), 1);
+    assert_eq!(
+        ran[0]["lookups"],
+        json!([{ "kind": "label", "name": "Finance" }])
+    );
+    assert!(model.asked()[0].0.contains(r#""emailLabels":["Finance"]"#));
+}
+
+#[tokio::test]
+async fn names_are_left_for_the_person_when_code_cant_look_them_up() {
+    let model = Arc::new(Model {
+        answers: Mutex::new(VecDeque::from([answer(json!([]), json!([agent_step()]))])),
+        lookups: vec![json!({ "kind": "channel", "name": "bug-reports" })],
+        ..Default::default()
+    });
+    let drafts = RoutineDrafts::new(
+        Arc::new(crate::domain::ports::NoRoutineCode),
+        Arc::clone(&model),
+        Arc::new(DisabledAiAdmissionService),
+    );
+
+    let drafted = drafts.draft(owner(), routine(BUG_REPORTS), context()).await;
+    drafted_routine(drafted.unwrap());
+
+    let asked = model.asked();
+    assert!(asked[0].0.contains(r#""channels":[]"#));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_lookup_that_runs_out_of_time_drafts_without_it() {
+    let model = Arc::new(Model {
+        answers: Mutex::new(VecDeque::from([answer(json!([]), json!([agent_step()]))])),
+        lookups: vec![json!({ "kind": "channel", "name": "bug-reports" })],
+        ..Default::default()
+    });
+    let checker = Checker {
+        hangs: true,
+        ..Default::default()
+    };
+    let drafts = drafts(checker, &model);
+
+    let routine = drafted_routine(draft(&drafts, routine(BUG_REPORTS)).await);
+
+    assert_eq!(routine.steps.len(), 1);
+    assert!(model.asked()[0].0.contains(r#""channels":[]"#));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_draft_that_runs_out_of_time_says_so() {
+    let model = Arc::new(Model {
+        hangs: true,
+        ..Default::default()
+    });
+    let drafts = drafts(Checker::default(), &model);
+
+    let draft = draft(&drafts, routine(BUG_REPORTS)).await;
+
+    assert_eq!(draft, failed(TIMED_OUT));
 }

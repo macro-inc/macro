@@ -217,7 +217,8 @@ export type Draft = (DraftedRoutine & {
 };
 
 /**
- * What the drafter may write, and the person's workspace by name and id.
+ * What the drafter may write. It looks up the items the person's words
+ * name itself, with their access.
  */
 export type DraftContext = {
     /**
@@ -238,7 +239,6 @@ export type DraftContext = {
      * IANA time zone schedules are written in, e.g. `America/New_York`.
      */
     timezone: string;
-    workspace?: Workspace;
 };
 
 /**
@@ -414,14 +414,6 @@ export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
     resource?: null | ExecutionResource;
-};
-
-/**
- * An item and its name.
- */
-export type NamedItem = {
-    id: string;
-    name: string;
 };
 
 /**
@@ -783,48 +775,6 @@ export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update
  * How a variable is filled when someone activates the template.
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
-
-/**
- * The items AI may name in a draft. They are data for the model; saving
- * checks every id the draft uses.
- */
-export type Workspace = {
-    /**
-     * Agents a step may hand the run to.
-     */
-    agents?: Array<WorkspaceAgent>;
-    channels?: Array<NamedItem>;
-    /**
-     * Projects.
-     */
-    folders?: Array<NamedItem>;
-    /**
-     * Email label names.
-     */
-    labels?: Array<string>;
-    people?: Array<NamedItem>;
-    /**
-     * Tag options, by the property definition they belong to.
-     */
-    tags?: Array<WorkspaceTag>;
-};
-
-/**
- * An agent and its bot id.
- */
-export type WorkspaceAgent = {
-    botId: string;
-    name: string;
-};
-
-/**
- * A tag: one option of a property.
- */
-export type WorkspaceTag = {
-    definitionId: string;
-    label: string;
-    optionId: string;
-};
 
 export type ScheduledActionHealthData = {
     body?: never;

@@ -44,8 +44,16 @@ each run.
   model names the SDK symbols it will use from the entity indexes, and
   `RoutineCode::symbol_references` adds their full reference (as code mode's
   ReadCodeDocs reads it) and the types they name; without those, nearly
-  every first draft failed the type check. The caller sends the
-  names and ids the model may use (`Workspace`); saving checks every id.
+  every first draft failed the type check. The request carries no
+  workspace lists: before drafting, the model lists the items the words name
+  (`drafts/lookup.rs`, at most `MAX_LOOKUPS`), and the fixed `lookup.ts` step
+  finds them through `RoutineCode::run` as a dry run with the person's access,
+  bounded by `LOOKUP_TIMEOUT`. Only a name matching one item exactly (or, for a
+  person, the only one found) reaches the model; the rest stay empty for the
+  review's pickers, and saving checks every id. A draft is bounded by
+  `DRAFT_TIMEOUT`; the `routine.draft` span records the lookup count,
+  model turns and outcome (`timeout` included), never the words. `DraftContext`
+  still accepts and ignores the `workspace` older web clients send.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,

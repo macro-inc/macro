@@ -858,7 +858,13 @@ behind `enable-routine-code-steps` (PostHog, on in development builds): with it
 off, Draft it, the add-step box and the built-in templates write Ask AI steps
 only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
-while the button shows **Drafting…**): it reads the same code-step guide
+while the button shows **Drafting…**, at most two minutes): the request carries
+only the description and settings (time zone, model, decisions, code steps).
+The model first lists the channels, people, folders, labels, tags and agents
+the description names (at most 12), and a fixed read-only code step looks them
+up as the person, with their access, within 20 seconds; a name that matches
+nothing, or several items equally, is left out, so the review shows the
+normal picker for it. Saving checks every id. Then it reads the same code-step guide
 CreateRoutine does, plus the SDK entities relevant to the description and the
 starter routines as worked examples; the model names the SDK symbols its code
 will use and reads their full reference before writing, then the scheduler
@@ -866,7 +872,9 @@ type-checks the routine's code steps
 together (a step that misreads an earlier step's output fails) and asks the
 model to fix errors, three times at most. A step that still fails stays in the draft with its
 errors listed, and the routine can't be created until it is drafted again or
-the step is removed.
+the step is removed. A request the gateway refuses as too large, a timeout and
+the AI usage limit each show their own message in the dialog instead of
+"Couldn’t draft that routine".
 
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,

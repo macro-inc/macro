@@ -18,6 +18,8 @@ pub(crate) struct Checker {
     pub runs: Option<serde_json::Value>,
     /// The context each run was given.
     pub ran: Mutex<Vec<serde_json::Value>>,
+    /// Runs never finish.
+    pub hangs: bool,
 }
 
 impl RoutineCode for Checker {
@@ -58,8 +60,14 @@ impl RoutineCode for Checker {
     async fn run(&self, _: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
         assert!(run.dry_run, "only dry runs here");
         self.ran.lock().unwrap().push(run.context.clone());
+        if self.hangs {
+            std::future::pending::<()>().await;
+        }
         CodeOutcome {
-            result: self.runs.clone().ok_or_else(|| "no code runs here".to_owned()),
+            result: self
+                .runs
+                .clone()
+                .ok_or_else(|| "no code runs here".to_owned()),
             calls: Vec::new(),
             calls_truncated: false,
             waited_ms: None,
