@@ -228,9 +228,16 @@ page should remain stable after the session check returns
 401; it must not alternate with the loading screen or reset a selected color.
 Verify that Continue advances without signing in. Below the color
 picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
-step, Connect work email uses Google sign-up to create the Macro account and link
-the primary inbox. This step offers Google sign-up only, with no alternate email
-button. The chosen accent and work step survive the OAuth
+step, Continue with Google creates the Macro account and links the primary
+inbox; Continue with Microsoft below it (behind the `enable-microsoft-signup`
+flag, on in dev builds) creates the account through the
+FusionAuth `microsoft` identity provider (work, school, and personal accounts),
+then the signed-in work step continues straight into Outlook consent (mail and
+calendar) when `enable-outlook` admits the user. Declining or a tenant that
+needs admin approval leaves the account on the work step, which offers Google,
+Microsoft, or Skip. A provider sign-in that fails comes back with `?sso_error=`
+and opens email-code sign-up with the reason. There is no alternate email
+button. The sign-in picker also offers Continue with Microsoft. The chosen accent and work step survive the OAuth
 redirect; after authentication the accent is saved to the user's theme and setup
 resumes at work email. Regular `/app/login` retains the direct sign-in screen.
 

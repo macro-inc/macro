@@ -33,6 +33,8 @@ export type OnboardingRecord = {
   suggestedTeamDomain: string | undefined;
 };
 
+export type InboxProvider = 'google' | 'microsoft';
+
 export type EmailAccountsSource = {
   accounts: Accessor<Loadable<readonly EmailAccount[]>>;
   /** Re-reads the links; resolves once the request settles. */
@@ -102,8 +104,16 @@ export type OnboardingContext = {
   refreshViewer(): Promise<ViewerState>;
   createOnboardingRecord(): Accessor<Loadable<OnboardingRecord>>;
   createEmailAccounts(): EmailAccountsSource;
-  /** Starts Google consent for another inbox; on web the page navigates away. */
-  connectInbox(): Promise<void>;
+  /**
+   * Starts consent for another inbox; on web the page navigates away. Without
+   * a provider the app asks which one.
+   */
+  connectInbox(provider?: InboxProvider): Promise<void>;
+  /**
+   * Whether to offer Outlook beside Google: Microsoft sign-up is on and this
+   * user may connect an Outlook inbox. False until both are known.
+   */
+  createOutlookAvailability(): Accessor<boolean>;
   createToolCatalog(): ToolCatalogSource;
   /**
    * Independent provider states. `poll` re-checks while connections change.

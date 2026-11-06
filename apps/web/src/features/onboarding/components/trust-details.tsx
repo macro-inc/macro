@@ -18,6 +18,8 @@ function EvidenceLink(props: { href: string; children: JSX.Element }) {
 /** Optional reading, grounded in Macro's privacy policy, DPA, and security material. */
 export function OnboardingTrustDetails(props: {
   topic: 'security' | 'google';
+  /** Fine print shown under the policy links, such as sign-up terms. */
+  legal?: JSX.Element;
 }) {
   const google = () => props.topic === 'google';
   const questions = () =>
@@ -210,6 +212,9 @@ export function OnboardingTrustDetails(props: {
         </EvidenceLink>
         .
       </p>
+      <Show when={props.legal}>
+        <p class="mt-3 text-xs leading-6 text-ink-extra-muted">{props.legal}</p>
+      </Show>
       <button
         type="button"
         class="mt-10 inline-flex items-center gap-2 rounded-sm py-2 text-sm text-ink-muted hover:text-ink focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-ink"

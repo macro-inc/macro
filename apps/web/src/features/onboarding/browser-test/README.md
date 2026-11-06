@@ -6,7 +6,7 @@ mocked, and nothing touches the network: the only difference from production is
 the context the provider receives.
 
 The fake world is persisted in sessionStorage, so the full-page round-trips are
-real page loads. Google sign-up, inbox OAuth, and native GitHub account linking
+real page loads. Google or Microsoft sign-up, inbox OAuth, and native GitHub account linking
 reload into the flow, and
 checkout returns on Stripe's success or cancel leg. Leaving onboarding renders
 a `landed` marker showing where the app would have navigated.
@@ -26,7 +26,7 @@ bunx vite --config src/features/onboarding/browser-test/vite.config.ts
 
 - Add `&theme=cream` or `&theme=dark` to preview either palette. Without an override,
   the fixture follows the system color scheme. Overrides survive simulated redirects.
-- `/?view=signup` shows the signed-out slides; Google sign-up continues into the flow.
+- `/?view=signup` shows the signed-out slides; Google or Microsoft sign-up continues into the flow.
 - `/?view=flow&next=/channel/x` shows the signed-in flow with a deep link.
 - `/?view=flow&step=plan` opens that step. `step` must be a current step name.
   Progress is stored in localStorage, so a later load without the query stays

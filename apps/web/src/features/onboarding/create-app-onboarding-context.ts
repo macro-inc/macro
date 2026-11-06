@@ -1,7 +1,9 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
+import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -17,6 +19,7 @@ import {
   useGithubLinkStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
@@ -45,6 +48,7 @@ import {
   userTeamsQueryOptions,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import { match } from 'ts-pattern';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
 import type {
   OnboardingContext,
@@ -218,7 +222,20 @@ export function createAppOnboardingContext(): OnboardingContext {
         refresh: async () => invalidateEmailLinks(),
       };
     },
-    connectInbox: () => startAddInbox(),
+    connectInbox: (provider) => {
+      if (!provider) return startAddInbox();
+      return match(provider)
+        .with('google', () => startAddInbox({ provider: 'GMAIL' }))
+        .with('microsoft', () =>
+          startAddInbox({ provider: 'OUTLOOK', scopes: 'gmail_and_calendar' })
+        )
+        .exhaustive();
+    },
+    createOutlookAvailability: () => {
+      const microsoft = useFeatureFlag(enableMicrosoftSignup);
+      const outlook = useOutlookAvailable();
+      return () => microsoft().enabled && outlook();
+    },
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {

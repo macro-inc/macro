@@ -18,6 +18,7 @@ function setup(
     initialEmail?: string;
     autoStart?: boolean;
     token?: string;
+    ssoFallbackNotice?: string;
     signupJourney?: (slots: SignupJourneySlots) => ReturnType<typeof Journey>;
   } = {}
 ) {
@@ -32,6 +33,7 @@ function setup(
         initialEmail={options.initialEmail}
         autoStart={options.autoStart}
         token={options.token}
+        ssoFallbackNotice={options.ssoFallbackNotice}
         onVerified={verified}
         onSignIn={signIn}
         signupJourney={options.signupJourney}
@@ -461,5 +463,28 @@ describe('desktop sign-up', () => {
     await vi.advanceTimersByTimeAsync(300);
     await screen.findByRole('button', { name: 'Connect work email' });
     expect(screen.queryByTestId('pending')).toBeNull();
+  });
+});
+
+describe('after a failed provider sign-in', () => {
+  it('opens on the email step, says why, and still sends a code', async () => {
+    const { fake } = setup({
+      intent: 'signup',
+      ssoFallbackNotice:
+        'Your organization needs an admin to approve Macro. Continue with your email instead.',
+    });
+    expect(
+      screen.getByText(
+        'Your organization needs an admin to approve Macro. Continue with your email instead.'
+      )
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Continue with Microsoft' })
+    ).toBeNull();
+    await typeEmail('ada@acme.com');
+    click('Continue');
+    await waitFor(() =>
+      expect(fake.calls()).toContain('sendCode:ada@acme.com')
+    );
   });
 });
