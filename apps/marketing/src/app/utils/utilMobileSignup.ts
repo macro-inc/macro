@@ -176,3 +176,57 @@ export const submitMobileSignup = async (
   }
   return { ok: false, message: 'Something went wrong. Please try again.' };
 };
+
+/**
+ * UTM tags on the link a captured visitor sends to their team, so the people
+ * who arrive through it are counted as invites in first-touch attribution.
+ */
+const TEAM_INVITE_UTM = {
+  utm_source: 'mobile_invite',
+  utm_medium: 'share',
+  utm_campaign: 'team_invite',
+};
+
+export const teamInviteUrl = (origin: string): string =>
+  `${origin}/?${new URLSearchParams(TEAM_INVITE_UTM).toString()}`;
+
+export const TEAM_INVITE_TEXT =
+  "I'm setting up Macro for our team: email, chat, docs and tasks in one app.";
+
+export type TeamInviteResult = 'shared' | 'cancelled' | 'copied' | 'failed';
+
+/**
+ * Hands the invite link to the phone's share sheet, so the visitor can send it
+ * through whatever they already use with their team. In-app browsers (where
+ * most ad traffic lands) often lack the share sheet, so the link is copied to
+ * the clipboard instead.
+ */
+type ShareTarget = {
+  share?: (data: ShareData) => Promise<void>;
+  clipboard: { writeText: (text: string) => Promise<void> };
+};
+
+export const shareTeamInvite = async (
+  url: string,
+  nav: ShareTarget = navigator
+): Promise<TeamInviteResult> => {
+  if (nav.share) {
+    try {
+      await nav.share({ title: 'Macro', text: TEAM_INVITE_TEXT, url });
+      return 'shared';
+    } catch (error) {
+      // AbortError: the visitor closed the sheet. Anything else (a webview
+      // that exposes the API but refuses it) falls through to copying.
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return 'cancelled';
+      }
+    }
+  }
+
+  try {
+    await nav.clipboard.writeText(`${TEAM_INVITE_TEXT} ${url}`);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+};
