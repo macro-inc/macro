@@ -81,6 +81,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   subquery can be NULL and types it non-null from the table. Alias such
   columns `"name?"`, and never force `"name!"` on one; `from_contact_id` is
   nullable and `ON DELETE SET NULL`, so contact columns are often NULL.
+- `email_attachments.thread_id` copies its message's thread and is written
+  only by triggers: inserts and `message_id` changes read it from the message,
+  and changing `email_messages.thread_id` moves the message's attachments.
+  Don't set it in queries; read it instead of joining `email_messages`.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
