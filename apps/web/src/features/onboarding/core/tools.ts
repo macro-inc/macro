@@ -346,7 +346,7 @@ export const ONBOARDING_SENDER_DOMAINS: readonly string[] =
 const DEFAULT_SUGGESTED_TOOLS = ['slack', 'linear', 'notion', 'github'];
 
 /** Tool rows shown above the catalog; "Add another inbox" is always added. */
-export const SUGGESTED_TOOL_LIMIT = 4;
+const SUGGESTED_TOOL_LIMIT = 4;
 
 export type SuggestedTool = {
   tool: { slug: string; name: string; iconUrl: string | null };

@@ -571,7 +571,11 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
   await expect(
     page.getByRole('button', { name: 'Connect Notion' })
   ).toBeEnabled();
-  // Suggested tools lead; the catalog behind Browse leaves them out.
+  // Suggested tools lead, after the inbox loader; the catalog behind Browse
+  // leaves them out.
+  await expect(
+    page.getByRole('list', { name: 'Suggested connections' })
+  ).toBeVisible();
   expect(
     await page
       .getByRole('list', { name: 'Suggested connections' })

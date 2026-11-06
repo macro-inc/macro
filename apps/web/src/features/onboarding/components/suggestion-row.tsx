@@ -1,4 +1,3 @@
-import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
 import VerifiedIcon from '@icon/system/fill/seal-check-fill.svg';
@@ -163,19 +162,5 @@ export function AddInboxMenu(props: {
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
-  );
-}
-
-/** A placeholder row while the inbox is checked. */
-export function SuggestionRowSkeleton() {
-  return (
-    <li aria-hidden="true" class="flex items-center gap-4 py-4">
-      <ListSkeleton.Bar class="size-10 shrink-0 rounded-xl sm:mr-[15px] sm:size-11" />
-      <div class="flex flex-1 flex-col gap-2">
-        <ListSkeleton.Bar class="h-3.5 w-28" />
-        <ListSkeleton.Bar class="h-3 w-3/4" />
-      </div>
-      <ListSkeleton.Bar class="h-9 w-20 shrink-0" />
-    </li>
   );
 }

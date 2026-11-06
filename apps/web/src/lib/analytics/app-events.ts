@@ -94,6 +94,11 @@ export type AppEvents = {
   onboarding_v4_email_connected: { connected_count: number };
   /** A connector completed OAuth from its step. */
   onboarding_v4_connector_connected: { connector: string };
+  /** How the tools step's inbox read ended: suggestions, or the plain catalog. */
+  onboarding_v4_tool_suggestions: {
+    outcome: 'ready' | 'fallback';
+    duration_ms: number;
+  };
   /** What happened on the team step. */
   onboarding_v4_team: {
     action:

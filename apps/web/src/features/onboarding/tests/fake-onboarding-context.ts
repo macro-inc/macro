@@ -41,6 +41,8 @@ export type FakeOnboardingWorld = {
   catalog: Tool[];
   /** Recent messages per sender domain, as the mail provider reports them. */
   senderDomainCounts: Record<string, number>;
+  /** How long the inbox read takes; past the step's limit it falls back. */
+  senderDomainCountsDelayMs: number;
   connectedTools: string[];
   githubLinkStatus: 'linked' | 'unlinked' | 'reauthentication_required';
   nativeTools: ServerResponse[];
@@ -104,6 +106,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
       })
     ),
     senderDomainCounts: {},
+    senderDomainCountsDelayMs: 0,
     connectedTools: [],
     githubLinkStatus: 'unlinked',
     nativeTools: [],
@@ -255,15 +258,24 @@ export function createFakeOnboarding(
         retry: () => call('retryCatalog'),
       };
     },
-    createSenderDomainCounts: (domains) => () =>
-      loadable('senderDomainCounts', () =>
-        Object.fromEntries(
-          domains.map((domain) => [
-            domain,
-            world.senderDomainCounts[domain] ?? 0,
-          ])
-        )
-      ),
+    createSenderDomainCounts: (domains) => {
+      const [answered, setAnswered] = createSignal(
+        world.senderDomainCountsDelayMs <= 0
+      );
+      if (!answered())
+        setTimeout(() => setAnswered(true), world.senderDomainCountsDelayMs);
+      return () =>
+        !answered()
+          ? { t: 'loading' }
+          : loadable('senderDomainCounts', () =>
+              Object.fromEntries(
+                domains.map((domain) => [
+                  domain,
+                  world.senderDomainCounts[domain] ?? 0,
+                ])
+              )
+            );
+    },
     createConnectedTools: () => ({
       connected: () =>
         onboardingConnectedTools(

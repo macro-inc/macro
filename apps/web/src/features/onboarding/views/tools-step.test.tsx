@@ -13,6 +13,9 @@ import {
 import { renderWithFakeOnboarding } from '../tests/render';
 import { ToolsStep } from './tools-step';
 
+/** No minimum loader time, so the step settles as soon as the fake answers. */
+const INSTANT = { minMs: 0, maxMs: 2500 };
+
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
@@ -21,7 +24,7 @@ afterEach(() => {
 describe('onboarding tools', () => {
   it('keeps Drive and Sheets available, hides excluded Google apps, and reuses native connections', async () => {
     const { fake } = renderWithFakeOnboarding(
-      () => <ToolsStep onContinue={vi.fn()} />,
+      () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
       {
         catalog: [
           ['gmail', 'Gmail'],
@@ -87,7 +90,7 @@ describe('onboarding tools', () => {
 
 it('keeps native GitHub available during hosted connection failures and offers retry', () => {
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     {
       connectionFailures: ['pipedream'],
       catalog: [
@@ -120,7 +123,7 @@ it('keeps native GitHub available during hosted connection failures and offers r
 });
 it('distinguishes a linked GitHub account from repository setup', () => {
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     { githubLinkStatus: 'linked' }
   );
   expect(
@@ -133,7 +136,7 @@ it('distinguishes a linked GitHub account from repository setup', () => {
 });
 it('tracks a connector once its connection lands, not ones already connected', async () => {
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     {
       catalog: [
         { slug: 'linear', name: 'Linear', iconUrl: null },
@@ -163,7 +166,7 @@ it('reports a GitHub connect that lands after the OAuth reload', async () => {
   // Web GitHub OAuth reloads the page, so the step remounts with the link.
   savePendingConnectors(new Set(['github']));
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     { githubLinkStatus: 'linked' }
   );
   await waitFor(() =>
@@ -182,7 +185,7 @@ it('reports a GitHub connect that lands after the OAuth reload', async () => {
 });
 it('suggests the tools the inbox shows, with why, and always another inbox', async () => {
   const { fake } = renderWithFakeOnboarding(
-    () => <ToolsStep onContinue={vi.fn()} />,
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
     {
       emailAccounts: [
         { address: 'ada@example.com', isPrimary: true, ownerId: 'macro|ada' },
@@ -227,9 +230,30 @@ it('suggests the tools the inbox shows, with why, and always another inbox', asy
   });
   await waitFor(() => expect(fake.calls()).toContain('connectInbox:OUTLOOK'));
 });
-it('suggests the defaults when the inbox check fails', () => {
-  renderWithFakeOnboarding(() => <ToolsStep onContinue={vi.fn()} />, {
-    failures: { senderDomainCounts: 'unavailable' },
-  });
-  expect(screen.getByRole('button', { name: 'Connect Slack' })).toBeTruthy();
+it('shows the plain catalog when the inbox check fails', () => {
+  renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} timing={INSTANT} />,
+    { failures: { senderDomainCounts: 'unavailable' } }
+  );
+  expect(
+    screen.queryByRole('list', { name: 'Suggested connections' })
+  ).toBeNull();
+  expect(screen.getByRole('searchbox')).toBeTruthy();
+  expect(
+    screen.getByRole('region', { name: 'Available integrations' })
+  ).toBeTruthy();
+});
+it('shows the plain catalog when the inbox check outlasts the loader', async () => {
+  renderWithFakeOnboarding(
+    () => <ToolsStep onContinue={vi.fn()} timing={{ minMs: 0, maxMs: 50 }} />,
+    {
+      senderDomainCountsDelayMs: 5000,
+      senderDomainCounts: { 'hubspot.com': 9 },
+    }
+  );
+  expect(screen.getByRole('status')).toBeTruthy();
+  expect(await screen.findByRole('searchbox')).toBeTruthy();
+  expect(
+    screen.queryByRole('list', { name: 'Suggested connections' })
+  ).toBeNull();
 });

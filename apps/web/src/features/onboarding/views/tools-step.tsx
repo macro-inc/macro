@@ -5,12 +5,13 @@ import GmailIcon from '@icon/gmail-color.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
+import { BrainLoader } from '../components/brain-loader';
+import '../components/brain-loader.css';
 import { ContinueButton } from '../components/controls';
 import {
   AddInboxMenu,
   ConnectAction,
   SuggestionRow,
-  SuggestionRowSkeleton,
 } from '../components/suggestion-row';
 import { ToolTile } from '../components/tool-tile';
 import {
@@ -18,13 +19,16 @@ import {
   type Tool,
   useOnboardingContext,
 } from '../context/onboarding-context';
-import { SUGGESTED_TOOL_LIMIT } from '../core/tools';
 import {
   readPendingConnectors,
   savePendingConnectors,
 } from '../primitives/flow-storage';
-import { createToolSuggestions } from '../primitives/tool-suggestions';
+import {
+  createToolSuggestions,
+  type ToolSuggestionsTiming,
+} from '../primitives/tool-suggestions';
 import { orderOnboardingTools } from '../primitives/tools';
+import { createWorkspaceAccent } from '../primitives/workspace-accent';
 
 /** The busy key for the Add another inbox row. */
 const ADD_INBOX = 'add-inbox';
@@ -33,11 +37,20 @@ const ADD_INBOX = 'add-inbox';
  * Suggests the tools the viewer's inbox shows they use, plus another inbox,
  * above the same searchable catalog and hosted connection flow as Settings.
  */
-export function ToolsStep(props: { onContinue: () => void }) {
+export function ToolsStep(props: {
+  onContinue: () => void;
+  /** How long the loader may run; tests shorten it. */
+  timing?: ToolSuggestionsTiming;
+}) {
   const context = useOnboardingContext();
   const catalog = context.createToolCatalog();
   const connected = context.createConnectedTools({ poll: true });
-  const suggestions = createToolSuggestions(context);
+  const view = createToolSuggestions(context, props.timing);
+  const suggestions = () => {
+    const current = view();
+    return current.t === 'ready' ? current.suggestions : undefined;
+  };
+  const workspaceAccent = createWorkspaceAccent();
   const emailAccounts = context.createEmailAccounts();
   const outlookAvailable = context.createOutlookAvailability();
   const suggestedSlugs = () =>
@@ -60,7 +73,9 @@ export function ToolsStep(props: { onContinue: () => void }) {
   const [browsing, setBrowsing] = createSignal(false);
   const shownSlugs = () => [
     ...suggestedSlugs(),
-    ...(browsing() ? entries().map((tool) => tool.slug) : []),
+    ...(browsing() || view().t === 'fallback'
+      ? entries().map((tool) => tool.slug)
+      : []),
   ];
   let searchInput: HTMLInputElement | undefined;
   const browseAll = () => {
@@ -126,98 +141,96 @@ export function ToolsStep(props: { onContinue: () => void }) {
 
   return (
     <div class="flex flex-col gap-4">
-      <section aria-labelledby="suggested-tools-heading" class="flex flex-col">
-        <h2 id="suggested-tools-heading" class="sr-only">
-          Suggested for you
-        </h2>
-        <p class="mx-auto -mt-2 mb-8 max-w-[600px] text-center text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
-          We recommend connecting your existing tools to Macro now so that the
-          background import process (0-2 hours) can start for each tool.
-        </p>
-        <ul
-          aria-label="Suggested connections"
-          aria-busy={suggestions() === undefined}
-          class="flex flex-col [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/6"
+      <Show when={view().t === 'loading'}>
+        <BrainLoader accent={workspaceAccent.accent().color} />
+      </Show>
+      <Show when={view().t === 'ready'}>
+        <section
+          aria-labelledby="suggested-tools-heading"
+          class="flex flex-col"
         >
-          <SuggestionRow
-            stacked
-            icon={<GmailIcon class="size-6" />}
-            name="Add another inbox"
-            kind="native"
-            detail={inboxDetail()}
-            verified
-            reason="Sync another email account into the same inbox, search and agents, so all of your mail lives in one place."
+          <h2 id="suggested-tools-heading" class="sr-only">
+            Suggested for you
+          </h2>
+          <p class="mx-auto -mt-2 mb-8 max-w-[600px] text-center text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
+            We recommend connecting your existing tools to Macro now so that the
+            background import process (0-2 hours) can start for each tool.
+          </p>
+          <ul
+            aria-label="Suggested connections"
+            class="suggestions-reveal flex flex-col [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-ink/6"
           >
-            <AddInboxMenu
-              busy={busy() === ADD_INBOX}
-              disabled={busy() !== undefined}
-              outlookAvailable={outlookAvailable()}
-              onSelect={(provider) =>
-                fireAndForget(addInbox(provider), 'onboarding')
-              }
-            />
-          </SuggestionRow>
-          <Show
-            when={suggestions()}
-            fallback={
-              <For each={Array.from({ length: SUGGESTED_TOOL_LIMIT })}>
-                {() => <SuggestionRowSkeleton />}
-              </For>
-            }
-          >
-            {(list) => (
-              <For each={list()}>
-                {(suggestion) => (
-                  <SuggestionRow
-                    icon={
-                      <PipedreamConnectorIcon
-                        appSlug={suggestion.tool.slug}
-                        iconUrl={catalogTool(suggestion.tool).iconUrl}
-                        class="size-6"
-                      />
-                    }
-                    name={suggestion.tool.name}
-                    kind={suggestion.kind}
-                    reason={suggestion.reason}
-                  >
-                    <ConnectAction
-                      name={suggestion.tool.name}
-                      state={rowState(suggestion.tool.slug)}
-                      label={
-                        connected.state(suggestion.tool.slug) === 'disabled'
-                          ? 'Enable'
-                          : 'Connect'
-                      }
-                      connectedLabel={
-                        connected.state(suggestion.tool.slug) ===
-                        'account-linked'
-                          ? 'Account linked'
-                          : undefined
-                      }
-                      disabled={busy() !== undefined}
-                      onConnect={() =>
-                        fireAndForget(connect(suggestion.tool), 'onboarding')
-                      }
+            <SuggestionRow
+              stacked
+              icon={<GmailIcon class="size-6" />}
+              name="Add another inbox"
+              kind="native"
+              detail={inboxDetail()}
+              verified
+              reason="Sync another email account into the same inbox, search and agents, so all of your mail lives in one place."
+            >
+              <AddInboxMenu
+                busy={busy() === ADD_INBOX}
+                disabled={busy() !== undefined}
+                outlookAvailable={outlookAvailable()}
+                onSelect={(provider) =>
+                  fireAndForget(addInbox(provider), 'onboarding')
+                }
+              />
+            </SuggestionRow>
+            <For each={suggestions()}>
+              {(suggestion) => (
+                <SuggestionRow
+                  icon={
+                    <PipedreamConnectorIcon
+                      appSlug={suggestion.tool.slug}
+                      iconUrl={catalogTool(suggestion.tool).iconUrl}
+                      class="size-6"
                     />
-                  </SuggestionRow>
-                )}
-              </For>
-            )}
-          </Show>
-        </ul>
-      </section>
+                  }
+                  name={suggestion.tool.name}
+                  kind={suggestion.kind}
+                  reason={suggestion.reason}
+                >
+                  <ConnectAction
+                    name={suggestion.tool.name}
+                    state={rowState(suggestion.tool.slug)}
+                    label={
+                      connected.state(suggestion.tool.slug) === 'disabled'
+                        ? 'Enable'
+                        : 'Connect'
+                    }
+                    connectedLabel={
+                      connected.state(suggestion.tool.slug) === 'account-linked'
+                        ? 'Account linked'
+                        : undefined
+                    }
+                    disabled={busy() !== undefined}
+                    onConnect={() =>
+                      fireAndForget(connect(suggestion.tool), 'onboarding')
+                    }
+                  />
+                </SuggestionRow>
+              )}
+            </For>
+          </ul>
+        </section>
+      </Show>
+      {/* Without suggestions in time, the step is the plain catalog it was. */}
       <Show
-        when={browsing()}
+        when={browsing() || view().t === 'fallback'}
         fallback={
-          <button
-            type="button"
-            aria-expanded="false"
-            onClick={browseAll}
-            class="mx-auto flex items-center gap-1.5 rounded-full px-4 py-2 text-sm text-ink-muted hover:bg-ink/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-ink"
-          >
-            Browse all integrations
-            <CaretDownIcon aria-hidden="true" class="size-3.5" />
-          </button>
+          <Show when={view().t === 'ready'}>
+            <button
+              type="button"
+              aria-expanded="false"
+              onClick={browseAll}
+              class="mx-auto flex items-center gap-1.5 rounded-full px-4 py-2 text-sm text-ink-muted hover:bg-ink/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-ink"
+            >
+              Browse all integrations
+              <CaretDownIcon aria-hidden="true" class="size-3.5" />
+            </button>
+          </Show>
         }
       >
         <section aria-label="All integrations" class="flex flex-col gap-5">
