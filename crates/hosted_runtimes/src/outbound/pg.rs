@@ -29,8 +29,10 @@ const COMPUTER_GUARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::fr
 /// Errors from the Postgres adapter.
 #[derive(Debug, thiserror::Error)]
 pub enum PgComputerError {
+    /// A database operation failed.
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+    /// Stored computer data violates a domain contract.
     #[error("stored computer data is invalid: {0}")]
     Corrupt(String),
 }
@@ -47,6 +49,7 @@ impl From<serde_json::Error> for PgComputerError {
     }
 }
 
+/// Postgres storage for computers, capacity and lifecycle work.
 #[derive(Clone)]
 pub struct PgComputerRepo {
     pool: PgPool,
@@ -54,6 +57,7 @@ pub struct PgComputerRepo {
 }
 
 impl PgComputerRepo {
+    /// Build a repository with a separate pool for long-lived guards.
     pub fn new(pool: PgPool) -> Self {
         // Guards outlive provider calls; keep their waiters off the
         // pool used to persist the outcome while the guard is held.

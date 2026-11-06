@@ -48,20 +48,31 @@ impl ControlPlaneId {
 /// One computer allocated to a team.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Computer {
+    /// Stable resource identity.
     pub id: ComputerId,
+    /// Team that owns the computer.
     pub team_id: Uuid,
+    /// Display name.
     pub name: ComputerName,
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Resource limits saved at purchase.
     pub resources: ComputerResources,
+    /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
+    /// Stripe price saved for billing replay.
     pub price_id: Option<StripePriceId>,
+    /// Persisted lifecycle state.
     pub state: ComputerState,
     /// The harness macrod claims, created when the instance is created.
     pub harness_id: Option<HarnessId>,
+    /// Optional guest persona configuration.
     pub persona: Option<Persona>,
     /// Last guest creation begun by the fleet; retries keep the same generation.
     pub enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration,
+    /// Macro user who purchased the computer.
     pub created_by: String,
+    /// Time the computer was reserved.
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
     pub enrolled_at: Option<DateTime<Utc>>,
@@ -70,17 +81,27 @@ pub struct Computer {
 /// A computer to reserve units for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewComputer {
+    /// Purchase funding or billing state.
     pub billing: PurchaseBilling,
     /// Persisted in the payment confirmation outbox for exact purchase replay.
     pub extra_items: Vec<SubscriptionItem>,
+    /// Stable resource identity.
     pub id: ComputerId,
+    /// Team that owns the computer.
     pub team_id: Uuid,
+    /// Display name.
     pub name: ComputerName,
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Resource limits saved at purchase.
     pub resources: ComputerResources,
+    /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
+    /// Stripe price saved for billing replay.
     pub price_id: Option<StripePriceId>,
+    /// Optional guest persona configuration.
     pub persona: Option<Persona>,
+    /// Macro user who purchased the computer.
     pub created_by: String,
 }
 
@@ -88,14 +109,19 @@ pub struct NewComputer {
 /// item in the same subscription update. Comped purchases require no extra items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PurchaseRequest {
+    /// Purchase funding or billing state.
     pub billing: PurchaseBilling,
+    /// Team that owns the computer.
     pub team_id: Uuid,
     /// The admin or owner buying it.
     pub created_by: String,
+    /// Purchased catalog size.
     pub size: ComputerSize,
     /// Display name; defaults to the persona's name, then "Macro computer".
     pub name: Option<String>,
+    /// Optional guest persona configuration.
     pub persona: Option<Persona>,
+    /// Additional subscription items included in the purchase.
     pub extra_items: Vec<SubscriptionItem>,
 }
 
@@ -104,8 +130,13 @@ pub struct PurchaseRequest {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PurchaseBilling {
+    /// Charge the team subscription.
     Stripe,
-    Comped { reason: String },
+    /// Provide the computer without a charge.
+    Comped {
+        /// Reason for this decision or failure.
+        reason: String,
+    },
 }
 
 /// A Stripe price and how many of it to add to the team subscription.
@@ -113,6 +144,7 @@ pub enum PurchaseBilling {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SubscriptionItem {
+    /// Stripe price saved for billing replay.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
     pub price_id: StripePriceId,
     /// Added to the item's current quantity.
@@ -124,7 +156,9 @@ pub struct SubscriptionItem {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BillingInterval {
+    /// Monthly billing.
     Month,
+    /// Annual billing.
     Year,
 }
 
@@ -133,12 +167,16 @@ pub enum BillingInterval {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Quote {
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Stripe price saved for billing replay.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
     pub price_id: StripePriceId,
     /// In the currency's smallest unit.
     pub amount: i64,
+    /// Billing currency code.
     pub currency: String,
+    /// Subscription billing interval.
     pub interval: BillingInterval,
 }
 
@@ -147,11 +185,17 @@ pub struct Quote {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SizeOffer {
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Virtual CPU count.
     pub vcpus: u32,
+    /// Memory in GiB.
     pub memory_gb: u32,
+    /// Root disk size in GiB.
     pub disk_gb: u32,
+    /// Price for one computer.
     pub quote: Quote,
+    /// Whether no host can currently sell this size.
     pub sold_out: bool,
     /// The caller asked to hear when this size is back.
     pub notify_requested: bool,
@@ -160,16 +204,22 @@ pub struct SizeOffer {
 /// A fleet host, counted in resource units.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Host {
+    /// Stable resource identity.
     pub id: HostId,
+    /// Display name.
     pub name: String,
+    /// Units available for awake guests.
     pub awake_capacity_units: u32,
+    /// Units available for purchase.
     pub sold_capacity_units: u32,
 }
 
 /// What a host reports when it registers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostRegistration {
+    /// Display name.
     pub name: String,
+    /// Memory in GiB.
     pub memory_gb: u32,
     /// RAM kept for the host itself.
     pub reserve_gb: u32,
@@ -178,10 +228,12 @@ pub struct HostRegistration {
 }
 
 impl HostRegistration {
+    /// Compute awake capacity after reserving host memory.
     pub fn awake_capacity_units(&self) -> u32 {
         self.memory_gb.saturating_sub(self.reserve_gb) / 8
     }
 
+    /// Compute sellable capacity with overselling.
     pub fn sold_capacity_units(&self) -> u32 {
         self.awake_capacity_units() * self.oversell_factor
     }
@@ -192,14 +244,23 @@ impl HostRegistration {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ComputerStatusKind {
+    /// Initial setup is in progress.
     SettingUp,
+    /// Guest is connected and ready.
     Ready,
+    /// Guest is frozen or suspended.
     Asleep,
+    /// Guest is starting or resuming.
     Waking,
+    /// Guest is shutting down.
     Stopping,
+    /// Guest is powered off.
     Stopped,
+    /// Guest needs a retry or operator attention.
     Failed,
+    /// Purchase payment was refused.
     PaymentFailed,
+    /// Guest has been released.
     Released,
 }
 
@@ -208,10 +269,15 @@ pub enum ComputerStatusKind {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SetupStep {
+    /// Resolving the purchase payment.
     Paying,
+    /// Creating the guest.
     Creating,
+    /// Starting the guest operating system.
     Booting,
+    /// Waiting for macrod to connect.
     Connecting,
+    /// Guest is connected and ready.
     Ready,
 }
 
@@ -220,9 +286,11 @@ pub enum SetupStep {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SetupProgress {
+    /// Current setup stage.
     pub step: SetupStep,
     /// 1-based position of `step`.
     pub position: u8,
+    /// Number of setup stages.
     pub total: u8,
 }
 
@@ -231,33 +299,47 @@ pub struct SetupProgress {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ComputerStatus {
+    /// Stable resource identity.
     #[cfg_attr(feature = "inbound", schema(value_type = Uuid))]
     pub id: ComputerId,
+    /// Display name.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
     pub name: ComputerName,
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Virtual CPU count.
     pub vcpus: Vcpus,
+    /// Memory limit saved at purchase.
     pub memory_gib: MemoryGib,
+    /// Root disk limit saved at purchase.
     pub disk_gib: DiskGib,
+    /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
+    /// Observed guest status.
     pub status: ComputerStatusKind,
+    /// Latched purchase outcome.
     pub payment: PaymentOutcome,
     /// Present for a comped purchase, including after release.
     pub comp_reason: Option<String>,
     /// Present until the computer first connects.
     pub setup: Option<SetupProgress>,
+    /// Whether power is requested on.
     pub powered_on: bool,
     /// When billing stops, for a computer canceled at period end.
     pub cancels_at: Option<DateTime<Utc>>,
     /// When the disk is destroyed, for a canceled computer.
     pub retained_until: Option<DateTime<Utc>>,
+    /// Harness claimed by this guest.
     #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
     pub harness_id: Option<HarnessId>,
+    /// Display name of the installed persona.
     pub persona_name: Option<String>,
+    /// Time the computer was reserved.
     pub created_at: DateTime<Utc>,
 }
 
 impl Computer {
+    /// Project lifecycle state into the team-facing status.
     pub fn status(&self) -> ComputerStatus {
         let setup_step = match self.state.phase {
             _ if self.enrolled_at.is_some() => None,

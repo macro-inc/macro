@@ -22,10 +22,13 @@ pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
 /// pairing exactly once; a copy read after that claim is useless.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Enrollment {
+    /// Computer this operation addresses.
     pub computer_id: ComputerId,
     /// Guest creation this one-time enrollment belongs to.
     pub generation: EnrollmentGeneration,
+    /// One-time enrollment pairing.
     pub pairing_id: PairingId,
+    /// Secret used to claim the pairing.
     #[serde(serialize_with = "serialize_device_secret")]
     pub device_secret: DeviceSecret,
     /// Display name the harness shows in Settings → Runtimes.
@@ -46,10 +49,12 @@ pub struct Enrollment {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Persona {
+    /// Display name.
     pub name: String,
     /// Linux user created for the persona; its service runs as this user.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
     pub os_user: PersonaOsUser,
+    /// Service installed for the persona.
     pub extra_service: PersonaService,
     /// Written to `/etc/macro/personas/<os_user>.env` and loaded by the
     /// persona's unit as its `EnvironmentFile`.

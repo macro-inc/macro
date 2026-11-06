@@ -39,6 +39,7 @@ fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> Compu
 
 /// Whether a harness's agent sessions are quiet.
 pub trait SessionActivity: Send + Sync + 'static {
+    /// Adapter failure type.
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// True when no turn is running on the harness and nothing happened in
@@ -488,6 +489,7 @@ where
         Ok(true)
     }
 
+    /// Record a lost macrod connection for the guest harness.
     #[tracing::instrument(skip(self), err)]
     pub async fn macrod_disconnected(&self, harness_id: HarnessId) -> Result<(), ComputerError> {
         if let Some(computer_id) = self.computer_of(harness_id).await? {

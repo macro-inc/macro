@@ -35,8 +35,11 @@ use crate::domain::size::ComputerSize;
 
 /// Router state: the computer service plus what team access checks need.
 pub struct ComputerRouterState<Repo, Bill, Time, Eas, Auth, Policy = NoComps> {
+    /// Computer use cases.
     pub service: Arc<ComputerService<Repo, Bill, Time, Policy>>,
+    /// Team access receipt provider.
     pub entity_access_service: Arc<Eas>,
+    /// Authentication services for route extractors.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
@@ -258,6 +261,7 @@ pub async fn offers<
 /// Query of a quote.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct QuoteQuery {
+    /// Purchased catalog size.
     pub size: ComputerSize,
 }
 
@@ -299,7 +303,9 @@ pub async fn quote<
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PurchaseBody {
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Display name.
     pub name: Option<String>,
 }
 
@@ -307,6 +313,7 @@ pub struct PurchaseBody {
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Purchased {
+    /// Computer this operation addresses.
     #[schema(value_type = Uuid)]
     pub computer_id: ComputerId,
 }
@@ -357,6 +364,7 @@ pub async fn purchase<
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PowerBody {
+    /// Requested power state.
     pub on: bool,
 }
 
@@ -518,6 +526,7 @@ pub async fn release<
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NotifyBody {
+    /// Purchased catalog size.
     pub size: ComputerSize,
 }
 
@@ -554,12 +563,17 @@ pub async fn notify_me<
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InternalPurchaseBody {
+    /// Purchase funding or billing state.
     pub billing: PurchaseBilling,
+    /// Team that owns the computer.
     pub team_id: Uuid,
     /// The team admin or owner the caller authorized.
     pub created_by: String,
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Display name.
     pub name: Option<String>,
+    /// Optional guest persona configuration.
     pub persona: Option<Persona>,
     /// Joined into the same subscription update, e.g. an agent seat.
     #[serde(default)]
@@ -607,7 +621,9 @@ pub async fn internal_purchase<
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
 pub struct InternalQuoteQuery {
+    /// Team that owns the computer.
     pub team_id: Uuid,
+    /// Purchased catalog size.
     pub size: ComputerSize,
 }
 
@@ -618,6 +634,7 @@ pub struct InternalQuoteQuery {
     params(InternalQuoteQuery),
     responses((status = 200, body = Quote), (status = 503, body = ErrorResponse)),
 )]
+/// Quote a computer for an authenticated internal caller.
 #[tracing::instrument(skip_all, err)]
 pub async fn internal_quote<
     Repo: ComputerRepo,
@@ -643,6 +660,7 @@ pub async fn internal_quote<
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
 pub struct InternalTeamQuery {
+    /// Team that owns the computer.
     pub team_id: Uuid,
 }
 
@@ -653,6 +671,7 @@ pub struct InternalTeamQuery {
     params(("computer_id" = Uuid, Path), InternalTeamQuery),
     responses((status = 200, body = ComputerStatus)),
 )]
+/// Read computer status for an authenticated internal caller.
 #[tracing::instrument(skip_all, fields(computer_id = %computer_id), err)]
 pub async fn internal_status<
     Repo: ComputerRepo,

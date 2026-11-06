@@ -27,20 +27,28 @@ const BILLING_BATCH: u32 = 16;
 /// Errors from the computer service.
 #[derive(Debug, thiserror::Error)]
 pub enum ComputerError {
+    /// No computer exists for this team and identity.
     #[error("computer not found")]
     NotFound,
+    /// The caller is outside the computer rollout.
     #[error("Macro computers are not enabled for this user")]
     RolloutDisabled,
+    /// Only failed computers may be retried.
     #[error("only a failed computer can be retried")]
     NotFailed,
+    /// No host has enough sale capacity.
     #[error("this size is sold out")]
     SoldOut,
+    /// Request violates a computer input contract.
     #[error("{0}")]
     BadRequest(String),
+    /// Confirmation does not match the computer name.
     #[error("type the computer's name to release it")]
     ConfirmationMismatch,
+    /// Subscription billing failed.
     #[error(transparent)]
     Billing(#[from] BillingError),
+    /// An adapter operation failed.
     #[error("internal computer error: {0:?}")]
     Internal(rootcause::Report),
 }
@@ -57,6 +65,7 @@ fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> Compu
 
 /// Clock seam so tests control time.
 pub trait Clock: Send + Sync + 'static {
+    /// Return the current time.
     fn now(&self) -> DateTime<Utc>;
 }
 
@@ -89,6 +98,7 @@ where
     Bill: Billing,
     Time: Clock,
 {
+    /// Compose the repository, billing provider and clock.
     pub fn new(repo: Repo, billing: Bill, clock: Time) -> Self {
         Self {
             rollout: Default::default(),
@@ -335,6 +345,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         Ok(computers.iter().map(Computer::status).collect())
     }
 
+    /// Apply the team-requested power state.
     #[tracing::instrument(skip(self), err)]
     pub async fn set_power(
         &self,
@@ -383,6 +394,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             .await
     }
 
+    /// Withdraw cancellation before the billing period ends.
     #[tracing::instrument(skip(self), err)]
     pub async fn undo_cancel(
         &self,

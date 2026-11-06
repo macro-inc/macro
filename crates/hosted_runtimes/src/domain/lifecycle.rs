@@ -37,7 +37,9 @@ pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
 pub enum Phase {
     /// Purchase in flight: units held on `host`, payment not yet confirmed.
     PendingPayment {
+        /// Host holding the computer.
         host: HostId,
+        /// Time the purchase began.
         since: DateTime<Utc>,
     },
     /// Payment was definitely refused; no capacity or billing item is held.
@@ -45,39 +47,54 @@ pub enum Phase {
     /// Purchase confirmed; the instance is created on `host`, started when `start`
     /// (a full host creates it stopped and wakes it later).
     Provisioning {
+        /// Host holding the computer.
         host: HostId,
+        /// Whether creation should also start the guest.
         start: bool,
     },
     /// The VM is starting (first boot, resume or restart); macrod not yet connected.
     Booting {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Guest is running.
     Running {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Crashed; restarts when the backoff timer fires.
     Restarting {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Paused in RAM; wakes in milliseconds.
     Frozen {
+        /// Host holding the computer.
         host: HostId,
     },
     /// RAM written to disk (`saved_state` once the snapshot finished); takes no host RAM.
     Suspended {
+        /// Host holding the computer.
         host: HostId,
+        /// Whether RAM has been saved to disk.
         saved_state: bool,
     },
+    /// Guest is shutting down.
     Stopping {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Guest is powered off.
     Stopped {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Gave up restarting; an operator retries.
     Failed {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Guest and its retained disk have been deleted.
     Destroyed,
 }
 
@@ -85,7 +102,9 @@ pub enum Phase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Power {
+    /// Keep the guest powered on.
     On,
+    /// Keep the guest powered off.
     Off,
 }
 
@@ -93,13 +112,16 @@ pub enum Power {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "billing", rename_all = "snake_case")]
 pub enum Billing {
+    /// Billing remains active.
     Active,
     /// Billing stops at `at` (the current period end); undo is allowed until then.
     CancelAtPeriodEnd {
+        /// Time the operation takes effect.
         at: DateTime<Utc>,
     },
     /// No longer billed; the disk is kept until `retained_until`.
     Canceled {
+        /// Deadline for retaining the guest disk.
         retained_until: DateTime<Utc>,
     },
 }
@@ -122,13 +144,18 @@ pub enum PaymentOutcome {
 /// Everything the lifecycle knows about one computer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerState {
+    /// Last observed guest phase.
     pub phase: Phase,
+    /// Requested power state.
     pub power: Power,
+    /// Purchase funding or billing state.
     pub billing: Billing,
+    /// Latched purchase outcome.
     pub payment: PaymentOutcome,
     /// Absent on older Stripe purchases; persisted at reservation for crash recovery.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comp_reason: Option<String>,
+    /// Whether macrod is currently connected.
     pub macrod_connected: bool,
     /// Crash times inside the current [`CRASH_WINDOW`].
     pub recent_crashes: Vec<DateTime<Utc>>,
@@ -193,8 +220,10 @@ impl ComputerState {
 pub enum Event {
     /// The server granted a computer without a subscription charge.
     Comped {
+        /// Reason for this decision or failure.
         reason: String,
     },
+    /// Purchase payment succeeded.
     PaymentConfirmed,
     /// The purchase was definitely refused by billing.
     PurchaseFailed,
@@ -202,28 +231,40 @@ pub enum Event {
     InstanceStarted,
     /// The fleet finished stopping the instance (or created it stopped).
     InstanceStopped,
+    /// The guest connected to the harness service.
     MacrodConnected,
+    /// The guest disconnected from the harness service.
     MacrodDisconnected,
     /// Timer: macrod has been gone for [`MACROD_GRACE`].
     MacrodMissing,
+    /// All guest sessions are idle.
     SessionsIdle,
+    /// A prompt needs the guest awake.
     PromptArrived,
     /// Timer: frozen for [`SUSPEND_AFTER`].
     SuspendDue,
+    /// Guest RAM was saved to disk.
     SnapshotSaved,
+    /// The guest stopped unexpectedly.
     VmCrashed,
     /// The guest no longer exists; recreate it on its assigned host.
     InstanceLost,
     /// Timer: the backoff after a crash elapsed.
     RestartDue,
+    /// The assigned host is unavailable.
     HostLost,
+    /// Request power on.
     PowerOn,
+    /// Request power off.
     PowerOff,
     /// Timer: retry a wake that found the host full.
     WakeRetry,
+    /// Schedule cancellation at the billing period end.
     CancelAtPeriodEnd {
+        /// Time the operation takes effect.
         at: DateTime<Utc>,
     },
+    /// Withdraw a pending cancellation.
     UndoCancel,
     /// Timer: the billing period of a cancel-at-period-end ended.
     PeriodEnded,
@@ -231,10 +272,13 @@ pub enum Event {
     SubscriptionCanceled,
     /// Release now: stop billing and destroy immediately.
     ReleaseNow,
+    /// The retained disk may now be deleted.
     RetentionExpired,
+    /// Retry a failed guest.
     OperatorRetry,
     /// A fleet effect failed after its retries; an operator looks.
     EffectFailed {
+        /// Reason for this decision or failure.
         reason: String,
     },
 }
@@ -255,11 +299,17 @@ pub enum Event {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TimerKind {
+    /// Check whether macrod exceeded its connection grace period.
     MacrodMissing,
+    /// Suspend an idle frozen guest.
     SuspendDue,
+    /// Retry after the crash backoff.
     RestartDue,
+    /// Retry a wake blocked by host capacity.
     WakeRetry,
+    /// Apply the scheduled billing cancellation.
     PeriodEnded,
+    /// The retained disk may now be deleted.
     RetentionExpired,
 }
 
@@ -283,43 +333,61 @@ impl TimerKind {
 pub enum Effect {
     /// Resolve a pending purchase with its original idempotency key and items.
     ConfirmPayment {
+        /// Additional subscription items included in the purchase.
         extra_items: Vec<SubscriptionItem>,
     },
     /// Create the instance from the base image with its enrollment; start it when `start`.
     Create {
+        /// Host holding the computer.
         host: HostId,
+        /// Whether creation should also start the guest.
         start: bool,
+        /// Enrollment generation reserved for this creation.
         generation: EnrollmentGeneration,
     },
+    /// Start the guest.
     Start {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Pause the guest in RAM.
     Freeze {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Resume a guest paused in RAM.
     Unfreeze {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Stateful stop: save RAM to disk.
     Suspend {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Start from saved state.
     Resume {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Shut down the guest.
     Stop {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Force-stop and start.
     Restart {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Delete the guest and its disk.
     Destroy {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Suspend the coldest idle awake computer on `host` to free units.
     MakeRoom {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Remove this computer's item from the team subscription.
@@ -330,10 +398,14 @@ pub enum Effect {
     /// need no cancel: a timer that fires in a state it no longer applies to
     /// is ignored by [`transition`].
     ScheduleTimer {
+        /// Timer event to deliver.
         kind: TimerKind,
+        /// Time the operation takes effect.
         at: DateTime<Utc>,
     },
+    /// Report a failure requiring operator attention.
     PageOperator {
+        /// Reason for this decision or failure.
         reason: String,
     },
 }
@@ -352,11 +424,15 @@ impl Effect {
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr, strum::EnumString,
 )]
+/// Worker responsible for an outbox action.
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum EffectWorker {
+    /// Executes guest operations.
     Fleet,
+    /// Executes subscription operations.
     Billing,
+    /// Persists scheduled lifecycle events.
     Timers,
 }
 
@@ -365,6 +441,7 @@ pub enum EffectWorker {
 pub struct Context {
     /// Last creation begun by the fleet; Create effects reserve its successor.
     pub enrollment_generation: EnrollmentGeneration,
+    /// Current time used for this transition.
     pub now: DateTime<Utc>,
     /// Whether the computer's host has awake units free for it to wake.
     pub host_has_room: bool,

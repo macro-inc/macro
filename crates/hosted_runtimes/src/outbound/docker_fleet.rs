@@ -51,6 +51,7 @@ trait DockerCommand: std::fmt::Debug + Send + Sync {
 /// What the Docker fleet runs and how it reports its host.
 #[derive(Debug, Clone)]
 pub struct DockerFleetConfig {
+    /// Owner identity shared by control-plane replicas.
     pub control_plane_id: ControlPlaneId,
     /// The computer image, e.g. `macro-box:latest` (`nix build .#macro-box-docker`).
     pub image: String,
@@ -58,38 +59,60 @@ pub struct DockerFleetConfig {
     pub network: String,
     /// Host directory holding one enrollment directory per computer.
     pub enrollment_dir: PathBuf,
+    /// Name used to register host capacity.
     pub host_name: String,
+    /// Memory in GiB.
     pub memory_gb: u32,
+    /// Memory in GiB reserved for the host.
     pub reserve_gb: u32,
+    /// Sold units per awake unit.
     pub oversell_factor: u32,
 }
 
+/// Failure while operating the local Docker fleet.
 #[derive(Debug, thiserror::Error)]
 pub enum DockerFleetError {
+    /// Persona credential issuance failed.
     #[error(transparent)]
     Credential(#[from] PersonaCredentialError),
+    /// Guest enrollment belongs to another pairing or generation.
     #[error("instance enrollment identity does not match the Create generation")]
     EnrollmentMismatch,
+    /// The addressed guest does not exist.
     #[error("instance {computer_id} is missing")]
-    Missing { computer_id: ComputerId },
+    Missing {
+        /// Computer this operation addresses.
+        computer_id: ComputerId,
+    },
+    /// Docker fleet was selected outside the local environment.
     #[error("DockerFleet only runs in the local environment, not {0:?}")]
     NotLocal(Environment),
+    /// The Docker process could not be started.
     #[error("could not run docker: {0}")]
     Spawn(#[source] std::io::Error),
+    /// The Docker process exited unsuccessfully.
     #[error("docker {command} exited with {status}: {stderr}")]
     Command {
+        /// Docker subcommand that failed.
         command: String,
+        /// Docker process exit code.
         status: i32,
+        /// Diagnostic output from Docker.
         stderr: String,
     },
+    /// Guest enrollment could not be prepared.
     #[error("enrollment at {path}: {source}")]
     Enrollment {
+        /// Enrollment file that could not be written.
         path: PathBuf,
+        /// Underlying filesystem failure.
         #[source]
         source: std::io::Error,
     },
+    /// Enrollment JSON could not be encoded.
     #[error("could not encode the enrollment: {0}")]
     Encode(#[from] serde_json::Error),
+    /// Docker returned invalid output.
     #[error("unexpected docker output: {0}")]
     Malformed(String),
 }
