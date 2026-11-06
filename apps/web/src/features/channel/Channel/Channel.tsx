@@ -395,8 +395,6 @@ export function Channel(props: ChannelProps) {
     callPanel.onViewChannel();
   };
 
-  const [liveCallRowVisible, setLiveCallRowVisible] = createSignal(false);
-
   const unifiedInput = createUnifiedInputManager({
     initialReplyTarget: props.initialMessagesStateSnapshot?.replyTarget,
     defaultThreadId: callPanel?.rootId,
@@ -1020,9 +1018,6 @@ export function Channel(props: ChannelProps) {
                                                             message={m()}
                                                             status={status()}
                                                             inCallPanel={isPanelRoot()}
-                                                            onVisibilityChange={
-                                                              setLiveCallRowVisible
-                                                            }
                                                           />
                                                         )}
                                                       </Show>
@@ -1214,20 +1209,6 @@ export function Channel(props: ChannelProps) {
                         </MessageNotificationIndexContext.Provider>
                       </div>
                     </Show>
-                    <Show when={!callPanel}>
-                      <DebugSuspense name="Channel.active-call">
-                        <ActiveCallMessage
-                          channelId={props.channelId}
-                          hidden={liveCallRowVisible()}
-                          messageCount={(callId) =>
-                            messageIndex.callStatusByKey.has(callId)
-                              ? messageById().get(callId)?.thread.reply_count
-                              : undefined
-                          }
-                          onOpenRow={(callId) => goToMessage(callId)}
-                        />
-                      </DebugSuspense>
-                    </Show>
                   </div>
                   <DebugSuspense name="Channel.input">
                     <Dynamic
@@ -1236,6 +1217,11 @@ export function Channel(props: ChannelProps) {
                       }
                       region="accessory"
                     >
+                      <Show when={!callPanel}>
+                        <DebugSuspense name="Channel.active-call">
+                          <ActiveCallMessage channelId={props.channelId} />
+                        </DebugSuspense>
+                      </Show>
                       <ChannelInputContainer
                         ref={(el) => {
                           attachInputRef(el);

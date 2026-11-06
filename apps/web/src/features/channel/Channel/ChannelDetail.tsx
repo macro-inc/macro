@@ -18,7 +18,10 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
-import { ActiveCallHeader } from '@channel/Call/ActiveCallHeader';
+import {
+  ActiveCallHeader,
+  JoinableCallStatus,
+} from '@channel/Call/ActiveCallHeader';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
@@ -198,6 +201,13 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
             channelId={props.channelId}
             link={activeTab() === 'call'}
           />
+        </DebugSuspense>
+      </Show>
+      <Show
+        when={!call.isInThisChannel() && ENABLE_CALLS && !channel()?.agent_dm}
+      >
+        <DebugSuspense name="ChannelDetail.joinable-call">
+          <JoinableCallStatus channelId={props.channelId} />
         </DebugSuspense>
       </Show>
       <HeaderActionGroup label="Conversation actions">

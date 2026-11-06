@@ -1,4 +1,6 @@
 export default {
+  inProgress: 'Call in progress',
+  join: 'Join',
   team: 'Team',
   channel: 'Channel',
   shareWithTeam: 'Share with team',

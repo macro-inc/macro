@@ -80,10 +80,15 @@ With the `enable-call-channel-thread` server flag on for the caller, a new call 
 `channel_thread` as its discussion, and `CallRecord.discussion` says so. Past channel calls, calls
 already running, and calls with no channel keep `call_chat`, and behave as described elsewhere here.
 
-In the channel, the call is a row at its start time: `<name> started a call`, the call time, live
+While a call is active and you have not joined, a compact **Call in progress**
+card stays above the composer with live duration, attendee avatars and **Join**.
+The channel header also shows attendees, duration and Join. Joining uses the
+existing call action; no call is started merely by opening the channel.
+
+In the channel, the call is also a row at its start time: `<name> started a call`, the call time, live
 avatars and **Join** (or **Return to call**), with the thread collapsed under it, which replies like any other thread.
-When it ends the line says how long it lasted. While the live row is
-off screen, the banner above the composer shows a message count and scrolls to the row.
+When it ends the line says how long it lasted. The join card remains above the
+composer while the viewer is outside the call, independent of scroll position.
 
 In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is the channel's
 name. It shows the channel up to the call's row, opened on the blank slate when the thread is empty
