@@ -64,17 +64,17 @@ export function HomeListEntity(props: HomeListEntityProps) {
               <Switch fallback={<HomeEntityIcon entity={props.entity} />}>
                 <Match when={threadEntity()}>
                   <ViewSidebar.Icon>
-                    <ArrowBendUpLeftIcon class="size-4" />
+                    <ArrowBendUpLeftIcon class="size-4 text-communication" />
                   </ViewSidebar.Icon>
                 </Match>
                 <Match when={commentNotification()}>
                   <ViewSidebar.Icon>
-                    <ChatTeardropIcon class="size-4" />
+                    <ChatTeardropIcon class="size-4 text-comment" />
                   </ViewSidebar.Icon>
                 </Match>
                 <Match when={joinRequestNotification()}>
                   <ViewSidebar.Icon>
-                    <UserPlusIcon class="size-4" />
+                    <UserPlusIcon class="size-4 text-calendar" />
                   </ViewSidebar.Icon>
                 </Match>
               </Switch>

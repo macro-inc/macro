@@ -17,105 +17,15 @@ import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 
 const FILTER_ICONS = new Map<string, () => JSX.Element>([
-  [
-    'documents',
-    () => (
-      <EntityIcon
-        targetType="md"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'tasks',
-    () => (
-      <EntityIcon
-        targetType="task"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'email',
-    () => (
-      <EntityIcon
-        targetType="email"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'channels',
-    () => (
-      <EntityIcon
-        targetType="channel"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'agents',
-    () => (
-      <EntityIcon
-        targetType="agent"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'folders',
-    () => (
-      <EntityIcon
-        targetType="project"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'initiatives',
-    () => (
-      <EntityIcon
-        targetType="initiative"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'github',
-    () => (
-      <EntityIcon
-        targetType="githubPullRequest"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
-  [
-    'calendar',
-    () => (
-      <EntityIcon
-        targetType="calendar"
-        size="xs"
-        theme="monochrome"
-        class="text-ink-muted"
-      />
-    ),
-  ],
+  ['documents', () => <EntityIcon targetType="md" size="xs" />],
+  ['tasks', () => <EntityIcon targetType="task" size="xs" />],
+  ['email', () => <EntityIcon targetType="email" size="xs" />],
+  ['channels', () => <EntityIcon targetType="channel" size="xs" />],
+  ['agents', () => <EntityIcon targetType="agent" size="xs" />],
+  ['folders', () => <EntityIcon targetType="project" size="xs" />],
+  ['initiatives', () => <EntityIcon targetType="initiative" size="xs" />],
+  ['github', () => <EntityIcon targetType="githubPullRequest" size="xs" />],
+  ['calendar', () => <EntityIcon targetType="calendar" size="xs" />],
 ]);
 
 const FILTER_GROUPS = HOME_TYPE_FILTER_GROUPS.map((group) => ({

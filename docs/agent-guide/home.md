@@ -111,12 +111,16 @@ target; an explicit reply `messageId` still takes precedence.
 
 Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
 DMs and model logos for AI chats (Claude sunburst or ChatGPT knot). Other items
-use the same glyphs as entity rows elsewhere: document file-type and
-task/snippet/skill variants, hashes for channels, read/unread envelopes or
+use the same glyphs as entity rows elsewhere, in the shared entity-icon colors:
+document file-type and task/snippet/skill variants, hashes for channels, read/unread envelopes or
 calendar invites for email, sparkles for agents, folders for folders, the
-project stack for task projects, and alarms for reminders. Pull requests retain open, merged, and closed status glyphs and
-colors; unknown foreign sources use the generic file icon.
-New agent-session rows always use a sparkle in the left slot, including while
+project stack for task projects, and alarms for reminders. Reply arrows use the
+channel color, document-comment glyphs use the comment color, and join requests
+use the calendar color. Tasks keep their status colors. Pull requests
+retain open, merged, and closed status glyphs and colors; unknown foreign
+sources use the generic file icon. The same colors show in Home's type filter,
+search type facets, notification cards, and agent tool lists.
+New agent-session rows always use a chat-colored sparkle in the left slot, including while
 working. A coding session adds a second line with repository, captured working
 branch (when available), and PR number/status. Non-coding sessions stay on one
 line. Their timestamps and unread dots stay visible. Missing repository metadata

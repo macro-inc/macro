@@ -49,7 +49,7 @@ const ListEntitiesToolResponse = (props: {
   const getItemIcon = (item: ListEntitiesItem) => {
     switch (item.type) {
       case 'channel':
-        return <WideChannel class="size-4" />;
+        return <WideChannel class="size-4 text-communication" />;
       case 'document':
         return (
           <EntityIcon
@@ -58,16 +58,15 @@ const ListEntitiesToolResponse = (props: {
               true
             )}
             size="xs"
-            theme="monochrome"
           />
         );
       case 'aiChat':
       case 'agentSession':
-        return <EntityIcon targetType="agent" size="xs" theme="monochrome" />;
+        return <EntityIcon targetType="agent" size="xs" />;
       case 'project':
-        return <EntityIcon targetType="project" size="xs" theme="monochrome" />;
+        return <EntityIcon targetType="project" size="xs" />;
       case 'email':
-        return <EntityIcon targetType="email" size="xs" theme="monochrome" />;
+        return <EntityIcon targetType="email" size="xs" />;
       default:
         return undefined;
     }

@@ -103,8 +103,11 @@ export function AgentSessionListItem(props: Props) {
             />
           }
         >
-          <Show when={mode() === 'code'} fallback={<SparkleIcon />}>
-            <FilledSparkleIcon />
+          <Show
+            when={mode() === 'code'}
+            fallback={<SparkleIcon class="text-chat" />}
+          >
+            <FilledSparkleIcon class="text-chat" />
           </Show>
         </Show>
       }
