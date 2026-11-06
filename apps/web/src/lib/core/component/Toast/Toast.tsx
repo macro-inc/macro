@@ -89,8 +89,8 @@ export interface CustomToastConfig {
   icon?: Component<{ class?: string }>;
   /** Any CSS color value, e.g. 'var(--color-success)' or '#ff6600' */
   color?: string;
-  /** Subtle brand surface for informational product updates. */
-  appearance?: 'accent';
+  /** Optional title color; descriptions and action colors stay independent. */
+  titleColor?: string;
   actions?: ToastAction[];
   actionLayout?: ToastActionLayout;
   /** Label for the secondary dismissal action; defaults to Dismiss. */
@@ -330,7 +330,6 @@ export function ToastContent(props: {
       data-toast-id={props.toastId}
       data-mobile={isMobile() ? '' : undefined}
       data-single-row={singleRow() ? '' : undefined}
-      data-appearance={props.custom?.appearance}
       class="macro-toast"
       style={{ '--toast-height': height() ? `${height()}px` : undefined }}
       persistent={props.persistent}
@@ -352,7 +351,10 @@ export function ToastContent(props: {
             fallback={
               <div class={cn('min-w-0', icon() && 'pl-7')}>
                 <div class="macro-toast-heading flex min-w-0 flex-wrap items-center gap-2">
-                  <Toast.Title class="relative min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere">
+                  <Toast.Title
+                    class="relative min-w-0 flex-auto text-base font-medium leading-normal text-ink wrap-anywhere"
+                    style={{ color: props.custom?.titleColor }}
+                  >
                     <Show when={icon()}>
                       {(Icon) => (
                         <span

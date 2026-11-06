@@ -315,6 +315,7 @@ export function createEmailComposeContext(
                 content: () => options.subtext,
                 icon: ExclamationIcon,
                 color: 'var(--color-failure)',
+                titleColor: 'var(--color-failure)',
                 actions: notice(options).actions,
               },
               {

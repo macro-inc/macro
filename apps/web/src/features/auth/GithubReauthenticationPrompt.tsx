@@ -76,6 +76,7 @@ export function GithubReauthenticationPrompt() {
       title: 'Reconnect GitHub',
       icon: PlugIcon,
       color: 'var(--color-failure)',
+      titleColor: 'var(--color-failure)',
       dismissLabel: t('common.maybeLater'),
       content(): string {
         return 'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.';
