@@ -76,6 +76,7 @@ export function CallRecordingBody(props: {
   const recordingDuration = () => playback.duration() || undefined;
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const [scrollingDown, setScrollingDown] = createSignal(false);
+  const [manualScrollGeneration, setManualScrollGeneration] = createSignal(0);
   const scrollIntent = createScrollIntentTracker(() => {
     const direction = scrollIntent.lastDirection();
     if (direction) setScrollingDown(direction === 'down');
@@ -420,6 +421,7 @@ export function CallRecordingBody(props: {
                                 onSeekToSeconds={seekToSeconds}
                                 messages={messages()}
                                 scrollElement={scrollRef()}
+                                manualScrollGeneration={manualScrollGeneration()}
                                 hideHeader
                               />
                             </Match>
@@ -449,7 +451,13 @@ export function CallRecordingBody(props: {
                       }
                     />
                   </Show>
-                  <CustomScrollbar scrollContainer={scrollRef} />
+                  <CustomScrollbar
+                    scrollContainer={scrollRef}
+                    onScrollIntent={(delta) => {
+                      scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up');
+                      setManualScrollGeneration((generation) => generation + 1);
+                    }}
+                  />
                   <Show when={isMobile()}>
                     <CallRecordingMobilePlayback
                       playback={playback}

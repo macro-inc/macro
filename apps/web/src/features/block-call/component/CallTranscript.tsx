@@ -45,6 +45,8 @@ export function CallTranscript(props: {
   messages?: MessageData[];
   /** Column transcripts share the page scroller; docked transcripts own one. */
   scrollElement?: HTMLElement;
+  /** Changes only when the enclosing page's custom scrollbar is dragged. */
+  manualScrollGeneration?: number;
 }) {
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const viewport = () => props.scrollElement ?? scrollRef();
@@ -146,6 +148,16 @@ export function CallTranscript(props: {
     )
   );
 
+  createEffect(
+    on(
+      () => props.manualScrollGeneration ?? 0,
+      (generation, previous) => {
+        if (previous !== undefined && generation !== previous)
+          setFollowing(false);
+      }
+    )
+  );
+
   createEffect(() => {
     const element = viewport();
     if (!element) return;
@@ -153,9 +165,30 @@ export function CallTranscript(props: {
     const onScroll = () => {
       if (performance.now() >= ignoreScrollUntil) updateVisibility();
     };
+    const onPointerDown = (event: PointerEvent) => {
+      // Scrollbar presses target the viewport; content presses target a row.
+      if (event.target === element && event.pointerType !== 'touch')
+        stopFollowing();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        [
+          'ArrowUp',
+          'ArrowDown',
+          'PageUp',
+          'PageDown',
+          'Home',
+          'End',
+          ' ',
+        ].includes(event.key)
+      )
+        stopFollowing();
+    };
     element.addEventListener('wheel', stopFollowing, { passive: true });
     element.addEventListener('touchmove', stopFollowing, { passive: true });
     element.addEventListener('scroll', onScroll, { passive: true });
+    element.addEventListener('pointerdown', onPointerDown);
+    element.addEventListener('keydown', onKeyDown);
     const observer = new ResizeObserver(() => {
       if (following()) scrollActiveIntoView(false, 'auto');
       updateVisibility();
@@ -166,6 +199,8 @@ export function CallTranscript(props: {
       element.removeEventListener('wheel', stopFollowing);
       element.removeEventListener('touchmove', stopFollowing);
       element.removeEventListener('scroll', onScroll);
+      element.removeEventListener('pointerdown', onPointerDown);
+      element.removeEventListener('keydown', onKeyDown);
     });
   });
 
@@ -304,7 +339,10 @@ export function CallTranscript(props: {
         </StaticMarkdownContext>
       </div>
       <Show when={!props.scrollElement}>
-        <CustomScrollbar scrollContainer={scrollRef} />
+        <CustomScrollbar
+          scrollContainer={scrollRef}
+          onScrollIntent={() => setFollowing(false)}
+        />
       </Show>
       <Show
         when={

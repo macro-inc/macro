@@ -53,6 +53,8 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   const scroll = vi.fn();
   const viewport = document.createElement('div');
   viewport.scrollTo = scroll;
+  const [manualScrollGeneration, setManualScrollGeneration] = createSignal(0);
+  const [seekGeneration, setSeekGeneration] = createSignal(0);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
     function (this: HTMLElement) {
       const top = this.hasAttribute('data-call-transcript-row') ? 200 : 0;
@@ -86,6 +88,8 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
       onSeekToSeconds={seek}
       hideHeader
       scrollElement={viewport}
+      manualScrollGeneration={manualScrollGeneration()}
+      videoSeekGeneration={seekGeneration()}
     />
   ));
   fireEvent.click(screen.getByRole('button', { name: /A recorded sentence/ }));
@@ -95,4 +99,34 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   const sync = screen.getByRole('button', { name: 'Sync to video' });
   fireEvent.click(sync);
   expect(scroll).toHaveBeenCalled();
+
+  scroll.mockClear();
+  fireEvent.pointerDown(viewport, { pointerType: 'mouse' });
+  setActive(null);
+  setActive(1);
+  expect(scroll).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Sync to video' }));
+  expect(scroll).toHaveBeenCalled();
+
+  scroll.mockClear();
+  setManualScrollGeneration(1);
+  fireEvent.scroll(viewport);
+  setActive(null);
+  setActive(1);
+  expect(scroll).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Sync to video' }));
+  expect(scroll).toHaveBeenCalled();
+
+  scroll.mockClear();
+  setSeekGeneration(1);
+  fireEvent.scroll(viewport);
+  expect(screen.queryByRole('button', { name: 'Sync to video' })).toBeNull();
+  setActive(null);
+  setActive(1);
+  expect(scroll).toHaveBeenCalled();
+  scroll.mockClear();
+  fireEvent.keyDown(viewport, { key: 'PageDown' });
+  setActive(null);
+  setActive(1);
+  expect(scroll).not.toHaveBeenCalled();
 });
