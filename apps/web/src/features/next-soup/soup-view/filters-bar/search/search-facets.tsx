@@ -1,9 +1,14 @@
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
 import type {
   CallStatus,
   PropertyFilter,
   TagFilterMode,
 } from '@app/features/next-soup/filters/filter-store/types';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -134,6 +139,8 @@ export type SearchFacetVM = FacetBase &
         preserveOrder?: boolean;
         onOnly?: (id: string) => void;
         mode?: FacetModeVM;
+        footer?: () => JSX.Element;
+        onPickerOpenChange?: (open: boolean) => void;
       }
   );
 
@@ -260,6 +267,10 @@ export function useSearchFacets(
 ): Accessor<SearchFacetVM[]> {
   const channelOptions = useChannelPicker();
   const personOptions = usePersonPicker();
+  const assigneePicker = useAssigneePicker(
+    controller.taskAssignees,
+    () => controller.type() === 'task'
+  );
   const inboxPicker = useInboxPicker({
     selectedIds: controller.emailInbox,
     setSelectedIds: controller.setEmailInbox,
@@ -432,15 +443,24 @@ export function useSearchFacets(
     onChange: controller.setTaskPriority,
   });
 
-  const taskAssignee = multiFacet({
-    id: 'task-assignee',
-    label: 'Assignee',
-    neutralLabel: 'Anyone',
-    placeholder: 'Search assignees...',
-    options: personOptions,
-    activeIds: controller.taskAssignees,
-    onChange: controller.setTaskAssignees,
-  });
+  const taskAssignee: SearchFacetVM = {
+    ...multiFacet({
+      id: 'task-assignee',
+      label: 'Assignee',
+      neutralLabel: 'Anyone',
+      placeholder: 'Search assignees...',
+      options: () =>
+        assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+      activeIds: controller.taskAssignees,
+      onChange: controller.setTaskAssignees,
+    }),
+    options: () =>
+      assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+    get placeholder() {
+      return assigneePicker.placeholder();
+    },
+    footer: () => <AssigneePickerStatus picker={assigneePicker} />,
+  };
 
   const taskCreatedBy = multiFacet({
     id: 'task-created-by',

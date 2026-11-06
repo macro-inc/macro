@@ -42,6 +42,18 @@ stacks. Process isolation belongs to
   and streams it as a completed `PresentView` call (`view_<id>`) through
   `ReviewActions::present_view`. There is no `PresentView` tool: ExecuteCode's
   description carries the view schema and when to present one.
+- `src/domain/connected_apps.rs`: a running execution's connected apps
+  (`macro.connectedApps`). `GET|POST /agent-sessions/{id}/code-executions/{execution}/connected-apps…`
+  admits only a running execution of the session's current turn, called by
+  the account that execution was approved to act as; the harness adapter
+  (`agent_harness_service/src/code_mode/connected_apps.rs`) lists the apps the
+  session's agent was given (`EgressProvisioner::advertised_all`) and calls
+  them through `agent_egress`'s `SessionMcpExchange`, so credentials never
+  reach the sandbox. In a turn someone other than the owner prompted, each
+  call spending the owner's access is held for the owner's approval
+  (`OwnerApprovals::hold_in_process`), like a direct MCP call. `discover`
+  and `servers` serve `DiscoverConnectors` and `ConnectMcpServer` through
+  the native tool gate, so both tools are in `covered_by_code_sdk`.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per
   symbol). Jev ranks entities on their descriptions (32 per call, at most 8
@@ -64,7 +76,7 @@ session presentation. Never replay an uncertain submitted action.
 
 ## Tool contracts
 
-- Keep native `NameSearch` and `ListEntities` available for session-aware discovery; agent SDK documentation excludes legacy chats and workspace feeds.
+- `ContentSearch`, `NameSearch`, `ListEntities` and `ReadChat` are covered by the SDK's `search` entity (`macro.search`, `macro.workspace`, `macro.chats`), which carries the search guide; keep their filters in step.
 
 Reviews write `review.decided` and `review.settled` through the injected
 transaction-aware notification writer in the same revision-checked transaction.

@@ -56,3 +56,6 @@ pub mod tool_actions;
 
 /// Durable system notifications.
 pub mod notifications;
+
+/// Sessions registered as an account's work.
+pub mod work_registration;

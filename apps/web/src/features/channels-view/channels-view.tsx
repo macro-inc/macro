@@ -11,6 +11,7 @@ import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { ChannelAccessDenied } from '@channel/ChannelAccessDenied';
 import { ChannelUnavailable } from '@channel/components/ChannelUnavailable';
 import { DebugSuspense } from '@channel/DebugSuspense';
+import { isPendingDirectMessageId } from '@channel/primitives/pending-direct-messages';
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -36,6 +37,7 @@ import { ChannelDetailView } from './components/ChannelDetailView';
 import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
+import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
@@ -149,12 +151,18 @@ function ChannelsViewRoot() {
   const {
     state,
     tab,
+    setTab,
     mobileLayout,
     sectionsLoading,
     selectedChannel,
-    setAsideWidth,
+    setSelectedChannel,
   } = useChannelsView();
   const threadsTab = () => !mobileLayout() && tab() === 'threads';
+  // Threads fill Main like a conversation, so going back leaves them first.
+  const returnToList = () => {
+    if (threadsTab()) setTab('browse');
+    else setSelectedChannel(undefined);
+  };
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -196,16 +204,18 @@ function ChannelsViewRoot() {
                       asidePreferenceKey="channels"
                       // The empty state only points at the rail, so keep it open.
                       asideRequired={selectedChannel() === undefined}
-                      // Keep tab changes from resetting a narrow navigation overlay.
+                      // Threads are chosen in the rail's tabs, so keep it docked.
                       asidePinned={threadsTab()}
-                      aside={{
-                        width: state.asideWidth,
-                        preserveDuringResize: false,
+                      // Narrow, the rail and the conversation take turns.
+                      asideList={{
+                        open: selectedChannel() !== undefined || threadsTab(),
+                        onBack: returnToList,
                       }}
+                      aside={{ preserveDuringResize: false }}
                       main={{ preferredWidth: 640 }}
                       resizable
                     >
-                      <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
+                      <ViewShell.Aside>
                         <DebugSuspense
                           name="ChannelsView.rail"
                           fallback={
@@ -415,12 +425,21 @@ function ChannelDetailRouteContent() {
 }
 
 export function ChannelDetailRouteView() {
+  const { selectedChannel } = useChannelsView();
+  // A DM its first message will create has nothing to load yet.
+  const pendingId = () => {
+    const id = selectedChannel()?.id;
+    return isPendingDirectMessageId(id) ? id : undefined;
+  };
+
   return (
     <DebugSuspense
       name="ChannelsView.detail-route"
       fallback={<ChannelLoading />}
     >
-      <ChannelDetailRouteContent />
+      <Show when={pendingId()} keyed fallback={<ChannelDetailRouteContent />}>
+        {(id) => <PendingDirectMessageDetail pendingId={id} />}
+      </Show>
     </DebugSuspense>
   );
 }

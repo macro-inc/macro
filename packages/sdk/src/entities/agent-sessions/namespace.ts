@@ -9,6 +9,7 @@ import {
   AgentSession,
   type AgentSessionUpdates,
   type CreateManagedSessionOptions,
+  type RegisteredWork,
   type SelectableRepository,
 } from './agent-session';
 
@@ -63,6 +64,15 @@ export class AgentSessionNamespace {
    */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
+  }
+
+  /**
+   * The sessions the caller registered as its work with
+   * {@link AgentSession.registerAsWork} and can still view, newest first.
+   * Ended registrations and archived sessions are left out.
+   */
+  registeredWork(): Promise<RegisteredWork[]> {
+    return AgentSession.listRegisteredWork(this.client);
   }
 
   /**

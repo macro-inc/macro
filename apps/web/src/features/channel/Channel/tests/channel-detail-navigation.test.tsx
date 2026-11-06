@@ -14,6 +14,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const analytics = vi.hoisted(() => ({ pageView: vi.fn(), track: vi.fn() }));
+vi.mock('@app/features/agent-work/views/dm-work', () => ({
+  DmWorkProvider: (props: { children: unknown }) => props.children,
+  DmWorkPanel: () => null,
+  DmWorkToggle: () => null,
+}));
+
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => analytics,
 }));

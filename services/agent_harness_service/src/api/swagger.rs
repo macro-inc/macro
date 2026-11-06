@@ -34,6 +34,7 @@ use agent_session::inbound::axum_router::pull_requests::{
     SessionPullRequestsResponse,
 };
 use agent_session::inbound::axum_router::task::{LinkTaskRequest, LinkedTaskResponse};
+use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
     self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
     AgentSessionPreviewData, AgentSessionPreviewDto, AgentSessionQueueResponse,
@@ -74,6 +75,12 @@ impl Modify for SecurityAddon {
         agent_code_mode::inbound::axum_router::get_review,
         agent_code_mode::inbound::axum_router::list_reviews,
         agent_code_mode::inbound::axum_router::decide_review,
+        agent_code_mode::inbound::axum_router::list_connected_apps,
+        agent_code_mode::inbound::axum_router::list_connected_app_tools,
+        agent_code_mode::inbound::axum_router::call_connected_app_tool,
+        agent_code_mode::inbound::axum_router::search_connected_app_tools,
+        agent_code_mode::inbound::axum_router::discover_connected_apps,
+        agent_code_mode::inbound::axum_router::add_connected_mcp_server,
         axum_router::create_agent_session_handler,
         axum_router::warm_agent_session_handler,
         axum_router::get_agent_session_handler,
@@ -106,6 +113,9 @@ impl Modify for SecurityAddon {
         axum_router::auto_archive::put_auto_archive_preferences,
         axum_router::auto_archive::get_session_auto_archive,
         axum_router::auto_archive::put_session_auto_archive,
+        axum_router::work_registration::register_work,
+        axum_router::work_registration::unregister_work,
+        axum_router::work_registration::list_own_work,
         model_load::load_agent_models_handler,
         capability_discovery::discover_agent_capabilities_handler,
         agent_harness::inbound::conversations::list_agent_conversations,
@@ -169,6 +179,7 @@ impl Modify for SecurityAddon {
         AutoArchiveOverridesBody,
         ArchiveCause,
         SessionAutoArchiveResponse,
+        WorkRegistrationResponse,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,

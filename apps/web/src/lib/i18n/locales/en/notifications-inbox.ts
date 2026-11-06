@@ -55,7 +55,6 @@ export default {
   undoFailed: 'Failed to undo',
 
   // List states
-  location: 'Notifications location',
   loading: 'Loading notifications',
   loadFailed: 'Notifications couldn’t be loaded.',
   tryAgain: 'Try again',

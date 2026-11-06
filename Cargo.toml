@@ -7,6 +7,7 @@ members = [
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
+  "crates/routine_program",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
@@ -89,6 +90,7 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/harness_id",
@@ -290,6 +292,7 @@ glob = "0.3.3"
 # CI always run the identical generator; guppy is pinned to the version the
 # hakari release is built against.
 guppy = "0.17.24"
+h2 = "0.4"
 hex = "0.4.3"
 hkdf = "0.12.4"
 hmac = "0.12.1"
@@ -435,6 +438,7 @@ time = "0.3.37"
 tiny-skia = { version = "0.11.4", default-features = false, features = ["simd", "std"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 tokio-retry = { version = "0.3.2", default-features = false }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs"] }
 tokio-stream = { version = "0.1.17" }
 tokio-tungstenite = { version = "0.28", default-features = false, features = [
   "connect",

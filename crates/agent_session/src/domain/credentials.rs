@@ -17,6 +17,12 @@ pub async fn authenticate_session<R: AgentSessionRepo>(
         .find_by_egress_token_hash(token_hash)
         .await?
         .ok_or(AgentSessionError::Forbidden)?;
+    open_session(session)
+}
+
+/// Refuse a session that has disconnected: its credentials stop working the
+/// moment it closes.
+pub fn open_session(session: AgentSession) -> Result<AgentSession> {
     if matches!(
         session.status,
         SessionStatus::Disconnected | SessionStatus::Event(SystemEvent::Disconnected)
