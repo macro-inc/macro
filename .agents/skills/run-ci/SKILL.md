@@ -76,11 +76,16 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 
 ## Fork PRs
 
-A maintainer adds the label after reading the diff, workflow files included:
-the run uses the fork's copies. The fork's token can't set statuses, so
-`CI Gate for Forks` removes the label and sets `CI gate` to `Running on <sha>`
-on the head the label went on, then copies the run's verdict onto that head.
+A maintainer adds the label after reading the diff: the run executes the
+fork's code. The fork's token can't set statuses, so `CI Gate for Forks`
+removes the label and sets `CI gate` to `Running on <sha>` on the head the
+label went on, then copies the verdict of the `pr-ci.yml` run onto that head.
 Re-running a fork's failed jobs doesn't update `CI gate`; add the label again.
+
+A fork run uses the fork's workflow files, so a fork that changes `.github/` or
+`tooling/xtask/crates/xtask_workflows` gets `CI gate` failure (`fork changes CI
+workflows`). To test it, a maintainer reviews it, pushes it to a branch here,
+and runs CI on a PR from that branch.
 
 ## While the switch is in progress
 
