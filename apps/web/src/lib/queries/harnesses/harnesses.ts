@@ -1,4 +1,8 @@
-import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import {
+  ThrownResultError,
+  thrownResultErrorHasCode,
+  throwOnErr,
+} from '@core/util/result';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import {
@@ -6,6 +10,9 @@ import {
   type HarnessPairing,
   storageServiceClient,
 } from '@service-storage/client';
+import type { BoundHarnessAgent } from '@service-storage/generated/schemas/boundHarnessAgent';
+import type { RequestedHarnessOwner } from '@service-storage/generated/schemas/requestedHarnessOwner';
+import { blockingAgentsOf } from '@service-storage/harness-errors';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { harnessKeys } from './keys';
 
@@ -20,7 +27,19 @@ export type PatchHarnessParams = {
   harnessId: string;
   name?: string;
   allowPermissionBypass?: boolean;
+  owner?: RequestedHarnessOwner;
 };
+
+/** An owner change was refused while these agents still run on the harness. */
+export class HarnessOwnerConflictError extends Error {
+  constructor(
+    message: string,
+    public readonly blockingAgents: BoundHarnessAgent[]
+  ) {
+    super(message);
+    this.name = 'HarnessOwnerConflictError';
+  }
+}
 
 export type DeleteHarnessParams = {
   harnessId: string;
@@ -120,13 +139,23 @@ export function useApproveOwnHarnessPairingMutation() {
 }
 
 export async function patchHarness(vars: PatchHarnessParams) {
-  const updated = await throwOnErr(() =>
-    storageServiceClient.patchHarness({
-      harness_id: vars.harnessId,
-      name: vars.name,
-      allow_permission_bypass: vars.allowPermissionBypass,
-    })
-  );
+  const result = await storageServiceClient.patchHarness({
+    harness_id: vars.harnessId,
+    name: vars.name,
+    allow_permission_bypass: vars.allowPermissionBypass,
+    owner: vars.owner,
+  });
+  if (result.isErr()) {
+    const blockingAgents = result.error.flatMap(blockingAgentsOf);
+    if (blockingAgents.length > 0) {
+      throw new HarnessOwnerConflictError(
+        result.error.map((error) => error.message).join(', '),
+        blockingAgents
+      );
+    }
+    throw new ThrownResultError(result.error);
+  }
+  const updated = result.value;
   queryClient.setQueryData<Harness[]>(harnessKeys.list.queryKey, (current) =>
     current?.map((harness) => (harness.id === updated.id ? updated : harness))
   );

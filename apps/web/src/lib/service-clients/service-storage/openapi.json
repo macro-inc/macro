@@ -17618,6 +17618,7 @@
       "patch": {
         "tags": ["harnesses"],
         "summary": "Handler for `PATCH /harnesses/{harness_id}`.",
+        "description": "An owner change is refused with 409 while it would leave bound agents\ntheir owners could no longer run on this harness.",
         "operationId": "patch_harness",
         "parameters": [
           {
@@ -17677,6 +17678,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HarnessOwnerConflict"
                 }
               }
             }
@@ -24688,6 +24699,29 @@
           "token_prefix": {
             "type": "string",
             "description": "Display prefix of the bearer token. The raw secret is never stored here."
+          }
+        }
+      },
+      "BoundHarnessAgent": {
+        "type": "object",
+        "description": "An agent bound to a harness, with its owner.",
+        "required": ["bot_id", "name", "handle", "owner"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent's bot id."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/HarnessAgentOwner",
+            "description": "Who owns the agent."
           }
         }
       },
@@ -37163,6 +37197,42 @@
           }
         }
       },
+      "HarnessAgentOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A private agent.",
+            "required": ["user_id", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "user_id": {
+                "type": "string",
+                "description": "Owner user id."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A team agent.",
+            "required": ["team_id", "type"],
+            "properties": {
+              "team_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owner team id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
+          }
+        ],
+        "description": "Owner of an agent bound to a harness."
+      },
       "HarnessId": {
         "type": "string"
       },
@@ -37201,6 +37271,24 @@
           }
         ],
         "description": "Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses."
+      },
+      "HarnessOwnerConflict": {
+        "type": "object",
+        "description": "Body of a refused owner change.",
+        "required": ["message", "blocking_agents"],
+        "properties": {
+          "blocking_agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoundHarnessAgent"
+            },
+            "description": "The bound agents whose owners could no longer run them on the\nharness. Move them to another runtime first."
+          },
+          "message": {
+            "type": "string",
+            "description": "Why the change was refused."
+          }
+        }
       },
       "HarnessSession": {
         "type": "object",
@@ -40572,6 +40660,17 @@
           "name": {
             "type": ["string", "null"],
             "description": "New display name."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RequestedHarnessOwner",
+                "description": "New owner. Refused while it would leave agents bound to this harness\nthat their owners could no longer run on it."
+              }
+            ]
           }
         }
       },
@@ -42344,6 +42443,38 @@
         "type": "string",
         "description": "Durable outcome; reading a notification never changes it.",
         "enum": ["pending", "granted", "denied", "cancelled"]
+      },
+      "RequestedHarnessOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Private to the caller making the change.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["user"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Shared with a team the caller belongs to.",
+            "required": ["team_id", "type"],
+            "properties": {
+              "team_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owner team id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
+          }
+        ],
+        "description": "Who a harness should belong to after a change."
       },
       "RequestedLayout": {
         "oneOf": [

@@ -985,9 +985,13 @@ use utoipa::OpenApi;
             harnesses::domain::models::PairingDetails,
             harnesses::domain::models::ApprovePairingRequest,
             harnesses::domain::models::PatchHarnessRequest,
+            harnesses::domain::models::RequestedHarnessOwner,
+            harnesses::domain::models::BoundHarnessAgent,
+            harnesses::domain::models::HarnessAgentOwner,
             harnesses::domain::models::ClaimPairingRequest,
             harnesses::domain::models::ClaimedPairing,
             harnesses::inbound::axum_router::PendingClaimResponse,
+            harnesses::inbound::axum_router::HarnessOwnerConflict,
 
             // Bots
             bots::domain::models::Agent,

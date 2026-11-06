@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            b.id, b.name, b.handle, b.owner_user_id, b.team_id,\n            EXISTS (\n                SELECT 1 FROM team_user tu\n                WHERE tu.user_id = b.owner_user_id AND tu.team_id = $2\n            ) AS \"owner_in_new_team!\"\n        FROM agent_configs ac\n        JOIN bots b ON b.id = ac.bot_id\n        WHERE ac.harness_id = $1\n          AND b.deleted_at IS NULL\n          AND b.has_agent\n        ORDER BY b.created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "handle",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "owner_in_new_team!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "5a57babb23318f0b76701d4b712c5ecd5d57134e21a13dcb0aff3cb45bafd233"
+}

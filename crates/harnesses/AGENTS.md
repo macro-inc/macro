@@ -9,7 +9,7 @@ daemon reconciles its webhook feed from.
 
 ## Start here
 
-- `src/domain/service.rs`: pairing, listing, revocation logic.
+- `src/domain/service.rs`: pairing, listing, owner changes, revocation logic.
 - `src/domain/tokens.rs`: harness token minting/verification
   (`constant_time_eq` comparison — don't swap in a non-constant-time check).
 - `src/domain/ports.rs` + `src/domain/models.rs`: repo port and harness model.
@@ -40,6 +40,13 @@ daemon reconciles its webhook feed from.
 - `cargo test -p harnesses` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
+
+- Changes to a registered harness take a `ManagedHarness`, which only
+  `HarnessServiceImpl::ensure_may_manage` builds; add new manager-only
+  operations behind it, not beside it.
+- `agents_stranded_by` mirrors `crates/bots`' `ensure_harness_usable` binding
+  rule; change both together. An owner change locks the harness row FOR
+  UPDATE and the bots agent write takes it FOR SHARE, so the two serialize.
 
 - `Harness.connected` reads `harness_runtime_connection`: true while a row has an
   unexpired lease. `agent_harness_service` writes those rows per connection. With

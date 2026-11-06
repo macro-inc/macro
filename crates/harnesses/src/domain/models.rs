@@ -119,6 +119,20 @@ pub struct ApprovePairingRequest {
     pub team_id: Option<Uuid>,
 }
 
+/// Who a harness should belong to after a change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum RequestedHarnessOwner {
+    /// Private to the caller making the change.
+    User,
+    /// Shared with a team the caller belongs to.
+    Team {
+        /// Owner team id.
+        team_id: Uuid,
+    },
+}
+
 /// Request to change a registered harness. Omitted fields stay as they are.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -130,6 +144,41 @@ pub struct PatchHarnessRequest {
     /// Live sessions pick the change up at their next turn.
     #[serde(default)]
     pub allow_permission_bypass: Option<bool>,
+    /// New owner. Refused while it would leave agents bound to this harness
+    /// that their owners could no longer run on it.
+    #[serde(default)]
+    pub owner: Option<RequestedHarnessOwner>,
+}
+
+/// Owner of an agent bound to a harness.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum HarnessAgentOwner {
+    /// A private agent.
+    User {
+        /// Owner user id.
+        user_id: String,
+    },
+    /// A team agent.
+    Team {
+        /// Owner team id.
+        team_id: Uuid,
+    },
+}
+
+/// An agent bound to a harness, with its owner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct BoundHarnessAgent {
+    /// The agent's bot id.
+    pub bot_id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Stable `@` handle.
+    pub handle: String,
+    /// Who owns the agent.
+    pub owner: HarnessAgentOwner,
 }
 
 /// Request to claim an approved pairing's credential.

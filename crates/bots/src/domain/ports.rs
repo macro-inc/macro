@@ -4,8 +4,8 @@ use super::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
     BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
-    UpdateAgentRequest,
+    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, HarnessOwner, PatchAgentRequest,
+    PatchBotRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -13,6 +13,16 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
+
+/// Outcome of writing an agent that may bind to a registered harness.
+#[derive(Debug)]
+pub enum AgentWrite<T> {
+    /// The agent was written.
+    Written(T),
+    /// The bound harness was removed or changed owner after the binding was
+    /// validated; nothing was written.
+    HarnessChanged,
+}
 
 /// Bot repository.
 #[cfg_attr(feature = "test-utils", mockall::automock(type Err = anyhow::Error;))]
@@ -22,23 +32,30 @@ pub trait BotRepo: Send + Sync + 'static {
 
     /// Create an owned agent and its selected channel memberships atomically,
     /// with `has_agent` enabled.
+    ///
+    /// `harness_owner` is the owner `req.harness_id` was validated against;
+    /// the write holds that harness row FOR SHARE and checks it still has
+    /// that owner, so a concurrent owner change cannot strand the agent.
     fn create_agent(
         &self,
         owner: BotOwner,
         created_by: MacroUserIdStr<'static>,
         req: CreateAgentRequest,
-    ) -> impl Future<Output = Result<Agent, Self::Err>> + Send;
+        harness_owner: Option<HarnessOwner>,
+    ) -> impl Future<Output = Result<AgentWrite<Agent>, Self::Err>> + Send;
 
     /// Replace an owned agent and its selected channel memberships atomically,
     /// enabling `has_agent` even if it was previously disabled.
     /// The direct agent conversations it takes part in are not among them and
     /// are left as they are.
+    /// `harness_owner` is checked as in [`Self::create_agent`].
     fn update_agent(
         &self,
         bot_id: BotId,
         owner: BotOwner,
         req: UpdateAgentRequest,
-    ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
+        harness_owner: Option<HarnessOwner>,
+    ) -> impl Future<Output = Result<AgentWrite<Option<Agent>>, Self::Err>> + Send;
 
     /// List active agents the caller can manage or start a managed session as.
     ///

@@ -199,6 +199,7 @@ import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
 import type { View } from './generated/schemas/view';
 import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
+import { harnessPatchErrorResponse } from './harness-errors';
 import type { ItemType } from './itemType';
 
 export type { HistoryItemType, ItemType } from './itemType';
@@ -886,12 +887,11 @@ export const storageServiceClient = {
 
   async patchHarness(args: { harness_id: string } & PatchHarnessRequest) {
     const { harness_id, ...request } = args;
-    return (
-      await dssFetch<Harness>(`/harnesses/${harness_id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(request),
-      })
-    ).map((result) => result);
+    return await fetchWithToken<Harness>(`${dssHost}/harnesses/${harness_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+      errorResponseHandler: harnessPatchErrorResponse,
+    });
   },
 
   async deleteHarness(args: { harness_id: string }) {

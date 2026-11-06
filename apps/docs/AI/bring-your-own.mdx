@@ -108,6 +108,13 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
 
 In **New agent**, set the name, **@tag**, and instructions. Under **Where it runs**, choose **In your harness** and pick the machine under **Harness**. Under **Who can use it**, choose **Private** or **Team**, then save. @mention the agent to start a session on your machine. A **Private** agent can only be mentioned by you.
 
+## Change who can use a runtime
+
+You choose **Private** or **Team** when you approve a runtime, and you can change it later under **Who can use it** in **Settings → Runtimes**. You can change a private runtime you paired. For a team runtime, the person who paired it and the team owner can change it.
+
+- **Team:** everyone on your team can run their agents on the runtime. Your own agents keep working.
+- **Private:** only you can run agents on it, and it becomes yours. Macro refuses while team agents or other people's agents still run on it, and lists them. Move those agents to another runtime, then try again.
+
 ## Keep your runtime connected
 
 Leave `macrod` running and your computer awake while you use the runtime. Its terminal shows your sessions, configuration, and logs. You can also check the runtime in **Settings → Runtimes**.

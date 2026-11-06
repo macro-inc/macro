@@ -11,7 +11,7 @@ use super::{
         CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
         MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService, McpAppCatalog},
+    ports::{AgentWrite, BotError, BotRepo, BotService, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
@@ -309,21 +309,23 @@ where
         })
     }
 
-    /// Ensure the resolved agent owner may run agents on a registered harness.
+    /// Ensure the resolved agent owner may run agents on a registered harness,
+    /// returning the harness owner it checked so the write can confirm it.
     ///
     /// A team agent must run on its own team's harness - never on a private
     /// one, so a teammate's mention can never execute on a machine only one
     /// person controls. A private agent may run on the caller's own harness
-    /// or on a team harness of a team the caller belongs to.
+    /// or on a team harness of a team the caller belongs to. The harnesses
+    /// crate's `agents_stranded_by` applies the same rule to owner changes.
     async fn ensure_harness_usable(
         &self,
         caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
         auto_accept_permissions: Option<bool>,
-    ) -> Result<(), BotError> {
+    ) -> Result<Option<HarnessOwner>, BotError> {
         let Some(harness_id) = harness_id else {
-            return Ok(());
+            return Ok(None);
         };
         let harness_owner = self
             .repo
@@ -336,20 +338,20 @@ where
             harness_owner.allow_permission_bypass,
             auto_accept_permissions,
         )?;
-        let usable = match (owner, harness_owner.owner) {
+        let usable = match (owner, &harness_owner.owner) {
             (
                 BotOwner::Team { team_id },
                 HarnessOwner::Team {
                     team_id: harness_team,
                 },
-            ) => *team_id == harness_team,
+            ) => team_id == harness_team,
             (BotOwner::Team { .. }, HarnessOwner::User { .. }) => false,
             (
                 BotOwner::User { user_id },
                 HarnessOwner::User {
                     user_id: harness_user,
                 },
-            ) => *user_id == harness_user,
+            ) => user_id == harness_user,
             (
                 BotOwner::User { .. },
                 HarnessOwner::Team {
@@ -357,14 +359,14 @@ where
                 },
             ) => self
                 .repo
-                .user_has_team(caller, harness_team)
+                .user_has_team(caller, *harness_team)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?,
         };
         if !usable {
             return Err(BotError::Unauthorized);
         }
-        Ok(())
+        Ok(Some(harness_owner.owner))
     }
 
     async fn owner_for_agent_update(
@@ -453,23 +455,30 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), current, req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        let harness_owner = self
+            .ensure_harness_usable(
+                caller.clone(),
+                &owner,
+                req.harness_id,
+                req.auto_accept_permissions,
+            )
+            .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
         let requested_avatar_url = req.avatar_url.clone();
-        let agent = self
+        let agent = match self
             .repo
-            .update_agent(current.id, owner, req)
+            .update_agent(current.id, owner, req, harness_owner)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
-            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        {
+            AgentWrite::Written(Some(agent)) => agent,
+            AgentWrite::Written(None) => {
+                return Err(BotError::NotFound("agent not found".to_string()));
+            }
+            AgentWrite::HarnessChanged => return Err(harness_changed()),
+        };
 
         self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
             bot_id: agent.bot.id,
@@ -540,19 +549,24 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        let harness_owner = self
+            .ensure_harness_usable(
+                caller.clone(),
+                &owner,
+                req.harness_id,
+                req.auto_accept_permissions,
+            )
+            .await?;
         let created_by_user_id = caller.clone();
-        let agent = self
+        let agent = match self
             .repo
-            .create_agent(owner, caller, req)
+            .create_agent(owner, caller, req, harness_owner)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?;
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            AgentWrite::Written(agent) => agent,
+            AgentWrite::HarnessChanged => return Err(harness_changed()),
+        };
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: agent.bot.id,
@@ -1038,6 +1052,11 @@ fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<
         ));
     }
     Ok(())
+}
+
+/// The runtime an agent binds to changed between the check and the write.
+fn harness_changed() -> BotError {
+    BotError::BadRequest("the runtime changed while saving; choose a runtime again".to_owned())
 }
 
 #[cfg(test)]

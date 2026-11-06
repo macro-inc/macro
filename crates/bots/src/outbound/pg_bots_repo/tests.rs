@@ -5,7 +5,7 @@ use crate::domain::{
         CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
         PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotService, McpAppCatalog},
+    ports::{AgentWrite, BotError, BotService, McpAppCatalog},
     service::BotServiceImpl,
 };
 use entity_access::domain::models::{
@@ -2222,6 +2222,62 @@ async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnes
         .update_agent(user_id(TEAM_MEMBER), member_agent.bot.id, cleared)
         .await?;
     assert_eq!(cleared.harness_id, None);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_agent_write_refuses_a_harness_whose_owner_changed_after_the_check(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = PgBotsRepo::new(pool.clone());
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, USER_OWNER, "member").await?;
+    let harness_id = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    let owner = BotOwner::User {
+        user_id: USER_OWNER.to_owned(),
+    };
+
+    // The service checked the harness while it was private; it has since
+    // moved to the team.
+    sqlx::query!(
+        "UPDATE harnesses SET owner_user_id = NULL, team_id = $2 WHERE id = $1",
+        harness_id.as_uuid(),
+        team_id,
+    )
+    .execute(&pool)
+    .await?;
+    let stale = repo
+        .create_agent(
+            owner.clone(),
+            user_id(USER_OWNER),
+            macrod_agent_req("stale-check", Some(harness_id)),
+            Some(HarnessOwner::User {
+                user_id: USER_OWNER.to_owned(),
+            }),
+        )
+        .await?;
+    assert!(matches!(stale, AgentWrite::HarnessChanged));
+    let written = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM agent_configs WHERE harness_id = $1"#,
+        harness_id.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(written, 0);
+
+    let current = repo
+        .create_agent(
+            owner,
+            user_id(USER_OWNER),
+            macrod_agent_req("current-check", Some(harness_id)),
+            Some(HarnessOwner::Team { team_id }),
+        )
+        .await?;
+    let AgentWrite::Written(agent) = current else {
+        panic!("expected the agent to be written");
+    };
+    assert_eq!(agent.harness_id, Some(harness_id));
 
     Ok(())
 }

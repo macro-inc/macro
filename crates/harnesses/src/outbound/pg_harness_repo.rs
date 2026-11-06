@@ -13,10 +13,14 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-        PairingStatus,
+        BoundHarnessAgent, Harness, HarnessAgent, HarnessAgentOwner, HarnessOwner, HarnessSession,
+        PairingClaimFacts, PairingDetails, PairingStatus,
     },
-    ports::{HarnessChanges, HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
+    ports::{
+        BoundAgentFacts, HarnessChanges, HarnessRepo, HarnessUpdate, NewHarness, NewPairing,
+        OpenPairingCounts, PairingRow,
+    },
+    service::{ManagedHarness, agents_stranded_by},
 };
 
 /// Postgres-backed harness repository.
@@ -102,6 +106,63 @@ fn pairing_status(status: &str) -> anyhow::Result<PairingStatus> {
         "claimed" => Ok(PairingStatus::Claimed),
         other => anyhow::bail!("unknown pairing status: {other}"),
     }
+}
+
+/// The `(owner_user_id, team_id)` columns of an owner.
+fn owner_columns(owner: &HarnessOwner) -> (Option<&str>, Option<Uuid>) {
+    match owner {
+        HarnessOwner::User { user_id } => (Some(user_id.as_str()), None),
+        HarnessOwner::Team { team_id } => (None, Some(*team_id)),
+    }
+}
+
+/// The active agents bound to a harness, judged against `new_owner`.
+async fn bound_agent_facts(
+    executor: impl sqlx::PgExecutor<'_>,
+    harness_id: Uuid,
+    new_owner: &HarnessOwner,
+) -> anyhow::Result<Vec<BoundAgentFacts>> {
+    let (_, new_team_id) = owner_columns(new_owner);
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            b.id, b.name, b.handle, b.owner_user_id, b.team_id,
+            EXISTS (
+                SELECT 1 FROM team_user tu
+                WHERE tu.user_id = b.owner_user_id AND tu.team_id = $2
+            ) AS "owner_in_new_team!"
+        FROM agent_configs ac
+        JOIN bots b ON b.id = ac.bot_id
+        WHERE ac.harness_id = $1
+          AND b.deleted_at IS NULL
+          AND b.has_agent
+        ORDER BY b.created_at
+        "#,
+        harness_id,
+        new_team_id,
+    )
+    .fetch_all(executor)
+    .await
+    .context("failed to list bound agents")?;
+
+    rows.into_iter()
+        .map(|row| {
+            let owner = match (row.owner_user_id, row.team_id) {
+                (Some(user_id), None) => HarnessAgentOwner::User { user_id },
+                (None, Some(team_id)) => HarnessAgentOwner::Team { team_id },
+                _ => anyhow::bail!("agent {} bound to a harness has no single owner", row.id),
+            };
+            Ok(BoundAgentFacts {
+                agent: BoundHarnessAgent {
+                    bot_id: bot_id::BotId::new_from_uuid(row.id),
+                    name: row.name,
+                    handle: row.handle,
+                    owner,
+                },
+                owner_in_new_team: row.owner_in_new_team,
+            })
+        })
+        .collect()
 }
 
 async fn fetch_harness(
@@ -231,10 +292,7 @@ impl HarnessRepo for PgHarnessRepo {
     ) -> Result<Option<Harness>, Self::Err> {
         let mut tx = self.pool.begin().await.context("failed to begin tx")?;
 
-        let (owner_user_id, team_id) = match &harness.owner {
-            HarnessOwner::User { user_id } => (Some(user_id.as_str()), None),
-            HarnessOwner::Team { team_id } => (None, Some(*team_id)),
-        };
+        let (owner_user_id, team_id) = owner_columns(&harness.owner);
         sqlx::query!(
             r#"
             INSERT INTO harnesses (id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass)
@@ -397,39 +455,76 @@ impl HarnessRepo for PgHarnessRepo {
 
     async fn update_harness(
         &self,
-        harness_id: HarnessId,
+        managed: &ManagedHarness,
         changes: HarnessChanges,
-    ) -> Result<Option<Harness>, Self::Err> {
-        let row = sqlx::query_as!(
-            HarnessRow,
+    ) -> Result<HarnessUpdate, Self::Err> {
+        let harness_id = managed.harness().id.as_uuid();
+        let (checked_user_id, checked_team_id) = owner_columns(&managed.harness().owner);
+        let mut tx = self.pool.begin().await.context("failed to begin tx")?;
+
+        // Agent binds take this row FOR SHARE, so they wait for an owner
+        // change and see its result. Matching the owner keeps the caller's
+        // manage check from going stale under a concurrent owner change.
+        let locked = sqlx::query_scalar!(
+            r#"
+            SELECT id FROM harnesses
+            WHERE id = $1
+              AND deleted_at IS NULL
+              AND owner_user_id IS NOT DISTINCT FROM $2
+              AND team_id IS NOT DISTINCT FROM $3
+            FOR UPDATE
+            "#,
+            harness_id,
+            checked_user_id,
+            checked_team_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("failed to lock harness")?;
+        if locked.is_none() {
+            return Ok(HarnessUpdate::Missing);
+        }
+
+        let (owner_user_id, team_id) = match &changes.owner {
+            Some(new_owner) => {
+                let stranded = agents_stranded_by(
+                    new_owner,
+                    bound_agent_facts(&mut *tx, harness_id, new_owner).await?,
+                );
+                if !stranded.is_empty() {
+                    return Ok(HarnessUpdate::OwnerChangeBlocked(stranded));
+                }
+                owner_columns(new_owner)
+            }
+            None => (checked_user_id, checked_team_id),
+        };
+
+        sqlx::query!(
             r#"
             UPDATE harnesses
             SET
                 name = COALESCE($2, name),
                 allow_permission_bypass = COALESCE($3, allow_permission_bypass),
+                owner_user_id = $4,
+                team_id = $5,
                 updated_at = now()
-            WHERE id = $1 AND deleted_at IS NULL
-            RETURNING
-                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at,
-                EXISTS (
-                    SELECT 1 FROM harness_runtime_connection c
-                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
-                ) AS "has_live_connection!",
-                EXISTS (
-                    SELECT 1 FROM harness_runtime_connection c
-                    WHERE c.harness_id = harnesses.id
-                ) AS "has_connection_record!"
+            WHERE id = $1
             "#,
-            harness_id.as_uuid(),
+            harness_id,
             changes.name,
             changes.allow_permission_bypass,
+            owner_user_id,
+            team_id,
         )
-        .fetch_optional(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("failed to update harness")?;
 
-        row.map(Harness::try_from).transpose()
+        let updated = fetch_harness(&mut *tx, harness_id)
+            .await?
+            .context("updated harness row missing")?;
+        tx.commit().await.context("failed to commit")?;
+        Ok(HarnessUpdate::Updated(updated))
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {

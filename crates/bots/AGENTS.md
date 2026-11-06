@@ -44,6 +44,10 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Agent create/update/patch must persist `has_agent = true` atomically with
   configuration writes; mention dispatch gates on this flag for every harness.
+- An agent write bound to a registered harness re-reads the harness owner FOR
+  SHARE in its transaction and refuses when it differs from the owner
+  `ensure_harness_usable` checked, so a concurrent harness owner change
+  (`crates/harnesses`) cannot strand the agent.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).
