@@ -111,16 +111,13 @@ Vite's defaults.
 
 The local stack runs without Doppler. It runs Postgres, Redis, LocalStack, OpenSearch, Kafka, and FusionAuth in Docker, with dummy AWS credentials and fixed test secrets.
 
-On Linux, the Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-overlayfs`. Nix is the only host dependency.
+The local stack runs on Linux. The Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-overlayfs`. Nix is the only host dependency.
 
-On macOS, install a Docker runtime such as Docker Desktop, OrbStack, or Colima. The Nix dev shell supplies the Docker CLI, but macOS still needs the runtime to provide the daemon.
+The service binaries are built natively and link the Nix shell's libraries, so a macOS build can't run in the stack's Linux containers. On macOS, `run_local` and `stack up` stop before building and say so; for frontend-only work, [run the frontend against hosted services](#run-the-frontend-against-hosted-services).
 
-Install workspace dependencies from the repository root inside the Nix shell
-for each checkout or worktree before starting the stack:
-
-```bash
-bun install --frozen-lockfile
-```
+The first build in a checkout or worktree runs `bun install --frozen-lockfile`
+at the repository root and in `packages/sdk` when either has no `node_modules`:
+a Rust build script bundles the SDK from them.
 
 Run the preflight check before the first start:
 
@@ -452,7 +449,9 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 
 ## What the Stack Rebuilds
 
-The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
+The Rust services are built on the host with one `cargo build` in the Nix shell, into `target/debug`, the same directory `cargo build` and `cargo test` use. The binaries are mounted into a shared runtime image together with `/nix/store`, which holds the loader and libraries they link. Docker does not compile these services during a normal `run_local`. `cargo x build-services` runs the same build on its own.
+
+A Nix garbage collection can delete libraries a running stack's binaries use; rebuild with `r` or `just stack update` if a service then fails to start.
 
 Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
 

@@ -1,6 +1,6 @@
 //! `cargo x <local-orchestration-command>`
 //!
-//! The local/dev orchestration surface (`run-local`, `run-dev`, `zigbuild`,
+//! The local/dev orchestration surface (`run-local`, `run-dev`, `build-services`,
 //! `doctor-local`, …). It has many subcommands each with several flags, so it
 //! uses a real (clap) parser rather than fixed-arity slice patterns. The
 //! launcher forwards any command it does not recognize as a repo-automation
