@@ -64,6 +64,8 @@ fn linux_job() -> Job {
                 ))
                 .shell("bash"),
         )
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 

@@ -88,6 +88,8 @@ fn path_check() -> Job {
         )
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(compute_nextest_filter())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
 }
 
 /// fmt + clippy.
@@ -105,6 +107,7 @@ fn check() -> Job {
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -142,6 +145,7 @@ fn doppler_config() -> Job {
         .add_step(compute_doppler_bins())
         .add_step(validate_doppler_configs())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -198,6 +202,7 @@ fn test() -> Job {
         .add_step(setup_execution_runtime())
         .add_step(test_execution_runtime())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -235,6 +240,7 @@ fn build_service_bins() -> Job {
             Step::new("build service binaries").run(include_str!("scripts/build_service_bins.sh")),
         )
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 

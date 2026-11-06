@@ -312,6 +312,25 @@ jobs:
       shell: bash
       env:
         FILTER_CACHE_DIR: /home/runner/.cache/macro-nextest-filter
+    - name: show sccache stats
+      if: always()
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
   check:
     needs:
     - path-check
@@ -508,7 +527,23 @@ jobs:
         RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
     - name: show sccache stats
       if: always()
-      run: sccache --show-stats || true
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -739,7 +774,23 @@ jobs:
         DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
     - name: show sccache stats
       if: always()
-      run: sccache --show-stats || true
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -1038,7 +1089,23 @@ jobs:
         NEXTEST_RUN_DENO_TESTS: 'true'
     - name: show sccache stats
       if: always()
-      run: sccache --show-stats || true
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -1212,7 +1279,23 @@ jobs:
           --test service_binary_builds
     - name: show sccache stats
       if: always()
-      run: sccache --show-stats || true
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
