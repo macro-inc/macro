@@ -7,6 +7,7 @@ export const ONBOARDING_STEPS = [
   'tools',
   'team',
   'plan',
+  'routines',
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 

@@ -1,6 +1,11 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { starterSuggestionDraft } from '@app/features/routine-suggestions/core/suggestion-draft';
+import { createEmptyDraft } from '@app/features/routines/core/routine-draft';
+import type { RoutineTemplate } from '@app/features/routines/core/routine-templates';
+import { TEST_CATALOG } from '@app/features/routines/tests/catalog';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
+import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
@@ -51,6 +56,15 @@ export type FakeOnboardingWorld = {
   /** How many refreshes a checkout's webhook takes to land. */
   webhookDelayPolls: number;
   accent: string | undefined;
+  /** Suggestions are on, so the flow ends with the routines step. */
+  routineSuggestionsEnabled: boolean;
+  /** The last step's suggestions; undefined while they're picked. */
+  routineSuggestions: RoutineSuggestion[] | undefined;
+  routineCatalog: RoutineTemplate[];
+  /** Suggestions whose routine fails to be created. */
+  routineCreateFailures: string[];
+  /** Routines created from suggestions, by suggestion id. */
+  routinesCreated: string[];
   /** Capabilities that fail, with the message they report. */
   failures: Partial<
     Record<
@@ -133,6 +147,11 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
+    routineSuggestionsEnabled: false,
+    routineSuggestions: [],
+    routineCatalog: TEST_CATALOG,
+    routineCreateFailures: [],
+    routinesCreated: [],
     failures: {},
   };
 }
@@ -372,6 +391,40 @@ export function createFakeOnboarding(
       });
       return { t: 'completed' };
     },
+    routineSuggestionsEnabled: () => world.routineSuggestionsEnabled,
+    warmRoutineSuggestions: () => call('warmRoutineSuggestions'),
+    createRoutinesStep: () => ({
+      suggestions: () => world.routineSuggestions,
+      generating: () => world.routineSuggestions === undefined,
+      failed: () => false,
+      refresh: async () => call('refreshRoutineSuggestions'),
+      catalog: () => world.routineCatalog,
+      draft: (suggestion, edits) => {
+        const entry = world.routineCatalog.find(
+          (routine) => routine.key === suggestion.key
+        );
+        if (!entry) return undefined;
+        return starterSuggestionDraft(
+          { ...suggestion, knobs: { ...suggestion.knobs, ...edits } },
+          entry,
+          { ...createEmptyDraft('model'), triggers: [], enabled: true },
+          {
+            target: { kind: 'model', model: 'model' },
+            codeSteps: true,
+            workspace: { tag: [], channel: [], label: [] },
+          }
+        ).draft;
+      },
+      create: async (suggestion) => {
+        call(`createRoutine:${suggestion.id}`);
+        if (world.routineCreateFailures.includes(suggestion.id))
+          throw new Error('create failed');
+        update((draft) => {
+          draft.routinesCreated.push(suggestion.id);
+        });
+        return `routine-${suggestion.id}`;
+      },
+    }),
     repairTutorial: async () => {
       call('repairTutorial');
       update((draft) => {
