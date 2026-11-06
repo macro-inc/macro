@@ -296,6 +296,12 @@ export {
   ConversationTurn,
 } from './entities/agent-sessions/conversation';
 export type {
+  SessionOrigin,
+  SessionOriginCaller,
+  SessionOriginLineage,
+  SessionOriginRoot,
+} from './entities/agent-sessions/origin';
+export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
   ReviewDraft,
