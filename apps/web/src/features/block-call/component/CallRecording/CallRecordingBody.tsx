@@ -1,13 +1,22 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useCallContextOptional } from '@channel/Call/CallContext';
+import { guestDisplayName } from '@channel/Call/call-identity';
 import { CallDiscussionHistory } from '@channel/Call/chat/CallChatHistory';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { getDisplayName, tryMacroId } from '@core/user';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button, Tabs } from '@ui';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import type { CallTranscriptTarget } from '../../constants';
 import { recordingChatMessages } from '../../core/recording-chat';
 import { createRecordingPlayback } from '../../primitives/recording-playback';
@@ -20,6 +29,7 @@ import {
 } from '../transcript-playback';
 import { useCallAgain } from '../use-call-again';
 import { CallRecordingChat } from './CallRecordingChat';
+import { CallRecordingPinnedPlayer } from './CallRecordingPinnedPlayer';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingTitle } from './CallRecordingTitle';
 import { CallRecordingVideo } from './CallRecordingVideo';
@@ -48,6 +58,23 @@ export function CallRecordingBody(props: {
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
   const playback = createRecordingPlayback(videoRef);
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
+  const [playerRef, setPlayerRef] = createSignal<HTMLElement>();
+  const [playerOffscreen, setPlayerOffscreen] = createSignal(false);
+  createEffect(
+    on([scrollRef, playerRef], ([root, player]) => {
+      if (!root || !player) return;
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          setPlayerOffscreen(
+            entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0)
+          );
+        },
+        { root }
+      );
+      observer.observe(player);
+      onCleanup(() => observer.disconnect());
+    })
+  );
   const sortedTranscript = createMemo(() =>
     sortTranscriptSegments(record().transcript)
   );
@@ -135,6 +162,16 @@ export function CallRecordingBody(props: {
   const callTitle = createMemo(
     () => record().customName ?? record().channelName ?? 'Call Recording'
   );
+  const currentSpeaker = () => {
+    const segment = sortedTranscript().find(
+      (item) => item.sequenceNum === activeSequenceNum()
+    );
+    if (!segment) return callTitle();
+    return (
+      guestDisplayName(record(), segment.speakerId) ||
+      getDisplayName(tryMacroId(segment.speakerId))
+    );
+  };
 
   const callCtx = useCallContextOptional();
   const { canCallAgain, callAgain } = useCallAgain(
@@ -209,7 +246,7 @@ export function CallRecordingBody(props: {
 
                   <Show when={record().recordingUrl}>
                     {(url) => (
-                      <section class="flex flex-col gap-3">
+                      <section ref={setPlayerRef} class="flex flex-col gap-3">
                         <div class="overflow-hidden rounded-2xl">
                           <CallRecordingVideo
                             url={url()}
@@ -274,6 +311,20 @@ export function CallRecordingBody(props: {
               </div>
             </div>
             <CustomScrollbar scrollContainer={scrollRef} />
+            <Show when={playerOffscreen() && record().recordingUrl}>
+              <div class="absolute inset-x-4 bottom-4 z-20">
+                <CallRecordingPinnedPlayer
+                  playback={playback}
+                  speaker={currentSpeaker()}
+                  onShowVideo={() =>
+                    playerRef()?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    })
+                  }
+                />
+              </div>
+            </Show>
           </div>
         </SidePanel.Layout>
       )}
