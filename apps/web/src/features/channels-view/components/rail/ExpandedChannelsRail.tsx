@@ -24,7 +24,6 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
-import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -660,7 +659,6 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
-      <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={(element) => {
