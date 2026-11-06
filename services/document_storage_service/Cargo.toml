@@ -216,6 +216,9 @@ model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
 models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
+models_pagination = { path = "../../crates/models_pagination", features = [
+  "axum",
+] }
 models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }

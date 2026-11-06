@@ -19,6 +19,10 @@ impl CompaniesRepositoryImpl {
             .begin()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // Reassignment changes the parent used by contribution/read eligibility.
+        // Serialize it with privacy changes and population before domain/row locks;
+        // taking this lock never enrolls a mailbox or requires consent.
+        Self::lock_email_privacy(&mut tx, *team_id, true).await?;
         let before = sqlx::query!(
             "SELECT company_id, email FROM crm_contacts WHERE id = $1 AND team_id = $2",
             contact_id,
@@ -61,7 +65,7 @@ impl CompaniesRepositoryImpl {
         for domain in domains {
             Self::lock_team_domain(&mut tx, team_id, &domain).await?;
         }
-        if !Self::team_crm_enabled(&mut tx, team_id).await? {
+        if !Self::team_exists(&mut tx, team_id).await? {
             return Err(CrmError::CrmDisabledForTeam);
         }
         let companies = sqlx::query!(

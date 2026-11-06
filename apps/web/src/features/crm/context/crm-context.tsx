@@ -56,6 +56,15 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  createEmailPrivacy(): {
+    query: import('./crm-sources').CrmQuery<
+      import('../core/email-privacy').EmailPrivacy
+    >;
+    update: CrmMutation<
+      import('../core/email-privacy').EmailPrivacyChange,
+      import('../core/email-privacy').EmailPrivacy
+    >;
+  };
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
