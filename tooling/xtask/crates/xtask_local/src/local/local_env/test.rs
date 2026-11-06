@@ -316,18 +316,18 @@ fn emits_in_network_service_url_overrides() {
     }
 }
 
-/// Permalinks the static file service mints must be loadable by a browser on
-/// the host: the instance proxy's `/static-file/*` block, not the
-/// single-instance CDN port.
+/// Permalinks must remain loadable when the browser is on another machine,
+/// including when a headless stack serves the frontend on localhost.
 #[test]
 fn static_file_permalinks_go_through_the_instance_proxy() {
     let env = local_env();
     let permalink_base = env
         .get("OVERRIDE_STATIC_FILE_PUBLIC_URL")
         .expect("static file permalink base");
-    assert!(
-        permalink_base.starts_with("https://localhost:"),
-        "{permalink_base}"
+    let instance = Instance::derive(None, None).unwrap();
+    assert_eq!(
+        permalink_base,
+        &format!("{}/static-file", frontend::https_origin(&instance).unwrap())
     );
     assert!(permalink_base.ends_with("/static-file"), "{permalink_base}");
     assert!(!permalink_base.contains(":8100"), "{permalink_base}");
@@ -540,7 +540,7 @@ fn frontend_origin_tracks_how_the_app_is_served() {
             );
             assert_eq!(
                 env["OVERRIDE_STATIC_FILE_PUBLIC_URL"],
-                format!("{origin}/static-file")
+                format!("{}/static-file", frontend::https_origin(&instance).unwrap())
             );
         }
     }

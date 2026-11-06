@@ -92,22 +92,23 @@ impl LocalEnv {
         } else {
             instance.port(Port::Frontend)
         };
+        let public_origin = frontend::https_origin(instance)?;
         let frontend_origin = if static_frontend {
             proxy::url(instance)
         } else {
-            frontend::https_origin(instance)?
+            public_origin.clone()
         };
         // Presigned file URLs are opened by a browser that may be on another
         // machine (a laptop on the tailnet), so they use this machine's name,
         // which the proxy certificate covers in both flavors, not localhost.
-        let infra = InfraEnv::local(&frontend::https_origin(instance)?);
+        let infra = InfraEnv::local(&public_origin);
         Ok(LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
             frontend_port,
             mcp_client_public_url: format!("{frontend_origin}/cognition"),
-            static_file_public_url: format!("{frontend_origin}/static-file"),
+            static_file_public_url: format!("{public_origin}/static-file"),
             frontend_origin,
             external_egress_url: tunnels.egress.map(str::to_owned).unwrap_or_else(|| {
                 format!(

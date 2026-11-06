@@ -183,6 +183,11 @@ translate that public endpoint back to LocalStack internally. If a download or
 upload still attempts HTTP localhost, rebuild the services, reload the generated
 environment and proxy, and hard-refresh the browser to discard cached URLs.
 
+Static-file permalinks, including generated agent portraits, also use the
+machine's HTTPS proxy hostname at `/static-file`. This applies to headless
+stacks too, so a remote browser can load images even when the local frontend
+origin is localhost.
+
 If LocalStack loses its temporary resources after a restart, restore missing
 buckets, queues, tables, and keys without resetting Postgres or volumes:
 `cargo x localstack-provision --instance <name>`. Include `--port-base` if the
