@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                parent_id,\n                name,\n                description,\n                color AS \"color: SubteamColor\",\n                join_policy AS \"join_policy: SubteamJoinPolicy\",\n                created_at\n            FROM subteam\n            WHERE team_id = $1 AND ($2::uuid IS NULL OR id = $2)\n            ORDER BY lower(name), id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "color: SubteamColor",
+        "type_info": {
+          "Custom": {
+            "name": "subteam_color",
+            "kind": {
+              "Enum": [
+                "violet",
+                "blue",
+                "teal",
+                "cyan",
+                "orange",
+                "pink",
+                "lime"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "join_policy: SubteamJoinPolicy",
+        "type_info": {
+          "Custom": {
+            "name": "subteam_join_policy",
+            "kind": {
+              "Enum": [
+                "open",
+                "invite_only"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c0c4bd89c664926df48e96800ac43acbd3277edfee61d5088ff4b78f023ab733"
+}

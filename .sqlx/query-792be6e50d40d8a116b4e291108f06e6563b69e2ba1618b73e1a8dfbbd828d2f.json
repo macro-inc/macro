@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                subteam_id,\n                user_id,\n                role AS \"role: SubteamRole\"\n            FROM subteam_member\n            WHERE team_id = $1 AND ($2::uuid IS NULL OR subteam_id = $2)\n            ORDER BY role DESC, created_at, user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subteam_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role: SubteamRole",
+        "type_info": {
+          "Custom": {
+            "name": "subteam_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "manager"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "792be6e50d40d8a116b4e291108f06e6563b69e2ba1618b73e1a8dfbbd828d2f"
+}
