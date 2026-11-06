@@ -4,29 +4,8 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use super::super::test_support::TempDir;
 use super::*;
-
-/// A fresh, empty directory under the system temp dir, removed on drop.
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn new(name: &str) -> TempDir {
-        let dir = std::env::temp_dir().join(format!(
-            "xtask-dep-cache-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        TempDir(dir)
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
 
 const REG: &str = "0123456789abcdef";
 const REG_BUILD: &str = "fedcba9876543210";
@@ -86,7 +65,7 @@ fn key() -> Key {
 #[test]
 fn selects_only_registry_units() {
     let tmp = TempDir::new("select");
-    let t = fake_target(&tmp.0);
+    let t = fake_target(tmp.path());
     let paths: Vec<String> = registry_unit_paths(&t, &workspace())
         .unwrap()
         .iter()
@@ -163,7 +142,7 @@ fn key_env_keeps_only_build_relevant_vars() {
 #[test]
 fn save_keeps_mtimes_and_seed_sets_one_current_time() {
     let tmp = TempDir::new("roundtrip");
-    let t = fake_target(&tmp.0.join("a"));
+    let t = fake_target(&tmp.path().join("a"));
     let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
     fs::File::options()
         .write(true)
@@ -172,14 +151,14 @@ fn save_keeps_mtimes_and_seed_sets_one_current_time() {
         .set_modified(old)
         .unwrap();
 
-    let entry = tmp.0.join("cache").join(key().digest());
+    let entry = tmp.path().join("cache").join(key().digest());
     save(&entry, &t, &workspace()).unwrap();
     assert!(is_complete(&entry));
 
     let cached = entry.join(format!("deps/libserde_json-{REG}.rlib"));
     assert_eq!(fs::metadata(&cached).unwrap().modified().unwrap(), old);
 
-    let fresh = tmp.0.join("b/target/debug");
+    let fresh = tmp.path().join("b/target/debug");
     assert!(!is_seeded(&fresh, &entry));
     let before = SystemTime::now();
     seed(&entry, &fresh).unwrap();
@@ -208,13 +187,13 @@ fn save_keeps_mtimes_and_seed_sets_one_current_time() {
 #[test]
 fn seeded_files_are_independent_of_the_cache() {
     let tmp = TempDir::new("independent");
-    let t = fake_target(&tmp.0.join("a"));
-    let entry = tmp.0.join("cache").join(key().digest());
+    let t = fake_target(&tmp.path().join("a"));
+    let entry = tmp.path().join("cache").join(key().digest());
     save(&entry, &t, &workspace()).unwrap();
     let cached = entry.join(format!("deps/libserde_json-{REG}.rlib"));
     let before = fs::metadata(&cached).unwrap();
 
-    let fresh = tmp.0.join("b/target/debug");
+    let fresh = tmp.path().join("b/target/debug");
     seed(&entry, &fresh).unwrap();
     let seeded = fresh.join(format!("deps/libserde_json-{REG}.rlib"));
     assert_ne!(fs::metadata(&seeded).unwrap().ino(), before.ino());
@@ -234,11 +213,11 @@ fn seeded_files_are_independent_of_the_cache() {
 #[test]
 fn a_second_save_of_the_same_key_keeps_the_first() {
     let tmp = TempDir::new("race");
-    let t = fake_target(&tmp.0.join("a"));
-    let entry = tmp.0.join("cache").join(key().digest());
+    let t = fake_target(&tmp.path().join("a"));
+    let entry = tmp.path().join("cache").join(key().digest());
     save(&entry, &t, &workspace()).unwrap();
     save(&entry, &t, &workspace()).unwrap();
-    let leftovers: Vec<_> = fs::read_dir(tmp.0.join("cache"))
+    let leftovers: Vec<_> = fs::read_dir(tmp.path().join("cache"))
         .unwrap()
         .flatten()
         .map(|e| e.file_name())
@@ -249,15 +228,15 @@ fn a_second_save_of_the_same_key_keeps_the_first() {
 #[test]
 fn seed_refuses_an_unfinished_entry() {
     let tmp = TempDir::new("unfinished");
-    let entry = tmp.0.join("cache/abc");
+    let entry = tmp.path().join("cache/abc");
     write(&entry.join("deps/x"), "x");
-    assert!(seed(&entry, &tmp.0.join("t")).is_err());
+    assert!(seed(&entry, &tmp.path().join("t")).is_err());
 }
 
 #[test]
 fn evict_keeps_the_most_recently_used() {
     let tmp = TempDir::new("evict");
-    let root = tmp.0.join("cache");
+    let root = tmp.path().join("cache");
     for (i, name) in ["old", "mid", "new"].iter().enumerate() {
         let marker = root.join(name).join(COMPLETE_MARKER);
         write(&marker, "1");
@@ -280,12 +259,12 @@ fn evict_keeps_the_most_recently_used() {
 fn read_only_outputs_are_copied() {
     use std::os::unix::fs::PermissionsExt;
     let tmp = TempDir::new("readonly");
-    let t = fake_target(&tmp.0.join("a"));
+    let t = fake_target(&tmp.path().join("a"));
     let lib = t.join(format!("build/openssl-sys-{REG_BUILD}/out/lib/libssl.a"));
     fs::set_permissions(&lib, fs::Permissions::from_mode(0o444)).unwrap();
-    let entry = tmp.0.join("cache").join(key().digest());
+    let entry = tmp.path().join("cache").join(key().digest());
     save(&entry, &t, &workspace()).unwrap();
-    let fresh = tmp.0.join("b/target/debug");
+    let fresh = tmp.path().join("b/target/debug");
     seed(&entry, &fresh).unwrap();
     let cached = entry.join(format!("build/openssl-sys-{REG_BUILD}/out/lib/libssl.a"));
     assert_eq!(
@@ -309,11 +288,11 @@ fn read_only_outputs_are_copied() {
 #[test]
 fn a_target_with_any_of_the_units_is_not_seeded() {
     let tmp = TempDir::new("overlap");
-    let t = fake_target(&tmp.0.join("a"));
-    let entry = tmp.0.join("cache").join(key().digest());
+    let t = fake_target(&tmp.path().join("a"));
+    let entry = tmp.path().join("cache").join(key().digest());
     save(&entry, &t, &workspace()).unwrap();
 
-    let other = tmp.0.join("b/target/debug");
+    let other = tmp.path().join("b/target/debug");
     let own = other.join(format!("deps/libserde_json-{REG}.rlib"));
     write(&own, "built here");
     write(
@@ -338,12 +317,12 @@ fn a_target_with_any_of_the_units_is_not_seeded() {
 #[test]
 fn an_empty_target_gets_every_unit() {
     let tmp = TempDir::new("whole");
-    let t = fake_target(&tmp.0.join("a"));
-    let entry = tmp.0.join("cache").join(key().digest());
+    let t = fake_target(&tmp.path().join("a"));
+    let entry = tmp.path().join("cache").join(key().digest());
     save(&entry, &t, &workspace()).unwrap();
     // The rlib, rmeta and .d; the build script's two files; two fingerprints.
     assert_eq!(
-        seed(&entry, &tmp.0.join("b/target/debug")).unwrap(),
+        seed(&entry, &tmp.path().join("b/target/debug")).unwrap(),
         Seeded::Copied(7)
     );
 }
