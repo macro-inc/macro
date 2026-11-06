@@ -30,7 +30,14 @@ rec {
     instance: name: w:
     "${name}-${
       builtins.substring 0 10 (
-        builtins.hashString "sha256" "${builtins.unsafeDiscardStringContext w.image.ref}${instance.envRevision}"
+        builtins.hashString "sha256" (
+          builtins.toJSON {
+            image = builtins.unsafeDiscardStringContext w.image.ref;
+            workload = builtins.removeAttrs w [ "image" ];
+            inherit (instance) envRevision secrets size;
+            builder = builtins.hashFile "sha256" ./lib.nix;
+          }
+        )
       )
     }";
   # An OCI image in the platform registry. Each store path in its closure is
