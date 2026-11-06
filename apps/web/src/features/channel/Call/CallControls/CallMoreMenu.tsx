@@ -220,33 +220,30 @@ export function CallMoreMenu(props: {
                   </Dropdown.Group>
                 </Dropdown.SubContent>
               </Dropdown.Sub>
-              <Dropdown.CheckboxItem
-                class="flex-row-reverse"
-                checked={props.hideParticipants}
-                disabled={!props.hasScreenShare}
-                closeOnSelect={false}
-                onChange={props.onHideParticipantsChange}
-                indicator={
-                  <span inert aria-hidden="true">
-                    <ToggleSwitch
-                      checked={props.hideParticipants}
-                      disabled={!props.hasScreenShare}
-                    />
+              <Show when={props.hasScreenShare}>
+                <Dropdown.CheckboxItem
+                  class="flex-row-reverse"
+                  checked={props.hideParticipants}
+                  disabled={!props.hasScreenShare}
+                  closeOnSelect={false}
+                  onChange={props.onHideParticipantsChange}
+                  indicator={
+                    <span inert aria-hidden="true">
+                      <ToggleSwitch
+                        checked={props.hideParticipants}
+                        disabled={!props.hasScreenShare}
+                      />
+                    </span>
+                  }
+                >
+                  <span class="flex flex-1 items-center gap-1.5">
+                    <UsersSlash class="size-4" />
+                    <span class="flex-1">
+                      <span class="block">{t('calls.hideParticipants')}</span>
+                    </span>
                   </span>
-                }
-              >
-                <span class="flex flex-1 items-center gap-1.5">
-                  <UsersSlash class="size-4" />
-                  <span class="flex-1">
-                    <span class="block">{t('calls.hideParticipants')}</span>
-                    <Show when={!props.hasScreenShare}>
-                      <span class="block text-xs text-ink-muted">
-                        {t('calls.whileSharing')}
-                      </span>
-                    </Show>
-                  </span>
-                </span>
-              </Dropdown.CheckboxItem>
+                </Dropdown.CheckboxItem>
+              </Show>
               <Dropdown.Item
                 onSelect={props.onFullscreen}
                 disabled={!props.fullscreenAvailable}

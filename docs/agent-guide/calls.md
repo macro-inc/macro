@@ -359,7 +359,7 @@ equal tiles; Speaker puts the active person or share above a filmstrip; Sidebar
 puts that strip on the right. Phones always use Auto.
 **More → Hide participants** hides the strip and self view during screen sharing,
 leaving a speaking-person chip on the share. It resets when sharing stops and is
-disabled without a share. Hover or focus the shared screen to reveal the same
+not shown without a share. Hover or focus the shared screen to reveal the same
 visibility toggle on its bottom edge, or its right edge in Sidebar. The caret
 flips while hidden. Grid has no edge caret; its equal participant grid remains
 controlled through More. Tracks stay mounted and audio continues.

@@ -280,7 +280,9 @@ describe('CallOverlay screen share', () => {
     );
     screenShare.track = undefined;
     controls.setTrackVersion((version) => version + 1);
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(
+      screen.queryByRole('menuitemcheckbox', { name: /Hide participants/ })
+    ).toBeNull();
     expect(camera.closest('[hidden]')).toBeNull();
   });
 });
