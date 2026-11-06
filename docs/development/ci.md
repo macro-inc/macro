@@ -1,6 +1,6 @@
 # CI on pull requests
 
-CI runs on a pull request when someone adds the `run-ci` label. The `PR CI`
+CI runs on a pull request only when someone adds the `run-ci` label. The `PR CI`
 workflow then runs every check on the PR's head commit, removes the label, and
 reports the result as the `CI gate` commit status on that commit. Each push
 leaves the new commit at `Not run on this commit`, so a PR can merge only after
@@ -14,6 +14,3 @@ The [`run-ci` skill](../../.agents/skills/run-ci/SKILL.md) has the commands,
 what each `CI gate` state means, re-runs, and fork PRs. The workflows are
 generated from Rust; see the
 [workflows rule](../../.agents/rules/infra/github-workflows.md).
-
-Until `main`'s ruleset requires `CI gate`, the checks also still run on every
-push, and `main` still requires their old status checks.

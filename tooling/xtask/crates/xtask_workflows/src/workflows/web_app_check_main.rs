@@ -2,8 +2,7 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Strategy,
-    Use, Workflow, WorkflowCall,
+    Event, Expression, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
 };
 
 use crate::workflows::{
@@ -36,17 +35,7 @@ fn mid_web_runner() -> String {
 /// Build the workflow.
 pub fn web_app_check_main() -> Workflow {
     Workflow::new("Web App Pr Checks")
-        .on(Event::default()
-            .pull_request(
-                PullRequest::default()
-                    .add_branch("main")
-                    .add_type(PullRequestType::Opened)
-                    .add_type(PullRequestType::Synchronize)
-                    .add_type(PullRequestType::Reopened)
-                    .add_type(PullRequestType::ReadyForReview),
-            )
-            .workflow_call(WorkflowCall::default()))
-        .concurrency(vars::concurrency("web-app-pr-checks"))
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("path-check", path_check())
         .add_job(android_native_check::JOB_ID, android_native_check())
         .add_job("typescript", typescript())
