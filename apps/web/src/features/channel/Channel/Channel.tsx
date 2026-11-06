@@ -1220,6 +1220,11 @@ export function Channel(props: ChannelProps) {
                         </DebugSuspense>
                       </Show>
                       <ChannelInputContainer
+                        class={
+                          callPanel
+                            ? 'px-(--message-padding-x) touch:px-(--message-padding-x)'
+                            : undefined
+                        }
                         ref={(el) => {
                           attachInputRef(el);
                           composerTarget(el);
