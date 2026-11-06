@@ -1019,6 +1019,11 @@ export async function persistLocalEmailSend(
 export async function removeLocalEmailSend(uuid: string): Promise<void> {
   await localDraftStore.removeSend(await emailStorageSession(), uuid);
 }
+export async function readRemovedEmailSendCopy(
+  draftId: string
+): Promise<Pick<LocalDraft, 'generation' | 'revision'> | undefined> {
+  return await localDraftStore.sentCopy(await emailStorageSession(), draftId);
+}
 export function watchLocalEmailSends(changed: () => void): () => void {
   return localDraftStore.subscribe(changed);
 }
