@@ -12,11 +12,12 @@ use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPerm
 
 use crate::domain::owned_entity_cleanup::OwnedEntityCleanupError;
 
+mod domain_join;
 mod invite_link;
 
+pub use domain_join::{DomainTeam, JoinTeamByDomainError};
 pub use invite_link::{
-    JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, ManageTeamInviteLinkError,
-    TeamInviteLinkTeam, TeamInviteLinkToken,
+    JoinTeamByInviteLinkError, ManageTeamInviteLinkError, TeamInviteLinkTeam, TeamInviteLinkToken,
 };
 
 /// Team plans
@@ -903,6 +904,28 @@ pub enum JoinTeamDirectlyError {
     /// Underlying join team error
     #[error("Underlying join team error {0}")]
     JoinTeamError(#[from] JoinTeamError),
+}
+
+/// What happened when a user joined a team without an email invite.
+#[derive(Debug, Clone)]
+pub enum DirectJoinOutcome {
+    /// The user joined the team.
+    Joined(TeamMember<'static>),
+    /// The user was already on the team, so nothing changed.
+    AlreadyMember {
+        /// The team the user is on.
+        team_id: uuid::Uuid,
+    },
+}
+
+impl DirectJoinOutcome {
+    /// The team the user joined or was already on.
+    pub fn team_id(&self) -> uuid::Uuid {
+        match self {
+            Self::Joined(member) => member.team_id,
+            Self::AlreadyMember { team_id } => *team_id,
+        }
+    }
 }
 
 /// Errors for revoking permissions for team members

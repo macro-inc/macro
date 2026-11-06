@@ -77,6 +77,8 @@ export const authExcluded = [
   'getPermissions',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
+  // Joining the team that claims the user's email domain is an app team flow.
+  'getTeamByDomain',
   'getTeamByInviteLink',
   'getTeamInviteLink',
   'getSystemStatus',
@@ -96,6 +98,7 @@ export const authExcluded = [
   'initGmailLink',
   'initOutlookLink',
   'joinTeam',
+  'joinTeamByDomain',
   'joinTeamByInviteLink',
   'listCodexEnvironments',
   'listCursorModels',

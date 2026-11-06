@@ -8,10 +8,10 @@ use entity_access::domain::models::{
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
-    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, DueInviteReminder,
-    InviteUsersToTeamError, JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome,
-    JoinTeamDirectlyError, JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse,
-    PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
+    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, DirectJoinOutcome, DomainTeam,
+    DueInviteReminder, InviteUsersToTeamError, JoinTeamByDomainError, JoinTeamByInviteLinkError,
+    JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
+    RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
     SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
@@ -337,7 +337,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     ///
     /// NOTE: this only touches team membership — billing, roles, and
     /// channel membership are handled by the service (see
-    /// `TeamService::try_join_team_by_domain`).
+    /// `TeamService::join_team_by_domain`).
     fn add_user_to_team(
         &self,
         team_id: &uuid::Uuid,
@@ -607,17 +607,22 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
-    /// Automatically joins the user to the team whose auto-join domain
-    /// matches the user's email domain, if such a team exists. The user is
-    /// added to the team directly (no invite), with the same billing /
-    /// roles / channel side effects as `join_team`.
-    ///
-    /// Returns the new team member, or None when no team matched or the
-    /// user is already on a team. Membership is not capped by plan or team size.
-    fn try_join_team_by_domain(
+    /// The team whose auto-join domain matches the user's email domain, if
+    /// any, so the user can see it before choosing to join.
+    fn get_team_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<TeamMember<'static>>, JoinTeamDirectlyError>> + Send;
+    ) -> impl Future<Output = Result<Option<DomainTeam>, TeamError>> + Send;
+
+    /// Joins the user to the team whose auto-join domain matches their email
+    /// domain, once they accept. The user is added directly (no invite), with
+    /// the same billing, role, and channel side effects as `join_team`.
+    /// Rejoining the same team is a no-op. Membership is not capped by plan
+    /// or team size.
+    fn join_team_by_domain(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<DirectJoinOutcome, JoinTeamByDomainError>> + Send;
 }
 
 /// Manages a team's shareable invite link and joins users through it.
@@ -658,5 +663,5 @@ pub trait TeamInviteLinkService: Clone + Send + Sync + 'static {
         &self,
         token: &TeamInviteLinkToken,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError>> + Send;
+    ) -> impl Future<Output = Result<DirectJoinOutcome, JoinTeamByInviteLinkError>> + Send;
 }

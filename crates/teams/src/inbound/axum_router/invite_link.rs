@@ -16,7 +16,7 @@ use model_error_response::ErrorResponse;
 
 use crate::domain::{
     model::{
-        JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, JoinTeamDirectlyError,
+        DirectJoinOutcome, JoinTeamByInviteLinkError, JoinTeamDirectlyError,
         ManageTeamInviteLinkError, TeamError, TeamInviteLinkTeam, TeamInviteLinkToken,
     },
     team_repo::{TeamInviteLinkService, TeamService},
@@ -246,6 +246,6 @@ pub async fn join_handler<
         .await?;
     Ok(Json(JoinTeamByInviteLinkResponse {
         team_id: outcome.team_id(),
-        already_member: matches!(outcome, JoinTeamByInviteLinkOutcome::AlreadyMember { .. }),
+        already_member: matches!(outcome, DirectJoinOutcome::AlreadyMember { .. }),
     }))
 }

@@ -4207,6 +4207,45 @@
         }
       }
     },
+    "/team/domain": {
+      "get": {
+        "tags": ["teams::inbound::axum_router::domain_join"],
+        "summary": "Gets the team whose auto-join domain matches the caller's email domain, so\nthe caller can choose to join it.",
+        "operationId": "get_team_by_domain",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainTeamResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/domain-notice": {
       "post": {
         "tags": ["teams::inbound::axum_router::domain_notice"],
@@ -4234,6 +4273,65 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/domain/join": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::domain_join"],
+        "summary": "Joins the team whose auto-join domain matches the caller's email domain.",
+        "operationId": "join_team_by_domain",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinTeamByDomainResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -7163,6 +7261,39 @@
           "overage_payment_failed"
         ]
       },
+      "DomainTeam": {
+        "type": "object",
+        "description": "The team whose auto-join domain matches the user's email domain, offered\nto the user before they accept.",
+        "required": ["team_id", "team_name"],
+        "properties": {
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id of the team."
+          },
+          "team_name": {
+            "type": "string",
+            "description": "Name of the team."
+          }
+        }
+      },
+      "DomainTeamResponse": {
+        "type": "object",
+        "description": "The team the caller may join because it claims their email domain.",
+        "properties": {
+          "team": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DomainTeam",
+                "description": "The team, or null when no team claims the caller's email domain."
+              }
+            ]
+          }
+        }
+      },
       "EmailConnectionProviders": {
         "type": "object",
         "description": "What the provider selector offers the requesting user.",
@@ -8084,6 +8215,22 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The team the caller means to invite to. Invites always go to the\ncaller's current team; when this names another team, nothing is sent\nand the request answers 409."
+          }
+        }
+      },
+      "JoinTeamByDomainResponse": {
+        "type": "object",
+        "description": "The result of joining the team that claims the caller's email domain.",
+        "required": ["team_id", "already_member"],
+        "properties": {
+          "already_member": {
+            "type": "boolean",
+            "description": "True when the caller was already on the team and nothing changed."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team the caller joined."
           }
         }
       },

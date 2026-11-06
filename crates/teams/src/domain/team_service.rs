@@ -46,9 +46,10 @@ use crate::domain::{
     },
     invite_rewards::{InviteRewardEvent, InviteRewarder, NoOpInviteRewarder},
     model::{
-        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
-        JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
+        CreateTeamError, CustomerError, DeleteTeamError, DirectJoinOutcome, DomainTeam,
+        InviteUsersToTeamError, JoinTeamByDomainError, JoinTeamDirectlyError, JoinTeamError,
+        PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
+        RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
         RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
         SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
         TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
@@ -530,6 +531,40 @@ where
         }));
 
         Ok(Some(team_member))
+    }
+
+    /// Joins the team directly unless the user is already on a team, since
+    /// users belong to at most one. Rejoining the user's own team is a no-op.
+    /// Returns None when the user is on another team.
+    async fn join_team_when_teamless(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        join_method: TeamJoinMethod,
+    ) -> Result<Option<DirectJoinOutcome>, JoinTeamDirectlyError> {
+        let user_teams = self.team_repository.get_user_teams(user_id).await?;
+        if user_teams.iter().any(|team| team.id == *team_id) {
+            return Ok(Some(DirectJoinOutcome::AlreadyMember { team_id: *team_id }));
+        }
+        if !user_teams.is_empty() {
+            return Ok(None);
+        }
+
+        if let Some(member) = self
+            .join_team_directly(team_id, user_id, join_method)
+            .await?
+        {
+            return Ok(Some(DirectJoinOutcome::Joined(member)));
+        }
+
+        // The insert found an existing membership, which a concurrent join
+        // may have created on either this team or another one.
+        let user_teams = self.team_repository.get_user_teams(user_id).await?;
+        if user_teams.iter().any(|team| team.id == *team_id) {
+            Ok(Some(DirectJoinOutcome::AlreadyMember { team_id: *team_id }))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Reconcile while the caller holds the owning team billing guard.
@@ -1277,7 +1312,7 @@ where
     }
 
     /// Best-effort rollback of a direct team add (from
-    /// `try_join_team_by_domain`): removes the membership again and undoes
+    /// `join_team_directly`): removes the membership again and undoes
     /// the team seat count bump. Failures are logged and swallowed, like
     /// the other join rollbacks.
     async fn rollback_add_user_to_team(
@@ -2708,15 +2743,30 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn try_join_team_by_domain(
+    async fn get_team_by_domain(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
+    ) -> Result<Option<DomainTeam>, TeamError> {
         let Some(team_id) = self.team_repository.get_team_id_by_domain(user_id).await? else {
             return Ok(None);
         };
+        let team_name = self.team_repository.get_team_name(&team_id).await?;
+        Ok(Some(DomainTeam { team_id, team_name }))
+    }
 
-        self.join_team_directly(&team_id, user_id, TeamJoinMethod::DomainAutoJoin)
-            .await
+    #[tracing::instrument(skip(self), err)]
+    async fn join_team_by_domain(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<DirectJoinOutcome, JoinTeamByDomainError> {
+        let team_id = self
+            .team_repository
+            .get_team_id_by_domain(user_id)
+            .await?
+            .ok_or(JoinTeamByDomainError::NoDomainTeam)?;
+
+        self.join_team_when_teamless(&team_id, user_id, TeamJoinMethod::DomainAutoJoin)
+            .await?
+            .ok_or(JoinTeamByDomainError::AlreadyInAnotherTeam)
     }
 }

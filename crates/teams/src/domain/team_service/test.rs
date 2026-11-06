@@ -56,11 +56,12 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, DueInviteReminder, JoinTeamDirectlyError,
-        PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError, RemoveUserFromAllTeamsError,
-        RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamInviteSnapshot, TeamMember,
-        TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        AcceptedTeamInvite, CustomerError, DirectJoinOutcome, DomainTeam, DueInviteReminder,
+        JoinTeamByDomainError, JoinTeamDirectlyError, PatchTeamRequest, PatchTeamUserRole,
+        RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan,
+        SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
+        TeamInviteLinkToken, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+        ToggleAutoJoinDomainError,
     },
     owned_entity_cleanup::ClearedTeam,
     team_repo::TeamRepository,
@@ -6643,7 +6644,7 @@ async fn team_analytics_remove_user_from_team_does_not_emit_when_remove_is_rolle
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_no_matching_team_returns_none() {
+async fn test_join_team_by_domain_no_matching_team_fails() {
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
@@ -6662,14 +6663,14 @@ async fn test_try_join_team_by_domain_no_matching_team_returns_none() {
         NoOpTeamCrmSettingsRepository,
     );
 
-    let member = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let error = service.join_team_by_domain(&user_id).await.unwrap_err();
 
-    assert!(member.is_none());
+    assert!(matches!(error, JoinTeamByDomainError::NoDomainTeam));
     assert!(increment_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_adds_member_directly() {
+async fn test_join_team_by_domain_adds_member_directly() {
     let team_id = uuid::Uuid::from_u128(77);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
@@ -6707,11 +6708,10 @@ async fn test_try_join_team_by_domain_adds_member_directly() {
         NoOpTeamCrmSettingsRepository,
     );
 
-    let member = service
-        .try_join_team_by_domain(&user_id)
-        .await
-        .unwrap()
-        .expect("user should have been auto-joined");
+    let DirectJoinOutcome::Joined(member) = service.join_team_by_domain(&user_id).await.unwrap()
+    else {
+        panic!("user should have joined the team");
+    };
 
     assert_eq!(member.team_id, team_id);
     assert_eq!(member.user_id.as_ref(), user_id.as_ref());
@@ -6730,15 +6730,14 @@ async fn test_try_join_team_by_domain_adds_member_directly() {
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_returns_none_when_already_member() {
+async fn test_join_team_by_domain_is_a_no_op_for_an_existing_member() {
     let team_id = uuid::Uuid::from_u128(78);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
 
-    // add_user_to_team returns None: the user is already on the team.
     let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
     team_repo.team_id_for_domain = Some(team_id);
-    team_repo.add_user_to_team_result = None;
+    team_repo.user_teams = vec![account_deletion_team(team_id, &user_id)];
 
     let customer_repo = MockCustomerRepository::default();
     let increment_calls = customer_repo.increment_calls.clone();
@@ -6755,15 +6754,76 @@ async fn test_try_join_team_by_domain_returns_none_when_already_member() {
     )
     .with_event_broker(event_broker.clone());
 
-    let member = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let outcome = service.join_team_by_domain(&user_id).await.unwrap();
 
-    assert!(member.is_none());
+    assert!(matches!(
+        outcome,
+        DirectJoinOutcome::AlreadyMember { team_id: id } if id == team_id
+    ));
     assert!(increment_calls.lock().unwrap().is_empty());
     assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_paid_team_joins_past_former_plan_limit() {
+async fn join_team_by_domain_refuses_a_user_on_another_team() {
+    let domain_team_id = uuid::Uuid::from_u128(87);
+    let other_team_id = uuid::Uuid::from_u128(88);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+
+    let mut team_repo =
+        MockTeamRepository::new(Vec::new(), "Test Team", Arc::new(Mutex::new(Vec::new())));
+    team_repo.team_id_for_domain = Some(domain_team_id);
+    team_repo.user_teams = vec![account_deletion_team(other_team_id, &user_id)];
+    let add_user_to_team_calls = team_repo.add_user_to_team_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let error = service.join_team_by_domain(&user_id).await.unwrap_err();
+
+    assert!(matches!(error, JoinTeamByDomainError::AlreadyInAnotherTeam));
+    assert_eq!(*add_user_to_team_calls.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn get_team_by_domain_names_the_matching_team() {
+    let team_id = uuid::Uuid::from_u128(89);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+
+    let mut team_repo =
+        MockTeamRepository::new(Vec::new(), "Example Co", Arc::new(Mutex::new(Vec::new())));
+    team_repo.team_id_for_domain = Some(team_id);
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let team = service.get_team_by_domain(&user_id).await.unwrap();
+
+    assert_eq!(
+        team,
+        Some(DomainTeam {
+            team_id,
+            team_name: "Example Co".to_string(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_join_team_by_domain_paid_team_joins_past_former_plan_limit() {
     let team_id = uuid::Uuid::from_u128(79);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
@@ -6794,9 +6854,9 @@ async fn test_try_join_team_by_domain_paid_team_joins_past_former_plan_limit() {
     )
     .with_event_broker(event_broker.clone());
 
-    let member = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let member = service.join_team_by_domain(&user_id).await.unwrap();
 
-    assert_eq!(member.unwrap().team_id, team_id);
+    assert_eq!(member.team_id(), team_id);
     assert_eq!(
         *increment_calls.lock().unwrap(),
         vec![("sub_test".to_string(), 1)]
@@ -6811,7 +6871,7 @@ async fn test_try_join_team_by_domain_paid_team_joins_past_former_plan_limit() {
 }
 
 #[tokio::test]
-async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
+async fn test_join_team_by_domain_rolls_back_membership_when_roles_fail() {
     let team_id = uuid::Uuid::from_u128(80);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
@@ -6850,15 +6910,13 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
     )
     .with_event_broker(event_broker.clone());
 
-    let err = service
-        .try_join_team_by_domain(&user_id)
-        .await
-        .err()
-        .unwrap();
+    let err = service.join_team_by_domain(&user_id).await.err().unwrap();
 
     assert!(matches!(
         err,
-        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::AddRolesToUserError(_))
+        JoinTeamByDomainError::JoinError(JoinTeamDirectlyError::JoinTeamError(
+            JoinTeamError::AddRolesToUserError(_)
+        ))
     ));
     // The seat increment happened, was rolled back, and the membership
     // itself was removed again.
@@ -6875,7 +6933,7 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_rolls_back_membership_when_billing_lookup_fails() {
+async fn join_team_by_domain_rolls_back_membership_when_billing_lookup_fails() {
     let team_id = uuid::Uuid::from_u128(86);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
 
@@ -6897,11 +6955,13 @@ async fn try_join_team_by_domain_rolls_back_membership_when_billing_lookup_fails
             NoOpTeamCrmSettingsRepository,
         );
 
-        let error = service.try_join_team_by_domain(&user_id).await.unwrap_err();
+        let error = service.join_team_by_domain(&user_id).await.unwrap_err();
 
         assert!(matches!(
             error,
-            JoinTeamDirectlyError::TeamError(TeamError::StorageLayerError(_))
+            JoinTeamByDomainError::JoinError(JoinTeamDirectlyError::TeamError(
+                TeamError::StorageLayerError(_)
+            ))
         ));
         assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
         assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
@@ -6923,7 +6983,7 @@ async fn try_join_team_by_domain_rolls_back_membership_when_billing_lookup_fails
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_effects() {
+async fn join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_effects() {
     let team_id = uuid::Uuid::from_u128(81);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
@@ -6946,11 +7006,10 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
     )
     .with_event_broker(event_broker.clone());
 
-    let member = service
-        .try_join_team_by_domain(&user_id)
-        .await
-        .unwrap()
-        .expect("enterprise user should have been auto-joined");
+    let DirectJoinOutcome::Joined(member) = service.join_team_by_domain(&user_id).await.unwrap()
+    else {
+        panic!("user should have joined the team");
+    };
 
     assert_eq!(member.team_id, team_id);
     assert_eq!(member.user_id, user_id);
@@ -6998,7 +7057,7 @@ async fn try_join_team_by_domain_enterprise_bypasses_billing_and_preserves_side_
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_enterprise_joins_past_former_plan_limit() {
+async fn join_team_by_domain_enterprise_joins_past_former_plan_limit() {
     let team_id = uuid::Uuid::from_u128(82);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mut team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
@@ -7021,9 +7080,9 @@ async fn try_join_team_by_domain_enterprise_joins_past_former_plan_limit() {
         MockTeamAnalytics::new(events.clone()),
     );
 
-    let member = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let member = service.join_team_by_domain(&user_id).await.unwrap();
 
-    assert_eq!(member.unwrap().team_id, team_id);
+    assert_eq!(member.team_id(), team_id);
     assert_eq!(
         *team_repository
             .enterprise_status_lookup_calls
@@ -7047,7 +7106,7 @@ async fn try_join_team_by_domain_enterprise_joins_past_former_plan_limit() {
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_enterprise_rolls_back_membership_when_roles_fail() {
+async fn join_team_by_domain_enterprise_rolls_back_membership_when_roles_fail() {
     let team_id = uuid::Uuid::from_u128(83);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
@@ -7071,11 +7130,13 @@ async fn try_join_team_by_domain_enterprise_rolls_back_membership_when_roles_fai
         MockTeamAnalytics::new(events.clone()),
     );
 
-    let error = service.try_join_team_by_domain(&user_id).await.unwrap_err();
+    let error = service.join_team_by_domain(&user_id).await.unwrap_err();
 
     assert!(matches!(
         error,
-        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::AddRolesToUserError(_))
+        JoinTeamByDomainError::JoinError(JoinTeamDirectlyError::JoinTeamError(
+            JoinTeamError::AddRolesToUserError(_)
+        ))
     ));
     assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
@@ -7094,7 +7155,7 @@ async fn try_join_team_by_domain_enterprise_rolls_back_membership_when_roles_fai
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_enterprise_rolls_back_roles_when_channels_fail() {
+async fn join_team_by_domain_enterprise_rolls_back_roles_when_channels_fail() {
     let team_id = uuid::Uuid::from_u128(84);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
@@ -7118,11 +7179,13 @@ async fn try_join_team_by_domain_enterprise_rolls_back_roles_when_channels_fail(
         MockTeamAnalytics::new(events.clone()),
     );
 
-    let error = service.try_join_team_by_domain(&user_id).await.unwrap_err();
+    let error = service.join_team_by_domain(&user_id).await.unwrap_err();
 
     assert!(matches!(
         error,
-        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::TeamError(_))
+        JoinTeamByDomainError::JoinError(JoinTeamDirectlyError::JoinTeamError(
+            JoinTeamError::TeamError(_)
+        ))
     ));
     assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
     assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
@@ -7628,11 +7691,7 @@ async fn team_contacts_domain_join_enqueues_distinct_owner_and_member_edges() {
     )
     .with_contacts_enqueuer(contacts_enqueuer.clone());
 
-    service
-        .try_join_team_by_domain(&user_id)
-        .await
-        .unwrap()
-        .expect("user should join the team");
+    service.join_team_by_domain(&user_id).await.unwrap();
 
     let batches = contacts_enqueuer.batches.lock().unwrap();
     assert_eq!(batches.len(), 1);
@@ -7666,9 +7725,9 @@ async fn team_contacts_domain_join_does_not_enqueue_without_matching_team() {
     )
     .with_contacts_enqueuer(contacts_enqueuer.clone());
 
-    let member = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let error = service.join_team_by_domain(&user_id).await.unwrap_err();
 
-    assert!(member.is_none());
+    assert!(matches!(error, JoinTeamByDomainError::NoDomainTeam));
     assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 0);
     assert!(contacts_enqueuer.batches.lock().unwrap().is_empty());
 }
@@ -7683,7 +7742,7 @@ async fn team_contacts_domain_join_does_not_enqueue_for_existing_member() {
         Arc::new(Mutex::new(Vec::new())),
     );
     team_repository.team_id_for_domain = Some(team_id);
-    team_repository.add_user_to_team_result = None;
+    team_repository.user_teams = vec![account_deletion_team(team_id, &user_id)];
     let contacts_enqueuer = RecordingContactsEnqueuer::default();
     let service = TeamServiceImpl::new(
         team_repository.clone(),
@@ -7696,9 +7755,9 @@ async fn team_contacts_domain_join_does_not_enqueue_for_existing_member() {
     )
     .with_contacts_enqueuer(contacts_enqueuer.clone());
 
-    let member = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let outcome = service.join_team_by_domain(&user_id).await.unwrap();
 
-    assert!(member.is_none());
+    assert!(matches!(outcome, DirectJoinOutcome::AlreadyMember { .. }));
     assert_eq!(*team_repository.get_team_by_id_calls.lock().unwrap(), 0);
     assert!(contacts_enqueuer.batches.lock().unwrap().is_empty());
 }
@@ -7741,9 +7800,9 @@ async fn team_contacts_domain_join_enqueues_past_former_plan_limit() {
     )
     .with_contacts_enqueuer(contacts_enqueuer.clone());
 
-    let member = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let member = service.join_team_by_domain(&user_id).await.unwrap();
 
-    assert_eq!(member.unwrap().team_id, team_id);
+    assert_eq!(member.team_id(), team_id);
     assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 1);
     let batches = contacts_enqueuer.batches.lock().unwrap();
     assert_eq!(batches.len(), 1);
@@ -7754,7 +7813,7 @@ async fn team_contacts_domain_join_enqueues_past_former_plan_limit() {
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_enterprise_status_read_precedes_membership_mutation() {
+async fn join_team_by_domain_enterprise_status_read_precedes_membership_mutation() {
     let team_id = uuid::Uuid::from_u128(85);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mut team_repository = make_enterprise_domain_join_team_repository(team_id, &user_id);
@@ -7776,11 +7835,13 @@ async fn try_join_team_by_domain_enterprise_status_read_precedes_membership_muta
         MockTeamAnalytics::new(events.clone()),
     );
 
-    let error = service.try_join_team_by_domain(&user_id).await.unwrap_err();
+    let error = service.join_team_by_domain(&user_id).await.unwrap_err();
 
     assert!(matches!(
         error,
-        JoinTeamDirectlyError::TeamError(TeamError::StorageLayerError(_))
+        JoinTeamByDomainError::JoinError(JoinTeamDirectlyError::TeamError(
+            TeamError::StorageLayerError(_)
+        ))
     ));
     assert_eq!(
         *team_repository
@@ -8112,7 +8173,7 @@ async fn join_team_free_team_accepts_sixth_member_without_billing_or_premium_rol
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_free_team_adds_sixth_member_without_billing_or_premium_roles() {
+async fn join_team_by_domain_free_team_adds_sixth_member_without_billing_or_premium_roles() {
     let team_id = uuid::Uuid::from_u128(7040);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
@@ -8149,9 +8210,9 @@ async fn try_join_team_by_domain_free_team_adds_sixth_member_without_billing_or_
     )
     .with_event_broker(event_broker.clone());
 
-    let result = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let result = service.join_team_by_domain(&user_id).await.unwrap();
 
-    assert_eq!(result.unwrap().team_id, team_id);
+    assert_eq!(result.team_id(), team_id);
     assert_eq!(*add_user_calls.lock().unwrap(), 1);
     assert_eq!(*remove_user_calls.lock().unwrap(), 0);
     assert!(increment_calls.lock().unwrap().is_empty());
@@ -8202,7 +8263,7 @@ fn legacy_team_domain_join(
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_legacy_team_without_owner_subscription_joins_free() {
+async fn join_team_by_domain_legacy_team_without_owner_subscription_joins_free() {
     let team_id = uuid::Uuid::from_u128(7050);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repo = legacy_team_domain_join(team_id, &user_id);
@@ -8226,9 +8287,9 @@ async fn try_join_team_by_domain_legacy_team_without_owner_subscription_joins_fr
         NoOpTeamCrmSettingsRepository,
     );
 
-    let result = service.try_join_team_by_domain(&user_id).await.unwrap();
+    let result = service.join_team_by_domain(&user_id).await.unwrap();
 
-    assert_eq!(result.unwrap().team_id, team_id);
+    assert_eq!(result.team_id(), team_id);
     assert_eq!(*subscription_lookup_calls.lock().unwrap(), 1);
     assert_eq!(*remove_user_calls.lock().unwrap(), 0);
     assert!(increment_calls.lock().unwrap().is_empty());
@@ -8236,7 +8297,7 @@ async fn try_join_team_by_domain_legacy_team_without_owner_subscription_joins_fr
 }
 
 #[tokio::test]
-async fn try_join_team_by_domain_rolls_back_when_the_subscription_lookup_fails() {
+async fn join_team_by_domain_rolls_back_when_the_subscription_lookup_fails() {
     let team_id = uuid::Uuid::from_u128(7060);
     let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
     let team_repo = legacy_team_domain_join(team_id, &user_id);
@@ -8259,16 +8320,12 @@ async fn try_join_team_by_domain_rolls_back_when_the_subscription_lookup_fails()
         NoOpTeamCrmSettingsRepository,
     );
 
-    let err = service
-        .try_join_team_by_domain(&user_id)
-        .await
-        .err()
-        .unwrap();
+    let err = service.join_team_by_domain(&user_id).await.err().unwrap();
 
     assert!(matches!(
         err,
-        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::CustomerError(
-            CustomerError::StorageLayerError(_)
+        JoinTeamByDomainError::JoinError(JoinTeamDirectlyError::JoinTeamError(
+            JoinTeamError::CustomerError(CustomerError::StorageLayerError(_))
         ))
     ));
     assert_eq!(*remove_user_calls.lock().unwrap(), 1);
@@ -8357,11 +8414,7 @@ async fn domain_join_does_not_create_teammate_dms_inline() {
     )
     .with_event_broker(event_broker.clone());
 
-    service
-        .try_join_team_by_domain(&joiner)
-        .await
-        .unwrap()
-        .unwrap();
+    service.join_team_by_domain(&joiner).await.unwrap();
 
     assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
     let events = event_broker.events();
