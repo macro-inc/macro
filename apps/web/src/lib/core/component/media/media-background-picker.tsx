@@ -2,9 +2,9 @@ import type { BackgroundEffect } from '@core/media/background-effect';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import Image from '@icon/system/regular/image.svg';
 import Prohibit from '@icon/system/regular/prohibit.svg';
-import Upload from '@icon/system/regular/upload-simple.svg';
 import { Dropdown, SingleSelectCheck } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
+import { RecentBackgroundImages } from './recent-background-images';
 
 export function BlurIcon(props: { strong?: boolean }) {
   const count = () => (props.strong ? 5 : 3);
@@ -73,7 +73,7 @@ export function MediaBackgroundPicker(props: {
         >
           {(trigger) => trigger}
         </Show>
-        <Dropdown.Content class="min-w-48">
+        <Dropdown.Content class="min-w-72">
           <Dropdown.RadioGroup value={selected()} onChange={select}>
             <Dropdown.RadioItem
               value="none"
@@ -102,29 +102,19 @@ export function MediaBackgroundPicker(props: {
               <span class="flex-1">Strong blur</span>
               <SingleSelectCheck active={selected() === 'heavy'} />
             </Dropdown.RadioItem>
-            <Show when={props.effect.type === 'image'}>
-              <Dropdown.RadioItem
-                value="image"
-                closeOnSelect
-                disabled={props.disabled || props.uploading}
-              >
-                <Image class="size-4" />
-                <span class="flex-1">Custom background</span>
-                <SingleSelectCheck active />
-              </Dropdown.RadioItem>
-            </Show>
           </Dropdown.RadioGroup>
           <Show when={props.onUpload}>
             <Dropdown.Separator />
-            <Dropdown.Item
+            <RecentBackgroundImages
+              effect={props.effect}
               disabled={props.disabled || props.uploading}
-              onSelect={() => input?.click()}
-            >
-              <Upload class="size-4" />
-              <span>
-                {props.uploading ? 'Loading image…' : 'Upload an image'}
-              </span>
-            </Dropdown.Item>
+              uploading={props.uploading}
+              onSelect={(effect) => {
+                props.onSelect(effect);
+                return true;
+              }}
+              onUploadClick={() => input?.click()}
+            />
           </Show>
         </Dropdown.Content>
       </Dropdown>

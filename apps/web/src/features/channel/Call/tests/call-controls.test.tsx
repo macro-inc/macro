@@ -1,5 +1,16 @@
 /** @vitest-environment jsdom */
+import 'fake-indexeddb/auto';
 import type { BackgroundEffect } from '@core/media/background-effect';
+import { readBackgroundImage } from '@core/media/read-background-image';
+import {
+  loadRecentBackgroundImages,
+  saveRecentBackgroundImage,
+} from '@core/media/recent-background-images';
+
+vi.mock('@core/media/read-background-image', () => ({
+  readBackgroundImage: vi.fn(),
+}));
+
 import {
   cleanup,
   fireEvent,
@@ -126,6 +137,131 @@ describe('call controls', () => {
     );
   });
 
+  it('selects, reorders and removes inactive recent images from video settings', async () => {
+    await saveRecentBackgroundImage({
+      id: 'custom',
+      path: 'data:image/jpeg;base64,AAAA',
+    });
+    await saveRecentBackgroundImage({
+      id: 'custom',
+      path: 'data:image/jpeg;base64,BBBB',
+    });
+    const { media } = setup();
+    await openMenu('Video settings');
+    const first = await screen.findByRole('menuitemradio', {
+      name: 'Recent image 1',
+    });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'Enter' });
+    await waitFor(() =>
+      expect(media.setBackgroundEffect).toHaveBeenCalledWith({
+        type: 'image',
+        id: 'custom',
+        path: 'data:image/jpeg;base64,BBBB',
+      })
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Remove from recent' })
+    ).toHaveLength(1);
+    fireEvent.keyDown(first, { key: 'Delete' });
+    expect(
+      (await loadRecentBackgroundImages()).map((image) => image.path)
+    ).toContain('data:image/jpeg;base64,BBBB');
+    const second = screen.getByRole('menuitemradio', {
+      name: 'Recent image 2',
+    });
+    second.focus();
+    fireEvent.keyDown(second, { key: 'Enter' });
+    await waitFor(async () =>
+      expect((await loadRecentBackgroundImages())[0]?.path).toBe(
+        'data:image/jpeg;base64,AAAA'
+      )
+    );
+    const selected = screen.getByRole('menuitemradio', {
+      name: 'Recent image 1',
+    });
+    fireEvent.keyDown(selected, { key: 'Backspace' });
+    expect((await loadRecentBackgroundImages())[0]?.path).toBe(
+      'data:image/jpeg;base64,AAAA'
+    );
+    const inactive = screen.getByRole('menuitemradio', {
+      name: 'Recent image 2',
+    });
+    fireEvent.keyDown(inactive, { key: 'Backspace' });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('menuitemradio', { name: 'Recent image 2' })
+      ).toBeNull()
+    );
+    expect(
+      (await loadRecentBackgroundImages()).map((image) => image.path)
+    ).not.toContain('data:image/jpeg;base64,BBBB');
+  });
+
+  it('removes an inactive image with the hover action', async () => {
+    await saveRecentBackgroundImage({
+      id: 'custom',
+      path: 'data:image/jpeg;base64,DDDD',
+    });
+    setup();
+    await openMenu('Video settings');
+    await screen.findByRole('menuitemradio', { name: 'Recent image 2' });
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Remove from recent' })[0]
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('menuitemradio', { name: 'Recent image 2' })
+      ).toBeNull()
+    );
+    expect(
+      (await loadRecentBackgroundImages()).map((image) => image.path)
+    ).not.toContain('data:image/jpeg;base64,DDDD');
+  });
+
+  it('keeps an uploaded background applied when recent storage fails', async () => {
+    vi.mocked(readBackgroundImage).mockResolvedValueOnce(
+      'data:image/jpeg;base64,CCCC'
+    );
+    const { media } = setup();
+    await openMenu('Video settings');
+    await screen.findByRole('menuitemradio', { name: 'Recent image 1' });
+    const transaction = IDBDatabase.prototype.transaction;
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementationOnce(
+      function (this: IDBDatabase, ...args) {
+        if (args[1] === 'readwrite') throw new Error('Storage unavailable');
+        return transaction.apply(this, args);
+      }
+    );
+    const input = screen.getByLabelText('Upload background image', {
+      selector: 'input',
+    });
+    fireEvent.change(input, {
+      target: {
+        files: [new File(['jpeg'], 'photo.jpg', { type: 'image/jpeg' })],
+      },
+    });
+    await waitFor(() =>
+      expect(media.setBackgroundEffect).toHaveBeenCalledWith({
+        type: 'image',
+        id: 'custom',
+        path: 'data:image/jpeg;base64,CCCC',
+      })
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('menuitem', { name: 'Upload background image' })
+          .hasAttribute('disabled')
+      ).toBe(false)
+    );
+    expect(
+      (await loadRecentBackgroundImages()).some(
+        (image) => image.path === 'data:image/jpeg;base64,CCCC'
+      )
+    ).toBe(false);
+    vi.restoreAllMocks();
+  });
   it('shares the screen without opening its settings', () => {
     const { media } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Share screen' }));

@@ -295,7 +295,10 @@ backgrounds. The background button over the preview toggles the selected effect
 off and back on; when no effect has been selected, it enables Strong blur.
 Backgrounds use a simple menu with None, Light blur, Strong blur, and image upload
 (JPG, PNG, or WebP, up to 10 MB). Dot icons distinguish the two blur strengths.
-Selected devices and backgrounds carry into the call; unsupported browsers use
+Background pickers share five device-local recent uploaded images. Selecting one
+moves it first; hover/focus Remove or press Delete/Backspace to remove an inactive
+image. The current image cannot be removed. Uploads stay usable if optional
+IndexedDB storage fails. Selected devices and backgrounds carry into the call; unsupported browsers use
 the system speaker. If a background cannot be applied, the camera stays off
 until the user retries or chooses None. The screen uses a gray join
 button. In a channel's Call tab, the header shows the live waveform and duration,

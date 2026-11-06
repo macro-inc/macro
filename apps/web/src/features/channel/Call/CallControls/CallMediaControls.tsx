@@ -1,12 +1,14 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { BlurIcon } from '@core/component/media/media-background-picker';
 import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker';
+import {
+  RecentBackgroundImages,
+  rememberRecentBackgroundImage,
+} from '@core/component/media/recent-background-images';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Image from '@icon/system/regular/image.svg';
 import Prohibit from '@icon/system/regular/prohibit.svg';
-import Upload from '@icon/system/regular/upload-simple.svg';
 import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import type { CallState } from '../CallContext';
@@ -66,10 +68,11 @@ export function CallMediaControls(props: {
     disposed = true;
   });
 
-  async function run(action: () => void | Promise<void>) {
+  async function run(action: () => void | Promise<void>): Promise<boolean> {
     setError(undefined);
     try {
       await action();
+      return true;
     } catch (error) {
       if (!disposed)
         setError(
@@ -77,26 +80,39 @@ export function CallMediaControls(props: {
             ? error.message
             : 'Could not update call settings.'
         );
+      return false;
     }
   }
   const fire = (action: () => void | Promise<void>) =>
     fireAndForget(run(action), 'channel-call');
 
   async function applyBackground(effect: BackgroundEffect | File) {
-    if (applyingBackground()) return;
+    if (disposed || applyingBackground()) return false;
     setApplyingBackground(true);
-    await run(async () => {
-      const next =
+    let next: BackgroundEffect | undefined;
+    const applied = await run(async () => {
+      next =
         effect instanceof File
           ? {
-              type: 'image' as const,
+              type: 'image',
               id: 'custom',
               path: await readBackgroundImage(effect),
             }
           : effect;
       if (!disposed) await call.setBackgroundEffect(next);
     });
+    if (
+      applied &&
+      effect instanceof File &&
+      next?.type === 'image' &&
+      !disposed
+    )
+      fireAndForget(
+        rememberRecentBackgroundImage({ id: next.id, path: next.path }),
+        'recent-background-images'
+      );
     if (!disposed) setApplyingBackground(false);
+    return applied && !disposed;
   }
   async function selectBackground(value: string) {
     if (value === 'none') await applyBackground({ type: 'none' });
@@ -262,25 +278,15 @@ export function CallMediaControls(props: {
                   >
                     <BlurIcon strong />
                   </BackgroundTile>
-                  <Show when={call.backgroundEffect().type === 'image'}>
-                    <BackgroundTile
-                      value="image"
-                      label="Custom image"
-                      caption="Custom"
-                    >
-                      <Image class="size-4" />
-                    </BackgroundTile>
-                  </Show>
                 </Dropdown.RadioGroup>
-                <Dropdown.Item
-                  disabled={backgroundDisabled()}
-                  onSelect={() => upload?.click()}
-                  class="aspect-[4/3] flex-col justify-center gap-1 border border-dashed border-edge-muted p-1 text-xs text-ink-muted"
-                >
-                  <Upload class="size-4" />
-                  <span>{applyingBackground() ? 'Loading…' : 'Upload'}</span>
-                </Dropdown.Item>
               </div>
+              <RecentBackgroundImages
+                effect={call.backgroundEffect()}
+                disabled={backgroundDisabled()}
+                uploading={applyingBackground()}
+                onSelect={applyBackground}
+                onUploadClick={() => upload?.click()}
+              />
             </Dropdown.Group>
           </>
         }
@@ -374,29 +380,15 @@ export function CallMediaControls(props: {
                     </MobileDrawer.Item>
                   )}
                 </For>
-                <Show when={call.backgroundEffect().type === 'image'}>
-                  <MobileDrawer.Item
-                    role="radio"
-                    aria-checked="true"
-                    disabled={backgroundDisabled()}
-                  >
-                    <Image class="size-4" />
-                    <span class="flex-1">Custom image</span>
-                    <SingleSelectCheck active />
-                  </MobileDrawer.Item>
-                </Show>
               </MobileDrawer.Section>
-              <MobileDrawer.Section class="mt-2">
-                <MobileDrawer.Item
-                  disabled={backgroundDisabled()}
-                  onClick={() => upload?.click()}
-                >
-                  <Upload class="size-4" />
-                  <span>
-                    {applyingBackground() ? 'Loading…' : 'Upload image'}
-                  </span>
-                </MobileDrawer.Item>
-              </MobileDrawer.Section>
+              <RecentBackgroundImages
+                phone
+                effect={call.backgroundEffect()}
+                disabled={backgroundDisabled()}
+                uploading={applyingBackground()}
+                onSelect={applyBackground}
+                onUploadClick={() => upload?.click()}
+              />
             </div>
           </div>
         }
