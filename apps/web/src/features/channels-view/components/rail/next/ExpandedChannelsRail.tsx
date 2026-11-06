@@ -560,9 +560,14 @@ function BrowseSection(props: {
         <ChannelRailVirtualizer
           ref={(current) => {
             handle.virtualizer = current;
-            handle.outerScroll = outerScroll();
             setVirtualizer(current);
-            if (current) props.onReady();
+            // The virtualizer clears its ref while the rail is disposed. A
+            // reactive read then can rerun the owner being disposed, so keep
+            // the last snapshot.
+            if (!current) return;
+
+            handle.outerScroll = outerScroll();
+            props.onReady();
           }}
           keys={rowIds()}
           scrollRoot={rowsScrollRoot()}

@@ -36,6 +36,9 @@ threads, pins, recents, notifications, folders, activity.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
+- Authenticated call routes are composed from `crates/call` under `/call`;
+  `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
+  `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
   across item types. Folder duplication runs on its own task and copies
   documents and chats through `entity_mutation/project_contents.rs`, the
@@ -86,12 +89,12 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
-- Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
+- Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
+  evaluation has a 300 ms timeout and keeps the call's own chat on failure.
+- The same flag client evaluates `enable-programmatic-calls` per caller for the
+  explicit call start, join, and leave routes; failures disable those routes.
 
-- Don't declare a function that reaches the router `pub async fn`, even in a private
-  module. rustc compiles the body of every non-generic `pub async fn` in every build,
-  so the lib test would compile the whole service. `server::run` returns `impl Future`
-  for that reason.
+- Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
@@ -113,3 +116,5 @@ threads, pins, recents, notifications, folders, activity.
 - Rules: `.agents/rules/rust/db.md`, `.agents/rules/observability.md`
 
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
+
+- The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.

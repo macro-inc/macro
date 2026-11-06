@@ -17,3 +17,12 @@ fn publishes_matching_tags_with_oidc_on_a_github_runner() {
     assert!(yaml.contains("tag version $version does not match package version $package_version"));
     assert!(yaml.contains("git merge-base --is-ancestor \"$GITHUB_SHA\" origin/main"));
 }
+
+#[test]
+fn recovers_either_package_from_its_own_tag() {
+    let yaml = rendered_yaml();
+
+    assert!(yaml.contains(CALLS_TAG_PATTERN));
+    assert!(yaml.contains("Publish sdk-calls"));
+    assert!(yaml.contains("Validate sdk-calls"));
+}

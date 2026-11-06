@@ -417,7 +417,7 @@ where
         macro_id: MacroUserIdStr<'static>,
         thread_id: Uuid,
         action: crate::domain::models::mailbox_action::MailboxAction,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         self.change_thread_mailbox_state_impl(macro_id, thread_id, action)
             .await
     }
@@ -427,7 +427,9 @@ where
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
-        self.mark_thread_seen_impl(macro_id, thread_id).await
+        self.mark_thread_seen_impl(macro_id, thread_id)
+            .await
+            .map(|_| ())
     }
 
     async fn set_thread_archived(
@@ -438,6 +440,7 @@ where
     ) -> Result<(), EmailErr> {
         self.set_thread_archived_impl(macro_id, thread_id, archived)
             .await
+            .map(|_| ())
     }
 
     async fn set_threads_archived(
@@ -455,7 +458,9 @@ where
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
-        self.mark_thread_unread_impl(macro_id, thread_id).await
+        self.mark_thread_unread_impl(macro_id, thread_id)
+            .await
+            .map(|_| ())
     }
 
     async fn update_thread_labels_for_user(

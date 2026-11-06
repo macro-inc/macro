@@ -16,6 +16,8 @@ export const badgeVariants = createVariants(
       ghost: 'bg-transparent text-ink-muted',
       secondary: 'bg-button-secondary-bg text-ink',
       outline: 'bg-transparent text-ink-muted border-edge-muted',
+      /** AI-made choices, e.g. a routine step AI picks for. */
+      accent: 'bg-accent-bg text-accent',
     },
     size: {
       xs: "h-5 gap-1 px-2 text-xs [&>svg:not([class*='size-'])]:size-3 has-[>[data-slot=avatar][data-size=sm]:first-child]:pl-px",

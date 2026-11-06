@@ -199,7 +199,10 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
                 if let (Some(message_db_id), Some(thread_db_id)) =
                     (message_to_send.db_id, message_to_send.thread_db_id)
                 {
-                    let _ = ctx
+                    agent_correlation::context::scope(
+                        scheduled_message.agent_correlation_id,
+                        async {
+                            let _ = ctx
                         .macro_event_broker
                         .send_event(&EmailMacroEvent::message_sent(MessageSentMetadata {
                             link_id: link.id,
@@ -234,6 +237,9 @@ impl ScheduledDeliveryRepo for ScheduledDeliveryAdapter {
                         .inspect_err(
                             |error| tracing::error!(error=?error, "failed to publish email event"),
                         );
+                        },
+                    )
+                    .await;
                 }
 
                 // Cleanup attachments in the background after successful send
