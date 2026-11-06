@@ -291,6 +291,8 @@ def up(args):
         flags = ['--instance', args.name, '--port-base', str(32434 + args.slot), '--no-doppler', '--traces', 'off']
         if args.binaries_dir:
             flags += ['--binaries-dir', args.binaries_dir]
+        if args.env_file:
+            flags += ['--env-file', args.env_file]
         xtask('kubernetes-prepare', *flags)
         command, env, config = compose(args.name)
         services = {k: v for k, v in config['services'].items() if not v.get('profiles')}
@@ -327,6 +329,7 @@ def main():
     parser.add_argument('name', nargs='?')
     parser.add_argument('--slot', type=int, choices=[0, 1], default=0)
     parser.add_argument('--binaries-dir')
+    parser.add_argument('--env-file', help='same optional dotenv overlay as run_local')
     parser.add_argument('--service', help='Compose service name for roll; build the binary before rolling')
     args = parser.parse_args()
     os.chdir(ROOT)

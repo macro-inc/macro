@@ -7,7 +7,7 @@ ranges and HTTPS port mappings. It uses no cloud cluster or deployment tool.
 ## Run
 
 Enter `nix develop` from the repository root. Keep temporary build files on the
-home filesystem on small-root hosts: `export TMPDIR=/home/wolf/tmp`.
+home filesystem on small-root hosts: `export TMPDIR="$HOME/tmp"`.
 
 ```sh
 just kube-local up kube-a --slot 0
@@ -30,7 +30,8 @@ and the ports must be reachable from the visiting machine. Passwordless codes
 stay in each instance's `/mailpit/` UI at the same origin.
 
 This runner uses `--no-doppler --traces off`. External integrations have the same
-stub limitations as credential-free Compose. It does not create cloud tunnels.
+stub limitations as credential-free Compose. Pass `--env-file <path>` to apply
+the same optional dotenv overlay as `run_local`. It does not create cloud tunnels.
 
 ## Inner loop and lifecycle
 
