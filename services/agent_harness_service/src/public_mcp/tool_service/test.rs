@@ -472,12 +472,30 @@ mod code_mode {
         )
     }
 
+    struct Accounts;
+    impl agent_inmem::domain::tool_mode::AgentAccounts for Accounts {
+        fn is_teammate<'a>(
+            &'a self,
+            user: &'a MacroUserIdStr<'_>,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<bool, agent_inmem::domain::tool_mode::AgentAccountError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async move { Ok(user.as_ref() == "macro|agent@example.com") })
+        }
+    }
     fn app(runs: Arc<dyn UserCodeMode>) -> axum::Router {
         let surface = Arc::new(CodeModeSurface {
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
             service: runs,
             cognition: None,
-            selector: Arc::new(Flag),
+            selector: Arc::new(agent_inmem::domain::tool_mode::AgentToolMode::new(
+                Accounts,
+                Arc::new(Flag),
+            )),
         });
         let mut config =
             StreamableHttpServerConfig::default().with_allowed_hosts(["localhost".to_owned()]);
@@ -553,6 +571,29 @@ mod code_mode {
         Some(ToolCaller::McpClient {
             name: Some(name.to_owned()),
         })
+    }
+
+    #[tokio::test]
+    async fn api_key_teammate_gets_code_mode_and_ordinary_key_follows_its_flag() {
+        let app = app(Arc::new(Runs::default()));
+        let agent = rpc(
+            app.clone(),
+            "agent@example.com",
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(
+            tool_names(&agent),
+            ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
+        );
+        let ordinary = rpc(app.clone(), UNFLAGGED, "tools/list", serde_json::json!({})).await;
+        assert_eq!(tool_names(&ordinary), DIRECT_TOOLS);
+        let flagged = rpc(app, FLAGGED, "tools/list", serde_json::json!({})).await;
+        assert_eq!(
+            tool_names(&flagged),
+            ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
+        );
     }
 
     #[tokio::test]

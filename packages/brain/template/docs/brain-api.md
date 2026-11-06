@@ -39,7 +39,7 @@ The public module exports these typed primitives:
 | `judge(input, deps)` | Async relevance decision; custom relevance implements the same signature. |
 | `Lanes<Item>(dir, handler, log)` | Durable serial queues. `push`, `resume`, `shutdown` drains active batches. |
 | `Pool(deps)` | `start(turn)` admits concurrency, speaking and spend caps. `speak(fn)` serializes speech. Custom tier names require a concurrency limit and a positive per-run budget; custom tiers are quiet by default. |
-| `Runner`, `AgentSdkRunner(options)` | `start(Turn): RunHandle`, with `events`, `inject`, `abort`, `done`. Options accept SDK `tools`; replace `deps.runner` for custom tools or execution. |
+| `Runner`, `AgentSdkRunner(options)` | `start(Turn): RunHandle`, with `events`, `inject`, `abort`, `done`. The installed runner supplies the server-described Macro SDK tools on every non-triage turn. Add custom in-process tools through `Wiring.tools`; replacing `deps.runner` replaces execution and must preserve the credential boundary. |
 | `Turn`, `Tier` | Turn has id, tier, prompt, system, cwd, model, budget and env. Tier is a string; defaults are respond, heartbeat, work. |
 | `Schedules(workspace, writer, routines, model)` | `create`, `list`, `delete`, `reconcile`, `wakeFor`. Triggers use Macro routines. |
 | `Memory(workspace, writer)` | `remember`, `recall`, `forget`, self state and commitments. |
@@ -253,3 +253,12 @@ three config JSON files use the same check/health/revert path. Fixture-only,
 style, prompt and memory commits do not reload code; style and persona text
 remain fresh each turn. A library upgrade is an exact installed `brain.lock`
 bump with the same checks and recovery.
+
+## Macro SDK tools
+
+Respond, heartbeat and work turns have ExecuteCode, DescribeCodeTools and
+ReadCodeDocs. Use the full SDK as your own account, within your permissions,
+charter and budget. Discover the task and read the required symbols from the
+server before writing code. These are in-process brain tools backed by Macro's
+public MCP; no Macro API key is available in a turn. Triage has no tools.
+Missing code-mode tools or failed authentication fail the turn explicitly.

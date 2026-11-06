@@ -32,6 +32,8 @@ pub struct BearerAuth {
     pub jwt_args: JwtValidationArgs,
     /// Which client each OAuth access token was issued to.
     pub clients: AccessTokenClients,
+    /// Optional standard revocable user-key authorizer.
+    pub user_api_keys: Option<std::sync::Arc<dyn crate::domain::user_api_keys::McpUserApiKeys>>,
 }
 
 /// Which kind of credential authenticated an MCP request.
@@ -128,6 +130,18 @@ pub async fn validate_bearer(
     mut request: Request<Body>,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    if let Some(keys) = &auth.user_api_keys
+        && let Some(key) = request
+            .headers()
+            .get("x-macro-user-api-key")
+            .and_then(|value| value.to_str().ok())
+        && let Some(user_id) = keys.user(key).await
+    {
+        request.extensions_mut().insert(user_id);
+        request.extensions_mut().insert(McpAuthMethod::ApiKey);
+        request.extensions_mut().insert(ToolCaller::ApiKey);
+        return next.run(request).await;
+    }
     let token = request
         .headers()
         .get(axum::http::header::AUTHORIZATION)

@@ -906,7 +906,11 @@ where
         let clients = auth_proxy.access_token_clients();
         mcp_router_with_oauth(
             oauth_router(auth_proxy),
-            super::middleware::BearerAuth { jwt_args, clients },
+            super::middleware::BearerAuth {
+                jwt_args,
+                clients,
+                user_api_keys: None,
+            },
             mcp_service,
         )
     }
@@ -914,6 +918,7 @@ where
 
 /// MCP routes for a shared HTTP listener whose process owns health checks.
 pub fn mounted_mcp_router<I, S>(
+    user_api_keys: Option<std::sync::Arc<dyn crate::domain::user_api_keys::McpUserApiKeys>>,
     auth_proxy: McpAuthProxyServiceImpl<I>,
     jwt_args: JwtValidationArgs,
     mcp_service: S,
@@ -932,7 +937,11 @@ where
         let clients = auth_proxy.access_token_clients();
         mcp_router_with_oauth(
             oauth_routes(auth_proxy),
-            super::middleware::BearerAuth { jwt_args, clients },
+            super::middleware::BearerAuth {
+                jwt_args,
+                clients,
+                user_api_keys,
+            },
             mcp_service,
         )
     }
@@ -983,6 +992,7 @@ fn mcp_cors_layer() -> CorsLayer {
         .allow_headers([
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
+            HeaderName::from_static("x-macro-user-api-key"),
             HeaderName::from_static("mcp-protocol-version"),
             HeaderName::from_static("mcp-session-id"),
         ])

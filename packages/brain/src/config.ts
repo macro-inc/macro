@@ -12,6 +12,8 @@ export type Hosts = {
 };
 export type Config = {
   macroApiKey: string;
+  /** Public MCP transport; gateway prefix and endpoint are both /mcp. */
+  mcpUrl: string;
   gateway: string;
   hosts: Hosts;
   workspace: string;
@@ -66,8 +68,27 @@ export function loadConfig(env: (name: string) => string | undefined): Config {
       `MACRO_GATEWAY must be an http(s) origin, got ${JSON.stringify(gateway)}`
     );
   }
+  const mcpBase =
+    env('OVERRIDE_MCP_SERVICE_URL') ?? `${gateway.replace(/\/+$/, '')}/mcp`;
+  let mcpUrl: URL;
+  try {
+    mcpUrl = new URL(`${mcpBase.replace(/\/+$/, '')}/mcp`);
+    if (
+      !['http:', 'https:'].includes(mcpUrl.protocol) ||
+      mcpUrl.username ||
+      mcpUrl.password ||
+      mcpUrl.search ||
+      mcpUrl.hash
+    )
+      throw new Error('invalid endpoint');
+  } catch {
+    throw new ConfigError(
+      'OVERRIDE_MCP_SERVICE_URL must be an http(s) service base without credentials, query or fragment'
+    );
+  }
   return {
     macroApiKey,
+    mcpUrl: mcpUrl.toString(),
     gateway,
     hosts: gatewayHosts(gateway),
     workspace,

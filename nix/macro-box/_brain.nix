@@ -24,7 +24,7 @@ pkgs.buildNpmPackage {
   inherit version;
   src = source;
   nodejs = pkgs.nodejs_24;
-  npmDepsHash = "sha256-bfiH+zXuA7NSt7+CfqX0CYuvodEWZYOOuAp/jTQ6TFU=";
+  npmDepsHash = "sha256-SUO3mPp8s/qBP5tVShj+wFUAcPIYeSXSZx76MNdwrSg=";
   npmFlags = [ "--ignore-scripts" ];
   dontNpmBuild = true;
   nativeBuildInputs = [ pkgs.makeWrapper pkgs.esbuild pkgs.autoPatchelfHook ];

@@ -85,3 +85,28 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
         requester
     );
 }
+
+#[test]
+fn teammate_sdk_writes_as_itself_and_other_caller_attribution_stays_unchanged() {
+    assert_eq!(
+        super::execution_actor(&ai_toolset::ToolCaller::ApiKey, true),
+        None
+    );
+    assert_eq!(
+        super::execution_actor(&ai_toolset::ToolCaller::ApiKey, false),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(
+        super::execution_actor(
+            &ai_toolset::ToolCaller::McpClient {
+                name: Some("client".into())
+            },
+            true
+        ),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(
+        super::execution_actor(&ai_toolset::ToolCaller::Agent(bot_id::BotId::TEST_A), true),
+        Some(bot_id::BotId::TEST_A)
+    );
+}

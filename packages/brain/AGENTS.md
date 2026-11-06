@@ -8,6 +8,7 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 
 ## Start here
 
+- `src/code-mode.ts`: public MCP client; server-owned ExecuteCode, DescribeCodeTools and ReadCodeDocs are supplied by `runtime.ts` to every non-triage runner turn. Never move its key into turn options or a subprocess.
 - `src/mod.ts`: the stable public API; `template/brain.ts`: agent-owned wiring.
 - `src/supervisor.ts`: checks, main-only activation, draining and rollback.
 - `src/brain.ts`: the default event-to-turn composition.
@@ -90,3 +91,8 @@ replace these conformance checks.
 - Keep learning text in workspace files; telemetry receives only categories,
   counts and rates. Reactions are polled on owned messages until the broker
   exposes reaction facts.
+
+- Public MCP uses the canonical `OVERRIDE_MCP_SERVICE_URL` base when supplied,
+  otherwise the configured gateway's `/mcp` base; append `/mcp` once for the
+  transport. Discovery must require all three tools and fail explicitly if
+  code mode/auth is unavailable. Never copy server descriptions or SDK docs.

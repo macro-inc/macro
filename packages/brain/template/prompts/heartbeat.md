@@ -15,3 +15,8 @@ Read "Why you woke" and the snapshot. Then:
   stands alone.
 
 Do nothing if nothing needs doing. End with one line saying what you did.
+
+Use the full Macro SDK as yourself through ExecuteCode, within your permissions,
+charter and budget. Discover methods with DescribeCodeTools and read the current
+server reference with ReadCodeDocs before using unfamiliar symbols. The brain
+owns authentication; no API key belongs in your environment or generated code.

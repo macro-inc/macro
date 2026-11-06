@@ -70,6 +70,7 @@ impl ExecutionCredentials for RunCredentials {
 /// tools give. The MCP client asks the user before each tool call, so there is
 /// no owner gate.
 pub struct UserRunCredentials {
+    pub teammates: Arc<dyn agent_inmem::domain::tool_mode::AgentAccounts>,
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub hosts: BTreeMap<String, String>,
@@ -83,14 +84,17 @@ impl UserExecutionCredentials for UserRunCredentials {
         caller: &ai_toolset::ToolCaller,
         session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
-        let agent = match caller {
-            ai_toolset::ToolCaller::Agent(agent) => *agent,
-            ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
-                bot_id::MACRO_AI_BOT_ID
-            }
+        let teammate = if matches!(caller, ai_toolset::ToolCaller::ApiKey) {
+            self.teammates
+                .is_teammate(user)
+                .await
+                .map_err(|_| CodeModeError::Unavailable)?
+        } else {
+            false
         };
-        let correlation = match session {
-            Some(session) => Some(
+        let agent = execution_actor(caller, teammate);
+        let correlation = match (session, agent) {
+            (Some(session), Some(agent)) => Some(
                 self.correlations
                     .create(session, agent.as_uuid())
                     .await
@@ -99,7 +103,7 @@ impl UserExecutionCredentials for UserRunCredentials {
                         CodeModeError::Unavailable
                     })?,
             ),
-            None => None,
+            _ => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
@@ -107,7 +111,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             .mint_for_agent(
                 user,
                 60,
-                Some(agent.as_uuid()),
+                agent.map(|agent| agent.as_uuid()),
                 caller.via().map(str::to_owned),
                 None,
                 correlation,
@@ -125,6 +129,17 @@ impl UserExecutionCredentials for UserRunCredentials {
             execution_id: None,
             unattended: None,
         })
+    }
+}
+
+// A teammate is a user account: no bot attribution claim means writes are its own.
+fn execution_actor(caller: &ai_toolset::ToolCaller, teammate: bool) -> Option<bot_id::BotId> {
+    match caller {
+        ai_toolset::ToolCaller::Agent(agent) => Some(*agent),
+        ai_toolset::ToolCaller::ApiKey if teammate => None,
+        ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
+            Some(bot_id::MACRO_AI_BOT_ID)
+        }
     }
 }
 

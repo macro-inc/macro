@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { BrainDeps } from './brain.ts';
 import { SpeechGateway } from './calls/speech.ts';
 import { callTransport } from './calls/transport.ts';
+import { MacroCodeMode } from './code-mode.ts';
 import { loadConfig } from './config.ts';
 import { MacroHttp } from './macro.ts';
 import { openGatewaySocket, stayOnline } from './presence.ts';
@@ -24,6 +25,7 @@ export async function runtimeDeps(
     tracedFetch(fetch)
   );
   const macro = macroSdk(config.hosts, config.macroApiKey);
+  const codeMode = new MacroCodeMode(config.mcpUrl, config.macroApiKey);
   const baseEnv: Record<string, string> = {};
   for (const name of ['PATH', 'HOME', 'LANG', 'TZ']) {
     const value = env(name);
@@ -105,6 +107,7 @@ export async function runtimeDeps(
     routines: sdkRoutines(macro),
     runner: new AgentSdkRunner({
       query,
+      macroTools: (signal) => codeMode.connect(signal),
       claudeExecutable: 'claude',
       anthropicBaseUrl: config.anthropicBaseUrl,
       anthropicAuthToken: config.anthropicAuthToken,

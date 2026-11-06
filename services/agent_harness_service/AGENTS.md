@@ -341,3 +341,10 @@ commits the selected model. Spans never include transcripts, synthesis text or k
 Computer operator construction requires an explicit persona credential source.
 The composition currently passes `NoPersonaCredentials`, which returns empty
 material only for computers without a persona and rejects persona computers.
+
+Public MCP accepts JWT bearer or the standard revocable user API key. Compose
+`UserApiKeyAuthorizer` at startup; key requests run only as their owner. The
+`ai-code-mode` selector includes teammates through `TeamAgentRepository` server
+facts even without PostHog configuration; ordinary users keep their existing
+flag policy. No request header may assert teammate status. Brain clients require
+all three code-mode tools and reject unavailable deployments explicitly.

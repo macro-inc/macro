@@ -58,7 +58,10 @@ import { type Git, GitWriter, Workspace } from './workspace.ts';
 
 export type { Wiring } from './wiring.ts';
 export type BrainDeps = {
-  config: Omit<Config, 'macroApiKey' | 'anthropicAuthToken' | 'executable'>;
+  config: Omit<
+    Config,
+    'macroApiKey' | 'mcpUrl' | 'anthropicAuthToken' | 'executable'
+  >;
   /** Frozen composition/config snapshot selected by the supervisor. */
   wiringRoot?: string;
   http: MacroHttp;

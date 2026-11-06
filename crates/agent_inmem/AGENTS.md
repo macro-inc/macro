@@ -102,3 +102,8 @@ DecideReview are eager internal tools in both standard and code modes.
 The in-process egress MCP client accepts the primary and explicitly configured
 external egress bases, so tool catalogs can inspect paired-runtime sessions.
 Keep route parsing limited to those configured bases.
+
+- Public MCP composes `AgentToolMode` over `FlaggedToolMode`: authoritative
+  teammate account facts explicitly enable `ai-code-mode`; ordinary users
+  retain the existing rollout. Account lookup failures fail closed and log a
+  category, never user or credential text.

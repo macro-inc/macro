@@ -114,3 +114,8 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 - Skill: `new-service` (for how this is wired as a dependency, not a deploy)
 
 - Only verified Macro JWT session provenance becomes `ManagedAgentSession`; external MCP callers remain uncorrelated.
+
+Public MCP may additionally receive the existing `UserApiKeyAuthorizer` through
+`mounted_mcp_router`. `x-macro-user-api-key` resolves only the key owner and is
+rechecked on every request; never trust an acting-user header or client agent
+claim. JWT bearer authentication remains independent and unchanged.

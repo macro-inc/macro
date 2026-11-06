@@ -12,6 +12,7 @@ import { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { match } from 'ts-pattern';
 import { AsyncQueue } from './channel.ts';
+import type { CodeModeConnection } from './code-mode.ts';
 import { startSpan, traceHeaders } from './telemetry.ts';
 export type Tier = string;
 export type BrainTool = NonNullable<
@@ -77,6 +78,8 @@ export type QueryFunction = (params: {
 export type AgentSdkRunnerOptions = {
   query: QueryFunction;
   tools?: Options['tools'];
+  /** Connect inside the brain process; never serialize transport credentials. */
+  macroTools?: (signal: AbortSignal) => Promise<CodeModeConnection>;
   /** The `claude` executable the SDK drives. */
   claudeExecutable: string;
   /** Claude access through Macro's gateway; never a personal login. */
@@ -121,19 +124,18 @@ export class AgentSdkRunner implements Runner {
       input.push(userMessage(text));
     };
     send(turn.prompt);
-    let messages: AsyncIterable<SDKMessage>;
-    try {
-      messages = context.with(parent, () =>
+    const query = (tools: BrainTool[] | undefined) =>
+      context.with(parent, () =>
         this.#options.query({
           prompt: input,
           options: {
             tools: turn.builtinTools ?? this.#options.tools,
             strictMcpConfig: turn.strictMcpConfig,
-            mcpServers: turn.tools?.length
+            mcpServers: tools?.length
               ? {
                   brain: createSdkMcpServer({
                     name: 'brain',
-                    tools: turn.tools,
+                    tools,
                   }),
                 }
               : undefined,
@@ -151,8 +153,12 @@ export class AgentSdkRunner implements Runner {
               append: turn.system,
             },
             env: {
-              ...this.#options.baseEnv,
-              ...turn.env,
+              ...Object.fromEntries(
+                Object.entries({
+                  ...this.#options.baseEnv,
+                  ...turn.env,
+                }).filter(([name]) => name !== 'MACRO_API_KEY')
+              ),
               ANTHROPIC_BASE_URL: this.#options.anthropicBaseUrl,
               ANTHROPIC_AUTH_TOKEN: this.#options.anthropicAuthToken,
               CLAUDE_CONFIG_DIR: this.#options.claudeConfigDir,
@@ -166,6 +172,17 @@ export class AgentSdkRunner implements Runner {
           },
         })
       );
+    let connection: CodeModeConnection | undefined;
+    const connect = this.#options.macroTools;
+    let messages: AsyncIterable<SDKMessage>;
+    try {
+      messages =
+        connect && turn.tier !== 'triage'
+          ? (async function* () {
+              connection = await connect(abortController.signal);
+              yield* query([...(turn.tools ?? []), ...connection.tools]);
+            })()
+          : query(turn.tools);
     } catch (error) {
       span.setStatus({ code: SpanStatusCode.ERROR });
       span.end();
@@ -230,6 +247,9 @@ export class AgentSdkRunner implements Runner {
           outcome = { ...outcome, status: 'error', result: String(error) };
         }
       } finally {
+        await connection?.close().catch(() => {
+          span.setStatus({ code: SpanStatusCode.ERROR });
+        });
         input.close();
         events.close();
         span.setAttribute('brain.aborted', abortController.signal.aborted);
