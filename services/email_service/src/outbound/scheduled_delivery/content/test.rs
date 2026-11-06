@@ -110,7 +110,7 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../crates/email/fixtures",
+        path = "../../../../../../crates/email/email/fixtures",
         scripts("email_draft")
     )
 )]
@@ -163,7 +163,7 @@ async fn provider_sync_cannot_replace_approved_body_envelope_or_sender(
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../crates/email/fixtures",
+        path = "../../../../../../crates/email/email/fixtures",
         scripts("email_draft")
     )
 )]
@@ -191,7 +191,7 @@ async fn older_graphql_attempt_without_prepared_content_requires_review(
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../crates/email/email_db_client/fixtures",
         scripts("get_process_scheduled_messages")
     )
 )]

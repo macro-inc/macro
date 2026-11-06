@@ -30,8 +30,8 @@ members = [
   "crates/ai_usage",
   "crates/attention_feed",
   "crates/bots",
-  "crates/calendar_events",
-  "crates/calendar_scheduling",
+  "crates/calendar/calendar_events",
+  "crates/calendar/calendar_scheduling",
   "crates/channel_bots",
   "crates/channel_labels",
   "crates/client/cache-core",
@@ -58,7 +58,10 @@ members = [
   "crates/dictation",
   "crates/docx_engine",
   "crates/dynamic_ui",
-  "crates/email_api_client",
+  "crates/email/email_api_client",
+  "crates/email/generic_email_domains",
+  "crates/email/google_token",
+  "crates/email/reminders",
   "crates/embedding",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
@@ -72,9 +75,7 @@ members = [
   "crates/folds/codex_fold",
   "crates/foreign_entity",
   "crates/forms",
-  "crates/generic_email_domains",
   "crates/git_patch",
-  "crates/google_token",
   "crates/granola_sync",
   "crates/graphql/complete_graph",
   "crates/graphql/graphql_activity",
@@ -130,7 +131,6 @@ members = [
   "crates/prompt",
   "crates/properties_service",
   "crates/psd_engine",
-  "crates/reminders",
   "crates/routine_program",
   "crates/routines",
   "crates/scheduled_action",
@@ -570,9 +570,9 @@ bots = { path = "crates/bots", default-features = false }
 broadcast = { path = "crates/platform/broadcast" }
 cache-core = { path = "crates/client/cache-core" }
 cache-turso = { path = "crates/client/cache-turso" }
-cal = { path = "crates/cal" }
-calendar_events = { path = "crates/calendar_events" }
-calendar_scheduling = { path = "crates/calendar_scheduling" }
+cal = { path = "crates/calendar/cal" }
+calendar_events = { path = "crates/calendar/calendar_events" }
+calendar_scheduling = { path = "crates/calendar/calendar_scheduling" }
 call = { path = "crates/call", default-features = false }
 channel_bots = { path = "crates/channel_bots" }
 channel_labels = { path = "crates/channel_labels" }
@@ -613,13 +613,13 @@ documents_hex = { package = "documents", path = "crates/documents" }
 docx_engine = { path = "crates/docx_engine" }
 dynamic_ui = { path = "crates/dynamic_ui" }
 dynamodb_client = { path = "crates/aws/dynamodb_client" }
-email = { path = "crates/email" }
-email_api_client = { path = "crates/email_api_client" }
-email_db_client = { path = "crates/email_db_client" }
-email_formatting = { path = "crates/email_formatting" }
+email = { path = "crates/email/email" }
+email_api_client = { path = "crates/email/email_api_client" }
+email_db_client = { path = "crates/email/email_db_client" }
+email_formatting = { path = "crates/email/email_formatting" }
 email_service_client = { path = "crates/clients/email_service_client" }
-email_utils = { path = "crates/email_utils" }
-email_validator = { path = "crates/email_validator" }
+email_utils = { path = "crates/email/email_utils" }
+email_validator = { path = "crates/email/email_validator" }
 embedding = { path = "crates/embedding" }
 ensure_exists = { path = "crates/platform/ensure_exists" }
 entity_access = { path = "crates/entity_access", default-features = false }
@@ -638,12 +638,12 @@ forms = { path = "crates/forms" }
 frecency = { path = "crates/frecency" }
 fusionauth = { path = "crates/clients/fusionauth" }
 genai_telemetry = { path = "crates/platform/genai_telemetry" }
-generic_email_domains = { path = "crates/generic_email_domains" }
+generic_email_domains = { path = "crates/email/generic_email_domains" }
 git_patch = { path = "crates/git_patch" }
 github = { path = "crates/github", default-features = false }
 github_pull_requests = { path = "crates/github_pull_requests", default-features = false }
 gmail_client = { path = "crates/clients/gmail_client" }
-google_token = { path = "crates/google_token" }
+google_token = { path = "crates/email/google_token" }
 granola_sync = { path = "crates/granola_sync" }
 graphql_activity = { path = "crates/graphql/graphql_activity" }
 graphql_calendar = { path = "crates/graphql/graphql_calendar" }
@@ -676,7 +676,7 @@ import_notion = { path = "crates/import_notion" }
 import_tracker = { path = "crates/import_tracker" }
 initiative = { path = "crates/initiative", default-features = false }
 initiative_description = { path = "crates/initiative_description" }
-invite_email = { path = "crates/invite_email" }
+invite_email = { path = "crates/email/invite_email" }
 ip_extractor = { path = "crates/platform/ip_extractor" }
 item-filter-index = { path = "crates/item_filter_index" }
 item_filters = { path = "crates/item_filters", default-features = false }
@@ -767,7 +767,7 @@ psd_engine = { path = "crates/psd_engine" }
 rate_limit = { path = "crates/platform/rate_limit" }
 readonly_pool = { path = "crates/platform/readonly_pool" }
 referral = { path = "crates/referral" }
-reminders = { path = "crates/reminders" }
+reminders = { path = "crates/email/reminders" }
 remote_env_var = { path = "crates/platform/remote_env_var" }
 roles_and_permissions = { path = "crates/roles_and_permissions", default-features = false }
 routine_program = { path = "crates/routine_program" }

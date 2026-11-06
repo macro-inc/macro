@@ -35,7 +35,7 @@ in-call chat.
 - Owns: call creation/ringing/join lifecycle, LiveKit room management, call
   recordings, and persistent in-call chat.
 - Not here: channel messages and threads outside calls → `crates/channels`;
-  calendar meeting scheduling → `crates/calendar_events`, `crates/calendar_scheduling`.
+  calendar meeting scheduling → `crates/calendar/calendar_events`, `crates/calendar/calendar_scheduling`.
 
 ## Boundaries
 

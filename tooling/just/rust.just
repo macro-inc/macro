@@ -74,7 +74,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notifications/notification_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notifications/notification/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_db_client/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_text_extractor/.env
@@ -86,12 +86,12 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/accounts/teams/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/frecency/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/favorites/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/reminders/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/reminders/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/slack_integration/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/slack_import_worker/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/accounts/user_api_key/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/soup/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/email/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/system_properties/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/properties/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/name_search/.env
@@ -125,7 +125,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_projections/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_billing/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/webhook/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar_events/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar/calendar_events/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_service/.env
 
 setup_macrodb:

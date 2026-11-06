@@ -42,7 +42,7 @@ fn missing_uploaded_bytes_require_review_but_transient_storage_errors_remain_ret
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../../crates/email/email_db_client/fixtures",
         scripts("forwarded_attachments")
     )
 )]
@@ -61,7 +61,7 @@ async fn source_deletion_before_preparation_rejects_incomplete_payload(
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../../crates/email/email_db_client/fixtures",
         scripts("forwarded_attachments")
     )
 )]
@@ -85,7 +85,7 @@ async fn source_deletion_after_snapshot_cannot_shrink_the_payload(
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../../crates/email/email_db_client/fixtures",
         scripts("forwarded_attachments")
     )
 )]

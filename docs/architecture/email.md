@@ -481,7 +481,7 @@ with a higher independent sequence. RSVP carries the displayed responding addres
 the calendar domain verifies inbox ownership before passing only that address to
 Google. Optimistic responses and rollback ownership are scoped to that attendee.
 
-The parser compatibility corpus is in `crates/email/fixtures/calendar`. `ical` 0.11
+The parser compatibility corpus is in `crates/email/email/fixtures/calendar`. `ical` 0.11
 handles folded properties, parameters, and embedded VTIMEZONE syntax. `chrono-tz`
 resolves unambiguous IANA times, and the Windows zone IDs that Outlook writes map to
 IANA through the CLDR table in `calendar_invitation_parser/windows_zones.rs`. Custom

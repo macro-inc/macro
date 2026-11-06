@@ -321,11 +321,11 @@ checks before enabling reads again.
 
 ## Implementation references
 
-- [Team policy and source models](../../crates/calendar_events/src/domain/team.rs)
-- [Source repository](../../crates/calendar_events/src/outbound/pg_team.rs)
-- [Availability calculation](../../crates/calendar_events/src/domain/team_availability.rs)
-- [AI adapter](../../crates/calendar_events/src/inbound/team_toolset.rs)
-- [HTTP adapter](../../crates/calendar_events/src/inbound/team_router.rs)
+- [Team policy and source models](../../crates/calendar/calendar_events/src/domain/team.rs)
+- [Source repository](../../crates/calendar/calendar_events/src/outbound/pg_team.rs)
+- [Availability calculation](../../crates/calendar/calendar_events/src/domain/team_availability.rs)
+- [AI adapter](../../crates/calendar/calendar_events/src/inbound/team_toolset.rs)
+- [HTTP adapter](../../crates/calendar/calendar_events/src/inbound/team_router.rs)
 - [Database workflow](../development/database.md)
 
 [google-sharing]: https://developers.google.com/workspace/calendar/api/concepts/sharing
