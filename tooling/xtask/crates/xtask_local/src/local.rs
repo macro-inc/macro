@@ -1081,6 +1081,22 @@ fn bring_up_infra(
         let stage = stage.background();
         std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
     });
+    // LocalStack is ready within seconds, long before OpenSearch: poll its API
+    // and provision S3/SQS/DynamoDB while compose waits on the rest.
+    let localstack_lane = {
+        let instance = instance.clone();
+        let stage = stage.background();
+        std::thread::spawn(move || {
+            let health = format!(
+                "http://localhost:{}/_localstack/health",
+                instance.port(Port::LocalStack)
+            );
+            wait_http(&stage, "Waiting for LocalStack", &health)?;
+            stage.run_step("Provisioning LocalStack", || {
+                localstack::provision(&instance)
+            })
+        })
+    };
     let mut up = compose_cmd(instance, env);
     up.arg("up").arg("-d").arg("--wait").args(waited);
     let infra = stage.run("Starting infra (docker compose up -d --wait)", &mut up);
@@ -1089,18 +1105,12 @@ fn bring_up_infra(
             .join()
             .map_err(|_| anyhow::anyhow!("starting FusionAuth panicked"))?
     });
+    let localstack_ready = localstack_lane
+        .join()
+        .map_err(|_| anyhow::anyhow!("provisioning LocalStack panicked"))?;
     infra?;
     fusionauth_started.transpose()?;
-
-    // LocalStack has no healthcheck: poll its API, then provision S3/SQS/DynamoDB.
-    let localstack_health = format!(
-        "http://localhost:{}/_localstack/health",
-        instance.port(Port::LocalStack)
-    );
-    wait_http(stage, "Waiting for LocalStack", &localstack_health)?;
-    stage.run_step("Provisioning LocalStack", || {
-        localstack::provision(instance)
-    })?;
+    localstack_ready?;
 
     if spec.migrates_db && init == InfraInit::Full {
         // Postgres is ready (`--wait`); create + migrate the freshly-wiped DB.
