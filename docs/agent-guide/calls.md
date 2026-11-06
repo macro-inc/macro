@@ -59,8 +59,8 @@ existing permission-scoped readers. Only team sharing has a card; metadata and
 the other sections use the shared unframed side-panel rows.
 
 Close the side panel to widen and center the recording column and expose
-Summary/Transcript tabs. Stored summary attribution remains visible in both
-layouts. Below 960px of call-pane width the panel starts closed;
+Summary/Transcript tabs. Stored summary attribution sits below the Summary
+heading or reading tabs, above the summary text. Below 960px of call-pane width the panel starts closed;
 opening it covers the content with Back to content, keeping the same tabs.
 Playback remains reachable in a pinned bar after the recording scrolls above the
 viewport. On wide panes its width follows the centered content column; only

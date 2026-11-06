@@ -345,63 +345,93 @@ export function CallRecordingBody(props: {
                           )}
                         </Show>
 
-                        <Show when={columnTabs()}>
-                          <div class="mobile:order-3">
-                            <Tabs
-                              aria-label={t('calls.detailContent')}
-                              size={isMobile() ? 'md' : 'sm'}
-                              fullWidth={isMobile()}
-                              options={[
-                                {
-                                  value: 'summary',
-                                  label: t('calls.detailSummary'),
-                                },
-                                {
-                                  value: 'transcript',
-                                  label: t('calls.detailTranscript'),
-                                },
-                                ...(isMobile()
-                                  ? [
-                                      {
-                                        value: 'chat' as const,
-                                        label: t('calls.detailChat'),
-                                        count: messages().length,
-                                      },
-                                    ]
-                                  : []),
-                              ]}
-                              value={selectedTab()}
-                              onChange={(tab) => {
-                                const interaction = beginInteraction(
-                                  'call.detail.tab',
+                        <div class="flex min-w-0 flex-col gap-2 mobile:order-3">
+                          <Show when={columnTabs()}>
+                            <div>
+                              <Tabs
+                                aria-label={t('calls.detailContent')}
+                                size={isMobile() ? 'md' : 'sm'}
+                                fullWidth={isMobile()}
+                                options={[
                                   {
-                                    attributes: {
-                                      'call.id': props.callId,
-                                      'call.tab': tab,
-                                    },
+                                    value: 'summary',
+                                    label: t('calls.detailSummary'),
+                                  },
+                                  {
+                                    value: 'transcript',
+                                    label: t('calls.detailTranscript'),
+                                  },
+                                  ...(isMobile()
+                                    ? [
+                                        {
+                                          value: 'chat' as const,
+                                          label: t('calls.detailChat'),
+                                          count: messages().length,
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                                value={selectedTab()}
+                                onChange={(tab) => {
+                                  const interaction = beginInteraction(
+                                    'call.detail.tab',
+                                    {
+                                      attributes: {
+                                        'call.id': props.callId,
+                                        'call.tab': tab,
+                                      },
+                                    }
+                                  );
+                                  try {
+                                    setContentTab(tab);
+                                  } finally {
+                                    interaction.end();
                                   }
-                                );
-                                try {
-                                  setContentTab(tab);
-                                } finally {
-                                  interaction.end();
-                                }
-                              }}
-                            />
-                          </div>
-                        </Show>
-                        <div class="flex min-w-0 flex-col gap-7 mobile:order-4">
-                          <Switch>
-                            <Match
-                              when={
-                                !columnTabs() || selectedTab() === 'summary'
-                              }
-                            >
-                              <CallRecordingSummarySection
-                                record={props.record}
-                                hideHeading={columnTabs()}
+                                }}
                               />
-                              <Show when={!isMobile()}>
+                            </div>
+                          </Show>
+                          <div class="flex min-w-0 flex-col gap-7">
+                            <Switch>
+                              <Match
+                                when={
+                                  !columnTabs() || selectedTab() === 'summary'
+                                }
+                              >
+                                <CallRecordingSummarySection
+                                  record={props.record}
+                                  hideHeading={columnTabs()}
+                                />
+                                <Show when={!isMobile()}>
+                                  <CallRecordingChat
+                                    source={discussion}
+                                    timelineStartMs={timelineStartMs()}
+                                    durationSeconds={recordingDuration()}
+                                    onSeek={seekRecording()}
+                                    targetId={props.messageTarget}
+                                    requestKey={props.messageTargetRequestKey}
+                                    onClearTarget={props.onClearMessageTarget}
+                                  />
+                                </Show>
+                              </Match>
+                              <Match when={selectedTab() === 'transcript'}>
+                                <CallTranscript
+                                  transcript={record().transcript}
+                                  channelId={record().channelId}
+                                  record={record()}
+                                  timelineStartMs={timelineStartMs()}
+                                  durationSeconds={recordingDuration()}
+                                  activeSequenceNum={activeSequenceNum()}
+                                  videoSeekGeneration={videoSeekGeneration()}
+                                  onSeekToSeconds={seekToSeconds}
+                                  messages={messages()}
+                                  scrollElement={scrollRef()}
+                                  manualScrollGeneration={manualScrollGeneration()}
+                                  syncTarget={syncTarget()}
+                                  hideHeader
+                                />
+                              </Match>
+                              <Match when={selectedTab() === 'chat'}>
                                 <CallRecordingChat
                                   source={discussion}
                                   timelineStartMs={timelineStartMs()}
@@ -410,39 +440,11 @@ export function CallRecordingBody(props: {
                                   targetId={props.messageTarget}
                                   requestKey={props.messageTargetRequestKey}
                                   onClearTarget={props.onClearMessageTarget}
+                                  hideHeading
                                 />
-                              </Show>
-                            </Match>
-                            <Match when={selectedTab() === 'transcript'}>
-                              <CallTranscript
-                                transcript={record().transcript}
-                                channelId={record().channelId}
-                                record={record()}
-                                timelineStartMs={timelineStartMs()}
-                                durationSeconds={recordingDuration()}
-                                activeSequenceNum={activeSequenceNum()}
-                                videoSeekGeneration={videoSeekGeneration()}
-                                onSeekToSeconds={seekToSeconds}
-                                messages={messages()}
-                                scrollElement={scrollRef()}
-                                manualScrollGeneration={manualScrollGeneration()}
-                                syncTarget={syncTarget()}
-                                hideHeader
-                              />
-                            </Match>
-                            <Match when={selectedTab() === 'chat'}>
-                              <CallRecordingChat
-                                source={discussion}
-                                timelineStartMs={timelineStartMs()}
-                                durationSeconds={recordingDuration()}
-                                onSeek={seekRecording()}
-                                targetId={props.messageTarget}
-                                requestKey={props.messageTargetRequestKey}
-                                onClearTarget={props.onClearMessageTarget}
-                                hideHeading
-                              />
-                            </Match>
-                          </Switch>
+                              </Match>
+                            </Switch>
+                          </div>
                         </div>
                       </div>
                     </div>
