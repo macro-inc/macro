@@ -369,6 +369,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+proc-macro2 = "1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 prost = "0.14"
 prost-build = "0.14"
@@ -433,6 +434,7 @@ symphonia = { version = "0.6.1", default-features = false, features = [
   "ogg",
   "wav",
 ] }
+syn = { version = "2", features = ["full"] }
 tar = "0.4.46"
 tempfile = "3"
 thiserror = "2.0.0"
