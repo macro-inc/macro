@@ -3,7 +3,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import Lock from '@icon/system/regular/lock-simple.svg';
 import Users from '@icon/system/regular/users-three.svg';
 import { Button, Dropdown, SingleSelectCheck } from '@ui';
-import { createSignal, createUniqueId, For, Show } from 'solid-js';
+import { createSignal, createUniqueId, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { CallSettingsMenu } from './CallSettingsMenu';
 
@@ -51,6 +51,10 @@ function SharingOptionContent(props: {
 export function CallSharingMenu(props: {
   sharedWithTeam: boolean;
   disabled: boolean;
+  /** A change is already awaiting approval, so the options wait for it too. */
+  changePending: boolean;
+  /** Where that change stands. */
+  status: JSX.Element;
   onToggle: () => void;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -65,8 +69,9 @@ export function CallSharingMenu(props: {
     setOpen(open);
     props.onOpenChange(open);
   };
+  const optionsDisabled = () => props.disabled || props.changePending;
   const select = (value: string) => {
-    if (props.disabled) return;
+    if (optionsDisabled()) return;
     if (value !== selected()) props.onToggle();
     setMenuOpen(false);
   };
@@ -90,30 +95,34 @@ export function CallSharingMenu(props: {
         </Button>
       )}
       mobileContent={
-        <MobileDrawer.Section role="radiogroup" aria-label="Call sharing">
-          <For each={sharingOptions}>
-            {(option) => (
-              <MobileDrawer.Item
-                role="radio"
-                aria-label={option.label}
-                aria-describedby={`${id}-${option.value}`}
-                aria-checked={selected() === option.value}
-                disabled={props.disabled}
-                onClick={() => select(option.value)}
-              >
-                <SharingOptionContent
-                  option={option}
-                  descriptionId={`${id}-${option.value}`}
-                  selected={selected() === option.value}
-                />
-              </MobileDrawer.Item>
-            )}
-          </For>
-        </MobileDrawer.Section>
+        <>
+          {props.status}
+          <MobileDrawer.Section role="radiogroup" aria-label="Call sharing">
+            <For each={sharingOptions}>
+              {(option) => (
+                <MobileDrawer.Item
+                  role="radio"
+                  aria-label={option.label}
+                  aria-describedby={`${id}-${option.value}`}
+                  aria-checked={selected() === option.value}
+                  disabled={optionsDisabled()}
+                  onClick={() => select(option.value)}
+                >
+                  <SharingOptionContent
+                    option={option}
+                    descriptionId={`${id}-${option.value}`}
+                    selected={selected() === option.value}
+                  />
+                </MobileDrawer.Item>
+              )}
+            </For>
+          </MobileDrawer.Section>
+        </>
       }
     >
       <Dropdown.Group>
         <Dropdown.GroupLabel>Call sharing</Dropdown.GroupLabel>
+        {props.status}
         <Dropdown.RadioGroup value={selected()} onChange={select}>
           <For each={sharingOptions}>
             {(option) => (
@@ -122,7 +131,7 @@ export function CallSharingMenu(props: {
                 textValue={option.label}
                 aria-label={option.label}
                 aria-describedby={`${id}-${option.value}`}
-                disabled={props.disabled}
+                disabled={optionsDisabled()}
               >
                 <SharingOptionContent
                   option={option}

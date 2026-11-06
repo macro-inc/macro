@@ -9,6 +9,7 @@ mod meeting_invites;
 mod meetings;
 mod orphan_rooms;
 mod reconcile;
+mod team_share_consent;
 
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{
@@ -45,8 +46,8 @@ use crate::domain::events::{
     CallStartedMetadata,
 };
 use crate::domain::models::{
-    CallRecordPage, EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
-    VoipPushPayloadRequest,
+    CallRecordPage, CallTeamShareState, EditCallRecordOutcome, EditCallRecordRepoArgs,
+    EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
 };
 use crate::domain::notification_events::{
     CallNotificationEvent, CallNotificationMacroEvent, CallNotificationMetadata,
@@ -2150,7 +2151,7 @@ impl<
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
-    ) -> Result<(), CallError> {
+    ) -> Result<EditCallRecordOutcome, CallError> {
         let entity = receipt.entity();
         if entity.entity_type != EntityType::Call {
             return Err(CallError::Internal(anyhow::anyhow!(
@@ -2187,15 +2188,16 @@ impl<
         let mut share_permission = request.share_permission;
 
         // While the call is live, team sharing is the pending toggle on the
-        // active call (any Edit-level caller may flip it, like the toggle
-        // endpoint); it becomes canonical state when the call is archived.
-        // Once archived, the change is authorized against the persisted
-        // creator before any write, so a rejected request publishes nothing.
-        let live_share_with_team = match &record {
+        // active call (any Edit-level caller may propose changing it, like the
+        // toggle endpoint); it becomes canonical state when the call is
+        // archived. Once archived, the change is authorized against the
+        // persisted creator before any write, so a rejected request publishes
+        // nothing.
+        let mut live_share_with_team = match &record {
             Some(record) if record.is_active => live_share_intent(team_share_request)?,
             _ => None,
         };
-        let team_share = if live_share_with_team.is_some() {
+        let mut team_share = if live_share_with_team.is_some() {
             // The repository refuses a team level without a command; the live
             // intent is carried separately.
             if let Some(permission) = share_permission.as_mut() {
@@ -2206,6 +2208,40 @@ impl<
             self.authorize_call_team_share(&receipt, &call_id, team_share_request)
                 .await?
         };
+        let requested_share = live_share_with_team.or_else(|| {
+            team_share
+                .as_ref()
+                .map(|command| command.target().is_some())
+        });
+        // A change other participants must approve is held back; the rest of
+        // the edit goes ahead either way.
+        let held = match (&record, requested_share) {
+            (Some(record), Some(shared)) => {
+                self.hold_team_share_change(record, receipt.acting_user_id(), shared)
+                    .await?
+            }
+            _ => false,
+        };
+        let outcome = if held {
+            live_share_with_team = None;
+            team_share = None;
+            if let Some(permission) = share_permission.as_mut() {
+                permission.team_share_access_level = None;
+            }
+            EditCallRecordOutcome::TeamShareAwaitingApproval
+        } else {
+            EditCallRecordOutcome::Saved
+        };
+        let edits_nothing_else = custom_name.is_none()
+            && share_permission.as_ref().is_none_or(|permission| {
+                permission.link_share.is_none()
+                    && permission.link_share_access_level.is_none()
+                    && permission.channel_share_permissions.is_none()
+            });
+        if held && edits_nothing_else {
+            return Ok(outcome);
+        }
+
         // Events report the committed team-share outcome, never the raw request.
         let share_with_team = live_share_with_team.or_else(|| {
             team_share
@@ -2226,7 +2262,7 @@ impl<
             .await?;
 
         let Some(record) = record else {
-            return Ok(());
+            return Ok(outcome);
         };
 
         self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
@@ -2253,7 +2289,50 @@ impl<
             .await;
         }
 
-        Ok(())
+        Ok(outcome)
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn get_team_share_state(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<CallTeamShareState, CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        self.team_share_state(&call_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, receipt))]
+    async fn respond_to_team_share_change(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        approve: bool,
+    ) -> Result<CallTeamShareState, CallError> {
+        let entity = receipt.entity();
+        if entity.entity_type != EntityType::Call {
+            return Err(CallError::Internal(anyhow::anyhow!(
+                "expected Call entity in receipt, got {:?}",
+                entity.entity_type
+            )));
+        }
+
+        let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
+            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        // Consent comes from people, never from a bot acting for one.
+        let actor = receipt.get_authenticated_user().map_err(|_| {
+            CallError::Forbidden("only a person can answer a team-sharing change".to_string())
+        })?;
+        self.answer_team_share_change(&call_id, actor, approve)
+            .await?;
+        self.team_share_state(&call_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -2305,6 +2384,12 @@ impl<
                 .await?;
             (false, None)
         } else {
+            let held = self
+                .hold_team_share_change(&record, receipt.acting_user_id(), !record.share_with_team)
+                .await?;
+            if held {
+                return Ok(record.share_with_team);
+            }
             self.repo.toggle_share_with_team(&call_id).await?
         };
 

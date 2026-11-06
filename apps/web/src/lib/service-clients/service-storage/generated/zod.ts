@@ -3361,8 +3361,10 @@ export const deleteCallRecordParams = zod.object({
  * Edits a call record: link/channel share permissions, display name, and
 team sharing. Edit access (channel membership) is required for the request.
 `sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
-the call is live it sets the pending share-with-team toggle, and once the
-call is archived it is additionally authorized against the call's creator.
+the call is live it proposes changing the pending share-with-team toggle, and
+once the call is archived it is additionally authorized against the call's
+creator. On a channel call a team-sharing change is held until the other
+participants approve it; read it from the pending route below.
  * @summary Handler for `PATCH /call/record/{call_id}`.
  */
 export const editCallRecordParams = zod.object({
@@ -3633,10 +3635,105 @@ export const getCallRingStateResponse = zod
   .describe('Response body for `GET \/call\/ring-status\/{call_id}`.');
 
 /**
- * Flips the live call's share-with-team toggle and returns the new value as
-the JSON body. The toggle is applied as canonical team sharing (View for
-the creator's team) when the call is archived; archived calls answer 409
-and are edited through `PATCH /call/record/{call_id}` instead.
+ * The call's team sharing and any change awaiting approval.
+ * @summary Handler for `GET /call/record/{call_id}/share-with-team/pending`.
+ */
+export const getTeamShareStateParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
+
+export const getTeamShareStateResponse = zod
+  .object({
+    pending: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            requestedBy: zod
+              .string()
+              .describe('The user who proposed the change.'),
+            shared: zod
+              .boolean()
+              .describe(
+                'Whether the call would be shared with the team afterwards.'
+              ),
+            waitingOn: zod
+              .array(zod.string())
+              .describe('The users who have not approved it yet.'),
+          })
+          .describe(
+            'A team-sharing change that takes effect once everyone on the call approves.'
+          ),
+      ])
+      .optional(),
+    shared: zod
+      .boolean()
+      .describe(
+        'Whether the call is shared with the team now: the pending toggle while\nthe call is live, canonical sharing once it is archived.'
+      ),
+  })
+  .describe(
+    "A call's team sharing as it stands, and any change awaiting approval."
+  );
+
+/**
+ * Approves or declines the call's pending team-sharing change and returns the
+state that leaves. The last approval applies the change; one decline drops
+it. An agent run cannot answer for the person it runs as.
+ * @summary Handler for `POST /call/record/{call_id}/share-with-team/pending/respond`.
+ */
+export const respondToTeamShareChangeParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
+
+export const respondToTeamShareChangeBody = zod
+  .object({
+    approve: zod
+      .boolean()
+      .describe('True to approve the change, false to decline it.'),
+  })
+  .describe("An answer to a call's pending team-sharing change.");
+
+export const respondToTeamShareChangeResponse = zod
+  .object({
+    pending: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            requestedBy: zod
+              .string()
+              .describe('The user who proposed the change.'),
+            shared: zod
+              .boolean()
+              .describe(
+                'Whether the call would be shared with the team afterwards.'
+              ),
+            waitingOn: zod
+              .array(zod.string())
+              .describe('The users who have not approved it yet.'),
+          })
+          .describe(
+            'A team-sharing change that takes effect once everyone on the call approves.'
+          ),
+      ])
+      .optional(),
+    shared: zod
+      .boolean()
+      .describe(
+        'Whether the call is shared with the team now: the pending toggle while\nthe call is live, canonical sharing once it is archived.'
+      ),
+  })
+  .describe(
+    "A call's team sharing as it stands, and any change awaiting approval."
+  );
+
+/**
+ * Proposes flipping the live call's share-with-team toggle and returns its
+current value as the JSON body: it flips at once only when nobody else has
+to approve. The toggle is applied as canonical team sharing (View for the
+creator's team) when the call is archived; archived calls answer 409 and are
+edited through `PATCH /call/record/{call_id}` instead.
  * @summary Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
  */
 export const toggleShareWithTeamParams = zod.object({

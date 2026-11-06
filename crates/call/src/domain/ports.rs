@@ -20,8 +20,9 @@ use notification::domain::models::apple::VoipPushPayload;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 
 use crate::domain::models::{
-    CallPeople, CallRecordPage, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
-    EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
+    CallPeople, CallRecordPage, CallTeamShareState, CustomSpeakerAssignment,
+    DeletedCallRecordStorageKeys, EditCallRecordOutcome, EditCallRecordRepoArgs,
+    EditCallRecordRequest, EditCallTranscriptRequest, TeamShareChange,
 };
 
 use super::meetings::{
@@ -184,8 +185,9 @@ pub trait CallRepository: Send + Sync + 'static {
     /// Create a new call record, or return `None` if one already exists for
     /// this channel (unique-constraint conflict).
     ///
-    /// The live `share_with_team` intent starts at its default (on); canonical
-    /// team sharing is only written when the call is archived.
+    /// The live `share_with_team` intent starts off in DMs and private
+    /// channels and on elsewhere; canonical team sharing is only written when
+    /// the call is archived.
     fn create_call<'a>(
         &self,
         call_id: &Uuid,
@@ -357,6 +359,36 @@ pub trait CallRepository: Send + Sync + 'static {
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<(bool, Option<Uuid>), CallError>> + Send;
+
+    /// The team-sharing change awaiting approval on this call, if any.
+    fn get_team_share_change(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<TeamShareChange>, CallError>> + Send;
+
+    /// Everyone whose approval a team-sharing change needs: every person who
+    /// has joined the call, and in a DM its other member even before joining.
+    /// Bots and guests have no say. Works for active and archived calls alike.
+    fn team_share_approvers(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, CallError>> + Send;
+
+    /// Open a team-sharing change with `user_id` as its requester, or add
+    /// `user_id`'s approval to the one already open in the same direction. Returns `None` when the
+    /// open change goes the other way. Idempotent.
+    fn approve_team_share_change<'a>(
+        &self,
+        call_id: &Uuid,
+        shared: bool,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<Option<TeamShareChange>, CallError>> + Send;
+
+    /// Drop the call's open team-sharing change. Idempotent.
+    fn clear_team_share_change(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
@@ -1160,23 +1192,44 @@ pub trait CallService: Send + Sync + 'static {
 
     /// Edit a [`CallRecord`] with the receipt's Edit access. Team sharing
     /// (`sharePermission.teamShareAccessLevel` or legacy `shareWithTeam`) accepts
-    /// only `view`: any Edit caller may set the live intent, but only the persisted
-    /// creator may change archived sharing. Standalone calls may clear existing
-    /// team intent or grants but cannot enable them.
+    /// only `view`: any Edit caller may propose a change to the live intent, but
+    /// only the persisted creator may propose one to archived sharing. A channel
+    /// call's change waits for the other participants to approve it, which the
+    /// outcome reports. Standalone calls may clear existing team intent or
+    /// grants but cannot enable them.
     fn edit_call_record(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         request: EditCallRecordRequest,
-    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    ) -> impl Future<Output = Result<EditCallRecordOutcome, CallError>> + Send;
 
-    /// Toggle live `share_with_team` intent and return its new value. The receipt
-    /// must authorize `EntityType::Call` with the call UUID as its `entity_id`.
-    /// Intent becomes canonical sharing on archive; archived calls return
-    /// [`CallError::Conflict`]. Standalone calls may only clear enabled intent.
+    /// Propose flipping the live `share_with_team` intent and return its current
+    /// value, which only differs from the old one if nobody else had to approve.
+    /// The receipt must authorize `EntityType::Call` with the call UUID as its
+    /// `entity_id`. Intent becomes canonical sharing on archive; archived calls
+    /// return [`CallError::Conflict`]. Standalone calls may only clear enabled
+    /// intent.
     fn toggle_share_with_team(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// The call's team sharing and any change awaiting approval.
+    fn get_team_share_state(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<CallTeamShareState, CallError>> + Send;
+
+    /// Approve or decline the call's open team-sharing change and return the
+    /// state that leaves. The last approval applies the change; one decline
+    /// drops it, as does its requester declining their own. Only a signed-in
+    /// person on the call, or the change's requester, may answer. Repeating an
+    /// answer after the change is settled returns the current state.
+    fn respond_to_team_share_change(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        approve: bool,
+    ) -> impl Future<Output = Result<CallTeamShareState, CallError>> + Send;
 
     /// Apply per-diarized-speaker `custom_speaker` overrides to a call's
     /// transcript. Authorization is carried in the receipt; the entity must

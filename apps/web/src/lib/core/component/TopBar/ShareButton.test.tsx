@@ -87,6 +87,7 @@ const mocks = vi.hoisted(() => ({
   updateChatPermissions: vi.fn(),
   fetchCallSharePermission: vi.fn(),
   updateCallTeamShare: vi.fn(),
+  fetchCallTeamShareState: vi.fn(),
   setCallRecordTeamShareCache: vi.fn(),
   callRecordShared: true,
   callRecordChannelId: 'channel-1' as string | null,
@@ -282,6 +283,9 @@ vi.mock('@queries/call/call', () => ({
     mocks.fetchCallSharePermission(...args),
   updateCallTeamShare: (...args: unknown[]) =>
     mocks.updateCallTeamShare(...args),
+  fetchCallTeamShareState: (...args: unknown[]) =>
+    mocks.fetchCallTeamShareState(...args),
+  invalidateCallRecord: vi.fn(),
   setCallRecordTeamShareCache: (...args: unknown[]) =>
     mocks.setCallRecordTeamShareCache(...args),
   sharePermissionFromCallRecord: (record: {
@@ -450,6 +454,10 @@ beforeEach(() => {
   mocks.updateInitiativePermissions.mockResolvedValue(ok({}));
   mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
   mocks.updateCallTeamShare.mockResolvedValue({ isErr: () => false });
+  mocks.fetchCallTeamShareState.mockResolvedValue({
+    isOk: () => true,
+    value: { pending: null },
+  });
   mocks.editProject.mockResolvedValue({ isErr: () => false });
   mocks.updateDatabasePermissions.mockResolvedValue({ isErr: () => false });
   mocks.editDocument.mockResolvedValue({ isErr: () => false });
@@ -1066,15 +1074,35 @@ describe('call team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.updateCallTeamShare).toHaveBeenCalledWith('call-1', true)
+      expect(mocks.setCallRecordTeamShareCache).toHaveBeenCalledWith(
+        'call-1',
+        true
+      )
     );
-    expect(mocks.setCallRecordTeamShareCache).toHaveBeenCalledWith(
-      'call-1',
-      true
-    );
+    expect(mocks.updateCallTeamShare).toHaveBeenCalledWith('call-1', true);
     expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
     expect(mocks.editDocument).not.toHaveBeenCalled();
     expect(mocks.editProject).not.toHaveBeenCalled();
+  });
+
+  it('leaves call sharing alone while the change awaits approval', async () => {
+    mocks.hasTeam = true;
+    mocks.fetchCallTeamShareState.mockResolvedValue({
+      isOk: () => true,
+      value: {
+        pending: { shared: true, requestedBy: 'a', waitingOn: ['b'] },
+      },
+    });
+    mountCallShare();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level view' })
+    );
+
+    await vi.waitFor(() =>
+      expect(mocks.fetchCallTeamShareState).toHaveBeenCalledWith('call-1')
+    );
+    expect(mocks.setCallRecordTeamShareCache).not.toHaveBeenCalled();
   });
 
   it('clears call team access with an explicit null', async () => {
@@ -1086,12 +1114,12 @@ describe('call team sharing', () => {
     );
 
     await vi.waitFor(() =>
-      expect(mocks.updateCallTeamShare).toHaveBeenCalledWith('call-1', false)
+      expect(mocks.setCallRecordTeamShareCache).toHaveBeenCalledWith(
+        'call-1',
+        false
+      )
     );
-    expect(mocks.setCallRecordTeamShareCache).toHaveBeenCalledWith(
-      'call-1',
-      false
-    );
+    expect(mocks.updateCallTeamShare).toHaveBeenCalledWith('call-1', false);
   });
 
   it('shows team access from the call record cache after the checkbox writes it', () => {

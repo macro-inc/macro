@@ -45,11 +45,11 @@ use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ActiveCallsResponse, CallActiveResponse, CallError, CallRecord, CallTokenResponse,
-    EditCallRecordRequest, EditCallTranscriptRequest, GetBatchCallRecordPreviewRequest,
-    GetBatchCallRecordPreviewResponse, JoinCallRequest, LeaveCallResponse,
-    LiveCallParticipantsResponse, LiveCallsResponse, MAX_BATCH_CALL_IDS, RingStatusResponse,
-    TranscriptSegmentRequest,
+    ActiveCallsResponse, CallActiveResponse, CallError, CallRecord, CallTeamShareState,
+    CallTokenResponse, EditCallRecordRequest, EditCallTranscriptRequest,
+    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, JoinCallRequest,
+    LeaveCallResponse, LiveCallParticipantsResponse, LiveCallsResponse, MAX_BATCH_CALL_IDS,
+    RespondToTeamShareChangeRequest, RingStatusResponse, TranscriptSegmentRequest,
 };
 use crate::domain::ports::{CallService, CallStartLimiter};
 
@@ -242,6 +242,14 @@ where
         .route(
             "/record/{call_id}/share-with-team/toggle",
             post(toggle_share_with_team_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/share-with-team/pending",
+            get(get_team_share_state_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/share-with-team/pending/respond",
+            post(respond_to_team_share_change_handler::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -830,8 +838,10 @@ pub async fn delete_call_record_handler<
 /// Edits a call record: link/channel share permissions, display name, and
 /// team sharing. Edit access (channel membership) is required for the request.
 /// `sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
-/// the call is live it sets the pending share-with-team toggle, and once the
-/// call is archived it is additionally authorized against the call's creator.
+/// the call is live it proposes changing the pending share-with-team toggle, and
+/// once the call is archived it is additionally authorized against the call's
+/// creator. On a channel call a team-sharing change is held until the other
+/// participants approve it; read it from the pending route below.
 #[utoipa::path(
     patch,
     operation_id = "edit_call_record",
@@ -841,12 +851,12 @@ pub async fn delete_call_record_handler<
     ),
     request_body = EditCallRecordRequest,
     responses(
-        (status = 204, description = "Call record updated"),
+        (status = 204, description = "Call record updated; a team-sharing change may still await approval"),
         (status = 400, description = "Invalid team-share level, contradictory inputs, or the creator has no team", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 403, description = "Team sharing of an archived call may only be changed by its creator", body = ErrorResponse),
         (status = 404, body = ErrorResponse),
-        (status = 409, description = "Team-sharing facts changed, or the call was archived mid-request; reload and retry", body = ErrorResponse),
+        (status = 409, description = "Team-sharing facts changed, an opposite change is awaiting approval, or the call was archived mid-request; reload and retry", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -907,10 +917,11 @@ pub async fn edit_call_transcript_handler<
 
 /// Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
 ///
-/// Flips the live call's share-with-team toggle and returns the new value as
-/// the JSON body. The toggle is applied as canonical team sharing (View for
-/// the creator's team) when the call is archived; archived calls answer 409
-/// and are edited through `PATCH /call/record/{call_id}` instead.
+/// Proposes flipping the live call's share-with-team toggle and returns its
+/// current value as the JSON body: it flips at once only when nobody else has
+/// to approve. The toggle is applied as canonical team sharing (View for the
+/// creator's team) when the call is archived; archived calls answer 409 and are
+/// edited through `PATCH /call/record/{call_id}` instead.
 #[utoipa::path(
     post,
     operation_id = "toggle_share_with_team",
@@ -919,10 +930,10 @@ pub async fn edit_call_transcript_handler<
         ("call_id" = Uuid, Path, description = "Call ID"),
     ),
     responses(
-        (status = 200, body = bool, content_type = "application/json", description = "New value of the share-with-team toggle"),
+        (status = 200, body = bool, content_type = "application/json", description = "Current value of the share-with-team toggle"),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
-        (status = 409, description = "The call is no longer active", body = ErrorResponse),
+        (status = 409, description = "The call is no longer active, or an opposite change is awaiting approval", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -940,6 +951,85 @@ pub async fn toggle_share_with_team_handler<
         .toggle_share_with_team(access.entity_access_receipt)
         .await?;
     Ok(Json(new_value))
+}
+
+/// Handler for `GET /call/record/{call_id}/share-with-team/pending`.
+///
+/// The call's team sharing and any change awaiting approval.
+#[utoipa::path(
+    get,
+    operation_id = "get_team_share_state",
+    path = "/call/record/{call_id}/share-with-team/pending",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 200, body = CallTeamShareState),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_team_share_state_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<Json<CallTeamShareState>, CallError> {
+    let team_share = state
+        .service
+        .get_team_share_state(access.entity_access_receipt)
+        .await?;
+    Ok(Json(team_share))
+}
+
+/// Handler for `POST /call/record/{call_id}/share-with-team/pending/respond`.
+///
+/// Approves or declines the call's pending team-sharing change and returns the
+/// state that leaves. The last approval applies the change; one decline drops
+/// it. An agent run cannot answer for the person it runs as.
+#[utoipa::path(
+    post,
+    operation_id = "respond_to_team_share_change",
+    path = "/call/record/{call_id}/share-with-team/pending/respond",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    request_body = RespondToTeamShareChangeRequest,
+    responses(
+        (status = 200, body = CallTeamShareState),
+        (status = 401, body = ErrorResponse),
+        (status = 403, description = "Only the change's requester and the people on the call may answer, and never through an agent run", body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 409, description = "The change or the call moved on; reload and retry", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn respond_to_team_share_change_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
+    Json(request): Json<RespondToTeamShareChangeRequest>,
+) -> Result<Json<CallTeamShareState>, CallError> {
+    if is_agent_run(user.authorization.user.agent_id.is_some(), &headers) {
+        return Err(CallError::Forbidden(
+            "an agent cannot answer a team-sharing change".to_string(),
+        ));
+    }
+    let team_share = state
+        .service
+        .respond_to_team_share_change(access.entity_access_receipt, request.approve)
+        .await?;
+    Ok(Json(team_share))
 }
 
 /// Handler for `POST /call/record/preview`.

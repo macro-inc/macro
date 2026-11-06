@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{CallToolContext, call_access_error, call_error};
-use crate::domain::models::EditCallRecordRequest;
+use crate::domain::models::{EditCallRecordOutcome, EditCallRecordRequest};
 use crate::domain::ports::CallService;
 
 /// Change a call's name or team sharing.
@@ -18,7 +18,7 @@ use crate::domain::ports::CallService;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "UpdateCallRecord",
-    description = "Rename a recorded call or change whether it is shared with the team, as the call's header menu does. Requires edit access to the call; only the call's creator can change team sharing on a finished call. Find calls with ListEntities or NameSearch."
+    description = "Rename a recorded call or change whether it is shared with the team, as the call's header menu does. Requires edit access to the call; only the call's creator can propose a team-sharing change on a finished call, and a change on a channel call only takes effect once the other participants approve it. Find calls with ListEntities or NameSearch."
 )]
 pub struct UpdateCallRecord {
     /// The call to change.
@@ -32,7 +32,7 @@ pub struct UpdateCallRecord {
     pub name: Option<String>,
     /// Team sharing.
     #[schemars(
-        description = "True to share the call with the creator's team (view access), false to stop sharing it. Omit to leave it unchanged."
+        description = "True to propose sharing the call with the creator's team (view access), false to propose no longer sharing it. Takes effect once the other participants approve. Omit to leave it unchanged."
     )]
     #[serde(default)]
     pub share_with_team: Option<bool>,
@@ -84,7 +84,7 @@ where
             .await
             .map_err(call_access_error)?;
         let name = self.name.as_deref().map(str::trim).map(str::to_string);
-        service_context
+        let outcome = service_context
             .service
             .edit_call_record(
                 receipt,
@@ -103,10 +103,22 @@ where
             Some(name) => changes.push(format!("renamed it to `{name}`")),
             None => {}
         }
-        match self.share_with_team {
-            Some(true) => changes.push("shared it with the team".to_string()),
-            Some(false) => changes.push("stopped sharing it with the team".to_string()),
-            None => {}
+        let awaiting_approval = outcome == EditCallRecordOutcome::TeamShareAwaitingApproval;
+        match (self.share_with_team, awaiting_approval) {
+            (Some(true), false) => changes.push("shared it with the team".to_string()),
+            (Some(false), false) => changes.push("stopped sharing it with the team".to_string()),
+            (Some(true), true) => {
+                changes.push(
+                    "asked the other participants to approve sharing it with the team".to_string(),
+                );
+            }
+            (Some(false), true) => {
+                changes.push(
+                    "asked the other participants to approve no longer sharing it with the team"
+                        .to_string(),
+                );
+            }
+            (None, _) => {}
         }
         Ok(UpdateCallRecordResponse {
             call_id: self.call_id,
