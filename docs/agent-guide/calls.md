@@ -359,6 +359,10 @@ chat history. The emoji rises above its sender's name tag and fades; when the
 sender's tile is off screen it appears at the stage's bottom-left. Reduced motion
 fades without movement. Reactions have no sound and disappear when leaving.
 
+Desktop **More → Full screen** expands only the call area. The same item becomes
+**Exit full screen**; browser Escape also exits. Call menus and tooltips remain
+inside the fullscreen surface. Unsupported webviews disable the action.
+
 Open **Chat** and **People** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
 **People** shows the live attendee count on phones and a scrollable roster, including

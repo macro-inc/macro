@@ -80,6 +80,7 @@ vi.mock('@core/user', () => ({
 vi.mock('@ui', async () => ({
   Avatar: (await import('@ui/components/Avatar')).Avatar,
   Button: (await import('@ui/components/Button')).Button,
+  Hotkey: (await import('@ui/components/Hotkey')).Hotkey,
   Layer: (await import('@ui/components/Layer')).Layer,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),

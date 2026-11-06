@@ -1,9 +1,10 @@
 import { t } from '@app/lib/i18n';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import CornersIn from '@icon/system/regular/corners-in.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import LayoutIcon from '@icon/system/regular/sidebar-simple.svg';
-import { Button, Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
+import { Button, Dropdown, Hotkey, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { type CallLayout, normalizeCallLayout } from '../call-layout';
 import {
@@ -79,6 +80,9 @@ export function CallMoreMenu(props: {
   onOpenChange: (open: boolean) => void;
   children?: JSX.Element;
   onReaction?: (emoji: CallReactionEmoji) => void;
+  fullscreen?: boolean;
+  fullscreenAvailable?: boolean;
+  onFullscreen?: () => void;
 }) {
   const label = () =>
     layouts.find((item) => item.value === props.layout)?.label ??
@@ -94,7 +98,7 @@ export function CallMoreMenu(props: {
       >
         <DotsThree class="size-5" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-64">
+      <Dropdown.Content portalScope="local" class="min-w-64">
         <Show when={props.onReaction}>
           <Dropdown.Group>
             <Dropdown.GroupLabel>{t('calls.reactions')}</Dropdown.GroupLabel>
@@ -122,7 +126,7 @@ export function CallMoreMenu(props: {
               <span class="text-ink-muted">{t(label())}</span>
               <CaretRight class="size-3" />
             </Dropdown.SubTrigger>
-            <Dropdown.SubContent class="w-80">
+            <Dropdown.SubContent portalScope="local" class="w-80">
               <Dropdown.Group>
                 <Dropdown.GroupLabel>{t('calls.layout')}</Dropdown.GroupLabel>
                 <Dropdown.RadioGroup
@@ -187,6 +191,23 @@ export function CallMoreMenu(props: {
               </span>
             </span>
           </Dropdown.CheckboxItem>
+          <Dropdown.Item
+            onSelect={props.onFullscreen}
+            disabled={!props.fullscreenAvailable}
+          >
+            <Show
+              when={props.fullscreen}
+              fallback={<CornersOut class="size-4" />}
+            >
+              <CornersIn class="size-4" />
+            </Show>
+            <span class="flex-1">
+              {props.fullscreen
+                ? t('calls.exitFullscreen')
+                : t('calls.fullscreen')}
+            </span>
+            <Hotkey shortcut="ctrl+meta+f" theme="subtle" />
+          </Dropdown.Item>
         </Dropdown.Group>
         {props.children}
       </Dropdown.Content>

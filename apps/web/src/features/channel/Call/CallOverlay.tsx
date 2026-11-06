@@ -48,6 +48,7 @@ import {
 } from './CallParticipantTiles';
 import { CallReactionLayer } from './CallReactionLayer';
 import { CallWaveform } from './CallWaveform';
+import { createCallFullscreen } from './call-fullscreen';
 import {
   type CallLayout,
   normalizeCallLayout,
@@ -91,6 +92,8 @@ export function CallOverlay(props: {
   };
 }) {
   const callCtx = useCallContext();
+  const [callRoot, setCallRoot] = createSignal<HTMLDivElement>();
+  const fullscreen = createCallFullscreen(callRoot);
   const reactions = createCallReactions(callCtx.room);
   const [reactionRoot, setReactionRoot] = createSignal<HTMLDivElement>();
   const currentUserId = useUserId();
@@ -386,7 +389,11 @@ export function CallOverlay(props: {
 
   return (
     <div
-      class="relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0"
+      ref={setCallRoot}
+      class={cn(
+        'portal-scope relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0',
+        fullscreen.active() && 'h-dvh w-dvw bg-surface'
+      )}
       data-call-layout={layout()}
       data-call-fullscreen={isMobile() ? '' : undefined}
       onPointerDown={() => {
@@ -670,6 +677,14 @@ export function CallOverlay(props: {
                         <CallMoreMenu
                           compact={compactControls()}
                           layout={layout()}
+                          fullscreen={fullscreen.active()}
+                          fullscreenAvailable={fullscreen.available()}
+                          onFullscreen={() =>
+                            fireAndForget(
+                              fullscreen.toggle(),
+                              'call-fullscreen'
+                            )
+                          }
                           onReaction={
                             callCtx.room()
                               ? (emoji) =>

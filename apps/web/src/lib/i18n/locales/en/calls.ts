@@ -1,6 +1,8 @@
 export default {
   layout: 'Layout',
   reactions: 'Reactions',
+  fullscreen: 'Full screen',
+  exitFullscreen: 'Exit full screen',
   layoutAuto: 'Auto',
   layoutGrid: 'Grid',
   layoutSpeaker: 'Speaker',
