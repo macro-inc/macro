@@ -565,6 +565,7 @@ dependencies = [
  "chat",
  "chrono",
  "chrono-tz",
+ "clap",
  "code_execution",
  "codex_cloud_agents",
  "codex_connection",

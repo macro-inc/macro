@@ -254,6 +254,7 @@ async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
         .await
         .context("failed to resolve agent harness service secrets")?;
+    let computer_fleet = config.computer_fleet()?;
     let non_user_owners = config.non_user_owners()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     let enable_dev_commands = matches!(
@@ -1234,6 +1235,7 @@ async fn run() -> anyhow::Result<()> {
     // a forwarder that wakes an asleep computer for a prompt.
     let computer_operator = computers::operator(
         &config,
+        computer_fleet,
         &pool,
         Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
             PgHarnessRepo::new(pool.clone()),

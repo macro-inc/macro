@@ -113,3 +113,23 @@ fn incus_computers_need_no_relay_sidecars() {
     );
     let _ = std::fs::remove_dir_all(instance.artifact_dir());
 }
+
+#[test]
+fn disabled_control_plane_is_explicit_only_in_the_harness() {
+    let instance = Instance::derive(Some("computers-off"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Off, &instance);
+    let mut services = IndexMap::from([(
+        EGRESS_SERVICE.to_owned(),
+        Some(dct::Service {
+            environment: kv(&[("PORT", "8080")]),
+            ..Default::default()
+        }),
+    )]);
+    add_computers(&mut services, &computers).unwrap();
+    let value = serde_yaml::to_value(&services).unwrap();
+    assert_eq!(
+        value[EGRESS_SERVICE]["environment"]["COMPUTERS_FLEET"],
+        "disabled"
+    );
+    assert_eq!(value[EGRESS_SERVICE]["environment"]["PORT"], "8080");
+}

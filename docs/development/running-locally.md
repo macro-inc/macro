@@ -405,10 +405,11 @@ upgrades. Bun is still used for dependency installation and builds.
 ## Macro Computers
 
 `agent_harness_service` runs the Macro computer control plane when
-`COMPUTERS_FLEET` is set. The stack sets every `COMPUTERS_*` value from the
-fleet you pick. An enabled fleet requires explicit configuration; missing values
-fail startup with the variable name. With `COMPUTERS_FLEET` unset, these values
-are not required.
+`COMPUTERS_FLEET` is `incus` or `docker`. The stack sets every `COMPUTERS_*`
+value from the fleet you pick. An enabled fleet requires explicit configuration;
+missing values fail startup with the variable name. `COMPUTERS_FLEET` is required;
+`disabled` needs no fleet settings. Local orchestration sets `disabled` when
+computers are off.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,

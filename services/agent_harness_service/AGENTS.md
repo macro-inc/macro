@@ -43,7 +43,8 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/computers.rs`: configures the optional fleet operator, runs fleet effects,
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
-  `incus` or local-only `docker`; unset disables the control plane.
+  `incus`, local-only `docker`, or explicit `disabled`; missing selection fails
+  startup.
 - `src/computer_screen.rs` + `src/computer_screen/`: Macro computer routes.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`,
@@ -161,8 +162,9 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 ## Configuration and lifecycle
 
 Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
-is set. Read the stable identity from Doppler in deployed environments; local
-stacks explicitly set `local-<instance>`. Distinct control planes sharing a host
+is `incus` or `docker`. The selector is required; use `disabled` without a fleet.
+Read the stable identity from Doppler in deployed environments; local stacks
+explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.
 
 An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_HOST_NAME`,

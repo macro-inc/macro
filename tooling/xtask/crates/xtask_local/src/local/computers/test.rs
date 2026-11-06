@@ -114,7 +114,7 @@ fn incus_computers_dial_tailnet_ips_without_compose_dns() {
 }
 
 #[test]
-fn off_removes_every_computers_key() {
+fn off_removes_shared_computer_settings() {
     let instance = Instance::derive(Some("computers-off"), None).unwrap();
     let mut env = local_env(&instance);
     env.insert("COMPUTERS_FLEET".into(), "docker".into());

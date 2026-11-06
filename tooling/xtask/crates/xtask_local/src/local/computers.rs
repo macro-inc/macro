@@ -10,7 +10,7 @@
 //! - `incus`: VMs on `runtime-dev-1`, reached directly over Tailscale.
 //!   Resolve the runtime's IPv4 address before generating compose env so
 //!   containers do not depend on MagicDNS. Boxes dial the devbox's tailnet IP.
-//! - `off`: no control plane; every `COMPUTERS_*` key is removed.
+//! - `off`: no control plane; explicitly sets `COMPUTERS_FLEET=disabled`.
 
 use std::collections::BTreeMap;
 use std::io::Write;

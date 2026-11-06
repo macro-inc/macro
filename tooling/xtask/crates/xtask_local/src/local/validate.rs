@@ -180,10 +180,8 @@ fn computers_failures(
     let mut failures = Vec::new();
     match computers.fleet() {
         Fleet::Off => {
-            if let Some(fleet) = env("COMPUTERS_FLEET") {
-                failures.push(format!(
-                    "computers are off but COMPUTERS_FLEET is {fleet:?}"
-                ));
+            if env("COMPUTERS_FLEET") != Some("disabled") {
+                failures.push("computers are off but COMPUTERS_FLEET is not disabled".into());
             }
         }
         Fleet::Docker => {

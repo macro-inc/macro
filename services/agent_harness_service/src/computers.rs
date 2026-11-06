@@ -23,6 +23,7 @@ use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId, EnrollmentDefaults};
+use hosted_runtimes::domain::no_persona_credentials::NoPersonaCredentials;
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
 use hosted_runtimes::domain::ports::{Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
@@ -37,7 +38,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
-use crate::config::{Config, Environment};
+use crate::config::{ComputerFleetConfig, Config, Environment};
 
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
@@ -47,128 +48,79 @@ const IDLE_TICK: Duration = Duration::from_secs(60);
 /// connects to another replica still gets it.
 const PARK_LIMIT: Duration = Duration::from_secs(120);
 
-pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+pub type Operator = ComputerOperator<
+    PgComputerRepo,
+    ConfiguredFleet,
+    HostedHarnesses,
+    SystemClock,
+    NoPersonaCredentials<PgComputerRepo>,
+>;
 
 /// Build the operator from explicit config, or `None` when this deployment
-/// runs no computers (`COMPUTERS_FLEET` unset).
+/// runs no computers (`COMPUTERS_FLEET=disabled`).
 pub async fn operator(
     config: &Config,
+    fleet_config: ComputerFleetConfig,
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
-    let Some(kind) = config.computers_fleet.as_deref() else {
-        return Ok(None);
-    };
-    let control_plane_id = ControlPlaneId::parse(required(
-        &config.computers_control_plane_id,
-        "COMPUTERS_CONTROL_PLANE_ID",
-    )?)?;
-    let host_name = required(&config.computers_host_name, "COMPUTERS_HOST_NAME")?;
-
-    let image = required(&config.computers_image, "COMPUTERS_IMAGE")?;
-    let reserve_gb = required_value(
-        &config.computers_host_reserve_gb,
-        "COMPUTERS_HOST_RESERVE_GB",
-    )?;
-    let oversell_factor = required_value(
-        &config.computers_oversell_factor,
-        "COMPUTERS_OVERSELL_FACTOR",
-    )?;
-    anyhow::ensure!(
-        oversell_factor > 0,
-        "COMPUTERS_OVERSELL_FACTOR must be positive"
-    );
-
-    let fleet = match kind {
-        "incus" => ConfiguredFleet::Incus(
+    let fleet = match fleet_config {
+        ComputerFleetConfig::Incus(settings) => ConfiguredFleet::Incus(
             IncusFleet::new(IncusFleetConfig {
                 endpoint: IncusEndpoint {
-                    url: required(&config.computers_incus_url, "COMPUTERS_INCUS_URL")?,
+                    url: settings.computers_incus_url.clone(),
                     timeouts: IncusTimeouts {
-                        state_change_secs: required_value(
-                            &config.computers_incus_state_change_timeout_secs,
-                            "COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS",
-                        )?,
-                        request: Duration::from_secs(required_value(
-                            &config.computers_incus_request_timeout_secs,
-                            "COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS",
-                        )?),
-                        connect: Duration::from_secs(required_value(
-                            &config.computers_incus_connect_timeout_secs,
-                            "COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS",
-                        )?),
-                        operation_wait_secs: required_value(
-                            &config.computers_incus_operation_wait_secs,
-                            "COMPUTERS_INCUS_OPERATION_WAIT_SECS",
-                        )?,
-                        operation_waits: required_value(
-                            &config.computers_incus_operation_waits,
-                            "COMPUTERS_INCUS_OPERATION_WAITS",
-                        )?,
+                        state_change_secs: settings.computers_incus_state_change_timeout_secs,
+                        request: Duration::from_secs(settings.computers_incus_request_timeout_secs),
+                        connect: Duration::from_secs(settings.computers_incus_connect_timeout_secs),
+                        operation_wait_secs: settings.computers_incus_operation_wait_secs,
+                        operation_waits: settings.computers_incus_operation_waits,
                     },
-                    client_cert_pem: required(
-                        &config.computers_incus_client_cert,
-                        "COMPUTERS_INCUS_CLIENT_CERT",
-                    )?,
-                    client_key_pem: required(
-                        &config.computers_incus_client_key,
-                        "COMPUTERS_INCUS_CLIENT_KEY",
-                    )?,
-                    server_cert_pem: required(
-                        &config.computers_incus_server_cert,
-                        "COMPUTERS_INCUS_SERVER_CERT",
-                    )?,
+                    client_cert_pem: settings.computers_incus_client_cert.clone(),
+                    client_key_pem: settings.computers_incus_client_key.clone(),
+                    server_cert_pem: settings.computers_incus_server_cert.clone(),
                 },
-                host_name,
-                control_plane_id,
-                reserve_gb,
-                oversell_factor,
+                host_name: settings.computers_host_name.clone(),
+                control_plane_id: ControlPlaneId::parse(
+                    settings.computers_control_plane_id.clone(),
+                )?,
+                reserve_gb: settings.computers_host_reserve_gb,
+                oversell_factor: settings.computers_oversell_factor,
                 image: ImageSource {
-                    reference: ImageReference::Alias(incus_client::ImageAlias::try_new(&image)?),
+                    reference: ImageReference::Alias(incus_client::ImageAlias::try_new(
+                        &settings.computers_image,
+                    )?),
                     remote: None,
                 },
-                profile: incus_client::ProfileName::try_new(&required(
-                    &config.computers_incus_profile,
-                    "COMPUTERS_INCUS_PROFILE",
-                )?)?,
-                storage_pool: incus_client::StoragePoolName::try_new(&required(
-                    &config.computers_incus_storage_pool,
-                    "COMPUTERS_INCUS_STORAGE_POOL",
-                )?)?,
-                shutdown_grace: Duration::from_secs(required_value(
-                    &config.computers_incus_shutdown_grace_secs,
-                    "COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS",
-                )?),
+                profile: incus_client::ProfileName::try_new(
+                    &settings.computers_incus_profile.clone(),
+                )?,
+                storage_pool: incus_client::StoragePoolName::try_new(
+                    &settings.computers_incus_storage_pool.clone(),
+                )?,
+                shutdown_grace: Duration::from_secs(settings.computers_incus_shutdown_grace_secs),
             })
             .context("could not build the Incus fleet")?,
         ),
-        "docker" => ConfiguredFleet::Docker(
+        ComputerFleetConfig::Docker(settings) => ConfiguredFleet::Docker(
             DockerFleet::new(
                 DockerFleetConfig {
-                    control_plane_id,
-                    image,
-                    network: required(
-                        &config.computers_docker_network,
-                        "COMPUTERS_DOCKER_NETWORK",
+                    control_plane_id: ControlPlaneId::parse(
+                        settings.computers_control_plane_id.clone(),
                     )?,
-                    enrollment_dir: required(
-                        &config.computers_docker_enrollment_dir,
-                        "COMPUTERS_DOCKER_ENROLLMENT_DIR",
-                    )?
-                    .into(),
-                    host_name,
-                    memory_gb: required_value(
-                        &config.computers_docker_memory_gb,
-                        "COMPUTERS_DOCKER_MEMORY_GB",
-                    )?,
-                    reserve_gb,
-                    oversell_factor,
+                    image: settings.computers_image.clone(),
+                    network: settings.computers_docker_network.clone(),
+                    enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
+                    host_name: settings.computers_host_name.clone(),
+                    memory_gb: settings.computers_docker_memory_gb,
+                    reserve_gb: settings.computers_host_reserve_gb,
+                    oversell_factor: settings.computers_oversell_factor,
                 },
                 config.environment,
             )
             .context("could not build the Docker fleet")?,
         ),
-        other => anyhow::bail!("COMPUTERS_FLEET must be incus or docker, not {other:?}"),
+        ComputerFleetConfig::Disabled => return Ok(None),
     };
 
     let service_url_overrides = service_url_overrides(config)?;
@@ -181,6 +133,7 @@ pub async fn operator(
         EnrollmentDefaults {
             service_url_overrides,
         },
+        NoPersonaCredentials::new(PgComputerRepo::new(pool.clone())),
     )
     .await
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
@@ -199,20 +152,6 @@ pub(super) fn service_url_overrides(config: &Config) -> anyhow::Result<BTreeMap<
     }
 
     Ok(service_url_overrides)
-}
-
-fn required(value: &Option<String>, name: &str) -> anyhow::Result<String> {
-    value
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .with_context(|| format!("{name} is required when COMPUTERS_FLEET is set"))
-}
-
-fn required_value<T: Copy>(value: &Option<T>, name: &str) -> anyhow::Result<T> {
-    value
-        .as_ref()
-        .copied()
-        .with_context(|| format!("{name} is required when COMPUTERS_FLEET is set"))
 }
 
 /// The operator's periodic passes.
