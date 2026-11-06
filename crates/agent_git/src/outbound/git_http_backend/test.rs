@@ -83,7 +83,7 @@ async fn git_enforces_remaining_input_bytes_before_publishing_objects() {
         .stdout;
     assert!(pack.len() > 1024);
     let repo = AuthorizedRepo::new(agent.clone(), GitAccess::Push, Some(1024));
-    let response = GitHttpBackend::new(directories.clone())
+    let response = GitHttpBackend::new(directories.clone(), TaskTracker::new())
         .serve(&repo, push(oid.trim(), pack))
         .await
         .unwrap();
@@ -138,7 +138,7 @@ async fn git_fsck_refuses_a_commit_without_an_author() {
         .await
         .stdout;
     let repo = AuthorizedRepo::new(agent.clone(), GitAccess::Push, Some(1024 * 1024));
-    let response = GitHttpBackend::new(directories.clone())
+    let response = GitHttpBackend::new(directories.clone(), TaskTracker::new())
         .serve(&repo, push(oid.trim(), pack))
         .await
         .unwrap();
@@ -153,4 +153,66 @@ async fn git_fsck_refuses_a_commit_without_an_author() {
         .await
         .unwrap();
     assert!(!exists.success());
+}
+
+#[tokio::test]
+async fn shutdown_tracker_waits_for_the_request_pump() {
+    use futures::FutureExt;
+
+    let storage = tempfile::tempdir().unwrap();
+    let (directories, agent) = target(storage.path()).await;
+    let tasks = TaskTracker::new();
+    let backend = GitHttpBackend::new(directories, tasks.clone());
+    let (finish, finished) = tokio::sync::oneshot::channel();
+    let response = backend
+        .serve(
+            &AuthorizedRepo::new(agent, GitAccess::Read, None),
+            GitRequest {
+                endpoint: GitEndpoint::Rpc(GitService::UploadPack),
+                content_type: Some("application/x-git-upload-pack-request".to_owned()),
+                content_encoding: None,
+                git_protocol: None,
+                body: Box::pin(futures::stream::once(async move {
+                    finished.await.unwrap();
+                    Ok(Bytes::from_static(b"0000"))
+                })),
+            },
+        )
+        .await
+        .unwrap();
+    tasks.close();
+    assert!(tasks.wait().now_or_never().is_none());
+    finish.send(()).unwrap();
+    drain(response.body).await;
+    tokio::time::timeout(std::time::Duration::from_secs(5), tasks.wait())
+        .await
+        .unwrap();
+    assert!(tasks.is_empty());
+}
+
+#[tokio::test]
+async fn completed_git_process_cancels_an_unfinished_input_pump() {
+    let storage = tempfile::tempdir().unwrap();
+    let (directories, agent) = target(storage.path()).await;
+    let tasks = TaskTracker::new();
+    let backend = GitHttpBackend::new(directories, tasks.clone());
+    let response = backend
+        .serve(
+            &AuthorizedRepo::new(agent, GitAccess::Read, None),
+            GitRequest {
+                endpoint: GitEndpoint::InfoRefs(GitService::UploadPack),
+                content_type: None,
+                content_encoding: None,
+                git_protocol: None,
+                body: Box::pin(futures::stream::pending()),
+            },
+        )
+        .await
+        .unwrap();
+    drain(response.body).await;
+    tasks.close();
+    tokio::time::timeout(std::time::Duration::from_secs(5), tasks.wait())
+        .await
+        .unwrap();
+    assert!(tasks.is_empty());
 }

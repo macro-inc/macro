@@ -35,9 +35,11 @@ serde = { workspace = true }
 sqlx = { workspace = true }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
 tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tower-http = { workspace = true, features = ["trace"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 serde_json = { workspace = true }

@@ -78,7 +78,7 @@ async fn start_server(pool: PgPool, storage_root: &Path, max_repo_size_bytes: u6
                 pool.clone(),
             )),
             limiter: InMemoryPushRateLimiter::new(30),
-            backend: GitHttpBackend::new(directories),
+            backend: GitHttpBackend::new(directories, tokio_util::task::TaskTracker::new()),
         },
         RepoLimits {
             max_repo_size_bytes,

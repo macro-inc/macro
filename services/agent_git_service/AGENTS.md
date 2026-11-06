@@ -41,3 +41,7 @@ Composition root for `crates/agent_git`: hosts each agent's workspace repo
 
 HTTP tracing adopts incoming W3C context through
 `macro_tower_layers::MakeSpanWithRemoteParent`, including internal repo calls.
+
+After Axum's graceful shutdown, the git backend `TaskTracker` drains before
+telemetry and the Tokio runtime shut down. The eight-second limit bounds only
+this tracker-drain phase; it does not bound the service's whole shutdown.

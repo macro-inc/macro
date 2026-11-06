@@ -22,15 +22,21 @@ use macro_authorization::{
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_service_urls::AgentGitServiceUrl;
 use sqlx::postgres::PgPoolOptions;
+use tokio_util::task::TaskTracker;
 use tower_http::trace::TraceLayer;
 
 mod config;
 mod git_runtime;
 
+#[cfg(test)]
+mod test;
+
 const PORT: u16 = 8080;
 /// Prefix the shared gateway forwards unchanged.
 const GATEWAY_PATH_PREFIX: &str = "/agent-git";
 const MAX_DATABASE_CONNECTIONS: u32 = 10;
+/// Maximum tracker-drain time after Axum's graceful shutdown completes.
+const GIT_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
 #[tokio::main]
 async fn main() -> Result<(), rootcause::Report> {
@@ -77,6 +83,7 @@ async fn run() -> Result<(), rootcause::Report> {
     }
     let directories = RepoDirectories::new(config.repo_storage_root.clone());
 
+    let git_tasks = TaskTracker::new();
     let service = AgentGitServiceImpl::new(
         AgentGitAdapters {
             repos: PgRepoRepository::new(pool.clone()),
@@ -85,7 +92,7 @@ async fn run() -> Result<(), rootcause::Report> {
                 pool,
             )),
             limiter: InMemoryPushRateLimiter::new(config.pushes_per_minute),
-            backend: GitHttpBackend::new(directories),
+            backend: GitHttpBackend::new(directories, git_tasks.clone()),
         },
         RepoLimits {
             max_repo_size_bytes: config.max_repo_size_bytes,
@@ -119,9 +126,23 @@ async fn run() -> Result<(), rootcause::Report> {
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", PORT)).await?;
     tracing::info!(port = PORT, "agent git service listening");
 
-    axum::serve(listener, app)
+    let result = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
-        .await?;
+        .await;
 
+    drain_git_tasks(&git_tasks).await?;
+    result?;
+
+    Ok(())
+}
+
+async fn drain_git_tasks(git_tasks: &TaskTracker) -> Result<(), rootcause::Report> {
+    git_tasks.close();
+    if tokio::time::timeout(GIT_SHUTDOWN_TIMEOUT, git_tasks.wait())
+        .await
+        .is_err()
+    {
+        return Err(rootcause::report!("git backend shutdown drain timed out"));
+    }
     Ok(())
 }

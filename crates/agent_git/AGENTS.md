@@ -95,3 +95,9 @@ retrying concurrent main updates. Repeating a saved choice creates no new commit
 Reject a symlinked config directory; replace voice.json atomically without following
 repository symlinks, because repository contents are controlled by the agent.
 The canonical recursive embedder includes voice/call configuration automatically.
+
+The CGI request and process pumps use the composition root's `TaskTracker`;
+close and drain it after HTTP shutdown before exiting the runtime. The service's
+eight-second limit bounds only tracker draining after Axum's graceful shutdown,
+not the service's whole shutdown. Git process completion cancels its stdin pump
+so an unfinished client body cannot retain it.

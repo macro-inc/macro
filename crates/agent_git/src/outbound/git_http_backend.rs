@@ -4,7 +4,7 @@ use std::process::Stdio;
 
 use futures::StreamExt;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio_util::io::ReaderStream;
+use tokio_util::{io::ReaderStream, sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument;
 
 use crate::domain::models::{
@@ -33,12 +33,13 @@ pub enum GitHttpBackendError {
 #[derive(Debug, Clone)]
 pub struct GitHttpBackend {
     directories: RepoDirectories,
+    tasks: TaskTracker,
 }
 
 impl GitHttpBackend {
-    /// Serve repos under `directories`.
-    pub fn new(directories: RepoDirectories) -> Self {
-        Self { directories }
+    /// Serve repos under `directories`; the owner closes and drains `tasks` at shutdown.
+    pub fn new(directories: RepoDirectories, tasks: TaskTracker) -> Self {
+        Self { directories, tasks }
     }
 }
 
@@ -158,12 +159,19 @@ impl GitBackend for GitHttpBackend {
         };
 
         // Pumps end with the request: body exhausted, failed, or git exited.
+        let input_cancel = CancellationToken::new();
+        let process_finished = input_cancel.clone().drop_guard();
         let mut body = request.body;
         let input_span = tracing::Span::current();
-        tokio::spawn(
+        self.tasks.spawn(
             async move {
                 let mut bytes = 0_i64;
-                while let Some(chunk) = body.next().await {
+                loop {
+                    let chunk = tokio::select! {
+                        _ = input_cancel.cancelled() => return,
+                        chunk = body.next() => chunk,
+                    };
+                    let Some(chunk) = chunk else { break };
                     let written = match chunk {
                         Ok(chunk) => {
                             bytes = bytes
@@ -186,8 +194,9 @@ impl GitBackend for GitHttpBackend {
             .instrument(input_span),
         );
         let process_span = tracing::Span::current();
-        tokio::spawn(
+        self.tasks.spawn(
             async move {
+                let _process_finished = process_finished;
                 let mut output = String::new();
                 if stderr.read_to_string(&mut output).await.is_ok() && !output.is_empty() {
                     tracing::warn!(
