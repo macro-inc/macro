@@ -56,6 +56,10 @@ class ManifestTests(unittest.TestCase):
             deployments = [o for o in objects if o['kind'] == 'Deployment']
             paths = {o['spec']['template']['spec']['containers'][0]['volumeMounts'][0]['mountPath'] for o in deployments}
             self.assertEqual(paths, {'/app/services/ai-editing-worker/.wrangler', '/app/services/analytics-proxy/.wrangler'})
+            worker = next(o for o in deployments if o['metadata']['name'] == 'ai-editing-worker')['spec']['template']['spec']
+            self.assertEqual(worker['volumes'][-1], {'name': 'worker-config', 'emptyDir': {}})
+            self.assertEqual(worker['initContainers'][0]['command'], ['sh', '-c', 'touch /config/dev.vars'])
+            self.assertEqual(worker['containers'][0]['volumeMounts'][-1]['subPath'], 'dev.vars')
 
 
 if __name__ == '__main__':

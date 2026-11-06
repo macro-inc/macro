@@ -30,6 +30,9 @@ on one Nix-declared kind node. This is a local development runtime only.
 ## Gotchas
 
 - Namespace deletion deletes its data; `stop` preserves PVCs.
+- Keep worker configuration and Wrangler state in namespace-local volumes even
+  when worker source code is mounted from the checkout.
+- Mount the Docker socket into the owned kind node for local agent sandboxes.
 - Always pass the private kubeconfig and explicit context; never use the user's
   current Kubernetes context.
 - The two fixed HTTPS slots are 32443 and 32444; initialization forwards bind

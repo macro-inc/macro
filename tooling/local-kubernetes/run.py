@@ -92,6 +92,7 @@ def cluster():
     config['nodes'][0]['extraMounts'] = [
         {'hostPath': str(ROOT), 'containerPath': str(ROOT)},
         {'hostPath': '/nix/store', 'containerPath': '/nix/store', 'readOnly': True},
+        {'hostPath': '/var/run/docker.sock', 'containerPath': '/var/run/docker.sock'},
     ]
     scratch = scratch_path()
     if scratch is not None:
@@ -196,6 +197,16 @@ def manifests(config, namespace, slot):
             ports.add({'lexical_service': 8096, 'sync_service': 8787, 'websocket_service': 6969,
                        'static_file_cdn': 80, 'ai_editing_worker': 8933, 'analytics_proxy': 8098}.get(key, 8080))
         pod = {'containers': [container], 'volumes': volumes, 'terminationGracePeriodSeconds': 30}
+        if key == 'ai_editing_worker':
+            volumes.append({'name': 'worker-config', 'emptyDir': {}})
+            container.setdefault('volumeMounts', []).append({
+                'name': 'worker-config', 'mountPath': '/app/services/ai-editing-worker/.dev.vars',
+                'subPath': 'dev.vars'})
+            pod['initContainers'] = [{'name': 'worker-config', 'image': container['image'],
+                'imagePullPolicy': 'Never', 'command': ['sh', '-c', 'touch /config/dev.vars'],
+                'volumeMounts': [{'name': 'worker-config', 'mountPath': '/config'}]}]
+        if value.get('ulimits', {}).get('memlock'):
+            container['securityContext'] = {'capabilities': {'add': ['IPC_LOCK']}}
         if value.get('user'):
             # Current Compose user values are numeric uid[:gid].
             parts = value['user'].split(':')
@@ -414,8 +425,7 @@ def main():
                 {'name': mount['name'], 'hostPath': {'path': str(binary_dir), 'type': ''}}
             ]}}}}
             kube('-n', namespace, 'patch', deployment, '--type=strategic', '-p', json.dumps(patch))
-        else:
-            kube('-n', namespace, 'rollout', 'restart', deployment)
+        kube('-n', namespace, 'rollout', 'restart', deployment)
         kube('-n', namespace, 'rollout', 'status', deployment, '--timeout=180s')
 
 
