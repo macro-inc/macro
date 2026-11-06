@@ -1,5 +1,7 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
 import {
   makeAddTagAction,
   makeCopyEntityIdAction,
@@ -24,7 +26,11 @@ import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
-import { enableProjects, enableReminders } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableProjects,
+  enableReminders,
+} from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -119,10 +125,14 @@ function SplitMenuItemContent(
 ) {
   return (
     <>
-      <Dynamic
-        component={props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-        class="size-4 shrink-0"
-      />
+      <Show when={props.icon}>
+        {(icon) => (
+          <Dynamic
+            component={icon() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
+            class="size-4 shrink-0"
+          />
+        )}
+      </Show>
       <div class="flex-1 truncate">{props.label}</div>
       <Show when={props.showHotkey !== false && props.hotkeyToken}>
         <Hotkey
@@ -360,6 +370,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const [open, setOpen] = createSignal(false);
   const [assigningProject, setAssigningProject] = createSignal(false);
   const projectsFlag = useFeatureFlag(enableProjects);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
@@ -373,6 +384,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const changeIcon = useChangeEntityIcon();
   // Read shortcut availability from row getters so focus changes update only
   // the hint, without recreating the action groups and losing menu focus.
   const activeHotkeyToken = (token: HotkeyToken): HotkeyToken | undefined => {
@@ -394,6 +406,28 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       blockName: props.entityKind,
     });
   });
+  const appearanceOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (
+      !appearanceFlag().enabled ||
+      !entity ||
+      !supportsEntityAppearance(entity)
+    )
+      return;
+    if (
+      props.permissions !== Permissions.OWNER &&
+      props.permissions !== Permissions.CAN_EDIT
+    )
+      return;
+    return {
+      label: t('appearance.title'),
+      group: 'file',
+      action: () => {
+        setOpen(false);
+        changeIcon(entity);
+      },
+    };
+  };
 
   const favoriteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
@@ -647,6 +681,15 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         }
       })
       .filter((op) => !!op);
+    const appearance = appearanceOp();
+    if (appearance) {
+      const renameIndex = mapped.findIndex((op) => op.icon === Rename);
+      mapped.splice(
+        renameIndex < 0 ? mapped.length : renameIndex + 1,
+        0,
+        appearance
+      );
+    }
     return [
       favoriteOp(),
       snoozeOp(),

@@ -17,6 +17,7 @@ properties, and activity.
   `share.rs`): the Postgres adapter, split by operation.
 - `src/inbound/toolset/`: AI toolset surface (lifecycle, reads, sharing).
 - `src/inbound/axum_router/`: REST surface (create/get/list/update/delete).
+- `axum_router/appearance.rs` uses Edit access for atomic icon/color and history updates; identity reads include overrides without changing timestamps or activity ranking.
 - `fixtures/initiative_test_data.sql`: seed data for repo tests.
 
 ## Scope
@@ -40,6 +41,9 @@ properties, and activity.
   relevant `src/inbound/` surface (`toolset/` or `axum_router/`).
 - Add a toolset action: `src/inbound/toolset/<area>.rs` →
   `src/domain/service.rs`.
+
+Appearance writes use `activity::AppearanceUpdate` in the repository transaction;
+realtime appearance events do not re-ingest history.
 
 ## Checks
 

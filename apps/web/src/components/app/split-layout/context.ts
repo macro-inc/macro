@@ -25,7 +25,7 @@ export type SplitBottomPanelRegistration = {
 
 export type SplitFileMenuAction = {
   label: string | JSX.Element;
-  icon: Component;
+  icon?: Component;
   action?: (e?: MouseEvent) => void;
   children?: SplitFileMenuAction[];
   /** Only set when the token's shortcut is executable from the split. */

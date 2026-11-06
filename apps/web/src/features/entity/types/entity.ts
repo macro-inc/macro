@@ -13,6 +13,7 @@ import type {
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
 import type {
   GraphqlEmailFocusCategory,
   GraphqlEmailImportanceTrend,
@@ -22,6 +23,8 @@ export type EntityBase = {
   id: string;
   name: string;
   ownerId: string;
+  /** Shared entity-owned icon and palette overrides. */
+  appearance?: EntityAppearance | null;
   frecencyScore?: number;
   /** Viewer-owned favorite state from Soup; absent on search-only results. */
   isFavorited?: boolean;

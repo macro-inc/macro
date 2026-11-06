@@ -192,6 +192,7 @@ impl From<RecordedAction> for GraphqlActivityAction {
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved(Default::default()),
             RecordedAction::Known(
                 action @ (Action::Renamed(_)
+                | Action::AppearanceChanged(_)
                 | Action::PictureChanged
                 | Action::CallEnded(_)
                 | Action::AccessRequested(_)),

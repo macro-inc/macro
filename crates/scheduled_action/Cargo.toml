@@ -14,7 +14,7 @@ ai_usage = { path = "../ai_usage" }
 bots = { path = "../bots", features = ["outbound"] }
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../teams", default-features = false, features = ["outbound"] }
-activity = { path = "../activity", default-features = false }
+activity = { path = "../activity", default-features = false, features = ["outbound"] }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = ["admission"] }
 bot_id = { path = "../bot_id" }

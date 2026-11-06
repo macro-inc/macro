@@ -93,7 +93,8 @@ fn typescript() -> Job {
         ))
         .name("Typecheck")
         .runs_on(mid_web_runner())
-        .add_step(checkout("Checkout Repo", false))
+        // Entity icon permanence checks compare every committed name list.
+        .add_step(checkout("Checkout Repo", true))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))

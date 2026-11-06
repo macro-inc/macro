@@ -1,3 +1,4 @@
+use super::appearance::ChangeAppearance;
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
@@ -15,6 +16,7 @@ use entity_access::domain::models::{
 use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
 use std::collections::HashMap;
@@ -70,8 +72,14 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action: ScheduledAction,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// Atomically replace presentation and record the actual change in entity history.
+    fn set_appearance(
+        &self,
+        change: ChangeAppearance,
+    ) -> impl Future<Output = Result<Option<EntityAppearance>>> + Send;
+
     /// Deletes the action row, its `entity_access` rows (`entity_type =
-    /// 'scheduled_action'`) and the `entity` row in one transaction. A missing
+    /// 'scheduled_action'`), history, and the `entity` row in one transaction. A missing
     /// row is `Ok(())`.
     fn delete_action(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
@@ -171,6 +179,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         template_id: Uuid,
+        appearance: EntityAppearance,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Actions `user_id` can access. Legacy clients see cron actions only;
@@ -187,6 +196,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         input: ActionConfigurationUpdate,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// Change the owner's routine presentation without changing its execution revision.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        appearance: EntityAppearance,
+    ) -> impl Future<Output = Result<EntityAppearance>> + Send;
 
     /// Change activation without touching configuration. Requesting the
     /// current state returns the stored action unchanged.

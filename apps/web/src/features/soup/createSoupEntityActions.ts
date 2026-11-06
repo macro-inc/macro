@@ -43,7 +43,11 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableProjects,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -54,6 +58,9 @@ import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
+import { supportsEntityAppearance } from '../entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
+import { useAppearanceEditAccess } from '../entity-appearance/queries/access';
 
 type SoupEntityActionItem = {
   id: string;
@@ -106,6 +113,7 @@ export function createSoupEntityActions(
   options: {
     /** A list that completes its own rows, such as Home's work feed. */
     markDoneDelegate?: () => MarkDoneDelegate | undefined;
+    selectedEntities?: () => readonly EntityData[];
   } = {}
 ): {
   buildActionGroups: BuildActionGroups;
@@ -113,7 +121,14 @@ export function createSoupEntityActions(
 } {
   const analytics = useAnalytics();
   const projectsFlag = useFeatureFlag(enableProjects);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const userId = useUserId();
+  const changeIcon = useChangeEntityIcon();
+  const selectedEntity = () => {
+    const entities = options.selectedEntities?.();
+    return entities?.length === 1 ? entities[0] : undefined;
+  };
+  const canEditIcon = useAppearanceEditAccess(selectedEntity, userId);
   const isTeamAdmin = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
@@ -330,6 +345,22 @@ export function createSoupEntityActions(
         label: t('entityActions.rename'),
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
+      });
+    }
+    const entity = entities.length === 1 ? entities[0] : undefined;
+    if (
+      appearanceFlag().enabled &&
+      entity &&
+      supportsEntityAppearance(entity) &&
+      (entity.ownerId === userId() ||
+        (selectedEntity()?.id === entity.id && canEditIcon()))
+    ) {
+      middleItems.push({
+        id: 'change-icon',
+        label: t('appearance.title'),
+        onClick: () => {
+          changeIcon(entity);
+        },
       });
     }
 

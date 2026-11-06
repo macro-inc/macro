@@ -44,6 +44,10 @@ through its breadcrumb retains the selected project view.
 Cached project rows remain available through offline/background refresh failures.
 Cache misses, server/permission errors, and failed continuation requests retain
 failure and retry controls.
+Project list rows, project breadcrumbs, task project chips, and project pickers
+show the saved icon and color. With the normalized cache active, Apply updates
+these surfaces before the save completes, without changing project recency or
+refetching their pages; resetting appearance restores the default project icon.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.

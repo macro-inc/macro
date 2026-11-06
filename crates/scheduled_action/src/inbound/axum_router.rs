@@ -31,6 +31,7 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
+use model_entity::EntityAppearance;
 use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -165,6 +166,10 @@ where
             get(get_action::<S, Svc, Auth>)
                 .put(update_action::<S, Svc, Auth>)
                 .delete(delete_action::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/appearance",
+            put(set_appearance::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/enabled",
@@ -376,6 +381,37 @@ where
         .update_action(entity_access_receipt, req)
         .await?;
     Ok(Json(ScheduledActionResponse::from(updated)))
+}
+
+#[utoipa::path(
+    put,
+    path = "/scheduled-actions/{id}/appearance",
+    tag = "scheduled actions",
+    operation_id = "set_scheduled_action_appearance",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    request_body = EntityAppearance,
+    responses((status = 200, body = EntityAppearance), (status = 400), (status = 401), (status = 404)),
+)]
+pub async fn set_appearance<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+    body: Result<Json<EntityAppearance>, JsonRejection>,
+) -> Result<Json<EntityAppearance>, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(appearance) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    Ok(Json(
+        state
+            .service
+            .set_appearance(entity_access_receipt, appearance)
+            .await?,
+    ))
 }
 
 #[utoipa::path(
@@ -601,6 +637,7 @@ impl IntoResponse for ScheduledActionApiError {
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
+                | ActionPolicyError::InvalidAppearance(_)
                 | ActionPolicyError::GithubNotLinked
                 | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };

@@ -59,6 +59,13 @@ impl FakeRepository {
 }
 
 impl ScheduledActionRepo for FakeRepository {
+    async fn set_appearance(
+        &self,
+        _change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        anyhow::bail!("appearance writes are not supported by this execution-only adapter")
+    }
+
     async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
         Ok(action)
     }
@@ -200,6 +207,7 @@ fn due_action() -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         description: String::new(),
     }
 }

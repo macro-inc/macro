@@ -138,6 +138,7 @@ export function RoutineEditor(props: {
   runCount?: number;
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
+  identityIcon?: JSX.Element;
   feedback?: JSX.Element;
   /** Above the sections, for what the owner has to act on first. */
   notice?: JSX.Element;
@@ -173,13 +174,16 @@ export function RoutineEditor(props: {
       <ViewBreadcrumbs.Item value="routine" metadata={{}} order={1}>
         {(item) => (
           <div class="flex min-w-0 items-center">
+            {props.identityIcon}
             <ViewBreadcrumbs.Button
               class="gap-1.5"
               isActive={item.isActive()}
               onClick={item.onSelect}
               tooltip={breadcrumbName()}
             >
-              <ClockIcon class="size-3 shrink-0" />
+              <Show when={!props.identityIcon}>
+                <ClockIcon class="size-3 shrink-0" />
+              </Show>
               <span class="truncate">{breadcrumbName()}</span>
             </ViewBreadcrumbs.Button>
             <Show when={props.actions}>

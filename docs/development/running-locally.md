@@ -337,6 +337,20 @@ Each instance has its own resources:
 The ports are deterministic for the instance name. The same name gets the same
 port window on every run.
 
+Use a separate browser profile for each instance on the same hostname: cookies
+are shared across ports, even though databases are isolated. A private session
+isolates an instance from normal windows, but private windows in the same browser
+can share cookies with one another. A session from another instance can leave
+the app loading and make `/auth/user/legacy_user_permissions` return 500 when its
+account is absent from the selected database. Sign in to the intended instance
+in an isolated browser profile; do not reset its database or clear another
+instance's session.
+
+Local signup and onboarding screens provide **Bypass** for any account. Before
+signup it skips the opening slides, not authentication; after sign-in it records
+both onboarding and tutorial completion. See the
+[onboarding guide](../agent-guide/onboarding.md#onboarding-bypass--apponboarding).
+
 If the port window conflicts with another program, change the base port:
 
 ```bash

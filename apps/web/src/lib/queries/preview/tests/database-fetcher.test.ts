@@ -26,6 +26,7 @@ it('previews a shared database its owner can open, and a deleted one as gone', a
         owner_id: 'macro|wolf@macro.com',
         created_at: '2026-09-01T00:00:00Z',
         trashed_at: null,
+        appearance: { icon: { kind: 'emoji', value: '📚' }, color: null },
       },
       grant: 'owner',
       tables: [],
@@ -43,6 +44,7 @@ it('previews a shared database its owner can open, and a deleted one as gone', a
     rawName: 'Wedding',
     name: 'Wedding',
     owner: 'macro|wolf@macro.com',
+    appearance: { icon: { kind: 'emoji', value: '📚' }, color: null },
   });
 
   getDatabase.mockReturnValueOnce(

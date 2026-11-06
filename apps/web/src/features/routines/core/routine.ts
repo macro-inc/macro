@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ScheduleDraft } from './draft';
 import type { HistoryRecord } from './history';
 
@@ -5,6 +6,7 @@ import type { HistoryRecord } from './history';
 export type RoutineSnapshot = {
   id: string;
   name: string;
+  appearance?: EntityAppearance | null;
   ownerId: string;
   createdAt: string;
   enabled: boolean;

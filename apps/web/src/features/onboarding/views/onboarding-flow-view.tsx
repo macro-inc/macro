@@ -1,3 +1,4 @@
+import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
@@ -148,7 +149,9 @@ export function OnboardingFlowView(props: {
       wide
       onBack={back()}
       overlay={
-        <Show when={canBypassOnboarding(viewerEmail()) && step()}>
+        <Show
+          when={(LOCAL_ONLY || canBypassOnboarding(viewerEmail())) && step()}
+        >
           {(current) => (
             <BypassButton
               disabled={finish.finishing()}

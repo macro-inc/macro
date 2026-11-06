@@ -29,7 +29,7 @@ ports = ["dep:schemars", "models_forms/schema", "models_databases/schema", "data
 # Branding images read through the static-file service.
 static_files = ["dep:anyhow", "dep:static_file_service_client", "outbound"]
 # Postgres persistence for forms, layouts and the submission ledger.
-postgres = ["dep:entity_access_db_utils", "dep:serde_json", "dep:sqlx", "outbound"]
+postgres = ["activity/outbound", "dep:entity_access_db_utils", "dep:serde_json", "dep:sqlx", "outbound"]
 
 [dependencies]
 base64 = { workspace = true, optional = true }

@@ -2,7 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
-- `bun run check`: check typescript changes 
+- `bun run check`: check generated entity catalogs, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
@@ -295,6 +295,9 @@ new MutationObserver(() => {
 ```
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
+
+Keep each imperative dialog inside its own Suspense boundary in `ImperativeDialog`;
+lazy popup code and popup queries must never detach the surrounding app.
 
 Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a

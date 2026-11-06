@@ -48,7 +48,7 @@ use crate::outbound::pg_soup_repo::candidate_gates::{
 use crate::outbound::pg_soup_repo::notified::{
     ID_SQL, agent_session_gate, calendar_event_gate, foreign_entity_gate, included_types,
 };
-use crate::outbound::pg_soup_repo::touched::view_tags_sql;
+use crate::outbound::pg_soup_repo::touched::non_touch_tags_sql;
 use crate::outbound::pg_soup_repo::type_err;
 
 /// Every type an attention feed can surface, in the order the notified-at
@@ -149,7 +149,7 @@ fn own_work(alias: &str) -> String {
     format!(
         "{alias}.action NOT IN ({views}) \
          AND ({alias}.entity_type <> 'email_thread' OR {alias}.action = '{sent}')",
-        views = view_tags_sql(),
+        views = non_touch_tags_sql(),
     )
 }
 

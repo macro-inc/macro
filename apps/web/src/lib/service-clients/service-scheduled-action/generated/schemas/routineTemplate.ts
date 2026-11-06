@@ -7,6 +7,7 @@
  */
 
 import type { ActionTrigger } from './actionTrigger';
+import type { EntityAppearance } from './entityAppearance';
 import type { RoutineTemplateTask } from './routineTemplateTask';
 import type { TemplateVariable } from './templateVariable';
 
@@ -19,6 +20,7 @@ export interface RoutineTemplate {
    * @minimum 0
    */
   active_count: number;
+  appearance: EntityAppearance;
   /** Who shared it: the source routine's owner. */
   author: string;
   created_at: string;

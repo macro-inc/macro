@@ -23,8 +23,9 @@ use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use unicode_segmentation::UnicodeSegmentation;
 
-use activity::{Actor, Attribution};
+use activity::{Actor, AppearanceUpdate, Attribution};
 use anyhow::anyhow;
+use chrono::Utc;
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use connection::domain::models::{InvalidationEvent, InvalidationReason};
 use connection::domain::ports::ConnectionService;
@@ -50,6 +51,7 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key, document_key_url_path,
 };
 use tracing;
+use uuid::Uuid;
 
 use crate::domain::models::{
     ASSIGNEES_PROPERTY_ID, InitialLinkShare, NOT_STARTED_STATUS_OPTION_ID, PropertyInput,
@@ -1076,6 +1078,76 @@ impl<
         Ok(document_id)
     }
 
+    #[tracing::instrument(err, skip(self, receipt))]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        let id = &receipt.entity().entity_id;
+        let document = self
+            .repo
+            .get_basic_document(id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if document.deleted_at.is_some()
+            || document.try_file_type() != Some(FileType::Md)
+            || !matches!(
+                document.sub_type,
+                None | Some(document_sub_type::DocumentSubType::Snippet)
+            )
+        {
+            return Err(DocumentError::BadRequest(
+                "appearance requires an ordinary Markdown document or snippet".into(),
+            ));
+        }
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(receipt.auth());
+        let update = AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: match receipt.auth() {
+                EntityAccessAuth::Authenticated(user) => {
+                    Some(Attribution::direct(Actor::new_from_user(user.clone())))
+                }
+                EntityAccessAuth::Bot(bot) => Some(Attribution::new(
+                    Actor::new_from_bot(bot.bot_id()),
+                    bot.scope().acting_user_id().cloned(),
+                )),
+                EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+            },
+            event_id: Uuid::now_v7(),
+            occurred_at: Utc::now(),
+        };
+        if let Some(previous) = self
+            .repo
+            .set_appearance(id, &update)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?
+        {
+            self.publish_document_event(&DocumentMacroEvent::updated(
+                id.clone(),
+                DocumentUpdatedMetadata {
+                    appearance_change: Some([previous, appearance.clone()]),
+                    document_id: id.clone(),
+                    owner: document.owner,
+                    actor,
+                    on_behalf_of,
+                    actor_user_id,
+                    document_name: None,
+                    previous_project_id: None,
+                    project_id: None,
+                    file_type: None,
+                    share_permission_updated: false,
+                },
+            ));
+        }
+        Ok(appearance)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,
@@ -1869,6 +1941,7 @@ impl<
         self.publish_document_event(&DocumentMacroEvent::updated(
             entity_access_receipt.entity().entity_id.clone(),
             DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: entity_access_receipt.entity().entity_id.clone(),
                 owner: document_context.owner.clone(),
                 actor_user_id,

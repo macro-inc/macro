@@ -11,6 +11,7 @@ viewer pattern), which apply to every type defined here.
 ## Gotchas
 
 - `PROJECT` grouping forwards the Project property (initiative membership) to Soup; legacy folder IDs are not grouping keys.
+- Document and initiative `appearance` fields carry entity-owned JSON overrides; the shared Soup reads supply them without changing sort timestamps.
 
 - `SoupItemLoader` (single-entity lookups, `soupUpdates` hydration) resolves
   email threads through entity-access view receipts, the rule the REST thread

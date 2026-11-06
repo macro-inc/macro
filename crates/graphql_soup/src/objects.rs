@@ -762,6 +762,11 @@ where
         self.3.clone()
     }
 
+    /// Entity-owned icon and color overrides.
+    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+        self.0.appearance.clone().map(Json)
+    }
+
     /// User-visible display name.
     async fn display_name(&self) -> Option<String> {
         Some(self.0.name.clone())
@@ -1033,6 +1038,11 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
     /// Opaque cache projection metadata, unavailable for this entity variant.
     async fn cache_projection(&self) -> Option<SoupCacheProjection> {
         None
+    }
+
+    /// Entity-owned icon and color overrides.
+    async fn appearance(&self) -> Option<Json<model_entity::EntityAppearance>> {
+        self.0.appearance.clone().map(Json)
     }
 
     /// User-visible project name.

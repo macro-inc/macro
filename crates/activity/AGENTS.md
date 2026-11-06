@@ -16,6 +16,7 @@ distribution.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the ingest/query service
   and the ports it depends on.
 - `src/outbound/pg_activity_repo.rs`: the single `activity_events` table.
+- Use `AppearanceUpdate` and `pg_activity_repo::insert_activities` to commit attributed appearance history in the entity transaction; appearance broker events must not insert duplicate history.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
 
@@ -27,6 +28,7 @@ distribution.
   crate depends on this with `default-features = false` (models only) and
   implements its own event → `DomainActivity` mapping; the hosting service
   declares consumed topics and dispatches.
+- Keep appearance changes in entity history, but exclude them from personal/team feeds, contribution totals, and attribution recency.
 
 ## Boundaries
 

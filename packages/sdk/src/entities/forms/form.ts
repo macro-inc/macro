@@ -3,6 +3,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type {
   BookingTarget,
   CellValue,
+  EntityAppearance,
   EntityKind,
   FilterGroup,
   FilterNode,
@@ -227,6 +228,19 @@ export class Form extends MacroEntity<FormDetail> {
 
   /** The form's display name. */
   readonly name = this.mappedField('form', (form) => form.name);
+  /** Shared icon and color overrides. */
+  readonly appearance = this.mappedField('form', (form) => form.appearance);
+
+  /** Replace shared appearance. Pass {} to reset both overrides. */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setFormAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
+
   /** Introductory text shown to respondents. */
   readonly description = this.mappedField('form', (form) => form.description);
   /** The owning user. */

@@ -1,3 +1,4 @@
+mod appearance;
 mod user_cleanup;
 
 use chrono::{SubsecRound, Utc};
@@ -117,6 +118,7 @@ pub(crate) fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         description: String::new(),
     }
 }

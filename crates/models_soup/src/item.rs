@@ -309,6 +309,7 @@ impl<T> SoupItem<T> {
     {
         match self {
             SoupItem::Document(SoupDocument {
+                appearance,
                 id,
                 document_version_id,
                 owner_id,
@@ -326,6 +327,7 @@ impl<T> SoupItem<T> {
                 deleted_at,
                 extra,
             }) => SoupItem::Document(SoupDocument {
+                appearance,
                 id,
                 document_version_id,
                 owner_id,
@@ -369,6 +371,7 @@ impl<T> SoupItem<T> {
                 extra: f(extra),
             }),
             SoupItem::Initiative(SoupInitiative {
+                appearance,
                 id,
                 name,
                 owner_id,
@@ -377,6 +380,7 @@ impl<T> SoupItem<T> {
                 viewed_at,
                 extra,
             }) => SoupItem::Initiative(SoupInitiative {
+                appearance,
                 id,
                 name,
                 owner_id,

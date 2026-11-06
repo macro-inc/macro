@@ -1032,6 +1032,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
             <EntityIcon
               class={AVATAR_GLYPH_CLASS}
               targetType={getEntityIconType(props.item.entity)}
+              appearance={props.item.entity.appearance}
               size="fill"
             />
           }
@@ -1042,6 +1043,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
       titleLeading={
         <EntityIcon
           targetType={getEntityIconType(props.item.entity)}
+          appearance={props.item.entity.appearance}
           size="xs"
           class="shrink-0"
         />

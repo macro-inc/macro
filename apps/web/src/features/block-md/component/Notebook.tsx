@@ -1,3 +1,7 @@
+import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
+import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
@@ -7,9 +11,11 @@ import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
+  enableEntityAppearance,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
+import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -19,9 +25,13 @@ import {
   restoreScrollAnchor,
   type ScrollAnchor,
 } from '@core/util/scrollAnchor';
+import type { DocumentEntity } from '@entity';
+import Smiley from '@icon/system/regular/smiley.svg';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
+import { badgeTriggerClasses } from '@ui';
+import type { DialogHandle } from '@ui/components/ImperativeDialog';
 import {
   createComputed,
   createEffect,
@@ -98,11 +108,31 @@ export function Notebook(props: {
   hotkeyScope: string | undefined;
   autoFocus: boolean;
 }) {
-  const { element: blockElement, state } = useMarkdownDocument();
+  const {
+    element: blockElement,
+    state,
+    entity: documentEntity,
+    permissions,
+  } = useMarkdownDocument();
   const panel = useSplitPanel();
   const { comments: commentState, params } = state;
   const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
+  const userId = useUserId();
+  const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
+  const [appearanceDialog, setAppearanceDialog] = createSignal<DialogHandle>();
+  const openIconEditor = (entity: DocumentEntity, anchor: HTMLElement) => {
+    setAppearanceDialog(changeIcon(entity, anchor));
+  };
+  const appearance = useDocumentAppearance(
+    () => documentEntity?.(),
+    () => Boolean(userId())
+  );
+  const titleEntity = () => {
+    const entity = documentEntity?.();
+    return entity && { ...entity, appearance: appearance() };
+  };
   const scopeId = () => props.hotkeyScope;
   const ownsEnter = createEnterOwningControl();
   const resolveAppLink = useMacroMentionLinkResolver();
@@ -381,6 +411,32 @@ export function Notebook(props: {
         <div class="spacer h-3" />
         <SkillDescriptionField />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
+          <Show
+            when={
+              appearanceFlag().enabled &&
+              titleEntity() &&
+              !titleEntity()?.appearance?.icon &&
+              permissions.canEdit()
+            }
+          >
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={appearanceDialog()?.isOpen() ?? false}
+              class={badgeTriggerClasses({
+                variant: 'secondary',
+                size: 'xs',
+                class: 'gap-1.5',
+              })}
+              onClick={(event) => {
+                const entity = titleEntity();
+                if (entity) openIconEditor(entity, event.currentTarget);
+              }}
+            >
+              <Smiley class="size-3.5" />
+              {t('appearance.addIcon')}
+            </button>
+          </Show>
           <InlineTaskProperties />
           <InlineTaskGithubPullRequests />
           <TaskDuplicateMatchPill />

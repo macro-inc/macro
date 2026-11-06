@@ -14,7 +14,7 @@ import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
-import DatabaseIcon from '@icon/system/regular/database.svg';
+import { EntityIcon } from '@entity/extractors/entity-icon';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
@@ -57,7 +57,9 @@ function DriveDatabases(props: { onNavigate?: () => void }) {
               }}
             >
               <ViewSidebar.Icon>
-                <DatabaseIcon class="size-4" />
+                <span class="size-4">
+                  <EntityIcon entity={database} />
+                </span>
               </ViewSidebar.Icon>
               <span class="truncate">{database.name}</span>
             </ViewSidebar.Item>

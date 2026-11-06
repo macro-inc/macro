@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RoutineCodeStartersData, RoutineCodeStartersErrors, RoutineCodeStartersResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RoutineCodeStartersData, RoutineCodeStartersErrors, RoutineCodeStartersResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionAppearanceData, SetScheduledActionAppearanceErrors, SetScheduledActionAppearanceResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -102,6 +102,17 @@ export class Sdk extends HeyApiClient {
     public updateScheduledAction<ThrowOnError extends boolean = false>(options: Options<UpdateScheduledActionData, ThrowOnError>): RequestResult<UpdateScheduledActionResponses, UpdateScheduledActionErrors, ThrowOnError> {
         return (options.client ?? this.client).put<UpdateScheduledActionResponses, UpdateScheduledActionErrors, ThrowOnError>({
             url: '/scheduled-actions/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public setScheduledActionAppearance<ThrowOnError extends boolean = false>(options: Options<SetScheduledActionAppearanceData, ThrowOnError>): RequestResult<SetScheduledActionAppearanceResponses, SetScheduledActionAppearanceErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetScheduledActionAppearanceResponses, SetScheduledActionAppearanceErrors, ThrowOnError>({
+            url: '/scheduled-actions/{id}/appearance',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

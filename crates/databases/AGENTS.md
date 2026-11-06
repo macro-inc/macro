@@ -14,6 +14,7 @@ service with Axum, agent-tool and Postgres adapters.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
 - `src/domain/models.rs`: `Database`, `DatabaseStorage`, typed ops/results.
+- `set_appearance` updates `database_entities` presentation under Edit access, preserving content dates and committing history-only activity in the same transaction.
 
 ## Scope
 
@@ -62,7 +63,8 @@ service with Axum, agent-tool and Postgres adapters.
   membership.
 - A duplicate rewrites IDs while walking each column config, view and card
   position as JSON. Cells are rewritten only in their option and row references,
-  never in text.
+  never in text. Copy saved appearance into the duplicate's app entity in the
+  same transaction as storage and grants; keep the copy outside any folder.
 - `databases` (core storage) and `database_entities` (app identity: name,
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").

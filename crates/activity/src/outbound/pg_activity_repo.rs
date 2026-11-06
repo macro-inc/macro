@@ -36,84 +36,108 @@ impl PgActivityRepo {
     }
 }
 
-impl ActivityRepo for PgActivityRepo {
-    type Err = sqlx::Error;
-
-    async fn insert_activities(&self, activities: &[Activity]) -> Result<(), Self::Err> {
-        if activities.is_empty() {
-            return Ok(());
-        }
-
-        let mut ids = Vec::with_capacity(activities.len());
-        let mut correlations = Vec::with_capacity(activities.len());
-        let mut actor_ids = Vec::with_capacity(activities.len());
-        let mut subject_ids = Vec::with_capacity(activities.len());
-        let mut actions = Vec::with_capacity(activities.len());
-        let mut payloads = Vec::with_capacity(activities.len());
-        let mut entity_types = Vec::with_capacity(activities.len());
-        let mut entity_ids = Vec::with_capacity(activities.len());
-        let mut occurred_ats = Vec::with_capacity(activities.len());
-        for activity in activities {
-            let (action, payload) = activity.action.to_columns();
-            ids.push(activity.id);
-            correlations.push(activity.agent_correlation_id);
-            actor_ids.push(activity.actor.as_ref().to_owned());
-            subject_ids.push(activity.subject_id.clone());
-            actions.push(action.to_owned());
-            payloads.push(payload);
-            entity_types.push(activity.entity_type.as_ref().to_owned());
-            entity_ids.push(activity.entity_id.clone());
-            occurred_ats.push(activity.occurred_at);
-        }
-
-        sqlx::query!(
-            r#"
-            INSERT INTO activity_events
-                (id, actor_id, subject_id, action, action_payload,
-                 entity_type, entity_id, occurred_at, agent_correlation_id)
-            SELECT * FROM UNNEST(
-                $1::uuid[], $2::text[], $3::text[], $4::text[], $5::jsonb[],
-                $6::text[], $7::text[], $8::timestamptz[], $9::uuid[])
-            ON CONFLICT (id) DO NOTHING
-            "#,
-            &ids,
-            &actor_ids,
-            &subject_ids,
-            &actions,
-            payloads.as_slice() as &[Option<serde_json::Value>],
-            &entity_types,
-            &entity_ids,
-            &occurred_ats,
-            correlations.as_slice() as &[Option<Uuid>],
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+/// Insert activities through a pool or an existing transaction.
+///
+/// The caller owns commit and rollback when passing a transaction connection.
+pub async fn insert_activities<'e, E>(
+    executor: E,
+    activities: &[Activity],
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    if activities.is_empty() {
+        return Ok(());
     }
 
-    async fn purge_entities(&self, entities: &[(EntityType, String)]) -> Result<(), Self::Err> {
-        if entities.is_empty() {
-            return Ok(());
-        }
+    let mut ids = Vec::with_capacity(activities.len());
+    let mut correlations = Vec::with_capacity(activities.len());
+    let mut actor_ids = Vec::with_capacity(activities.len());
+    let mut subject_ids = Vec::with_capacity(activities.len());
+    let mut actions = Vec::with_capacity(activities.len());
+    let mut payloads = Vec::with_capacity(activities.len());
+    let mut entity_types = Vec::with_capacity(activities.len());
+    let mut entity_ids = Vec::with_capacity(activities.len());
+    let mut occurred_ats = Vec::with_capacity(activities.len());
+    for activity in activities {
+        let (action, payload) = activity.action.to_columns();
+        ids.push(activity.id);
+        correlations.push(activity.agent_correlation_id);
+        actor_ids.push(activity.actor.as_ref().to_owned());
+        subject_ids.push(activity.subject_id.clone());
+        actions.push(action.to_owned());
+        payloads.push(payload);
+        entity_types.push(activity.entity_type.as_ref().to_owned());
+        entity_ids.push(activity.entity_id.clone());
+        occurred_ats.push(activity.occurred_at);
+    }
 
-        let entity_types: Vec<String> = entities
-            .iter()
-            .map(|(entity_type, _)| entity_type.as_ref().to_owned())
-            .collect();
-        let entity_ids: Vec<String> = entities.iter().map(|(_, id)| id.clone()).collect();
+    sqlx::query!(
+        r#"
+        INSERT INTO activity_events
+            (id, actor_id, subject_id, action, action_payload,
+             entity_type, entity_id, occurred_at, agent_correlation_id)
+        SELECT * FROM UNNEST(
+            $1::uuid[], $2::text[], $3::text[], $4::text[], $5::jsonb[],
+            $6::text[], $7::text[], $8::timestamptz[], $9::uuid[])
+        ON CONFLICT (id) DO NOTHING
+        "#,
+        &ids,
+        &actor_ids,
+        &subject_ids,
+        &actions,
+        payloads.as_slice() as &[Option<serde_json::Value>],
+        &entity_types,
+        &entity_ids,
+        &occurred_ats,
+        correlations.as_slice() as &[Option<Uuid>],
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
 
-        sqlx::query!(
-            r#"
+/// Remove entity history through a pool or the owning domain's transaction.
+pub async fn purge_entities<'e, E>(
+    executor: E,
+    entities: &[(EntityType, String)],
+) -> Result<(), sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    if entities.is_empty() {
+        return Ok(());
+    }
+
+    let entity_types: Vec<String> = entities
+        .iter()
+        .map(|(entity_type, _)| entity_type.as_ref().to_owned())
+        .collect();
+    let entity_ids: Vec<String> = entities.iter().map(|(_, id)| id.clone()).collect();
+
+    sqlx::query!(
+        r#"
             DELETE FROM activity_events
             WHERE (entity_type, entity_id) IN
                 (SELECT * FROM UNNEST($1::text[], $2::text[]))
             "#,
-            &entity_types,
-            &entity_ids,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+        &entity_types,
+        &entity_ids,
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+impl ActivityRepo for PgActivityRepo {
+    type Err = sqlx::Error;
+
+    async fn insert_activities(&self, activities: &[Activity]) -> Result<(), Self::Err> {
+        insert_activities(&self.pool, activities).await
+    }
+
+    async fn purge_entities(&self, entities: &[(EntityType, String)]) -> Result<(), Self::Err> {
+        purge_entities(&self.pool, entities).await
     }
 }
 
@@ -204,6 +228,7 @@ impl ActivityReads for PgActivityRepo {
                            subject_id, entity_type, entity_id, occurred_at
                     FROM activity_events
                     WHERE subject_id = $1
+                    AND action <> 'appearance_changed'
                     ORDER BY occurred_at DESC, id DESC
                     LIMIT $2
                     "#,
@@ -221,6 +246,7 @@ impl ActivityReads for PgActivityRepo {
                            subject_id, entity_type, entity_id, occurred_at
                     FROM activity_events
                     WHERE subject_id = $1 AND (occurred_at, id) < ($2, $3)
+                    AND action <> 'appearance_changed'
                     ORDER BY occurred_at DESC, id DESC
                     LIMIT $4
                     "#,
@@ -327,6 +353,7 @@ impl ActivityReads for PgActivityRepo {
                    count(*)::bigint AS "n!"
             FROM activity_events
             WHERE subject_id = $2
+              AND action <> 'appearance_changed'
               AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
                                - INTERVAL '26 hours'
               AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
@@ -348,6 +375,7 @@ impl ActivityReads for PgActivityRepo {
             SELECT entity_type, entity_id, count(*)::bigint AS "n!"
             FROM activity_events
             WHERE subject_id = $2
+              AND action <> 'appearance_changed'
               AND occurred_at >= ($3::date::timestamp AT TIME ZONE $1)
                                - INTERVAL '26 hours'
               AND occurred_at <  ($4::date::timestamp AT TIME ZONE $1)
@@ -420,6 +448,7 @@ impl ActivityReads for PgActivityRepo {
                    subject_id, entity_type, entity_id, occurred_at
             FROM activity_events
             WHERE subject_id = $1
+              AND action <> 'appearance_changed'
               AND occurred_at >= $2
               AND occurred_at < $3
             ORDER BY occurred_at DESC, id DESC

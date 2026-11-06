@@ -269,6 +269,9 @@ pub(crate) fn normalized_document_event(
 ) -> Result<Option<NormalizedWebhookEvent>, WebhookEventIngestionError> {
     let (event_name, entity_id) = match &event.event {
         DocumentTopicEvent::Created(metadata) => ("document.created", &metadata.document_id),
+        DocumentTopicEvent::Updated(metadata) if metadata.appearance_change.is_some() => {
+            return Ok(None);
+        }
         DocumentTopicEvent::Updated(metadata) => ("document.updated", &metadata.document_id),
         DocumentTopicEvent::Deleted(metadata) => ("document.deleted", &metadata.document_id),
         DocumentTopicEvent::Copied(metadata) => ("document.copied", &metadata.document_id),

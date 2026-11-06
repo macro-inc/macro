@@ -990,6 +990,8 @@ async fn a_conversion_request_reaches_the_service_and_answers_the_converted_cell
     );
 }
 
+mod appearance;
+
 #[tokio::test]
 async fn view_access_duplicates_a_database_for_the_caller() {
     use axum::body::Body;
