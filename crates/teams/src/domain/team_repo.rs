@@ -239,6 +239,12 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<String, TeamError>> + Send;
 
+    /// Gets a user's display name (first and last name). `None` when they have not set one.
+    fn get_user_display_name(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<String>, TeamError>> + Send;
+
     /// Updates a team
     fn patch_team(
         &self,

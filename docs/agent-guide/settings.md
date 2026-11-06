@@ -206,6 +206,13 @@ and **Copy link** go to `/app/signup/agent?team_invite=<id>` (see
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
 [mobile](media/team-invite-email/mobile.png).
+A signed-out invitee who opens an emailed or link invite is sent to
+`/app/login?redirect=/team-invite?…`; once signed in or signed up (including
+desktop Google sign-in, whose `macro:///login` callback carries the redirect)
+they return to the invite before onboarding, so they join first and onboarding
+opens on the team. Channel invites (`/channel-invite`) also open before
+onboarding. Other `?redirect=` deep links, such as meetings, return there after
+sign-in, or after onboarding for a new account.
 An unanswered invite gets up to two reminder emails, with subjects starting
 **Reminder:**, 3 days after the last email and 4 days after that. Invites more
 than 14 days old, already-members, and invites whose sender left the team get none.

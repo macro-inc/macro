@@ -10,6 +10,7 @@ name: Web App Pr Checks
     - ready_for_review
     branches:
     - main
+  workflow_call: {}
 jobs:
   path-check:
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -1418,5 +1419,5 @@ jobs:
 
         echo "All jobs passed or were skipped"
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-check
+  group: web-app-pr-checks-${{ github.event.action == 'labeled' && github.run_id || github.ref }}
   cancel-in-progress: true

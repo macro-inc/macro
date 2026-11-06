@@ -17,6 +17,7 @@ env:
     - ready_for_review
     branches:
     - main
+  workflow_call: {}
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=sccache-ci
@@ -322,7 +323,7 @@ jobs:
   check:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled')
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
@@ -522,7 +523,7 @@ jobs:
   doppler-config:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.doppler_candidates == 'true'
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
       RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
@@ -753,7 +754,7 @@ jobs:
   test:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
@@ -1052,7 +1053,7 @@ jobs:
   build-service-bins:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
@@ -1226,7 +1227,7 @@ jobs:
   graphql-schema-compat:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'
+    if: needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.graphql_schema == 'true'
     runs-on: namespace-profile-linux-small
     timeout-minutes: 15
     steps:
@@ -1282,5 +1283,5 @@ jobs:
 
         echo "✅ All jobs passed or were skipped"
 concurrency:
-  group: code-check-cloud-storage-${{ github.ref }}
+  group: code-check-cloud-storage-${{ github.event.action == 'labeled' && github.run_id || github.ref }}
   cancel-in-progress: true

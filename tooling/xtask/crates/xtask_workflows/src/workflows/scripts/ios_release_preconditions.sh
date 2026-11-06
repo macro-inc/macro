@@ -34,8 +34,10 @@ fi
 
 # Web App Status Check aggregates the gate, so it is red whenever the gate is;
 # its other inputs (Typecheck, Test, Build, ...) are separate checks and stay.
-# (`gh pr checks` names are job names, not workflow names.)
-ours='^(iOS Native Check|Re-run the native check|Web App Status Check|iOS App Store Release|iOS Release Drift|Android Native Check)'
+# The CI gate status aggregates all of them, and stays pending on a head no one
+# has run PR CI on. (`gh pr checks` names are job names, not workflow names;
+# PR CI prefixes the ones it calls with `Web App / `.)
+ours='^((Web App / )?(iOS Native Check|Web App Status Check|Android Native Check)|Re-run the native check|iOS App Store Release|iOS Release Drift|CI gate$)'
 deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
 while true; do
   checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \
