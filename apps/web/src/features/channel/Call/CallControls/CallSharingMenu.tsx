@@ -1,6 +1,5 @@
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { isMobile } from '@core/mobile/isMobile';
 import CaretUp from '@icon/system/regular/caret-up.svg';
 import Hash from '@icon/system/regular/hash.svg';
 import Lock from '@icon/system/regular/lock-simple.svg';
@@ -101,7 +100,7 @@ export function CallSharingMenu(props: {
       trigger={(triggerProps) => (
         <Button
           {...triggerProps}
-          size={props.size ?? (isMobile() || props.compact ? 'md' : 'lg')}
+          size={props.size ?? (props.compact ? 'md' : 'lg')}
           variant="secondary"
           aria-label={t('calls.sharingLabel', { mode: label() })}
           disabled={props.disabled}

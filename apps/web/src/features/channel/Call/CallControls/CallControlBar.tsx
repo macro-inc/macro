@@ -6,7 +6,7 @@ import PhoneDisconnect from '@icon/system/regular/phone-disconnect.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import VideoCamera from '@icon/system/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
-import { Button, ButtonGroup } from '@ui';
+import { Button, ButtonGroup, cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { CallSettingsMenu } from './CallSettingsMenu';
 
@@ -41,7 +41,7 @@ function MediaSplitButton(props: {
       mobileContent={props.mobileContent}
       trigger={(triggerProps) => (
         <ButtonGroup
-          size={isMobile() || props.compact ? 'icon-md' : 'icon-lg'}
+          size={props.compact ? 'icon-md' : 'icon-lg'}
           aria-label={props.label}
           class="shrink-0"
         >
@@ -55,25 +55,27 @@ function MediaSplitButton(props: {
           >
             {props.icon}
           </ButtonGroup.Button>
-          <ButtonGroup.Divider />
-          <ButtonGroup.Button
-            {...triggerProps}
-            disabled={props.disabled}
-            variant="ghost"
-            size={isMobile() || props.compact ? 'icon-md' : 'icon-lg'}
-            aria-label={props.menuLabel}
-            tooltip={{
-              content: props.menuLabel,
-              placement: 'top',
-              disabled: open(),
-            }}
-            class="w-6 mobile:@max-[20rem]:min-w-6"
-          >
-            <CaretUp
-              class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
-              classList={{ 'rotate-180': open() }}
-            />
-          </ButtonGroup.Button>
+          <Show when={!isMobile()}>
+            <ButtonGroup.Divider />
+            <ButtonGroup.Button
+              {...triggerProps}
+              disabled={props.disabled}
+              variant="ghost"
+              size={props.compact ? 'icon-md' : 'icon-lg'}
+              aria-label={props.menuLabel}
+              tooltip={{
+                content: props.menuLabel,
+                placement: 'top',
+                disabled: open(),
+              }}
+              class="w-6 mobile:@max-[20rem]:min-w-6"
+            >
+              <CaretUp
+                class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
+                classList={{ 'rotate-180': open() }}
+              />
+            </ButtonGroup.Button>
+          </Show>
         </ButtonGroup>
       )}
     >
@@ -111,7 +113,12 @@ export function CallControlBar(props: {
   let screenOpen = false;
   return (
     <div data-call-controls class="@container relative z-20 w-fit max-w-full">
-      <div class="menu-surface mx-auto flex w-fit max-w-full items-center justify-center gap-2 rounded-full p-1.5 text-ink">
+      <div
+        class={cn(
+          isMobile() ? 'island' : 'menu-surface',
+          'mx-auto flex w-fit max-w-full items-center justify-center gap-2 rounded-full p-1.5 text-ink'
+        )}
+      >
         <MediaSplitButton
           label="Microphone"
           compact={props.compact}
@@ -185,7 +192,7 @@ export function CallControlBar(props: {
         </Show>
         {props.children}
         <Button
-          size={isMobile() || props.compact ? 'icon-md' : 'icon-lg'}
+          size={props.compact ? 'icon-md' : 'icon-lg'}
           variant="danger"
           aria-label="Leave call"
           class="min-w-14 rounded-full"

@@ -431,7 +431,7 @@ export function CallOverlay(props: {
       ref={panelButton}
       class="relative"
       variant={panelOpen() ? 'accent' : 'secondary'}
-      size={isMobile() ? 'icon-xl' : compactControls() ? 'icon-md' : 'icon-lg'}
+      size={compactControls() ? 'icon-md' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
       tooltip={{
         content: panelOpen() ? t('calls.closePanel') : t('calls.openPanel'),
@@ -553,7 +553,7 @@ export function CallOverlay(props: {
   const [screenShareMaximized, setScreenShareMaximized] = createSignal(false);
   const showScreenShare = () => hasAnyScreenShare() && !focusedParticipant();
   const selfInGrid = () =>
-    compactControls() &&
+    (isMobile() || compactControls()) &&
     participants().length > 0 &&
     !hasAnyScreenShare() &&
     !focusedParticipant();
@@ -816,7 +816,12 @@ export function CallOverlay(props: {
                       </Show>
                     </CallControls>
                   </div>
-                  <div class="menu-surface flex justify-center rounded-full p-1.5">
+                  <div
+                    class={cn(
+                      isMobile() ? 'island' : 'menu-surface',
+                      'flex justify-center rounded-full p-1.5'
+                    )}
+                  >
                     <PanelToggle />
                   </div>
                 </div>

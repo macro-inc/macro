@@ -332,13 +332,10 @@ This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.
 
-On phones, the fully rounded control bar fits its buttons instead of filling the
-available width. Controls have 8px gaps, expanding to 12px in roomy bars and
-contracting on narrow phones so all controls fit. The sidebar button stays
-separate on the right with a 48px tap target and the row keeps its side gutters.
-On phones at most 416px wide, the sidebar button moves below the bar so the
-additional screen-share settings control fits without clipping. Controls wrap
-on smaller available widths without shrinking their split-button segments.
+On phones, the full-screen call puts the self view in the participant grid.
+A compact bottom island holds microphone, camera, Team/Private and Leave;
+Chat is a separate island beside it. Both keep the safe-area gutters and stay
+below the tiles. The phone island has no screen-share button or device carets.
 The desktop control bar is centered beneath the tiles, with an equal-width
 balance slot on the left and a separate round chat toggle on the right. The
 toggle uses accent while open; existing discussion/Work updates retain their dot.
