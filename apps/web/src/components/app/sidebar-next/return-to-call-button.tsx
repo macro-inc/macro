@@ -2,7 +2,7 @@ import { useActiveQuickCallsSource } from '@app/features/meetings/queries/active
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
-import { ActiveCallPopover } from '@channel/Call/ActiveCallPopover';
+import { beginInteraction } from '@app/observability/flow';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallWaveform } from '@channel/Call/CallWaveform';
 import {
@@ -12,11 +12,22 @@ import {
 import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { Popover } from '@kobalte/core/popover';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
+
+const ActiveCallPopover = lazyNamed(
+  () => import('@channel/Call/ActiveCallPopover'),
+  'ActiveCallPopover'
+);
+const CallMiniPlayer = lazyNamed(
+  () => import('@channel/Call/CallMiniPlayer'),
+  'CallMiniPlayer'
+);
 
 function ReturnToCallButtonContent() {
   const call = useCallContextOptional();
@@ -30,6 +41,16 @@ function ReturnToCallButtonContent() {
 
   const inCall = () => Boolean(call?.isInCall());
   const [popupOpen, setPopupOpen] = createSignal(false);
+  const [collapsedCallId, setCollapsedCallId] = createSignal<string>();
+  const showPlayer = () => {
+    const interaction = beginInteraction('call.player.show');
+    try {
+      setPopupOpen(false);
+      setCollapsedCallId(undefined);
+    } finally {
+      interaction.end();
+    }
+  };
 
   // A quick call is backed by a channel call; it lives on its meeting page.
   const meetingShareToken = () => {
@@ -76,10 +97,27 @@ function ReturnToCallButtonContent() {
         </Popover.Trigger>
         <Popover.Portal>
           <Suspense>
-            <ActiveCallPopover onOpenCall={open} />
+            <ActiveCallPopover onOpenCall={open} onShowPlayer={showPlayer} />
           </Suspense>
         </Popover.Portal>
       </Popover>
+      <Show
+        when={
+          !isMobile() &&
+          !call?.isCallPage() &&
+          !!call?.activeChannelId() &&
+          collapsedCallId() !== call?.activeCallId()
+        }
+      >
+        <Suspense>
+          <CallMiniPlayer
+            onOpenCall={open}
+            onCollapse={() =>
+              setCollapsedCallId(call?.activeCallId() ?? undefined)
+            }
+          />
+        </Suspense>
+      </Show>
     </Show>
   );
 }
