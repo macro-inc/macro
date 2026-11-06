@@ -30,6 +30,7 @@ export default {
   openPanel: 'Open chat and participants',
   closePanel: 'Close chat and participants',
   participants: 'Participants',
+  people: 'People',
   participantsCount: { other: 'Participants ({{count}})' },
   inCallParticipants: 'In-call participants',
   localParticipant: '{{name}} (You)',

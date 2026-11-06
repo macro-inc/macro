@@ -354,7 +354,7 @@ export function CallOverlay(props: {
   const [selectedTab, setSelectedTab] = createSignal<CallPanelTab>('chat');
   const [focusChatOnOpen, setFocusChatOnOpen] = createSignal(true);
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
-  const [panelWidth, setPanelWidth] = createSignal(360);
+  const [panelWidth, setPanelWidth] = createSignal(320);
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
@@ -582,7 +582,7 @@ export function CallOverlay(props: {
       <FloatRegion region="dock" priority={100} active={isMobile} />
       <div
         ref={setOverlayMount}
-        class="relative min-h-0 flex-1 overflow-hidden"
+        class="relative min-h-0 flex-1 overflow-hidden px-3 pb-3 mobile:px-0 mobile:pb-0"
       >
         <Resize.Zone
           direction="horizontal"
@@ -789,7 +789,7 @@ export function CallOverlay(props: {
             id="call-sidebar"
             minSize={280}
             maxSize={480}
-            target={{ kind: 'px', px: 360 }}
+            target={{ kind: 'px', px: 320 }}
             redistributionPreferredSize={panelWidth()}
             onSizeChangeEnd={setPanelWidth}
             hidden={() => !widePanel() || !panelOpen()}

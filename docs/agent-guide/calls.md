@@ -303,9 +303,9 @@ top-right hides the participant strip so the share fills the call area, and
 playing. The choice lasts while the call view is open, so a later share also
 opens maximized; check it on desktop and at phone width, and when the share stops.
 
-Open **Chat** and **Participants** from the button beside the media controls.
+Open **Chat** and **People** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
-**Participants** shows the live attendee count and a scrollable roster, including
+**People** shows the live attendee count on phones and a scrollable roster, including
 you and connected guests but excluding recording agents. Rows show names,
 avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
@@ -334,12 +334,12 @@ phones, safe-area insets, and rotation.
 In wide desktop panes, the sidebar fills the call content height alongside the
 video and controls, with a rounded, raised background. Drag its divider, or focus
 the divider and use the arrow keys, to resize it between 280px and 480px while
-leaving at least 320px for the call. It starts at 360px and retains its resized
+leaving at least 320px for the call. It starts at 320px and retains its resized
 width when closed and reopened. Narrow desktop panes overlay the sidebar;
 phones use the shared bottom sheet instead of a resize handle.
 
-Both presentations have a **Close chat and participants** button beside the tabs.
-Dismiss the sheet with that button, its handle, backdrop, or Escape; desktop also
+Desktop has a **Close chat and participants** button beside the tabs.
+Dismiss the phone sheet with its handle, backdrop, or Escape; desktop also
 closes with Escape. Opening and closing animate unless reduced motion is enabled.
 The desktop sidebar stays anchored to the right edge and closes to the right,
 without crossing the call area. Closing returns focus to the footer button.

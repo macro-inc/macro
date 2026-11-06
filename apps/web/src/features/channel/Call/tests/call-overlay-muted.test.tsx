@@ -373,7 +373,7 @@ describe('CallOverlay muted microphone badges', () => {
     });
     fireEvent.input(composer, { target: { value: 'Draft' } });
     expect(screen.getByText('call-id')).toBeTruthy();
-    fireEvent.click(screen.getByRole('radio', { name: /Participants/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /People/ }));
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(composer.isConnected).toBe(true);
     fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
