@@ -21,6 +21,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createSkill } from '@core/util/create';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -258,6 +259,8 @@ export function ComposeSkill(props: ComposeSkillProps) {
         },
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: () => {
             openWithSplit(
               { type: 'skill', id: documentId },

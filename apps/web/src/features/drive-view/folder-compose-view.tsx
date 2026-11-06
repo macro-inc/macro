@@ -6,6 +6,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import { onMount, Suspense } from 'solid-js';
 import type { FolderDraft, FolderSubmission } from './core/folder-composer';
@@ -54,6 +55,8 @@ async function settleFolderSubmission(
       actions: [
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: () => {
             layout.openWithSplit({ type: 'project', id: outcome.id });
           },

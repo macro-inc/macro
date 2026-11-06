@@ -4,6 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { refetchHistory } from '@queries/history/history';
@@ -49,6 +50,8 @@ export function useHandleFileUpload(options: { projectId?: string } = {}) {
               actions: [
                 {
                   label: t('entityActions.open'),
+                  icon: ArrowSquareOutIcon,
+                  trailingIcon: true,
                   onClick: () => {
                     openWithSplit(
                       { type: 'project', id: createdProjectId },

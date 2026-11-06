@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { type ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import Bell from '@icon/system/regular/bell.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
@@ -234,10 +235,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     behavior: 'Persistent · touch devices only',
     create: (dismiss) => ({
       custom: {
-        title: 'Update ready',
-        actions: [
-          { label: 'Reload', icon: ArrowCounterClockwise, onClick: dismiss },
-        ],
+        title: 'A new version of Macro is ready',
+        actions: [{ label: 'Reload', onClick: dismiss }],
       },
     }),
   },
@@ -447,6 +446,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
           : []),
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -472,6 +473,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         },
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -498,6 +501,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         },
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -517,6 +522,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         actions: [
           {
             label: t('entityActions.open'),
+            icon: ArrowSquareOutIcon,
+            trailingIcon: true,
             onClick: dismiss,
           },
         ],
@@ -537,6 +544,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
         actions: [
           {
             label: t('entityActions.open'),
+            icon: ArrowSquareOutIcon,
+            trailingIcon: true,
             onClick: dismiss,
           },
         ],
@@ -574,6 +583,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       actions: [
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -604,6 +615,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
           : []),
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],
@@ -622,6 +635,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       actions: [
         {
           label: t('entityActions.open'),
+          icon: ArrowSquareOutIcon,
+          trailingIcon: true,
           onClick: dismiss,
         },
       ],

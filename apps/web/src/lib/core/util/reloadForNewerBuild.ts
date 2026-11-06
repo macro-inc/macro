@@ -2,7 +2,6 @@ import type { ReloadReason } from '@app/observability/generated/native-diagnosti
 import { reloadApp } from '@app/observability/reload';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { deviceLooksOffline } from './connectivity';
@@ -66,10 +65,8 @@ const browserPage: ReloadPage = {
     if (!isTouchDevice()) return;
     toast.custom(
       {
-        title: 'Update ready',
-        actions: [
-          { label: 'Reload', icon: ArrowCounterClockwise, onClick: reload },
-        ],
+        title: 'A new version of Macro is ready',
+        actions: [{ label: 'Reload', onClick: reload }],
       },
       { persistent: true }
     );
