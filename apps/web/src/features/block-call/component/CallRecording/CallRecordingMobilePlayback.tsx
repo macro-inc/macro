@@ -10,11 +10,13 @@ export function CallRecordingMobilePlayback(props: {
   active: boolean;
   scrollingDown: boolean;
   onShowVideo: () => void;
+  syncTargetRef?: (element: HTMLDivElement) => void;
 }) {
   const active = () =>
     props.active && !SearchState.isOpen() && !virtualKeyboardVisible();
   const player = () => (
-    <div class="px-(--mobile-chrome-gutter)">
+    <div class="flex flex-col gap-3 px-(--mobile-chrome-gutter)">
+      <div ref={props.syncTargetRef} class="empty:hidden" />
       <CallRecordingPinnedPlayer
         playback={props.playback}
         speaker={props.speaker}

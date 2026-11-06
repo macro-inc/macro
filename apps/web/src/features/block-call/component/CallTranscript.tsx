@@ -20,6 +20,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { messageVideoSeconds } from '../core/recording-chat';
 import { getSegmentVideoSeconds } from './transcript-playback';
 
@@ -47,6 +48,8 @@ export function CallTranscript(props: {
   scrollElement?: HTMLElement;
   /** Changes only when the enclosing page's custom scrollbar is dragged. */
   manualScrollGeneration?: number;
+  /** Place resynchronization immediately above the host's playback bar. */
+  syncTarget?: HTMLElement;
 }) {
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const viewport = () => props.scrollElement ?? scrollRef();
@@ -204,6 +207,20 @@ export function CallTranscript(props: {
     });
   });
 
+  const syncButton = () => (
+    <Button
+      class="pointer-events-auto"
+      variant="secondary"
+      size="sm"
+      onClick={() => {
+        setFollowing(true);
+        scrollActiveIntoView(true);
+      }}
+    >
+      <CrosshairIcon class="size-4" />
+      {t('calls.detailSyncToVideo')}
+    </Button>
+  );
   return (
     <div
       class="relative flex min-h-0 flex-col"
@@ -349,20 +366,26 @@ export function CallTranscript(props: {
           !following() && !activeVisible() && props.activeSequenceNum != null
         }
       >
-        <div class="pointer-events-none sticky bottom-4 mobile:bottom-[calc(var(--mobile-content-inset-bottom,0px)+12px)] z-20 flex justify-center py-2">
-          <Button
-            class="pointer-events-auto"
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setFollowing(true);
-              scrollActiveIntoView(true);
-            }}
-          >
-            <CrosshairIcon class="size-4" />
-            {t('calls.detailSyncToVideo')}
-          </Button>
-        </div>
+        <Show
+          when={props.syncTarget}
+          fallback={
+            <div
+              class="pointer-events-none inset-x-0 bottom-4 z-20 flex justify-center py-2"
+              classList={{
+                absolute: !props.scrollElement,
+                sticky: !!props.scrollElement,
+              }}
+            >
+              {syncButton()}
+            </div>
+          }
+        >
+          {(target) => (
+            <Portal mount={target()}>
+              <div class="flex justify-center">{syncButton()}</div>
+            </Portal>
+          )}
+        </Show>
       </Show>
     </div>
   );

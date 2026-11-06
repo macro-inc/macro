@@ -55,6 +55,8 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   viewport.scrollTo = scroll;
   const [manualScrollGeneration, setManualScrollGeneration] = createSignal(0);
   const [seekGeneration, setSeekGeneration] = createSignal(0);
+  const syncTarget = document.createElement('div');
+  document.body.append(syncTarget);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
     function (this: HTMLElement) {
       const top = this.hasAttribute('data-call-transcript-row') ? 200 : 0;
@@ -90,6 +92,7 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
       scrollElement={viewport}
       manualScrollGeneration={manualScrollGeneration()}
       videoSeekGeneration={seekGeneration()}
+      syncTarget={syncTarget}
     />
   ));
   fireEvent.click(screen.getByRole('button', { name: /A recorded sentence/ }));
@@ -97,6 +100,7 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   fireEvent.wheel(viewport);
   setActive(1);
   const sync = screen.getByRole('button', { name: 'Sync to video' });
+  expect(syncTarget.contains(sync)).toBe(true);
   fireEvent.click(sync);
   expect(scroll).toHaveBeenCalled();
 
@@ -129,4 +133,5 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   setActive(null);
   setActive(1);
   expect(scroll).not.toHaveBeenCalled();
+  syncTarget.remove();
 });

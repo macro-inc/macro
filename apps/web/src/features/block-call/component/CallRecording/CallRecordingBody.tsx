@@ -77,6 +77,13 @@ export function CallRecordingBody(props: {
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const [scrollingDown, setScrollingDown] = createSignal(false);
   const [manualScrollGeneration, setManualScrollGeneration] = createSignal(0);
+  const [syncTarget, setSyncTarget] = createSignal<HTMLDivElement>();
+  const registerSyncTarget = (element: HTMLDivElement) => {
+    setSyncTarget(element);
+    onCleanup(() => {
+      if (syncTarget() === element) setSyncTarget(undefined);
+    });
+  };
   const scrollIntent = createScrollIntentTracker(() => {
     const direction = scrollIntent.lastDirection();
     if (direction) setScrollingDown(direction === 'down');
@@ -422,6 +429,7 @@ export function CallRecordingBody(props: {
                                 messages={messages()}
                                 scrollElement={scrollRef()}
                                 manualScrollGeneration={manualScrollGeneration()}
+                                syncTarget={syncTarget()}
                                 hideHeader
                               />
                             </Match>
@@ -464,6 +472,7 @@ export function CallRecordingBody(props: {
                       speaker={currentSpeaker()}
                       active={mobilePlaybackActive()}
                       scrollingDown={scrollingDown()}
+                      syncTargetRef={registerSyncTarget}
                       onShowVideo={() =>
                         playerRef()?.scrollIntoView({
                           behavior: 'smooth',
@@ -472,18 +481,21 @@ export function CallRecordingBody(props: {
                       }
                     />
                   </Show>
-                  <Show when={!isMobile() && floatingPlayback()}>
-                    <div class="absolute inset-x-0 bottom-4 z-20 mx-auto w-full max-w-[800px] px-4 @[640px]/call-column:px-6 @[760px]/call-column:px-10">
-                      <CallRecordingPinnedPlayer
-                        playback={playback}
-                        speaker={currentSpeaker()}
-                        onShowVideo={() =>
-                          playerRef()?.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start',
-                          })
-                        }
-                      />
+                  <Show when={!isMobile()}>
+                    <div class="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto w-full max-w-[800px] px-4 @[640px]/call-column:px-6 @[760px]/call-column:px-10">
+                      <div ref={registerSyncTarget} class="mb-3 empty:hidden" />
+                      <Show when={floatingPlayback()}>
+                        <CallRecordingPinnedPlayer
+                          playback={playback}
+                          speaker={currentSpeaker()}
+                          onShowVideo={() =>
+                            playerRef()?.scrollIntoView({
+                              behavior: 'smooth',
+                              block: 'start',
+                            })
+                          }
+                        />
+                      </Show>
                     </div>
                   </Show>
                 </div>
