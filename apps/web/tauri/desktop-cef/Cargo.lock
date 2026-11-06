@@ -1032,6 +1032,7 @@ name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "maybe_send",
  "predicate-index",
  "thiserror 2.0.21",
  "turso-opfs",
@@ -2273,6 +2274,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "strum 0.27.2",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4684,6 +4686,7 @@ dependencies = [
  "nom 8.0.0",
  "serde",
  "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]
