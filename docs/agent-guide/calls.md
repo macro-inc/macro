@@ -86,7 +86,9 @@ use the real incoming-call signal rather than treating every active call as ring
 
 Live waveforms animate only while someone in the joined call is speaking, using
 the same speaking state as the participant tiles. Silent calls, other live calls
-without speech data, and reduced-motion preferences keep the waveform still.
+without speech data, and reduced-motion preferences show a low, even five-bar
+resting mark. Speech eases into the existing waveform loop and settles back to
+that resting mark when speech stops.
 Speaking participants have the same success-colored ring in tiles and the
 filmstrip, the People roster, header/sidebar avatar groups, and the floating
 player. Avatar groups without a matching joined room have no speaking ring.
