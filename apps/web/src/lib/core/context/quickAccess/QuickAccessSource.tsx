@@ -41,6 +41,11 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
+import {
+  hiddenContactIdSet,
+  isHiddenContactEmail,
+  isHiddenDirectMessage,
+} from '@queries/contacts/hidden';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
 import {
   localDraftQuickAccessItems,
@@ -561,7 +566,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         ),
       });
     }
+    const hidden = hiddenContactIdSet();
     for (const sourceChannel of channelData.values()) {
+      if (isHiddenDirectMessage(sourceChannel, hidden)) continue;
       const recentlyViewedAt = viewedAtMap.get(sourceChannel.id);
       const viewedAt = latestDate(recentlyViewedAt, sourceChannel.viewedAt);
       const channel = { ...sourceChannel, viewedAt };
@@ -705,8 +712,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // not Macro users, so they stay out of the 'person' bucket.
   const crmContactEntries = createLazyMemo(() => {
     const allEntries: IndexEntry[] = [];
+    const hiddenContacts = hiddenContactIdSet();
     for (const contact of crmContactsAccessor()) {
       if (contact.hidden) continue;
+      if (isHiddenContactEmail(contact.email, hiddenContacts)) continue;
       const version = getCrmContactVersion(contact);
       const cached = itemCache.get(contact.id);
       const item =

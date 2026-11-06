@@ -4,7 +4,7 @@ use crate::domain::models::messages::{
 };
 use crate::domain::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
-    ContactsOutboxService, ContactsRepository, ContactsService,
+    ContactsOutboxService, ContactsRepository, ContactsService, HideContactError,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -88,6 +88,33 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
 
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         self.process_message(ContactsMessage::Nodes(nodes)).await
+    }
+
+    async fn set_contact_hidden(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+        contact_id: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> Result<(), HideContactError> {
+        if owner_id.as_ref() == contact_id.as_ref() {
+            return Err(HideContactError::CannotHideSelf);
+        }
+        self.repository
+            .set_contact_hidden(owner_id.copied(), contact_id.copied(), hidden)
+            .await
+            .map_err(HideContactError::Store)?;
+        self.notifier
+            .invalidate_contacts_for_users(vec![owner_id.into_owned()])
+            .await
+            .map_err(HideContactError::Store)?;
+        Ok(())
+    }
+
+    async fn query_hidden_contacts(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        self.repository.hidden_contacts(owner_id).await
     }
 }
 

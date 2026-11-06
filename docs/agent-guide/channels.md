@@ -1493,6 +1493,17 @@ A team channel the viewer has not joined shows its picture without editing
 controls. One-to-one direct messages
 continue to show the other person's user picture.
 
+## Hiding a contact
+
+A one-to-one direct message's menu (the rail row, a favorite of that
+conversation, and the conversation title menu) offers **Hide contact**. That
+person leaves direct messages, @ mentions, and email address suggestions,
+including CRM contacts with the same email. The conversation is also muted.
+**Settings → Email → Hidden contacts** lists them; **Unhide** puts them back
+in those suggestions. The next inbox sync does not open a new direct message
+for someone who is still hidden. Group chats and agent direct messages have
+no Hide contact action.
+
 Opening the slash menu with `/` lists Normal Text, headings, and the other
 Markdown options before Query and Database. Typing `/query` filters to the Query
 action; `/database` creates a new database and inserts its editable card.

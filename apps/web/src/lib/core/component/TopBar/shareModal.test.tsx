@@ -74,6 +74,9 @@ vi.mock('@notifications/notification-platform', () => ({
 }));
 vi.mock('@queries/chat', () => ({ useChatRenameWebsocketSync: () => {} }));
 vi.mock('@queries/sync/use-query-sync', () => ({ useQuerySync: () => {} }));
+vi.mock('@queries/contacts/hidden', () => ({
+  useHiddenContactsSync: () => {},
+}));
 vi.mock('@queries/undo', () => ({
   MutationUndoProvider: (props: { children: unknown }) => props.children,
 }));

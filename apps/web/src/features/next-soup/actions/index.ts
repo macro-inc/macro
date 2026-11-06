@@ -30,6 +30,7 @@ export { makeDownloadAction } from './make-download-action';
 export { makeFavoriteAction } from './make-favorite-action';
 export { makeGithubLinkAction } from './make-github-link-action';
 export { makeHideCompanyAction } from './make-hide-company-action';
+export { makeHideContactAction } from './make-hide-contact-action';
 export { makeMarkDoneAction } from './make-mark-done-action';
 export { makeMarkNotDoneAction } from './make-mark-not-done-action';
 export { makeMarkNotificationsReadAction } from './make-mark-notifications-read-action';

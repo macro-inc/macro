@@ -43,4 +43,18 @@ export const contactsClient = {
       body: JSON.stringify({ user_id: userId }),
     });
   },
+  async getHiddenContacts() {
+    return (
+      await contactsFetch<GetContactsResponse>(`/contacts/hidden`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+  async setContactHidden(userId: string, hidden: boolean) {
+    return contactsFetch(`/contacts/hidden`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, hidden }),
+    });
+  },
 };

@@ -221,6 +221,10 @@ export const connectionBacklog =
 
 export const contactsExcluded = [
   'addContact',
+  // Hiding a contact is an app preference. The web client owns the surfaces
+  // that drop the person; agents keep using the visible contact list.
+  'getHiddenContacts',
+  'setContactHidden',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =

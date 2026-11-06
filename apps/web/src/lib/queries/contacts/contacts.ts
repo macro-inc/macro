@@ -6,6 +6,7 @@ import { queryClient } from '@queries/client';
 import { contactsClient } from '@service-contacts/client';
 import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { hiddenContactIdSet, isHiddenUserId } from './hidden';
 import { contactsKeys } from './keys';
 
 export function contactsQueryOptions() {
@@ -35,7 +36,10 @@ export function useContacts(
   const query = useContactsQuery(enabled);
   return createMemo(() => {
     if (authenticated() !== true || !query.isSuccess) return [];
-    const contacts = query.data.contacts;
+    const hidden = hiddenContactIdSet();
+    const contacts = query.data.contacts.filter(
+      (id) => !isHiddenUserId(id, hidden)
+    );
     return contacts.map((c) => ({
       id: c,
       email: idToEmail(c),

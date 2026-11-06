@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM contacts_hidden\n                WHERE owner_id = $1 AND contact_id = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "feccb62814560aad0773f285528f83f68797926330b90fa1e3382bbead414bc7"
+}

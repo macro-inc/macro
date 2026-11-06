@@ -1,5 +1,5 @@
 use crate::domain::models::messages::ContactsNodes;
-use crate::domain::ports::ContactsService;
+use crate::domain::ports::{ContactsService, HideContactError};
 use axum::extract::{FromRef, FromRequestParts, Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -35,6 +35,16 @@ pub struct AddContactRequest {
     /// The user ID to add as a contact.
     #[schema(value_type = String)]
     pub user_id: MacroUserIdStr<'static>,
+}
+
+/// Request body for PUT /contacts/hidden.
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+pub struct SetContactHiddenRequest {
+    /// The contact to hide or show.
+    #[schema(value_type = String)]
+    pub user_id: MacroUserIdStr<'static>,
+    /// `true` hides the contact; `false` shows them again.
+    pub hidden: bool,
 }
 
 /// GET /contacts handler.
@@ -100,6 +110,71 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /contacts/hidden handler.
+#[utoipa::path(get,
+    tag = "contacts",
+    operation_id = "get_hidden_contacts",
+    path = "/contacts/hidden",
+    responses(
+    (status = 200, body=GetContactsResponse),
+    (status = 401, body=String),
+    (status = 500, body=String)))
+]
+#[instrument(
+    skip(authorization, contacts),
+    fields(actor = %authorization.acting_entity())
+)]
+pub async fn hidden_contacts_handler<S: ContactsService, Auth: MacroAuthorizationService>(
+    State(contacts): State<Arc<S>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<GetContactsResponse>, StatusCode> {
+    let user = authorization.authorization.user;
+    contacts
+        .query_hidden_contacts(user.macro_user_id)
+        .await
+        .map(|contacts| Json(GetContactsResponse { contacts }))
+        .map_err(|error| {
+            tracing::error!(error = ?error, "failed to list hidden contacts");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
+/// PUT /contacts/hidden handler.
+#[utoipa::path(put,
+    tag = "contacts",
+    operation_id = "set_contact_hidden",
+    path = "/contacts/hidden",
+    request_body = SetContactHiddenRequest,
+    responses(
+    (status = 204),
+    (status = 400, body=String),
+    (status = 401, body=String),
+    (status = 500, body=String)))
+]
+#[instrument(
+    skip(service, authorization),
+    fields(actor = %authorization.acting_entity()),
+    err
+)]
+pub async fn set_contact_hidden_handler<S: ContactsService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<S>>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
+    Json(body): Json<SetContactHiddenRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let user = authorization.authorization.user;
+    match service
+        .set_contact_hidden(user.macro_user_id, body.user_id, body.hidden)
+        .await
+    {
+        Ok(()) => Ok(StatusCode::NO_CONTENT),
+        Err(HideContactError::CannotHideSelf) => Err(StatusCode::BAD_REQUEST),
+        Err(HideContactError::Store(error)) => {
+            tracing::error!(error = ?error, "failed to update hidden contact");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// Rate limit for adding contacts: 50 requests per user per hour.
@@ -241,6 +316,10 @@ where
 
     Router::new()
         .route("/contacts", get(handler::<S, Auth>))
+        .route(
+            "/contacts/hidden",
+            get(hidden_contacts_handler::<S, Auth>).put(set_contact_hidden_handler::<S, Auth>),
+        )
         .merge(post_route)
         .with_state(state)
 }
@@ -254,11 +333,14 @@ where
         paths(
             handler,
             add_contact_handler,
+            hidden_contacts_handler,
+            set_contact_hidden_handler,
         ),
         components(
             schemas(
                 GetContactsResponse,
                 AddContactRequest,
+                SetContactHiddenRequest,
             ),
         ),
         tags(

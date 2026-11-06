@@ -45,6 +45,10 @@ import {
   useRenameChannelLabelMutation,
   useSetChannelLabelMutation,
 } from '@queries/channel-labels/channel-labels';
+import {
+  hiddenContactIdSet,
+  isHiddenDirectMessage,
+} from '@queries/contacts/hidden';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { debounce } from '@solid-primitives/scheduled';
@@ -361,9 +365,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return 'Channel labels are unavailable right now.';
   };
 
-  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
+  const savedFavorites = createMemo(() => favoritesData()?.favorites ?? []);
   const favoriteChannelIds = createMemo(() =>
-    favorites()
+    savedFavorites()
       .filter((favorite) => favorite.entityType === 'channel')
       .map((favorite) => favorite.entityId)
   );
@@ -397,7 +401,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const labelledChannels = createMemo<ChannelEntity[]>(() => {
     if (!channelTagsEnabled()) return [];
     const labelled = new Set(labels().flatMap((label) => label.channelIds));
-    return referencedChannels().filter((channel) => labelled.has(channel.id));
+    const hidden = hiddenContactIdSet();
+    return referencedChannels().filter(
+      (channel) =>
+        labelled.has(channel.id) && !isHiddenDirectMessage(channel, hidden)
+    );
   });
 
   const allChannels = createMemo(() =>
@@ -409,6 +417,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelById = (channelId: string) =>
     channelsById().get(channelId) ??
     referencedChannels().find((channel) => channel.id === channelId);
+  const favorites = createMemo(() => {
+    const hidden = hiddenContactIdSet();
+    return savedFavorites().filter((favorite) => {
+      if (favorite.entityType !== 'channel' || hidden.size === 0) return true;
+      const channel = channelById(favorite.entityId);
+      if (!channel) return true;
+      return !isHiddenDirectMessage(channel, hidden);
+    });
+  });
 
   const channelActivity = useChannelRailActivity(allChannels, channelCalls);
 

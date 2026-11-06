@@ -35,6 +35,9 @@ and kept in sync via the connection gateway.
 
 - Add an HTTP endpoint: `src/domain/ports.rs` (port method) →
   `src/domain/service.rs` → `src/inbound/http.rs` (handler + router + swagger).
+- Hide a contact: `PUT /contacts/hidden` writes `contacts_hidden`. `GET /contacts`
+  omits those people; `GET /contacts/hidden` lists them. Hiding does not delete
+  the graph edge, so a later sync cannot bring the person back.
 - Change what triggers a contact update: `src/inbound/worker.rs` (SQS message
   parsing) → `src/domain/service.rs`.
 - Add a repository query: `src/outbound/repository.rs` → its `test.rs`.

@@ -1,6 +1,10 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { createSearchState } from '@app/features/soup/search/create-search-state';
 import { type ChannelEntity, isChannelEntity } from '@entity';
+import {
+  hiddenContactIdSet,
+  withoutHiddenDirectMessages,
+} from '@queries/contacts/hidden';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -72,9 +76,12 @@ export function createChannelSearchSource(options: {
     // Recent and Threads search include both channels and DMs, even without
     // message metadata.
     const scope = options.scope();
-    return filterChannelsForScope(
-      scope === 'recents' || scope === 'threads' ? 'search' : scope,
-      matches
+    return withoutHiddenDirectMessages(
+      filterChannelsForScope(
+        scope === 'recents' || scope === 'threads' ? 'search' : scope,
+        matches
+      ),
+      hiddenContactIdSet()
     );
   });
   const isFetching = () =>

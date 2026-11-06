@@ -151,6 +151,8 @@ the gateway `/email` prefix.
   a `label_write_sim` test runs the label paths on 1.5 MiB worker stacks.
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
+- Inbox backfill opens direct messages for colleagues and top contacts, skipping
+  addresses the owner has hidden (`contacts_hidden`).
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see `pubsub::util::build_contact_connections`.

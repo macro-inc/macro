@@ -712,6 +712,22 @@ impl ContactsService for FakeContacts {
     async fn add_contact_nodes(&self, _: ContactsNodes) -> Result<(), rootcause::Report> {
         unimplemented!("SQL never adds contacts")
     }
+
+    async fn set_contact_hidden(
+        &self,
+        _: MacroUserIdStr<'_>,
+        _: MacroUserIdStr<'_>,
+        _: bool,
+    ) -> Result<(), contacts::domain::ports::HideContactError> {
+        unimplemented!("SQL never hides contacts")
+    }
+
+    async fn query_hidden_contacts(
+        &self,
+        _: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Ok(Vec::new())
+    }
 }
 
 /// The literals a read's row filter names, in order.

@@ -12,9 +12,11 @@ use channels::{
     outbound::pg_channels_repo::PgChannelsRepo,
 };
 use generic_email_domains::is_generic_email_domain;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::link::Link;
 use sqlx::PgPool;
+use std::collections::HashSet;
 
 #[cfg(test)]
 mod test;
@@ -51,11 +53,40 @@ pub(crate) fn colleague_emails(own_email: &str, emails: &[String]) -> Vec<String
         .collect()
 }
 
+/// Drops addresses the owner has hidden. Comparison is case-insensitive.
+pub(crate) fn without_hidden_emails(
+    emails: impl IntoIterator<Item = String>,
+    hidden: &HashSet<String>,
+) -> Vec<String> {
+    emails
+        .into_iter()
+        .filter(|email| !hidden.contains(&email.to_ascii_lowercase()))
+        .collect()
+}
+
+async fn hidden_emails(db: &PgPool, owner: &MacroUserIdStr<'_>) -> HashSet<String> {
+    let repository = contacts::outbound::repository::DbContactsRepository::new(db.clone());
+    match repository.hidden_contacts(owner.copied()).await {
+        Ok(contacts) => contacts
+            .into_iter()
+            .map(|contact| contact.email_str().to_ascii_lowercase())
+            .collect(),
+        Err(error) => {
+            tracing::warn!(
+                error = ?error,
+                "unable to read hidden contacts before opening direct messages"
+            );
+            HashSet::new()
+        }
+    }
+}
+
 /// Opens direct messages from the link's owner to each address. Invalid
-/// addresses and the owner's own address are skipped.
+/// addresses, the owner's own address, and hidden contacts are skipped.
 async fn ensure_dms_with(db: &PgPool, link: &Link, emails: impl IntoIterator<Item = String>) {
+    let hidden = hidden_emails(db, &link.macro_id).await;
     let own_email = link.email_address.0.as_ref().to_ascii_lowercase();
-    let roster: Vec<MacroUserIdStr<'static>> = emails
+    let roster: Vec<MacroUserIdStr<'static>> = without_hidden_emails(emails, &hidden)
         .into_iter()
         .filter(|email| *email != own_email)
         .filter_map(|email| MacroUserIdStr::try_from_email(&email).ok())

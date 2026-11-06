@@ -1,4 +1,5 @@
-use super::colleague_emails;
+use super::{colleague_emails, without_hidden_emails};
+use std::collections::HashSet;
 
 fn emails(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_owned()).collect()
@@ -24,6 +25,16 @@ fn consumer_domains_have_no_colleagues() {
     let contacts = emails(&["friend@gmail.com", "other@gmail.com"]);
 
     assert!(colleague_emails("owner@gmail.com", &contacts).is_empty());
+}
+
+#[test]
+fn skips_hidden_addresses_ignoring_case() {
+    let hidden = HashSet::from(["hidden@example.com".to_owned()]);
+
+    assert_eq!(
+        without_hidden_emails(emails(&["Hidden@example.com", "kept@example.com"]), &hidden),
+        emails(&["kept@example.com"])
+    );
 }
 
 #[test]

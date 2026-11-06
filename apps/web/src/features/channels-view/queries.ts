@@ -13,6 +13,10 @@ import {
   isChannelThreadEntity,
 } from '@entity';
 import {
+  hiddenContactIdSet,
+  withoutHiddenDirectMessages,
+} from '@queries/contacts/hidden';
+import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
   useSoupAstItemsQuery,
@@ -333,9 +337,12 @@ function useChannelsDataSource(
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 
-    const channels = filterChannelsForScope(
-      scope,
-      (query.data?.entities ?? []).filter(isChannelEntity)
+    const channels = withoutHiddenDirectMessages(
+      filterChannelsForScope(
+        scope,
+        (query.data?.entities ?? []).filter(isChannelEntity)
+      ),
+      hiddenContactIdSet()
     );
 
     if (scope === 'recents') return channels;

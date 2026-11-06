@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT contact_id\n            FROM contacts_hidden\n            WHERE owner_id = $1\n            ORDER BY created_at DESC, contact_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7dfc3aaa9ac3297a940796757c0a1314cfd425d7099eec2210802eea1149e534"
+}

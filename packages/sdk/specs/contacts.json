@@ -98,6 +98,95 @@
           }
         }
       }
+    },
+    "/contacts/hidden": {
+      "get": {
+        "tags": ["contacts"],
+        "summary": "GET /contacts/hidden handler.",
+        "operationId": "get_hidden_contacts",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetContactsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["contacts"],
+        "summary": "PUT /contacts/hidden handler.",
+        "operationId": "set_contact_hidden",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactHiddenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -124,6 +213,21 @@
               "type": "string"
             },
             "description": "The list of contact user IDs."
+          }
+        }
+      },
+      "SetContactHiddenRequest": {
+        "type": "object",
+        "description": "Request body for PUT /contacts/hidden.",
+        "required": ["user_id", "hidden"],
+        "properties": {
+          "hidden": {
+            "type": "boolean",
+            "description": "`true` hides the contact; `false` shows them again."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The contact to hide or show."
           }
         }
       }

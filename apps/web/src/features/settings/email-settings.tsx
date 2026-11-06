@@ -1,10 +1,17 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { toast } from '@core/component/Toast/Toast';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
+import { idToDisplayName, idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  useHiddenContactsQuery,
+  useSetContactHiddenMutation,
+} from '@queries/contacts/hidden';
 import { Button } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
@@ -37,6 +44,20 @@ export function EmailSettings() {
           }
         >
           <EmailCard />
+        </Suspense>
+      </SettingsSection>
+      <SettingsSection
+        title="Hidden contacts"
+        description="Hidden people stay out of direct messages, mentions, and email suggestions."
+      >
+        <Suspense
+          fallback={
+            <p role="status" class="text-sm text-ink-muted">
+              Loading hidden contacts…
+            </p>
+          }
+        >
+          <HiddenContacts />
         </Suspense>
       </SettingsSection>
       <Show when={signatures().enabled}>
@@ -92,6 +113,82 @@ export function EmailSettings() {
         </SettingsSection>
       </Show>
     </SettingsPage>
+  );
+}
+
+function HiddenContacts() {
+  const query = useHiddenContactsQuery();
+  const unhide = useSetContactHiddenMutation();
+  const contacts = () => query.data?.contacts ?? [];
+
+  return (
+    <Show
+      when={!query.isError}
+      fallback={
+        <SettingsCard>
+          <SettingsRow label="Couldn't load hidden contacts">
+            <Button
+              variant="secondary"
+              onClick={() => fireAndForget(query.refetch(), 'hidden-contacts')}
+            >
+              Try again
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      }
+    >
+      <Show
+        when={!query.isPending}
+        fallback={
+          <p role="status" class="text-sm text-ink-muted">
+            Loading hidden contacts…
+          </p>
+        }
+      >
+        <SettingsCard>
+          <Show
+            when={contacts().length > 0}
+            fallback={<SettingsRow label="No hidden contacts." />}
+          >
+            <For each={contacts()}>
+              {(userId) => {
+                const email = idToEmail(userId);
+                const name = idToDisplayName(userId);
+                return (
+                  <SettingsRow
+                    label={name || email}
+                    description={name && name !== email ? email : undefined}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={unhide.isPending}
+                      onClick={() => {
+                        fireAndForget(
+                          unhide.mutateAsync({ userId, hidden: false }).then(
+                            () =>
+                              toast.success(
+                                t('entityActions.toastContactUnhidden')
+                              ),
+                            () =>
+                              toast.failure(
+                                t('entityActions.toastContactUnhiddenFailed')
+                              )
+                          ),
+                          'unhide-contact'
+                        );
+                      }}
+                    >
+                      Unhide
+                    </Button>
+                  </SettingsRow>
+                );
+              }}
+            </For>
+          </Show>
+        </SettingsCard>
+      </Show>
+    </Show>
   );
 }
 

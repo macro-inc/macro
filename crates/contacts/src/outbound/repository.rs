@@ -32,9 +32,19 @@ impl ContactsRepository for DbContactsRepository {
         // disjoint and neither repeats a contact.
         let rows = sqlx::query!(
             "
-            SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
+            SELECT user1 AS contact FROM contacts_connections
+            WHERE user2 = $1
+              AND NOT EXISTS (
+                SELECT 1 FROM contacts_hidden
+                WHERE owner_id = $1 AND contact_id = contacts_connections.user1
+              )
             UNION ALL
-            SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
+            SELECT user2 AS contact FROM contacts_connections
+            WHERE user1 = $1
+              AND NOT EXISTS (
+                SELECT 1 FROM contacts_hidden
+                WHERE owner_id = $1 AND contact_id = contacts_connections.user2
+              )
             ",
             user_id.as_ref()
         )
@@ -45,6 +55,61 @@ impl ContactsRepository for DbContactsRepository {
             .into_iter()
             .filter_map(|r| r.contact)
             .filter_map(|s| MacroUserIdStr::try_from(s).ok())
+            .collect())
+    }
+
+    async fn set_contact_hidden(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+        contact_id: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> Result<(), Report> {
+        if hidden {
+            sqlx::query!(
+                "
+                INSERT INTO contacts_hidden (owner_id, contact_id)
+                VALUES ($1, $2)
+                ON CONFLICT (owner_id, contact_id) DO NOTHING
+                ",
+                owner_id.as_ref(),
+                contact_id.as_ref()
+            )
+            .execute(&self.db)
+            .await?;
+        } else {
+            sqlx::query!(
+                "
+                DELETE FROM contacts_hidden
+                WHERE owner_id = $1 AND contact_id = $2
+                ",
+                owner_id.as_ref(),
+                contact_id.as_ref()
+            )
+            .execute(&self.db)
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn hidden_contacts(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        let rows = sqlx::query!(
+            "
+            SELECT contact_id
+            FROM contacts_hidden
+            WHERE owner_id = $1
+            ORDER BY created_at DESC, contact_id
+            ",
+            owner_id.as_ref()
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| MacroUserIdStr::try_from(row.contact_id).ok())
             .collect())
     }
 

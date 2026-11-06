@@ -16,6 +16,7 @@ import {
   makeDownloadAction,
   makeFavoriteAction,
   makeGithubLinkAction,
+  makeHideContactAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
   makeMarkNotificationsReadAction,
@@ -51,7 +52,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import { entityIsMuted, muteItemForEntity } from '@entity/utils/notification';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useSetContactHiddenMutation } from '@queries/contacts/hidden';
+import { useMuteItemMutation } from '@queries/notification/unsubscribes';
 import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
@@ -146,6 +150,20 @@ export function createSoupEntityActions(
   const favoriteAction = makeFavoriteAction();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
+  });
+  const hideContactMutation = useSetContactHiddenMutation();
+  const muteHiddenContact = useMuteItemMutation();
+  const hideContactAction = makeHideContactAction({
+    viewerId: () => userId(),
+    setHidden: (contactId) =>
+      hideContactMutation.mutateAsync({ userId: contactId, hidden: true }),
+    muteChannel: async (entity) => {
+      const item = muteItemForEntity(entity);
+      if (!item || entityIsMuted(notificationSource.mutedEntities(), entity)) {
+        return;
+      }
+      await muteHiddenContact.mutateAsync(item);
+    },
   });
   const moveToProjectAction = makeMoveToProjectAction({
     userId: () => userId(),
@@ -383,6 +401,14 @@ export function createSoupEntityActions(
           ? t('entityActions.unmuteNotifications')
           : t('entityActions.muteNotifications'),
         onClick: handle(muteAction.executeWithSoup),
+      });
+    }
+
+    if (entities.length === 1 && hideContactAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'hide-contact',
+        label: t('entityActions.hideContact'),
+        onClick: () => hideContactAction.execute(entities),
       });
     }
 

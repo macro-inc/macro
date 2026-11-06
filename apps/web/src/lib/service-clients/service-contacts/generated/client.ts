@@ -4,7 +4,11 @@
  * contacts
  * OpenAPI spec version: 0.1.0
  */
-import type { AddContactRequest, GetContactsResponse } from './schemas';
+import type {
+  AddContactRequest,
+  GetContactsResponse,
+  SetContactHiddenRequest,
+} from './schemas';
 
 /**
  * @summary GET /contacts handler.
@@ -121,4 +125,121 @@ export const addContact = async (
     status: res.status,
     headers: res.headers,
   } as addContactResponse;
+};
+
+/**
+ * @summary GET /contacts/hidden handler.
+ */
+export type getHiddenContactsResponse200 = {
+  data: GetContactsResponse;
+  status: 200;
+};
+
+export type getHiddenContactsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getHiddenContactsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getHiddenContactsResponseSuccess = getHiddenContactsResponse200 & {
+  headers: Headers;
+};
+export type getHiddenContactsResponseError = (
+  | getHiddenContactsResponse401
+  | getHiddenContactsResponse500
+) & {
+  headers: Headers;
+};
+
+export type getHiddenContactsResponse =
+  | getHiddenContactsResponseSuccess
+  | getHiddenContactsResponseError;
+
+export const getGetHiddenContactsUrl = () => {
+  return `/contacts/hidden`;
+};
+
+export const getHiddenContacts = async (
+  options?: RequestInit
+): Promise<getHiddenContactsResponse> => {
+  const res = await fetch(getGetHiddenContactsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getHiddenContactsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getHiddenContactsResponse;
+};
+
+/**
+ * @summary PUT /contacts/hidden handler.
+ */
+export type setContactHiddenResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type setContactHiddenResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type setContactHiddenResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type setContactHiddenResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type setContactHiddenResponseSuccess = setContactHiddenResponse204 & {
+  headers: Headers;
+};
+export type setContactHiddenResponseError = (
+  | setContactHiddenResponse400
+  | setContactHiddenResponse401
+  | setContactHiddenResponse500
+) & {
+  headers: Headers;
+};
+
+export type setContactHiddenResponse =
+  | setContactHiddenResponseSuccess
+  | setContactHiddenResponseError;
+
+export const getSetContactHiddenUrl = () => {
+  return `/contacts/hidden`;
+};
+
+export const setContactHidden = async (
+  setContactHiddenRequest: SetContactHiddenRequest,
+  options?: RequestInit
+): Promise<setContactHiddenResponse> => {
+  const res = await fetch(getSetContactHiddenUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setContactHiddenRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setContactHiddenResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setContactHiddenResponse;
 };

@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::HideContactError;
 use axum::{
     body::Body,
     http::{Request, header},
@@ -48,6 +49,25 @@ impl ContactsService for MockService {
 
     async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), Report> {
         Ok(())
+    }
+
+    async fn set_contact_hidden(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+        contact_id: MacroUserIdStr<'_>,
+        _hidden: bool,
+    ) -> Result<(), HideContactError> {
+        if owner_id.as_ref() == contact_id.as_ref() {
+            return Err(HideContactError::CannotHideSelf);
+        }
+        Ok(())
+    }
+
+    async fn query_hidden_contacts(
+        &self,
+        _owner_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(Vec::new())
     }
 }
 
@@ -269,4 +289,60 @@ async fn internal_request_without_an_identity_is_rejected() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(validator.validation_count(), 0);
+}
+
+#[tokio::test]
+async fn hiding_yourself_is_rejected() {
+    let (api, _) = build_test_router(false);
+    let request = Request::put("/contacts/hidden")
+        .header(header::AUTHORIZATION, "Bearer sender")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "user_id": SENDER_USER_ID,
+                "hidden": true
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let response = api.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn hidden_contacts_list_is_empty_for_the_mock() {
+    let (api, _) = build_test_router(false);
+    let request = Request::get("/contacts/hidden")
+        .header(header::AUTHORIZATION, "Bearer found")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = api.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: GetContactsResponse = serde_json::from_slice(&body).unwrap();
+    assert!(body.contacts.is_empty());
+}
+
+#[tokio::test]
+async fn hiding_another_contact_succeeds() {
+    let (api, _) = build_test_router(false);
+    let request = Request::put("/contacts/hidden")
+        .header(header::AUTHORIZATION, "Bearer sender")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "user_id": "macro|other@example.com",
+                "hidden": true
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let response = api.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
 }

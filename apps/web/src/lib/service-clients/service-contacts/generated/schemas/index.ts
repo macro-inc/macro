@@ -7,3 +7,4 @@
 
 export * from './addContactRequest';
 export * from './getContactsResponse';
+export * from './setContactHiddenRequest';

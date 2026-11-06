@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::models::messages::ContactConnection;
+use crate::domain::ports::HideContactError;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -26,6 +27,22 @@ impl ContactsRepository for RecordingRepository {
         );
         Ok(())
     }
+
+    async fn set_contact_hidden(
+        &self,
+        _owner_id: MacroUserIdStr<'_>,
+        _contact_id: MacroUserIdStr<'_>,
+        _hidden: bool,
+    ) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+
+    async fn hidden_contacts(
+        &self,
+        _owner_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Ok(Vec::new())
+    }
 }
 
 struct NoopNotifier;
@@ -41,6 +58,22 @@ impl ContactsNotifier for NoopNotifier {
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
+}
+
+#[tokio::test]
+async fn hiding_yourself_is_rejected() {
+    let owner = user("owner@example.com");
+    let service = ContactsDomainService {
+        repository: RecordingRepository::default(),
+        notifier: NoopNotifier,
+    };
+
+    let error = service
+        .set_contact_hidden(owner.copied(), user("owner@example.com"), true)
+        .await
+        .expect_err("a user cannot hide themselves");
+
+    assert!(matches!(error, HideContactError::CannotHideSelf));
 }
 
 #[test]

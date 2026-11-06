@@ -25,6 +25,7 @@ export default {
   snoozeNotifications: 'Snooze notifications…',
   muteNotifications: 'Mute notifications',
   unmuteNotifications: 'Unmute notifications',
+  hideContact: 'Hide contact',
   remindMe: 'Remind me',
   addTag: 'Add tag',
   addToProject: 'Add to project…',
@@ -122,6 +123,10 @@ export default {
       'Removed {{succeeded}} of {{count}} items from favorites; {{failed}} failed',
   },
   toastFavoritesUpdateFailed: 'Failed to update favorites',
+  toastContactHidden: 'Contact hidden',
+  toastContactHiddenFailed: 'Failed to hide contact',
+  toastContactUnhidden: 'Contact restored',
+  toastContactUnhiddenFailed: 'Failed to restore contact',
   toastMuted: 'Muted notifications',
   toastMutedCount: {
     one: 'Muted notifications for {{count}} item',

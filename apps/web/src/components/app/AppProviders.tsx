@@ -29,6 +29,7 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { useChatRenameWebsocketSync } from '@queries/chat';
+import { useHiddenContactsSync } from '@queries/contacts/hidden';
 import { useWarmPromptDismissals } from '@queries/prompt-dismissals';
 import { useQuerySync } from '@queries/sync/use-query-sync';
 import { MutationUndoProvider } from '@queries/undo';
@@ -111,6 +112,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 export function AppProviders(props: ParentProps) {
   const userId = useUserId();
   useQuerySync(userId);
+  useHiddenContactsSync();
   useSoupBackfills(userId);
   useCalendarCache(() => userId() !== undefined);
   useWarmPromptDismissals(userId);

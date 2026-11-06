@@ -1,5 +1,9 @@
 import { useChannelsContext } from '@core/context/channels';
 import type { ChannelEntity } from '@entity';
+import {
+  hiddenContactIdSet,
+  withoutHiddenDirectMessages,
+} from '@queries/contacts/hidden';
 import { createMemo } from 'solid-js';
 
 /**
@@ -12,16 +16,19 @@ import { createMemo } from 'solid-js';
 export function useChannelListSearchPool() {
   const { channels } = useChannelsContext();
   return createMemo<ChannelEntity[]>(() =>
-    channels().map((channel) => ({
-      id: channel.id,
-      type: 'channel',
-      name: channel.agent_dm?.name ?? (channel.name || 'Unknown Channel'),
-      channelType: channel.channel_type,
-      ownerId: channel.owner_id,
-      isParticipant: channel.is_participant,
-      participantIds: channel.participants.map(
-        (participant) => participant.user_id
-      ),
-    }))
+    withoutHiddenDirectMessages(
+      channels().map((channel) => ({
+        id: channel.id,
+        type: 'channel',
+        name: channel.agent_dm?.name ?? (channel.name || 'Unknown Channel'),
+        channelType: channel.channel_type,
+        ownerId: channel.owner_id,
+        isParticipant: channel.is_participant,
+        participantIds: channel.participants.map(
+          (participant) => participant.user_id
+        ),
+      })),
+      hiddenContactIdSet()
+    )
   );
 }

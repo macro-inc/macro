@@ -16,6 +16,7 @@ import {
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { useContactsQuery } from '@queries/contacts/contacts';
+import { hiddenContactIdSet, isHiddenUserId } from '@queries/contacts/hidden';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
@@ -210,7 +211,11 @@ export function createAppOnboardingContext(): OnboardingContext {
             }))
           ),
         contacts: () =>
-          loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
+          loadableQuery(contacts, (data) =>
+            data.contacts
+              .filter((id) => !isHiddenUserId(id, hiddenContactIdSet()))
+              .map(idToEmail)
+          ),
         retry: () => {
           fireAndForget(teams.refetch(), 'onboarding');
           fireAndForget(invites.refetch(), 'onboarding');

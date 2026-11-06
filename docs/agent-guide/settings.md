@@ -83,6 +83,9 @@ Accounts list each inbox as its own row, followed by **Connect another Google
 Workspace account** and **Connect an Outlook account**; Integrations shows the
 same rows. Its **Email settings**
 gear opens the dedicated page, and Email links to Notifications and Calendar.
+**Hidden contacts** lists people removed from direct messages, mentions, and
+email suggestions. **Unhide** restores that person. An empty list says there
+are no hidden contacts, and a failed load offers **Try again**.
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
 offline and confirm it uses the saved settings.

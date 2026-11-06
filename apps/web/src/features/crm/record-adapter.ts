@@ -5,6 +5,10 @@ import { useQuickAccess } from '@core/context/quickAccess/context';
 import { toCrmContactItem } from '@core/context/quickAccess/crm-contacts';
 import { debouncedDependent } from '@core/util/debounce';
 import { isCrmContactEntity } from '@entity/types/entity';
+import {
+  hiddenContactIdSet,
+  isHiddenContactEmail,
+} from '@queries/contacts/hidden';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
@@ -59,15 +63,17 @@ export function useCrmContactMentionSource(
     enabled,
     search
   );
-  const entities = createMemo<EntityItem[]>(() =>
-    queryReadyGate(query)
-      ? query.data.pages.flatMap((page) =>
-          page.contacts.map((record) =>
-            toCrmContactItem(toCrmContactEntity(record))
-          )
-        )
-      : []
-  );
+  const entities = createMemo<EntityItem[]>(() => {
+    if (!queryReadyGate(query)) return [];
+    const hidden = hiddenContactIdSet();
+    return query.data.pages.flatMap((page) =>
+      page.contacts.flatMap((record) => {
+        const contact = toCrmContactEntity(record);
+        if (isHiddenContactEmail(contact.email, hidden)) return [];
+        return [toCrmContactItem(contact)];
+      })
+    );
+  });
   return {
     entities,
     totalCount: () => entities().length,

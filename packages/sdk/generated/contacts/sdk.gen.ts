@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses } from './types.gen';
+import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses, GetHiddenContactsData, GetHiddenContactsErrors, GetHiddenContactsResponses, SetContactHiddenData, SetContactHiddenErrors, SetContactHiddenResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -70,6 +70,27 @@ export class Sdk extends HeyApiClient {
     public addContact<ThrowOnError extends boolean = false>(options: Options<AddContactData, ThrowOnError>): RequestResult<AddContactResponses, AddContactErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AddContactResponses, AddContactErrors, ThrowOnError>({
             url: '/contacts',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * GET /contacts/hidden handler.
+     */
+    public getHiddenContacts<ThrowOnError extends boolean = false>(options?: Options<GetHiddenContactsData, ThrowOnError>): RequestResult<GetHiddenContactsResponses, GetHiddenContactsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetHiddenContactsResponses, GetHiddenContactsErrors, ThrowOnError>({ url: '/contacts/hidden', ...options });
+    }
+    
+    /**
+     * PUT /contacts/hidden handler.
+     */
+    public setContactHidden<ThrowOnError extends boolean = false>(options: Options<SetContactHiddenData, ThrowOnError>): RequestResult<SetContactHiddenResponses, SetContactHiddenErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SetContactHiddenResponses, SetContactHiddenErrors, ThrowOnError>({
+            url: '/contacts/hidden',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

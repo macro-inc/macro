@@ -1,3 +1,7 @@
+import {
+  hiddenContactIdSet,
+  isHiddenContactEmail,
+} from '@queries/contacts/hidden';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { EmailRecipient } from '../../email-compose/core/email-recipient';
 import { convertContactInfoToEmailRecipient } from '../../email-compose/core/recipient-conversion';
@@ -35,9 +39,11 @@ export function createThreadRecipients(
   }
 
   const getRecipientOptions = () => {
+    const hidden = hiddenContactIdSet();
     const optionsMap = new Map<string, EmailRecipient>();
 
     for (const contact of contacts()) {
+      if (isHiddenContactEmail(contact.data.email, hidden)) continue;
       optionsMap.set(contact.data.email, contact);
     }
 
@@ -62,6 +68,7 @@ export function createThreadRecipients(
       });
 
       for (const value of seen.values()) {
+        if (isHiddenContactEmail(value.email, hidden)) continue;
         const mapped = convertContactInfoToEmailRecipient(value);
         optionsMap.set(mapped.data.email, mapped);
       }

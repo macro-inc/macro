@@ -24,6 +24,20 @@ export type GetContactsResponse = {
     contacts: Array<string>;
 };
 
+/**
+ * Request body for PUT /contacts/hidden.
+ */
+export type SetContactHiddenRequest = {
+    /**
+     * `true` hides the contact; `false` shows them again.
+     */
+    hidden: boolean;
+    /**
+     * The contact to hide or show.
+     */
+    user_id: string;
+};
+
 export type GetContactsData = {
     body?: never;
     path?: never;
@@ -64,3 +78,44 @@ export type AddContactResponses = {
 };
 
 export type AddContactResponse = AddContactResponses[keyof AddContactResponses];
+
+export type GetHiddenContactsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/contacts/hidden';
+};
+
+export type GetHiddenContactsErrors = {
+    401: string;
+    500: string;
+};
+
+export type GetHiddenContactsError = GetHiddenContactsErrors[keyof GetHiddenContactsErrors];
+
+export type GetHiddenContactsResponses = {
+    200: GetContactsResponse;
+};
+
+export type GetHiddenContactsResponse = GetHiddenContactsResponses[keyof GetHiddenContactsResponses];
+
+export type SetContactHiddenData = {
+    body: SetContactHiddenRequest;
+    path?: never;
+    query?: never;
+    url: '/contacts/hidden';
+};
+
+export type SetContactHiddenErrors = {
+    400: string;
+    401: string;
+    500: string;
+};
+
+export type SetContactHiddenError = SetContactHiddenErrors[keyof SetContactHiddenErrors];
+
+export type SetContactHiddenResponses = {
+    204: void;
+};
+
+export type SetContactHiddenResponse = SetContactHiddenResponses[keyof SetContactHiddenResponses];

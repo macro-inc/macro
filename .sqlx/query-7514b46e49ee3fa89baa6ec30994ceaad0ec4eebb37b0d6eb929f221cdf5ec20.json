@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO contacts_hidden (owner_id, contact_id)\n                VALUES ($1, $2)\n                ON CONFLICT (owner_id, contact_id) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7514b46e49ee3fa89baa6ec30994ceaad0ec4eebb37b0d6eb929f221cdf5ec20"
+}

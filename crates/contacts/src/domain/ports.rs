@@ -4,9 +4,18 @@ use rootcause::Report;
 use std::collections::HashSet;
 use uuid::Uuid;
 
+/// Hiding a contact was rejected.
+#[derive(Debug)]
+pub enum HideContactError {
+    /// A user cannot hide their own id.
+    CannotHideSelf,
+    /// The contacts store failed.
+    Store(Report),
+}
+
 /// Port trait for accessing the contacts data store.
 pub trait ContactsRepository: Send + Sync + 'static {
-    /// Gets the list of contact user IDs for a given user.
+    /// Gets the list of contact user IDs for a given user, excluding hidden ones.
     fn get_contacts(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -17,6 +26,20 @@ pub trait ContactsRepository: Send + Sync + 'static {
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Records or clears one hidden contact. Repeating the same value is a no-op.
+    fn set_contact_hidden(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+        contact_id: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// The contacts `owner_id` has hidden, newest first.
+    fn hidden_contacts(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Port trait for notifying users about contact changes.
@@ -71,6 +94,20 @@ pub trait ContactsService: Send + Sync + 'static {
         &self,
         nodes: ContactsNodes,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Hides or shows one contact for `owner_id`.
+    fn set_contact_hidden(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+        contact_id: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), HideContactError>> + Send;
+
+    /// Contacts `owner_id` has hidden.
+    fn query_hidden_contacts(
+        &self,
+        owner_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send;
 }
 
 /// Trait for outbox message processing
