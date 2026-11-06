@@ -4877,7 +4877,7 @@
       },
       "AgentUpdateKind": {
         "type": "string",
-        "description": "A kind of action or inactivity the user should see.",
+        "description": "A kind of action or inactivity the user should see: `permission` to run a tool, an\n`elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no\nactivity for over 20 minutes.",
         "enum": ["permission", "elicitation", "tool_approval", "stalled"]
       },
       "AgentUpdates": {

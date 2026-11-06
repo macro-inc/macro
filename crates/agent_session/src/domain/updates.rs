@@ -65,19 +65,17 @@ impl CodingAgentUpdatesRepo for () {
     }
 }
 
-/// A kind of action or inactivity the user should see.
+/// A kind of action or inactivity the user should see: `permission` to run a tool, an
+/// `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+/// activity for over 20 minutes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AgentUpdateKind {
-    /// The agent asks permission to run a tool.
     Permission,
-    /// The agent asks a question or shows a form.
     Elicitation,
-    /// A Macro or connected-app tool call is held for the owner's approval.
     ToolApproval,
-    /// A running turn has shown no activity for over 20 minutes.
     Stalled,
 }
 

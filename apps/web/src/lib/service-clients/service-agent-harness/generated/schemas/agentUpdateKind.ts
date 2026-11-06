@@ -6,7 +6,9 @@
  */
 
 /**
- * A kind of action or inactivity the user should see.
+ * A kind of action or inactivity the user should see: `permission` to run a tool, an
+`elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+activity for over 20 minutes.
  */
 export type AgentUpdateKind =
   (typeof AgentUpdateKind)[keyof typeof AgentUpdateKind];
