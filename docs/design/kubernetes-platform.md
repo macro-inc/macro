@@ -415,10 +415,11 @@ Not built yet:
   applied. Node configuration, ECR pull credentials on k3s, and the AWS image push are
   not wired.
 - Phases 8 and 9: gRPC and service splits, and the prod cutover.
-- Document conversion, which the local compose stack does not run either, so Word upload
-  does not work on an instance. `convert_service` needs LibreOffice assets, and it and
-  `docx_unzip_handler` invoke an AWS Lambda directly, so this needs Lambda-invoke support
-  plus all of them together.
+- Word upload, which the local compose stack does not run either. The web app runs it as a
+  job over the storage WebSocket, and `convert_service` and `docx_unzip_handler` report
+  the result by invoking a job-update Lambda. That WebSocket API and Lambda belong to a
+  separate stack outside this repository, and the local `websocket-service` is a stub,
+  so the conversion services alone would not make uploads complete.
 - Handlers the instance does not run: `image_optimizer` (a function URL),
   `call_recording_preview_handler` (needs ffmpeg and call recordings), and the SES ones,
   `dataloss_prevention_handler` and `email_suppression_handler`, which Mailpit makes
