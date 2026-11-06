@@ -1247,10 +1247,12 @@
               # cmake-build feature, so no system librdkafka.pc is needed here.
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+              # sccache shares third-party crates across worktrees. Cargo builds
+              # only workspace members incrementally, and sccache passes those
+              # through uncached, so incremental stays on: it cut the
+              # agent_harness_service edit-to-binary time by half.
+              # CI derivations do not inherit devShell attributes.
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-              # Local dev shells favor reusable sccache artifacts across JJ
-              # workspaces. CI derivations do not inherit devShell attributes.
-              CARGO_INCREMENTAL = "0";
               SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
