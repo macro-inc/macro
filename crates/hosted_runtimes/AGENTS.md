@@ -145,8 +145,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   serializes it for the one-time `user.macro.enrollment` JSON or Docker file.
   `Effect::Create { host, start, generation: EnrollmentGeneration }` carries no
   issuance material. `hosted_runtime.enrollment_generation` starts at zero and
-  advances after fleet creation succeeds, using the generation reserved by the
-  effect. Retries keep that generation; `InstanceLost` reserves its successor.
+  is reserved and advanced inside `ComputerRepo::apply`, atomically with the
+  transition and Create outbox insert. First provisioning reserves 1; retries
+  keep that generation even when creation or issuance fails. `InstanceLost`
+  reserves its successor. The forward reservation migration synchronizes pending
+  effects written by the earlier post-create generation recorder.
   Fleet Create checks the persisted generation and pairing identity before
   polling `FleetEnrollment::issue`: an already-claimed guest completes without
   issuance or re-keying. An unclaimed guest receives a fresh enrollment and a

@@ -180,6 +180,9 @@ impl PgComputerRepo {
         );
 
         for effect in effects {
+            if let Effect::Create { generation, .. } = &effect {
+                computer.enrollment_generation = *generation;
+            }
             match effect {
                 Effect::ScheduleTimer { kind, at } => {
                     sqlx::query!(
@@ -226,7 +229,7 @@ impl PgComputerRepo {
             r#"
             UPDATE hosted_runtime
             SET state = $2, awake = $3, holds_units = $4, host_id = $5,
-                version = version + 1, updated_at = $6
+                version = version + 1, updated_at = $6, enrollment_generation = $7
             WHERE id = $1
             "#,
             computer_id.into_inner(),
@@ -235,6 +238,7 @@ impl PgComputerRepo {
             state.holds_units(),
             state.host().map(HostId::into_inner),
             now,
+            i64::from(computer.enrollment_generation.get()),
         )
         .execute(&mut **tx)
         .await?;
@@ -496,19 +500,6 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
-    }
-
-    async fn record_generation(
-        &self,
-        computer_id: ComputerId,
-        generation: crate::domain::persona_credentials::EnrollmentGeneration,
-    ) -> Result<bool, PgComputerError> {
-        let generation = i64::from(generation.get());
-        let updated = sqlx::query!(
-            "UPDATE hosted_runtime SET enrollment_generation = $2 WHERE id = $1 AND enrollment_generation IN ($2::BIGINT, $2::BIGINT - 1)",
-            computer_id.into_inner(), generation,
-        ).execute(&self.pool).await?;
-        Ok(updated.rows_affected() == 1)
     }
 
     async fn mark_enrolled(

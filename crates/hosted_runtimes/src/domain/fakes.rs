@@ -161,6 +161,9 @@ impl ComputerRepo for FakeRepo {
         computer.state = state;
         let mut outbox = self.effects.lock().unwrap();
         for effect in effects {
+            if let Effect::Create { generation, .. } = &effect {
+                computer.enrollment_generation = *generation;
+            }
             let id = outbox.iter().map(|pending| pending.id).max().unwrap_or(0) + 1;
             outbox.push(PendingEffect {
                 id,
@@ -209,24 +212,6 @@ impl ComputerRepo for FakeRepo {
             computer.harness_id = Some(harness_id);
         }
         Ok(())
-    }
-
-    async fn record_generation(
-        &self,
-        computer_id: ComputerId,
-        generation: crate::domain::persona_credentials::EnrollmentGeneration,
-    ) -> Result<bool, FakeError> {
-        let mut computers = self.computers.lock().unwrap();
-        let Some(computer) = computers.get_mut(&computer_id) else {
-            return Ok(false);
-        };
-        if computer.enrollment_generation == generation
-            || computer.enrollment_generation.next() == Some(generation)
-        {
-            computer.enrollment_generation = generation;
-            return Ok(true);
-        }
-        Ok(false)
     }
 
     async fn mark_enrolled(

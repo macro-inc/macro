@@ -238,9 +238,7 @@ where
                 if *generation < computer.enrollment_generation {
                     return Ok(None);
                 }
-                if computer.enrollment_generation != *generation
-                    && computer.enrollment_generation.next() != Some(*generation)
-                {
+                if computer.enrollment_generation != *generation {
                     return Err(ComputerError::BadRequest(
                         "invalid enrollment generation".to_owned(),
                     ));
@@ -256,17 +254,6 @@ where
                     .fleet
                     .create(&computer, *generation, &enrollment, *start)
                     .await;
-                if result.is_ok()
-                    && !self
-                        .repo
-                        .record_generation(computer_id, *generation)
-                        .await
-                        .map_err(internal)?
-                {
-                    return Err(ComputerError::BadRequest(
-                        "stale enrollment generation".to_owned(),
-                    ));
-                }
                 fleet_completion(
                     result,
                     Some(if *start {

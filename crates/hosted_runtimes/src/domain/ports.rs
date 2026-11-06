@@ -113,14 +113,6 @@ pub trait ComputerRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Record a creation generation exactly once, allowing retries of that generation.
-    /// Reject stale effects and skipped generations.
-    fn record_generation(
-        &self,
-        computer_id: ComputerId,
-        generation: EnrollmentGeneration,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
-
     /// Record the first macrod connection; later calls keep the first time.
     fn mark_enrolled(
         &self,

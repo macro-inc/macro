@@ -16,12 +16,31 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
     .unwrap();
     let computer = repo.reserve(standard(1), now()).await.unwrap();
     assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(0));
+    let mut tx = pool.begin().await.unwrap();
+    let reserved =
+        PgComputerRepo::apply_locked(&mut tx, computer.id, &Event::PaymentConfirmed, now())
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(reserved.enrollment_generation, EnrollmentGeneration::new(1));
+    tx.rollback().await.unwrap();
+    assert_eq!(
+        repo.get(computer.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .enrollment_generation,
+        EnrollmentGeneration::new(0)
+    );
+    let creates = sqlx::query_scalar!("SELECT count(*) FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'", computer.id.into_inner())
+        .fetch_one(&pool).await.unwrap();
+    assert_eq!(creates, Some(0));
     let computer = repo
         .apply(computer.id, Event::PaymentConfirmed, now())
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(0));
+    assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(1));
     let outbox = sqlx::query_scalar!("SELECT effect FROM hosted_runtime_effect WHERE computer_id = $1 AND effect->>'effect' = 'create'", computer.id.into_inner())
         .fetch_one(&pool).await.unwrap();
     assert_eq!(
@@ -37,22 +56,10 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
     ] {
         assert!(!outbox.to_string().contains(forbidden));
     }
-    assert!(
-        repo.record_generation(computer.id, EnrollmentGeneration::new(1))
-            .await
-            .unwrap()
-    );
-    assert!(
-        repo.record_generation(computer.id, EnrollmentGeneration::new(1))
-            .await
-            .unwrap()
-    );
-    assert!(
-        !repo
-            .record_generation(computer.id, EnrollmentGeneration::new(3))
-            .await
-            .unwrap()
-    );
+    // A duplicate payment event cannot reserve another generation.
+    repo.apply(computer.id, Event::PaymentConfirmed, now())
+        .await
+        .unwrap();
     assert_eq!(
         repo.get(computer.id)
             .await
@@ -67,17 +74,6 @@ async fn generations_and_create_outbox_never_persist_issuance_material(pool: PgP
     repo.apply(computer.id, Event::InstanceLost, now())
         .await
         .unwrap();
-    assert!(
-        repo.record_generation(computer.id, EnrollmentGeneration::new(2))
-            .await
-            .unwrap()
-    );
-    assert!(
-        !repo
-            .record_generation(computer.id, EnrollmentGeneration::new(1))
-            .await
-            .unwrap()
-    );
     assert_eq!(
         repo.get(computer.id)
             .await

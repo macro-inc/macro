@@ -24,7 +24,7 @@ async fn create_rotates_only_for_a_new_or_unclaimed_guest() {
                 .unwrap()
                 .unwrap()
                 .enrollment_generation,
-            EnrollmentGeneration::new(0)
+            EnrollmentGeneration::new(1)
         );
         if existing {
             operator.run_fleet_effects().await.unwrap();
@@ -147,7 +147,7 @@ async fn instance_loss_advances_generation_and_revokes_the_previous_credentials(
             .unwrap()
             .unwrap()
             .enrollment_generation,
-        EnrollmentGeneration::new(1)
+        EnrollmentGeneration::new(2)
     );
     assert!(
         operator
@@ -197,7 +197,7 @@ async fn instance_loss_advances_generation_and_revokes_the_previous_credentials(
 }
 
 #[tokio::test]
-async fn failed_fleet_creation_does_not_advance_generation() {
+async fn failed_fleet_creation_keeps_the_reserved_generation() {
     let operator = operator(FakeFleet {
         failures: Mutex::new(1),
         ..Default::default()
@@ -213,7 +213,7 @@ async fn failed_fleet_creation_does_not_advance_generation() {
             .unwrap()
             .unwrap()
             .enrollment_generation,
-        EnrollmentGeneration::new(0)
+        EnrollmentGeneration::new(1)
     );
     assert!(operator.credentials.issues.lock().unwrap().is_empty());
     operator
@@ -240,7 +240,7 @@ async fn failed_fleet_creation_does_not_advance_generation() {
 }
 
 #[tokio::test]
-async fn a_lost_issuance_response_is_not_replayed_and_does_not_advance_generation() {
+async fn a_lost_issuance_response_is_not_replayed_and_keeps_the_reserved_generation() {
     let operator = operator(FakeFleet::default()).await;
     let id = paid_computer(&operator).await;
     operator
@@ -265,7 +265,7 @@ async fn a_lost_issuance_response_is_not_replayed_and_does_not_advance_generatio
             .unwrap()
             .unwrap()
             .enrollment_generation,
-        EnrollmentGeneration::new(0)
+        EnrollmentGeneration::new(1)
     );
     assert!(operator.fleet.enrollments.lock().unwrap().is_empty());
     operator.carry_out(id, &effect).await.unwrap();
@@ -289,7 +289,7 @@ async fn a_lost_issuance_response_is_not_replayed_and_does_not_advance_generatio
 }
 
 #[tokio::test]
-async fn guest_loss_during_create_requeues_the_same_generation() {
+async fn guest_loss_during_create_reserves_a_new_generation() {
     let operator = operator(FakeFleet::default()).await;
     let id = paid_computer(&operator).await;
     operator
@@ -298,7 +298,7 @@ async fn guest_loss_during_create_requeues_the_same_generation() {
         .store(true, Ordering::SeqCst);
     operator.run_fleet_effects().await.unwrap();
     let computer = operator.repo.get(id).await.unwrap().unwrap();
-    assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(0));
+    assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(2));
     assert!(matches!(computer.state.phase, Phase::Provisioning { .. }));
     {
         let effects = operator.repo.effects.lock().unwrap();
@@ -312,7 +312,7 @@ async fn guest_loss_during_create_requeues_the_same_generation() {
             Effect::Create {
                 host: HOST,
                 start: true,
-                generation: EnrollmentGeneration::new(1)
+                generation: EnrollmentGeneration::new(2)
             }
         );
     }
@@ -325,7 +325,7 @@ async fn guest_loss_during_create_requeues_the_same_generation() {
             .unwrap()
             .unwrap()
             .enrollment_generation,
-        EnrollmentGeneration::new(1)
+        EnrollmentGeneration::new(2)
     );
     assert_eq!(operator.credentials.issues.lock().unwrap().len(), 2);
 }
