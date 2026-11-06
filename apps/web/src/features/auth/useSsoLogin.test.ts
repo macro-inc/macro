@@ -1,5 +1,5 @@
 import type { RedirectLocation } from '@core/util/authRedirect';
-import { err, ok } from 'neverthrow';
+import { err, ok, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -261,10 +261,28 @@ describe('useSsoLogin', () => {
     mocks.syncLoginStorage.mockImplementation(() => {
       heldAt.hint = mocks.reloadHolds > 0;
     });
+    // Record the hold as each later step finishes, not as it starts.
+    mocks.invalidateAllAfterLogin.mockImplementation(async () => {
+      await Promise.resolve();
+      heldAt.refresh = mocks.reloadHolds > 0;
+    });
+    mocks.initEmailLink.mockImplementation(() =>
+      ResultAsync.fromSafePromise(
+        (async () => {
+          await Promise.resolve();
+          heldAt.emailLink = mocks.reloadHolds > 0;
+        })()
+      )
+    );
 
     await useSsoLogin()('google');
 
-    expect(heldAt).toEqual({ redeem: true, hint: true });
+    expect(heldAt).toEqual({
+      redeem: true,
+      hint: true,
+      refresh: true,
+      emailLink: true,
+    });
     expect(mocks.syncLoginStorage).toHaveBeenCalledWith(true);
     // The identity refetch can take a while; the hint must not wait for it.
     expect(mocks.syncLoginStorage.mock.invocationCallOrder[0]).toBeLessThan(
