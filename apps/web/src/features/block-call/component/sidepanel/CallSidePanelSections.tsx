@@ -35,7 +35,12 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
   return (
     <>
       <SidePanel.Footer>
-        <DetailsSectionContent record={props.record} />
+        <div class="flex flex-col gap-4">
+          <DetailsSectionContent record={props.record} />
+          <Show when={props.record.channelId != null}>
+            <SharingSectionContent record={props.record} />
+          </Show>
+        </div>
       </SidePanel.Footer>
       <SidePanel.Section
         id="properties"
@@ -49,16 +54,6 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
           />
         )}
       />
-      <Show when={props.record.channelId != null}>
-        <SidePanel.Section
-          id="sharing"
-          title={t('calls.detailSharing')}
-          order={10}
-          defaultOpen
-        >
-          <SharingSectionContent record={props.record} />
-        </SidePanel.Section>
-      </Show>
       <EntityActivitySectionConditional
         entityId={props.record.callId}
         entityType="CALL_RECORD"

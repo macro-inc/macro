@@ -13,12 +13,7 @@ export function CallRecordingSidePanel(props: {
   const panel = useSidePanel();
   const [tab, setTab] = createSignal<'transcript' | 'details'>('transcript');
   onMount(() =>
-    panel?.setOpenSectionIds([
-      'sharing',
-      'properties',
-      'activity',
-      'references',
-    ])
+    panel?.setOpenSectionIds(['properties', 'activity', 'references'])
   );
   return (
     <div class="flex h-full min-h-0 flex-col">

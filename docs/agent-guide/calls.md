@@ -56,8 +56,8 @@ scrolls away; Sync to video sits on an opaque floating pill above pinned or phon
 playback and returns to the current line. Authorized chat messages
 appear inline at their recorded moment. Details keeps owner, dates, duration,
 status, channel, team sharing, properties, activity and references on their
-existing permission-scoped readers. Only team sharing has a card; metadata and
-the other sections use the shared unframed side-panel rows.
+existing permission-scoped readers. Only team sharing has a card, always visible below metadata with no collapsible
+Sharing section; other sections use the shared unframed side-panel rows.
 
 Close the side panel to widen and center the recording column and expose
 Summary/Transcript tabs. Stored summary attribution sits below the Summary
