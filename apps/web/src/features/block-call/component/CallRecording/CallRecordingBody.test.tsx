@@ -27,7 +27,9 @@ vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   AskMacroButton: () => null,
 }));
 vi.mock('@channel/Call/chat/CallChatHistory', () => ({
-  CallDiscussionHistory: () => null,
+  CallDiscussionHistory: (props: {
+    render: (source: unknown) => JSX.Element;
+  }) => props.render({}),
 }));
 vi.mock('@components/app/HeaderActionGroup', () => ({
   HeaderActionGroup: () => null,
@@ -50,6 +52,7 @@ vi.mock('./CallRecordingParticipants', () => ({
 vi.mock('./CallRecordingSummary', () => ({
   CallRecordingSummarySection: () => null,
 }));
+vi.mock('./CallRecordingChat', () => ({ CallRecordingChat: () => null }));
 
 function callRecord(isActive: boolean): CallRecord {
   return {
