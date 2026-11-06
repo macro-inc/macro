@@ -216,5 +216,7 @@ old listener rules must be retired before the harness claims their priorities.
 
 ## Local Kubernetes development
 
-The [local kind runtime](local-kubernetes.md) reuses the Compose service inventory
-without changing deployed ECS infrastructure or provisioning cloud resources.
+The [local kind runtime](local-kubernetes.md) declares the full local stack in
+`infra/k8s/` using nixidy and nix2container. It runs alongside Compose and
+`run_local`, sharing service packages and resource catalogs without deriving
+manifests from Compose or provisioning cloud resources.
