@@ -20,6 +20,7 @@ import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
+import { ImportsNamespace } from './entities/imports/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
@@ -165,6 +166,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
+
+  /** Import Notion, Linear, Jira and Slack content, tracked so nothing is imported twice. */
+  readonly imports: ImportsNamespace;
   /** Search the public web and read web pages. */
   readonly web: WebNamespace;
   /** Your own profile: set your name and profile picture. */
@@ -236,6 +240,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
+    this.imports = new ImportsNamespace(client);
     this.web = new WebNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
@@ -346,6 +351,26 @@ export type {
   GenerateImageAspectRatio,
   GenerateImageOptions,
 } from './entities/images/namespace';
+export {
+  type ImportedEntity,
+  ImportItem,
+  type ImportItemFilters,
+  type ImportResult,
+  type TrackedItem,
+} from './entities/imports/import-item';
+export {
+  ImportLedger,
+  ImportsNamespace,
+} from './entities/imports/namespace';
+export {
+  type ImportSharing,
+  type NotionPlanOptions,
+  NotionWorkspaceImport,
+  WorkspaceImport,
+  type WorkspaceImportReport,
+  type WorkspaceImportSource,
+  type WorkspacePlanOptions,
+} from './entities/imports/workspace-import';
 export {
   Initiative,
   type InitiativeOptions,

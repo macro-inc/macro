@@ -87,9 +87,10 @@ export function packageEntityDocs(
               letter.toUpperCase()
             ),
       // Agent and host setup share one discovery topic, as do AI calls and
-      // image generation, searching, browsing and AI chats, and the web and
-      // URL previews, keeping the classifier request within its 32-question
-      // contract as the public API grows.
+      // image generation, searching, browsing and AI chats, the web and URL
+      // previews, and linked external entities and imports, keeping the
+      // classifier request within its 32-question contract as the public API
+      // grows.
       prefixes: (directory === 'agents'
         ? ['agents', 'harnesses']
         : directory === 'channels'
@@ -102,7 +103,9 @@ export function packageEntityDocs(
                 ? ['search', 'workspace', 'chats']
                 : directory === 'web'
                   ? ['web', 'unfurls']
-                  : [directory]
+                  : directory === 'foreign'
+                    ? ['foreign', 'imports']
+                    : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),
     { name: 'core', prefixes: core },

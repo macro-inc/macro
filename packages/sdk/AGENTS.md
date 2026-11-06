@@ -41,6 +41,9 @@ enforced by the ordinary backend APIs.
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
   { images })` and `thread.reply` as `static/image` attachments.
+- `src/entities/imports/`: `macro.imports`, the import ledger (`ImportItem`),
+  single Notion page imports and reviewed Notion/Linear/Jira workspace plans
+  (cognition `/import/*`).
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
@@ -155,5 +158,7 @@ the existing gateway prefixes.
   old edit.
 - SQL result schemas are dynamic typed-cell unions; inspect `truncatedTables` before interpreting aggregates. Queries can write and are never retried automatically.
 
-- Workspace-import report/cancel endpoints remain app-only review plumbing,
-  explicitly classified alongside the existing Notion routes in coverage skips.
+- `macro.imports` plans, reports and cancels workspace imports through the
+  per-source `/import/workspaces/{source}` routes; the older Notion-only
+  report/cancel routes stay app-only in coverage skips. Approval is the import
+  review's `submitAll()`, never a separate route.
