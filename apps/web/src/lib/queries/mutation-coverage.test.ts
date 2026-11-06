@@ -71,8 +71,7 @@ const policies = {
     'authoritative: the server returns the restored inbox entries',
   MarkNotificationInboxRowsSeen:
     'custom: inbox rows read as seen until the server returns their entries',
-  MoveEntities:
-    'authoritative: destination authorization and membership refresh',
+  MoveEntities: 'resolver',
   UpdateEntitySharePolicies:
     'authoritative: permission changes require server confirmation',
   TrashEntities:
