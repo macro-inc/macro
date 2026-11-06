@@ -487,7 +487,10 @@ const LAMBDA_HANDLERS: &[(&str, &str)] = &[
     ("document-text-extractor", "document_text_extractor"),
     ("upload-extractor", "upload_extractor_lambda_handler"),
     ("search-upload", "search_upload_handler"),
-    ("upload-extractor-trigger", "upload_extractor_lambda_trigger"),
+    (
+        "upload-extractor-trigger",
+        "upload_extractor_lambda_trigger",
+    ),
 ];
 
 /// The cargo bin each Rust workload runs (the inventory, k8s names, and the
