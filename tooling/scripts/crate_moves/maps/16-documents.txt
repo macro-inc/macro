@@ -1,0 +1,6 @@
+crates/documents crates/documents/documents
+crates/collab_surface crates/documents/collab_surface
+crates/sync_service crates/documents/sync_service
+crates/sync_router crates/documents/sync_router
+crates/static_file crates/documents/static_file
+crates/lexical_mention_extractor crates/documents/lexical_mention_extractor

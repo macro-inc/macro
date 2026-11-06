@@ -1,0 +1,10 @@
+crates/soup crates/search/soup
+crates/soup_realtime crates/search/soup_realtime
+crates/models_soup crates/search/models_soup
+crates/models_search crates/search/models_search
+crates/item_filters crates/search/item_filters
+crates/name_search crates/search/name_search
+crates/search_service crates/search/search_service
+crates/work_feed crates/search/work_feed
+crates/activity crates/search/activity
+crates/attention_feed crates/search/attention_feed

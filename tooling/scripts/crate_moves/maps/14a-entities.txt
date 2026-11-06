@@ -1,0 +1,13 @@
+crates/entity_access crates/entities/entity_access
+crates/entity_access_db_utils crates/entities/entity_access_db_utils
+crates/entity_access_management crates/entities/entity_access_management
+crates/entity_mutation crates/entities/entity_mutation
+crates/entity_registry/entity_registry crates/entities/entity_registry
+crates/entity_registry/entity_registry_db_utils crates/entities/entity_registry_db_utils
+crates/entity_registry/shared_entity_registry crates/entities/shared_entity_registry
+crates/foreign_entity crates/entities/foreign_entity
+crates/access_requests crates/entities/access_requests
+crates/roles_and_permissions crates/entities/roles_and_permissions
+crates/share_permission_db_utils crates/entities/share_permission_db_utils
+crates/favorites crates/entities/favorites
+crates/frecency crates/entities/frecency
