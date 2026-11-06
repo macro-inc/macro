@@ -1,9 +1,24 @@
 ---
 name: run-ci
-description: Run CI on a pull request and wait for its result. Use after opening a PR, after pushing commits you want tested, before calling a PR ready or merging it, and whenever the `CI gate` status says CI has not run.
+description: Run CI on a pull request and wait for its result. Use at a checkpoint (a coherent, locally tested chunk), when you think a PR is done, before asking for review or merging, after fixing a CI failure, and whenever the `CI gate` status says CI has not run.
 ---
 
 # Run CI on a pull request
+
+## When to run CI
+
+Run CI deliberately, after the local checks for what you changed pass
+(`just check`, the affected tests):
+
+- at a checkpoint: a coherent, locally tested chunk you want real CI on before
+  building further;
+- when you think the PR is done, and before asking for review or merging;
+- after pushing the fix for a CI failure.
+
+Not after every small push, not while you are still iterating, and never
+instead of local checks: every run costs CI compute.
+
+## How it works
 
 CI runs when someone asks for it, not on every push. Adding the `run-ci` label
 to a PR runs every check on its head commit (the `PR CI` workflow), and the
@@ -23,8 +38,6 @@ gh api repos/macro-inc/macro/issues/<pr>/labels -f "labels[]=run-ci"  # after a 
 `gh pr edit <pr> --add-label run-ci` does the same on a recent gh; older
 releases fail on a Projects (classic) error before adding the label.
 
-- Run CI once the commits you want tested are pushed. While you are still
-  iterating, push several fixes and run once; every run costs CI compute.
 - Adding the label again starts a fresh run. A run still going for the same PR
   is cancelled.
 - Draft PRs run too.

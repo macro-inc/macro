@@ -58,6 +58,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
 | iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
 | Android Play releases from pull requests | [Android development](docs/development/android.md) |
+| Running CI on a pull request | [CI on pull requests](docs/development/ci.md), `run-ci` skill |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
 | Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
 | Giving the user a local preview link | `local-preview` skill |
@@ -122,9 +123,11 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
   reads it too.
 - Open pull requests ready for review. If one is created as a draft, mark it
   ready for review before handing off.
-- Get CI passing on the latest commit before handing off. CI runs only when
-  asked: add the `run-ci` label after pushing (`run-ci` skill). A pull request whose `CI gate` is
-  failing, still running, or not run is not done.
+- Run CI deliberately with the `run-ci` label (`run-ci` skill): at a
+  checkpoint, a coherent locally tested chunk you want real CI on before
+  building further, or when you think the PR is done. Never after every push,
+  and never instead of local checks. A PR is done only when `CI gate` passes on
+  its latest commit.
 - Test the affected packages/services individually before committing. Use the
   relevant guide for setup; there is no root `just test` recipe.
 - For code changes, run `just check` (format/lint/code rules scoped to changes).
