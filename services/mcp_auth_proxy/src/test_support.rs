@@ -4,7 +4,7 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -19,11 +19,12 @@ use crate::domain::{
     },
     ports::{
         ClientRegistrationStore, EmailCodeError, EmailCodeProvider, EmailCodeRequestFuture,
-        EmailCodeTokensFuture, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
-        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture, UpstreamGrantError,
-        UpstreamRevocationFuture, UpstreamTokensFuture,
+        EmailCodeTokensFuture, GrantRevokedFuture, MacroApiTokenMinter, MintedAccessTokenFuture,
+        OAuthProvider, RefreshTokenBindingFuture, RefreshTokenBindingStore, RegisteredClientFuture,
+        StoreWriteFuture, UpstreamGrantError, UpstreamRevocationFuture, UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
+    resource::McpResources,
     service::{
         InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl,
     },
@@ -57,6 +58,32 @@ pub const EMAIL_ADDRESS: &str = "user@example.com";
 pub const SSO_EMAIL_ADDRESS: &str = "user@sso.example";
 /// The only code the fake email provider accepts.
 pub const EMAIL_CODE: &str = "123456";
+/// The harness's public MCP, as its metadata advertises it.
+pub const HARNESS_RESOURCE: &str = "https://mcp.macro.com/mcp";
+/// The ChatGPT MCP server, which gets Macro API tokens.
+pub const CHATGPT_RESOURCE: &str = "https://mcp-chatgpt.macro.com/mcp";
+
+/// Minter that spells out what it was asked to sign, standing in for the
+/// harness's Macro API token signer.
+pub struct FakeMacroApiTokens;
+
+impl MacroApiTokenMinter for FakeMacroApiTokens {
+    fn mint<'a>(
+        &'a self,
+        upstream: &'a AccessToken,
+        client_name: Option<&'a str>,
+        lifetime: Duration,
+    ) -> MintedAccessTokenFuture<'a> {
+        Box::pin(async move {
+            Ok(AccessToken::from(format!(
+                "macro-api-token for {} via {} for {}s",
+                upstream.as_str(),
+                client_name.unwrap_or("no client"),
+                lifetime.as_secs()
+            )))
+        })
+    }
+}
 
 /// Computes the S256 challenge for a PKCE verifier.
 pub fn code_challenge_for(verifier: &str) -> String {
@@ -458,6 +485,8 @@ impl Harness {
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
             oauth_provider: Arc::clone(&provider) as Arc<dyn OAuthProvider>,
             email_codes: Arc::clone(&email_codes) as Arc<dyn EmailCodeProvider>,
+            resources: McpResources::new(HARNESS_RESOURCE.to_owned(), CHATGPT_RESOURCE.to_owned()),
+            macro_api_tokens: Arc::new(FakeMacroApiTokens),
         });
 
         Self {
@@ -499,6 +528,7 @@ impl Harness {
             sign_in: None,
             delivery: None,
             scope: None,
+            resource: None,
         }
     }
 
