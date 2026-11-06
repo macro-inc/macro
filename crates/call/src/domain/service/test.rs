@@ -551,7 +551,7 @@ fn mock_get_or_create_repo_storing(
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_set_participant_client()
-        .returning(|_, _, _| Ok(()));
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .times(1)
         .returning(|call_id, user_id| {
@@ -928,7 +928,7 @@ fn switching_repo(remaining: i64) -> MockCallRepository {
         .times(1)
         .returning(move |_| Box::pin(async move { Ok(remaining) }));
     repo.expect_set_participant_client()
-        .returning(|_, _, _| Ok(()));
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .withf(|call_id, _| *call_id == STARTED_EVENT_CALL_ID)
         .times(1)
@@ -1473,7 +1473,7 @@ async fn participant_joined_webhook_sends_call_answered_to_answering_user() {
             Box::pin(async move { Ok(Some(active_call)) })
         });
     repo.expect_set_participant_client()
-        .returning(|_, _, _| Ok(()));
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .times(1)
         .returning(|call_id, participant_identity| {
@@ -1531,7 +1531,7 @@ async fn participant_joined_webhook_skips_call_answered_on_state_drift() {
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
     repo.expect_set_participant_client()
-        .returning(|_, _, _| Ok(()));
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .times(1)
         .returning(|_, _| Box::pin(async { Err(AddParticipantError::UserAlreadyActive) }));
