@@ -124,8 +124,10 @@ the macOS runtimes already map container root to your user, so the containers
 keep the image's user there. Init snapshots stream out of their helper
 container, so your user writes them on every runtime. A checkout that ran a
 stack while those containers ran as root still has root-owned files. The
-containers cannot overwrite those files. `just doctor-local` lists them and
-prints the `sudo chown` command that gives them back to you.
+containers cannot overwrite those files, so `just run_local`, `just run_dev`
+and `just stack up` stop before starting any container. They print the paths and
+the `sudo chown` command that gives the files back to you. `just doctor-local`
+reports the same files.
 
 Install workspace dependencies from the repository root inside the Nix shell
 for each checkout or worktree before starting the stack:

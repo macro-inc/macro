@@ -129,6 +129,7 @@ pub(super) fn clear_state(instance: &Instance) -> Result<()> {
 /// `cargo x stack up` — bring the whole stack up and return, leaving only
 /// Docker containers running.
 pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
+    super::doctor::ensure_checkout_ownership()?;
     let stage = Stage::from_env_cli(args.run.verbose);
     let instance = Instance::derive(
         args.run.instance.instance.as_deref(),

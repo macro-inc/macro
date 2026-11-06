@@ -8,6 +8,9 @@ use anyhow::{Result, bail};
 
 use super::{arch, cli::InstanceArgs, instance::Instance, stage::Stage};
 
+#[cfg(test)]
+mod test;
+
 enum Status {
     Ok(String),
     Warn(String),
@@ -239,6 +242,25 @@ const CONTAINER_WRITTEN_PATHS: &[&str] = &[
     "infra/local/generated",
 ];
 
+/// Fail a stack start on the leftovers [`check_checkout_ownership`] finds,
+/// before any container starts: the checkout writers would otherwise fail
+/// mid-bring-up with `EACCES`.
+pub fn ensure_checkout_ownership() -> Result<()> {
+    require_checkout_ownership(check_checkout_ownership())
+}
+
+fn require_checkout_ownership(status: Status) -> Result<()> {
+    match status {
+        Status::Fail { msg, hint } => {
+            let hint = hint
+                .map(|hint| format!("\n  hint: {hint}"))
+                .unwrap_or_default();
+            bail!("checkout ownership: {msg}; containers cannot overwrite them{hint}")
+        }
+        Status::Ok(_) | Status::Warn(_) => Ok(()),
+    }
+}
+
 /// Stacks started before those containers ran as the checkout owner left
 /// root-owned files there, which the containers can no longer overwrite and
 /// `git worktree remove` cannot delete.
@@ -247,12 +269,17 @@ fn check_checkout_ownership() -> Status {
     let Ok(checkout) = std::fs::metadata(&root) else {
         return Status::Warn("could not read the checkout owner".into());
     };
+    checkout_ownership(&root, checkout.uid(), checkout.gid())
+}
 
+/// The ownership status of `CONTAINER_WRITTEN_PATHS` under `root` for the
+/// owner `uid:gid`.
+fn checkout_ownership(root: &Path, uid: u32, gid: u32) -> Status {
     let mut foreign = 0;
     let mut foreign_paths = Vec::new();
     let mut unreadable = Vec::new();
     for path in CONTAINER_WRITTEN_PATHS {
-        match count_foreign(&root.join(path), checkout.uid()) {
+        match count_foreign(&root.join(path), uid) {
             Ok(0) => {}
             Ok(count) => {
                 foreign += count;
@@ -288,9 +315,7 @@ fn check_checkout_ownership() -> Status {
     Status::Fail {
         msg: problems.join("; "),
         hint: Some(format!(
-            "from the repository root: sudo chown -R {}:{} {}",
-            checkout.uid(),
-            checkout.gid(),
+            "from the repository root: sudo chown -R {uid}:{gid} {}",
             affected.join(" ")
         )),
     }

@@ -199,6 +199,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         // that can't do that before any containers start.
         kafka::ensure_available(&format!("run-{}", mode.label()))?;
     }
+    doctor::ensure_checkout_ownership()?;
     let stage = Stage::from_env_cli(args.verbose);
     let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
     stage.section(&format!(
