@@ -115,7 +115,6 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
-import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
 /** Stepping through the list and moving on from a done row replace the entry. */
@@ -1060,7 +1059,18 @@ export function NotificationsView(props: NotificationsViewProps) {
                         fallback={() => (
                           <Show
                             when={previewTarget()}
-                            fallback={<NotificationsNoneSelected />}
+                            fallback={
+                              <EmptyStatePanel
+                                centered
+                                graphic={EmptyStateInboxTrayGraphic}
+                                title={t(
+                                  'notificationsInbox.noneSelectedTitle'
+                                )}
+                                description={t(
+                                  'notificationsInbox.noneSelectedDescription'
+                                )}
+                              />
+                            }
                           >
                             <PreviewPanel
                               target={previewTarget()}
