@@ -19,7 +19,7 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, Checkbox, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -474,7 +474,6 @@ export function InviteToTeamDialog(props: {
   // dismissed it cannot reopen on the heads-up step.
   let submission = 0;
   const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
-  const [inviteAsAgent, setInviteAsAgent] = createSignal(false);
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -494,7 +493,6 @@ export function InviteToTeamDialog(props: {
 
   const close = () => {
     setInvites([EMPTY_INVITE]);
-    setInviteAsAgent(false);
     setInviteErrors([]);
     setSent(undefined);
     submission += 1;
@@ -509,22 +507,15 @@ export function InviteToTeamDialog(props: {
       .map((i) => ({ email: i.email.trim() }));
     if (inviteEntries.length === 0) return;
 
-    // Agent invites are redeemed by the agent's own signup, so a heads-up
-    // to a person doesn't apply.
-    const asAgent = inviteAsAgent();
     const current = submission;
     inviteToTeamMutation.mutate(
       {
         teamId: props.teamId,
-        request: { invites: inviteEntries, is_agent: asAgent },
+        request: { invites: inviteEntries, is_agent: false },
       },
       {
         onSuccess: () => {
           if (current !== submission) return;
-          if (asAgent) {
-            close();
-            return;
-          }
           setSent(inviteEntries.map((entry) => entry.email));
         },
       }
@@ -555,28 +546,24 @@ export function InviteToTeamDialog(props: {
           )}
         </Show>
         <Show when={!sent()}>
-          <Panel.Body scroll class="px-5 py-5 flex flex-col gap-5">
-            <TeamInviteLinkSection
-              teamId={props.teamId}
-              canManage={props.canManageLink}
-            />
-            <div class="h-px shrink-0 bg-edge-muted" />
-            <div class="flex flex-col gap-3">
-              <div class="text-sm font-medium text-ink">Invite by email</div>
-              <InviteEmailsInput
-                invites={invites()}
-                onChange={setInvites}
-                errors={inviteErrors()}
-                onErrorsChange={setInviteErrors}
+          <Panel.Body scroll>
+            {/* Scroll puts `class` on its root, so the column goes inside. */}
+            <div class="flex flex-col gap-5 px-5 py-5">
+              <TeamInviteLinkSection
+                teamId={props.teamId}
+                canManage={props.canManageLink}
               />
+              <div class="h-px shrink-0 bg-edge-muted" />
+              <div class="flex flex-col gap-3">
+                <div class="text-sm font-medium text-ink">Invite by email</div>
+                <InviteEmailsInput
+                  invites={invites()}
+                  onChange={setInvites}
+                  errors={inviteErrors()}
+                  onErrorsChange={setInviteErrors}
+                />
+              </div>
             </div>
-            <div class="h-px shrink-0 bg-edge-muted" />
-            <Checkbox checked={inviteAsAgent()} onChange={setInviteAsAgent}>
-              <Checkbox.Control />
-              <Checkbox.Label class="text-sm text-ink">
-                Invite as agent
-              </Checkbox.Label>
-            </Checkbox>
           </Panel.Body>
           <Panel.Footer class="justify-end gap-2 px-4 py-3">
             <Button
@@ -621,28 +608,31 @@ function InviteHeadsUpStep(props: {
 }) {
   return (
     <>
-      <Panel.Body scroll class="px-5 py-5 flex flex-col gap-3">
-        <div class="flex flex-col gap-1">
-          <div class="text-sm text-ink">
-            <Show
-              when={props.emails.length === 1}
-              fallback={`Invites sent to ${props.emails.length} people`}
-            >
-              Invite sent to <span class="font-medium">{props.emails[0]}</span>
-            </Show>
+      <Panel.Body scroll>
+        <div class="flex flex-col gap-3 px-5 py-5">
+          <div class="flex flex-col gap-1">
+            <div class="text-sm text-ink">
+              <Show
+                when={props.emails.length === 1}
+                fallback={`Invites sent to ${props.emails.length} people`}
+              >
+                Invite sent to{' '}
+                <span class="font-medium">{props.emails[0]}</span>
+              </Show>
+            </div>
+            <div class="text-sm text-ink-muted">
+              Invite emails from Macro are easy to miss. Send the invite link in
+              Slack, a text, or your own email so they know to look for it.
+            </div>
           </div>
-          <div class="text-sm text-ink-muted">
-            Invite emails from Macro are easy to miss. Send the invite link in
-            Slack, a text, or your own email so they know to look for it.
-          </div>
+          <Show when={props.emails.length > 1}>
+            <ul class="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-ink-muted">
+              <For each={props.emails}>
+                {(email) => <li class="truncate">{email}</li>}
+              </For>
+            </ul>
+          </Show>
         </div>
-        <Show when={props.emails.length > 1}>
-          <ul class="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-ink-muted">
-            <For each={props.emails}>
-              {(email) => <li class="truncate">{email}</li>}
-            </For>
-          </ul>
-        </Show>
       </Panel.Body>
       <Panel.Footer class="justify-end gap-2 px-4 py-3">
         <CopyTeamInviteLinkButton teamId={props.teamId} />
