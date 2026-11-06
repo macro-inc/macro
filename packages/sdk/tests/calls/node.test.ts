@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
+import assert from 'node:assert/strict';
 
 const published: Array<{
   kind: number;
@@ -28,7 +29,7 @@ mock.module('@livekit/rtc-node', () => ({
       _data: Uint8Array,
       public width: number,
       public height: number,
-      public type: number
+      public type: number,
     ) {}
   },
   VideoSource: class {
@@ -48,7 +49,7 @@ mock.module('@livekit/rtc-node', () => ({
     localParticipant = {
       publishTrack: async (
         track: { kind: number },
-        options: { dtx?: boolean; source?: number }
+        options: { dtx?: boolean; source?: number },
       ) => {
         published.push({ kind: track.kind, options });
         return { sid: 'publication-1' };
@@ -62,7 +63,7 @@ mock.module('@livekit/rtc-node', () => ({
   },
 }));
 
-const { connectRoom, publishScreen } = await import('../src/node');
+const { connectRoom, publishScreen } = await import('../../src/calls/node');
 
 describe('Node room helpers', () => {
   test('disables DTX for published audio', async () => {
@@ -76,10 +77,11 @@ describe('Node room helpers', () => {
       leave: async () => ({ callEnded: false }),
     };
     const { room } = await connectRoom({ join: async () => connection });
+    assert(room.localParticipant);
     await Reflect.apply(
-      room.localParticipant!.publishTrack,
+      room.localParticipant.publishTrack,
       room.localParticipant,
-      [{ kind: 1 }, { dtx: true }]
+      [{ kind: 1 }, { dtx: true }],
     );
     expect(published.at(-1)?.options.dtx).toBe(false);
   });
@@ -107,7 +109,7 @@ describe('Node room helpers', () => {
     await share.stopped;
     expect(published.at(-1)?.options.source).toBe(3);
     expect(published.at(-1)?.options.videoEncoding?.maxBitrate).toBe(
-      2_500_000n
+      2_500_000n,
     );
     expect(captured.at(-1)).toMatchObject({ width: 2, height: 2, type: 0 });
     expect(unpublished.at(-1)).toBe('publication-1');

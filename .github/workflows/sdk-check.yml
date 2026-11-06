@@ -7,7 +7,6 @@ name: SDK Check
     - main
     paths:
     - packages/sdk/**
-    - packages/sdk-calls/**
     - '.github/workflows/sdk-check.yml'
   workflow_call: {}
 jobs:
@@ -24,6 +23,10 @@ jobs:
       uses: oven-sh/setup-bun@v2
       with:
         bun-version: '1.3.5'
+    - name: Setup Node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
     - name: Install dependencies
       run: bun install --frozen-lockfile
       working-directory: packages/sdk
@@ -36,15 +39,9 @@ jobs:
     - name: Check endpoint coverage
       run: bun run coverage
       working-directory: packages/sdk
-    - name: Build SDK
-      run: bun run build
+    - name: Check packed SDK
+      run: bun run build && bun run check:pack
       working-directory: packages/sdk
-    - name: Install sdk-calls dependencies
-      run: bun install --frozen-lockfile
-      working-directory: packages/sdk-calls
-    - name: Check sdk-calls
-      run: bun run check && bun test && bun run build && bun run check:pack
-      working-directory: packages/sdk-calls
 concurrency:
   group: sdk-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
   cancel-in-progress: true

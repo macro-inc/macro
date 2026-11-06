@@ -476,8 +476,13 @@ await routine.update({
 
 ### Agents, conversations and hosts
 
-`macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes
-channel, team and host handles. Updates replace the configuration.
+`macro.agents.list/create/byId` manage agent configuration; listed agents read
+their runtime, coding/chat choice, apps, channel scope and permission settings.
+`agent.update(patch)` changes only the settings it names (`PATCH /agents/{id}`);
+`agent.replace(options)` replaces everything, including the owning team, and
+`AgentOptions` takes channel, team and host handles. `macro.agents.coding()` lists the coding personas the caller can
+start right now, built-in ones such as Cursor included; pass an entry's `agent`
+to `macro.agentSessions.createManaged`.
 `channel.agentConversations()` returns conversations with session and turn handles;
 `conversation.startFresh(session)` and `turn.retry(actionId)` expose explicit
 conversation controls. `session.toolApprovalById(id).answer(answer)` answers a
@@ -972,3 +977,10 @@ for (const shared of await personal.externalChats.list()) {
 Keep the same idempotency key when retrying the same request. A delivery state of
 `unknown` must be reconciled; never automatically resend it. Uploads, quoted
 messages, mentions, mutations, and delivery references must belong to the same chat.
+
+## Live call media
+
+Use `@macro-inc/sdk/calls/node` or `@macro-inc/sdk/calls/browser` for room
+connections and screen sharing. Install the optional LiveKit runtime only when
+using those helpers. The core import does not load or bundle call media code.
+See [Call rooms](CALLS.md) for installation and examples.

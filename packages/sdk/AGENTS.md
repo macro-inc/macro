@@ -31,6 +31,9 @@ enforced by the ordinary backend APIs.
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
   route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `agents.list()` reads storage agent records, which built-in personas lack;
+  `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
+  included) that the `ListCodingAgents` tool serves.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -71,7 +74,9 @@ enforced by the ordinary backend APIs.
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
-- `../sdk-calls/`: optional Node and browser LiveKit room helpers for call handles. It publishes with this package at the same version; `just bump` moves both.
+- `src/calls/`: optional Node and browser LiveKit helpers, exported only as
+  `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of
+  `src/macro.ts` and its dependency graph; LiveKit runtimes stay optional peers.
 - `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
 
 ## Boundaries
@@ -84,13 +89,15 @@ enforced by the ordinary backend APIs.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
-  Runtime-specific bundles belong to their consumer, not this package.
+  Consumer application bundles belong to their consumer. The calls entry points
+  are built separately from core, with LiveKit and OpenTelemetry external.
 
 ## Checks
 
 Run from this directory: `bun test`, `bun run check`, `bun run coverage`, and
-`bun run lint`. Coverage requires each generated endpoint to be wrapped or
-explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
+`bun run lint`. After building, run `bun run check:pack` to verify isolated
+consumer imports, types, and bundle separation. Coverage requires each generated
+endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
 excluded from source linting.
 
 ## Local agent APIs
@@ -101,6 +108,10 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- Dependency changes require refreshing both platform hashes in
+  `nix-support/node_modules-hashes.json`; use
+  `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
+  generation otherwise restores dependencies from the old SDK snapshot.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
@@ -187,3 +198,16 @@ the existing gateway prefixes.
   explicitly classified alongside the existing Notion routes in coverage skips.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
+
+## Call media entry points
+
+- See `CALLS.md` for the optional room helpers. `src/calls/common.ts` owns connection
+  cleanup, `node.ts` publishes caller-supplied frames, and `browser.ts` publishes
+  MediaStreams. Keep the existing one-time leave and audio DTX defaults.
+- Never log, trace, or serialize room tokens. Call spans use `@opentelemetry/api`
+  and are no-ops without a host tracer provider.
+- Node has no room-wide publish defaults, so `publishTrack` is wrapped to disable
+  audio DTX. Unpublish Node tracks by publication SID; browser tracks by object.
+- Keep LiveKit and OpenTelemetry external in the calls build so room objects and
+  tracing use the consumer's runtime instances. Do not re-export calls helpers
+  or their runtime types from `src/macro.ts`.
