@@ -2,9 +2,9 @@ export async function main({ macro, trigger, knobs }: StepContext) {
   if (trigger.kind !== 'event' || !trigger.item.email) return { tag: null };
   const email = trigger.item.email;
   const personal = (await macro.properties.tags()).find((set) => set.scope === 'user');
-  if (!personal?.definition) {
-    throw new Error('You have no personal tags yet. Make one, then run this routine again.');
-  }
+  // Without a personal tag set there is nowhere to tag; starting this
+  // routine from a suggestion provisions one.
+  if (!personal?.definition) return { tag: null };
   const property = macro.properties.definition(personal.definition.id);
   const options = await property.options();
   const tags = [
