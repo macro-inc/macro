@@ -7,11 +7,12 @@
 //! AWS credentials anywhere).
 //!
 //! Critical path: `path-check` (no Rust compile on a warm binary cache) →
-//! `test`. `check` (fmt + clippy), `doppler-config`, and
+//! `test`. `check` (fmt + clippy), `build-service-bins`, `doppler-config`, and
 //! `graphql-schema-compat` run alongside `test`.
 
 use gh_workflow::{
-    Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
+    Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step,
+    Workflow, WorkflowCall,
 };
 use xtask_paths::RuntimePath;
 
@@ -27,20 +28,23 @@ mod test;
 /// Build the workflow.
 pub fn code_check_cloud_storage() -> Workflow {
     Workflow::new("cloud storage code check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
+        .on(Event::default()
+            .pull_request(
+                PullRequest::default()
+                    .add_branch("main")
+                    .add_type(PullRequestType::Opened)
+                    .add_type(PullRequestType::Synchronize)
+                    .add_type(PullRequestType::Reopened)
+                    .add_type(PullRequestType::ReadyForReview),
+            )
+            .workflow_call(WorkflowCall::default()))
         .map(vars::with_global_env)
         .concurrency(vars::concurrency("code-check-cloud-storage"))
         .add_job("path-check", path_check())
         .add_job("check", check())
         .add_job("doppler-config", doppler_config())
         .add_job("test", test())
+        .add_job("build-service-bins", build_service_bins())
         .add_job("graphql-schema-compat", graphql_schema_compat())
         .add_job("status-check", status_check())
 }
@@ -133,7 +137,7 @@ fn doppler_config() -> Job {
     steps::gated_job()
         .timeout_minutes(45u32)
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'",
+            "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.doppler_candidates == 'true'",
         ))
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
         .map(with_check_env)
@@ -159,7 +163,7 @@ fn graphql_schema_compat() -> Job {
     steps::gated_job()
         .timeout_minutes(15u32)
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'",
+            "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.graphql_schema == 'true'",
         ))
         .runs_on(runners::Runner::Small.to_string())
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
@@ -178,7 +182,7 @@ fn test() -> Job {
     steps::gated_job()
         .timeout_minutes(90u32)
         .cond(Expression::new(
-            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
+            "needs.path-check.outputs.should_run == 'true' && (github.event.pull_request.draft == false || github.event.action == 'labeled') && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'",
         ))
         .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
         .add_env((
@@ -186,11 +190,7 @@ fn test() -> Job {
             "${{ needs.path-check.outputs.rust_packages }}",
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
-        // Debug info is most of what test builds write and link. Panic locations
-        // don't depend on it; only backtrace frames lose their file and line.
-        .add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
-        .add_env(("CARGO_PROFILE_TEST_DEBUG", "0"))
-        .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
+        .map(with_test_compile_env)
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
         .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
@@ -212,6 +212,51 @@ fn test() -> Job {
         .add_step(steps::teardown_nix())
 }
 
+/// The env the jobs that compile for `test` share, so their sccache keys stay
+/// identical.
+fn with_test_compile_env(job: Job) -> Job {
+    // Debug info is most of what test builds write and link. Panic locations
+    // don't depend on it; only backtrace frames lose their file and line.
+    job.add_env(("CARGO_PROFILE_DEV_DEBUG", "0"))
+        .add_env(("CARGO_PROFILE_TEST_DEBUG", "0"))
+        .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
+}
+
+/// Build the real binaries of the services whose `run` bodies only a real build
+/// compiles. The script picks them from the selected packages; this gate only
+/// avoids a dev shell when none can match.
+fn build_service_bins() -> Job {
+    steps::gated_job()
+        .timeout_minutes(45u32)
+        .cond(Expression::new(BUILD_SERVICE_BINS_CONDITION))
+        .runs_on(runners::Runner::Large.with_cache_tag(vars::CI_CACHE_TAG))
+        .add_env((
+            "RUST_PACKAGES",
+            "${{ needs.path-check.outputs.rust_packages }}",
+        ))
+        .map(with_test_compile_env)
+        .add_env(("SQLX_OFFLINE", "true"))
+        .add_step(steps::checkout(false, false))
+        .add_step(steps::mount_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(steps::code_mode_assets())
+        .add_step(
+            Step::new("build service binaries").run(include_str!("scripts/build_service_bins.sh")),
+        )
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
+}
+
+const BUILD_SERVICE_BINS_CONDITION: &str = "needs.path-check.outputs.should_run == 'true' \
+     && (github.event.pull_request.draft == false || github.event.action == 'labeled') \
+     && needs.path-check.outputs.skip_tests != 'true' \
+     && (needs.path-check.outputs.rust_packages == 'all' \
+     || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') \
+     || contains(needs.path-check.outputs.rust_packages, 'email_service') \
+     || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))";
+
 /// Install the same pinned runtime shipped in the agent harness container.
 fn setup_execution_runtime() -> Step<gh_workflow::Use> {
     Step::new("Set up code execution runtime")
@@ -226,7 +271,9 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
         ))
 }
 
-/// Exercise the real permission boundary and authenticated SDK execution in CI.
+/// Exercise the real permission boundary, authenticated SDK execution, and
+/// routine code (the step contract, starters and examples) against the SDK
+/// in CI.
 fn test_execution_runtime() -> Step<Run> {
     Step::new("Test Deno sandbox and authenticated SDK execution")
         .run(include_str!("scripts/run_tests.sh"))
@@ -249,6 +296,7 @@ fn status_check() -> Job {
             "check".to_string(),
             "doppler-config".to_string(),
             "test".to_string(),
+            "build-service-bins".to_string(),
             "graphql-schema-compat".to_string(),
         ])
         .add_step(check_job_results())
@@ -437,6 +485,7 @@ fn check_job_results() -> Step<Run> {
         echo "check: ${{ needs.check.result }}"
         echo "doppler-config: ${{ needs.doppler-config.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "build-service-bins: ${{ needs.build-service-bins.result }}"
         echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
 
         # Only success and skipped are OK. A job that hits its timeout reports
@@ -446,6 +495,7 @@ fn check_job_results() -> Step<Run> {
           "${{ needs.check.result }}" \
           "${{ needs.doppler-config.result }}" \
           "${{ needs.test.result }}" \
+          "${{ needs.build-service-bins.result }}" \
           "${{ needs.graphql-schema-compat.result }}"; do
           if [[ "$result" != "success" && "$result" != "skipped" ]]; then
             echo "❌ One or more jobs failed or were cancelled"

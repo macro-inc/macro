@@ -92,6 +92,7 @@ pub struct CallServiceImpl<
     voice_repo: Vr,
     ring_status_base_url: Option<String>,
     event_broker: B,
+    channel_threads: Option<Arc<dyn crate::domain::ports::ChannelThreads>>,
 }
 
 impl<
@@ -129,6 +130,7 @@ impl<
             voice_repo: NoOpVoiceRepository,
             ring_status_base_url: None,
             event_broker: NoopMacroEventBroker,
+            channel_threads: None,
         }
     }
 }
@@ -146,6 +148,15 @@ impl<
     B: MacroEventBroker,
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    /// Let new channel calls discuss in a thread in their channel.
+    pub fn with_channel_threads(
+        mut self,
+        channel_threads: Arc<dyn crate::domain::ports::ChannelThreads>,
+    ) -> Self {
+        self.channel_threads = Some(channel_threads);
+        self
+    }
+
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
         self.egress_s3_config = Some(s3_config);
@@ -194,6 +205,7 @@ impl<
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker: self.event_broker,
+            channel_threads: self.channel_threads,
         }
     }
 
@@ -217,6 +229,7 @@ impl<
             voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker: self.event_broker,
+            channel_threads: self.channel_threads,
         }
     }
 
@@ -240,6 +253,7 @@ impl<
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker,
+            channel_threads: self.channel_threads,
         }
     }
 
@@ -327,6 +341,7 @@ impl<
                 participants,
                 has_recording: archived.has_recording,
                 archive_reason,
+                channel_thread: archived.channel_thread,
             },
         ));
     }
@@ -864,14 +879,42 @@ impl<
                     .await
                     .map_err(CallError::Internal)?;
 
+                // Decided before the row exists, so nobody can read this call
+                // and see a discussion it will not keep.
+                let channel_thread = match &self.channel_threads {
+                    Some(channel_threads) => channel_threads.enabled_for(user_id.copied()).await,
+                    None => false,
+                };
+
                 // Try to create call record; if another request won the race
                 // the ON CONFLICT returns None — re-read the existing call.
                 match self
                     .repo
-                    .create_call(&call_id, channel_id, &room_name, user_id.copied())
+                    .create_call(
+                        &call_id,
+                        channel_id,
+                        &room_name,
+                        user_id.copied(),
+                        channel_thread,
+                    )
                     .await?
                 {
                     Some(call) => {
+                        // Never blocks the call: the first reply retries it.
+                        if channel_thread && let Some(channel_threads) = &self.channel_threads {
+                            channel_threads
+                                .ensure_root(call.id)
+                                .await
+                                .inspect_err(|error| {
+                                    tracing::error!(
+                                        error = ?error,
+                                        call_id = %call.id,
+                                        "failed to create the call's thread root"
+                                    );
+                                })
+                                .ok();
+                        }
+
                         match MacroUserIdStr::parse_from_str(&call.created_by) {
                             Ok(created_by) => {
                                 self.publish_call_event(&CallMacroEvent::started(

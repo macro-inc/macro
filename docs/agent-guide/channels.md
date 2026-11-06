@@ -18,6 +18,11 @@ IDs, messages and editors resolve the current name and fall back to the email
 local part when lookup fails. Verify that these mentions remain intact when
 editing and saving a message; integrations need not supply email or displayName.
 
+## Channel calls
+
+A channel call may have its own row and thread in the channel. See
+[calls whose discussion is a channel thread](calls.md#calls-whose-discussion-is-a-channel-thread).
+
 ## Channel list previews
 
 Message text in channel rows and Home cards is display-only, including quoted
@@ -385,6 +390,25 @@ the sender with **from <user>**, and a message sent with a pasted Macro API key
 shows the Macro bot with **from <user>**. To check this, connect an MCP client
 over OAuth, ask it to post in a channel and to comment on a document, and
 confirm both show the client and the user on desktop and at phone width.
+
+## Account manager requests
+
+A DM between a person and an agent account has an account manager button
+(user-gear icon) in the channel top bar; a DM between two agents or two people
+doesn't, because an agent can't be managed and only an agent can manage. It starts
+a request: the person asks the agent to manage their account, or the agent asks to
+manage the person's. Either way a card appears
+in the DM (`<m-account-manager-request>{"id":"<grant>"}</...>`).
+
+- The side that didn't ask gets **Approve** and **Decline**. Approve opens a
+  confirmation stating the access it gives. The side that asked gets **Withdraw**.
+- Approval posts a second card with a one-time link to
+  `/app/account-manager/<grant>`. **Reveal token** on either surface works once,
+  only for the manager, and shows the token in a dialog.
+- Requests and unclaimed approvals expire after 7 days. Revoke active access from
+  Settings → Account Managers.
+- Messages the manager sends with the token show the managed account as sender,
+  with a `from <agent>` line (`triggered_by`).
 
 ## Message composer
 
@@ -1042,11 +1066,12 @@ Chat remembers this choice independently of other workspaces and restores it
 after reload. While no conversation is selected, the rail stays open regardless
 of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
 selecting a conversation applies the saved choice again. Chat uses
-the shared 256px default sidebar width and resize limits. In splits narrower than
-720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
-with the same full sidebar contents. With no conversation selected, the
-slide-over opens on its own and closes once a conversation is picked; the
-backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
+the shared 256px default sidebar width and resize limits. In splits 720px wide or
+narrower, the rail and the conversation take turns at full width instead of a
+slide-over: with no conversation selected the rail fills the split (no Hide
+navigation, `Cmd+.` inert), and an open conversation shows **Back** (left arrow)
+where the hamburger was. Back opens the Channels list route, so browser or split
+back returns to the conversation. There is no separate skinny sidebar mode.
 
 ### Sidebar redesign rollout
 
@@ -1074,8 +1099,8 @@ collapses and sorts independently; open groups split the available height.
 the channel filter, while the Conversations section lists channels and DMs with
 threads the user participates in. Scrolling loads more. Selecting a conversation
 filters the thread view instead of opening that conversation. On desktop, Threads
-pins navigation open with no Hide navigation control. In narrow splits, changing
-between Threads, All, and Recent preserves an already-open navigation overlay.
+pins navigation open with no Hide navigation control. In narrow splits the thread
+view fills the split like a conversation, and **Back** returns to All.
 
 ### Sectioned sidebar (flag on)
 
@@ -1788,3 +1813,21 @@ For tab performance QA, switch Attachments → Calls → Participants → Messag
 in both the routed channel and a block split. Each actual selection should
 produce one `channel.tab` interaction with its `channel.*.view` child; repeat
 the current selection and confirm it does not create a new interaction.
+
+## Work in a DM with an agent account
+
+Behind `enable-agent-work`, a 1:1 DM shows the other account's registered work
+when that account is an agent (`isAgentAccount`) and has work you can open. The
+rule lives in `features/agent-work/core/work-visibility.ts`. DMs with people,
+group DMs, and channels show nothing.
+
+The side panel toggle appears in the top bar only while there's work, using the
+floating `SidePanel` the agent session uses. When the agent goes from no work to
+some, a "<name> started working" label appears beside the toggle for six
+seconds without opening the panel; clicking it opens the panel. Clicking a row
+opens the session in a new split. Rows keep their order as state changes.
+
+To exercise it, register a session as the agent account through the SDK
+(`session.registerAsWork()`), share it with the viewer, and watch the DM update
+live. `session.unregisterAsWork()` removes it. A registered session the viewer
+can't open stays hidden.

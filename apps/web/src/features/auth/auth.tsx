@@ -10,12 +10,19 @@ import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { deepEqual } from '@core/util/compareUtils';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { onMount, Show } from 'solid-js';
+import { createMemo, onMount } from 'solid-js';
+import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
+import {
+  AGENT_SETUP_PATH,
+  postAuthTarget,
+  readRedirectParam,
+} from './core/post-auth-target';
 import { ssoFallbackNotice } from './core/sso-fallback';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
@@ -61,7 +68,12 @@ export function Login(props: { signupMode?: boolean }) {
         onAgentSignup={() => navigate('/signup/agent')}
         // Desktop sign-up resolves into onboarding's frame either way.
         pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
-        signedIn={(user) => <PostAuthGate user={user()} />}
+        signedIn={(user) => (
+          <PostAuthGate
+            user={user()}
+            redirect={readRedirectParam(params.redirect)}
+          />
+        )}
       />
     </AuthProvider>
   );
@@ -99,29 +111,35 @@ function agentSignupDestination(user: AuthUser, teamInvite?: string) {
   return '/';
 }
 
-const AGENT_SETUP_PATH = '/agent-setup';
-
 function needsAgentSetup(user: AuthUser) {
   return user.isAgent && !user.tutorialComplete;
 }
 
-function PostAuthGate(props: { user: AuthUser }) {
-  const needsOnboarding = () =>
-    !isMobile() &&
-    !isNativeMobilePlatform() &&
-    !props.user.tutorialComplete &&
-    !props.user.isAgent;
+/**
+ * Pages that need an account (team and channel invites, meetings) link to
+ * `/login?redirect=`; honor it once signed in, opening an invite before
+ * onboarding so the invitee joins first.
+ */
+function PostAuthGate(props: { user: AuthUser; redirect: unknown }) {
+  // Compared by value so a refreshed user object never remounts onboarding.
+  const target = createMemo(
+    () =>
+      postAuthTarget({
+        tutorialComplete: props.user.tutorialComplete,
+        isAgent: props.user.isAgent,
+        onboardsOnThisDevice: !isMobile() && !isNativeMobilePlatform(),
+        redirect: props.redirect,
+      }),
+    undefined,
+    { equals: deepEqual }
+  );
   return (
-    <Show
-      when={needsOnboarding()}
-      fallback={
-        <PostLoginRedirect
-          target={needsAgentSetup(props.user) ? AGENT_SETUP_PATH : '/'}
-        />
-      }
-    >
-      <Onboarding />
-    </Show>
+    <>
+      {match(target())
+        .with({ t: 'onboarding' }, ({ next }) => <Onboarding next={next} />)
+        .with({ t: 'navigate' }, ({ to }) => <PostLoginRedirect target={to} />)
+        .exhaustive()}
+    </>
   );
 }
 
