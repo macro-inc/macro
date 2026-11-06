@@ -18,7 +18,7 @@ use s3_key::{
     build_docx_to_pdf_converted_document_key,
 };
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 use crate::parsers::pdf::parse_pdf_pages;
 use crate::{
     parsers::{
@@ -389,7 +389,7 @@ pub async fn update_search_with_raw_document(
 
     let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
         FileType::Pdf | FileType::Docx => {
-            #[cfg(feature = "pdf")]
+            #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
             {
                 let Some(pages_content) =
                     parse_pdf_pages(content).context("unable to parse pdf")?
@@ -418,7 +418,7 @@ pub async fn update_search_with_raw_document(
                     })
                     .collect()
             }
-            #[cfg(not(feature = "pdf"))]
+            #[cfg(not(all(feature = "pdf", not(feature = "no_pdf"))))]
             {
                 let _ = content;
                 tracing::debug!("pdf/docx indexing skipped: pdf feature disabled");
