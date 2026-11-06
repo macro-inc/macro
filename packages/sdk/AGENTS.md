@@ -21,6 +21,10 @@ enforced by the ordinary backend APIs.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
+- `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
+  (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
+  `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
+  route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
