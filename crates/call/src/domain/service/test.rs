@@ -793,11 +793,15 @@ async fn get_or_create_call_publishes_started_event() {
             },
         })
     );
+    // The joining creator also produces call.answered for their own devices.
     let notifications = broker.notifications();
-    assert_eq!(notifications.len(), 1);
-    assert_eq!(notifications[0].envelope["event_type"], "call.started");
+    let started: Vec<_> = notifications
+        .iter()
+        .filter(|event| event.envelope["event_type"] == "call.started")
+        .collect();
+    assert_eq!(started.len(), 1);
     assert_eq!(
-        notifications[0].envelope["metadata"]["call_id"],
+        started[0].envelope["metadata"]["call_id"],
         json!(STARTED_EVENT_CALL_ID)
     );
 }

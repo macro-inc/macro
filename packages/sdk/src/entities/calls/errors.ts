@@ -1,4 +1,4 @@
-import { MacroApiError } from '../../utils';
+import { MacroApiError } from '../../utils/unwrap';
 
 /** The account is participating in another call. */
 export class InOtherCallError extends MacroApiError {

@@ -2005,7 +2005,7 @@ impl<
         self.recording_storage
             .open_recording(&key)
             .await
-            .map_err(|error| CallError::Internal(error.into()))?
+            .map_err(CallError::Internal)?
             .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))
     }
 
