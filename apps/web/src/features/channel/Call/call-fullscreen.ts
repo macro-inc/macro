@@ -5,6 +5,7 @@ export function createCallFullscreen(root: Accessor<HTMLElement | undefined>) {
   const [active, setActive] = createSignal(false);
   let pending = false;
   let disposed = false;
+  let ownedElement: HTMLElement | undefined;
   const sync = () =>
     setActive(!!root() && document.fullscreenElement === root());
   document.addEventListener('fullscreenchange', sync);
@@ -15,6 +16,7 @@ export function createCallFullscreen(root: Accessor<HTMLElement | undefined>) {
     const element = root();
     if (!element || !available() || pending) return;
     pending = true;
+    ownedElement = element;
     try {
       await Telemetry.span('call.fullscreen.toggle', async () => {
         if (document.fullscreenElement === element)
@@ -31,7 +33,8 @@ export function createCallFullscreen(root: Accessor<HTMLElement | undefined>) {
   onCleanup(() => {
     disposed = true;
     document.removeEventListener('fullscreenchange', sync);
-    if (root() && document.fullscreenElement === root())
+    const element = ownedElement ?? root();
+    if (element && document.fullscreenElement === element)
       void document.exitFullscreen().catch(() => {});
   });
   return { active, available, toggle };

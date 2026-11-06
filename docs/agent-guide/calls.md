@@ -363,6 +363,14 @@ Desktop **More → Full screen** expands only the call area. The same item becom
 **Exit full screen**; browser Escape also exits. Call menus and tooltips remain
 inside the fullscreen surface. Unsupported webviews disable the action.
 
+Desktop **More → Keyboard shortcuts** opens a four-row call-only popover.
+While the call view is open, ⌘D toggles the microphone, ⇧⌘E toggles the camera,
+Space holds the microphone open while muted, and ⌃⌘F toggles full screen.
+Non-Mac desktops use Ctrl for ⌘ and F11 for full screen. Space ignores text fields,
+editable content and buttons. Releasing Space, losing window focus or leaving the
+view restores mute; a delayed action never mutes a replacement call. These
+bindings use the app hotkey registry without changing the global shortcut sheet.
+
 Open **Chat** and **People** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
 **People** shows the live attendee count on phones and a scrollable roster, including

@@ -74,3 +74,18 @@ it('does not enter when the fullscreen API is unavailable', async () => {
   await state.toggle();
   state.dispose();
 });
+
+it('remembers its fullscreen element when the render ref is cleared before cleanup', async () => {
+  const doc = fullscreenDocument();
+  const element = document.createElement('div');
+  let root: HTMLElement | undefined = element;
+  element.requestFullscreen = vi.fn(async () => doc.change(element));
+  const state = createRoot((dispose) => ({
+    ...createCallFullscreen(() => root),
+    dispose,
+  }));
+  await state.toggle();
+  root = undefined;
+  state.dispose();
+  expect(doc.exit).toHaveBeenCalledOnce();
+});

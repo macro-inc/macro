@@ -28,6 +28,7 @@ export function CallControlsDefaultAndPanelRow(props: {
   };
   return (
     <CallMediaControls
+      showShortcuts
       compact={props.compact}
       media={call}
       screenUnavailable={screenUnavailable()}

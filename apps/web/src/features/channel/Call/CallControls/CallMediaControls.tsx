@@ -53,6 +53,7 @@ export function CallMediaControls(props: {
   onSettingsOpenChange?: (open: boolean) => void;
   compact?: boolean;
   unframed?: boolean;
+  showShortcuts?: boolean;
   canLeave?: boolean;
   children?: JSX.Element;
 }) {
@@ -118,6 +119,7 @@ export function CallMediaControls(props: {
       <CallControlBar
         compact={props.compact}
         unframed={props.unframed}
+        showShortcuts={props.showShortcuts}
         canLeave={props.canLeave}
         onSettingsOpenChange={props.onSettingsOpenChange}
         disabled={call.isConnecting()}

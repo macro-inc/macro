@@ -18,6 +18,7 @@ import { CallSettingsMenu } from './CallSettingsMenu';
 function MediaSplitButton(props: {
   label: string;
   toggleLabel: string;
+  shortcut?: string;
   menuLabel: string;
   disabled?: boolean;
   compact?: boolean;
@@ -49,7 +50,11 @@ function MediaSplitButton(props: {
           <ButtonGroup.Button
             aria-label={props.toggleLabel}
             variant={props.pressed ? 'accent' : 'secondary'}
-            tooltip={{ content: props.toggleLabel, placement: 'top' }}
+            tooltip={{
+              content: props.toggleLabel,
+              placement: 'top',
+              shortcut: props.shortcut,
+            }}
             aria-pressed={props.pressed}
             disabled={props.disabled}
             onClick={props.onToggle}
@@ -89,6 +94,7 @@ export function CallControlBar(props: {
   disabled: boolean;
   compact?: boolean;
   unframed?: boolean;
+  showShortcuts?: boolean;
   canLeave?: boolean;
   audioMuted: boolean;
   videoMuted: boolean;
@@ -133,6 +139,7 @@ export function CallControlBar(props: {
       >
         <MediaSplitButton
           label="Microphone"
+          shortcut={props.showShortcuts && !isMobile() ? 'cmd+d' : undefined}
           compact={props.compact}
           onOpenChange={(open) => {
             audioOpen = open;
@@ -158,6 +165,9 @@ export function CallControlBar(props: {
         </MediaSplitButton>
         <MediaSplitButton
           label="Camera"
+          shortcut={
+            props.showShortcuts && !isMobile() ? 'shift+cmd+e' : undefined
+          }
           compact={props.compact}
           onOpenChange={(open) => {
             videoOpen = open;

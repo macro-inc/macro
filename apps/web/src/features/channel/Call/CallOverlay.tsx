@@ -49,6 +49,7 @@ import {
 import { CallReactionLayer } from './CallReactionLayer';
 import { CallWaveform } from './CallWaveform';
 import { createCallFullscreen } from './call-fullscreen';
+import { createCallHotkeys } from './call-hotkeys';
 import {
   type CallLayout,
   normalizeCallLayout,
@@ -94,6 +95,7 @@ export function CallOverlay(props: {
   const callCtx = useCallContext();
   const [callRoot, setCallRoot] = createSignal<HTMLDivElement>();
   const fullscreen = createCallFullscreen(callRoot);
+  createCallHotkeys(callCtx, fullscreen);
   const reactions = createCallReactions(callCtx.room);
   const [reactionRoot, setReactionRoot] = createSignal<HTMLDivElement>();
   const currentUserId = useUserId();
