@@ -2,6 +2,7 @@ import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
+import { Resize } from '@core/component/Resize';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
@@ -20,7 +21,11 @@ import { Channel } from '../../../Channel/Channel';
 import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
 import type { ChannelTabId } from '../../../Channel/channel-tabs';
 import { CallProvider } from '../../CallContext';
-import { ChannelCallPanel } from '../ChannelCallPanel';
+import {
+  CallChatPanel,
+  type CallPanelTab,
+} from '../../chat/components/CallChatPanel';
+import { CallDiscussionContent } from '../CallDiscussionContent';
 
 // Only the app's data boundary is replaced; the channel on top of it is real.
 const NO_NOTIFICATIONS = {
@@ -43,6 +48,28 @@ const CALL_ID = '00000000-0000-7000-8000-0000000ca110';
 function Fixture() {
   useHotKeyRoot();
   const initial = new URLSearchParams(location.search).get('view');
+  const shell = new URLSearchParams(location.search).get('shell');
+  const [panelOpen, setPanelOpen] = createSignal(true);
+  const [panelTab, setPanelTab] = createSignal<CallPanelTab>('chat');
+  const [sidebar, setSidebar] = createSignal<HTMLDivElement>();
+  const [overlay, setOverlay] = createSignal<HTMLDivElement>();
+  const Discussion = () => (
+    <CallDiscussionContent
+      discussion={() => ({
+        kind: 'channel_thread',
+        channel_id: CHANNEL_ID,
+        root_id: CALL_ID,
+      })}
+      panel={{
+        get open() {
+          return panelOpen() && panelTab() === 'chat';
+        },
+        focusOnOpen: false,
+        onClose: () => setPanelOpen(false),
+      }}
+      onViewChannel={() => setTab('messages')}
+    />
+  );
   const [tab, setTab] = createSignal<ChannelTabId>(
     initial === 'panel' ? 'call' : 'messages'
   );
@@ -81,16 +108,78 @@ function Fixture() {
                                     </div>
                                   }
                                 >
-                                  <div
-                                    class="mx-auto flex min-h-0 w-full max-w-[372px] flex-1 flex-col bg-surface-2"
-                                    data-testid="call-panel"
+                                  <Show
+                                    when={shell}
+                                    fallback={
+                                      <div
+                                        class="mx-auto flex min-h-0 w-full max-w-[372px] flex-1 flex-col bg-surface-2"
+                                        data-testid="call-panel"
+                                      >
+                                        <Discussion />
+                                      </div>
+                                    }
                                   >
-                                    <ChannelCallPanel
-                                      channelId={CHANNEL_ID}
-                                      rootId={CALL_ID}
-                                      onViewChannel={() => setTab('messages')}
-                                    />
-                                  </div>
+                                    <button
+                                      onClick={() => setPanelOpen(!panelOpen())}
+                                    >
+                                      {panelOpen()
+                                        ? 'Leave call view'
+                                        : 'Return to call view'}
+                                    </button>
+                                    <div
+                                      ref={setOverlay}
+                                      class="@container/call relative mx-auto min-h-0 w-full flex-1"
+                                      style={{
+                                        'max-width':
+                                          shell === 'overlay'
+                                            ? '640px'
+                                            : undefined,
+                                      }}
+                                    >
+                                      <Resize.Zone
+                                        direction="horizontal"
+                                        gutter={12}
+                                        showDividers={false}
+                                      >
+                                        <Resize.Panel id="stage" minSize={200}>
+                                          <div class="h-full" />
+                                        </Resize.Panel>
+                                        <Resize.Panel
+                                          id="sidebar"
+                                          minSize={280}
+                                          target={{ kind: 'px', px: 380 }}
+                                          hidden={() =>
+                                            shell !== 'docked' || !panelOpen()
+                                          }
+                                          persistent
+                                        >
+                                          <div
+                                            ref={setSidebar}
+                                            class="h-full py-2"
+                                          />
+                                        </Resize.Panel>
+                                      </Resize.Zone>
+                                      <CallChatPanel
+                                        id="fixture-call-panel"
+                                        open={panelOpen()}
+                                        animate={false}
+                                        onClose={() => setPanelOpen(false)}
+                                        activeTab={panelTab()}
+                                        onTabChange={setPanelTab}
+                                        chatAvailable
+                                        participantCount={2}
+                                        participants={<p>Call participant</p>}
+                                        sidebarMount={
+                                          shell === 'docked'
+                                            ? sidebar()
+                                            : undefined
+                                        }
+                                        overlayMount={overlay()}
+                                      >
+                                        <Discussion />
+                                      </CallChatPanel>
+                                    </div>
+                                  </Show>
                                 </Show>
                               </Suspense>
                             </main>

@@ -1,3 +1,4 @@
+import { mkdir } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
 
 const CHANNEL_ID = '00000000-0000-7000-8000-00000000c0c0';
@@ -71,6 +72,8 @@ type Scenario = {
   status: object;
   replies?: ReturnType<typeof message>[];
   outside?: boolean;
+  shell?: 'docked' | 'overlay';
+  historyCount?: number;
 };
 
 async function open(
@@ -89,7 +92,23 @@ async function open(
       message: listItem(root, replies),
       status: scenario.status,
     },
-    { type: 'message', message: listItem(earlier, []) },
+    ...Array.from({ length: scenario.historyCount ?? 1 }, (_, index) => ({
+      type: 'message',
+      message: listItem(
+        index === 0
+          ? earlier
+          : message(
+              `00000000-0000-7000-8000-${(0xe01 + index).toString(16).padStart(12, '0')}`,
+              `Older channel message ${index}`,
+              {
+                created_at: new Date(
+                  Date.parse(STARTED_AT) - (index + 1) * 60_000
+                ).toISOString(),
+              }
+            ),
+        []
+      ),
+    })),
   ];
   await page.route('**/*', async (route) => {
     const request = route.request();
@@ -140,7 +159,7 @@ async function open(
     }
   });
   await page.routeWebSocket('**/*', (socket) => socket.close());
-  await page.goto(`${PATH}?view=${view}`);
+  await page.goto(`${PATH}?view=${view}&shell=${scenario.shell ?? ''}`);
   return { posted };
 }
 
@@ -333,3 +352,63 @@ test('the popup counts outside messages and swaps to the channel at the latest',
   await expect(page.getByTestId('messages-tab')).toBeVisible();
   await expect(page.getByText('Posted outside the call')).toBeInViewport();
 });
+
+for (const shell of ['docked', 'overlay'] as const) {
+  for (const withMessages of [false, true]) {
+    test(`composer stays at the bottom: ${shell}, messages=${withMessages}`, async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name === 'phone' && shell === 'docked');
+      await open(page, 'panel', {
+        status: { state: 'live' },
+        shell,
+        historyCount: 40,
+        replies: withMessages
+          ? [reply('00000000-0000-7000-8000-000000000b01', 'A call message')]
+          : [],
+      });
+      await expect(
+        page.locator('[data-input-id^="thread-reply-input"]')
+      ).toBeVisible({
+        timeout: 30_000,
+      });
+      const panel = page.getByRole(
+        testInfo.project.name === 'phone' ? 'dialog' : 'complementary',
+        { name: 'Call sidebar' }
+      );
+      const composer = page.locator('[data-input-id^="thread-reply-input"]');
+      const phase = process.env.CALL_REPRO_PHASE ?? 'after';
+      const directory = process.env.CALL_REPRO_DIR;
+      if (directory) {
+        await mkdir(directory, { recursive: true });
+        const path = `${directory}/L-77-${testInfo.project.name}-${shell}-${withMessages ? 'messages' : 'empty'}-${phase}.png`;
+        await page.screenshot({ path });
+        await testInfo.attach('Composer placement', {
+          path,
+          contentType: 'image/png',
+        });
+      }
+      async function expectBottom() {
+        const panelBox = await panel.boundingBox();
+        const composerBox = await composer.boundingBox();
+        expect(panelBox).not.toBeNull();
+        expect(composerBox).not.toBeNull();
+        expect(
+          panelBox!.y + panelBox!.height - composerBox!.y - composerBox!.height
+        ).toBeLessThanOrEqual(testInfo.project.name === 'phone' ? 32 : 24);
+      }
+      await expectBottom();
+      await page.getByText(/^(People|Participants)( \d+)?$/).click();
+      await expect(
+        page.getByText('Call participant', { exact: true })
+      ).toBeVisible();
+      await page.getByText('Chat', { exact: true }).click();
+      await expectBottom();
+      if (testInfo.project.name === 'desktop') {
+        await page.getByRole('button', { name: 'Leave call view' }).click();
+        await page.getByRole('button', { name: 'Return to call view' }).click();
+        await expectBottom();
+      }
+    });
+  }
+}
