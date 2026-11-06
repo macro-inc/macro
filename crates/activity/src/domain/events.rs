@@ -29,6 +29,9 @@ pub struct ActivityWireRow {
     /// Originating code-mode invocation, absent on older events.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_correlation_id: Option<Uuid>,
+    /// SDK display verb, absent on older events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_verb: Option<String>,
     /// The stored activity id.
     pub id: Uuid,
     /// Who mechanically acted, as a principal string (`macro|…` / `bot|…`).
@@ -54,6 +57,7 @@ impl ActivityWireRow {
         Self {
             id: activity.id,
             agent_correlation_id: activity.agent_correlation_id,
+            agent_verb: activity.agent_verb.map(|verb| verb.to_string()),
             actor_id: activity.actor.as_ref().to_owned(),
             subject_id: activity.subject_id.clone(),
             entity_type: activity.entity_type,
@@ -74,6 +78,10 @@ impl ActivityWireRow {
         Some(ActivityRecord {
             id: self.id,
             agent_correlation_id: self.agent_correlation_id,
+            agent_verb: self
+                .agent_verb
+                .as_deref()
+                .and_then(|verb| verb.parse().ok()),
             actor,
             subject_id: self.subject_id,
             entity_type: self.entity_type,
@@ -161,6 +169,7 @@ impl From<ActivityRecord> for ActivityWireRow {
         Self {
             id: record.id,
             agent_correlation_id: record.agent_correlation_id,
+            agent_verb: record.agent_verb.map(|verb| verb.to_string()),
             actor_id: record.actor.as_ref().to_owned(),
             subject_id: record.subject_id,
             entity_type: record.entity_type,

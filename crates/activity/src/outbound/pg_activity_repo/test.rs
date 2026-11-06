@@ -9,6 +9,46 @@ use crate::domain::ports::EntityActivityReads;
 
 mod teammate_feed;
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sdk_verb_survives_activity_storage_and_read(pool: PgPool) {
+    let correlation = Uuid::now_v7();
+    let activity = agent_correlation::context::scope_with_verb(
+        Some(correlation),
+        Some(agent_correlation::AgentVerb::Edited),
+        async {
+            Activity::common(
+                Uuid::now_v7(),
+                0,
+                Actor::new_from_user(user("macro|actor@example.com")),
+                None,
+                EntityType::Document,
+                "verb-document",
+                CommonAction::Edited,
+                Utc::now(),
+            )
+        },
+    )
+    .await;
+    let repo = PgActivityRepo::new(pool);
+    repo.insert_activities(&[activity]).await.unwrap();
+    let page = repo
+        .entity_feed(EntityType::Document, "verb-document", None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 1);
+    assert_eq!(page.records[0].agent_correlation_id, Some(correlation));
+    assert_eq!(
+        page.records[0].agent_verb,
+        Some(agent_correlation::AgentVerb::Edited)
+    );
+    let wire = crate::domain::events::ActivityWireRow::from(page.records[0].clone());
+    assert_eq!(wire.agent_verb.as_deref(), Some("edited"));
+    assert_eq!(
+        wire.into_record().unwrap().agent_verb,
+        Some(agent_correlation::AgentVerb::Edited)
+    );
+}
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
 }

@@ -63,4 +63,4 @@ distribution.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
 
-- Session activity reads preserve `agent_correlation_id` and use session visibility; entity and subject feeds retain their existing authorization.
+- Session and other activity reads preserve `agent_correlation_id` and nullable `agent_verb`; session visibility and existing entity/subject authorization still apply. The materializer restores both envelope fields before classifying an event.

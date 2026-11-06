@@ -21,11 +21,11 @@ impl AgentActivityReads for PgActivityRepo {
         // Bound each invocation's index scan before merging the session page.
         let mut rows = sqlx::query_as!(
             StoredRow,
-            r#"SELECT e.id, e.agent_correlation_id, e.actor_id, e.action,
+            r#"SELECT e.id, e.agent_correlation_id, e.agent_verb, e.actor_id, e.action,
                       e.action_payload, e.subject_id, e.entity_type, e.entity_id, e.occurred_at
                FROM agent_correlations c
                CROSS JOIN LATERAL (
-                   SELECT id, agent_correlation_id, actor_id, action, action_payload,
+                   SELECT id, agent_correlation_id, agent_verb, actor_id, action, action_payload,
                           subject_id, entity_type, entity_id, occurred_at
                    FROM activity_events
                    WHERE agent_correlation_id = c.id

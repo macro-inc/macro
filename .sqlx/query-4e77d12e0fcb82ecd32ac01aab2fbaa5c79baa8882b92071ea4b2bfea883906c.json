@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, agent_correlation_id, actor_id, action, action_payload,\n                   subject_id, entity_type, entity_id, occurred_at\n            FROM activity_events\n            WHERE subject_id = $1\n              AND occurred_at >= $2\n              AND occurred_at < $3\n            ORDER BY occurred_at DESC, id DESC\n            LIMIT $4\n            ",
+  "query": "SELECT id, agent_correlation_id, agent_verb, actor_id, action, action_payload, subject_id, entity_type, entity_id, occurred_at\n                   FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND (occurred_at, id) < ($3, $4)\n                   ORDER BY occurred_at DESC, id DESC LIMIT $5",
   "describe": {
     "columns": [
       {
@@ -15,36 +15,41 @@
       },
       {
         "ordinal": 2,
-        "name": "actor_id",
+        "name": "agent_verb",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "action",
+        "name": "actor_id",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
         "name": "action_payload",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "subject_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "entity_type",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "entity_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "occurred_at",
         "type_info": "Timestamptz"
       }
@@ -52,13 +57,15 @@
     "parameters": {
       "Left": [
         "Text",
+        "Text",
         "Timestamptz",
-        "Timestamptz",
+        "Uuid",
         "Int8"
       ]
     },
     "nullable": [
       false,
+      true,
       true,
       false,
       false,
@@ -69,5 +76,5 @@
       false
     ]
   },
-  "hash": "7dfe9f1ccade84674a6bea7df73b9f8f4e0fca11d23afb42352bdc63cd6c7e74"
+  "hash": "4e77d12e0fcb82ecd32ac01aab2fbaa5c79baa8882b92071ea4b2bfea883906c"
 }

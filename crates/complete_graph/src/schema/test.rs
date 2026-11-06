@@ -2010,6 +2010,7 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
         );
         activity::ActivityRecord {
             agent_correlation_id: activity.agent_correlation_id,
+            agent_verb: activity.agent_verb,
             id: activity.id,
             actor: activity.actor.clone(),
             subject_id: activity.subject_id.clone(),
@@ -2612,6 +2613,7 @@ fn activity_record(
 ) -> activity::ActivityRecord {
     activity::ActivityRecord {
         agent_correlation_id: None,
+        agent_verb: None,
         id: Uuid::from_u128(id),
         actor: activity::Actor::new_from_user(
             MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
