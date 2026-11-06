@@ -267,6 +267,36 @@ test('a thread with messages opens at the newest, and a reply quotes in place', 
   expect(JSON.stringify(posted[0])).toContain('m-reply-target');
 });
 
+test('dismissing an explicit reply returns to the unflagged call-thread composer', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name === 'phone');
+  const { posted } = await open(page, 'panel', {
+    status: { state: 'live' },
+    replies: [reply('00000000-0000-7000-8000-000000000b01', 'A call message')],
+  });
+  const message = page.getByText('A call message', { exact: true });
+  await expect(message).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Replying in the call thread')).toHaveCount(0);
+  await message.hover();
+  await page
+    .getByRole('button', { name: 'Reply', exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole('button', { name: 'Stop replying', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Stop replying', exact: true })
+  ).toHaveCount(0);
+  await expect(page.getByText('Replying in the call thread')).toHaveCount(0);
+  await page.locator('[data-markdown-editable]').click();
+  await page.keyboard.type('Back in the call');
+  await page.getByRole('button', { name: /send/i }).click();
+  await expect.poll(() => posted.length).toBe(1);
+  expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
+});
+
 test('scrolling up through the channel stays put', async ({
   page,
 }, testInfo) => {
