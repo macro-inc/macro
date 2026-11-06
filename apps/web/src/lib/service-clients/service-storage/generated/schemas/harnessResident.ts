@@ -8,8 +8,6 @@ import type { HarnessResidentOneOf } from './harnessResidentOneOf';
 import type { HarnessResidentOneOfFive } from './harnessResidentOneOfFive';
 
 /**
- * An agent that lives on a runtime, as opposed to a coding agent directed
-there turn by turn. Anyone who can reach it can talk to it; it stays up only
-while its own owner can use the runtime.
+ * A bot or dedicated Macro account resident on a runtime.
  */
 export type HarnessResident = HarnessResidentOneOf | HarnessResidentOneOfFive;

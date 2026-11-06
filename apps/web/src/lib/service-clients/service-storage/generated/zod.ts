@@ -29943,9 +29943,7 @@ export const listHarnessResidentsResponseItem = zod
       })
       .describe('The Macro account assigned to a dedicated agent computer.'),
   ])
-  .describe(
-    'An agent that lives on a runtime, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the runtime.'
-  );
+  .describe('A bot or dedicated Macro account resident on a runtime.');
 export const listHarnessResidentsResponse = zod.array(
   listHarnessResidentsResponseItem
 );
