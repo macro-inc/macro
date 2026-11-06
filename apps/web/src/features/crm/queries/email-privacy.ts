@@ -24,21 +24,34 @@ function fromResponse(data: CrmEmailPrivacyResponse): EmailPrivacy {
   };
 }
 
+type EmailPrivacyDependencies = Pick<
+  CrmQueryDependencies,
+  'client' | 'feedback'
+> & {
+  privacy: typeof crmEmailPrivacyClient;
+};
+
+function emailPrivacyOptions(
+  deps: EmailPrivacyDependencies,
+  teamId: string | undefined,
+  userId: string | undefined
+) {
+  return {
+    queryKey: crmKeys.emailPrivacy(teamId, userId).queryKey,
+    enabled: !!teamId && !!userId,
+    queryFn: async () =>
+      fromResponse(await throwOnErr(() => deps.privacy.get())),
+  };
+}
+
 export function createEmailPrivacySource(
-  deps: Pick<CrmQueryDependencies, 'client' | 'feedback'> & {
-    privacy: typeof crmEmailPrivacyClient;
-  },
+  deps: EmailPrivacyDependencies,
   teamId: Accessor<string | undefined>,
   userId: Accessor<string | undefined>
 ) {
   const key = () => crmKeys.emailPrivacy(teamId(), userId()).queryKey;
   const query = useQuery(
-    () => ({
-      queryKey: key(),
-      enabled: !!teamId() && !!userId(),
-      queryFn: async () =>
-        fromResponse(await throwOnErr(() => deps.privacy.get())),
-    }),
+    () => emailPrivacyOptions(deps, teamId(), userId()),
     () => deps.client
   );
   const update = useMutation(
