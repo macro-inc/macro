@@ -85,13 +85,16 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .await
         .unwrap();
 
-    let taken = cache
+    let mut taken = cache
         .take_mobile_login_session(&code)
         .await
         .unwrap()
         .unwrap();
     let lifetime = std::time::Duration::from_secs(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS);
     assert!(!taken.remaining().is_zero() && taken.remaining() <= lifetime);
+    // Most of the code's lifetime went by while the refresh failed.
+    let left = std::time::Duration::from_secs(2);
+    taken.expires_at = std::time::Instant::now() + left;
     assert!(
         cache
             .restore_mobile_login_session(&code, &taken)
@@ -106,7 +109,9 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .unwrap();
     assert_eq!(again.refresh_token(), "fake-refresh-token");
     // The restore keeps the original deadline instead of starting a new one.
-    assert!(again.expires_at <= taken.expires_at);
+    // Redis keeps whole milliseconds, so allow one.
+    assert!(!again.remaining().is_zero());
+    assert!(again.remaining() <= left + std::time::Duration::from_millis(1));
     assert!(
         cache
             .take_mobile_login_session(&code)
