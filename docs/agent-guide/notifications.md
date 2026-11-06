@@ -93,8 +93,12 @@ for each kind the filters show. It acts on the whole inbox, not only the
 loaded rows, and never on a kind the filters hide; under Unread the choices
 read **Clear today's unread** and **Clear all unread** and take unread rows
 only. Clearing marks the rows done, but unlike a row's Mark done it doesn't
-archive email threads. A toast says how many were cleared and offers **Undo**,
-as does `⌘Z`/`Ctrl+Z`.
+archive email threads; a cleared email row stays gone until new mail arrives.
+The server clears the whole inbox in one request and finishes even if the tab
+closes. A toast says how many were cleared and offers **Undo**, as does
+`⌘Z`/`Ctrl+Z`; a large clear that is still running says **so far; still
+clearing**, and its rows leave as it goes. Undo, of a clear or of any Mark done,
+brings each notification back as it was: unread ones stay unread.
 
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
 checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,

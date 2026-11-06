@@ -85,7 +85,7 @@ mutation ClearNotificationInbox($input: ClearNotificationInboxInput!) {
 	clearNotificationInbox(input: $input) {
 		rowCount
 		undoToken
-		nextCursor
+		complete
 	}
 }
 

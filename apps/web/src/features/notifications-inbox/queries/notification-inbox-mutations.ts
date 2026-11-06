@@ -59,13 +59,14 @@ export async function markInboxNotificationDone(
 }
 
 /**
- * Clear one batch of the inbox; resolves to how many rows it took, the token
- * that reverses it, and where the next batch starts.
+ * Clear the inbox in one call; the server reads every batch. Resolves to how
+ * many rows it took (so far, when it carries on in the background), the token
+ * that reverses all of it, and whether it finished.
  */
-export async function clearInboxBatch(
+export async function clearInbox(
   client: Client,
   input: ClearNotificationInboxInput
-): Promise<{ rowCount: number; undoToken: string; nextCursor: string | null }> {
+): Promise<{ rowCount: number; undoToken: string; complete: boolean }> {
   const result = await client
     .mutation(ClearNotificationInboxDocument, { input })
     .toPromise();
@@ -76,7 +77,7 @@ export async function clearInboxBatch(
   return {
     rowCount: payload.rowCount,
     undoToken: payload.undoToken,
-    nextCursor: payload.nextCursor ?? null,
+    complete: payload.complete,
   };
 }
 

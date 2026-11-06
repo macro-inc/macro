@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import { rowEntity } from '../primitives/row-entity';
 import { commentNotification, inboxEntry } from '../tests/wire';
-import { encodeInboxScope, toInboxGroup } from './decode';
+import { encodeClearScope, encodeInboxScope, toInboxGroup } from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -304,5 +304,20 @@ describe('encodeInboxScope', () => {
     expect(
       encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
     ).toEqual({ rowTypes: [], unreadOnly: true });
+  });
+});
+
+describe('encodeClearScope', () => {
+  it('omits rowTypes for every kind, since the server rejects an empty list', () => {
+    expect(encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES })).toEqual({});
+    expect(
+      encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+    ).toEqual({ unreadOnly: true });
+  });
+
+  it('names the chosen kinds', () => {
+    expect(encodeClearScope({ rowTypes: ['email'] })).toEqual({
+      rowTypes: ['EMAIL'],
+    });
   });
 });
