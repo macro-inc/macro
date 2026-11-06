@@ -12,8 +12,9 @@ From the Nix development shell, build host binaries once, then start each slot:
 
 ```sh
 cargo x zigbuild
-just kube-local up dev-a --slot 0
-just kube-local up dev-b --slot 1
+just kube-local up dev-a --slot 0 &
+just kube-local up dev-b --slot 1 &
+wait
 just kube-local status dev-a
 ```
 
@@ -26,6 +27,8 @@ Doppler supplies the same local configuration as `run_local` by default.
 `--env-file /private/path` overlays it; `--no-doppler` opts out. Agent sessions
 need real model credentials. An offline stack can start without them but cannot
 provide a real model reply.
+Gmail forwarding starts when its provider key is present; the rendered reference
+and image commands include its declaration in the complete service catalog.
 
 Each instance owns its namespace, backing services, runtime Secrets and
 persistent volumes. The controller verifies checkout ownership before changing
@@ -37,6 +40,8 @@ kubeconfig and an explicit context.
 The host controller creates the namespace and runtime Secrets, applies the
 Nix-rendered resources with server-side apply and ApplySet pruning, and waits.
 There are no host port-forwards or service initialization scripts in the runner.
+Stable instance flakes in private state let Nix cache evaluations for repeat
+starts; source and configuration changes invalidate those evaluations.
 
 Postgres migrations, Kafka topics and OpenSearch indices run as Jobs. Init
 containers wait for dependencies. LocalStack's ready.d script provisions the

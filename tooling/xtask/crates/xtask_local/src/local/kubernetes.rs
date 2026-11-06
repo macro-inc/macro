@@ -145,7 +145,8 @@ pub fn run(cmd: Cmd) -> Result<()> {
         Cmd::Cluster => cluster::ensure(&state),
         Cmd::Up(args) => up(&state, &args),
         Cmd::Images(args) => {
-            let params = parameters(&args.instance)?;
+            let mut params = parameters(&args.instance)?;
+            params["enableGmail"] = json!(true);
             cluster::ensure(&state)?;
             if let Some(service) = &args.service {
                 validate_name(service)?;

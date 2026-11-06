@@ -18,7 +18,10 @@ in
   perSystem =
     { ... }:
     let
-      reference = platform.instance { name = "reference"; };
+      reference = platform.instance {
+        name = "reference";
+        enableGmail = true;
+      };
     in
     {
       packages = {

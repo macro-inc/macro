@@ -3,35 +3,53 @@ use serde::Deserialize;
 #[cfg(test)]
 mod test;
 
-fn expression(state: &Path, params: &Value, field: &str) -> Result<String> {
+fn flake(state: &Path, params: &Value, field: &str) -> Result<PathBuf> {
     let name = params["name"].as_str().context("instance name missing")?;
     validate_name(name)?;
-    let revision = format!("{:x}", Sha256::digest(serde_json::to_vec(params)?));
-    let file = state.join(format!("nix-{name}-{revision}.json"));
-    std::fs::write(&file, serde_json::to_vec_pretty(params)?)?;
-    // JSON is read as data, never interpolated into executable Nix source.
+    let revision = format!(
+        "{:x}",
+        Sha256::digest(serde_json::to_vec(&(params, field))?)
+    );
+    let directory = state.join("builds").join(format!("{name}-{revision}"));
+    std::fs::create_dir_all(&directory)?;
+    // A pure flake lets Nix cache evaluation across stops/restores. The JSON
+    // contains references and revision hashes, never credential values.
     let root = serde_json::to_string(&format!(
         "git+file://{}",
         super::super::repo_root().display()
-    ))?;
-    let file = serde_json::to_string(path_str(&file)?)?;
-    Ok(format!(
-        "let f = builtins.getFlake {root}; args = builtins.fromJSON (builtins.readFile {file}); in (f.kubeLocal.instance args).{field}"
-    ))
+    ))?
+    .replace("${", "\\${");
+    let source = format!(
+        "{{ inputs.macro.url = {root}; outputs = {{ macro, ... }}: {{ packages.x86_64-linux.default = (macro.kubeLocal.instance (builtins.fromJSON (builtins.readFile ./params.json))).{field}; }}; }}"
+    );
+    for (name, contents) in [
+        ("params.json", serde_json::to_string_pretty(params)?),
+        ("flake.nix", source),
+    ] {
+        let file = directory.join(name);
+        if std::fs::read(&file).ok().as_deref() != Some(contents.as_bytes()) {
+            std::fs::write(file, contents)?;
+        }
+    }
+    Ok(directory)
 }
 
 pub(super) fn build(state: &Path, params: &Value, field: &str) -> Result<PathBuf> {
-    let expr = expression(state, params, field)?;
+    let directory = flake(state, params, field)?;
+    let root = format!("git+file://{}", super::super::repo_root().display());
+    let target = format!("path:{}#default", directory.display());
     let result = Command::new("nix")
         .current_dir(super::super::repo_root())
         .stderr(std::process::Stdio::inherit())
         .args([
             "build",
-            "--impure",
             "--no-link",
             "--print-out-paths",
-            "--expr",
-            &expr,
+            "--no-write-lock-file",
+            "--override-input",
+            "macro",
+            &root,
+            &target,
         ])
         .output()?;
     ensure!(result.status.success(), "Nix instance build failed");
@@ -60,7 +78,7 @@ pub(super) fn push_store(script: &Path) -> Result<()> {
 
 pub(super) fn reference(state: &Path, args: &Render) -> Result<()> {
     validate_name(&args.name)?;
-    let params = json!({"name": args.name});
+    let params = json!({"name": args.name, "enableGmail": true});
     let rendered = build(state, &params, "manifests")?;
     check_directory(&rendered)?;
     let destination = args
