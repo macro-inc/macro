@@ -7,6 +7,16 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \
 bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts
 ```
 
+Session switching (rows prefetching on a pointer rest, held sessions reopening
+without a fetch) has a backend-free desktop check over the real rows,
+`AgentSession` and `createAgentSession`, with stand-in services answering after
+400 ms. It prints the press-to-transcript times it measured:
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \
+bunx playwright test --config src/features/block-agent/browser-test/session-switch.playwright.config.ts
+```
+
 For session-open performance, use a regular owned Vite frontend, an authorized
 local session and histories created through the local session API. Keep login
 state, session IDs, raw logs and capture artifacts outside the repository. Never

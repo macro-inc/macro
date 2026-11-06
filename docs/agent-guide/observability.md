@@ -388,7 +388,12 @@ Phases you will see:
 - Agents: `agent.session.load` (cache read/fold, session fetch, log fetch, fold
   and paint timings) when the view acquires a session; `agent.provision` waits
   for a newly created one; `agent.transcript` waits for the first visible
-  transcript, cached or not. An already shared session adds no load span. The
+  transcript, cached or not. An already shared session adds no load span. A
+  load a row prefetch started (pointer rest or focus, `prefetch.ts`) carries
+  `agent.session.load.prefetched:true`; when a view joins it mid-fetch,
+  `prefetch_lead_ms` is the head start and the render span's
+  `since_load_ms` counts from the view. A view of a prefetched session that
+  already loaded is `outcome:reused` with `prefetched:true`. The
   fold stage includes synchronous listener projection, reported separately as
   `agent.session.load.projection_ms` with its message count; do not add the two.
   A slow fold with a similarly slow projection is main-thread store work, not
