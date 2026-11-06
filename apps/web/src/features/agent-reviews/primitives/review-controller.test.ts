@@ -83,7 +83,7 @@ function setup(
   return { controller, actions };
 }
 describe('persisted review decisions', () => {
-  it('adopts presentation acknowledgments but preserves conflicting editor data', async () => {
+  it('adopts newer revisions, remounting editors only when their drafts change', async () => {
     const [source, update] = createSignal<EmailReview>(initial);
     const actions = {
       reload: async (): Promise<Review> => source(),
@@ -97,6 +97,7 @@ describe('persisted review decisions', () => {
     await Promise.resolve();
     expect(controller.stale()).toBe(false);
     expect(controller.record().presentedAt).toBe(100);
+    expect(controller.generation()).toBe(0);
     update({
       ...source(),
       revision: 2,
@@ -106,7 +107,37 @@ describe('persisted review decisions', () => {
       })),
     });
     await Promise.resolve();
+    expect(controller.stale()).toBe(false);
+    expect(controller.record().items[0].draft.subject).toBe(
+      'Changed elsewhere'
+    );
+    expect(controller.generation()).toBe(1);
+  });
+  it('keeps unsaved local edits when another editor changes the draft', async () => {
+    const [source, update] = createSignal<EmailReview>(initial);
+    const actions = {
+      reload: async (): Promise<Review> => source(),
+      decide: vi.fn(() => new Promise<Review>(() => {})),
+    };
+    const controller = createRoot((dispose) => {
+      cleanups.push(dispose);
+      return createReviewController(source, actions);
+    });
+    controller.edit('one', {
+      kind: 'email',
+      draft: { subject: 'Ready?', body: 'Mine', to: [{ email: 'a@example.com' }] },
+    });
+    update({
+      ...initial,
+      revision: 1,
+      items: initial.items.map((item) => ({
+        ...item,
+        draft: { ...item.draft, subject: 'Changed elsewhere' },
+      })),
+    });
+    await Promise.resolve();
     expect(controller.stale()).toBe(true);
+    expect(controller.generation()).toBe(0);
   });
   it('a poll returning its own in-flight save does not mark the review stale', async () => {
     const [source, update] = createSignal<EmailReview>({
