@@ -90,7 +90,8 @@ already running, and calls with no channel keep `call_chat`, and behave as descr
 
 While a call is active and you have not joined, a compact **Call in progress**
 card stays above the composer with live duration, attendee avatars and **Join**.
-The channel header also shows attendees, duration and Join. While you are in
+The channel header also shows attendees, duration and Join. On phones, Join is
+a success-colored phone icon and the compact card keeps up to three avatars. While you are in
 the call, Messages shows the live waveform/duration chip instead of a Return button. Joining uses the
 existing call action; no call is started merely by opening the channel.
 

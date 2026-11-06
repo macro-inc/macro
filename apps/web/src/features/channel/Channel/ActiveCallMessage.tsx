@@ -5,6 +5,7 @@ import { CallWaveform } from '@channel/Call/CallWaveform';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
 import { UserGroup } from '@core/component/UserGroup';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
@@ -50,12 +51,13 @@ export function ActiveCallMessage(props: { channelId: string }) {
             </span>
             <CallLiveChip
               bare
+              hideWave
               startedAt={active.isSuccess ? active.data?.createdAt : undefined}
             />
           </div>
           <UserGroup
             userIds={participantIds()}
-            maxUsers={4}
+            maxUsers={isMobile() ? 3 : 4}
             size="sm"
             suppressClick
           />
