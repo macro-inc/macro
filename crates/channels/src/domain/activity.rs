@@ -162,7 +162,10 @@ pub fn ingest_message_event(event_id: Uuid, event: &MessageTopicEvent) -> Ingest
             };
             // For agent (bot) messages, `triggered_by` is the user whose
             // authority the message was sent under — the activity's subject.
-            let on_behalf_of = m.triggered_by.as_deref().and_then(|id: &str| {
+            // A person's message with `triggered_by` came from their account
+            // manager, and remains that person's activity.
+            let bot_trigger = m.sender.as_bot().and(m.triggered_by.as_deref());
+            let on_behalf_of = bot_trigger.and_then(|id: &str| {
                 MacroUserIdStr::try_from(id.to_string())
                     .inspect_err(|e| {
                         // Fall back to the sender as subject, but loudly: the
