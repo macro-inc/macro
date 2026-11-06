@@ -7,6 +7,7 @@ import { Popover } from '@kobalte/core/popover';
 import { useLiveCallRecordQuery } from '@queries/call/call';
 import { Button, Dropdown } from '@ui';
 import { Show } from 'solid-js';
+import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 import { ActiveCallLink } from './ActiveCallLink';
 import { useCallContext } from './CallContext';
 import { CallLiveChip } from './CallLiveChip';
@@ -18,6 +19,7 @@ export function ActiveCallPopover(props: {
   onShowPlayer?: () => void;
 }) {
   const call = useCallContext();
+  const quickCalls = useQuickCallsFlag();
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
   return (
     <Popover.Content class="menu-surface z-modal w-75 max-w-[calc(100vw-1rem)] overflow-hidden outline-none animate-menu-open">
@@ -35,7 +37,12 @@ export function ActiveCallPopover(props: {
             startedAt={record.isSuccess ? record.data.startedAt : undefined}
           />
         </div>
-        <Show when={props.onShowPlayer}>
+        <Show
+          when={
+            props.onShowPlayer ||
+            (!quickCalls().loading && quickCalls().enabled)
+          }
+        >
           <Dropdown placement="bottom-end">
             <Dropdown.Trigger
               variant="ghost"
@@ -47,15 +54,17 @@ export function ActiveCallPopover(props: {
             </Dropdown.Trigger>
             <Dropdown.Content class="min-w-56">
               <Dropdown.Group>
-                <Dropdown.Item onSelect={props.onShowPlayer}>
-                  <PictureInPicture class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">{t('calls.showPlayer')}</span>
-                </Dropdown.Item>
+                <Show when={props.onShowPlayer}>
+                  <Dropdown.Item onSelect={props.onShowPlayer}>
+                    <PictureInPicture class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">{t('calls.showPlayer')}</span>
+                  </Dropdown.Item>
+                </Show>
+                <ActiveCallLink menuItem />
               </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>
         </Show>
-        <ActiveCallLink compact />
         <Button
           variant="ghost"
           size="icon-sm"
