@@ -1281,7 +1281,8 @@ GitHub sends, such as `workflow_run` and `completed`; empty means any), checks
 Macro's app can't retrigger itself). Deliveries only reach owners whose
 currently linked GitHub account installed the delivering installation, or whose
 team did. While GitHub is disconnected the panel shows **Connect GitHub**
-instead, and an enabled GitHub routine can't be saved. The panel also has
+instead, as does the triggers section above the list whenever a GitHub
+trigger is present, and an enabled GitHub routine can't be saved. The panel also has
 **Only when the payload…** rows: a dotted field (`*` checks every list item, e.g.
 `pull_request.labels.*.name`), a comparison (**is**, **is one of**, **is not one
 of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
