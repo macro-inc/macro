@@ -7,8 +7,6 @@ use agent_client_protocol::schema::v1::{
     ResumeSessionResponse, SelectedPermissionOutcome, SessionCapabilities,
     SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
-
-const CREDENTIAL: &str = "Bearer placeholder-session-credential";
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::{
     AgentAction, AgentActionId, AgentPermissionAction, PermissionAnswer,
@@ -26,6 +24,8 @@ use super::{
     CloseReason, Effect, Input, PermissionPolicy, RuntimeStatus, SessionMachine,
     SessionRestoreSupport, StopReason,
 };
+
+const CREDENTIAL: &str = "Bearer placeholder-session-credential";
 
 fn machine() -> SessionMachine<u32> {
     machine_under(PermissionPolicy::AutoAccept)

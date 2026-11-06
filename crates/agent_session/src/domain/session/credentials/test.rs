@@ -28,7 +28,8 @@ fn http_server(value: &str) -> McpServer {
 #[test]
 fn tool_output_scrubs_full_header_and_bare_bearer_token() {
     let original = tool_output(&format!("value: Bearer {TOKEN}; token: {TOKEN}; done"));
-    let redacted = redact_inbound_credentials(original, &[http_server(&format!("Bearer {TOKEN}"))]).unwrap();
+    let redacted =
+        redact_inbound_credentials(original, &[http_server(&format!("Bearer {TOKEN}"))]).unwrap();
     assert_eq!(
         serde_json::to_value(redacted).unwrap(),
         serde_json::to_value(tool_output("value: [REDACTED]; token: [REDACTED]; done")).unwrap()
