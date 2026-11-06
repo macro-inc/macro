@@ -37,7 +37,7 @@ evenly where its paper edges sat, and every other card dims until you close it. 
 card brings it back. Each small card opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.
-A stack stays open as new notifications land. The time always shows and ends the card's first line, after the stack caret and unread dot; on hover Mark done takes its place, so it sits at the same spot on every card, stacked or not, and nothing else moves. The author is
+A stack stays open as new notifications land. The time always shows. With a pointer, the first line ends time, stack caret, Mark done, unread dot: Mark done shows on hover in a slot that stays empty otherwise, and a read card keeps the dot's room, so Mark done sits at the same spot on every card, stacked or not, read or not, and nothing moves. Touch has no Mark done button and no empty slots. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't

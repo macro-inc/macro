@@ -42,9 +42,9 @@ export type NotificationRowProps = {
  * did it, what it is about, and what was said. Choosing it opens it. Several
  * notifications show as a stack with paper edges, and its own button spreads them
  * into small cards below it, leaving this card as it was.
- * With a pointer, Mark done takes the time's
- * place on hover and nothing else moves; the time ends the line, so the button
- * sits in the same spot on every card. Touch marks done by swiping the row. A
+ * With a pointer, Mark done shows on hover in its own slot just before the
+ * unread dot, held empty otherwise, so it sits in the same spot on every card
+ * and nothing moves. Touch marks done by swiping the row. A
  * phone shows larger text, and a read card gives up its fill and fades, so unread
  * ones stand out at a glance.
  */
@@ -109,12 +109,23 @@ export function NotificationRow(props: NotificationRowProps) {
                   theme={unifiedListMarkdownTheme}
                 />
               </span>
+              <span
+                data-card-time=""
+                class={cn(
+                  'shrink-0 text-xs mobile:text-[13px] mobile:leading-[18px]',
+                  props.unseen
+                    ? 'text-ink-extra-muted mobile:text-ink-muted'
+                    : 'text-ink-extra-muted/80'
+                )}
+              >
+                {props.time}
+              </span>
               <Show when={isStack()}>
                 <Button
                   size="icon-xs"
                   variant="ghost"
                   // Its frame is taller than the line; it shouldn't grow the card.
-                  class="-my-1 -mr-1 shrink-0 touch:-my-3"
+                  class="-my-1 shrink-0 touch:-my-3 touch:-mr-1"
                   data-stack-toggle=""
                   aria-expanded={props.unfolded}
                   aria-label={t('notificationsInbox.stackToggle', {
@@ -138,30 +149,10 @@ export function NotificationRow(props: NotificationRowProps) {
                   />
                 </Button>
               </Show>
-              <Show when={props.unseen}>
-                <span
-                  aria-label={t('notificationsInbox.unread')}
-                  data-unread-dot=""
-                  class="size-1.5 shrink-0 rounded-full bg-accent mobile:size-2"
-                />
-              </Show>
-              {/* The time ends the line, after the caret and unread dot, so Mark done,
-                  which takes its place on hover, sits in the same spot on every
-                  card, stacked or not, read or not, and nothing moves. */}
-              <span class="relative shrink-0">
-                <span
-                  data-card-time=""
-                  class={cn(
-                    'block text-xs not-touch:group-hover/notification:invisible mobile:text-[13px] mobile:leading-[18px]',
-                    props.unseen
-                      ? 'text-ink-extra-muted mobile:text-ink-muted'
-                      : 'text-ink-extra-muted/80'
-                  )}
-                >
-                  {props.time}
-                </span>
-                {/* Touch marks done by swiping the row instead. */}
-                <span class="absolute top-1/2 -right-1.5 hidden -translate-y-1/2 not-touch:group-hover/notification:block">
+              {/* Mark done's slot, held on every card with a pointer so the button
+                  shows in the same place on all of them; touch swipes instead. */}
+              <span class="relative hidden size-4 shrink-0 not-touch:block">
+                <span class="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 not-touch:group-hover/notification:block">
                   <Button
                     size="icon-sm"
                     variant="ghost"
@@ -176,6 +167,22 @@ export function NotificationRow(props: NotificationRowProps) {
                   </Button>
                 </span>
               </span>
+              {/* A read card keeps the dot's room, so Mark done doesn't move. */}
+              <Show
+                when={props.unseen}
+                fallback={
+                  <span
+                    aria-hidden="true"
+                    class="hidden size-1.5 shrink-0 not-touch:block"
+                  />
+                }
+              >
+                <span
+                  aria-label={t('notificationsInbox.unread')}
+                  data-unread-dot=""
+                  class="size-1.5 shrink-0 rounded-full bg-accent mobile:size-2"
+                />
+              </Show>
             </div>
             <Show when={props.what}>
               {(what) => (
