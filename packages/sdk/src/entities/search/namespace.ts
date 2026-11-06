@@ -68,7 +68,7 @@ const searchTypes: readonly SearchType[] = [
  * handles, with the same filters as the per-type searches and more: exact
  * matching, tags, one inbox and agent session transcripts.
  *
- * @routing Use when finding, looking up or listing the user's own Macro content, across types or in one, browsing recent or filtered workspace items, or reading an AI chat; not the web, and not one item already in context.
+ * @routing Use when finding or looking up the user's own Macro content by keyword, across types or in one; not browsing recent items (`macro.workspace`), the web, or one item already in context.
  *
  * @agent
  * Search is keyword search, not semantic: pass 1-3 words that would literally appear in the item, not the user's description. Whitespace-separated terms are ANDed; for documents and email each word is a prefix and terms may match different passages, while for other kinds the query is one adjacent phrase prefix, so long phrases match nothing. Quote a multi-word phrase; use matchType 'exact' for a whole word, identifier or email address. Search a person and a topic separately. To find someone's email, search their quoted address, not their name.

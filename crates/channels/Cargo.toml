@@ -96,6 +96,7 @@ schema = [
 ]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 activity = { path = "../activity", default-features = false }
 anyhow = { workspace = true }
 attachment = { path = "../attachment", optional = true }

@@ -70,6 +70,9 @@ fn segment(speaker_id: &str, content: &str, minute: u32) -> CallRecordTranscript
 
 fn ended_call(transcript: Vec<CallRecordTranscriptSegment>) -> CallRecord {
     CallRecord {
+        discussion: call::domain::models::CallDiscussion::CallChat {
+            call_id: Uuid::parse_str(CALL_ID).unwrap(),
+        },
         call_id: Uuid::parse_str(CALL_ID).unwrap(),
         channel_id: Some(Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0000000c4a77").unwrap()),
         room_name: Some("room".into()),
@@ -476,6 +479,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
     .unwrap();
     let at = |minute| Utc.with_ymd_and_hms(2026, 10, 8, 14, minute, 0).unwrap();
     let prompt = Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: prompt_id,
         parent: MessageParent::Channel(channel_id),
         thread_id: Some(root_id),
@@ -512,6 +516,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                     deleted_at: None,
                 },
                 root: Message {
+                    kind: messages::domain::models::MessageKind::Message,
                     id: root_id,
                     parent: MessageParent::Channel(channel_id),
                     thread_id: None,
@@ -532,6 +537,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                 },
                 replies: vec![
                     Message {
+                        kind: messages::domain::models::MessageKind::Message,
                         id: answer_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),
@@ -551,6 +557,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                         reactions: Vec::new(),
                     },
                     Message {
+                        kind: messages::domain::models::MessageKind::Message,
                         id: deleted_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),
@@ -571,6 +578,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
                     },
                     prompt,
                     Message {
+                        kind: messages::domain::models::MessageKind::Message,
                         id: later_id,
                         parent: MessageParent::Channel(channel_id),
                         thread_id: Some(root_id),

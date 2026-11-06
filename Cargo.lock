@@ -38,9 +38,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "account_manager"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "channels",
+ "chrono",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "messages",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "user_api_key",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "activity"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ai_toolset",
  "async-trait",
  "bot_id",
@@ -353,6 +381,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_correlation"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "macro_auth",
+ "macro_db_migrator",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -529,6 +577,7 @@ dependencies = [
  "agent_api_keys",
  "agent_changes",
  "agent_code_mode",
+ "agent_correlation",
  "agent_egress",
  "agent_fold",
  "agent_harness",
@@ -839,6 +888,7 @@ dependencies = [
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "agent-client-protocol",
  "agent_fold",
@@ -2196,6 +2246,7 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
+ "agent_correlation",
  "ai_billing",
  "ai_usage",
  "analytics_client",
@@ -3939,6 +3990,7 @@ dependencies = [
 name = "calendar_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "authentication_service_client",
  "aws-sdk-secretsmanager",
@@ -4006,6 +4058,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
+ "feature_flags",
  "filter_ast",
  "futures",
  "invite_email",
@@ -4292,6 +4345,7 @@ name = "channels"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -4997,6 +5051,7 @@ dependencies = [
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "async-trait",
  "aws-sdk-dynamodb",
@@ -5196,6 +5251,7 @@ dependencies = [
 name = "contacts_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -6605,8 +6661,10 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "access_requests",
+ "account_manager",
  "activity",
  "agent_changes",
+ "agent_correlation",
  "agent_session",
  "agent_session_realtime",
  "ai_billing",
@@ -6669,6 +6727,7 @@ dependencies = [
  "entity_registry_db_utils",
  "external_chat",
  "favorites",
+ "feature_flags",
  "flate2",
  "foreign_entity",
  "forms",
@@ -6903,6 +6962,7 @@ name = "documents"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_billing",
  "ai_engine",
  "ai_toolset",
@@ -7326,6 +7386,7 @@ name = "email"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "ai_toolset",
  "anyhow",
  "async-trait",
@@ -7589,6 +7650,7 @@ dependencies = [
 name = "email_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "ammonia",
  "anyhow",
  "authentication_service_client",
@@ -9452,6 +9514,7 @@ dependencies = [
  "async-graphql",
  "async-stream",
  "attention_feed",
+ "chrono",
  "futures",
  "graphql_common",
  "graphql_notification",
@@ -9460,6 +9523,7 @@ dependencies = [
  "notification_inbox",
  "soup",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -11354,6 +11418,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "async-trait",
+ "futures",
  "macro_env_var",
  "macro_user_id",
  "reqwest 0.13.4",
@@ -12587,6 +12652,7 @@ dependencies = [
 name = "macro_event_broker"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "kafka_util",
  "macro_event_topics",
  "rdkafka",
@@ -14105,6 +14171,7 @@ dependencies = [
 name = "notification_service"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
