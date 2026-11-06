@@ -6,12 +6,12 @@ import PhoneDisconnect from '@icon/system/regular/phone-disconnect.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import VideoCamera from '@icon/system/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
-import { Telemetry } from '@macro-inc/observability';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { useActiveCallCompanion } from './use-active-call-companion';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
 type QuickControl = 'camera' | 'screen' | 'sharing';
@@ -24,6 +24,7 @@ export function CallQuickControls(props: {
 }) {
   const call = useCallContext();
   const sharing = useActiveCallTeamShare();
+  const companion = useActiveCallCompanion();
   const screenUnavailable = () => {
     call.trackVersion();
     return (
@@ -39,16 +40,6 @@ export function CallQuickControls(props: {
         );
       })
     );
-  };
-  const leave = async () => {
-    const channelId = call.activeChannelId();
-    if (!channelId) return;
-    await Telemetry.span('call.leave', async (span) => {
-      const callId = call.activeCallId();
-      if (callId) span.setAttr('call.id', callId);
-      const result = await call.callLifecycle.leave(channelId);
-      span.setAttr('call.leave.ended', result?.callEnded ?? false);
-    });
   };
   return (
     <div class="flex items-center gap-1.5 p-2">
@@ -116,13 +107,15 @@ export function CallQuickControls(props: {
         />
       </Show>
       <span class="flex-1" />
-      <Show when={call.activeChannelId()}>
+      <Show when={companion.canLeave()}>
         <Button
           variant="danger"
           size={props.size ?? 'icon-md'}
           class="min-w-11"
           aria-label={t('calls.leave')}
-          onClick={() => fireAndForget(leave(), 'call-quick-controls')}
+          onClick={() =>
+            fireAndForget(companion.leave(), 'call-quick-controls')
+          }
         >
           <PhoneDisconnect class="size-4" />
         </Button>

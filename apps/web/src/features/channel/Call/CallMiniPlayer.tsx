@@ -207,9 +207,14 @@ export function CallMiniPlayer(props: {
                 <Show when={participant().sharing}>
                   <Screencast class="mr-1 inline size-3" />
                 </Show>
-                {participant().sharing && participant().local
-                  ? t('calls.youAreSharing')
-                  : participant().name}
+                <Show
+                  when={participant().sharing}
+                  fallback={participant().name}
+                >
+                  {participant().local
+                    ? t('calls.youAreSharing')
+                    : t('calls.presenterSharing', { name: participant().name })}
+                </Show>
                 <Show when={audioOnly() && participant().speaking}>
                   <span class="block text-xs text-success">
                     {t('calls.speaking')}

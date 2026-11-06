@@ -218,7 +218,7 @@ it.each([false, true])(
     viewport.scrollTop = 300;
     fireEvent.scroll(viewport);
     fireEvent.input(input, { target: { value: 'Keep this draft' } });
-    fireEvent.click(screen.getByRole('radio', { name: /Participants/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /People/ }));
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(input.isConnected).toBe(true);
     resize();

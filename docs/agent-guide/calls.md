@@ -73,8 +73,9 @@ More and creates the link only after explicit selection. More also offers
 **Show floating player**. Away from the channel's Call tab, the desktop player
 starts bottom-right, follows the speaker and gives screen sharing priority.
 Drag its header to snap to a corner; Collapse tucks it back into the rail.
-Audio-only calls use a compact neutral avatar/name row. Standalone meetings
-without a global channel lifecycle keep Open call rather than a global Leave.
+Audio-only calls use a compact neutral avatar/name row. Channel and standalone
+calls navigate and leave through their existing session owner; standalone calls
+do not depend on the quick-call feed loading first.
 
 The desktop Chat sidebar has no separate Live section. Live calls are marked
 on their conversation rows with a waveform and elapsed time. Your current call

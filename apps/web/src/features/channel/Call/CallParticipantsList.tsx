@@ -10,6 +10,7 @@ import { Avatar, Badge, cn } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { CallWaveform } from './CallWaveform';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 
@@ -53,9 +54,11 @@ function ParticipantRow(props: {
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 items-center gap-1">
           <p class="min-w-0 truncate text-sm" title={props.name}>
-            {props.local
-              ? t('calls.localParticipant', { name: props.name })
-              : props.name}
+            <Show when={props.local} fallback={props.name}>
+              {props.compact
+                ? t('calls.you')
+                : t('calls.localParticipant', { name: props.name })}
+            </Show>
           </p>
           <Show when={props.isProgram}>
             <Badge variant="secondary" size="xs">
@@ -67,34 +70,44 @@ function ParticipantRow(props: {
           <p class="text-xs text-accent">{t('calls.speaking')}</p>
         </Show>
       </div>
-      <span
-        class={cn('shrink-0', props.muted ? 'text-failure' : 'text-ink-muted')}
-        role="img"
-        aria-label={
-          props.muted ? t('calls.microphoneOff') : t('calls.microphoneOn')
-        }
-      >
-        <Show when={props.muted} fallback={<Microphone class="size-4" />}>
-          <MicrophoneSlash class="size-4" />
-        </Show>
-      </span>
-      <span
-        class={cn(
-          'shrink-0',
-          props.videoEnabled ? 'text-ink-muted' : 'text-failure'
-        )}
-        role="img"
-        aria-label={
-          props.videoEnabled ? t('calls.cameraOn') : t('calls.cameraOff')
-        }
-      >
-        <Show
-          when={props.videoEnabled}
-          fallback={<VideoCameraSlash class="size-4" />}
+      <Show when={props.compact && props.speaking}>
+        <CallWaveform class="size-4" />
+      </Show>
+      <Show when={!props.compact || props.muted}>
+        <span
+          class={cn(
+            'shrink-0',
+            props.muted ? 'text-failure' : 'text-ink-muted'
+          )}
+          role="img"
+          aria-label={
+            props.muted ? t('calls.microphoneOff') : t('calls.microphoneOn')
+          }
         >
-          <VideoCamera class="size-4" />
-        </Show>
-      </span>
+          <Show when={props.muted} fallback={<Microphone class="size-4" />}>
+            <MicrophoneSlash class="size-4" />
+          </Show>
+        </span>
+      </Show>
+      <Show when={!props.compact || !props.videoEnabled}>
+        <span
+          class={cn(
+            'shrink-0',
+            props.videoEnabled ? 'text-ink-muted' : 'text-failure'
+          )}
+          role="img"
+          aria-label={
+            props.videoEnabled ? t('calls.cameraOn') : t('calls.cameraOff')
+          }
+        >
+          <Show
+            when={props.videoEnabled}
+            fallback={<VideoCameraSlash class="size-4" />}
+          >
+            <VideoCamera class="size-4" />
+          </Show>
+        </span>
+      </Show>
     </li>
   );
 }

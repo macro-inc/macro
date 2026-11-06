@@ -239,6 +239,7 @@ function LocalParticipantTile(props: {
 function ParticipantTile(props: {
   participant: RemoteParticipant;
   avatarSize?: 'sm' | 'md';
+  filmstrip?: boolean;
   isFocused: boolean;
   hidden: boolean;
   onToggleFocus: () => void;
@@ -272,7 +273,11 @@ function ParticipantTile(props: {
       onToggleFocus={props.onToggleFocus}
       focusLabel={`${props.isFocused ? 'Unfocus' : 'Focus'} ${displayName()}`}
       hidden={props.hidden}
-      class={cn('min-w-0', props.hidden && 'hidden')}
+      class={cn(
+        'min-w-0',
+        props.filmstrip && 'max-w-36',
+        props.hidden && 'hidden'
+      )}
     >
       <Show
         when={cameraTrack()}
@@ -381,8 +386,10 @@ export function CallOverlay(props: {
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
-  const compactControls = () =>
-    !isMobile() && (resizeContext()?.size() ?? 0) < 640;
+  const stageWidth = () =>
+    (resizeContext()?.size() ?? 0) -
+    (panelOpen() && widePanel() ? panelWidth() + 12 : 0);
+  const compactControls = () => !isMobile() && stageWidth() < 640;
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [sharingOpen, setSharingOpen] = createSignal(false);
   const [keyboardFocus, setKeyboardFocus] = createSignal(false);
@@ -680,7 +687,7 @@ export function CallOverlay(props: {
               {/* Participants area; stays mounted while the screen share is maximized. */}
               <div
                 hidden={showScreenShare() && screenShareMaximized()}
-                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} ${focusedParticipant() === 'local' ? 'relative' : ''} ${selfInGrid() ? 'grid grid-cols-2 auto-rows-fr gap-2' : ''} pt-2 mobile:pt-0`}
+                class={`${showScreenShare() ? 'h-24 shrink-0' : 'flex-1 min-h-0'} ${focusedParticipant() === 'local' ? 'relative' : ''} ${selfInGrid() ? 'grid grid-cols-2 auto-rows-fr gap-2' : ''} pt-2 mobile:pt-0`}
               >
                 <Show
                   when={participants().length > 0}
@@ -711,7 +718,9 @@ export function CallOverlay(props: {
                       selfInGrid()
                         ? 'contents'
                         : cn(
-                            `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
+                            showScreenShare()
+                              ? 'flex h-full justify-center gap-2 overflow-hidden'
+                              : `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
                             focusedParticipant() === 'local'
                               ? 'absolute bottom-4 right-4 z-20 w-40 aspect-video shadow-lg sm:w-48'
                               : 'size-full'
@@ -722,8 +731,12 @@ export function CallOverlay(props: {
                       {(participant) => (
                         <ParticipantTile
                           participant={participant}
+                          filmstrip={showScreenShare()}
                           avatarSize={
-                            focusedParticipant() === 'local' ? 'sm' : 'md'
+                            focusedParticipant() === 'local' ||
+                            showScreenShare()
+                              ? 'sm'
+                              : 'md'
                           }
                           isFocused={focusedParticipant() === participant}
                           hidden={
@@ -754,7 +767,7 @@ export function CallOverlay(props: {
                       !selfInGrid() &&
                         (focusedParticipant() === 'local'
                           ? 'inset-0'
-                          : `right-4 w-48 aspect-video shadow-lg ${panelOpen() && widePanel() ? 'bottom-24' : 'bottom-4'}`)
+                          : `right-4 w-48 aspect-video shadow-lg ${(panelOpen() && widePanel()) || stageWidth() < 980 ? 'bottom-24' : 'bottom-4'}`)
                     )}
                   >
                     <LocalParticipantTile

@@ -10,15 +10,15 @@ import { Show } from 'solid-js';
 import { useCallContextOptional } from './CallContext';
 import { CallLiveChip } from './CallLiveChip';
 import { CallQuickControls } from './CallQuickControls';
-import { openChannelCallTab } from './open-channel-call-tab';
+import { useActiveCallCompanion } from './use-active-call-companion';
 
 export function MobileCallIsland() {
   const call = useCallContextOptional();
+  const companion = useActiveCallCompanion();
   const visible = () =>
     isMobile() &&
     !!call?.isInCall() &&
-    !call.isCallPage() &&
-    !!call.activeChannelId() &&
+    !companion.inCallView() &&
     !virtualKeyboardVisible();
   const record = useLiveCallRecordQuery(() =>
     visible() ? (call?.activeCallId() ?? '') : ''
@@ -43,10 +43,7 @@ export function MobileCallIsland() {
   const speaking = () =>
     call?.isLocalSpeaking() ||
     !!(speaker() && call?.isParticipantSpeaking(speaker()!));
-  const open = () => {
-    const id = call?.activeChannelId();
-    if (id) fireAndForget(openChannelCallTab(id), 'mobile-call-island');
-  };
+  const open = () => fireAndForget(companion.open(), 'mobile-call-island');
   return (
     <FloatRegion region="call" active={visible}>
       <Show when={visible()}>
