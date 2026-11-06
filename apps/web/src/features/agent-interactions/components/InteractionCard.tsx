@@ -1,10 +1,14 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { MessagePart } from '@service-agent-fold/generated/types';
+import type {
+  MessagePart,
+  PendingPermission,
+} from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
   AgentInteraction,
   InteractionController,
+  StopAskingAction,
 } from '../context/interaction';
 import {
   LiveQuestionCard,
@@ -23,6 +27,8 @@ export function InteractionCard(props: {
   request: AgentInteraction;
   controller: InteractionController;
   tool?: Extract<MessagePart, { kind: 'tool_use' }>;
+  /** Stopping the runtime asking, where the viewer may. */
+  stopAsking?: (request: PendingPermission) => StopAskingAction | undefined;
 }) {
   const locked = () =>
     !props.controller.canAnswer() || props.controller.answering(props.request);
@@ -33,6 +39,7 @@ export function InteractionCard(props: {
           options={request.options}
           canAnswer={props.controller.canAnswer()}
           disabled={locked()}
+          stopAsking={props.stopAsking?.(request)}
           action={
             props.tool?.name.kind === 'native'
               ? props.tool.name.name

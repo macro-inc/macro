@@ -49,3 +49,11 @@ export const agentSessionAutoArchiveKeys = createQueryKeys(
     detail: (sessionId: string) => ({ queryKey: [sessionId] }),
   }
 );
+
+/** What stopping a session's permission requests on its runtime would change. */
+export const agentSessionRuntimeBypassKeys = createQueryKeys(
+  'agentSessionRuntimeBypass',
+  {
+    offer: (sessionId: string) => ({ queryKey: [sessionId] }),
+  }
+);

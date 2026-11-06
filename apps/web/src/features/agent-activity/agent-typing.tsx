@@ -2,6 +2,8 @@ import { PersonaAvatar } from '@app/features/agent-dms/components/persona-avatar
 import { InteractionCard } from '@app/features/agent-interactions/components/InteractionCard';
 import type { AgentInteraction } from '@app/features/agent-interactions/context/interaction';
 import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
+import { createRuntimeBypass } from '@app/features/agent-interactions/primitives/create-runtime-bypass';
+import { confirmPermissionBypass } from '@app/features/settings/confirm-permission-bypass';
 import {
   isWorkingTurn,
   sessionTurn,
@@ -132,6 +134,15 @@ function AgentTypingEntry(props: {
     issue: (action) => live.issue(action),
     onFailure: (message) => toast.failure(message),
   });
+  const runtimeBypass = createRuntimeBypass({
+    sessionId: () => props.sessionId,
+    enabled: () =>
+      canEdit() === true &&
+      pending().some((request) => request.kind === 'permission'),
+    respond: interactions.respond,
+    confirm: confirmPermissionBypass,
+    onFailure: (message) => toast.failure(message),
+  });
   const toolFor = (toolCall: string | null) => {
     const part = reply()?.parts.find(
       (candidate): candidate is Extract<MessagePart, { kind: 'tool_use' }> =>
@@ -185,6 +196,7 @@ function AgentTypingEntry(props: {
                 request={request()}
                 controller={interactions}
                 tool={toolFor(request().toolCall)}
+                stopAsking={runtimeBypass.action}
               />
             )}
           </Key>

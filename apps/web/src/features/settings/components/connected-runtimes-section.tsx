@@ -3,8 +3,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { usePatchHarnessMutation } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
-import { confirmDialog, ToggleSwitch } from '@ui';
+import { ToggleSwitch } from '@ui';
 import { For, Show } from 'solid-js';
+import { confirmPermissionBypass } from '../confirm-permission-bypass';
 import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
 
@@ -82,15 +83,7 @@ function PairedRuntimeRow(props: {
   const patchHarness = usePatchHarnessMutation();
 
   const setBypass = async (allowed: boolean) => {
-    if (allowed) {
-      const confirmed = await confirmDialog({
-        title: 'Allow bypassing permission requests?',
-        body: 'Agents set to bypass can run commands and edit files on this machine without approval. Only enable this if you trust everyone who can create agents on this runtime.',
-        confirmLabel: 'Allow',
-        tone: 'danger',
-      });
-      if (!confirmed) return;
-    }
+    if (allowed && !(await confirmPermissionBypass())) return;
     try {
       await patchHarness.mutateAsync({
         harnessId: props.harness.id,

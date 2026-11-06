@@ -1,4 +1,7 @@
 import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
+import { createRuntimeBypass } from '@app/features/agent-interactions/primitives/create-runtime-bypass';
+import { confirmPermissionBypass } from '@app/features/settings/confirm-permission-bypass';
+import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { PendingPermission } from '@service-agent-fold/generated/types';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
@@ -8,6 +11,15 @@ import { toolCallDetail, toolLabel } from './parts/shared';
 export function PermissionRequest(props: { request: PendingPermission }) {
   const session = useOptionalAgentSession();
   const identity = () => ({ ...props.request, kind: 'permission' as const });
+  const canAnswer = () => session?.interactions.canAnswer() === true;
+  const runtimeBypass = createRuntimeBypass({
+    sessionId: () => session?.sessionId(),
+    enabled: canAnswer,
+    respond: (response) =>
+      session?.interactions.respond(response) ?? Promise.resolve(false),
+    confirm: confirmPermissionBypass,
+    onFailure: (message) => toast.failure(message),
+  });
   const tool = () =>
     session
       ?.messages()
@@ -34,8 +46,9 @@ export function PermissionRequest(props: { request: PendingPermission }) {
       action={action()}
       detail={detail()}
       options={props.request.options}
-      canAnswer={session?.interactions.canAnswer() === true}
+      canAnswer={canAnswer()}
       disabled={session?.interactions.answering(identity())}
+      stopAsking={runtimeBypass.action(props.request)}
       onSelect={(optionId) =>
         fireAndForget(
           session?.interactions.respond({
