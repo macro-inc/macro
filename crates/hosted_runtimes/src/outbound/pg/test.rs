@@ -91,7 +91,7 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
 
     assert!(matches!(tenth, Err(ReserveError::SoldOut)));
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+        repo.sold_out_sizes(&crate::domain::size::current_catalog(), false)
             .await
             .unwrap(),
         vec![
@@ -275,7 +275,7 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
     assert!(matches!(crashed.state.phase, Phase::Restarting { .. }));
     assert_eq!(repo.list_for_team(TEAM).await.unwrap().len(), 1);
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+        repo.sold_out_sizes(&crate::domain::size::current_catalog(), false)
             .await
             .unwrap(),
         vec![]
@@ -634,7 +634,7 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
     assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
     assert_eq!(stored.price_id.unwrap().as_str(), "price_standard");
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+        repo.sold_out_sizes(&crate::domain::size::current_catalog(), false)
             .await
             .unwrap(),
         vec![ComputerSize::Large, ComputerSize::Xl]
@@ -669,3 +669,5 @@ async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
 }
 
 mod credentials;
+
+mod capacity;

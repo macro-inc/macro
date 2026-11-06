@@ -220,10 +220,11 @@ pub trait ComputerRepo: Send + Sync + 'static {
         registration: HostRegistration,
     ) -> impl Future<Output = Result<Host, Self::Err>> + Send;
 
-    /// Sizes that no host can sell right now.
+    /// Sizes that no host can sell; personas require unreserved awake units too.
     fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
+        always_on: bool,
     ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 
     /// Ask to hear when `size` can be bought again.

@@ -239,7 +239,12 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         self.require_rollout(&user_id).await?;
         let sold_out = self
             .repo
-            .sold_out_sizes(&self.catalog)
+            .sold_out_sizes(&self.catalog, false)
+            .await
+            .map_err(internal)?;
+        let always_on_sold_out = self
+            .repo
+            .sold_out_sizes(&self.catalog, true)
             .await
             .map_err(internal)?;
         let notify = self
@@ -259,6 +264,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
                 disk_gb: entry.resources.disk_gib.get(),
                 quote: self.quote(team_id, size, &billing).await?,
                 sold_out: sold_out.contains(&size),
+                always_on_sold_out: always_on_sold_out.contains(&size),
                 notify_requested: notify.contains(&size),
             });
         }

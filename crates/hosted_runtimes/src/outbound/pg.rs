@@ -341,21 +341,28 @@ impl ComputerRepo for PgComputerRepo {
 
         // Lock every host: purchases are rare and hosts few, and this keeps
         // two purchases from both taking the last units.
+        sqlx::query!("SELECT id FROM hosted_runtime_host ORDER BY id FOR UPDATE")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(storage)?;
+        // Read reservations in a new statement after any host-lock wait.
         let host = sqlx::query_scalar!(
             r#"
             WITH locked AS (
-                SELECT id, sold_capacity_units FROM hosted_runtime_host ORDER BY id FOR UPDATE
+                SELECT id, sold_capacity_units, awake_capacity_units FROM hosted_runtime_host
             )
             SELECT locked.id
             FROM locked
             LEFT JOIN hosted_runtime computer
                 ON computer.host_id = locked.id AND computer.holds_units
-            GROUP BY locked.id, locked.sold_capacity_units
+            GROUP BY locked.id, locked.sold_capacity_units, locked.awake_capacity_units
             HAVING locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) >= $1::BIGINT
+               AND (NOT $2::BOOLEAN OR locked.awake_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.persona IS NOT NULL), 0) >= $1::BIGINT)
             ORDER BY locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) DESC
             LIMIT 1
             "#,
             i64::from(computer_units),
+            computer.persona.is_some(),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -828,18 +835,23 @@ impl ComputerRepo for PgComputerRepo {
     async fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
+        always_on: bool,
     ) -> Result<Vec<ComputerSize>, PgComputerError> {
         let free = sqlx::query_scalar!(
             r#"
             SELECT COALESCE(MAX(free), 0)::INTEGER AS "free!"
             FROM (
-                SELECT host.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) AS free
+                SELECT LEAST(
+                    host.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0),
+                    CASE WHEN $1::BOOLEAN THEN host.awake_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.persona IS NOT NULL), 0) ELSE host.sold_capacity_units END
+                ) AS free
                 FROM hosted_runtime_host host
                 LEFT JOIN hosted_runtime computer
                     ON computer.host_id = host.id AND computer.holds_units
-                GROUP BY host.id, host.sold_capacity_units
+                GROUP BY host.id, host.sold_capacity_units, host.awake_capacity_units
             ) hosts
             "#,
+            always_on,
         )
         .fetch_one(&self.pool)
         .await?;

@@ -15,7 +15,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
 - Keep literal purchase resources in the versioned `domain::size::current_catalog`.
 - Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
-  reserves sold units on a host; waking checks awake units (`Context::host_has_room`).
+  reserves sold units on a host; personas also reserve awake units. Waking checks
+  awake units (`Context::host_has_room`).
 
 ## Start here
 
@@ -106,6 +107,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   checks ownership and deletes orphans only after ten minutes. Creation timestamps
   are stamped once as `user.macro.created_at` / `macro.created_at`; missing or
   invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
+- **Capacity**: Every purchase holds oversold units until payment refusal or
+  destruction. Persona purchases additionally reserve awake units against other
+  capacity-holding personas on the same host, including powered-off personas.
+  Reserve both under the host lock. Ordinary computers may use oversold capacity.
+  `GET /team/computers/offers` reports `soldOut` for ordinary purchases and
+  `alwaysOnSoldOut` per size for persona purchases (including internal callers).
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, persona, extra_items, billing })`
   → `computer_id`. A Stripe purchase adds the computer's item plus
   every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: StripePriceId, quantity }`, quantity

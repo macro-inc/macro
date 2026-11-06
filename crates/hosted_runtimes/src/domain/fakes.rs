@@ -43,6 +43,7 @@ pub struct FakeError;
 #[derive(Default)]
 pub struct FakeRepo {
     pub sold_units: u32,
+    pub awake_units: Mutex<Option<u32>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
     pub enrollment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
@@ -95,6 +96,15 @@ impl ComputerRepo for FakeRepo {
             .map(|existing| existing.resources.units())
             .sum();
         if sold + computer.resources.units() > self.sold_units {
+            return Err(ReserveError::SoldOut);
+        }
+        let reserved_awake: u32 = computers
+            .values()
+            .filter(|existing| existing.state.holds_units() && existing.persona.is_some())
+            .map(|existing| existing.resources.units())
+            .sum();
+        let awake = self.awake_units.lock().unwrap().unwrap_or(self.sold_units);
+        if computer.persona.is_some() && reserved_awake + computer.resources.units() > awake {
             return Err(ReserveError::SoldOut);
         }
         let mut state = ComputerState::reserved(HOST, now);
@@ -409,6 +419,7 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, FakeError> {
+        *self.awake_units.lock().unwrap() = Some(registration.awake_capacity_units());
         Ok(Host {
             id: HOST,
             awake_capacity_units: registration.awake_capacity_units(),
@@ -419,9 +430,29 @@ impl ComputerRepo for FakeRepo {
 
     async fn sold_out_sizes(
         &self,
-        _catalog: &[crate::domain::size::CatalogEntry],
+        catalog: &[crate::domain::size::CatalogEntry],
+        always_on: bool,
     ) -> Result<Vec<ComputerSize>, FakeError> {
-        Ok(vec![])
+        let computers = self.computers.lock().unwrap();
+        let sold: u32 = computers
+            .values()
+            .filter(|c| c.state.holds_units())
+            .map(|c| c.resources.units())
+            .sum();
+        let reserved_awake: u32 = computers
+            .values()
+            .filter(|c| c.state.holds_units() && c.persona.is_some())
+            .map(|c| c.resources.units())
+            .sum();
+        let awake = self.awake_units.lock().unwrap().unwrap_or(self.sold_units);
+        Ok(catalog
+            .iter()
+            .filter(|entry| {
+                entry.resources.units() > self.sold_units.saturating_sub(sold)
+                    || (always_on && entry.resources.units() > awake.saturating_sub(reserved_awake))
+            })
+            .map(|entry| entry.size)
+            .collect())
     }
 
     async fn request_notify(

@@ -935,3 +935,5 @@ async fn disabled_sales_reject_purchase_before_reserving_capacity() {
     assert!(service.repo.list_for_team(TEAM).await.unwrap().is_empty());
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }
+
+mod capacity;

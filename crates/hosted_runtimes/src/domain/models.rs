@@ -199,6 +199,8 @@ pub struct SizeOffer {
     pub quote: Quote,
     /// Whether no host can currently sell this size.
     pub sold_out: bool,
+    /// Whether no host has both sold units and awake reservations for a persona.
+    pub always_on_sold_out: bool,
     /// The caller asked to hear when this size is back.
     pub notify_requested: bool,
 }
