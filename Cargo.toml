@@ -119,6 +119,7 @@ members = [
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
+  "crates/natural_time",
   "crates/notification_inbox",
   "crates/notification_state",
   "crates/pipedream_mcp",
