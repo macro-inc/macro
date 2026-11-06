@@ -39,7 +39,7 @@ struct FakeHost {
 }
 
 impl Host for FakeHost {
-    fn ensure_user(&self, os_user: &str) -> rootcause::Result<Ownership> {
+    fn ensure_user(&self, os_user: &PersonaOsUser) -> rootcause::Result<Ownership> {
         self.calls
             .borrow_mut()
             .push(format!("ensure_user {os_user}"));

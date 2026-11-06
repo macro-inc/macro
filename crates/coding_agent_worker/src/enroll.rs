@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use hosted_runtimes::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY, Persona};
+use hosted_runtimes::domain::enrollment::{
+    Enrollment, INCUS_ENROLLMENT_KEY, Persona, PersonaOsUser, SystemdUnitName,
+};
 use macro_service_urls::{
     AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
 };
@@ -103,7 +105,7 @@ pub struct Ownership {
 /// The privileged side effects enrolling has on the machine.
 pub trait Host {
     /// Create the OS user (with a home) when absent; return its ids.
-    fn ensure_user(&self, os_user: &str) -> rootcause::Result<Ownership>;
+    fn ensure_user(&self, os_user: &PersonaOsUser) -> rootcause::Result<Ownership>;
     /// Change a path's owner.
     fn chown(&self, path: &Path, owner: Ownership) -> rootcause::Result<()>;
     /// Run `systemctl` with these arguments.
@@ -114,11 +116,11 @@ pub trait Host {
 pub struct SystemHost;
 
 impl Host for SystemHost {
-    fn ensure_user(&self, os_user: &str) -> rootcause::Result<Ownership> {
+    fn ensure_user(&self, os_user: &PersonaOsUser) -> rootcause::Result<Ownership> {
         if id(os_user, "-u")?.is_none() {
             run(
                 "useradd",
-                &["--create-home", "--shell", "/bin/bash", os_user],
+                &["--create-home", "--shell", "/bin/bash", os_user.as_str()],
             )?;
         }
         let uid = id(os_user, "-u")?
@@ -140,9 +142,9 @@ impl Host for SystemHost {
 }
 
 /// `id <flag> <user>`: `None` when the user does not exist.
-fn id(os_user: &str, flag: &str) -> rootcause::Result<Option<u32>> {
+fn id(os_user: &PersonaOsUser, flag: &str) -> rootcause::Result<Option<u32>> {
     let output = std::process::Command::new("id")
-        .args([flag, os_user])
+        .args([flag, os_user.as_str()])
         .output()
         .context("could not run id")?;
     if !output.status.success() {
@@ -425,8 +427,8 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
 /// A persona's validated, rendered files.
 #[derive(Debug)]
 struct PersonaFiles {
-    os_user: String,
-    unit_name: String,
+    os_user: PersonaOsUser,
+    unit_name: SystemdUnitName,
     env_path: PathBuf,
     env_contents: String,
     unit_path: PathBuf,
@@ -479,8 +481,8 @@ impl PersonaFiles {
         );
 
         Ok(Self {
-            os_user: os_user.as_str().to_owned(),
-            unit_name: unit_name.as_str().to_owned(),
+            os_user: os_user.clone(),
+            unit_name: unit_name.clone(),
             env_path: paths.at(&env_system_path),
             env_contents,
             unit_path: paths.at(&format!("{SYSTEMD_UNIT_DIR}/{unit_name}.service")),

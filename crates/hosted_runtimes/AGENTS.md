@@ -112,7 +112,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   (the unit's `EnvironmentFile`), and installs + starts `/etc/systemd/system/<unit_name>.service`
   as that user. `PersonaOsUser`, `SystemdUnitName`, and `PersonaConfigKey` in
   `domain::enrollment` validate names and keys on construction and JSON reads;
-  `PersonaOsUser` requires `^agent-[a-z0-9][a-z0-9_-]{0,24}$` with no legacy names;
+  `PersonaOsUser` requires `^[a-z_][a-z0-9_-]{0,30}$`, excluding root, macro and macrod*;
   `PersonaConfigKey` supports borrowed string map lookups. `Persona` and
   `PersonaService` Debug redact config and env values.
   `service::validate_persona` checks commands and values.

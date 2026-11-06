@@ -608,7 +608,7 @@ pub fn validate_persona(persona: &Persona) -> Result<(), ComputerError> {
         .values()
         .chain(persona.extra_service.env.values());
     for value in values {
-        if value.contains('\n') {
+        if value.contains(['\n', '\r']) {
             return Err(ComputerError::BadRequest(
                 "persona values must be single lines".to_owned(),
             ));
