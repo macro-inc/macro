@@ -71,6 +71,7 @@
 			"apps/marketing",
 			"packages/observability",
 			"packages/code-mode-sdk",
+			"packages/sdk-mcp",
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
