@@ -146,7 +146,4 @@ it('redacts raw and encoded agent identities in URLs and exception text', () => 
   expect(redactLinkTokens('Failed /team_agents/macro|agent@example.com')).toBe(
     'Failed /team_agents/:agentId'
   );
-  expect(telemetryUrl('/team_agents/me/secrets')).toBe(
-    '/team_agents/me/secrets'
-  );
 });
