@@ -9,9 +9,30 @@ import { runCommand } from './subprocess.ts';
 import {
   checkWorkspace,
   childEnvironment,
+  installation,
   type Running,
   Supervisor,
 } from './supervisor.ts';
+import { useTestLibrary } from './test-library.ts';
+
+useTestLibrary();
+
+test('library resolution refuses missing or blank BRAIN_LIBRARY_ROOT', async () => {
+  const previous = process.env.BRAIN_LIBRARY_ROOT;
+  try {
+    for (const value of [undefined, '', '  ']) {
+      if (value === undefined) delete process.env.BRAIN_LIBRARY_ROOT;
+      else process.env.BRAIN_LIBRARY_ROOT = value;
+      await assert.rejects(
+        () => installation('/unused-workspace'),
+        /BRAIN_LIBRARY_ROOT/
+      );
+    }
+  } finally {
+    if (previous === undefined) delete process.env.BRAIN_LIBRARY_ROOT;
+    else process.env.BRAIN_LIBRARY_ROOT = previous;
+  }
+});
 
 test('template composition typechecks, tests and boots a fake event offline', async () => {
   const root = await nodeFs.mkdtemp(

@@ -3,13 +3,11 @@ import { spawn } from 'node:child_process';
 import * as nodeFs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { abortableSleep } from './events.ts';
 import { initTelemetry, shutdownTelemetry, withSpan } from './telemetry.ts';
 import { relayTelemetry } from './telemetry-relay.ts';
 import { type Git, gitCli } from './workspace.ts';
 
-const PACKAGE = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WIRING = [
   'brain.ts',
   ':(glob)brain/**/*.ts',
@@ -39,14 +37,14 @@ export type Installation = { root: string; config: string; version: string };
 
 /** Resolve an exact installed version; never download library code or npm dependencies. */
 export async function installation(workspace: string): Promise<Installation> {
+  const libraryRoot = process.env.BRAIN_LIBRARY_ROOT?.trim();
+  if (!libraryRoot) throw new Error('BRAIN_LIBRARY_ROOT must be set');
   const version = (
     await nodeFs.readFile(join(workspace, 'brain.lock'), 'utf8')
   ).trim();
   if (!/^\d+\.\d+\.\d+$/.test(version))
     throw new Error('brain.lock must contain an exact library version');
-  const root = process.env.BRAIN_LIBRARY_ROOT
-    ? join(process.env.BRAIN_LIBRARY_ROOT, version)
-    : PACKAGE;
+  const root = join(libraryRoot, version);
   const config = join(root, 'package.json');
   const manifest = JSON.parse(await nodeFs.readFile(config, 'utf8'));
   if (manifest.version !== version || manifest.name !== '@macro-inc/brain')

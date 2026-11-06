@@ -10,7 +10,10 @@ import { type Candidate, judge, parseJevConfig } from './jev.ts';
 import { fixtures, Learning } from './learning.ts';
 import type { Turn } from './runner.ts';
 import { checkWorkspace } from './supervisor.ts';
+import { useTestLibrary } from './test-library.ts';
 import { GitWriter, Workspace } from './workspace.ts';
+
+useTestLibrary();
 
 const candidate: Candidate = {
   messageId: 'useful-message',

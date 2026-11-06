@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { checkWorkspace } from './supervisor.ts';
+import { useTestLibrary } from './test-library.ts';
+
+useTestLibrary();
 
 test('the full release-manager composition passes brain check', async () => {
   const root = await mkdtemp(join(tmpdir(), 'brain-release-example-'));

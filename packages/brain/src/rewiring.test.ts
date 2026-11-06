@@ -6,7 +6,10 @@ import { test } from 'node:test';
 import { closeHttp, httpPort, serveHttp } from './http.ts';
 import { runCommand } from './subprocess.ts';
 import { supervise, workspaceSupervisor } from './supervisor.ts';
+import { useTestLibrary } from './test-library.ts';
 import { gitCli, Workspace } from './workspace.ts';
+
+useTestLibrary();
 
 test('a broken main composition is restored in real git and remembered for the next turn', async () => {
   const root = await nodeFs.mkdtemp(

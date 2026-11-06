@@ -19,8 +19,10 @@ brain health                     # what macrod polls, as JSON; exit 1 unless ok
 ```
 
 Every variable is required; a missing one fails startup with its name. The
-packaged CLI explicitly supplies its executable path and health interval; direct
-Node invocations must supply both. Claude
+packaged CLI explicitly supplies its executable path, health interval and
+versioned library root; direct Node invocations must supply all three.
+`brain check` also requires `BRAIN_LIBRARY_ROOT`, containing a directory for
+each installed exact version; workspace checks never use a checkout fallback. Claude
 access comes only from `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` (Macro's
 gateway); turns run with `CLAUDE_CONFIG_DIR=<workspace>/cache/claude`, so a
 personal `~/.claude` login is never read. `claude` must be on `PATH`, and the
