@@ -19,6 +19,7 @@ import {
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
+import { TutorialVideoDialog } from '../../features/marketing/components/TutorialVideoDialog';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/email/email-hero.css';
 
@@ -123,7 +124,10 @@ export function RouteEmail() {
           Keep your inbox clean, move through emails quickly, and have agents
           draft good replies.
         </p>
-        <FeaturePageCta name="email_hero_get_started" />
+        <div class="feature-page-hero-actions">
+          <FeaturePageCta name="email_hero_get_started" />
+          <TutorialVideoDialog tutorial="mail" />
+        </div>
       </header>
       <EmailDesktopDemo />
       <nav

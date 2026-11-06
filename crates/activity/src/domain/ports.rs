@@ -242,3 +242,18 @@ pub trait EntityActivityReads: Send + Sync + 'static {
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
 }
+
+/// Reads activity caused by one agent session. Its owning domain supplies access.
+pub trait AgentActivityReads: Send + Sync + 'static {
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// A stable page across the session's invocations, optionally narrowed to one.
+    fn agent_activity(
+        &self,
+        session_id: Uuid,
+        correlation_id: Option<Uuid>,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
+}

@@ -51,6 +51,7 @@ ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency/ports"]
 s3 = ["dep:aws-sdk-s3", "ports"]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 subtle = { workspace = true, optional = true }
 calendar_events = { path = "../calendar_events", optional = true }
 ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }

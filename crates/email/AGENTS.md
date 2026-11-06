@@ -198,3 +198,5 @@ tools — hexagonal, heavily feature-gated.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- Persist agent correlation with scheduled delivery and organization projection payloads, then restore it when publishing delayed activity.

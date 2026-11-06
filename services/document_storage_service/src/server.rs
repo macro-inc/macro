@@ -16,6 +16,13 @@ use crate::{
     outbound,
     service::{self, s3::S3},
 };
+use account_manager::{
+    domain::service::AccountManagerServiceImpl,
+    inbound::axum_router::AccountManagerRouterState,
+    outbound::{
+        dm_delivery::DmAccountManagerDelivery, pg_account_manager_repo::PgAccountManagerRepo,
+    },
+};
 use agent_session_realtime::{
     domain::service::AgentSessionLogConsumerService,
     outbound::redis_stream::consumer::RedisLogStreamConsumer,
@@ -197,6 +204,8 @@ use user_api_key::{
 
 const SOUP_CONSUMER_RESTART_MAX_DELAY_SECS: u64 = 60;
 const SOUP_CONSUMER_RESTART_ALERT_THRESHOLD: u32 = 5;
+
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
 fn soup_consumer_restart_delay(consecutive_failures: u32) -> Duration {
     let exponent = consecutive_failures.saturating_sub(1).min(6);
@@ -875,11 +884,24 @@ async fn run_server() -> anyhow::Result<()> {
     };
     let call_service_builder = call_service_builder.with_voip_push_sender(voip_sender);
 
-    let call_service = Arc::new(
-        call_service_builder
-            .with_voice_repo(PgVoiceRepo::new(db.clone()))
-            .with_event_broker(macro_event_broker.clone()),
-    );
+    let call_root_poster = call::outbound::channel_threads::LateCallRootPoster::default();
+    let call_service_builder = call_service_builder
+        .with_voice_repo(PgVoiceRepo::new(db.clone()))
+        .with_event_broker(macro_event_broker.clone());
+    let flags = feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+        config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
+        config.posthog_api_key.as_ref().to_owned(),
+        // Flag evaluation is on the call-start path; fall back promptly.
+        Duration::from_millis(300),
+    )
+    .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
+        call::outbound::channel_threads::FlaggedChannelThreads::new(
+            flags,
+            call_root_poster.clone(),
+        ),
+    ));
+    let call_service = Arc::new(call_service_builder);
 
     consumer_tracker.spawn({
         let service = call_service.clone();
@@ -1336,6 +1358,10 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    let call_roots: Arc<dyn messages::domain::api::CallRootPoster> = message_service.clone();
+    if call_root_poster.set(call_roots).is_err() {
+        tracing::error!("the call root poster was set twice");
+    }
     let guest_chat_service = Arc::new(
         messages::domain::service::guest_chat::GuestChatService::new(
             message_service.clone(),
@@ -1956,6 +1982,15 @@ async fn run_server() -> anyhow::Result<()> {
         favorites_service.clone(),
         entity_access_service.clone(),
     ));
+    let account_manager_service = Arc::new(AccountManagerServiceImpl::new(
+        PgAccountManagerRepo::new(db.clone()),
+        DmAccountManagerDelivery::new(
+            channels_service.clone(),
+            message_commands.clone(),
+            entity_access_service.clone(),
+            macro_service_urls::AppServiceUrl::new()?,
+        ),
+    ));
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
         db.clone(),
     )));
@@ -2161,6 +2196,22 @@ async fn run_server() -> anyhow::Result<()> {
     let feed_viewers: Arc<dyn attention_feed::inbound::viewers::FeedViewerResolver> = Arc::new(
         attention_feed::inbound::viewers::EntityAccessFeedViewers(entity_access_service.clone()),
     );
+    // Reads the primary: a client refetches right after the change it heard about.
+    let graphql_registered_work_context = complete_graph::RegisteredWorkGraphqlContext::new(
+        agent_session::domain::work_registration::WorkRegistrationService::new(
+            agent_session::outbound::postgres::PgAgentSessionRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            ),
+            Arc::new(
+                agent_session::domain::audience::EntityAccessSessionView::new(
+                    entity_access_service.as_ref().clone(),
+                ),
+            ),
+            agent_session::domain::work_registration::NoWorkRegistrationSignal,
+        ),
+        soup_realtime_service.clone(),
+    );
     let graphql_work_feed_context = complete_graph::WorkFeedGraphqlContext::new(
         work_feed::domain::service::WorkFeedServiceImpl::new(
             attention_feed::outbound::soup::SoupCandidateSource::new(
@@ -2202,6 +2253,7 @@ async fn run_server() -> anyhow::Result<()> {
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,
+        graphql_registered_work_context,
         graphql_notification_inbox_context,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
@@ -2225,6 +2277,10 @@ async fn run_server() -> anyhow::Result<()> {
                 db.clone(),
             ))),
             entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        account_manager_state: AccountManagerRouterState::new(
+            account_manager_service,
             authorization_state.clone(),
         ),
         user_api_key_state: UserApiKeyRouterState::new(

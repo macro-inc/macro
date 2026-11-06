@@ -94,6 +94,8 @@ pub fn encode_local_jwt_claims_with(
     };
 
     encode_macro_api_token(EncodeMacroApiTokenArgs {
+        agent_correlation_id: None,
+        agent_session_id: None,
         agent_id: None,
         agent_via: None,
         fusionauth_id: claims.fusion_user_id.to_owned(),

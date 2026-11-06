@@ -186,6 +186,7 @@ impl McpCredentials for SpyCredentials {
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
+        _session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         self.agents.lock().expect("lock").push(agent);

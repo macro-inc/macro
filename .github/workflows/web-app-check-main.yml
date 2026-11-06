@@ -2,14 +2,7 @@
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
 'on':
-  pull_request:
-    types:
-    - opened
-    - synchronize
-    - reopened
-    - ready_for_review
-    branches:
-    - main
+  workflow_call: {}
 jobs:
   path-check:
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -1420,6 +1413,3 @@ jobs:
         fi
 
         echo "All jobs passed or were skipped"
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-check
-  cancel-in-progress: true
