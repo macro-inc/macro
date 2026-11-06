@@ -262,6 +262,27 @@ export type AppEvents = {
     action: 'add' | 'remove';
   };
 
+  // In-product tutorial videos (the pinned row at the top of an inbox).
+  tutorial_video: {
+    /** `macro-<id>` for each id in features/video-tutorials/core/tutorial-id.ts. */
+    tutorial:
+      | 'macro-mail'
+      | 'macro-home'
+      | 'macro-chat'
+      | 'macro-tasks'
+      | 'macro-docs'
+      | 'macro-drive'
+      | 'macro-crm'
+      | 'macro-calendar'
+      | 'macro-calls'
+      | 'macro-agents'
+      | 'macro-github'
+      | 'macro-scheduling'
+      | 'macro-whatsapp';
+    /** `support_clicked`: the dialog's "Talk to us" link under the video. */
+    action: 'opened' | 'played' | 'dismissed' | 'support_clicked';
+  };
+
   // --- Calls ---------------------------------------------------------------
   // Frontend call interactions only. Recordings, transcripts and summaries
   // are produced server-side and send no PostHog events yet; the call service
@@ -379,7 +400,7 @@ export type AppEvents = {
    */
   crm_pipeline_entries_edited: {
     pipelineId: string;
-    recordType?: 'company' | 'contact';
+    recordType?: 'company' | 'contact' | 'generic';
     /** The pipeline editor or the record page's pipeline cards. */
     surface: 'pipeline' | 'record';
     insertedRows: number;
@@ -394,13 +415,14 @@ export type AppEvents = {
     routineId?: string;
     source: 'new' | 'duplicate';
     triggerType: string;
-    targetKind?: 'agent' | 'model';
+    /** A single agent's model or agent, or `steps` for a routine with steps. */
+    targetKind?: 'agent' | 'model' | 'steps';
   };
   /** A manual Run now the server accepted, not the run's outcome. */
   routine_run: {
     routineId: string;
     trigger: 'manual';
-    targetKind?: 'agent' | 'model';
+    targetKind?: 'agent' | 'model' | 'steps';
   };
 };
 

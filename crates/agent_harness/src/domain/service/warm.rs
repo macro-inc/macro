@@ -192,6 +192,7 @@ where
                             bot_id,
                             &model,
                             instructions.as_deref(),
+                            &request.origin,
                         )
                         .await?,
                 ),
@@ -290,6 +291,7 @@ where
                 instructions,
                 mcp_servers,
                 egress_token_hash: Some(egress.session_token_hash),
+                origin: request.origin,
             })
             .instrument(tracing::info_span!("agent.init.persist", agent.session.id = %session_id))
             .await?;
@@ -448,6 +450,7 @@ where
             reservations.insert(id, (owner.clone(), Instant::now()));
         }
         let request = OpenManagedSession {
+            origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner,
             prompt: None,

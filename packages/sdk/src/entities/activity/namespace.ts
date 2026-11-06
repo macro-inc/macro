@@ -36,6 +36,8 @@ export interface ActivityRange {
 /**
  * The acting user's own action history across Macro.
  *
+ * @routing Use when reading what the user did, opened, edited or sent in a time range, or a teammate's or project's history; not everything that changed in the workspace (`macro.workspace`).
+ *
  * @agent `macro.activity.mine` lists the user's own raw actions (opened,
  * edited, sent), including actions agents took for them; `User.activity`
  * reads privacy-reviewed daily, weekly and monthly summaries of the user's

@@ -70,6 +70,9 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
       muted:
         muteItem !== undefined &&
         isMutedItem(notificationSource.mutedEntities(), muteItem),
+      unread:
+        current.entityType === 'channel' &&
+        rail.channelActivity.unreadChannelIds().has(current.entityId),
     };
   });
 }

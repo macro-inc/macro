@@ -29,6 +29,7 @@ realtime = [
 ]
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 utoipa = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [

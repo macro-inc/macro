@@ -4425,6 +4425,76 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     dispose();
   });
 
+  it('skips local evaluation on cache changes while hidden and catches up once', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let currentRevision = REVISION_1;
+    let notifyCacheChanged!: (revision: string) => void;
+    let notifyGenerationChanged!: () => void;
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => currentRevision,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        notifyCacheChanged = callback;
+        return () => undefined;
+      },
+      onCacheGenerationChanged: (callback: () => void) => {
+        notifyGenerationChanged = callback;
+        return () => undefined;
+      },
+      entityFilter: entityFilterMock,
+    });
+    entityFilterMock.mockImplementation(async () => ({
+      kind: 'reconciled',
+      retainedKeys: [],
+      revision: currentRevision,
+      keys: [],
+      optimistic: false,
+    }));
+    readRecordsByKeysMock.mockImplementation(async () => ({
+      revision: currentRevision,
+      records: [],
+    }));
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    let dispose!: () => void;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      );
+    });
+    try {
+      fake.executions[0]?.next(
+        graphqlSoupPage({
+          items: [{ id: 'item-0', type: 'document', name: 'Network item' }],
+          next_cursor: null,
+        }),
+        { source: 'live-network', revision: REVISION_1 }
+      );
+      await Promise.resolve();
+      entityFilterMock.mockClear();
+
+      visibility.mockReturnValue('hidden');
+      currentRevision = REVISION_2;
+      notifyCacheChanged(REVISION_2);
+      currentRevision = '3';
+      notifyCacheChanged('3');
+      notifyGenerationChanged();
+      currentRevision = '4';
+      notifyCacheChanged('4');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(entityFilterMock).not.toHaveBeenCalled();
+
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() => expect(entityFilterMock).toHaveBeenCalledTimes(1));
+    } finally {
+      dispose();
+      visibility.mockRestore();
+    }
+  });
+
   it('merges baseline survivors with candidates without resetting server pagination', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

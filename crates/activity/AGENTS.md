@@ -62,3 +62,5 @@ distribution.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- Session activity reads preserve `agent_correlation_id` and use session visibility; entity and subject feeds retain their existing authorization.

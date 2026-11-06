@@ -11,6 +11,8 @@ export type { ExplicitMemory, MemoryEdit };
  * The acting user's private explicit memory: the preferences and facts they
  * asked AI to remember, one per line.
  *
+ * @routing Use when the user asks to remember, correct or forget something, or to see what AI remembers about them; not what someone worked on (`macro.activity`, `User.activity`).
+ *
  * @agent Change memory only when the user explicitly asks to remember,
  * correct or forget something; never save inferred preferences. Read first:
  * edits address one-based lines and must carry the revision you read. A

@@ -18,7 +18,13 @@ import {
   toBody,
   wrapXml,
 } from '../../mentions';
-import { MacroApiError, mapConcurrently, paginate, unwrap } from '../../utils';
+import {
+  MacroApiError,
+  MacroError,
+  mapConcurrently,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import {
@@ -27,7 +33,7 @@ import {
   timeline,
 } from '../messages/thread';
 import { Project } from '../projects/project';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
 import { User } from '../users/user';
 import {
@@ -43,6 +49,9 @@ type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
 
 /** Thread reads in flight at once while `comments()` expands a document's roots. */
 const THREAD_FETCH_CONCURRENCY = 8;
+
+/** File types whose content lives in Macro's editors, not in a stored file. */
+const NATIVE_FILE_TYPES = new Set(['md', 'canvas', 'spreadsheet']);
 
 /** One of a document's comment threads: its state and its comments. */
 export interface CommentThread {
@@ -108,7 +117,7 @@ export class Document
     ).token;
   }
 
-  /** Prepare multipart content saving and return the service's upload instructions. */
+  /** Prepare a multipart file upload; to change a markdown document's text, use `edit`. */
   async prepareSave(parts: PreSaveDocumentRequest['newBom']) {
     return unwrap(
       await this.client.storage.presaveDocumentHandler({
@@ -118,7 +127,7 @@ export class Document
     ).data;
   }
 
-  /** Commit uploaded content. Does not retry uncertain writes. */
+  /** Commit an uploaded file; to change a markdown document's text, use `edit`. Does not retry uncertain writes. */
   async save(options: SaveDocumentRequest) {
     return (
       await this.mutate((c) =>
@@ -130,7 +139,7 @@ export class Document
     ).data;
   }
 
-  /** Commit a simple document save. */
+  /** Commit a simple file save; to change a markdown document's text, use `edit`. */
   async simpleSave() {
     return (
       await this.mutate((c) =>
@@ -325,6 +334,37 @@ export class Document
       }),
     );
     if (text !== null) return text;
+    return (await this.download()).text();
+  }
+
+  /**
+   * The stored file's raw bytes: an uploaded PDF, image, Office file, CSV or
+   * any other file, such as an email attachment's `toDocument()`. Use
+   * `content()` for text; native Markdown, Canvas and spreadsheet documents
+   * have no stored file and throw here.
+   *
+   * @example Read an email attachment and re-upload it into a project.
+   * ```js
+   * const file = await attachment.toDocument();
+   * const bytes = await file.bytes();
+   * const copy = await macro.documents.upload({
+   *   name: await attachment.filename(),
+   *   content: bytes,
+   *   project,
+   * });
+   * ```
+   */
+  async bytes(): Promise<Uint8Array<ArrayBuffer>> {
+    const fileType = await this.fileType();
+    if (fileType && NATIVE_FILE_TYPES.has(fileType))
+      throw new MacroError(
+        `a native ${fileType} document has no stored file; read it with content()`,
+      );
+    return new Uint8Array(await (await this.download()).arrayBuffer());
+  }
+
+  /** Fetch the stored file through its signed export URL, without the user's token. */
+  private async download(): Promise<Response> {
     const { presigned_url } = unwrap(
       await this.client.storage.exportDocument({
         path: { document_id: this.id },
@@ -335,13 +375,13 @@ export class Document
       throw new MacroApiError(res.status, {
         message: 'failed to download document content',
       });
-    return res.text();
+    return res;
   }
 
   /**
-   * Edit a markdown document or task body by natural-language instructions,
-   * which an AI editor carries out, merging with anyone editing at the same
-   * time.
+   * Change a markdown document's or task body's text in place: pass
+   * natural-language instructions and an AI editor applies them, merging with
+   * concurrent edits.
    *
    * Write instructions like a precise request to a careful editor:
    * - Say where: name the section or heading, or quote the text to change.

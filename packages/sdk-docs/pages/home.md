@@ -96,7 +96,7 @@ opens the methods and exact request and response types for that namespace.
 | Entry point | What it represents |
 | --- | --- |
 | {@link src/entities/agent-sessions/namespace!AgentSessionNamespace | macro.agentSessions} | Agent conversations with their configuration, messages, queued actions, and execution state. |
-| {@link src/entities/bots/namespace!BotsNamespace | macro.bots} | Bot identities and their configuration. |
+| {@link src/entities/bots/namespace!BotsNamespace | macro.bots} | Bots: create, configure, channel access, webhooks and tokens. |
 | {@link src/entities/ai/namespace!AiNamespace | macro.ai} | AI operations on content you supply: structured generation and yes/no classification with Jev. |
 | {@link src/entities/memory/namespace!MemoryNamespace | macro.memory} | The current user's private explicit AI memory, edited one line at a time. |
 | {@link src/events/receiver!MacroEvents | macro.events} | Live entity events your application can subscribe to through a stream or webhook receiver. |

@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { PipelineRecordType } from './pipelineRecordType';
+import type { PipelineRecordTypeProperty } from './pipelineRecordTypeProperty';
 import type { PipelineSharing } from './pipelineSharing';
 import type { PipelineTrashedAt } from './pipelineTrashedAt';
 
@@ -20,10 +20,10 @@ export interface Pipeline {
   id: string;
   /** Pipeline display name. */
   name: string;
-  /** Protected primary column. */
+  /** A tracked pipeline's protected record reference. A generic pipeline's
+Name, which names no column once someone deletes it. */
   primaryColumnId: string;
-  /** Kind of the primary reference. */
-  recordType: PipelineRecordType;
+  recordType: PipelineRecordTypeProperty;
   /** Whether the pipeline has a team grant. */
   sharing: PipelineSharing;
   /** Table of entries. */

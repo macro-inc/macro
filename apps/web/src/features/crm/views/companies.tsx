@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show, Suspense } from 'solid-js';
 import { SoupViewList } from '../../next-soup/soup-view/soup-view';
@@ -42,6 +43,7 @@ export function Companies() {
                     onOpenEntity={options.onOpenEntity}
                     rowEntry={{ component: CompanyListEntity, family: 'row' }}
                     groupHeader={CompanyGroupHeader}
+                    listStart={<TutorialRow tutorial="crm" />}
                     listHeader={
                       <Show when={!isTouchDevice()}>
                         <ResponsiveCompanyListHeader class="shrink-0" />
