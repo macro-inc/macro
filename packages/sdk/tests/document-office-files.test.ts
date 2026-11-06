@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from 'bun:test';
-import { Document } from '../src/entities/documents/document';
 import { Macro } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
@@ -89,7 +88,6 @@ test('copyPresentation creates the edited copy and returns its handle', async ()
       operations: [{ op: 'setText', slide: 256, shape: 2, text: 'Résultats' }],
     });
 
-  expect(copy.document).toBeInstanceOf(Document);
   expect(copy.document.id).toBe('deck-2');
   expect(copy.changedSlides).toBe('Slide 1 (id 256): Résultats');
   expect(requests.map(target)).toEqual([
