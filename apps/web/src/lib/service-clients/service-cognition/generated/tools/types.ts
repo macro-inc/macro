@@ -8415,6 +8415,8 @@ export interface CreateProjectResponse {
  *
  * Prefer code: it is exact and cheap, and it can read many items, loop and decide. Use an agent step only for open-ended work, and put it last.
  *
+ * By default, code steps' posts, comments and emails are attributed to Macro's agent acting for the user. `dangerouslyOperateAsUser: true` makes them appear written by the user, with no agent badge. Set it ONLY when the user explicitly asks for the routine to act as them, send as them or post as them; never infer it from the task, and leave it out otherwise. Ask AI steps stay attributed to their agent either way.
+ *
  * Example, label invoices as they arrive. Triggers: `[{"type":"event","events":["email.message_received"]}]`. Its `steps` string holds:
  * [{"type":"code","title":"Label invoices","summary":"Asks AI whether the new email is an invoice and adds the inbox's Finance label if so.","source":"export async function main({ macro, trigger }: StepContext) {\n  if (trigger.kind !== 'event') return { labeled: false };\n  const { probabilities } = await macro.ai.decide({\n    input: { subject: trigger.item.email?.subject },\n    questions: { invoice: 'Is this email an invoice or a payment request?' },\n  });\n  if ((probabilities.invoice ?? 0) < 0.5) return { labeled: false };\n  const thread = macro.email.byId(trigger.item.entity_id);\n  const inbox = (await thread.link()).id;\n  for (const label of await macro.email.labels()) {\n    if ((await label.linkId()) === inbox && (await label.name()) === 'Finance') {\n      await thread.addLabel(label);\n      return { labeled: true };\n    }\n  }\n  return { labeled: false, missing: 'Finance' };\n}\n"}]
  *
@@ -8437,7 +8439,8 @@ export interface CreateProjectResponse {
  * - Call SDK methods as their declarations show, with `await`. Don't import anything.
  * - Judge with `macro.ai.decide({ input, questions })`: `questions` maps keys to yes/no questions, and `probabilities[key]` in the answer is from 0 to 1 (treat 0.5 and above as yes). Ask every question about one item in one call. Pass question knobs as the questions: `questions: { aboutMoney: knobs.aboutMoney }`. Build questions in code only when they come from data, such as one per label the owner has. To pick one of several options (a label, a priority, a person), ask one question per option and take the most likely one that reaches 0.5.
  * - Resolve names to ids in code, from the SDK (labels, properties, people, channels), rather than hard-coding ids.
- * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs as the owner, within 30 seconds.
+ * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs with the owner's access, within 30 seconds.
+ * - Its writes (messages, comments, emails) are attributed to Macro's agent acting for the owner. A routine's `dangerouslyOperateAsUser` setting makes them appear written by the owner, with no agent badge: it is set only when the user explicitly asks for the routine to act, send or post as them, never inferred from what the routine does.
  *
  */
 export interface CreateRoutine {
@@ -8467,6 +8470,16 @@ export interface RoutineConfiguration {
    * current apps; a list replaces them, and an empty list removes them.
    */
   requiredApps?: RoutineApp[] | null;
+  /**
+   * Dangerous: true makes its code steps post, comment and email as the
+   * user, with no agent badge, as if the user wrote them. Set it only
+   * when the user explicitly asks for the routine to act, send or post as
+   * them; never infer it. By default, and when false, code steps' writes
+   * are attributed to Macro's agent acting for the user. Ask AI steps are
+   * always attributed to their agent. On update, omit it to keep the
+   * routine's current setting.
+   */
+  dangerouslyOperateAsUser?: boolean | null;
 }
 /**
  * A Pipedream app a routine requires.

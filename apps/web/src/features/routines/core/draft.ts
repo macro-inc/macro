@@ -41,6 +41,11 @@ export type ScheduleDraft = {
   /** Apps every run requires, added to the target's own. Each must be connected. */
   apps: RoutineApp[];
   /**
+   * Whether code steps write as the owner, with no Agent badge, instead of as
+   * the agent. Ask AI steps stay the agent's. Absent means off.
+   */
+  dangerouslyOperateAsUser?: boolean;
+  /**
    * The routine's program. Absent for a single agent routine, which keeps its
    * instructions in `prompt` and its model or agent in `target`.
    */

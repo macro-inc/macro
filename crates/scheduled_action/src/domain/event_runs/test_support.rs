@@ -20,6 +20,7 @@ pub fn incoming() -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Document(
             serde_json::from_value(json!({
                 "event_type":"document.updated", "metadata": {

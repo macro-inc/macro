@@ -780,6 +780,9 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ReadSpreadsheet",
         "CalculateSpreadsheet",
         "EditSpreadsheet",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
     ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
@@ -788,9 +791,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "ListSkills",
-        "SearchSkills",
-        "ReadSkill",
         "ReadCanvas",
         "RenderCanvas",
         "ApplyCanvasEdits",
