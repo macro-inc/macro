@@ -77,8 +77,6 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-
-models_pagination = { path = "../models_pagination" }
 call = { path = "../call", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access", default-features = false }
 kafka_util = { path = "../kafka_util", optional = true }
