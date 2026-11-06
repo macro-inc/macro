@@ -1,5 +1,5 @@
 //! Bounded SDK documentation selection through the shared cognition service.
-use cognition::domain::{Answer, BatchedOutcome, Cognition, decide_in_batches};
+use cognition::domain::{Cognition, DecisionRequest};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -143,9 +143,9 @@ pub enum SelectionStatus {
     Unconfigured,
     /// The caller cancelled before Jev answered.
     Cancelled,
-    /// Every Jev call failed.
+    /// Jev returned an error.
     ProviderError,
-    /// No Jev call answered before the deadline.
+    /// Jev did not answer before the deadline.
     Timeout,
 }
 
@@ -161,27 +161,14 @@ impl SelectionStatus {
     }
 }
 
-/// The entities Jev considers relevant, most relevant first.
-struct Ranking<'a> {
-    entities: Vec<&'a SdkDocumentation>,
-    status: SelectionStatus,
-    /// Parallel Jev calls made, 32 entities per call.
-    batches: usize,
-}
+/// Questions Jev answers in one call.
+const QUESTIONS_PER_CALL: usize = 32;
+/// Parallel Jev calls per selection; entities past `MAX_CALLS * 32` are not
+/// asked about and stay reachable through `DescribeCodeTools`.
+const MAX_CALLS: usize = 8;
 
-impl Ranking<'_> {
-    fn nothing(status: SelectionStatus) -> Self {
-        Self {
-            entities: Vec::new(),
-            status,
-            batches: 0,
-        }
-    }
-}
-
-/// Ask Jev which entities help with `text`, every entity in parallel calls of
-/// 32. Entities whose call fails or misses the deadline are not ranked; the
-/// rest still are.
+/// Ask Jev which entities help with `text`, at most 32 questions per call and
+/// [`MAX_CALLS`] calls in parallel; most relevant first.
 async fn rank_entities<'a>(
     user: &MacroUserIdStr<'static>,
     text: &str,
@@ -189,59 +176,75 @@ async fn rank_entities<'a>(
     cognition: Option<&Arc<dyn Cognition>>,
     deadline: Duration,
     cancel: &CancellationToken,
-) -> Ranking<'a> {
+) -> (Vec<&'a SdkDocumentation>, SelectionStatus) {
     let Some(cognition) = cognition else {
-        return Ranking::nothing(SelectionStatus::Unconfigured);
+        return (Vec::new(), SelectionStatus::Unconfigured);
     };
     let input = serde_json::json!({"userRequest": text.chars().take(8000).collect::<String>()});
-    let questions: Vec<String> = docs
-        .iter()
-        .map(|doc| {
-            format!(
-                "Would the SDK entity {} help with this request? {}",
-                doc.name, doc.description
+    let calls = docs
+        .chunks(QUESTIONS_PER_CALL)
+        .take(MAX_CALLS)
+        .map(|chunk| {
+            cognition.decide(
+                user,
+                DecisionRequest {
+                    input: input.clone(),
+                    questions: chunk
+                        .iter()
+                        .map(|doc| {
+                            (
+                                doc.name.clone(),
+                                format!(
+                                    "Would the SDK entity {} help with this request? {}",
+                                    doc.name, doc.description
+                                ),
+                            )
+                        })
+                        .collect(),
+                },
             )
-        })
-        .collect();
-    let decision = tokio::select! {
+        });
+    let answers = tokio::select! {
         biased;
-        _ = cancel.cancelled() => return Ranking::nothing(SelectionStatus::Cancelled),
-        decision = decide_in_batches(&input, &questions, deadline, |request| cognition.decide(user, request)) => decision,
+        _ = cancel.cancelled() => return (Vec::new(), SelectionStatus::Cancelled),
+        result = tokio::time::timeout(deadline, futures::future::join_all(calls)) => match result {
+            Ok(answers) => answers,
+            Err(_) => return (Vec::new(), SelectionStatus::Timeout),
+        },
     };
-
-    let status = match decision.outcome() {
-        BatchedOutcome::Answered => SelectionStatus::Selected,
-        BatchedOutcome::TimedOut => SelectionStatus::Timeout,
-        BatchedOutcome::Failed => SelectionStatus::ProviderError,
-    };
-    if status != SelectionStatus::Selected {
-        return Ranking {
-            batches: decision.batches,
-            ..Ranking::nothing(status)
-        };
+    let mut probabilities = std::collections::BTreeMap::new();
+    let mut answered = false;
+    for answer in answers {
+        match answer {
+            Ok(answer) => {
+                answered = true;
+                probabilities.extend(answer.probabilities);
+            }
+            Err(error) => tracing::warn!(error = %error, "Jev could not rank SDK entities"),
+        }
     }
-
+    if !answered {
+        return (Vec::new(), SelectionStatus::ProviderError);
+    }
     let mut ranked: Vec<_> = docs
         .iter()
-        .zip(decision.answers)
-        .filter_map(|(doc, answer)| match answer {
-            Answer::Probability(score) if score.is_finite() && score >= 0.5 => Some((score, doc)),
-            Answer::Probability(_) | Answer::Failed | Answer::TimedOut => None,
+        .filter_map(|doc| {
+            let score = probabilities.get(&doc.name).copied()?;
+            (score.is_finite() && score >= 0.5).then_some((score, doc))
         })
         .collect();
     ranked.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.name.cmp(&b.1.name)));
-    Ranking {
-        entities: ranked.into_iter().map(|(_, doc)| doc).collect(),
-        status: SelectionStatus::Selected,
-        batches: decision.batches,
-    }
+    (
+        ranked.into_iter().map(|(_, doc)| doc).collect(),
+        SelectionStatus::Selected,
+    )
 }
 
 /// Load the entities a request needs, ranked by Jev, at most four: their
 /// indexes, and with [`Guidance::Selected`] their guidance too. Failures retain
 /// the compact catalog. The byte cap bounds prompt growth; it is not an exact
 /// tokenizer count.
-#[tracing::instrument(skip_all, fields(guidance = ?guidance, batches = tracing::field::Empty, selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
+#[tracing::instrument(skip_all, fields(guidance = ?guidance, selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn select_documentation(
     user: &MacroUserIdStr<'static>,
     prompt: &str,
@@ -257,7 +260,7 @@ pub async fn select_documentation(
         output.push_str(&format!("{}: {}\n", doc.name, doc.description));
     }
     let started = tokio::time::Instant::now();
-    let ranking = rank_entities(
+    let (ranked, status) = rank_entities(
         user,
         prompt,
         docs,
@@ -267,7 +270,7 @@ pub async fn select_documentation(
     )
     .await;
     let mut selected_entities = Vec::new();
-    for doc in ranking.entities.into_iter().take(4) {
+    for doc in ranked.into_iter().take(4) {
         let Some(index) = doc.index.as_ref() else {
             continue;
         };
@@ -285,11 +288,10 @@ pub async fn select_documentation(
         }
     }
     let span = tracing::Span::current();
-    span.record("batches", ranking.batches);
     span.record("selected", selected_entities.len());
     span.record("selected_entities", selected_entities.join(","));
     span.record("bytes", output.len());
-    span.record("selection_status", ranking.status.as_str());
+    span.record("selection_status", status.as_str());
     tracing::debug!(
         elapsed_ms = started.elapsed().as_millis() as u64,
         selected = selected_entities.len(),
@@ -318,7 +320,7 @@ pub struct TaskDocumentation {
 
 /// Select entity indexes for a task the agent describes, for clients that
 /// never show the server the user's request.
-#[tracing::instrument(name = "code_mode.task_documentation", skip_all, fields(batches = tracing::field::Empty, selected = tracing::field::Empty, omitted = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
+#[tracing::instrument(name = "code_mode.task_documentation", skip_all, fields(selected = tracing::field::Empty, omitted = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn documentation_for_task(
     user: &MacroUserIdStr<'static>,
     task: &str,
@@ -327,11 +329,12 @@ pub async fn documentation_for_task(
 ) -> TaskDocumentation {
     let docs = sdk_documentation();
     // The agent is waiting on this call, unlike the per-turn prompt path.
-    let ranking = rank_entities(user, task, docs, cognition, Duration::from_secs(5), cancel).await;
+    let (ranked, status) =
+        rank_entities(user, task, docs, cognition, Duration::from_secs(5), cancel).await;
     let mut bytes = 0;
     let mut entities = Vec::new();
     let mut omitted = Vec::new();
-    for doc in ranking.entities {
+    for doc in ranked {
         let size =
             doc.index.as_ref().map_or(0, String::len) + doc.guide.as_ref().map_or(0, String::len);
         if bytes + size <= DOCUMENTATION_BYTES {
@@ -342,11 +345,10 @@ pub async fn documentation_for_task(
         }
     }
     let span = tracing::Span::current();
-    span.record("batches", ranking.batches);
     span.record("selected", entities.len());
     span.record("omitted", omitted.len());
     span.record("bytes", bytes);
-    span.record("selection_status", ranking.status.as_str());
+    span.record("selection_status", status.as_str());
     span.record(
         "selected_entities",
         entities
@@ -356,7 +358,7 @@ pub async fn documentation_for_task(
             .join(","),
     );
     TaskDocumentation {
-        status: ranking.status,
+        status,
         entities,
         omitted,
     }

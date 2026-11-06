@@ -8,9 +8,7 @@ HTTP endpoints directly; this crate does not register tools into a runtime.
 
 ## Start here
 
-- `src/domain.rs`: authenticated-user port, model identifier and request bounds;
-  re-exports Jev's `decide_in_batches` for callers asking more than 32
-  questions.
+- `src/domain.rs`: authenticated-user port, model identifier and request bounds.
 - `src/outbound.rs`: pooled HTTP adapter to the cognition service.
 - `src/inbound/toolset.rs`: optional `GenerateObject` and `Decide` adapters.
 

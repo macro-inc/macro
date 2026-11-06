@@ -10,8 +10,6 @@ import { Chat } from './chat';
  * `macro.workspace.list({includeTypes: ['ai_chat']})`, then read it with
  * `chat.history()`. Agent work and coding sessions are agent sessions, not
  * chats.
- *
- * @routing Use when reading or continuing one of the user's AI chats with Macro's assistant; not agent sessions or channels.
  */
 export class ChatNamespace {
   constructor(private readonly client: MacroClient) {}

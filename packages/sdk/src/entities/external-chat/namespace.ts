@@ -6,8 +6,6 @@ import { ExternalChat } from './chat';
  * Chats from external messaging providers (WhatsApp today) that someone added
  * to Macro: read, share and send in them. Find and add a provider's chats
  * through its own namespace, such as `macro.whatsapp.chats()`.
- *
- * @routing Use when reading, sharing or sending in an external chat, such as a WhatsApp chat, already added to Macro; not Macro channels, or finding chats to add (`macro.whatsapp`).
  */
 export class ExternalChatsNamespace {
   /** Bind external chat operations to this authenticated client. */
