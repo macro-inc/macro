@@ -201,6 +201,19 @@ pub const QUEUES: &[Queue] = &[
         name: UPLOAD_FINALIZER_QUEUE,
         bindings: &[("DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL", Url)],
     },
+    // Their workers may be scaled to zero until the first message, on the platform.
+    Queue {
+        name: macro_queues::ChatDeleteQueue::LOCAL,
+        bindings: &[],
+    },
+    Queue {
+        name: macro_queues::OrganizationRetentionQueue::LOCAL,
+        bindings: &[],
+    },
+    Queue {
+        name: macro_queues::UploadExtractorQueue::LOCAL,
+        bindings: &[],
+    },
     Queue {
         name: macro_queues::DocumentTextExtractorQueue::LOCAL,
         bindings: &[("DOCUMENT_TEXT_EXTRACTOR_QUEUE", Name)],

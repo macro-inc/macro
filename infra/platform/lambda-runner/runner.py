@@ -28,7 +28,8 @@ RUNTIME_ADDRESS = ("127.0.0.1", 9001)
 SQS_ENDPOINT = os.environ.get("LAMBDA_SQS_ENDPOINT", "http://queue-gateway:9324")
 ACCOUNT_ID = "000000000000"
 REGION = "us-east-1"
-BATCH_SIZE = 10
+# Every handler's stack maps one message to an invocation, and some reject more.
+BATCH_SIZE = 1
 LONG_POLL_SECONDS = 20
 DEADLINE_SECONDS = 900
 
@@ -193,7 +194,7 @@ def run_queue(invocations, queue_name, unwrap_s3):
                 "ReceiveMessage",
                 {
                     "QueueUrl": queue_url,
-                    "MaxNumberOfMessages": 1 if unwrap_s3 else BATCH_SIZE,
+                    "MaxNumberOfMessages": BATCH_SIZE,
                     "WaitTimeSeconds": LONG_POLL_SECONDS,
                 },
             )

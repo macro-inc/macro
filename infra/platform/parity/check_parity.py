@@ -18,6 +18,9 @@ def scrub(resource):
     kind = resource.get("kind")
     if kind == "Deployment":
         resource["spec"].pop("replicas", None)
+    if kind == "ScaledObject":
+        resource["spec"].pop("minReplicaCount", None)
+        resource["spec"].pop("maxReplicaCount", None)
     if kind in ("Deployment", "Job"):
         for container in resource["spec"]["template"]["spec"]["containers"]:
             container.pop("resources", None)

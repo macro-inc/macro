@@ -350,6 +350,21 @@ in
               };
             };
 
+            keda = {
+              namespace = "keda";
+              createNamespace = true;
+              # Its CRDs exceed the client-side apply annotation limit.
+              syncPolicy.syncOptions.serverSideApply = true;
+              helm.releases.keda = {
+                chart = lib.helm.downloadHelmChart {
+                  repo = "https://kedacore.github.io/charts";
+                  chart = "keda";
+                  version = "2.21.0";
+                  chartHash = "sha256-wW7qhVcmjuDJkJQ/2shEZOjqlrkArNwGkyA0SU/gHDg=";
+                };
+              };
+            };
+
             forge = {
               namespace = "forge";
               createNamespace = true;

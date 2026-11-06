@@ -295,7 +295,10 @@ rec {
       deployments.${name} = {
         inherit metadata;
         spec = {
-          replicas = instance.size.replicas.${name} or 1;
+          # KEDA owns a scaled workload's count; a replica count here would have
+          # Argo CD's self-heal fight it.
+          ${if (w.scaleOnQueue or null) != null then null else "replicas"} =
+            instance.size.replicas.${name} or 1;
           # Single-writer volumes must never see two pods; everything else
           # rolls without downtime, the new pod ready before the old one stops.
           strategy =

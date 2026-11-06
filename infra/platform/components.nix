@@ -248,6 +248,11 @@ let
         ];
       };
       sharedEnv = true;
+      scaleOnQueue =
+        let
+          source = lib.splitString ":" trigger;
+        in
+        if builtins.elem (builtins.head source) [ "sqs" "s3" ] then lib.last source else null;
       env = {
         LAMBDA_TRIGGER = trigger;
         RUST_MIN_STACK = "16777216";

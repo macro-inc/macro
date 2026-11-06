@@ -6,6 +6,11 @@ rec {
   sizes = {
     local = {
       replicas = { };
+      # Workers KEDA scales on their queue's depth.
+      queueWorkers = {
+        min = 0;
+        max = 2;
+      };
       storage = {
         default = "2Gi";
         postgres = "10Gi";
@@ -41,6 +46,10 @@ rec {
     # Only stateless services scale: data-plane workloads and the queue gateway hold
     # single-writer state.
     prod = {
+      queueWorkers = {
+        min = 1;
+        max = 10;
+      };
       replicas = {
         authentication-service = 3;
         connection-gateway = 3;

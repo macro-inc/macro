@@ -100,6 +100,62 @@ rec {
         "app.kubernetes.io/part-of" = "macro";
         "macro.com/instance" = name;
       };
+      queueScaler = {
+        apiVersion = "keda.sh/v1alpha1";
+        kind = "TriggerAuthentication";
+        metadata = {
+          name = "queue-scaler";
+          inherit labels;
+        };
+        spec.secretTargetRef = [
+          {
+            parameter = "awsAccessKeyID";
+            name = "macro-env";
+            key = "AWS_ACCESS_KEY_ID";
+          }
+          {
+            parameter = "awsSecretAccessKey";
+            name = "macro-env";
+            key = "AWS_SECRET_ACCESS_KEY";
+          }
+        ];
+      };
+      # The SQS scaler reads the same attributes on real SQS, and counts messages in
+      # flight, so a worker is not scaled away during an invocation.
+      scaledObject = workload: queue: {
+        apiVersion = "keda.sh/v1alpha1";
+        kind = "ScaledObject";
+        metadata = {
+          name = workload;
+          inherit labels;
+        };
+        spec = {
+          scaleTargetRef.name = workload;
+          minReplicaCount = size.queueWorkers.min;
+          maxReplicaCount = size.queueWorkers.max;
+          pollingInterval = 15;
+          cooldownPeriod = 300;
+          triggers = [
+            {
+              type = "aws-sqs-queue";
+              authenticationRef.name = queueScaler.metadata.name;
+              metadata =
+                let
+                  gateway = "http://queue-gateway.${namespace}.svc:9324";
+                in
+                {
+                  queueURL = "${gateway}/000000000000/${queue}";
+                  queueLength = "5";
+                  awsRegion = "us-east-1";
+                  awsEndpoint = gateway;
+                };
+            }
+          ];
+        };
+      };
+      scaledObjects = lib.mapAttrsToList (n: w: scaledObject n w.scaleOnQueue) (
+        lib.filterAttrs (_: w: (w.scaleOnQueue or null) != null) components
+      );
       manifests = render {
         env = name;
         rootPath = "./instances/${name}";
@@ -107,13 +163,14 @@ rec {
           {
             applications.${namespace} = {
               inherit namespace;
+              yamls = map builtins.toJSON ([ queueScaler ] ++ scaledObjects);
               resources = lib.foldl' lib.recursiveUpdate {
                 namespaces.${namespace}.metadata = {
                   inherit labels;
                   annotations."argocd.argoproj.io/sync-wave" = "-3";
                 };
-                  # Instances never reach each other: only their own pods and the
-                  # cluster ingress may connect.
+                  # Instances never reach each other: only their own pods, the cluster
+                  # ingress, and KEDA reading queue depths may connect.
                   networkPolicies.isolate = {
                     metadata = { inherit labels; };
                     spec = {
@@ -124,6 +181,7 @@ rec {
                           from = [
                             { podSelector = { }; }
                             { namespaceSelector.matchLabels."kubernetes.io/metadata.name" = "platform-ingress"; }
+                            { namespaceSelector.matchLabels."kubernetes.io/metadata.name" = "keda"; }
                           ];
                         }
                       ];

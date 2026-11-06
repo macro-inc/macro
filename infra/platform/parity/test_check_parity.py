@@ -59,6 +59,16 @@ class Parity(unittest.TestCase):
         right["spec"]["paused"] = True
         self.assertTrue(p.compare({"d": left}, {"d": right}))
 
+    def test_a_scaler_may_differ_only_in_its_bounds(self):
+        def scaler(minimum, queue="q"):
+            return {
+                "kind": "ScaledObject",
+                "spec": {"minReplicaCount": minimum, "maxReplicaCount": 2, "triggers": [queue]},
+            }
+
+        self.assertEqual(p.differences(p.scrub(scaler(0)), p.scrub(scaler(1))), [])
+        self.assertTrue(p.differences(p.scrub(scaler(0)), p.scrub(scaler(0, "other"))))
+
     def test_replicas_outside_a_deployment_are_not_size(self):
         job = {"kind": "Other", "spec": {"replicas": 1}}
         changed = {"kind": "Other", "spec": {"replicas": 2}}
