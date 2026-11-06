@@ -1,5 +1,6 @@
 """Behavioral checks for the Compose-to-Kubernetes boundary; no running cluster."""
 import unittest
+import base64
 from unittest.mock import patch
 from pathlib import Path
 import tempfile
@@ -42,7 +43,10 @@ class ManifestTests(unittest.TestCase):
         gateway = deployments['connection-gateway']['spec']['template']['spec']['containers'][0]
         self.assertFalse(deployments['connection-gateway']['spec']['template']['spec']['enableServiceLinks'])
         self.assertEqual(gateway['args'], ['/app/out/connection_gateway'])
-        self.assertEqual(gateway['env'], [{'name': 'UPSTREAM', 'value': 'http://connection-gateway:8080'}])
+        self.assertEqual(gateway['envFrom'], [{'secretRef': {'name': 'runtime-connection-gateway'}}])
+        secret = next(o for o in objects if o['kind'] == 'Secret' and o['metadata']['name'] == 'runtime-connection-gateway')
+        self.assertEqual(base64.b64decode(secret['data']['UPSTREAM']).decode(), 'http://connection-gateway:8080')
+        self.assertNotIn('env', gateway)
         self.assertEqual(gateway['readinessProbe']['exec']['command'], ['curl', '-f', 'http://localhost:8080/health'])
         services = [o for o in objects if o['kind'] == 'Service']
         public = [o for o in services if o['spec'].get('type') == 'NodePort']
@@ -96,3 +100,18 @@ class ManifestTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class SecretTests(unittest.TestCase):
+    def test_rotating_secret_changes_pod_revision_without_deployment_literals(self):
+        config = {'name': 'macro-example', 'services': {'agent_harness_service': {
+            'image': 'runtime:dev', 'environment': {'ANTHROPIC_API_KEY': 'first-fixture-value'}}}}
+        first = manifests(config, 'macro-kube-example', 0)
+        config['services']['agent_harness_service']['environment']['ANTHROPIC_API_KEY'] = 'second-fixture-value'
+        second = manifests(config, 'macro-kube-example', 0)
+        first_pod = next(o for o in first if o['kind'] == 'Deployment')['spec']['template']
+        second_pod = next(o for o in second if o['kind'] == 'Deployment')['spec']['template']
+        self.assertNotEqual(first_pod['metadata']['annotations'], second_pod['metadata']['annotations'])
+        self.assertNotIn('first-fixture-value', str(first_pod))
+        self.assertNotIn('second-fixture-value', str(second_pod))
+        secret = next(o for o in second if o['kind'] == 'Secret')
+        self.assertEqual(base64.b64decode(secret['data']['ANTHROPIC_API_KEY']).decode(), 'second-fixture-value')

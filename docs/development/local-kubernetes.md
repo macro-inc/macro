@@ -10,11 +10,22 @@ Enter `nix develop` from the repository root. Keep temporary build files on the
 home filesystem on small-root hosts: `export TMPDIR="$HOME/tmp"`.
 
 ```sh
-just kube-local up kube-a --slot 0 --env-file tooling/local-kubernetes/local.env.example
-just kube-local up kube-b --slot 1 --env-file tooling/local-kubernetes/local.env.example
+just kube-local up kube-a --slot 0
+just kube-local up kube-b --slot 1
 ```
 
-The example overlay registers local Google-provider metadata required by the
+Doppler loads the same `local/lcl_personal` configuration as `just run_local`
+by default, including model API keys for agent replies. Existing instances
+refresh their generated environment and Deployments on `up`. Generated
+credentials and manifests live in a mode-0700 directory outside the checkout;
+ignored artifact paths inside the checkout are symlinks. No secret enters Git
+or a Nix derivation. Deployments reference Kubernetes Secrets via `envFrom`;
+only a content hash enters their Pod templates so rotating a key rolls the
+affected pods. Secret data is applied server-side from stdin.
+
+For offline smoke tests, pass `--no-doppler --env-file
+tooling/local-kubernetes/local.env.example`. The example overlay registers
+local Google-provider metadata required by the
 agent harness at startup. Its placeholders support passwordless smoke tests;
 they cannot authenticate Google accounts. Use your existing local integration
 overlay for external integration tests. No production credentials are needed.
@@ -66,8 +77,8 @@ stay in each instance's `/mailpit/` UI at the same origin. Cookies are scoped to
 the hostname, not the port; use separate browser profiles for simultaneous
 sign-ins to the two instances.
 
-This runner uses `--no-doppler --traces off`. External integrations have the same
-stub limitations as credential-free Compose. Pass `--env-file <path>` to apply
+This runner uses `--traces off`. Opt-in `--no-doppler` mode has the same
+stub limitations as credential-free Compose, and cannot provide model replies. Pass `--env-file <path>` to apply
 the same optional dotenv overlay as `run_local`. It does not create cloud tunnels.
 
 ## Inner loop and lifecycle

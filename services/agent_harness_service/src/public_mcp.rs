@@ -34,6 +34,30 @@ use std::sync::Arc;
 use tool_mode_cache::CachedToolMode;
 use tool_service::{AuthenticatedToolService, CodeModeSurface};
 
+/// Accept only configured OAuth and transport hosts, including local DNS names.
+fn http_config(
+    public_url: &url::Url,
+    service_url: &url::Url,
+) -> anyhow::Result<StreamableHttpServerConfig> {
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
+        public_url
+            .host_str()
+            .context("public MCP URL has no host")?
+            .to_owned(),
+        service_url
+            .host_str()
+            .context("MCP service URL has no host")?
+            .to_owned(),
+        "localhost".into(),
+        "127.0.0.1".into(),
+        "gateway.macro.com".into(),
+        "dev-gateway.macro.com".into(),
+    ]);
+    config.stateful_mode = false;
+    config.json_response = true;
+    Ok(config)
+}
+
 /// User-scoped code execution and the flag that offers it.
 pub struct PublicCodeMode {
     pub service: Arc<dyn agent_code_mode::domain::UserCodeMode>,
@@ -73,11 +97,10 @@ pub async fn router(
     let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
         url::Url::parse(macro_service_urls::StaticFileServiceUrl::new()?.as_ref())?;
-    let mcp_public_host = public_url
-        .parse_url()?
-        .host_str()
-        .context("public MCP URL has no host")?
-        .to_owned();
+    let http_config = http_config(
+        &public_url.parse_url()?,
+        &macro_service_urls::McpServiceUrl::new()?.parse_url()?,
+    )?;
     // Built once: the factory runs per request in stateless mode.
     let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp).toolset;
     let code_mode = code_mode.map(|code_mode| {
@@ -104,18 +127,7 @@ pub async fn router(
             })
         },
         Arc::new(LocalSessionManager::default()),
-        {
-            let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-                mcp_public_host.clone(),
-                "localhost".into(),
-                "127.0.0.1".into(),
-                "gateway.macro.com".into(),
-                "dev-gateway.macro.com".into(),
-            ]);
-            config.stateful_mode = false;
-            config.json_response = true;
-            config
-        },
+        http_config,
     );
 
     background_tasks.spawn(backfill);

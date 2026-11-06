@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Local-only kind runtime for the canonical xtask Compose configuration."""
 import argparse
+import base64
 import contextlib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -68,6 +70,50 @@ def scratch_path():
     return path
 
 
+def private_state():
+    scratch = scratch_path()
+    base = scratch if scratch else Path.home() / '.local/state/macro-local-kubernetes'
+    path = base / hashlib.sha256(OWNER.encode()).hexdigest()[:16]
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.chmod(0o700)
+    claim(path)
+    return path
+
+
+def instance_directory(name):
+    """Keep generated credentials outside the checkout, including ignored files."""
+    directory = ROOT / 'infra/local/generated' / name
+    destination = private_state() / name
+    if directory.is_symlink():
+        if directory.resolve() != destination:
+            raise RuntimeError('instance artifacts point outside this checkout private state')
+        return directory
+    if directory.exists() and any(directory.iterdir()):
+        marker = directory / 'kubernetes-owner.json'
+        if not marker.exists() or json.loads(marker.read_text()) != OWNER:
+            raise RuntimeError('instance artifacts belong to another runtime or checkout')
+        if destination.exists():
+            raise RuntimeError('private instance artifacts already exist')
+        shutil.move(str(directory), destination)
+    else:
+        directory.rmdir() if directory.exists() else None
+        destination.mkdir(mode=0o700)
+    destination.chmod(0o700)
+    directory.symlink_to(destination, target_is_directory=True)
+    return directory
+
+
+def prepare_flags(args):
+    flags = ['--instance', args.name, '--port-base', str(32434 + args.slot), '--traces', 'off']
+    if args.no_doppler:
+        flags.append('--no-doppler')
+    if args.env_file:
+        flags += ['--env-file', args.env_file]
+    if args.binaries_dir:
+        flags += ['--binaries-dir', args.binaries_dir]
+    return flags
+
+
 def cluster():
     claim(STATE)
     if (STATE / 'kubeconfig').exists():
@@ -75,6 +121,9 @@ def cluster():
         mounts = json.loads(run(['docker', 'inspect', f'{CLUSTER}-control-plane'], capture=True))[0]['Mounts']
         if not any(mount['Source'] == '/var/run/docker.sock' for mount in mounts):
             raise RuntimeError('the owned node lacks its sandbox socket mount; recreate it before starting instances')
+        private = private_state()
+        if not any(private.is_relative_to(mount['Source']) for mount in mounts):
+            raise RuntimeError('the owned node lacks its private artifact mount; recreate it before starting instances')
         scratch = scratch_path()
         if scratch is not None:
             if not any(mount['Source'] == str(scratch) for mount in mounts):
@@ -99,6 +148,9 @@ def cluster():
         {'hostPath': '/var/run/docker.sock', 'containerPath': '/var/run/docker.sock'},
     ]
     scratch = scratch_path()
+    if scratch is None:
+        private = private_state()
+        config['nodes'][0]['extraMounts'].append({'hostPath': str(private), 'containerPath': str(private)})
     if scratch is not None:
         config['nodes'][0]['extraMounts'].append({'hostPath': str(scratch), 'containerPath': str(scratch)})
     for mapping in config['nodes'][0]['extraPortMappings']:
@@ -168,8 +220,11 @@ def manifests(config, namespace, slot):
         metadata = {'name': name, 'namespace': namespace}
         container = {'name': name, 'image': value.get('image', f"{config['name']}-{key}"),
                      'imagePullPolicy': 'Never',
-                     'env': [{'name': k, 'value': normalize(str(v), services)}
-                             for k, v in value.get('environment', {}).items() if v is not None]}
+                     'envFrom': [{'secretRef': {'name': 'runtime-' + name}}]}
+        environment = {k: normalize(str(v), services) for k, v in value.get('environment', {}).items() if v is not None}
+        objects.append({'apiVersion': 'v1', 'kind': 'Secret',
+                        'metadata': {'name': 'runtime-' + name, 'namespace': namespace},
+                        'type': 'Opaque', 'data': {k: base64.b64encode(v.encode()).decode() for k, v in environment.items()}})
         for source, target in [('command', 'args'), ('entrypoint', 'command')]:
             if value.get(source):
                 container[target] = value[source] if isinstance(value[source], list) else ['/bin/sh', '-c', value[source]]
@@ -262,7 +317,7 @@ def manifests(config, namespace, slot):
         objects.append({'apiVersion': 'apps/v1', 'kind': 'Deployment', 'metadata': metadata,
                         'spec': {'replicas': 1, 'strategy': {'type': 'Recreate'} if key in INFRA else {'type': 'RollingUpdate'},
                                  'selector': {'matchLabels': labels},
-                                 'template': {'metadata': {'labels': labels}, 'spec': pod}}})
+                                 'template': {'metadata': {'labels': labels, 'annotations': {'macro.local/env-revision': hashlib.sha256(json.dumps(environment, sort_keys=True).encode()).hexdigest()}}, 'spec': pod}}})
         aliases = {name}
         for network in value.get('networks', {}).values():
             aliases.update(dns(a) for a in (network or {}).get('aliases', []))
@@ -283,7 +338,16 @@ def manifests(config, namespace, slot):
 
 
 def apply(objects):
-    kube('apply', '-f', '-', data=json.dumps({'apiVersion': 'v1', 'kind': 'List', 'items': objects}))
+    secrets = [o for o in objects if o['kind'] == 'Secret']
+    namespaces = [o for o in objects if o['kind'] == 'Namespace']
+    others = [o for o in objects if o['kind'] not in ['Secret', 'Namespace']]
+    if namespaces:
+        kube('apply', '-f', '-', data=json.dumps({'apiVersion': 'v1', 'kind': 'List', 'items': namespaces}))
+    if secrets:
+        kube('apply', '--server-side', '--field-manager=macro-kube-secrets', '-f', '-',
+             data=json.dumps({'apiVersion': 'v1', 'kind': 'List', 'items': secrets}))
+    if others:
+        kube('apply', '-f', '-', data=json.dumps({'apiVersion': 'v1', 'kind': 'List', 'items': others}))
 
 
 def check_namespace(namespace):
@@ -344,6 +408,7 @@ def stop_auth(namespace):
 
 
 def up(args):
+    instance_directory(args.name)
     cluster()
     namespace = f'macro-kube-{args.name}'
     check_namespace(namespace)
@@ -364,6 +429,12 @@ def up(args):
         previous = json.loads(state.read_text())
         if previous['slot'] != args.slot:
             raise RuntimeError('existing instance has a different HTTPS slot')
+        _, _, old_config = compose(args.name)
+        flags = prepare_flags(args)
+        if not args.binaries_dir:
+            source = next(v['source'] for v in old_config['services']['agent_harness_service']['volumes'] if v['target'] == '/app/out')
+            flags += ['--binaries-dir', source]
+        xtask('kubernetes-prepare', *flags, '--no-build', '--no-frontend')
         stop_auth(namespace)
         for service in sorted(INFRA - {'fusionauth'}):
             kube('-n', namespace, 'scale', f'deployment/{service}', '--replicas=1')
@@ -376,7 +447,11 @@ def up(args):
                  str(directory / 'local.generated.env')]
         with forwards(namespace, config):
             xtask('kubernetes-init', *flags)
-        kube('-n', namespace, 'scale', 'deployment', '--all', '--replicas=1')
+        objects = manifests(config, namespace, args.slot)
+        path = state.with_name('kubernetes-manifests.json')
+        path.write_text(json.dumps(objects, indent=2))
+        path.chmod(0o600)
+        apply(objects)
         wait_deployments(namespace)
     else:
         occupied = kube('get', 'service', '-A', '-o', 'json', capture=True)
@@ -384,11 +459,7 @@ def up(args):
             for port in service['spec'].get('ports', []):
                 if port.get('nodePort') == 30443 + args.slot and service['metadata']['namespace'] != namespace:
                     raise RuntimeError('HTTPS slot is already occupied')
-        flags = ['--instance', args.name, '--port-base', str(32434 + args.slot), '--no-doppler', '--traces', 'off']
-        if args.binaries_dir:
-            flags += ['--binaries-dir', args.binaries_dir]
-        if args.env_file:
-            flags += ['--env-file', args.env_file]
+        flags = prepare_flags(args)
         if args.frontend_dir:
             source = Path(args.frontend_dir).resolve(strict=True)
             if not (source / 'index.html').is_file():
@@ -448,10 +519,12 @@ def main():
     parser.add_argument('--frontend-dir', help='reuse an already-built same-origin development frontend bundle')
     parser.add_argument('--build-aux-services', action='store_true', help='rebuild auxiliary images even when already present')
     parser.add_argument('--binaries-dir')
+    parser.add_argument('--no-doppler', action='store_true', help='skip the default local Doppler secrets layer')
     parser.add_argument('--env-file', help='same optional dotenv overlay as run_local')
     parser.add_argument('--service', help='Compose service name for roll; build the binary before rolling')
     args = parser.parse_args()
     os.chdir(ROOT)
+    os.umask(0o077)
     STATE.mkdir(parents=True, exist_ok=True)
     if args.command == 'cluster':
         cluster()
