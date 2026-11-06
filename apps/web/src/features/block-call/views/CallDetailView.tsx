@@ -234,7 +234,19 @@ export function CallDetailView(props: {
               </>
             }
           >
-            {(header) => header()(detail.data)}
+            {(header) => (
+              <>
+                <div class="contents @max-[600px]/split-header:hidden">
+                  {header()(detail.data)}
+                </div>
+                <div class="hidden min-w-0 items-center gap-1.5 @max-[600px]/split-header:flex">
+                  <PhoneCallIcon class="size-4 shrink-0 text-ink-muted" />
+                  <span class="truncate text-sm font-medium">
+                    {detail.data()?.name ?? 'Call Recording'}
+                  </span>
+                </div>
+              </>
+            )}
           </Show>
           <Show when={detail.data()}>
             {(data) => (
