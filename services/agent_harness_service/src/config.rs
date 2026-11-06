@@ -147,8 +147,6 @@ pub struct Config {
     pub environment: Environment,
     /// Required fleet selection; only `disabled` runs no control plane.
     pub computers_fleet: ComputerFleetKind,
-    /// Local enrollment service URL overrides.
-    pub computers_service_url_overrides: Option<String>,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.

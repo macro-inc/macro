@@ -818,7 +818,7 @@ async fn run() -> anyhow::Result<()> {
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
         {
-            let overrides = computers::service_url_overrides(&config)?;
+            let overrides = computers::service_url_overrides()?;
             let mut urls = vec![egress_base_url.as_str()];
             urls.extend(config.external_egress_base_url.as_deref());
             urls.extend(

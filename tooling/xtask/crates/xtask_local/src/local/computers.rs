@@ -160,7 +160,7 @@ impl Computers {
             .iter()
             .map(|(name, _)| Ok((name.to_string(), in_network(env, name)?)))
             .collect::<Result<BTreeMap<_, _>>>()?;
-        Ok(BTreeMap::from([
+        let mut settings = BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "docker".into()),
             (
                 "COMPUTERS_CONTROL_PLANE_ID".into(),
@@ -179,11 +179,9 @@ impl Computers {
                 "COMPUTERS_DOCKER_ENROLLMENT_DIR".into(),
                 self.enrollment_dir().display().to_string(),
             ),
-            (
-                "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
-                serde_json::to_string(&overrides)?,
-            ),
-        ]))
+        ]);
+        settings.extend(overrides);
+        Ok(settings)
     }
 
     fn incus_env(
@@ -208,7 +206,7 @@ impl Computers {
                 Ok((name.to_string(), url))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
-        Ok(BTreeMap::from([
+        let mut settings = BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "incus".into()),
             (
                 "COMPUTERS_CONTROL_PLANE_ID".into(),
@@ -242,11 +240,9 @@ impl Computers {
                 "COMPUTERS_INCUS_SERVER_CERT".into(),
                 credentials.server_cert.clone(),
             ),
-            (
-                "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
-                serde_json::to_string(&overrides)?,
-            ),
-        ]))
+        ]);
+        settings.extend(overrides);
+        Ok(settings)
     }
 
     /// Build and load the macro-box image for the Docker fleet. Nix is the

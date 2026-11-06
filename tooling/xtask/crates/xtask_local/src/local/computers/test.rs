@@ -35,8 +35,15 @@ fn docker_computers_dial_the_stack_in_network() {
     assert_eq!(env["COMPUTERS_DOCKER_MEMORY_GB"], "32");
     assert_eq!(env["COMPUTERS_DOCKER_NETWORK"], "macro-computers_services");
     assert_eq!(env["COMPUTERS_DOCKER_ENROLLMENT_DIR"], enrollment_dir);
-    let overrides: BTreeMap<String, String> =
-        serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
+    let overrides: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(name, _)| {
+            MACROD_SERVICES
+                .iter()
+                .any(|(needed, _)| name.as_str() == *needed)
+        })
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
     assert_eq!(
         overrides,
         BTreeMap::from([
@@ -95,8 +102,15 @@ fn incus_computers_dial_tailnet_ips_without_compose_dns() {
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_CERT"], "client cert");
     assert_eq!(env["COMPUTERS_INCUS_CLIENT_KEY"], "client key");
     assert_eq!(env["COMPUTERS_INCUS_SERVER_CERT"], "server cert");
-    let overrides: BTreeMap<String, String> =
-        serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
+    let overrides: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(name, _)| {
+            MACROD_SERVICES
+                .iter()
+                .any(|(needed, _)| name.as_str() == *needed)
+        })
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
     let tailnet = |port: Port| format!("http://100.116.73.13:{}", instance.port(port));
     assert_eq!(
         overrides["OVERRIDE_AGENT_HARNESS_SERVICE_URL"],
@@ -182,8 +196,15 @@ fn incus_control_plane_address_can_be_overridden() {
     let env = computers
         .incus_env(&local_env(&instance), &credentials(), &network)
         .unwrap();
-    let overrides: BTreeMap<String, String> =
-        serde_json::from_str(&env["COMPUTERS_SERVICE_URL_OVERRIDES"]).unwrap();
+    let overrides: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(name, _)| {
+            MACROD_SERVICES
+                .iter()
+                .any(|(needed, _)| name.as_str() == *needed)
+        })
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
     assert_eq!(
         overrides["OVERRIDE_AGENT_HARNESS_EGRESS_URL"],
         format!(

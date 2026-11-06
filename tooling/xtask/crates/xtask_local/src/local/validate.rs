@@ -221,12 +221,18 @@ fn computers_failures(
             }
         }
     }
-    if computers.fleet() != Fleet::Off
-        && env("COMPUTERS_SERVICE_URL_OVERRIDES")
-            .and_then(|json| serde_json::from_str::<Value>(json).ok())
-            .is_none_or(|overrides| !overrides.is_object())
-    {
-        failures.push("COMPUTERS_SERVICE_URL_OVERRIDES is not a JSON object".into());
+    if computers.fleet() != Fleet::Off {
+        for name in [
+            "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
+            "OVERRIDE_AUTH_SERVICE_URL",
+            "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+            "OVERRIDE_APP_SERVICE_URL",
+        ] {
+            if env(name).is_none_or(str::is_empty) {
+                failures.push(format!("agent_harness_service lacks {name}"));
+            }
+        }
     }
     failures
 }

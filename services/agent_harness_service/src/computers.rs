@@ -38,7 +38,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
-use crate::config::{ComputerFleetConfig, Config, Environment};
+use crate::config::{ComputerFleetConfig, Config};
 
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
@@ -123,7 +123,7 @@ pub async fn operator(
         ComputerFleetConfig::Disabled => return Ok(None),
     };
 
-    let service_url_overrides = service_url_overrides(config)?;
+    let service_url_overrides = service_url_overrides()?;
 
     let operator = ComputerOperator::start(
         PgComputerRepo::new(pool.clone()),
@@ -140,15 +140,23 @@ pub async fn operator(
     Ok(Some(Arc::new(operator)))
 }
 
-pub(super) fn service_url_overrides(config: &Config) -> anyhow::Result<BTreeMap<String, String>> {
-    let service_url_overrides: BTreeMap<String, String> =
-        match config.computers_service_url_overrides.as_deref() {
-            Some(json) => serde_json::from_str(json)
-                .context("COMPUTERS_SERVICE_URL_OVERRIDES must be a JSON object of strings")?,
-            None => BTreeMap::new(),
-        };
-    if !service_url_overrides.is_empty() && !matches!(config.environment, Environment::Local) {
-        anyhow::bail!("COMPUTERS_SERVICE_URL_OVERRIDES is for local stacks only");
+pub(super) fn service_url_overrides() -> anyhow::Result<BTreeMap<String, String>> {
+    use macro_service_urls::{
+        AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, AuthServiceUrl,
+        DocumentStorageServiceUrl,
+    };
+
+    let mut service_url_overrides = BTreeMap::new();
+    for name in [
+        AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME,
+        AgentHarnessServiceUrl::OVERRIDE_ENV_VAR_NAME,
+        AppServiceUrl::OVERRIDE_ENV_VAR_NAME,
+        AuthServiceUrl::OVERRIDE_ENV_VAR_NAME,
+        DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
+    ] {
+        if let Some(value) = macro_service_urls::read_override_env(name)? {
+            service_url_overrides.insert(name.to_owned(), value);
+        }
     }
 
     Ok(service_url_overrides)
