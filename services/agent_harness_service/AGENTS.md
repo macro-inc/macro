@@ -55,7 +55,8 @@ Pulumi stacks; they do not host extra agent processes.
   providers/flags and evaluation errors return 403. The macrod
   `/harnesses/me/screen` endpoint and fleet workers stay ungated.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
-  `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`,
+  `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
+  (a rejected code returns 422 with `code: "invalid_code"`),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
   written to the harness row on macrod's confirmation; a shared 180-second
   account-change lease covers the command and mode write, preventing opposing

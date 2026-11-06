@@ -165,7 +165,13 @@ impl Computer {
         let sign_in = slot
             .as_mut()
             .ok_or_else(|| rootcause::report!("no Claude sign-in is waiting; start one first"))?;
-        let token = sign_in.complete(code).await?;
+        let token = match sign_in.complete(code).await {
+            Ok(token) => token,
+            Err(claude_sign_in::CompleteError::InvalidCode) => {
+                return Ok(ComputerControlResult::InvalidCode);
+            }
+            Err(error) => return Err(rootcause::report!("{error}")),
+        };
         self.token_store.save(token.clone()).await?;
         slot.take();
         *self

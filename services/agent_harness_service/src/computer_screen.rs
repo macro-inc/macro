@@ -584,6 +584,9 @@ pub enum ComputerRouteError {
     /// The computer is not in a state to do it (not connected, no display).
     #[error("{0}")]
     Conflict(String),
+    /// Claude rejected the code; the caller must start a new sign-in.
+    #[error("That code didn't work — sign in again to get a new one")]
+    InvalidCode,
     /// The computer tried and failed; the message is safe to show.
     #[error("{0}")]
     Failed(String),
@@ -598,6 +601,7 @@ pub enum ComputerRouteError {
 impl ComputerRouteError {
     fn from_result(result: ComputerControlResult) -> Self {
         match result {
+            ComputerControlResult::InvalidCode => Self::InvalidCode,
             ComputerControlResult::Failed { message } => Self::Failed(message),
             other => Self::Internal(rootcause::report!(
                 "the computer answered an unexpected {other:?}"
@@ -626,17 +630,17 @@ impl IntoResponse for ComputerRouteError {
             Self::Forbidden | Self::RolloutDisabled => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::Failed(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::Failed(_) | Self::InvalidCode => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {
             tracing::error!(error = ?self, "computer route failed");
         }
-        (
-            status,
-            Json(serde_json::json!({ "message": self.to_string() })),
-        )
-            .into_response()
+        let mut body = serde_json::json!({ "message": self.to_string() });
+        if matches!(self, Self::InvalidCode) {
+            body["code"] = serde_json::json!("invalid_code");
+        }
+        (status, Json(body)).into_response()
     }
 }

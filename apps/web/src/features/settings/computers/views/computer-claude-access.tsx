@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { enableMacroComputers } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import {
   useClaudeCompleteMutation,
@@ -51,7 +52,13 @@ export function ComputerClaudeAccess(props: {
       });
       setCode('');
       setUrl(undefined);
-    } catch {
+    } catch (error) {
+      if (thrownResultErrorHasCode(error, 'CLAUDE_INVALID_CODE')) {
+        setCode('');
+        setUrl(undefined);
+        setError(t('computers.claudeInvalidCode'));
+        return;
+      }
       setError(t('computers.claudeCompleteFailed'));
     }
   };

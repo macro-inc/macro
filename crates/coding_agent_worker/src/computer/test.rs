@@ -143,7 +143,7 @@ mod sign_in {
     use std::os::unix::fs::PermissionsExt as _;
 
     use super::super::claude_sign_in::{
-        Pasted, SignIn, oauth_token, sign_in_url, strip_terminal_codes,
+        CompleteError, Pasted, SignIn, oauth_token, sign_in_url, strip_terminal_codes,
     };
 
     const URL: &str = "https://claude.ai/oauth/authorize?code=true&client_id=9d1c&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback&state=abc";
@@ -171,6 +171,48 @@ mod sign_in {
             None
         );
         assert_eq!(strip_terminal_codes("\x1b[1mbold\x1b[22m"), "bold");
+    }
+
+    #[tokio::test]
+    async fn rejected_codes_finish_before_the_token_timeout() {
+        for transcript in [
+            "\x1b[31mInvalid code. Please make sure the full code was copied\x1b[39m\r\n",
+            "\x1b[31mOAuth error: access_denied\x1b[39m\r\n",
+            "Authentication failed: Invalid authorization code\r\n",
+            "OAuth state mismatch\r\n",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let claude = directory.path().join("claude");
+            let script = format!(
+                "#!/bin/sh\nprintf 'https://claude.ai/oauth/authorize?code=true\\n'\nIFS= read -r code\nprintf '%s' '{transcript}'\nIFS= read -r hold\n"
+            );
+            std::fs::write(&claude, script).unwrap();
+            std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let mut sign_in = SignIn::spawn(&claude).unwrap();
+            sign_in.url().await.unwrap();
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                sign_in.complete("bad-code"),
+            )
+            .await;
+            assert!(result.is_ok(), "rejection waited for the token timeout");
+            assert!(matches!(result.unwrap(), Err(CompleteError::InvalidCode)));
+        }
+    }
+
+    #[tokio::test]
+    async fn silent_setup_token_times_out_after_sixty_seconds() {
+        let directory = tempfile::tempdir().unwrap();
+        let claude = directory.path().join("claude");
+        std::fs::write(&claude, "#!/bin/sh\nprintf 'https://claude.ai/oauth/authorize?code=true\\n'\nIFS= read -r code\nIFS= read -r hold\n").unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut sign_in = SignIn::spawn(&claude).unwrap();
+        sign_in.url().await.unwrap();
+        tokio::time::pause();
+        let before = tokio::time::Instant::now();
+        let error = sign_in.complete("test-code").await.unwrap_err();
+        assert!(matches!(error, CompleteError::Timeout));
+        assert_eq!(before.elapsed().as_secs(), 60);
     }
 
     #[test]

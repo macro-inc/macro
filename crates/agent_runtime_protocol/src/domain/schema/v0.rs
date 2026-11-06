@@ -189,6 +189,8 @@ pub enum ComputerControlResult {
         /// Where the user signs in to Claude.
         url: String,
     },
+    /// The pasted OAuth code was rejected; start a fresh sign-in.
+    InvalidCode,
     /// Claude Code now runs on the user's own account.
     SignedIn,
     /// Claude Code is back on Macro credits.

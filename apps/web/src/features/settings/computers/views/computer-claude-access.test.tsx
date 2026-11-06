@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import { ThrownResultError } from '@core/util/result';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ComputerClaudeAccess } from './computer-claude-access';
@@ -68,5 +70,30 @@ it('hides Claude account controls with rollout off', () => {
   ));
   expect(
     screen.queryByRole('button', { name: 'Sign in with Claude' })
+  ).toBeNull();
+});
+
+it('explains a rejected code and lets the user start again', async () => {
+  mocks.complete.mockRejectedValueOnce(
+    new ThrownResultError([
+      { code: 'CLAUDE_INVALID_CODE', message: 'rejected' },
+    ])
+  );
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
+  const input = await screen.findByLabelText(
+    'Paste the code or the URL you were sent to'
+  );
+  fireEvent.input(input, { target: { value: 'bad-code' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe(
+      "That code didn't work — sign in again to get a new one"
+    )
+  );
+  expect(
+    screen.queryByLabelText('Paste the code or the URL you were sent to')
   ).toBeNull();
 });

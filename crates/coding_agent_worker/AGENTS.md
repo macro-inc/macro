@@ -56,7 +56,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   rustix): returns its OAuth URL, then types the pasted code or GETs a pasted
   `http://localhost:<port>/callback?code=` URL inside the box, and stores the
   `sk-ant-oat01-` token at `/var/lib/macrod/claude-token` (0600);
-  sign-out deletes it. `token_store.rs` keeps disk access in the root-only
+  sign-out deletes it. Match the pinned Claude Code setup-token rejection text
+  in `claude_sign_in.rs` and return typed `InvalidCode` immediately; silence
+  still times out after 60 seconds. `token_store.rs` keeps disk access in the root-only
   `macrod-token-store.service`, installed by enrollment. Its Unix socket is
   0600, owned by the config's uid, verifies peer credentials in both directions,
   and accepts only bounded load/save/delete requests. macrod and Claude stay

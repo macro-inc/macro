@@ -316,3 +316,24 @@ async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
     tasks.close();
     tasks.wait().await;
 }
+
+#[tokio::test]
+async fn computer_invalid_code_is_a_typed_retryable_response() {
+    use axum::response::IntoResponse as _;
+    let result = serde_json::from_value(serde_json::json!({"status": "invalid_code"})).unwrap();
+    let response = super::ComputerRouteError::from_result(result).into_response();
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({
+            "code": "invalid_code",
+            "message": "That code didn't work — sign in again to get a new one"
+        })
+    );
+}

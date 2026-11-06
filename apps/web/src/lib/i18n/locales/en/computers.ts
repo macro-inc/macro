@@ -30,6 +30,7 @@ export default {
   claudeCreditsFailed: 'Could not switch to Macro credits. Please try again.',
   claudeSignIn: 'Sign in with Claude',
   useCredits: 'Use Macro credits',
+  claudeInvalidCode: "That code didn't work — sign in again to get a new one",
   openClaudeSignIn: 'Open Claude sign-in',
   claudeCodeLabel: 'Paste the code or the URL you were sent to',
   completeSignIn: 'Complete sign-in',
