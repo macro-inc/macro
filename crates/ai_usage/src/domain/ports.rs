@@ -81,6 +81,8 @@ pub enum AiFeature {
     EmailFocus,
     /// Web search and page fetches for agents and the SDK.
     WebSearch,
+    /// Picking routines to suggest, in the background without the user asking.
+    RoutineSuggestions,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id

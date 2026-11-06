@@ -173,6 +173,16 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         template_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// `create_action` for a routine saved from routine suggestion
+    /// `suggestion_id`, recorded as given: it only marks that suggestion
+    /// taken for the routine's owner.
+    fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     /// Actions `user_id` can access. Legacy clients see cron actions only;
     /// backend clients opt into events. ID-based operations and workers must
     /// never authorize through this list.

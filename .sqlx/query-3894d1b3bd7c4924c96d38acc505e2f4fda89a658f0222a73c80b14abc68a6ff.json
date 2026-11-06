@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM routine_suggestion s\n            WHERE s.user_id = $1 AND s.state = 'open'\n              AND NOT EXISTS (SELECT 1 FROM scheduled_action a WHERE a.owner = s.user_id AND a.suggestion_id = s.id)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3894d1b3bd7c4924c96d38acc505e2f4fda89a658f0222a73c80b14abc68a6ff"
+}

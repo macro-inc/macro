@@ -93,6 +93,7 @@ documents = { path = "../../crates/documents", features = ["ai_tools", "attachme
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
 email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
+email_db_client = { path = "../../crates/email_db_client" }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }

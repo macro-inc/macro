@@ -21,9 +21,14 @@ pub struct ModelDrafts {
 
 impl ModelDrafts {
     pub fn new(recorder: Arc<dyn ai_usage::UsageRecorder>) -> Self {
+        Self::for_feature(recorder, AiFeature::Automation)
+    }
+
+    /// The same model with its usage recorded as `feature`: routine
+    /// suggestions are picked in the background and aren't billed.
+    pub fn for_feature(recorder: Arc<dyn ai_usage::UsageRecorder>, feature: AiFeature) -> Self {
         Self {
-            completions: ToolFreeCompletionService::new(recorder)
-                .for_feature(AiFeature::Automation),
+            completions: ToolFreeCompletionService::new(recorder).for_feature(feature),
         }
     }
 }

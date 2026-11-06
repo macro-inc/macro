@@ -447,6 +447,11 @@ export type ExecutionResult = {
 };
 
 /**
+ * Where a person's suggestions are in being generated.
+ */
+export type GenerationStatus = 'generating' | 'ready' | 'failed';
+
+/**
  * Which GitHub deliveries match.
  */
 export type GithubSelector = {
@@ -561,6 +566,45 @@ export type RoutineSoFar = {
     trigger?: {
         [key: string]: unknown;
     } | null;
+};
+
+/**
+ * A routine offered to one person, picked for them by AI.
+ */
+export type RoutineSuggestion = SuggestionPick & {
+    id: string;
+    /**
+     * AI's estimate, from 0 to 1, that the person keeps it on.
+     */
+    keepProbability: number;
+    /**
+     * Why it fits this person, in a line.
+     */
+    reason: string;
+    /**
+     * It may be switched on before its owner changes anything: only a
+     * catalog routine marked safe by default, never a request.
+     */
+    safeDefault: boolean;
+    /**
+     * Where it is offered: the sidebar of that part of the app.
+     */
+    surface: Surface;
+};
+
+/**
+ * A person's suggestions, and whether more are on the way.
+ */
+export type RoutineSuggestions = {
+    /**
+     * When the suggestions shown were generated; absent before the first.
+     */
+    generatedAt?: string | null;
+    status: GenerationStatus;
+    /**
+     * Best first within each surface.
+     */
+    suggestions: Array<RoutineSuggestion>;
 };
 
 /**
@@ -712,6 +756,11 @@ export type ScheduledAction = {
      * Whether the action's runs are listed in Home and the Agents list.
      */
     run_visibility: RunVisibility;
+    /**
+     * The routine suggestion it was saved from, if any: a plain pointer
+     * that stays after the suggestion is replaced.
+     */
+    suggestion_id?: string | null;
     task: {
         [key: string]: unknown;
     };
@@ -793,6 +842,35 @@ export type StepProblem = {
      */
     index: number;
     problems: Array<string>;
+};
+
+/**
+ * What AI picked: a catalog routine with its knobs, or a request for the
+ * drafter.
+ */
+export type SuggestionPick = {
+    /**
+     * The catalog routine, e.g. `inbox`.
+     */
+    key: string;
+    kind: 'starter';
+    /**
+     * Knob values by knob name; knobs left out keep the catalog's.
+     */
+    knobs: {
+        [key: string]: unknown;
+    };
+} | {
+    kind: 'request';
+    /**
+     * What it does and when, e.g. "Every Friday, list the deliveries
+     * suppliers confirmed this week."
+     */
+    request: string;
+    /**
+     * Its name, e.g. "Weekly supplier digest".
+     */
+    title: string;
 };
 
 /**
@@ -920,7 +998,12 @@ export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof L
 export type CreateScheduledActionData = {
     body: ActionConfiguration;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The routine suggestion it is saved from, recorded on the routine.
+         */
+        suggestion_id?: string;
+    };
     url: '/scheduled-actions';
 };
 
@@ -1001,6 +1084,92 @@ export type DraftRoutineResponses = {
 };
 
 export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
+
+export type ListRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/suggestions';
+};
+
+export type ListRoutineSuggestionsErrors = {
+    401: string;
+    /**
+     * Routine suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type ListRoutineSuggestionsError = ListRoutineSuggestionsErrors[keyof ListRoutineSuggestionsErrors];
+
+export type ListRoutineSuggestionsResponses = {
+    /**
+     * Routines picked for the caller, best first per surface; starts a generation when they are due
+     */
+    200: RoutineSuggestions;
+};
+
+export type ListRoutineSuggestionsResponse = ListRoutineSuggestionsResponses[keyof ListRoutineSuggestionsResponses];
+
+export type RefreshRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/suggestions/refresh';
+};
+
+export type RefreshRoutineSuggestionsErrors = {
+    401: string;
+    /**
+     * Routine suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type RefreshRoutineSuggestionsError = RefreshRoutineSuggestionsErrors[keyof RefreshRoutineSuggestionsErrors];
+
+export type RefreshRoutineSuggestionsResponses = {
+    /**
+     * The caller's current suggestions while a new generation runs
+     */
+    200: RoutineSuggestions;
+};
+
+export type RefreshRoutineSuggestionsResponse = RefreshRoutineSuggestionsResponses[keyof RefreshRoutineSuggestionsResponses];
+
+export type DismissRoutineSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/suggestions/{id}/dismiss';
+};
+
+export type DismissRoutineSuggestionErrors = {
+    401: string;
+    /**
+     * No such suggestion for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type DismissRoutineSuggestionError = DismissRoutineSuggestionErrors[keyof DismissRoutineSuggestionErrors];
+
+export type DismissRoutineSuggestionResponses = {
+    /**
+     * Not suggested again
+     */
+    204: void;
+};
+
+export type DismissRoutineSuggestionResponse = DismissRoutineSuggestionResponses[keyof DismissRoutineSuggestionResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;
