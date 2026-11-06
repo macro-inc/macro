@@ -68,7 +68,10 @@ are cleared and credentials stay in library adapters; they do not enter prompts.
 
 All hooks are optional. Their return values may be promises. Hooks run under
 my persona OS user and errors fail the affected operation. Turn hooks apply to respond,
-heartbeat and work. Budgets remain bounded by the tier's cap and the daily cap.
+heartbeat and work. Budgets remain bounded by the tier's cap and the daily cap. Direct
+turns use the gateway's request model IDs, including
+`claude-haiku-4-5-20251001` for Haiku. `config/events.json`'s `scheduleModel`
+uses Macro's separate provider/model namespace: `anthropic/claude-haiku-4-5`.
 
 ```ts
 // Replace semantic relevance for ordinary messages; protected messages still wake.
@@ -83,7 +86,7 @@ async relevance(candidate, services) {
 // Rewrite any part of a turn before concurrency and budget admission.
 beforeTurn(turn) {
   return { ...turn, prompt: `${turn.prompt}\nBe concrete.`,
-    model: 'claude-haiku-4-5', maxBudgetUsd: 0.25 };
+    model: 'claude-haiku-4-5-20251001', maxBudgetUsd: 0.25 };
 }
 ```
 
@@ -223,7 +226,7 @@ triage(candidate) {
   if (candidate.message.text.includes('release rollback')) return true;
   return undefined; // Delegate other cases to Jev.
 },
-learning: { wakesPerTune: 100, triageModel: 'claude-haiku-4-5' },
+learning: { wakesPerTune: 100, triageModel: 'claude-haiku-4-5-20251001' },
 ```
 
 Creator messages, DMs and mentions override a false filter decision. Protected

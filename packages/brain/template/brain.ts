@@ -6,7 +6,7 @@ const compose: Composition = (deps) =>
   new Brain(deps, {
     subscriptions: [],
     triage,
-    learning: { wakesPerTune: 100, triageModel: 'claude-haiku-4-5' },
+    learning: { wakesPerTune: 100, triageModel: 'claude-haiku-4-5-20251001' },
     schedules: [
       {
         note: 'tune',

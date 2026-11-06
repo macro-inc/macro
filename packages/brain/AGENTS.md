@@ -38,6 +38,10 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
   builds do this once. Workspace code runs directly with Node type stripping.
 - Require explicit workspace, executable and positive health interval settings;
   the Nix runner supplies its own executable path and interval.
+- Pin direct Claude turns to gateway request IDs: shipped triage uses
+  `claude-haiku-4-5-20251001`. Keep `scheduleModel` in Macro's separate
+  provider/model namespace (`anthropic/claude-haiku-4-5`). Exercise the actual
+  template composition through the runner when changing its model settings.
 - Keep `package.json` and template `brain.lock` versions identical; package every
   imported runtime and test dependency offline. No runtime library downloads.
 - Drain turns before stopping the control server; reload only committed wiring

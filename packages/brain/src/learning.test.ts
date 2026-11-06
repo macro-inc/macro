@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import compose from '../template/brain.ts';
 import { Brain } from './brain.ts';
 import { dryRun } from './dry-run.ts';
 import { type Candidate, judge, parseJevConfig } from './jev.ts';
@@ -142,6 +143,42 @@ test('all-event intake uses a cheap tool-free triage turn and preserves mandator
       await fs.readFile(join(root, 'log/decisions.jsonl'), 'utf8'),
       /"ignored":true/
     );
+  } finally {
+    await fs.rm(root, { recursive: true });
+  }
+});
+
+test('shipped composition sends the gateway-supported dated Haiku model to triage', async () => {
+  const root = await fs.mkdtemp(join(tmpdir(), 'brain-shipped-triage-'));
+  const turns: Turn[] = [];
+  try {
+    await fs.cp(new URL('../template/', import.meta.url), root, {
+      recursive: true,
+    });
+    await dryRun(
+      (deps) =>
+        compose({
+          ...deps,
+          runner: {
+            start(turn) {
+              turns.push(turn);
+              if (turn.tier === 'triage')
+                assert.equal(turn.model, 'claude-haiku-4-5-20251001');
+              return deps.runner.start(turn);
+            },
+          },
+        }),
+      root,
+      [
+        {
+          event_id: 'shipped-triage-update',
+          event_type: 'document.updated',
+          metadata: { document_id: 'document' },
+        },
+      ]
+    );
+    assert.equal(turns.filter((turn) => turn.tier === 'triage').length, 1);
+    assert.equal(turns.filter((turn) => turn.tier === 'respond').length, 1);
   } finally {
     await fs.rm(root, { recursive: true });
   }
