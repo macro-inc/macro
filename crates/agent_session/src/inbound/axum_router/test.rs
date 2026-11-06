@@ -1420,6 +1420,7 @@ async fn an_external_open_carries_its_instructions() {
 }
 
 mod coding_preferences;
+mod log_credentials;
 mod owned_purge;
 mod read;
 mod user_cleanup;
