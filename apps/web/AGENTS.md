@@ -105,6 +105,11 @@ blank slate, composer pinning, quote replies and the outside-message popup:
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
 
+Channel history keeps the message being read in place when a split opens or
+closes beside the channel (the pane rewraps every message); the backend-free
+regression over the production `ThreadList` is
+`bunx playwright test --config src/features/channel/Channel/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 

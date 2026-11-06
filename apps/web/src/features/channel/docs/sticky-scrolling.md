@@ -56,6 +56,15 @@ insets. Short conversations are bottom aligned. Before a scroll correction is
 written, `writeScroll` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
+A width change (a split opening or closing beside the channel) rewraps every row.
+The core only compensates a remeasured row that lies entirely above the viewport,
+so the row spanning the top edge would push the message being read down. Rows
+remember the width they were measured at; a row measured at another width is
+compensated whenever it starts above the viewport, like a first measurement, so
+the first message starting in view keeps its position. This covers rows measured
+at the old width that remount later as the reader scrolls up.
+The backend-free browser regression narrows and widens the production list:
+`bunx playwright test --config src/features/channel/Channel/browser-test/playwright.config.ts`.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
 including scroll events dispatched while our own `scrollTo` runs, so our own
 corrections neither start nor prolong gesture compensation.
