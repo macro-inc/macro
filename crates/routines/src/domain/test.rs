@@ -192,3 +192,35 @@ fn a_saved_single_agent_task_keeps_its_routine_instructions_apart() {
     assert_eq!(task["prompt"], "");
     assert_eq!(task["user_prompt"], "List my meetings");
 }
+
+#[test]
+fn operating_as_the_owner_is_kept_unless_an_update_states_it() {
+    let (trigger, mut task) = saved_program();
+    let mut configuration = RoutineConfiguration::from_saved("Inbox", &trigger, &task).unwrap();
+    assert_eq!(configuration.dangerously_operate_as_user, None);
+    assert!(
+        configuration
+            .task(Some(&task))
+            .get("dangerously_operate_as_user")
+            .is_none()
+    );
+
+    configuration.dangerously_operate_as_user = Some(true);
+    configuration.validate(Utc::now()).unwrap();
+    task = configuration.task(Some(&task));
+    assert_eq!(task["dangerously_operate_as_user"], true);
+
+    // Read back, and sent back without it, it stays on.
+    let mut configuration = RoutineConfiguration::from_saved("Inbox", &trigger, &task).unwrap();
+    assert_eq!(configuration.dangerously_operate_as_user, Some(true));
+    configuration.dangerously_operate_as_user = None;
+    assert_eq!(task, configuration.task(Some(&task)));
+
+    configuration.dangerously_operate_as_user = Some(false);
+    assert!(
+        configuration
+            .task(Some(&task))
+            .get("dangerously_operate_as_user")
+            .is_none()
+    );
+}

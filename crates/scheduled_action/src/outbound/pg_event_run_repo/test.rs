@@ -322,6 +322,7 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
     let incoming = IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Document(
             serde_json::from_value(json!({
                 "event_type": "document.updated", "metadata": {

@@ -1316,8 +1316,10 @@ written through the API with base instructions shows them above the step as
 **Saved instructions that run first**); **Connections**, shown
 when the routine has an **Ask AI** step or apps, lists its apps or **No
 connections added** with **Add connection**; and **Runs & notifications** has
-**Show runs in Home and Agents** and **Runs as** (the owner, whose access steps
-and AI use). There is no details panel: next run sits beside **Trigger**, the
+**Show runs in Home and Agents**, **Runs as** (the owner, whose access steps
+and AI use) and, when the routine has a code step, **Act as me** (off by
+default; when on, posts, emails and comments from code steps appear as written
+by the owner, with no Agent badge; **Ask AI** steps stay the agent's). There is no details panel: next run sits beside **Trigger**, the
 last run under the title, and a routine made from a template links to it there
 (**From a template ↗**). The **Run options** menu
 contains **Turn on** / **Turn off** and **Copy prompt**, which copies the
@@ -1330,7 +1332,8 @@ and a line with the rest, failures in red. Runs a trigger's condition skipped
 read **Condition not met · 12% likely yes** or **Condition couldn’t be
 checked**; consecutive skips collapse into one **N skipped by the condition**
 row with **Show**. The newest run with steps is open on the right: its title,
-time, outcome and how long it took, then a timeline with each AI decision and
+time, outcome, how long it took and, for runs with code steps, **Code acted as
+you** or **Code acted as the agent**, then a timeline with each AI decision and
 its probability bar, each action with a check or a cross and its reason, and
 **Open conversation** when the run had an agent session. Below 720px the list
 shows alone and a run opens full width with a **Runs** back button. A run that

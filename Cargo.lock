@@ -395,6 +395,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -12685,6 +12686,7 @@ dependencies = [
 name = "macro_middleware"
 version = "0.1.0"
 dependencies = [
+ "agent_correlation",
  "anyhow",
  "axum",
  "axum-extra",
