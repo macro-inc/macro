@@ -23,7 +23,6 @@ postgres = [
   "dep:entity_access_db_utils",
   "dep:share_permission_db_utils",
   "dep:model-entity",
-  "dep:macro_uuid",
   "outbound",
 ]
 
@@ -45,7 +44,6 @@ macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-macro_uuid = { workspace = true, optional = true }
 model-entity = { workspace = true, optional = true }
 model-error-response = { workspace = true, optional = true }
 models_permissions = { workspace = true }

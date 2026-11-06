@@ -216,7 +216,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 channel_sender = { workspace = true }
 messages = { workspace = true, features = ["ports", "test-utils"] }
 bot_id = { workspace = true, features = ["test-utils"] }
-dotenvy = { workspace = true }
 embedding = { workspace = true }
 http-body-util = { workspace = true }
 kafka_util = { workspace = true }

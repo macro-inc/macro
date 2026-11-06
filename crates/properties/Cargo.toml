@@ -47,8 +47,6 @@ entity_access = { workspace = true, features = [
 ] }
 entity_access_db_utils = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-filter_ast = { workspace = true }
-item_filters = { workspace = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
@@ -79,7 +77,6 @@ ai_toolset = { workspace = true }
 chrono = { workspace = true }
 macro_db_migrator = { workspace = true }
 mockall = { workspace = true }
-models_pagination = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

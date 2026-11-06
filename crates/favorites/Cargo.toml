@@ -16,7 +16,6 @@ inbound = [
   "entity_access/inbound",
   "ports",
 ]
-mock = ["dep:mockall"]
 outbound = ["ports"]
 ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
 postgres = ["dep:sqlx", "outbound"]
@@ -34,7 +33,6 @@ cowlike = { workspace = true }
 entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
-mockall = { workspace = true, optional = true }
 model-entity = { workspace = true }
 model-error-response = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }

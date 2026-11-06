@@ -1,4 +1,29 @@
 export default {
+  email: 'Email',
+  editContactEmail: 'Add contact email',
+  addEmail: 'Add email',
+  contactEmailPlaceholder: 'person@example.com',
+  saveContact: 'Save',
+  savingContact: 'Saving…',
+  cancel: 'Cancel',
+  company: 'Company',
+  loadingCompanies: 'Loading companies…',
+  retryContact: 'Retry',
+  addCompany: 'Add company',
+  editContactCompany: 'Change contact company',
+  noCompany: 'No company',
+  goToCompany: 'Go to company',
+  searchCompanies: 'Search companies…',
+  contactEditFailed: 'Could not save this change. Try again.',
+  contactEmailConflict:
+    'This email is already associated with another contact in this team.',
+  contactEditConflict:
+    'This change conflicts with an existing record or an archived company.',
+  contactEditUnavailable:
+    'This contact or company is no longer available to edit.',
+  contactEditInvalid:
+    'This change is unavailable. Check the value and try again.',
+
   navigation: 'CRM navigation',
   collapseSidebar: 'Collapse CRM sidebar',
   expandSidebar: 'Expand CRM sidebar',

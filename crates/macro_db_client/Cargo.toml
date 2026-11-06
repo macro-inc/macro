@@ -14,8 +14,6 @@ messages = { workspace = true, features = ["outbound", "annotations"] }
 agent = { workspace = true }
 anyhow = { workspace = true }
 rootcause = { workspace = true }
-async-recursion = "1.1.1"
-async-trait = { workspace = true }
 cached = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
@@ -27,13 +25,8 @@ macro_uuid = { workspace = true }
 model = { workspace = true }
 model-entity = { workspace = true }
 model_owner = { workspace = true }
-model_file_type = { workspace = true }
 models_dcs = { workspace = true }
-models_entity_access_management = { workspace = true, default-features = true, features = [
-  "db",
-] }
 models_opensearch = { workspace = true }
-models_pagination = { workspace = true }
 models_permissions = { workspace = true }
 models_team = { workspace = true, optional = true }
 non_empty = { workspace = true }
@@ -43,7 +36,6 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 system_properties = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
 user_quota = { workspace = true }
 uuid = { workspace = true }

@@ -28,7 +28,6 @@ anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-dashmap = { workspace = true }
 entity_access = { workspace = true, features = [
   "ports",
 ] }
@@ -48,11 +47,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
-uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 agent_session = { workspace = true, features = ["test-utils"] }
-bot_id = { workspace = true, features = ["test-utils"] }
 macro_db_migrator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

@@ -19,4 +19,3 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 [dev-dependencies]
 bot_id = { workspace = true }
 macro_db_migrator = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -12,8 +12,6 @@ local_auth = ["macro_authorization/local_auth"]
 ai_billing = { workspace = true, features = ["pg-admission"] }
 ai_usage = { workspace = true }
 bots = { workspace = true, default-features = true, features = ["outbound"] }
-roles_and_permissions = { workspace = true, features = ["outbound"] }
-teams = { workspace = true, features = ["outbound"] }
 activity = { workspace = true }
 agent_runtime_protocol = { workspace = true }
 agent_session = { workspace = true, features = ["admission"] }
@@ -21,14 +19,11 @@ bot_id = { workspace = true }
 call = { workspace = true, features = ["outbound"] }
 channel_sender = { workspace = true }
 channels = { workspace = true, features = ["outbound"] }
-crm = { workspace = true, features = ["ports"] }
 documents = { workspace = true, features = ["outbound", "ports"] }
 document_sub_type = { workspace = true, default-features = true }
 email = { workspace = true, features = ["outbound"] }
 github = { workspace = true, features = ["installation_claims"] }
 glob = { workspace = true }
-entity_access_management = { workspace = true, default-features = true }
-frecency = { workspace = true, features = ["postgres"] }
 feature_flags = { workspace = true }
 jev = { workspace = true, features = ["outbound"] }
 lexical_client = { workspace = true }
@@ -37,7 +32,6 @@ entity_access = { workspace = true, features = ["inbound", "outbound"] }
 entity_access_db_utils = { workspace = true }
 kafka_util = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
-macro_event_topics = { workspace = true }
 messages = { workspace = true, features = ["broker", "outbound"] }
 models_properties = { workspace = true }
 properties = { workspace = true, features = ["outbound"] }
@@ -67,24 +61,14 @@ futures = { workspace = true }
 tracing = { workspace = true }
 axum = { workspace = true }
 connection_gateway_client = { workspace = true }
-share_permission_db_utils = { workspace = true }
-models_permissions = { workspace = true }
-macro_db_client = { workspace = true, default-features = true }
 model = { workspace = true }
 model-entity = { workspace = true }
 model_owner = { workspace = true }
 entity_registry = { workspace = true, features = ["axum"] }
 entity_registry_db_utils = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
-utoipa-swagger-ui = { workspace = true }
 tower = { workspace = true }
-
-macro_cors = { workspace = true }
 macro_tower_layers = { workspace = true }
-macro_auth = { workspace = true }
-macro_entrypoint = { workspace = true }
-
-macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

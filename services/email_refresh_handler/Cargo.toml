@@ -15,7 +15,6 @@ macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_queues = { workspace = true }
-model = { workspace = true }
 models_email = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { workspace = true, default-features = true }

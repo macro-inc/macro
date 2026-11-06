@@ -13,7 +13,6 @@ futures = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
-document_sub_type = { workspace = true, default-features = true }
 email = { workspace = true, features = [
   "axum",
   "inbound",
@@ -31,7 +30,6 @@ item_filters = { workspace = true, default-features = true }
 macro_authorization = { workspace = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 model-entity = { workspace = true }
-model_file_type = { workspace = true }
 models_grouping = { workspace = true }
 models_pagination = { workspace = true }
 models_soup = { workspace = true }
@@ -49,6 +47,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-either = { workspace = true }
 model_owner = { workspace = true }
 models_properties = { workspace = true }

@@ -12,14 +12,12 @@ ports = ["entity_access/ports"]
 [dependencies]
 # Core
 anyhow = { workspace = true }
-chrono = { workspace = true }
 entity_access = { workspace = true }
 macro_user_id = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
 
 # Outbound
 connection_gateway_client = { workspace = true, optional = true }

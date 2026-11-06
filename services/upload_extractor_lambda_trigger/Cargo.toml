@@ -15,7 +15,6 @@ macro_entrypoint = { workspace = true }
 models_bulk_upload = { workspace = true }
 s3_key = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 sqs_client = { workspace = true, default-features = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

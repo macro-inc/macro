@@ -32,4 +32,3 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 anyhow.workspace = true
 macro_db_migrator = { workspace = true }
-tower.workspace = true

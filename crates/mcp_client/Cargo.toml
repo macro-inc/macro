@@ -10,14 +10,12 @@ providers = ["macro_env_var"]
 
 [dependencies]
 aes-gcm = "0.10"
-agent = { workspace = true }
 ai_toolset = { workspace = true }
 anyhow.workspace = true
 authentication_service_client = { workspace = true }
 async-trait.workspace = true
 oauth2 = { version = "5.0", default-features = false }
 base64.workspace = true
-async-openai.workspace = true
 axum.workspace = true
 futures.workspace = true
 macro_authorization = { workspace = true, features = [

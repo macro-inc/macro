@@ -53,7 +53,6 @@ last_online_tracker = { workspace = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-macro_env = { workspace = true }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_service_urls = { workspace = true }

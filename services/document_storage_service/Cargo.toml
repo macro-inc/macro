@@ -48,7 +48,6 @@ agent_correlation = { workspace = true, features = ["http", "postgres"] }
 access_requests = { workspace = true }
 async-trait = { workspace = true }
 ai_billing = { workspace = true }
-roles_and_permissions = { workspace = true, features = ["outbound"] }
 teams = { workspace = true, features = ["outbound"] }
 agent_changes = { workspace = true, features = ["outbound"] }
 dictation = { workspace = true, features = ["inbound", "outbound"] }
@@ -78,11 +77,7 @@ axum-extra = { workspace = true }
 base64 = { workspace = true }
 bots = { workspace = true, default-features = true }
 bot_id = { workspace = true }
-bytes = { workspace = true }
 calendar_events = { workspace = true, features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
-bzip2 = { workspace = true, default-features = false, features = [
-  "libbz2-rs-sys",
-] }
 cal = { workspace = true, features = ["axum", "outbound"] }
 call = { workspace = true, default-features = true }
 feature_flags = { workspace = true }
@@ -99,7 +94,6 @@ chat = { workspace = true, features = [
   "outbound",
 ] }
 chrono = { workspace = true }
-clap = { workspace = true }
 collab_surface = { workspace = true, features = [
   "inbound",
   "postgres",
@@ -110,10 +104,8 @@ complete_graph = { workspace = true }
 connection = { workspace = true, features = [
   "outbound",
 ] }
-channel_sender = { workspace = true }
 connection_gateway_client = { workspace = true }
 contacts = { workspace = true, default-features = true }
-cowlike = { workspace = true }
 channel_labels = { workspace = true, features = [
   "inbound",
   "postgres",
@@ -189,8 +181,6 @@ hyper-util = { workspace = true }
 import = { workspace = true }
 initiative = { workspace = true, default-features = true, features = ["inbound", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
-last_online_tracker = { workspace = true }
-lazy_static = { workspace = true }
 lexical_client = { workspace = true }
 lexical_mention_extractor = { workspace = true }
 macro_auth = { workspace = true }
@@ -224,14 +214,8 @@ model = { workspace = true }
 model-entity = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }
-model_user = { workspace = true }
-models_bulk_upload = { workspace = true }
 models_databases = { workspace = true }
 models_dcs = { workspace = true }
-models_opensearch = { workspace = true }
-models_pagination = { workspace = true, features = [
-  "axum",
-] }
 models_permissions = { workspace = true }
 models_properties = { workspace = true }
 models_soup = { workspace = true, features = ["schema"] }
@@ -240,7 +224,6 @@ notification_inbox = { workspace = true }
 opensearch_client = { workspace = true }
 projects_hex = { workspace = true }
 properties = { workspace = true, default-features = true }
-properties_service = { workspace = true }
 rate_limit = { workspace = true, features = [
   "axum",
 ] }
@@ -251,7 +234,6 @@ redis = { workspace = true, features = [
   "cluster-async",
   "tokio-rustls-comp",
 ] }
-regex = { workspace = true }
 reminders = { workspace = true, features = [
   "dispatch-sqs",
   "inbound",
@@ -309,7 +291,6 @@ tungstenite-signal = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["compression-gzip"] }
 tracing = { workspace = true }
-unicode-segmentation = { workspace = true }
 urlencoding = { workspace = true }
 account_manager = { workspace = true, features = [
   "inbound",
@@ -336,14 +317,12 @@ zip = { workspace = true }
 bebop = { workspace = true }
 sync_service_bebop_schema = { workspace = true }
 tokio-tungstenite = { workspace = true }
-cool_asserts = "2"
 flate2 = "1"
 frecency = { workspace = true, features = ["mock"] }
 macro_auth = { workspace = true, features = ["testing"] }
 macro_db_migrator = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
-ordered-float = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }

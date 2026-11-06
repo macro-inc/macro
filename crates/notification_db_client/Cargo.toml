@@ -9,9 +9,7 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model-entity = { workspace = true }
 model_notifications = { workspace = true }
-models_pagination = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 tracing = { workspace = true }
@@ -20,4 +18,3 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { workspace = true }
-serde_json = { workspace = true }

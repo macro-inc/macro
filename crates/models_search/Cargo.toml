@@ -8,7 +8,6 @@ version = "0.1.0"
 chrono = { workspace = true }
 item_filters = { workspace = true, default-features = true, features = ["schema"] }
 model_file_type = { workspace = true }
-models_opensearch = { workspace = true }
 opensearch_client = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

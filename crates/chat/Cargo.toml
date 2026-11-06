@@ -55,7 +55,6 @@ model = { workspace = true }
 non_empty = { workspace = true }
 model-entity = { workspace = true }
 model_owner = { workspace = true }
-models_entity_access_management = { workspace = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

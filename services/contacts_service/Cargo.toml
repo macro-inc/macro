@@ -32,13 +32,9 @@ macro_aws_config = { workspace = true }
 macro_cors = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
-macro_user_id = { workspace = true }
-model = { workspace = true }
 rate_limit = { workspace = true, features = ["axum"] }
 redis = { workspace = true }
 secretsmanager_client = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_worker = { workspace = true }
 tokio = { workspace = true }
@@ -59,3 +55,5 @@ mock = []
 [dev-dependencies]
 http-body-util = { workspace = true }
 tower = { workspace = true }
+macro_user_id = { workspace = true }
+serde_json = { workspace = true }

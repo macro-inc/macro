@@ -19,16 +19,13 @@ macro_entrypoint = { workspace = true }
 macro_queues = { workspace = true }
 macro_service_urls = { workspace = true }
 macro_user_id = { workspace = true }
-mention_utils = { workspace = true }
 messages = { workspace = true, features = ["outbound"] }
 rootcause = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 slack_integration = { workspace = true, features = ["postgres", "s3", "sqs", "search", "worker"] }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
-tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 

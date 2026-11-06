@@ -26,3 +26,6 @@ To click through by hand, run
 - `/?page=signup` is the desktop sign-up through onboarding's opening slides.
 - `/?page=mobile-signup` is the mobile-web email capture.
 - Add `&verifyLatency=300` to make code checks take a network round trip.
+
+- Add `&cleanupFailure=once` to keep the verified session gated through a failed
+  login cleanup, then retry verification in the same mounted view.

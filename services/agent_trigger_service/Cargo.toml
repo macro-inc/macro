@@ -10,8 +10,6 @@ path = "src/main.rs"
 
 [dependencies]
 ai_billing = { workspace = true, features = ["pg-admission"] }
-roles_and_permissions = { workspace = true, features = ["outbound"] }
-teams = { workspace = true, features = ["outbound"] }
 initiative = { workspace = true, features = ["postgres"] }
 crm = { workspace = true, features = ["lookup"] }
 call = { workspace = true, features = ["outbound"] }
@@ -40,7 +38,6 @@ properties = { workspace = true, features = ["outbound"] }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
 system_properties = { workspace = true }
-serde_json = { workspace = true }
 sqlx = { workspace = true }
 static_file = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }

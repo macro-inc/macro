@@ -9,7 +9,6 @@ version = "0.1.0"
 bytes = { workspace = true }
 hyper = { workspace = true, features = ["http2", "server"] }
 hyper-util = { workspace = true, features = ["http2", "server"] }
-macro_entrypoint = { workspace = true }
 rustls = { workspace = true }
 tokio = { workspace = true, features = ["net"] }
 tokio-rustls = { workspace = true }

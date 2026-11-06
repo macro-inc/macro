@@ -17,14 +17,9 @@ ports = []
 [dependencies]
 # Core
 anyhow = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-
-# Domain models (always included)
-macro_user_id = { workspace = true }
 model-entity = { workspace = true }
 models_entity_access_management = { workspace = true }
 models_permissions = { workspace = true }
@@ -35,8 +30,5 @@ sqlx = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-cool_asserts = "2"
 macro_db_migrator = { workspace = true }
-mockall = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

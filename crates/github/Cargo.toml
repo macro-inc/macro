@@ -7,7 +7,6 @@ version = "0.1.0"
 [features]
 axum = [
   "dep:axum",
-  "dep:axum-extra",
   "dep:entity_access",
   "dep:macro_authorization",
   "dep:model-error-response",
@@ -45,7 +44,6 @@ sync = [
 ]
 
 [dependencies]
-activity = { workspace = true }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
@@ -99,7 +97,6 @@ redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
 
 axum = { workspace = true, optional = true }
-axum-extra = { workspace = true, optional = true }
 model-error-response = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -114,7 +111,6 @@ foreign_entity = { workspace = true, features = [
 github_pull_requests = { workspace = true, features = [
   "service",
 ] }
-http-body-util = { workspace = true }
 macro_db_migrator = { workspace = true }
 mockall = { workspace = true }
 model = { workspace = true }

@@ -405,8 +405,8 @@ pub enum CrmError {
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),
     /// Tried to mutate a CRM company in a way that contradicts its
-    /// `hidden = true` state — currently raised when attempting to
-    /// re-enable `email_sync` on a hidden company.
+    /// `hidden = true` state, including enabling sync or changing a
+    /// contact relation in a way that would reveal an archived record.
     #[error("crm company is hidden")]
     CompanyHidden,
     /// The team already tracks a company for the requested domain.
@@ -415,6 +415,9 @@ pub enum CrmError {
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
+    /// Another visible contact in the owning team already uses this address.
+    #[error("a crm contact with this email already exists for the team")]
+    ContactAlreadyExistsForTeam,
     /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
     #[error("crm is not enabled for this team")]
     CrmDisabledForTeam,

@@ -16,8 +16,6 @@ path = "src/openapi.rs"
 agent_session = { workspace = true }
 rootcause = { workspace = true }
 anyhow = { workspace = true }
-aws-sdk-secretsmanager = { workspace = true }
-macro_aws_config = { workspace = true }
 axum = { workspace = true }
 calendar_events = { workspace = true }
 chrono = { workspace = true }
@@ -29,11 +27,8 @@ email_db_client = { workspace = true }
 entity_access = { workspace = true, features = [
   "outbound",
 ] }
-futures = { workspace = true }
-http-body-util = { workspace = true }
 indexmap = { workspace = true }
 item_filters = { workspace = true, default-features = true }
-macro_auth = { workspace = true }
 macro_authorization = { workspace = true, default-features = true }
 macro_db_client = { workspace = true, default-features = true }
 models_properties = { workspace = true }
@@ -43,8 +38,6 @@ properties = { workspace = true, features = [
 ] }
 system_properties = { workspace = true }
 readonly_pool = { workspace = true }
-macro_env = { workspace = true }
-macro_env_var = { workspace = true }
 macro_user_id = { workspace = true }
 model = { workspace = true }
 models_email = { workspace = true }
@@ -53,19 +46,12 @@ models_search = { workspace = true }
 models_search_cursor = { workspace = true }
 name_search = { workspace = true }
 opensearch_client = { workspace = true }
-secretsmanager_client = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-macro_auth = { workspace = true, features = ["testing"] }

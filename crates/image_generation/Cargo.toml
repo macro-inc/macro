@@ -40,7 +40,6 @@ uuid.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-http-body-util.workspace = true
 macro_user_id = { workspace = true }
 model_user = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

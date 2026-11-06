@@ -10,9 +10,7 @@ local = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-aws-sdk-sqs = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sqs"] }
-chrono = { workspace = true }
 connection_gateway_client = { workspace = true }
 document_storage_service_client = { workspace = true }
 dynamodb_client = { workspace = true }
@@ -24,7 +22,6 @@ macro_env_var = { workspace = true }
 model = { workspace = true }
 model-entity = { workspace = true }
 models_bulk_upload = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 macro_service_urls = { workspace = true }
 sha2 = { workspace = true }

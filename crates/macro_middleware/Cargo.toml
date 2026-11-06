@@ -9,7 +9,6 @@ all = ["cloud_storage", "tracking"]
 cloud_storage = [
   "dep:entity_access_db_utils",
   "dep:macro_user_id",
-  "dep:model_user",
   "macro_db_client",
 ]
 default = ["all"]
@@ -20,30 +19,16 @@ tracking = ["dep:ip_extractor"]
 agent_correlation = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
-axum-extra = { workspace = true }
 entity_access_db_utils = { workspace = true, optional = true }
-http-body-util = { workspace = true }
 ip_extractor = { workspace = true, optional = true }
 macro_db_client = { workspace = true, default-features = true, optional = true }
-macro_env = { workspace = true }
-macro_env_var = { workspace = true }
 macro_user_id = { workspace = true, optional = true }
 macro_uuid = { workspace = true }
 model = { workspace = true }
 model-entity = { workspace = true }
-model_user = { workspace = true, optional = true }
 models_permissions = { workspace = true }
-remote_env_var = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
-thiserror = { workspace = true }
 tokio = { workspace = true }
-tower = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-serde_urlencoded = { workspace = true }
-urlencoding = { workspace = true }

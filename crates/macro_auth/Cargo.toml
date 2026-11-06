@@ -17,7 +17,6 @@ jsonwebtoken = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_user_id = { workspace = true }
-rand = { workspace = true }
 remote_env_var = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

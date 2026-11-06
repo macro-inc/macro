@@ -15,7 +15,6 @@ entity_mutation = ["dep:entity_mutation", "ports"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
   "dep:utoipa",
   "databases/ports",
   "entity_access/inbound",
@@ -58,7 +57,6 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 model-entity = { workspace = true }
-model-error-response = { workspace = true, optional = true }
 models_databases = { workspace = true }
 models_forms = { workspace = true }
 models_permissions = { workspace = true }

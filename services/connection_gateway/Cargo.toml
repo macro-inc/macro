@@ -62,7 +62,6 @@ macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_tower_layers = { workspace = true }
-mockall.workspace = true
 postcard = { workspace = true }
 model = { workspace = true }
 model-entity = { workspace = true }
@@ -79,14 +78,12 @@ serde_dynamo = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
-strum_macros = { workspace = true }
 stream = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
 tracing-opentelemetry = { workspace = true }
-url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }

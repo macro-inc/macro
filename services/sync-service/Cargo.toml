@@ -71,3 +71,8 @@ utoipa = { version = "5.4.0", optional = true }
 
 [dependencies.tower-service]
 workspace = true
+
+[package.metadata.cargo-shear]
+# Feature activation for wasm32, never named in code: getrandom's `wasm_js`
+# backend, and `time`'s `wasm-bindgen` clock for `OffsetDateTime::now_utc`.
+ignored = ["getrandom", "time"]

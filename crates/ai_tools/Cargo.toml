@@ -30,9 +30,7 @@ agent = { workspace = true }
 agent_session = { workspace = true, default-features = true, features = ["ai_tools"] }
 ai_usage = { workspace = true }
 anthropic = { workspace = true, features = ["toolset"] }
-attachment = { workspace = true }
 static_file = { workspace = true, default-features = true, features = ["attachment"] }
-non_empty = { workspace = true }
 ai_toolset = { workspace = true }
 anyhow.workspace = true
 bot_id = { workspace = true }
@@ -68,16 +66,13 @@ entity_registry_db_utils = { workspace = true }
 foreign_entity = { workspace = true, default-features = true }
 github_pull_requests = { workspace = true, default-features = true }
 frecency = { workspace = true, features = ["outbound", "postgres"] }
-futures.workspace = true
 image_generation = { workspace = true }
 import = { workspace = true }
 import_notion = { workspace = true }
 item_filters = { workspace = true, default-features = true }
-lazy_static.workspace = true
 lexical_client = { workspace = true }
 lexical_mention_extractor = { workspace = true }
 macro_aws_config = { workspace = true }
-macro_db_client = { workspace = true, default-features = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true }
 messages = { workspace = true, features = ["ai_tools", "broker", "delivery"] }
@@ -89,11 +84,8 @@ pipedream_mcp = { workspace = true }
 url = { workspace = true }
 model = { workspace = true }
 model-entity = { workspace = true }
-model_notifications = { workspace = true }
 model_owner = { workspace = true }
 models_databases = { workspace = true }
-models_dcs = { workspace = true }
-models_email = { workspace = true }
 models_pagination = { workspace = true }
 models_permissions = { workspace = true }
 notification = { workspace = true, default-features = true, features = ["ai_tool"] }
@@ -101,7 +93,6 @@ prompt = { workspace = true }
 models_properties = { workspace = true }
 models_search = { workspace = true }
 models_soup = { workspace = true }
-rand.workspace = true
 reqwest.workspace = true
 readonly_pool = { workspace = true }
 rootcause = { workspace = true }
@@ -125,10 +116,8 @@ tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 unicode-segmentation.workspace = true
-utoipa.workspace = true
 uuid.workspace = true
 web_search = { workspace = true }
-remote_env_var = { workspace = true }
 macro_env = { workspace = true }
 secretsmanager_client = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -141,4 +130,3 @@ macro_db_migrator = { workspace = true }
 calendar_scheduling = { workspace = true, features = ["inbound"] }
 macro_authorization = { workspace = true, default-features = true, features = ["axum"] }
 model_user = { workspace = true }
-cool_asserts = "2"

@@ -29,6 +29,5 @@ models_properties = { workspace = true }
 model_owner = { workspace = true }
 serde = { workspace = true }
 chrono = { workspace = true }
-activity = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

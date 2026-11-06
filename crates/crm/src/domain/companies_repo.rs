@@ -160,18 +160,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Files a personal-provider address (gmail.com etc.) as a contact
-    /// without a company, the counterpart of [`populate_contact`] for
+    /// Files a personal-provider address (gmail.com etc.), preserving an existing
+    /// manual company choice, the counterpart of [`populate_contact`] for
     /// domains no company may own. In one transaction, under the same
     /// per-`(team, lower(domain))` advisory lock:
     ///
     /// 1. No-ops when the team's CRM is off, the team keeps personal
     ///    emails out (`exclude_personal_emails`, the default), or the
     ///    domain is on the team's blocklist.
-    /// 2. `is_sent = true` upserts the company-less contact for
-    ///    `(team, lower(email))`, merging interactions like
-    ///    [`populate_contact`]; `is_sent = false` only refreshes an
-    ///    existing one (received mail never creates a contact).
+    /// 2. Resolve a unique `(team, lower(email))` across all companies and hidden
+    ///    rows; skip ambiguous identities. Merge interactions on that ID without
+    ///    changing its company or archive state. Only sent mail creates a missing
+    ///    contact, initially without a company.
     /// 3. Records the `crm_contact_sources` row for `link_id`.
     ///
     /// [`populate_contact`]: CompaniesRepository::populate_contact
@@ -559,6 +559,19 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         name: &str,
         include_hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Add a missing email or link/switch a personal-provider contact company.
+    /// Validate the domain command against the locked current record.
+    /// Preserve history, sources and visibility; protect manually edited records
+    /// from sync orphan cleanup. Reject same-team email conflicts and inaccessible
+    /// destination companies. Serialize with company visibility and email sync.
+    fn update_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        update: &super::contact_update::ContactFieldUpdate,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Batched authorization probe for a CRM-scoped email query. Returns
     /// per-input status the email service maps into typed `EmailErr`

@@ -37,6 +37,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 cool_asserts = "2"
 item_filters = { workspace = true, default-features = true, features = ["mock"] }
 macro_db_migrator = { workspace = true }
-rand = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }

@@ -96,7 +96,6 @@ model_owner = { workspace = true }
 s3_key = { workspace = true }
 models_email = { workspace = true }
 model_file_type = { workspace = true }
-models_opensearch = { workspace = true }
 models_properties = { workspace = true, optional = true }
 models_search = { workspace = true }
 nom = { workspace = true }
@@ -118,7 +117,6 @@ sqs_client = { workspace = true, features = [
   "search",
 ] }
 sqs_worker = { workspace = true }
-strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal", "sync", "time"] }
 tokio-retry = { workspace = true, optional = true }

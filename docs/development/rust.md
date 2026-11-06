@@ -54,6 +54,7 @@ unit tests. Standalone pure-logic crates need no database setup.
 | `just check` | Fast, change-scoped format/lint/code-rule/PII gate; not a type check or test runner. |
 | `just check full` | Add TypeScript checking and Rust clippy to the gate. |
 | `just clippy` | Run workspace Rust lints using the SQLx cache. |
+| `cargo shear` | Find unused dependencies from source, without compiling (CI and `just check` run it). `cargo shear --fix` removes them; list a dependency needed only for a side effect (feature activation, linking) in its manifest's `[package.metadata.cargo-shear] ignored` with a comment. `cargo udeps` is the slower, compile-based cross-check. |
 
 `SQLX_OFFLINE=true` is allowed for `cargo check`, `cargo build`, and `cargo clippy`
 when the cache is current. Do not export it for a session that will run tests.

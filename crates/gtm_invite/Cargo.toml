@@ -7,7 +7,6 @@ version = "0.1.0"
 [features]
 axum = [
   "dep:axum",
-  "dep:axum-extra",
   "dep:ip_extractor",
   "dep:macro_authorization",
   "dep:model-error-response",
@@ -39,7 +38,6 @@ rate_limit = { workspace = true, features = ["axum"] }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-axum-extra = { workspace = true, optional = true }
 ip_extractor = { workspace = true, optional = true }
 model-error-response = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }

@@ -17,8 +17,6 @@ local_queue = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-lambda = { workspace = true }
-aws-sdk-s3 = { workspace = true }
-aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 database_env_vars = { workspace = true }
@@ -43,10 +41,8 @@ macro_uuid = { workspace = true }
 model = { workspace = true }
 s3_key = { workspace = true }
 nix = { version = "0.29.0", features = ["process", "signal"] }
-remote_env_var = { workspace = true }
 rs-libreoffice-bindings = { git = "https://github.com/macro-inc/rs-libreoffice-bindings", rev = "056a40ddfac1d9650be30b9f0b4b934e9266c7dc" }
 s3_client = { workspace = true }
-secretsmanager_client = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -62,6 +58,7 @@ zip = { workspace = true, features = ["bzip2"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+aws-sdk-s3 = { workspace = true }
 docx_engine = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }

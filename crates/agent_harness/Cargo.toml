@@ -53,7 +53,6 @@ github = { workspace = true, features = [
 ] }
 feature_flags = { workspace = true }
 jev = { workspace = true }
-kafka_util = { workspace = true }
 macro_env_var = { workspace = true }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
 mcp_client = { workspace = true }
@@ -108,7 +107,6 @@ dynamic_ui = { workspace = true }
 agent_session = { workspace = true, default-features = true, features = ["test-utils"] }
 bot_id = { workspace = true, features = ["test-utils"] }
 harness_id = { workspace = true, features = ["test-utils"] }
-mockall = { workspace = true }
 model_user = { workspace = true }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tower = { workspace = true }

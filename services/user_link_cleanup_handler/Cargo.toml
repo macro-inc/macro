@@ -7,14 +7,10 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
-chrono = { workspace = true }
-futures = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { workspace = true, default-features = true }
 macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

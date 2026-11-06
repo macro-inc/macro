@@ -71,6 +71,10 @@ import {
   useSetEmailSyncMutation,
 } from './queries/companies';
 import { useCompanyEmailsQuery } from './queries/company-emails';
+import {
+  useSetContactCompanyMutation,
+  useSetContactEmailMutation,
+} from './queries/contact-edit';
 import { useContactEmailsQuery } from './queries/contact-emails';
 import {
   useContactQuery,
@@ -368,6 +372,8 @@ export function createAppCrmContext(): CrmContext {
     createContact: (...args) => useCreateContactMutation(deps, ...args),
     renameCompany: (...args) => useSetCompanyNameMutation(deps, ...args),
     renameContact: (...args) => useSetContactNameMutation(deps, ...args),
+    editContactEmail: () => useSetContactEmailMutation(deps),
+    editContactCompany: () => useSetContactCompanyMutation(deps),
     hideCompany: (...args) => useSetCompanyHiddenMutation(deps, ...args),
     hideContact: (...args) => useSetContactHiddenMutation(deps, ...args),
     setEmailSync: (...args) => useSetEmailSyncMutation(deps, ...args),

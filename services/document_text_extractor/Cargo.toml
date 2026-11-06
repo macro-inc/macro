@@ -10,7 +10,6 @@ local-extract = []
 macos = []
 
 [dependencies]
-agent = { workspace = true }
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 macro_aws_config = { workspace = true, features = ["s3"] }
@@ -19,7 +18,6 @@ aws_lambda_events = { workspace = true, features = [
   "s3",
   "sqs",
 ] }
-chrono = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
@@ -33,7 +31,6 @@ sqlx = { workspace = true }
 tiktoken-rs = "0.5.9"
 tokio = { workspace = true }
 tracing = { workspace = true }
-urlencoding = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 

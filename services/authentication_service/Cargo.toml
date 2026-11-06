@@ -84,7 +84,6 @@ models_sfs = { workspace = true }
 static_file_service_client = { workspace = true }
 user_api_key = { workspace = true, features = ["postgres"] }
 email = { workspace = true, features = ["http_client", "outbound"] }
-doppleganger = { workspace = true }
 email_db_client = { workspace = true }
 email_validator = { workspace = true }
 entity_access = { workspace = true, default-features = true }
@@ -111,7 +110,6 @@ github_pull_requests = { workspace = true, features = [
 hmac = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
-last_online_tracker = { workspace = true }
 loops_client = { workspace = true }
 macro_auth = { workspace = true }
 macro_authorization = { workspace = true, default-features = true, features = [
@@ -147,14 +145,12 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 maud = { version = "0.27.0" }
 miniserde = "0.1.45"
-microsoft_oauth_grant_db_utils = { workspace = true }
 mobile_welcome_email_db_client = { workspace = true }
 models_email = { workspace = true }
 mockall = { workspace = true }
 model = { workspace = true }
 model-entity = { workspace = true }
 models_permissions = { workspace = true }
-model_notifications = { workspace = true }
 native_app_service = { workspace = true }
 non_empty = { workspace = true }
 notification = { workspace = true, default-features = true }

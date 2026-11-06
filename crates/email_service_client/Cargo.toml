@@ -8,14 +8,12 @@ version = "0.1.0"
 anyhow = { workspace = true }
 email = { workspace = true, features = ["axum", "inbound"] }
 macro_tower_layers = { workspace = true }
-model = { workspace = true }
 models_email = { workspace = true }
 reqwest = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 wiremock = { workspace = true }

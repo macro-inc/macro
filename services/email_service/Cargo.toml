@@ -90,7 +90,6 @@ sfs_delete = []
 [dependencies]
 agent_correlation = { workspace = true, features = ["http", "postgres"] }
 calendar_events = { workspace = true, features = ["google", "inbound", "postgres", "schema"] }
-ammonia = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { workspace = true }
 macro_aws_config = { workspace = true, features = ["s3", "sqs"] }
@@ -107,7 +106,6 @@ connection_gateway_client = { workspace = true }
 crm = { workspace = true, default-features = true }
 unfurl = { workspace = true, features = ["outbound"] }
 document_storage_service_client = { workspace = true }
-doppleganger = { workspace = true }
 doppler-config = { workspace = true }
 ego-tree = { workspace = true }
 email = { workspace = true, features = ["axum", "calendar_invitations", "gmail_token", "inbound", "outbound", "mailbox", "sqs"] }
@@ -139,7 +137,6 @@ macro_event_broker = { workspace = true, default-features = true }
 macro_env_var = { workspace = true }
 macro_queues = { workspace = true }
 macro_middleware = { workspace = true }
-last_online_tracker = { workspace = true }
 notification = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
@@ -152,10 +149,7 @@ model-entity = { workspace = true }
 model_file_type = { workspace = true }
 model_notifications = { workspace = true }
 models_email = { workspace = true }
-models_opensearch = { workspace = true }
 models_pagination = { workspace = true, features = ["axum"] }
-models_permissions = { workspace = true }
-once_cell = { workspace = true }
 models_properties = { workspace = true }
 rand = { workspace = true }
 redis = { workspace = true, features = [
@@ -167,7 +161,6 @@ regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
 s3_client = { workspace = true }
-schemars = { workspace = true }
 scraper = { workspace = true }
 secretsmanager_client = { workspace = true }
 serde = { workspace = true }

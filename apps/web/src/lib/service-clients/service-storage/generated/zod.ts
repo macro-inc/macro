@@ -5814,6 +5814,12 @@ export const createCrmCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -5928,6 +5934,12 @@ export const getCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6036,6 +6048,12 @@ export const listCompanyContactsResponseItem = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6106,6 +6124,12 @@ export const createCrmContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6235,6 +6259,12 @@ export const searchContactsResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6298,6 +6328,12 @@ export const createCrmTeamContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6357,6 +6393,12 @@ export const getContactByEmailResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6413,6 +6455,138 @@ export const getContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactCompanyParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactCompanyBody = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe(
+        'Destination company in the same team. Unlinking is not supported.'
+      ),
+  })
+  .describe('Link or switch a contact with a known personal-provider email.');
+
+export const setCrmContactCompanyResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe('The address to add. An identical retry is accepted.'),
+  })
+  .describe('Add a missing contact email. Existing addresses are read-only.');
+
+export const setCrmContactEmailResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),

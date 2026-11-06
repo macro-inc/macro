@@ -9,19 +9,13 @@ version = "0.1.0"
 anyhow = { workspace = true }
 aws-sdk-lambda = { workspace = true }
 macro_aws_config = { workspace = true, features = ["s3"] }
-aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
-aws-smithy-types = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["s3"] }
-bzip2 = { workspace = true, default-features = false, features = [
-  "libbz2-rs-sys",
-] }
 futures = { workspace = true }
 lambda_client = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { workspace = true, default-features = true }
 macro_entrypoint = { workspace = true }
-macro_env = { workspace = true }
 macro_sha_count_client = { workspace = true }
 macro_uuid = { workspace = true }
 model = { workspace = true }
@@ -33,7 +27,6 @@ redis = { workspace = true, features = [
 ] }
 s3_client = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { workspace = true, default-features = true }

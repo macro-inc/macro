@@ -8,7 +8,6 @@ version = "0.1.0"
 anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 macro_aws_config = { workspace = true }
-aws-smithy-types = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 chat = { workspace = true }
 chrono = { workspace = true }
@@ -21,11 +20,8 @@ macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true }
 macro_queues = { workspace = true }
-macro_uuid = { workspace = true }
-model = { workspace = true }
 model_owner = { workspace = true }
 projects = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { workspace = true, features = [
@@ -34,5 +30,4 @@ sqs_client = { workspace = true, features = [
 ] }
 tokio = { workspace = true }
 tracing = { workspace = true }
-urlencoding = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

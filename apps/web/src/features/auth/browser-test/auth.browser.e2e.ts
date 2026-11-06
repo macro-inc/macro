@@ -14,6 +14,27 @@ test('a returning user signs in with an emailed code', async ({ page }) => {
   await expectLanded(page, '/');
 });
 
+test('email verification can retry after login cleanup fails', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=login&cleanupFailure=once');
+  await page.getByRole('button', { name: 'Continue with email' }).click();
+  await signInWithCode(page, 'returning@example.com', '424242');
+  await expect(
+    page.getByRole('status', { name: 'Notifications' })
+  ).toContainText('Local cleanup failed');
+  const verify = page.getByRole('button', { name: 'Verify', exact: true });
+  await expect(verify).toBeEnabled();
+  await expect(page.getByLabel('One-time code')).toHaveValue('424242');
+  await verify.click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Create your workspace' })
+  ).toBeVisible();
+  expect(
+    (await fakeCalls(page)).filter((call) => call.startsWith('verify:'))
+  ).toHaveLength(2);
+});
+
 test('a wrong code can be corrected without starting over', async ({
   page,
 }) => {

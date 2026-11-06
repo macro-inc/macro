@@ -8,5 +8,4 @@ version = "0.1.0"
 anyhow = { workspace = true }
 models_search = { workspace = true }
 reqwest = { workspace = true }
-tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

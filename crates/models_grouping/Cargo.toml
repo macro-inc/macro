@@ -7,8 +7,6 @@ version = "0.1.0"
 [dependencies]
 chrono = { workspace = true }
 serde = { workspace = true }
-models_pagination = { workspace = true }
-models_properties = { workspace = true }
 uuid = { workspace = true }
 utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -42,7 +42,6 @@ utoipa.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-http-body-util.workspace = true
 model_user = { workspace = true }
 rate_limit = { workspace = true, features = [
   "axum",
