@@ -55,7 +55,7 @@ where
         sqlx::query!(
             "INSERT INTO crm_pipeline_entities (id, team_id, database_id, table_id, record_type, name, user_id, primary_column_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
             blueprint.id, blueprint.team_id, blueprint.database.id.into_uuid(),
-            blueprint.database.table_id.into_uuid(), blueprint.record_type.as_str(), &blueprint.name, blueprint.creator.as_ref(), blueprint.primary_column_id.into_uuid(),
+            blueprint.database.table_id.into_uuid(), blueprint.record_type.map(PipelineRecordType::as_str), &blueprint.name, blueprint.creator.as_ref(), blueprint.primary_column_id.into_uuid(),
         ).execute(&mut **transaction).await?;
         entity_access_db_utils::insert_entity_access_row(
             transaction,
@@ -111,10 +111,11 @@ where
         .await?;
         rows.into_iter()
             .map(|row| {
-                let record_type = match row.record_type.as_str() {
-                    "company" => PipelineRecordType::Company,
-                    "contact" => PipelineRecordType::Contact,
-                    _ => {
+                let record_type = match row.record_type.as_deref() {
+                    None => None,
+                    Some("company") => Some(PipelineRecordType::Company),
+                    Some("contact") => Some(PipelineRecordType::Contact),
+                    Some(_) => {
                         return Err(
                             sqlx::Error::Decode("Invalid pipeline record type".into()).into()
                         );

@@ -50,6 +50,14 @@ While the email list itself has focus, `Tab` moves browser focus instead; use
 `g i` or `g o`. Calendar mail remains available through the calendar filter and
 existing Calendar route. Mobile keeps its original tabs and order, including
 separate Signal, Noise, and Calendar tabs, with `Focus` (flagged) first.
+The top of Signal shows a pinned **Learn how to use Macro Mail** row
+(`TutorialRow` from `features/video-tutorials`, shared by every block). Clicking it opens the tutorial video in a dialog at 80% of
+the window (a bottom sheet on phones) that never autoplays: the play pill
+(play disc, then the presenter's photo and name over "Watch demo · 1:27")
+starts it and brings up the native controls. When it ends, the last frame dims under a shelf, "More videos from Macro", of the other tutorials (each block's nav icon on a pastel tile with its length); a card switches the dialog to that video, paused, and Replay or a click on the frame restarts it. Under the video, three Macro team faces (stacked like a block's live viewers) and "Have questions about Macro Mail? **Talk to us in your support channel →**" open the person's own `Macro Support x …` channel and close the dialog; the line is left out when they own no such channel. The row's X (on hover, always on
+touch) hides it on that device for good (`localStorage`
+`email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
+keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.
@@ -215,20 +223,22 @@ when: `Due today`, `Due tomorrow`, a weekday for the week ahead (`Due Fri`), or 
 date (`Due Nov 12`), on either sort, with the full date in its tooltip. A date
 before the viewer's local today reads `Overdue` with a warning dot and border. A
 thread classified before due dates shipped shows none until new mail arrives, and
-mail naming no firm date shows none. While the list is sorted by Importance, the
-0-100 score and five bars colored by band join it, red through green; Most recent
-hides them. The meter's tooltip and label add `rising` or `falling` while a thread's
+mail naming no firm date shows none. Every row also shows the 0-100 score and five
+bars colored by band, red through green, on either sort, except on phones (touch
+and under 640px), which leave it out so the reason and due date fit. The meter's
+tooltip and label add `rising` or `falling` while a thread's
 importance is moving: Jev judges per thread whether it gets more pressing or matters
 less as it sits, and the read moves the score from the time of its classified
 message until newer mail arrives. Threads classified before those questions stay
 flat until their next message. Rows at least 45rem wide keep all of it just before
 the date. Narrower Focus rows stack, on touch too, with the subject on its own line
-and all of it ahead of the preview, so a narrow desktop window still shows the meter. The desktop
+and all of it ahead of the preview, so a narrow desktop window still shows the
+meter. The desktop
 header's sort dropdown (`Sort Focus`, among the view options) switches between
 **Most recent**, the default, and **Importance**, which
 is flat with no day headers. Touch layouts, phone or tablet, have no dropdown and
-keep the saved order: Most recent, which shows no meter, unless that browser had
-already saved Importance. A saved order
+keep the saved order: Most recent, unless that browser had already saved
+Importance. A saved order
 that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
 needed, Follow up) on this tab only and has no Status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client. New mail
@@ -928,6 +938,12 @@ edit, an attachment upload completing during another local save, and Discard
 while an attachment snapshot is still being saved. A snapshot based on an older
 local revision must fail without replacing newer content or files, including
 when another tab saves first. Reopen the draft to use the latest version.
+Then open one reply in two tabs, type in the first, wait for its queued save to
+reach the server, and send from the second. The first tab's composer must clear
+without "Your newer text was kept as a new draft", Drafts must not gain a copy
+of the sent reply, and the thread must not reopen it as a draft. Text typed
+after the server last acknowledged the draft is still kept as a new draft;
+each such move logs `email_draft.kept_as_new` with its reason.
 A completed discard must not resurrect on reload. A clean,
 fully synchronized local copy must not hide newer server edits or sent state.
 While online, create a disposable reply, wait for its server identity, discard

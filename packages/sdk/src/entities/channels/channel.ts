@@ -11,20 +11,23 @@ import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
+import { Bot } from '../bots/bot';
+import type { Document } from '../documents/document';
 import { PropertiedEntity } from '../entity';
+import type { StaticImage } from '../images/image';
 import {
   MessageThread,
   type TimelineOptions,
   timeline,
 } from '../messages/thread';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { ChannelAccessRequest } from './access-request';
 import { ChannelActivity } from './activity';
 import { Message } from './message';
 import type { ChannelPicture } from './picture';
-import { type ChannelAttachments, postToChannel } from './post';
+import { postToChannel } from './post';
 import type { Thread } from './thread';
 
 type ChannelDetail = GetChannelResponses[200];
@@ -165,26 +168,28 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   readonly type = this.field('channel_type');
 
   /**
-   * Post a message, optionally in a thread, with images or Macro documents attached below the text.
-   *
+   * Post a message. Plain text, or a rich body composed with `msg`.
    * `images` attaches static images, such as one from
-   * `macro.images.generate()`; `documents` attaches Macro documents as cards
-   * readers can open, and needs the sender to be able to view each one. At
-   * most 10 attachments per message.
+   * `macro.images.generate()`, below the text; `documents` attaches Macro
+   * documents as file chips, such as a file from `macro.documents.upload()`.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
    * The webhook endpoint takes no attachments.
    *
-   * @example
-   * const plan = macro.documents.byId(planId);
-   * await channel.send('The launch plan is ready for review.', {
-   *   documents: [plan],
-   * });
+   * @example Share a generated CSV.
+   * ```js
+   * const file = await macro.documents.upload({ name: 'q3.csv', content: csv });
+   * await channel.send('Q3 numbers attached.', { documents: [file] });
+   * ```
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread } & ChannelAttachments,
+    opts?: {
+      thread?: Thread;
+      images?: StaticImage[];
+      documents?: Document[];
+    },
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
@@ -332,6 +337,15 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
         path: { channel_id: this.id },
       }),
     );
+  }
+
+  /** Bots that can post to the channel. */
+  async bots(): Promise<Bot[]> {
+    return unwrap(
+      await this.client.storage.listChannelBots({
+        path: { channel_id: this.id },
+      }),
+    ).map((record) => Bot.from(this.client, record));
   }
 
   /** Add users to the channel. */

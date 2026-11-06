@@ -82,6 +82,47 @@ it('loads a cold catalog through the shared query before supplying inference and
   });
 });
 
+it('creates with Companies and Contacts without offering them to extraction', async () => {
+  await createRoot(async (dispose) => {
+    try {
+      const definition = (id: string, display_name: string) => ({
+        definition: {
+          id,
+          display_name,
+          data_type: 'ENTITY',
+          is_multi_select: true,
+          specific_entity_type: 'COMPANY',
+          is_metadata: false,
+          is_system: true,
+          owner: { scope: 'system' },
+          created_at: '',
+          updated_at: '',
+        },
+        property_options: [],
+      });
+      query.isSuccess = false;
+      query.refetch.mockResolvedValue({
+        isSuccess: true,
+        data: [
+          definition(SYSTEM_PROPERTY_IDS.COMPANIES, 'Companies'),
+          definition(SYSTEM_PROPERTY_IDS.CONTACTS, 'Contacts'),
+        ],
+      });
+      const source = createTaskFieldSource('me');
+      expect(await source.definitions()).toEqual([]);
+      const definitions = await source.createDefinitions();
+      expect(
+        definitions.get(SYSTEM_PROPERTY_IDS.COMPANIES)?.is_multi_select
+      ).toBe(true);
+      expect(
+        definitions.get(SYSTEM_PROPERTY_IDS.CONTACTS)?.is_multi_select
+      ).toBe(true);
+    } finally {
+      dispose();
+    }
+  });
+});
+
 it('rejects impossible inferred due dates and permits a manual correction', () => {
   createRoot((dispose) => {
     try {

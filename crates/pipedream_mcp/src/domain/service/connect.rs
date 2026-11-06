@@ -41,8 +41,9 @@ pub enum PipedreamConnectError {
 ///
 /// Confirms with Pipedream that `account_id` exists and belongs to `user_id`
 /// (accounts are minted for our user IDs via the Connect token), then
-/// upserts the app record. Reconnecting an app the user already has simply
-/// points its record at the new account.
+/// upserts the app record. Reconnecting an app the user already has points
+/// its record at the new account and turns it on: connecting is how a user
+/// asks to use the app, and the app reports a disabled result as a failure.
 ///
 /// An overlaid app is refused and its new Pipedream account deleted, so no
 /// Pipedream grant for it outlives the attempt.
@@ -96,7 +97,7 @@ where
             .or_else(|| existing.as_ref().map(|r| r.server_name.clone()))
             .unwrap_or(account.app_name),
         account_id: account.id,
-        enabled: existing.as_ref().is_none_or(|r| r.enabled),
+        enabled: true,
         provider: ConnectionProvider::Pipedream,
     };
 
@@ -260,8 +261,9 @@ where
 /// `app_slug`.
 ///
 /// Nothing the browser reports is trusted: Connect itself must list an
-/// active connection for this user before a record is written. A Pipedream
-/// grant the record replaces is revoked, so only one backend holds the app.
+/// active connection for this user before a record is written. The record
+/// is turned on, as for [`complete_pipedream_connection`]. A Pipedream grant
+/// the record replaces is revoked, so only one backend holds the app.
 #[tracing::instrument(skip(store, backends), err)]
 pub async fn complete_connect_connection<S, P>(
     store: &S,
@@ -294,7 +296,7 @@ where
             .or_else(|| existing.as_ref().map(|r| r.server_name.clone()))
             .unwrap_or(app.name),
         account_id: app.app_id,
-        enabled: existing.as_ref().is_none_or(|r| r.enabled),
+        enabled: true,
         provider: ConnectionProvider::Connect,
     };
     store.save(&record).await.map_err(anyhow::Error::from)?;

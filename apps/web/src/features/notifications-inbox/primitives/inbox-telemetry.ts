@@ -1,5 +1,6 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { NotificationInboxRow } from '../context/notifications-inbox-context';
+import type { InboxClear } from '../core/inbox-filters';
 
 /**
  * Run an operation on inbox rows in its own span, recording the rows by their
@@ -26,6 +27,31 @@ export function traceInboxRows<T>(
       span.setAttr('inbox.outcome', 'failed');
       // Server messages can quote names; record only which step failed.
       span.error(`${name} failed`);
+      throw error;
+    }
+  });
+}
+
+/**
+ * Run a clear in its own span, recording what it takes (kinds, unread only,
+ * since a time) and how many rows it cleared, never their content.
+ */
+export function traceInboxClear<T extends { count: number }>(
+  clear: InboxClear,
+  operation: () => Promise<T>
+): Promise<T> {
+  return Telemetry.span('notifications_inbox.clear', async (span) => {
+    span.setAttr('inbox.clear_row_types', clear.rowTypes.join(','));
+    span.setAttr('inbox.clear_unread_only', clear.unreadOnly);
+    span.setAttr('inbox.clear_since', clear.since !== undefined);
+    try {
+      const result = await operation();
+      span.setAttr('inbox.rows', result.count);
+      span.setAttr('inbox.outcome', 'succeeded');
+      return result;
+    } catch (error) {
+      span.setAttr('inbox.outcome', 'failed');
+      span.error('notifications_inbox.clear failed');
       throw error;
     }
   });

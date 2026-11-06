@@ -49,8 +49,6 @@ describe('channel.send with documents', () => {
         {
           entity_type: 'document',
           entity_id: 'plan',
-          width: null,
-          height: null,
         },
       ],
     ]);
@@ -69,8 +67,6 @@ describe('channel.send with documents', () => {
       {
         entity_type: 'document',
         entity_id: 'plan',
-        width: null,
-        height: null,
       },
     ]);
   });

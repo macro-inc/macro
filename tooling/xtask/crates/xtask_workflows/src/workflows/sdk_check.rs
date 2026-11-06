@@ -1,9 +1,16 @@
-use gh_workflow::{Concurrency, Event, Expression, Job, PullRequest, Push, Run, Step, Workflow};
+use gh_workflow::{Event, Job, Push, Run, Step, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
-use crate::workflows::steps;
+use crate::workflows::{steps, vars};
 
 #[cfg(test)]
 mod test;
+
+/// Files whose change makes `PR CI` call this workflow, and that runs it on `main`.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("packages/sdk/**"),
+    xtask_paths::repo_glob!(".github/workflows/sdk-check.yml"),
+];
 
 /// Build the workflow. Whether `packages/sdk`'s generated layer is fresh is
 /// checked by the web app workflow's `Generated Code Check`, which builds the
@@ -11,26 +18,17 @@ mod test;
 pub fn sdk_check() -> Workflow {
     Workflow::new("SDK Check")
         .on(Event::default()
-            .pull_request(
-                PullRequest::default()
-                    .add_branch("main")
-                    .add_path("packages/sdk/**")
-                    .add_path(".github/workflows/sdk-check.yml"),
-            )
             // `Release SDK` publishes from `main` without re-checking the
             // package, so the same suite has to guard what lands there.
             .push(
-                Push::default()
-                    .add_branch("main")
-                    .add_path("packages/sdk/**")
-                    .add_path(".github/workflows/sdk-check.yml"),
-            ))
-        .concurrency(
-            Concurrency::new(Expression::new(
-                "${{ github.workflow }}-${{ github.ref }}-check",
-            ))
-            .cancel_in_progress(true),
-        )
+                PATHS
+                    .iter()
+                    .fold(Push::default().add_branch("main"), |trigger, path| {
+                        trigger.add_path(*path)
+                    }),
+            )
+            .workflow_call(WorkflowCall::default()))
+        .concurrency(vars::concurrency("sdk-check"))
         .add_job("check-package", check_package())
 }
 

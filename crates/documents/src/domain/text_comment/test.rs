@@ -63,6 +63,7 @@ fn posted(input: &PostMessage) -> Message {
         deleted_at: None,
         attachments: vec![],
         reactions: vec![],
+        kind: messages::domain::models::MessageKind::Message,
     }
 }
 

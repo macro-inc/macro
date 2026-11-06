@@ -1,6 +1,22 @@
 export default {
   panel: 'Call sidebar',
   chat: 'Chat',
+  someone: 'Someone',
+  outsideMessages: {
+    one: '{{name}} sent a message in the channel',
+    other: '{{name}} sent {{count}} messages in the channel',
+  },
+  viewChannel: 'View',
+  activeCallMessages: {
+    one: 'A call is active · {{count}} message',
+    other: 'A call is active · {{count}} messages',
+  },
+  replyingInCallThread: 'Replying in the call thread',
+  callThreadEmpty:
+    "No messages yet. Anything you send here is saved to this call's thread in {{channel}}.",
+  thisChannel: 'this channel',
+  backToCallThread: 'Back to call thread',
+  openInChannel: 'Open in channel',
   openPanel: 'Open chat and participants',
   closePanel: 'Close chat and participants',
   participants: 'Participants',
@@ -25,4 +41,6 @@ export default {
     'Macro needs Screen Recording access. Turn on Macro in System Settings › Privacy & Security › Screen & System Audio Recording, then reopen Macro.',
   share: 'Share',
   shareFailed: "Couldn't share your screen. Try again.",
+  maximizeScreenShare: 'Maximize screen share',
+  restoreScreenShare: 'Show participants',
 };

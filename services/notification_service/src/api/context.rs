@@ -15,6 +15,8 @@ pub(crate) type ItemPreferences =
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
+    /// Signed invocation validation and propagation.
+    pub correlation: agent_correlation::inbound::CorrelationState,
     pub item_preferences: ItemPreferences,
     pub db: PgPool,
     pub sns_client: Arc<sns_client::SNS>,

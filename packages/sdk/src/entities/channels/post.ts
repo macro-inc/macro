@@ -6,13 +6,13 @@ import type { StaticImage } from '../images/image';
 import type { Channel } from './channel';
 import type { Thread } from './thread';
 
-/** What a channel message carries below its text. */
-export interface ChannelAttachments {
-  /** Static images, such as one from `macro.images.generate()`. */
+/** What a posted message carries below its text. */
+export type MessageAttachments = {
+  /** Static images, shown inline. */
   images?: StaticImage[];
-  /** Macro documents, shown as document cards readers can open. */
+  /** Macro documents, shown as file chips. */
   documents?: Document[];
-}
+};
 
 /**
  * Post a message using the endpoint supported by the caller's credentials.
@@ -22,8 +22,8 @@ export interface ChannelAttachments {
  * through channel membership. The bot owner is read from `GET /bots/me` and
  * cached by the client.
  *
- * The webhook endpoint takes content only: it refuses threads and
- * attachments, and drops the `mentions` list. `<m-*>` mention tags in the content still render and
+ * The webhook endpoint takes content only: the `mentions` list, threads and
+ * attachments are dropped. `<m-*>` mention tags in the content still render and
  * notify, because the server extracts a bot's mentions from its content. A
  * user-owned bot gets the full API by acting as its owner with `requestedAs`.
  *
@@ -35,7 +35,7 @@ export async function postToChannel(
   client: MacroClient,
   target: Channel | Thread,
   body: RichMessage,
-  { images = [], documents = [] }: ChannelAttachments = {},
+  { images = [], documents = [] }: MessageAttachments = {},
 ): Promise<string> {
   const { channelId, thread } = resolve(target);
 
@@ -56,8 +56,6 @@ export async function postToChannel(
             ...documents.map((document) => ({
               entity_type: DOCUMENT,
               entity_id: document.id,
-              width: null,
-              height: null,
             })),
           ],
           thread_id: thread?.rootId ?? null,
@@ -71,8 +69,8 @@ export async function postToChannel(
   if (images.length > 0 || documents.length > 0) {
     throw new MacroError(
       'a user-owned bot can only post via the channel webhook endpoint, which ' +
-        'does not support attachments — use a team-owned bot, or ' +
-        'requestedAs(user), to attach images or documents',
+        'does not support attachments — use a team-owned bot, or requestedAs(user), ' +
+        'to attach images or documents',
     );
   }
 

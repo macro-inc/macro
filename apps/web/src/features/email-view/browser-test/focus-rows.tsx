@@ -19,7 +19,7 @@ import { queryClient } from '@queries/client';
 import { mapEmailFocus } from '@queries/email/focus';
 import type { EmailFocusQuery } from '@service-storage/graphql/generated/graphql';
 import { addDays } from 'date-fns';
-import { createSignal, For, type JSX } from 'solid-js';
+import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
@@ -29,7 +29,6 @@ import {
   EmailFocusReason,
   EmailFocusScore,
 } from '../components/EmailFocusBadges';
-import type { EmailFocusSort } from '../constants';
 
 const VIEWER_ID = 'macro|focus-rows@example.test';
 
@@ -209,23 +208,9 @@ const ROWS = mapEmailFocus({
 });
 
 function Fixture() {
-  const [sort, setSort] = createSignal<EmailFocusSort>('recent');
   const [list, setList] = createSignal<HTMLElement>();
-  const sortButton = (value: EmailFocusSort, label: string): JSX.Element => (
-    <button
-      type="button"
-      aria-pressed={sort() === value}
-      onClick={() => setSort(value)}
-    >
-      {label}
-    </button>
-  );
   return (
     <main class="flex h-dvh flex-col bg-panel text-ink">
-      <div class="flex h-8 shrink-0 gap-2 px-2 text-xs text-ink-muted">
-        {sortButton('recent', 'Most recent')}
-        {sortButton('importance', 'Importance')}
-      </div>
       <div ref={setList} class="soup-list min-h-0 flex-1 overflow-y-auto">
         <ListLayoutProvider
           ref={list}
@@ -240,9 +225,9 @@ function Fixture() {
                   <ListEntity
                     entity={entity}
                     meta={<EmailFocusReason entity={entity} />}
-                    metaEnd={<EmailFocusScore entity={entity} sort={sort()} />}
+                    metaEnd={<EmailFocusScore entity={entity} />}
                     previewLeading={
-                      <EmailFocusPreviewLeading entity={entity} sort={sort()} />
+                      <EmailFocusPreviewLeading entity={entity} />
                     }
                   />
                 </div>
