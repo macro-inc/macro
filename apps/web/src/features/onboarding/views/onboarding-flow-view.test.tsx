@@ -682,4 +682,146 @@ describe('onboarding flow', () => {
       screen.getByRole('heading', { level: 1, name: 'Built for teams.' })
     ).toBeTruthy();
   });
+
+  it('ends with routines: safe ones on, each reviewed in place, and only the chosen turned on', async () => {
+    const starter = (
+      id: string,
+      key: string,
+      keepProbability: number,
+      safeDefault: boolean
+    ) => ({
+      id,
+      kind: 'starter' as const,
+      key,
+      knobs: {},
+      surface: 'email' as const,
+      reason: 'You get a lot of mail.',
+      keepProbability,
+      safeDefault,
+    });
+    const { fake, navigate } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: [
+          starter('sort', 'inbox', 0.9, true),
+          starter('triage', 'triage', 0.85, true),
+          // AI is sure, but it posts where others see it: off until chosen.
+          starter('updates', 'updates', 0.99, false),
+          {
+            id: 'digest',
+            kind: 'request',
+            title: 'Supplier digest',
+            request: 'Every Friday, list deliveries.',
+            surface: 'crm',
+            reason: 'Suppliers write every week.',
+            keepProbability: 0.99,
+            safeDefault: false,
+          },
+        ],
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    // Requests need drafting, so they wait for the sidebars.
+    expect(screen.queryByText('Supplier digest')).toBeNull();
+    expect(
+      screen.getByRole('switch', { name: 'Turn on Share updates' })
+    ).toHaveProperty('checked', false);
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Turn on Triage new tasks' })
+    );
+    click('Turn on 1 routine');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+    expect(fake.world.routinesCreated).toEqual(['sort']);
+    expect(fake.calls()).toContain('completeOnboarding');
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_routines',
+      data: { suggested: 3, recommended: 2, enabled: 1, recommended_kept: 1 },
+    });
+  });
+
+  it('keeps a routine that failed to turn on and retries only it', async () => {
+    const { fake, navigate } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineCreateFailures: ['triage'],
+        routineSuggestions: [
+          {
+            id: 'sort',
+            kind: 'starter',
+            key: 'inbox',
+            knobs: {},
+            surface: 'email',
+            reason: 'Fits.',
+            keepProbability: 0.9,
+            safeDefault: true,
+          },
+          {
+            id: 'triage',
+            kind: 'starter',
+            key: 'triage',
+            knobs: {},
+            surface: 'tasks',
+            reason: 'Fits.',
+            keepProbability: 0.9,
+            safeDefault: true,
+          },
+        ],
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    click('Turn on 2 routines');
+    await screen.findByText(
+      'Couldn’t turn this on. Try again, or leave it off.'
+    );
+    expect(navigate).not.toHaveBeenCalled();
+    fake.update((draft) => {
+      draft.routineCreateFailures = [];
+    });
+    click('Turn on 2 routines');
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(
+      fake.calls().filter((call) => call.startsWith('createRoutine:'))
+    ).toEqual([
+      'createRoutine:sort',
+      'createRoutine:triage',
+      'createRoutine:triage',
+    ]);
+  });
+
+  it('ends with the routines step once a plan is chosen, where suggestions are on', async () => {
+    const { fake, navigate } = setup({
+      resume: 'plan',
+      world: { routineSuggestionsEnabled: true },
+    });
+    await heading('Free Claude & GPT for 30 days.');
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
+    );
+    await heading('Put your busywork on autopilot.');
+    expect(fake.calls()).not.toContain('completeOnboarding');
+    // The plan is settled: no going back to it.
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    click('Continue to workspace');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+    expect(fake.events()).toContainEqual(
+      expect.objectContaining({
+        event: 'onboarding_v4_completed',
+        data: expect.objectContaining({ plan: 'free' }),
+      })
+    );
+  });
+
+  it('starts picking routines when the tools step is left', async () => {
+    const { fake } = setup({
+      resume: 'tools',
+      world: { routineSuggestionsEnabled: true },
+    });
+    await heading('Connect your tools.');
+    click('Continue');
+    await waitFor(() =>
+      expect(fake.calls()).toContain('warmRoutineSuggestions')
+    );
+  });
 });

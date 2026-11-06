@@ -1,7 +1,11 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import type { ScheduleDraft } from '@app/features/routines/core/draft';
+import type { Knob } from '@app/features/routines/core/knobs';
+import type { RoutineTemplate } from '@app/features/routines/core/routine-templates';
 import type { AppEvents } from '@app/lib/analytics/app-events';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
+import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { CheckoutTerms } from '../core/checkout';
 import type { EmailAccount } from '../core/email-accounts';
@@ -157,12 +161,40 @@ export type OnboardingContext = {
    * `skipped` records that the user left without going through the steps.
    */
   completeOnboarding(options: { skipped: boolean }): Promise<CompletionResult>;
+  /** Routine suggestions are on: the flow ends with the routines step. */
+  routineSuggestionsEnabled: Accessor<boolean>;
+  /** Starts picking routines from the inbox and tools connected so far. */
+  warmRoutineSuggestions(): void;
+  createRoutinesStep(): RoutinesStepSource;
   /** Finishes a tutorial flag left behind by a completed onboarding record. */
   repairTutorial(): Promise<void>;
   applyAccent(color: string, viewerId: string): void;
   createGithubStars(): Accessor<number | undefined>;
   track: TrackOnboarding;
   notifyFailure(message: string): void;
+};
+
+/** The last step's routine suggestions, and how to turn them on. */
+export type RoutinesStepSource = {
+  /** Undefined until loaded; earlier ones stay while a generation runs. */
+  suggestions: Accessor<RoutineSuggestion[] | undefined>;
+  generating: Accessor<boolean>;
+  failed: Accessor<boolean>;
+  refresh(): Promise<unknown>;
+  catalog: Accessor<readonly RoutineTemplate[]>;
+  /**
+   * The routine a catalog suggestion becomes with the person's knob
+   * changes; undefined when the catalog doesn't have it.
+   */
+  draft(
+    suggestion: Extract<RoutineSuggestion, { kind: 'starter' }>,
+    edits: Record<string, Knob['value']>
+  ): ScheduleDraft | undefined;
+  /** Creates it, on, recorded as saved from its suggestion; rejects on failure. */
+  create(
+    suggestion: Extract<RoutineSuggestion, { kind: 'starter' }>,
+    draft: ScheduleDraft
+  ): Promise<string>;
 };
 
 const Context = createContext<OnboardingContext>();
