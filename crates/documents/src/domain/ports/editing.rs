@@ -92,7 +92,28 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> impl Future<Output = anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse>> + Send;
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::spreadsheet::SpreadsheetResponse,
+            crate::domain::spreadsheet::SpreadsheetError,
+        >,
+    > + Send;
+
+    /// Edit a native spreadsheet by instructions: the worker's writer model
+    /// reads the workbook and commits one batch. Usage comes back with every
+    /// outcome the worker reached.
+    #[cfg(feature = "ai_tools")]
+    fn spreadsheet_instructions(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        instructions: &str,
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::spreadsheet::SpreadsheetWriterResult,
+            crate::domain::spreadsheet::SpreadsheetError,
+        >,
+    > + Send;
 
     /// Read or edit the live collaborative copy of an uploaded Word document.
     #[cfg(feature = "ai_tools")]

@@ -44,6 +44,16 @@ word docs, Illustrator/Photoshop files).
   `edit_refused` is the worker's clarification, 502 `edit_failed` may have
   partly applied, and a client disconnect drops the worker call (never spawn
   it).
+- `src/inbound/axum_router/spreadsheet.rs`: SDK spreadsheets over the
+  spreadsheet tools' `SpreadsheetService`: `POST /create_spreadsheet` and
+  `POST /{id}/spreadsheet/read|calculate|edits`. Their tokens name the
+  receipt's user and bot (`SpreadsheetCaller::Receipt`); the tools name the
+  agent (`SpreadsheetCaller::Agent`). Worker 400/413 map to 400, 409 to a
+  revision conflict, and anything else to 502 (an edit may have saved).
+  `POST /{id}/spreadsheet/ai-edit` runs `SpreadsheetAiEditService`
+  (`domain/spreadsheet/instructions.rs`): admission, the worker's writer model,
+  and metering of its usage for every outcome; 422 refused, 409 conflict, 500
+  failed unsaved, 502 may have saved.
 - `axum_router/presentation.rs`, `word_document.rs`, `design_files.rs`: the
   presentation, Word, design, Photoshop and Illustrator tools over HTTP
   (`/{id}/presentation`, `/word`, `/design`, `/photoshop`, `/illustrator`),

@@ -825,8 +825,8 @@
     "/cursor-api-key/default-model": {
       "put": {
         "tags": ["crate::api::cursor_api_key::put_cursor_default_model"],
-        "summary": "Choose the model this user's `@cursor` sessions start on.",
-        "description": "Stores the id only; its parameters are resolved from Cursor's own default\nvariant at session start. Not validated against the live model list here —\nthe settings dropdown offers only real ids, and a stale id degrades to the\ndeployment default at spawn rather than failing, so a round trip to Cursor\non every save would buy nothing.",
+        "summary": "Choose the model, and optionally the effort, this user's `@cursor` sessions\nstart on.",
+        "description": "Stores the id and effort value only; the other parameters are resolved from\nCursor's own variants at session start. Saving a model without an effort\nclears the previous effort, which belonged to the previous model. Not\nvalidated against the live model list here — the settings controls offer\nonly real values, and a stale id or effort degrades to the deployment or\nmodel default at spawn rather than failing, so a round trip to Cursor on\nevery save would buy nothing.",
         "operationId": "put_cursor_default_model",
         "requestBody": {
           "content": {
@@ -8734,6 +8734,10 @@
         "description": "What settings needs to render the Cursor connection.\n\nDeliberately thin. `registered` drives the whole UI; `updatedAt` lets it say\nwhen the key was last replaced, which is the only thing a user can check\nagainst their own memory when a session starts failing.\n\nDeliberately *not* reporting anything about the deployment itself. That is\noperator information: a user who sees it cannot act on it, and a service\nthat cannot reach KMS does not start.",
         "required": ["registered"],
         "properties": {
+          "defaultEffort": {
+            "type": ["string", "null"],
+            "description": "The reasoning effort those sessions start on, as the value of the\ndefault model's effort parameter (e.g. `high`). `None` means the\nmodel's own default; never set without `default_model_id`."
+          },
           "defaultModelId": {
             "type": ["string", "null"],
             "description": "The Cursor model id this user's sessions start on, when they have\nchosen one. `None` means the deployment default is in effect — the\nsettings dropdown shows that as its resting value."
@@ -10466,8 +10470,12 @@
       },
       "PutCursorDefaultModelRequest": {
         "type": "object",
-        "description": "The model the user chose for their sessions.",
+        "description": "The model the user chose for their sessions, and its effort.",
         "properties": {
+          "effort": {
+            "type": ["string", "null"],
+            "description": "The value of the model's reasoning-effort parameter (e.g. `high`), or\n`null` for the model's own default. Ignored without a model."
+          },
           "modelId": {
             "type": ["string", "null"],
             "description": "A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and\nfall back to the deployment default."

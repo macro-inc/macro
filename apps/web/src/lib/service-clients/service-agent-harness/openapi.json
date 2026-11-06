@@ -3581,6 +3581,36 @@
         }
       }
     },
+    "/coding-agents": {
+      "get": {
+        "tags": ["coding-agents"],
+        "summary": "List the coding agents the caller can start a session as: the same\npersonas the `ListCodingAgents` tool offers, including built-in ones whose\nruntime the caller has connected (Cursor once its key is saved).",
+        "operationId": "list_coding_agents",
+        "responses": {
+          "200": {
+            "description": "The caller's available coding agents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingAgentsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "500": {
+            "description": "The personas or their runtime connections could not be read"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/harnesses/{harness_id}/claude-mode": {
       "get": {
         "tags": ["computers"],
@@ -5495,6 +5525,52 @@
           "signedIn": {
             "type": "boolean",
             "description": "Always `true`."
+          }
+        }
+      },
+      "CodingAgent": {
+        "type": "object",
+        "description": "Information used to choose a coding persona for a task.",
+        "required": ["id", "name", "instructions", "harness"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "What the persona is intended to do."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Runtime configured for the persona."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persona id to pass to dispatch."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Saved guidance describing the persona's repositories and specialties."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Persona's configured default model, absent when the provider chooses it."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-facing persona name."
+          }
+        }
+      },
+      "CodingAgentsResponse": {
+        "type": "object",
+        "description": "The coding agents the caller can start a session as right now.",
+        "required": ["agents"],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodingAgent"
+            },
+            "description": "Available coding personas, built-in ones such as Cursor first."
           }
         }
       },

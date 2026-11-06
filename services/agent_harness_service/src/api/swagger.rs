@@ -21,6 +21,7 @@ use agent_harness::inbound::tool_approvals::{
     ToolApprovalStatusDto,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
+use agent_session::domain::coding_agents::CodingAgent;
 use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
@@ -42,6 +43,7 @@ use agent_session::inbound::axum_router::{
     PreviewAgentSessionsResponse, QueuedActionDto, RenameAgentSessionRequest, SandboxSizeBody,
     SessionStatusDto, SetAgentSessionArchivedRequest, WithAgentSessionId,
 };
+use agent_session::inbound::coding_agents::{self, CodingAgentsResponse};
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
@@ -121,6 +123,7 @@ impl Modify for SecurityAddon {
         agent_harness::inbound::conversations::retry_agent_conversation_turn,
         agent_harness::inbound::conversations::start_fresh_agent_conversation,
         repositories::list_agent_repositories_handler,
+        coding_agents::list_coding_agents_handler,
         repositories::list_agent_repository_branches_handler,
         mode_choice::choose_agent_mode_handler,
         changes_router::get_agent_session_changes_handler,
@@ -134,6 +137,8 @@ impl Modify for SecurityAddon {
         crate::computer_screen::claude_mode_handler,
     ),
     components(schemas(
+        CodingAgent,
+        CodingAgentsResponse,
         CreateAgentSessionRequest,
         CreateAgentSessionResponse,
         CreateSessionThread,

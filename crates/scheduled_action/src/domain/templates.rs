@@ -128,12 +128,18 @@ impl ShareRoutineTemplate {
         if self.variables.len() > MAX_VARIABLES {
             return Err(TemplateInputError::TooManyVariables.into());
         }
+        // Writing as its owner is the owner's choice alone; whoever activates
+        // the template starts attributed to the agent and opts in themselves.
+        let mut task = action.task.clone();
+        if let Value::Object(fields) = &mut task {
+            fields.remove("dangerously_operate_as_user");
+        }
         Ok(TemplateSnapshot {
             action_id,
             name: action.name.clone(),
             description: self.description.trim().to_owned(),
             trigger: action.trigger.clone(),
-            task: action.task.clone(),
+            task,
             variables: self.variables,
         })
     }

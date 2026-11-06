@@ -1185,12 +1185,15 @@ export const deleteCursorApiKey = async (
 };
 
 /**
- * Stores the id only; its parameters are resolved from Cursor's own default
-variant at session start. Not validated against the live model list here —
-the settings dropdown offers only real ids, and a stale id degrades to the
-deployment default at spawn rather than failing, so a round trip to Cursor
-on every save would buy nothing.
- * @summary Choose the model this user's `@cursor` sessions start on.
+ * Stores the id and effort value only; the other parameters are resolved from
+Cursor's own variants at session start. Saving a model without an effort
+clears the previous effort, which belonged to the previous model. Not
+validated against the live model list here — the settings controls offer
+only real values, and a stale id or effort degrades to the deployment or
+model default at spawn rather than failing, so a round trip to Cursor on
+every save would buy nothing.
+ * @summary Choose the model, and optionally the effort, this user's `@cursor` sessions
+start on.
  */
 export type putCursorDefaultModelResponse200 = {
   data: CursorApiKeyStatus;

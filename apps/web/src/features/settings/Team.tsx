@@ -1,7 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { enableTeamAgents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -487,9 +485,6 @@ export function InviteToTeamDialog(props: {
   // dismissed it cannot reopen on the heads-up step.
   let submission = 0;
   const [invites, setInvites] = createSignal<InviteEntry[]>([EMPTY_INVITE]);
-  const [inviteAsAgent, setInviteAsAgent] = createSignal(false);
-  const agentFlag = useFeatureFlag(enableTeamAgents);
-  const canInviteAgents = () => !agentFlag().loading && agentFlag().enabled;
   const [inviteErrors, setInviteErrors] = createSignal<(string | undefined)[]>(
     []
   );
@@ -509,7 +504,6 @@ export function InviteToTeamDialog(props: {
 
   const close = () => {
     setInvites([EMPTY_INVITE]);
-    setInviteAsAgent(false);
     setInviteErrors([]);
     setOfferedRuntimes([]);
     setSent(undefined);
@@ -525,16 +519,13 @@ export function InviteToTeamDialog(props: {
       .map((i) => ({ email: i.email.trim() }));
     if (inviteEntries.length === 0) return;
 
-    // Agent invites are redeemed by the agent's own signup, so a heads-up
-    // to a person doesn't apply.
-    const asAgent = canInviteAgents() && inviteAsAgent();
     const current = submission;
     inviteToTeamMutation.mutate(
       {
         teamId: props.teamId,
         request: {
           invites: inviteEntries,
-          is_agent: asAgent,
+          is_agent: false,
           harness_ids: offeredRuntimes().filter((id) =>
             ownRuntimes().some((runtime) => runtime.id === id)
           ),
@@ -543,10 +534,6 @@ export function InviteToTeamDialog(props: {
       {
         onSuccess: () => {
           if (current !== submission) return;
-          if (asAgent) {
-            close();
-            return;
-          }
           setSent(inviteEntries.map((entry) => entry.email));
         },
       }
@@ -556,11 +543,11 @@ export function InviteToTeamDialog(props: {
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && close()}>
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-        <Panel.Header class="px-2 gap-1">
+        <Panel.Header class="px-3 gap-2">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
-          <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
+          <Dialog.Title as="span" class="text-base font-medium p-0 m-0">
             <Show when={sent()} fallback="Invite to Team">
               Let them know it's coming
             </Show>
@@ -577,89 +564,80 @@ export function InviteToTeamDialog(props: {
           )}
         </Show>
         <Show when={!sent()}>
-          <Panel.Body class="p-3 flex flex-col gap-3">
-            <TeamInviteLinkSection
-              teamId={props.teamId}
-              canManage={props.canManageLink}
-            />
-            <div class="h-px bg-edge-muted" />
-            <div class="text-sm text-ink">Invite by email</div>
-            <InviteEmailsInput
-              invites={invites()}
-              onChange={setInvites}
-              errors={inviteErrors()}
-              onErrorsChange={setInviteErrors}
-            />
-            <Show when={canInviteAgents()}>
-              <Checkbox
-                checked={inviteAsAgent()}
-                onChange={(checked) =>
-                  setInviteAsAgent(canInviteAgents() && checked)
-                }
-              >
-                <Checkbox.Control />
-                <Checkbox.Label class="text-sm text-ink">
-                  Invite as agent
-                </Checkbox.Label>
-              </Checkbox>
-            </Show>
-            <Show when={ownRuntimes().length > 0}>
-              <section
-                class="flex flex-col gap-2"
-                aria-label={t('runtimeSharing.inviteRuntimes')}
-              >
-                <div class="text-sm text-ink">
-                  {t('runtimeSharing.inviteRuntimes')}
-                </div>
-                <p class="text-xs text-ink-muted">
-                  {t('runtimeSharing.inviteRuntimesHint')}
-                </p>
-                <For each={ownRuntimes()}>
-                  {(runtime) => (
-                    <Checkbox
-                      class="flex items-center gap-3 text-sm touch:min-h-[44px]"
-                      checked={offeredRuntimes().includes(runtime.id)}
-                      onChange={(checked) =>
-                        setOfferedRuntimes((current) =>
-                          checked
-                            ? [...current, runtime.id]
-                            : current.filter((id) => id !== runtime.id)
-                        )
-                      }
-                    >
-                      <Checkbox.Control />
-                      <Checkbox.Label>{runtime.name}</Checkbox.Label>
-                    </Checkbox>
-                  )}
-                </For>
-              </section>
-            </Show>
-            <div class="flex justify-end gap-1 pt-2">
-              <Button
-                variant="ghost"
-                disabled={inviteToTeamMutation.isPending}
-                onClick={close}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
-                onClick={handleInvite}
-              >
-                <Show
-                  when={inviteToTeamMutation.isPending}
-                  fallback={
-                    invites().length > 1
-                      ? `Send ${invites().length} Invites`
-                      : 'Send Invite'
-                  }
+          <Panel.Body>
+            <div class="flex flex-col gap-5 px-5 py-5">
+              <TeamInviteLinkSection
+                teamId={props.teamId}
+                canManage={props.canManageLink}
+              />
+              <div class="h-px shrink-0 bg-edge-muted" />
+              <div class="flex flex-col gap-3">
+                <div class="text-sm font-medium text-ink">Invite by email</div>
+                <InviteEmailsInput
+                  invites={invites()}
+                  onChange={setInvites}
+                  errors={inviteErrors()}
+                  onErrorsChange={setInviteErrors}
+                />
+              </div>
+              <Show when={ownRuntimes().length > 0}>
+                <section
+                  class="flex flex-col gap-2"
+                  aria-label={t('runtimeSharing.inviteRuntimes')}
                 >
-                  <SpinnerIcon class="size-4 animate-spin" />
-                </Show>
-              </Button>
+                  <div class="text-sm text-ink">
+                    {t('runtimeSharing.inviteRuntimes')}
+                  </div>
+                  <p class="text-xs text-ink-muted">
+                    {t('runtimeSharing.inviteRuntimesHint')}
+                  </p>
+                  <For each={ownRuntimes()}>
+                    {(runtime) => (
+                      <Checkbox
+                        class="flex items-center gap-3 text-sm touch:min-h-[44px]"
+                        checked={offeredRuntimes().includes(runtime.id)}
+                        onChange={(checked) =>
+                          setOfferedRuntimes((current) =>
+                            checked
+                              ? [...current, runtime.id]
+                              : current.filter((id) => id !== runtime.id)
+                          )
+                        }
+                      >
+                        <Checkbox.Control />
+                        <Checkbox.Label>{runtime.name}</Checkbox.Label>
+                      </Checkbox>
+                    )}
+                  </For>
+                </section>
+              </Show>
             </div>
           </Panel.Body>
+          <Panel.Footer class="justify-end gap-2 px-4 py-3">
+            <Button
+              variant="ghost"
+              disabled={inviteToTeamMutation.isPending}
+              onClick={close}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
+              onClick={handleInvite}
+            >
+              <Show
+                when={inviteToTeamMutation.isPending}
+                fallback={
+                  invites().length > 1
+                    ? `Send ${invites().length} invites`
+                    : 'Send invite'
+                }
+              >
+                <SpinnerIcon class="size-4 animate-spin" />
+              </Show>
+            </Button>
+          </Panel.Footer>
         </Show>
       </Panel>
     </Dialog>
@@ -677,35 +655,40 @@ function InviteHeadsUpStep(props: {
   onDone: () => void;
 }) {
   return (
-    <Panel.Body class="p-3 flex flex-col gap-3">
-      <div class="flex flex-col gap-1">
-        <div class="text-sm text-ink">
-          <Show
-            when={props.emails.length === 1}
-            fallback={`Invites sent to ${props.emails.length} people`}
-          >
-            Invite sent to <span class="font-medium">{props.emails[0]}</span>
+    <>
+      <Panel.Body>
+        <div class="flex flex-col gap-3 px-5 py-5">
+          <div class="flex flex-col gap-1">
+            <div class="text-sm text-ink">
+              <Show
+                when={props.emails.length === 1}
+                fallback={`Invites sent to ${props.emails.length} people`}
+              >
+                Invite sent to{' '}
+                <span class="font-medium">{props.emails[0]}</span>
+              </Show>
+            </div>
+            <div class="text-sm text-ink-muted">
+              Invite emails from Macro are easy to miss. Send the invite link in
+              Slack, a text, or your own email so they know to look for it.
+            </div>
+          </div>
+          <Show when={props.emails.length > 1}>
+            <ul class="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-ink-muted">
+              <For each={props.emails}>
+                {(email) => <li class="truncate">{email}</li>}
+              </For>
+            </ul>
           </Show>
         </div>
-        <div class="text-xs text-ink-muted">
-          Invite emails from Macro are easy to miss. Send the invite link in
-          Slack, a text, or your own email so they know to look for it.
-        </div>
-      </div>
-      <Show when={props.emails.length > 1}>
-        <ul class="flex max-h-40 flex-col gap-0.5 overflow-y-auto text-xs text-ink-muted">
-          <For each={props.emails}>
-            {(email) => <li class="truncate">{email}</li>}
-          </For>
-        </ul>
-      </Show>
-      <div class="flex items-center justify-end gap-1 pt-2">
+      </Panel.Body>
+      <Panel.Footer class="justify-end gap-2 px-4 py-3">
         <CopyTeamInviteLinkButton teamId={props.teamId} />
         <Button variant="primary" onClick={() => props.onDone()}>
           Done
         </Button>
-      </div>
-    </Panel.Body>
+      </Panel.Footer>
+    </>
   );
 }
 

@@ -183,7 +183,7 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
         assert!(!prompt.contains(name), "{name}");
     }
     assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
-    assert!(prompt.contains("macro.agents.list()"));
+    assert!(prompt.contains("macro.agents.coding()"));
     assert!(prompt.contains("macro.agentSessions.createManaged"));
     assert!(
         !tools_for(AiHost::AgentSession)
@@ -777,6 +777,12 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ContentSearch",
         "DiscoverConnectors",
         "ConnectMcpServer",
+        "ReadSpreadsheet",
+        "CalculateSpreadsheet",
+        "EditSpreadsheet",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
     ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
@@ -785,10 +791,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "ListSkills",
-        "SearchSkills",
-        "ReadSkill",
-        "EditSpreadsheet",
         "ReadCanvas",
         "RenderCanvas",
         "ApplyCanvasEdits",

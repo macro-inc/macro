@@ -10,7 +10,8 @@ no I/O.
 ## Start here
 
 - `src/model.rs`: steps (code and agent, a flat list run in order), the
-  program's recorded `sdk`, `AgentTask`, and `RoutineProgram::from_task`.
+  program's recorded `sdk`, `dangerously_operate_as_user` (code steps write
+  as the owner; `CodeIdentity`), `AgentTask`, and `RoutineProgram::from_task`.
 - `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
   (`src/code_steps.md`, how to write a code step: the one description
   CreateRoutine and the scheduler's drafter both read), `STEP_CONTEXT` (the type of
@@ -69,6 +70,9 @@ no I/O.
   lines, and a step reads earlier steps' return types by importing their
   files. A change to one step's return can fail a later step.
 - A program with `mcp_servers` needs an agent step (`AppsWithoutAgent`).
+- `dangerously_operate_as_user` only changes code steps' attribution; agent
+  steps keep their agent's. Only the owner sets it: drafts never carry it and
+  sharing a routine as a template drops it.
 - `RoutineModelId` rejects blank models while parsing, so a single agent task
   with a blank model fails `from_task` rather than validation.
 - A single agent task keeps the rules it was saved under: `validate()` skips

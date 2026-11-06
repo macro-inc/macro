@@ -207,7 +207,6 @@ export const cognitionExcluded = [
   'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
-  'getChatPermissions',
   'getChatsForAttachmentHandler',
   'getCitationHandler',
   'getMemoryHandler',

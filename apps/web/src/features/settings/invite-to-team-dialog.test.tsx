@@ -51,11 +51,7 @@ afterEach(() => {
   mocks.mutate.mockReset();
 });
 
-function sendInvite(
-  asAgent: boolean,
-  onClose: () => void = () => {},
-  runtime?: string
-) {
+function sendInvite(onClose: () => void = () => {}, runtime?: string) {
   render(() => (
     <InviteToTeamDialog
       teamId="team-1"
@@ -67,14 +63,14 @@ function sendInvite(
 
   const email = screen.getByRole('textbox');
   fireEvent.input(email, { target: { value: 'invitee@signup.test' } });
-  if (asAgent) fireEvent.click(screen.getByLabelText('Invite as agent'));
   if (runtime) fireEvent.click(screen.getByLabelText(runtime));
-  fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
 }
 
 describe('InviteToTeamDialog', () => {
-  it('invites a person by default', () => {
-    sendInvite(false);
+  it('invites people, not agents', () => {
+    sendInvite();
+    expect(screen.queryByLabelText('Invite as agent')).toBeNull();
 
     expect(mocks.mutate.mock.calls[0]?.[0]).toEqual({
       teamId: 'team-1',
@@ -86,33 +82,20 @@ describe('InviteToTeamDialog', () => {
     });
   });
 
-  it('invites an agent when asked', () => {
-    sendInvite(true);
-
-    expect(mocks.mutate.mock.calls[0]?.[0]).toEqual({
-      teamId: 'team-1',
-      request: {
-        invites: [{ email: 'invitee@signup.test' }],
-        is_agent: true,
-        harness_ids: [],
-      },
-    });
-  });
-
   it.each([
     { enabled: false, loading: true },
     { enabled: false, loading: false },
   ])(
-    'keeps human invitations while agent invitations are unavailable: %s',
+    'sends human invitations regardless of agent rollout availability: %s',
     (state) => {
       setFlag(state);
-      sendInvite(false);
+      sendInvite();
       expect(screen.queryByLabelText('Invite as agent')).toBeNull();
       expect(mocks.mutate.mock.calls[0]?.[0].request.is_agent).toBe(false);
     }
   );
 
-  it('drops a stale agent selection and shows the human heads-up when the rollout switches off before sending', () => {
+  it('keeps the invitation human-only and shows the heads-up when the agent rollout switches off before sending', () => {
     render(() => (
       <InviteToTeamDialog
         teamId="team-1"
@@ -124,11 +107,10 @@ describe('InviteToTeamDialog', () => {
     fireEvent.input(screen.getByRole('textbox'), {
       target: { value: 'invitee@signup.test' },
     });
-    const checkbox = screen.getByLabelText('Invite as agent');
-    fireEvent.click(checkbox);
+    expect(screen.queryByLabelText('Invite as agent')).toBeNull();
     setFlag({ enabled: false, loading: false });
     expect(screen.queryByLabelText('Invite as agent')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Send Invite' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
     expect(mocks.mutate.mock.calls[0]?.[0].request.is_agent).toBe(false);
     mocks.mutate.mock.calls[0]?.[1]?.onSuccess?.();
     expect(screen.getByText("Let them know it's coming")).toBeTruthy();
@@ -136,7 +118,7 @@ describe('InviteToTeamDialog', () => {
 
   it('asks the inviter to give a heads-up with the invite link after sending', () => {
     const onClose = vi.fn();
-    sendInvite(false, onClose);
+    sendInvite(onClose);
     mocks.mutate.mock.calls[0]?.[1]?.onSuccess?.();
 
     expect(screen.getByText("Let them know it's coming")).toBeTruthy();
@@ -150,17 +132,8 @@ describe('InviteToTeamDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes right away after inviting an agent', () => {
-    const onClose = vi.fn();
-    sendInvite(true, onClose);
-    mocks.mutate.mock.calls[0]?.[1]?.onSuccess?.();
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText("Let them know it's coming")).toBeNull();
-  });
-
   it('stays on the invite form when a send finishes after the dialog closed', () => {
-    sendInvite(false);
+    sendInvite();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     mocks.mutate.mock.calls[0]?.[1]?.onSuccess?.();
 
@@ -168,7 +141,7 @@ describe('InviteToTeamDialog', () => {
   });
 
   it('offers only runtimes the inviter owns', () => {
-    sendInvite(false, () => {}, 'Mac mini');
+    sendInvite(() => {}, 'Mac mini');
 
     expect(screen.queryByLabelText('Build box')).toBeNull();
     expect(screen.queryByLabelText('Agent computer')).toBeNull();

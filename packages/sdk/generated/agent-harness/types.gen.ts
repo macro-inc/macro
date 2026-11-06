@@ -1144,6 +1144,46 @@ export type ClaudeSignedIn = {
 };
 
 /**
+ * Information used to choose a coding persona for a task.
+ */
+export type CodingAgent = {
+    /**
+     * What the persona is intended to do.
+     */
+    description?: string | null;
+    /**
+     * Runtime configured for the persona.
+     */
+    harness: string;
+    /**
+     * Persona id to pass to dispatch.
+     */
+    id: string;
+    /**
+     * Saved guidance describing the persona's repositories and specialties.
+     */
+    instructions: string;
+    /**
+     * Persona's configured default model, absent when the provider chooses it.
+     */
+    model?: string | null;
+    /**
+     * User-facing persona name.
+     */
+    name: string;
+};
+
+/**
+ * The coding agents the caller can start a session as right now.
+ */
+export type CodingAgentsResponse = {
+    /**
+     * Available coding personas, built-in ones such as Cursor first.
+     */
+    agents: Array<CodingAgent>;
+};
+
+/**
  * Request or response body for the caller's coding preferences.
  */
 export type CodingPreferencesBody = {
@@ -4657,6 +4697,33 @@ export type ListAgentWorkRegistrationsResponses = {
 };
 
 export type ListAgentWorkRegistrationsResponse = ListAgentWorkRegistrationsResponses[keyof ListAgentWorkRegistrationsResponses];
+
+export type ListCodingAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/coding-agents';
+};
+
+export type ListCodingAgentsErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * The personas or their runtime connections could not be read
+     */
+    500: unknown;
+};
+
+export type ListCodingAgentsResponses = {
+    /**
+     * The caller's available coding agents
+     */
+    200: CodingAgentsResponse;
+};
+
+export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
 
 export type GetClaudeModeData = {
     body?: never;

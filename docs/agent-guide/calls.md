@@ -466,7 +466,8 @@ remains usable; Answer opens the call screen directly for microphone permission
 and retry errors. Verify allowed/denied full-screen access, missing microphone
 permission, cancellation/expiry and stale notification actions after a replacement
 call arrives. While Android 14+ blocks full-screen notifications, a toast
-offers **Allow** (system setting) or **Hide**. PiP is a native, device-dependent
+offers **Allow** (system setting) or **Not now**; returning to Macro with access
+granted removes it. PiP is a native, device-dependent
 flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
 follow the hardware matrix in [Android development](../development/android.md#native-calling).
 

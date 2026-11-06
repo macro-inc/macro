@@ -324,7 +324,13 @@ export type {
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
-export { Agent, type AgentOptions } from './entities/agents/agent';
+export {
+  Agent,
+  type AgentApps,
+  type AgentOptions,
+  type AgentPatch,
+} from './entities/agents/agent';
+export type { CodingAgent } from './entities/agents/namespace';
 export { UserApiKey } from './entities/api-keys/api-key';
 export {
   Bot,
@@ -371,6 +377,17 @@ export {
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export type { FileContent } from './entities/documents/namespace';
+export {
+  RevisionConflictError,
+  Spreadsheet,
+  type SpreadsheetCalculateOptions,
+  type SpreadsheetCalculation,
+  type SpreadsheetEdited,
+  type SpreadsheetEditOptions,
+  type SpreadsheetRead,
+  type SpreadsheetReadOptions,
+  type SpreadsheetSheet,
+} from './entities/documents/spreadsheet';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,

@@ -625,6 +625,84 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["agents"],
+        "summary": "Handler for `PATCH /agents/{agent_id}`: change only the settings the body\nnames, keeping every other one, as the `ConfigureAgent` tool does.",
+        "operationId": "patch_agent",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "Agent bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/annotations/anchors": {
@@ -6837,6 +6915,91 @@
         }
       }
     },
+    "/channels/{channel_id}/shares": {
+      "post": {
+        "tags": ["channels"],
+        "summary": "Handler for `POST /channels/{channel_id}/shares`.",
+        "description": "Grants the channel's current members access to one item, the way posting\nit in a message does. Calendar events can be shared only from the caller's\nown calendar, and private or confidential events are refused. Sharing again\nis a no-op.",
+        "operationId": "share_with_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareWithChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The channel's members can see the item"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot share this item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/webhook": {
       "post": {
         "tags": ["bots"],
@@ -11649,6 +11812,68 @@
         }
       }
     },
+    "/documents/create_spreadsheet": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Create a blank native spreadsheet, ready to read and edit.",
+        "operationId": "create_spreadsheet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSpreadsheetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSpreadsheetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Project edit access denied"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/create_task": {
       "post": {
         "tags": ["document"],
@@ -14240,6 +14465,343 @@
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/spreadsheet/ai-edit": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Edit a native spreadsheet by instructions with the caller's edit access:\na writer model reads the workbook and saves one atomic batch, with AI\nadmission and billing. A workbook changed while it worked saves nothing\nand answers 409.",
+        "description": "A client that disconnects drops the worker request, which cancels the\nedit before its save.",
+        "operationId": "edit_spreadsheet_with_ai",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpreadsheetAiEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpreadsheetAiEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a native spreadsheet, or empty instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "The workbook changed while the edit ran; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The writer could not do the edit; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The edit failed before saving; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit may have been saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAiEditFailed"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/spreadsheet/calculate": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Evaluate scratch formulas against a native spreadsheet with view access,\noptionally with hypothetical inputs. Nothing is saved.",
+        "operationId": "calculate_spreadsheet",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculateSpreadsheetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpreadsheetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a native spreadsheet, or invalid formulas or overrides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "502": {
+            "description": "The spreadsheet engine failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/spreadsheet/edits": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Apply one atomic batch of operations to a native spreadsheet with edit\naccess. Every operation validates before anything is saved; a workbook that\nchanged since `expectedRevision` rejects the batch with 409.",
+        "operationId": "edit_spreadsheet",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditSpreadsheetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpreadsheetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a native spreadsheet, or an invalid batch; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "The workbook changed since expectedRevision; nothing changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The engine failed and the batch may have been saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/spreadsheet/read": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Read a native spreadsheet with view access: every sheet's summary, and the\ncells of the requested ranges. Returns the revision an edit needs.",
+        "operationId": "read_spreadsheet",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadSpreadsheetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpreadsheetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a native spreadsheet, or an invalid sheet or range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "502": {
+            "description": "The spreadsheet engine failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -23559,6 +24121,26 @@
         "description": "Whether an agent is available everywhere or only in selected channels.",
         "enum": ["all", "selected"]
       },
+      "AgentChannelSelection": {
+        "type": "object",
+        "description": "Where an agent can be mentioned: everywhere its owner can use it, or\nexactly the listed channels.",
+        "required": ["channel_scope"],
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channels. Must be non-empty only for `selected` scope."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          }
+        },
+        "additionalProperties": false
+      },
       "AgentDmProfile": {
         "type": "object",
         "description": "Historical persona identity displayed beside a private conversation.",
@@ -23577,6 +24159,29 @@
             "description": "Persona display name."
           }
         }
+      },
+      "AgentHarnessSelection": {
+        "type": "object",
+        "description": "The runtime an agent runs on: a harness slug and, for `macrod`, the\nregistered harness serving it. Travel together because one without the\nother is never a valid choice.",
+        "required": ["harness"],
+        "properties": {
+          "harness": {
+            "type": "string",
+            "description": "Harness slug, e.g. `in-memory`, `cursor`, or `macrod`."
+          },
+          "harness_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HarnessId",
+                "description": "Registered harness to run on. Required when `harness` is `macrod`,\nforbidden otherwise."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "AgentMcpServer": {
         "type": "object",
@@ -25753,6 +26358,31 @@
           }
         ],
         "description": "Bullet style for paragraphs."
+      },
+      "CalculateSpreadsheetRequest": {
+        "type": "object",
+        "description": "Scratch formulas to evaluate against a workbook, without writing anything.",
+        "required": ["formulas"],
+        "properties": {
+          "formulas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetFormula"
+            },
+            "description": "At most 20 formulas beginning with =."
+          },
+          "overrides": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetOverride"
+            },
+            "description": "Hypothetical cell inputs, never saved."
+          },
+          "sheetId": {
+            "type": ["string", "null"],
+            "description": "Sheet for unqualified references; defaults to the first sheet."
+          }
+        }
       },
       "CalendarAttendee": {
         "type": "object",
@@ -28180,6 +28810,21 @@
       "ChannelSender": {
         "type": "string"
       },
+      "ChannelShareEntityType": {
+        "type": "string",
+        "description": "Entity types a channel grant can cover.\n\nValues are the stored entity types. `calendar` is accepted for a calendar\nchip, whose stored type is `calendar_event`.",
+        "enum": [
+          "calendar_event",
+          "document",
+          "project",
+          "database",
+          "form",
+          "call",
+          "thread",
+          "agent_session",
+          "external_chat"
+        ]
+      },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
@@ -30604,6 +31249,33 @@
           "documentId": {
             "type": "string",
             "description": "The document ID of the created snippet."
+          }
+        }
+      },
+      "CreateSpreadsheetRequest": {
+        "type": "object",
+        "description": "Request to create a blank native spreadsheet.",
+        "required": ["documentName"],
+        "properties": {
+          "documentName": {
+            "type": "string",
+            "description": "Spreadsheet name."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional parent project."
+          }
+        }
+      },
+      "CreateSpreadsheetResponse": {
+        "type": "object",
+        "description": "A created native spreadsheet.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The new spreadsheet's document ID."
           }
         }
       },
@@ -35827,6 +36499,24 @@
           }
         }
       },
+      "EditSpreadsheetRequest": {
+        "type": "object",
+        "description": "One atomic batch of operations against the revision it was planned on.",
+        "required": ["expectedRevision", "operations"],
+        "properties": {
+          "expectedRevision": {
+            "type": "string",
+            "description": "The revision a read returned; a changed workbook rejects the batch."
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetOperation"
+            },
+            "description": "Between 1 and 25 operations, validated and saved together."
+          }
+        }
+      },
       "EffectSpec_GlowOptions": {
         "oneOf": [
           {
@@ -37309,7 +37999,7 @@
       "ExternalChatParticipant": {
         "type": "object",
         "description": "Someone in an external chat; Macro access is a separate grant.",
-        "required": ["jid", "admin"],
+        "required": ["jid", "name", "admin"],
         "properties": {
           "admin": {
             "type": "boolean",
@@ -37326,6 +38016,10 @@
           "jid": {
             "type": "string",
             "description": "Their id at the provider (WhatsApp: phone-number or LID JID)."
+          },
+          "name": {
+            "type": "string",
+            "description": "What to call them: their provider name, else their phone number,\nelse a generic name."
           }
         }
       },
@@ -44933,6 +45627,62 @@
         "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
       },
+      "PatchAgentRequest": {
+        "type": "object",
+        "description": "Request to change part of a persisted agent's instructions or settings.\n\nEvery field is optional; an absent field keeps the agent's current value.\nOwnership and the bot profile (name, handle, description, avatar) are not\npatchable here: the profile has [`PatchBotRequest`], and ownership changes\ngo through [`UpdateAgentRequest`]. Unknown fields are refused, so a\nmisspelled or flattened setting is never silently ignored.",
+        "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Replacement permission choice: approve without asking (`true`) or\nprompt (`false`). A patch cannot clear the choice back to unset; an\nexplicit `false` prompts exactly as unset does."
+          },
+          "channels": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentChannelSelection",
+                "description": "Replacement channel availability."
+              }
+            ]
+          },
+          "default_model": {
+            "type": ["string", "null"],
+            "description": "Replacement model."
+          },
+          "harness": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentHarnessSelection",
+                "description": "Replacement runtime."
+              }
+            ]
+          },
+          "instructions": {
+            "type": ["string", "null"],
+            "description": "Replacement instructions, whole."
+          },
+          "is_coding": {
+            "type": ["boolean", "null"],
+            "description": "Replacement coding choice."
+          },
+          "mcp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentMcpServers",
+                "description": "Replacement MCP server selection."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "PatchBotRequest": {
         "type": "object",
         "description": "Request to patch a bot.",
@@ -46927,6 +47677,27 @@
           }
         }
       },
+      "ReadSpreadsheetRequest": {
+        "type": "object",
+        "description": "What to read from a workbook.",
+        "properties": {
+          "includeStyles": {
+            "type": ["boolean", "null"],
+            "description": "Include cell formatting."
+          },
+          "ranges": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "A1 ranges such as A1:F20. Omit for the workbook overview and samples."
+          },
+          "sheetId": {
+            "type": ["string", "null"],
+            "description": "Stable sheet ID or exact name; defaults to the first sheet."
+          }
+        }
+      },
       "RecentlyDeletedResponseData": {
         "type": "object",
         "required": ["items"],
@@ -48603,6 +49374,22 @@
           }
         },
         "additionalProperties": false
+      },
+      "ShareWithChannelRequest": {
+        "type": "object",
+        "description": "Request to share one item with a channel's current members.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id of the item to share. For a calendar event, the event id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/ChannelShareEntityType",
+            "description": "Stored entity type of the item."
+          }
+        }
       },
       "SharedEmailFilter": {
         "type": "string",
@@ -51068,6 +51855,1140 @@
           }
         ],
         "description": "Source identity supplied when creating a job. One binding per Macro team in v1."
+      },
+      "SpreadsheetAiEditRequest": {
+        "type": "object",
+        "description": "What to change in a workbook, in words.",
+        "required": ["instructions"],
+        "properties": {
+          "instructions": {
+            "type": "string",
+            "description": "Natural-language instructions. Name the sheet and the cells, columns\nor table to change, describe the outcome, and say what must stay.",
+            "minLength": 1
+          }
+        }
+      },
+      "SpreadsheetAiEdited": {
+        "type": "object",
+        "description": "A completed edit by instructions.",
+        "required": ["revision", "applied", "changes", "sheets", "warnings"],
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "description": "Whether a new change was persisted."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetChange"
+            },
+            "description": "What changed, one summary per operation."
+          },
+          "revision": {
+            "type": "string",
+            "description": "Revision after the edit."
+          },
+          "sheets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetSheetSummary"
+            },
+            "description": "Every sheet after the edit."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Issues to check, such as formula errors; they are not repaired."
+          }
+        }
+      },
+      "SpreadsheetBorderStyle": {
+        "type": "string",
+        "description": "Excel border line style.",
+        "enum": [
+          "reset",
+          "thin",
+          "medium",
+          "thick",
+          "double",
+          "dotted",
+          "dashed",
+          "dashDot",
+          "dashDotDot",
+          "slantDashDot",
+          "hair",
+          "mediumDashed",
+          "mediumDashDot",
+          "mediumDashDotDot"
+        ]
+      },
+      "SpreadsheetCellInput": {
+        "type": "object",
+        "description": "Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.",
+        "required": ["address", "value"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "A1 address, from A1 through XFD100000."
+          },
+          "value": {
+            "type": "string",
+            "description": "Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}</m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}</m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}</m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpreadsheetChange": {
+        "type": "object",
+        "description": "Applied edit summary.",
+        "required": ["type", "sheetId", "summary"],
+        "properties": {
+          "range": {
+            "type": ["string", "null"],
+            "description": "Affected range, when applicable."
+          },
+          "sheetId": {
+            "type": "string",
+            "description": "Affected stable sheet identity."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Human-readable change summary."
+          },
+          "type": {
+            "type": "string",
+            "description": "Operation type."
+          }
+        }
+      },
+      "SpreadsheetColumnType": {
+        "type": "string",
+        "description": "What a table column holds, as Google Sheets types table columns.",
+        "enum": [
+          "text",
+          "number",
+          "percent",
+          "currency",
+          "date",
+          "datetime",
+          "time",
+          "checkbox",
+          "dropdown",
+          "person"
+        ]
+      },
+      "SpreadsheetColumnWidth": {
+        "type": "object",
+        "description": "A column width.",
+        "required": ["column", "width"],
+        "properties": {
+          "column": {
+            "type": "string",
+            "description": "Column letter A through XFD."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Width in pixels, 8 through 640.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpreadsheetDropdownColor": {
+        "type": "object",
+        "description": "A dropdown choice's color. Cells showing the choice draw it as a chip of this color.",
+        "required": ["item", "color"],
+        "properties": {
+          "color": {
+            "type": "string",
+            "description": "Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible."
+          },
+          "item": {
+            "type": "string",
+            "description": "The choice, matched to cell text ignoring case."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpreadsheetFont": {
+        "type": "string",
+        "description": "Font family.",
+        "enum": ["sans", "serif", "mono"]
+      },
+      "SpreadsheetFormula": {
+        "type": "object",
+        "description": "A scratch formula evaluated without persisting it.",
+        "required": ["formula"],
+        "properties": {
+          "formula": {
+            "type": "string",
+            "description": "Excel-style formula, beginning with =."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Optional label echoed with the result."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpreadsheetFormulaResult": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SpreadsheetValue",
+            "description": "Calculated scalar."
+          },
+          {
+            "type": "object",
+            "required": ["formula"],
+            "properties": {
+              "formula": {
+                "type": "string",
+                "description": "Evaluated scratch formula."
+              },
+              "label": {
+                "type": ["string", "null"],
+                "description": "Caller-supplied label."
+              }
+            }
+          }
+        ],
+        "description": "One hypothetical formula result."
+      },
+      "SpreadsheetHorizontalAlign": {
+        "type": "string",
+        "description": "Horizontal alignment.",
+        "enum": ["auto", "left", "center", "right"]
+      },
+      "SpreadsheetNumberFormat": {
+        "type": "string",
+        "description": "Number interpretation and display; currency and accounting are USD and dates use UTC.",
+        "enum": [
+          "general",
+          "number",
+          "currency",
+          "accounting",
+          "percent",
+          "date",
+          "time",
+          "scientific",
+          "text"
+        ]
+      },
+      "SpreadsheetOperation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Set raw values/formulas while preserving existing formatting.",
+            "required": ["sheetId", "cells", "type"],
+            "properties": {
+              "cells": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetCellInput"
+                },
+                "description": "Cells and their new source inputs."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["set_cells"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Apply a sparse formatting patch to a rectangle.",
+            "required": ["sheetId", "range", "style", "type"],
+            "properties": {
+              "range": {
+                "type": "string",
+                "description": "A1 rectangle, for example A1:D20."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "style": {
+                "$ref": "#/components/schemas/SpreadsheetStyle",
+                "description": "Properties to change; omitted properties remain unchanged."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["format_cells"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Clear a rectangle's inputs, optionally its formatting too.",
+            "required": ["sheetId", "range", "type"],
+            "properties": {
+              "clearFormatting": {
+                "type": ["boolean", "null"],
+                "description": "Defaults to false; preserves formatting unless requested."
+              },
+              "range": {
+                "type": "string",
+                "description": "A1 rectangle."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["clear_cells"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Repeat a source rectangle into a target using relative formula translation.",
+            "required": ["sheetId", "sourceRange", "targetRange", "type"],
+            "properties": {
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "sourceRange": {
+                "type": "string",
+                "description": "Source rectangle."
+              },
+              "targetRange": {
+                "type": "string",
+                "description": "Target rectangle."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["fill_cells"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Add an empty sheet; later operations may address it by this name.",
+            "required": ["name", "type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique Excel-compatible name, at most 31 characters."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["add_sheet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Rename a sheet; rejected when existing formulas directly reference its current name.",
+            "required": ["sheetId", "name", "type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "New unique name."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["rename_sheet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Duplicate a sheet, including values, formulas, styles, and layout.",
+            "required": ["sheetId", "type"],
+            "properties": {
+              "name": {
+                "type": ["string", "null"],
+                "description": "Optional unique name for the copy."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["duplicate_sheet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Delete a sheet; the final sheet and directly referenced sheets are protected.",
+            "required": ["sheetId", "type"],
+            "properties": {
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["delete_sheet"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Append rows, up to the 100,000-row sheet limit.",
+            "required": ["sheetId", "count", "type"],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Number of rows to append.",
+                "minimum": 0
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["append_rows"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Resize one or more columns.",
+            "required": ["sheetId", "columns", "type"],
+            "properties": {
+              "columns": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetColumnWidth"
+                },
+                "description": "Column widths to set."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["resize_columns"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.\nGive exactly one of items or source. Cell values are unchanged; set them separately.",
+            "required": ["sheetId", "range", "type"],
+            "properties": {
+              "colors": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetDropdownColor"
+                },
+                "description": "Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them."
+              },
+              "items": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Typed choices, without commas, at most 253 characters in total."
+              },
+              "range": {
+                "type": "string",
+                "description": "A1 rectangle, for example C2:C200."
+              },
+              "rejectInvalid": {
+                "type": ["boolean", "null"],
+                "description": "Defaults to true: reject typed entries that are not a choice. False only suggests the choices."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "source": {
+                "type": ["string", "null"],
+                "description": "Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["set_dropdown"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Remove dropdowns and any other data validation from a rectangle.",
+            "required": ["sheetId", "range", "type"],
+            "properties": {
+              "range": {
+                "type": "string",
+                "description": "A1 rectangle."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["clear_validation"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Turn a rectangle into checkboxes backed by TRUE/FALSE values: blank cells become FALSE\n(unchecked) and other values are kept. Check or uncheck them with set_cells TRUE or FALSE.",
+            "required": ["sheetId", "range", "type"],
+            "properties": {
+              "range": {
+                "type": "string",
+                "description": "A1 rectangle, for example D2:D50."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["insert_checkboxes"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Convert a rectangle to a named table (an Excel table). Its first row becomes the header\nrow; blank or repeated headers are named. Formulas can then use structured references\nsuch as Table1[Amount], [@Amount] or Table1 for its data, and each header gets sort and\nfilter controls. Columns take the type their values suggest unless column_types says.",
+            "required": ["sheetId", "range", "type"],
+            "properties": {
+              "columnTypes": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetTableColumnType"
+                },
+                "description": "Column types by header name. A type formats the column's data cells; checkbox makes\nthem checkboxes and dropdown offers the column's values as colored choices."
+              },
+              "name": {
+                "type": ["string", "null"],
+                "description": "Unique table name, such as Sales; spaces become underscores. Defaults to the next free\nTableN."
+              },
+              "range": {
+                "type": "string",
+                "description": "A1 rectangle including the header row, for example A1:D20. Must not overlap a table."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet ID or exact name."
+              },
+              "totalsRow": {
+                "type": ["boolean", "null"],
+                "description": "Add a total row below the data, which must be empty. Defaults to false."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["create_table"]
+              }
+            }
+          }
+        ],
+        "description": "One operation in an atomic workbook edit. All operations validate before any write."
+      },
+      "SpreadsheetOverride": {
+        "type": "object",
+        "description": "Hypothetical inputs applied only to the calculation's disposable workbook.",
+        "required": ["sheetId", "cells"],
+        "properties": {
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetCellInput"
+            },
+            "description": "Cells to change in this hypothetical calculation."
+          },
+          "sheetId": {
+            "type": "string",
+            "description": "Stable sheet ID or exact sheet name from ReadSpreadsheet."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpreadsheetReadCell": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SpreadsheetValue",
+            "description": "The current calculation result."
+          },
+          {
+            "type": "object",
+            "required": ["address", "source"],
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "A1 address."
+              },
+              "formula": {
+                "type": ["string", "null"],
+                "description": "Formula, when this input is calculated."
+              },
+              "source": {
+                "type": "string",
+                "description": "Exact persisted source input."
+              },
+              "style": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpreadsheetStyle",
+                    "description": "Cell formatting, when requested."
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Cell source and calculated result."
+      },
+      "SpreadsheetReadRange": {
+        "type": "object",
+        "description": "Addressed range with explicit truncation.",
+        "required": ["sheetId", "sheetName", "range", "cells", "truncated"],
+        "properties": {
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetReadCell"
+            },
+            "description": "Cells with their sources and current results."
+          },
+          "range": {
+            "type": "string",
+            "description": "Requested or sampled rectangle."
+          },
+          "sheetId": {
+            "type": "string",
+            "description": "Stable sheet identity."
+          },
+          "sheetName": {
+            "type": "string",
+            "description": "Current sheet name."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when a narrower follow-up read is needed to see every cell."
+          },
+          "validations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetReadValidation"
+            },
+            "description": "Dropdowns and other data validation rules overlapping this range."
+          }
+        }
+      },
+      "SpreadsheetReadValidation": {
+        "type": "object",
+        "description": "A data validation rule; list rules are dropdowns.",
+        "required": ["range", "type", "rejectInvalid"],
+        "properties": {
+          "colors": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetDropdownColor"
+            },
+            "description": "A dropdown's choice colors."
+          },
+          "dropdown": {
+            "type": ["boolean", "null"],
+            "description": "Whether a list rule shows its dropdown arrow."
+          },
+          "formulas": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Rule formulas, without the leading =."
+          },
+          "items": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "A dropdown's typed choices."
+          },
+          "operator": {
+            "type": ["string", "null"],
+            "description": "Comparison for number, date, time and text-length rules."
+          },
+          "range": {
+            "type": "string",
+            "description": "Cells the rule covers, as space-separated A1 ranges."
+          },
+          "rejectInvalid": {
+            "type": "boolean",
+            "description": "Whether entries that break the rule are rejected."
+          },
+          "source": {
+            "type": ["string", "null"],
+            "description": "A dropdown's source range."
+          },
+          "type": {
+            "type": "string",
+            "description": "Rule kind: list, whole, decimal, date, time, textLength, custom, or any."
+          }
+        }
+      },
+      "SpreadsheetResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Workbook inspection result.",
+            "required": ["revision", "sheets", "ranges", "warnings", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["read"]
+              },
+              "ranges": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetReadRange"
+                },
+                "description": "Addressed cells with raw inputs and calculated results."
+              },
+              "revision": {
+                "type": "string",
+                "description": "Opaque revision required for EditSpreadsheet."
+              },
+              "sheets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetSheetSummary"
+                },
+                "description": "All visible sheets and their used bounds."
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Limits or issues the caller should account for."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Scratch calculation result. No persistent changes were made.",
+            "required": ["revision", "results", "warnings", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["calculate"]
+              },
+              "results": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetFormulaResult"
+                },
+                "description": "Results in input order."
+              },
+              "revision": {
+                "type": "string",
+                "description": "Revision used for these calculations."
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Calculation limits or issues."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Result of a persisted atomic edit.",
+            "required": [
+              "revision",
+              "applied",
+              "changes",
+              "sheets",
+              "warnings",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["edit"]
+              },
+              "applied": {
+                "type": "boolean",
+                "description": "Whether a new change was persisted."
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetChange"
+                },
+                "description": "Applied operation summaries."
+              },
+              "revision": {
+                "type": "string",
+                "description": "Revision after the edit; use a fresh read before further editing."
+              },
+              "sheets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpreadsheetSheetSummary"
+                },
+                "description": "Sheet metadata after editing."
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Issues requiring inspection, including formula errors."
+              }
+            }
+          }
+        ],
+        "description": "Structured output from a deterministic workbook operation."
+      },
+      "SpreadsheetSheetSummary": {
+        "type": "object",
+        "description": "Compact metadata for a sheet.",
+        "required": [
+          "id",
+          "name",
+          "rowCount",
+          "columnCount",
+          "populatedCells",
+          "formulaCells",
+          "errorCells"
+        ],
+        "properties": {
+          "columnCount": {
+            "type": "integer",
+            "description": "Available columns.",
+            "minimum": 0
+          },
+          "errorCells": {
+            "type": "integer",
+            "description": "Number of calculated errors.",
+            "minimum": 0
+          },
+          "formulaCells": {
+            "type": "integer",
+            "description": "Number of formulas.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable sheet identity for future calls."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current sheet name."
+          },
+          "populatedCells": {
+            "type": "integer",
+            "description": "Number of populated cells.",
+            "minimum": 0
+          },
+          "rowCount": {
+            "type": "integer",
+            "description": "Available rows.",
+            "minimum": 0
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetTableSummary"
+            },
+            "description": "Named tables on the sheet."
+          },
+          "usedRange": {
+            "type": ["string", "null"],
+            "description": "Bounding rectangle of used cells, or null for an empty sheet."
+          }
+        }
+      },
+      "SpreadsheetStyle": {
+        "type": "object",
+        "description": "Sparse cell styling patch. Omitted fields remain unchanged.",
+        "properties": {
+          "bold": {
+            "type": ["boolean", "null"],
+            "description": "Bold text."
+          },
+          "borderBottom": {
+            "type": ["boolean", "null"],
+            "description": "Bottom border."
+          },
+          "borderBottomColor": {
+            "type": ["string", "null"],
+            "description": "Bottom border color."
+          },
+          "borderBottomStyle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetBorderStyle",
+                "description": "Bottom border style."
+              }
+            ]
+          },
+          "borderLeft": {
+            "type": ["boolean", "null"],
+            "description": "Left border."
+          },
+          "borderLeftColor": {
+            "type": ["string", "null"],
+            "description": "Left border color."
+          },
+          "borderLeftStyle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetBorderStyle",
+                "description": "Left border style."
+              }
+            ]
+          },
+          "borderRight": {
+            "type": ["boolean", "null"],
+            "description": "Right border."
+          },
+          "borderRightColor": {
+            "type": ["string", "null"],
+            "description": "Right border color."
+          },
+          "borderRightStyle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetBorderStyle",
+                "description": "Right border style."
+              }
+            ]
+          },
+          "borderTop": {
+            "type": ["boolean", "null"],
+            "description": "Top border."
+          },
+          "borderTopColor": {
+            "type": ["string", "null"],
+            "description": "Top border color."
+          },
+          "borderTopStyle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetBorderStyle",
+                "description": "Top border style."
+              }
+            ]
+          },
+          "checkbox": {
+            "type": ["boolean", "null"],
+            "description": "Show the cell's TRUE/FALSE value as a checkbox; false removes it and keeps the value."
+          },
+          "decimals": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Decimal places, 0 through 10; -1 restores automatic."
+          },
+          "fillColor": {
+            "type": ["string", "null"],
+            "description": "Fill color as #RRGGBB; empty string resets it."
+          },
+          "fontFamily": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetFont",
+                "description": "Font family."
+              }
+            ]
+          },
+          "fontName": {
+            "type": ["string", "null"],
+            "description": "Exact Excel font name, up to 128 characters."
+          },
+          "fontSize": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Font size in points, 8 through 36.",
+            "minimum": 0
+          },
+          "format": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetNumberFormat",
+                "description": "How to interpret and display the input."
+              }
+            ]
+          },
+          "horizontalAlign": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetHorizontalAlign",
+                "description": "Horizontal alignment."
+              }
+            ]
+          },
+          "indent": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it.",
+            "minimum": 0
+          },
+          "italic": {
+            "type": ["boolean", "null"],
+            "description": "Italic text."
+          },
+          "numberFormat": {
+            "type": ["string", "null"],
+            "description": "Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm/dd/yyyy, dd/mm/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM/PM."
+          },
+          "strikethrough": {
+            "type": ["boolean", "null"],
+            "description": "Struck-through text."
+          },
+          "textColor": {
+            "type": ["string", "null"],
+            "description": "Text color as #RRGGBB; empty string resets it."
+          },
+          "underline": {
+            "type": ["boolean", "null"],
+            "description": "Underlined text."
+          },
+          "verticalAlign": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpreadsheetVerticalAlign",
+                "description": "Vertical alignment."
+              }
+            ]
+          },
+          "wrap": {
+            "type": ["boolean", "null"],
+            "description": "Wrap text."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpreadsheetTableColumnType": {
+        "type": "object",
+        "description": "A table column's type, by its header name.",
+        "required": ["column", "type"],
+        "properties": {
+          "column": {
+            "type": "string",
+            "description": "Header name of the column, ignoring case."
+          },
+          "type": {
+            "$ref": "#/components/schemas/SpreadsheetColumnType",
+            "description": "What the column holds."
+          }
+        }
+      },
+      "SpreadsheetTableSummary": {
+        "type": "object",
+        "description": "A named table (an Excel table) that formulas address with structured references.",
+        "required": ["name", "range", "columns", "totalsRow"],
+        "properties": {
+          "columnTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpreadsheetTableColumnType"
+            },
+            "description": "Typed columns; untyped columns are left out."
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Column names, from the header row."
+          },
+          "filteredColumns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Columns whose filters currently hide rows."
+          },
+          "name": {
+            "type": "string",
+            "description": "Table name, as in Sales[Amount]."
+          },
+          "range": {
+            "type": "string",
+            "description": "A1 rectangle from the header row through the total row, if any."
+          },
+          "totalsRow": {
+            "type": "boolean",
+            "description": "Whether the last row is a total row."
+          }
+        }
+      },
+      "SpreadsheetValue": {
+        "type": "object",
+        "description": "A calculated scalar with its display text and optional error explanation.",
+        "required": ["type", "value", "display"],
+        "properties": {
+          "display": {
+            "type": "string",
+            "description": "Text shown in the spreadsheet."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Explanation for an error result."
+          },
+          "type": {
+            "$ref": "#/components/schemas/SpreadsheetValueKind",
+            "description": "Scalar kind: blank, number, text, boolean, or error."
+          },
+          "value": {
+            "description": "The typed scalar. Empty cells have a null value."
+          }
+        }
+      },
+      "SpreadsheetValueKind": {
+        "type": "string",
+        "description": "The calculation result kind.",
+        "enum": ["blank", "number", "text", "boolean", "error"]
+      },
+      "SpreadsheetVerticalAlign": {
+        "type": "string",
+        "description": "Vertical alignment.",
+        "enum": ["top", "middle", "bottom"]
       },
       "SqlCell": {
         "oneOf": [
