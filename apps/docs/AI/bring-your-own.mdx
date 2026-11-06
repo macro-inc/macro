@@ -115,6 +115,22 @@ You choose **Private** or **Team** when you approve a runtime, and you can chang
 - **Team:** everyone on your team can run their agents on the runtime. Your own agents keep working.
 - **Private:** only you can run agents on it, and it becomes yours. Macro refuses while team agents or other people's agents still run on it, and lists them. Move those agents to another runtime, then try again.
 
+## Choose where agents work
+
+By default, sessions start in the **Workspace** you set in Quickstart. To let Macro pick other folders on the machine, list them as `allowed_roots` in `macrod.toml`:
+
+```toml
+[workspace]
+path = "/home/me/code"
+allowed_roots = ["/home/me/code", "/srv/projects"]
+```
+
+You can also edit **Allowed roots** in the `macrod` **Config** tab. Without `allowed_roots`, only the workspace itself is allowed. `macrod` reports these folders, and the Git repositories up to two levels inside them, to Macro each time it starts.
+
+In **Settings → Runtimes**, the people who can change a runtime pick its **Workspace** from that list. For one agent, pick **Workspace** under **In your harness** in its settings. A session starts in the agent's workspace, else the runtime's, else the one in `macrod.toml`. A change applies to new sessions; running sessions keep their folder.
+
+`macrod` refuses any folder outside `allowed_roots`, including one reached through `..` or a symbolic link, and its **Logs** tab says why.
+
 ## Keep your runtime connected
 
 Leave `macrod` running and your computer awake while you use the runtime. Its terminal shows your sessions, configuration, and logs. You can also check the runtime in **Settings → Runtimes**.
