@@ -45,6 +45,42 @@ async fn email_delivery_upgrade_preserves_existing_schedules_and_attachments(poo
     MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
 }
 const OUTLOOK_RUNTIME_VERSION: i64 = 20261004022345;
+const ATTACHMENT_THREAD_VERSION: i64 = 20261106191035;
+
+#[sqlx::test(migrations = false)]
+async fn attachment_thread_backfill_fills_existing_rows_from_their_messages(pool: PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let before_thread = Migrator {
+        migrations: Cow::Owned(
+            MACRO_DB_MIGRATIONS
+                .iter()
+                .filter(|migration| migration.version < ATTACHMENT_THREAD_VERSION)
+                .cloned()
+                .collect(),
+        ),
+        ..Migrator::DEFAULT
+    };
+    before_thread.run(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../email_db_client/fixtures/get_process_scheduled_messages.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!("test/before_attachment_thread.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!("test/after_attachment_thread.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+}
 
 async fn before_drop(pool: &PgPool) {
     sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
