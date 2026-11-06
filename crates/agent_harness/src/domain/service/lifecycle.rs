@@ -403,8 +403,9 @@ where
             .unwrap_or(PermissionPolicy::Prompt)
     }
 
-    /// Conversation sessions keep the adopted persona choice across reconnects. Current
-    /// harness operator restrictions can always tighten that choice.
+    /// Conversation sessions keep the adopted persona choice across reconnects,
+    /// within the harness operator's current limit: withdrawing bypass tightens
+    /// it, and allowing bypass lets an adopted choice to bypass take effect.
     pub(super) async fn permission_policy_for_session(
         &self,
         session: AgentSessionId,
@@ -418,13 +419,27 @@ where
                 return Ok(PermissionPolicy::Prompt);
             };
             let current = self.permission_policies.permission_policy(bot).await;
-            return Ok(match current {
-                Ok(crate::domain::model::PermissionPolicyConfig::Persona {
-                    harness_allows_bypass: Some(false),
-                    ..
-                })
-                | Err(_) => PermissionPolicy::Prompt,
-                Ok(_) => settings.permissions.resolve(),
+            return Ok(match (settings.permissions, current) {
+                (
+                    _,
+                    Ok(crate::domain::model::PermissionPolicyConfig::Persona {
+                        harness_allows_bypass: Some(false),
+                        ..
+                    })
+                    | Err(_),
+                ) => PermissionPolicy::Prompt,
+                (
+                    crate::domain::model::PermissionPolicyConfig::Persona {
+                        harness_allows_bypass: Some(_),
+                        auto_accept_permissions,
+                        ..
+                    },
+                    Ok(crate::domain::model::PermissionPolicyConfig::Persona {
+                        harness_allows_bypass: Some(true),
+                        ..
+                    }),
+                ) => crate::domain::model::resolve_permission_policy(true, auto_accept_permissions),
+                (adopted, Ok(_)) => adopted.resolve(),
             });
         }
         Ok(self.permission_policy_for(bot).await)
@@ -432,7 +447,9 @@ where
 
     /// Hand a live session its current permission policy before a turn, so a
     /// withdrawn bypass applies from the next prompt rather than the next
-    /// attach. A session attached nowhere here takes it when it attaches.
+    /// attach, and when a person answers one of its permission requests, so
+    /// bypass turned on from that request covers the rest of the turn. A
+    /// session attached nowhere here takes it when it attaches.
     pub(super) async fn refresh_permission_policy(&self, session_id: AgentSessionId) {
         let refreshed = async {
             let session = self.sessions.get_session(session_id).await?;

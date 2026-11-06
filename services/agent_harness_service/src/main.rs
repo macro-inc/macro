@@ -27,6 +27,7 @@ mod pull_request_archive;
 mod routine_code;
 mod routine_drafts;
 mod routine_sessions;
+mod runtime_bypass;
 mod runtime_commands;
 mod scheduling;
 mod trigger;
@@ -1438,6 +1439,14 @@ async fn run() -> anyhow::Result<()> {
         .with_admission(admission.clone())
         .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)
+        .with_runtime_bypass(Arc::new(runtime_bypass::DomainRuntimeBypassSettings::new(
+            PgBotsRepo::new(pool.clone()),
+            bots::domain::service::BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                broker.clone(),
+            ),
+            PgHarnessRepo::new(pool.clone()),
+        )))
         .with_warm_sessions(Arc::new(session_repo.clone()), tool_catalog),
     );
     let reviews = agent_code_mode::domain::reviews::ReviewService::new(
@@ -1818,6 +1827,13 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let runtime_bypass = agent_harness::inbound::runtime_bypass::runtime_bypass_router(
+        agent_harness::inbound::runtime_bypass::RuntimeBypassRouterState::new(
+            harness.clone(),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let tool_approval_answers = tool_approvals_router(ToolApprovalsRouterState::new(
         tool_approvals,
         entity_access.clone(),
@@ -1889,6 +1905,7 @@ async fn run() -> anyhow::Result<()> {
             .with_auto_archive(auto_archive)
             .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)
+            .with_runtime_bypass(runtime_bypass)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
             .with_notifications(notification_ingress)

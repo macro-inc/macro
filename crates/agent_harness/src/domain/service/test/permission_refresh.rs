@@ -1,5 +1,7 @@
 //! A changed permission policy reaches a live session before its next prompt,
-//! so withdrawing bypass does not wait for the session to reattach.
+//! so withdrawing bypass does not wait for the session to reattach, and when a
+//! person answers a permission request, so bypass turned on from it applies to
+//! the rest of the turn.
 
 use std::sync::Mutex;
 
@@ -70,6 +72,56 @@ async fn a_withdrawn_bypass_reaches_a_live_session_before_its_next_prompt() {
         permission_outcome(&agent, "after"),
         Some(RequestPermissionOutcome::Selected(
             SelectedPermissionOutcome::new("once")
+        ))
+    );
+}
+
+#[tokio::test]
+async fn bypass_turned_on_from_a_request_covers_the_rest_of_the_turn() {
+    let policy = ChangeablePolicy(Arc::new(Mutex::new(persona_on_harness(false))));
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) = harness_with_policy(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        policy.clone(),
+    );
+    let id = AgentSessionId::new();
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    let agent = container.agent();
+    agent.sends_raw(permission_request("asked"));
+
+    *policy.0.lock().unwrap() = persona_on_harness(true);
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action_id: None,
+                action: permission_answer("asked", "once"),
+                actor: Some(staff_sender()),
+                context: None,
+            },
+        )
+        .await
+        .expect("the request waits for a user's answer");
+    agent.wait_for_responses(1).await;
+    assert_eq!(
+        permission_outcome(&agent, "asked"),
+        Some(RequestPermissionOutcome::Selected(
+            SelectedPermissionOutcome::new("once")
+        ))
+    );
+
+    agent.sends_raw(permission_request("next"));
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        agent.wait_for_responses(2),
+    )
+    .await
+    .expect("the next request is approved without asking");
+    assert_eq!(
+        permission_outcome(&agent, "next"),
+        Some(RequestPermissionOutcome::Selected(
+            SelectedPermissionOutcome::new("always")
         ))
     );
 }

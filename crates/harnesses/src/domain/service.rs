@@ -61,6 +61,29 @@ impl<R> HarnessServiceImpl<R>
 where
     R: HarnessRepo,
 {
+    /// Whether `caller` may change `harness_id`'s settings, by the rule
+    /// [`HarnessService::patch_harness`] applies. `false` for an unknown
+    /// harness.
+    pub async fn may_manage(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+    ) -> Result<bool, HarnessError> {
+        let Some(harness) = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+        else {
+            return Ok(false);
+        };
+        match self.ensure_may_manage(caller, &harness).await {
+            Ok(()) => Ok(true),
+            Err(HarnessError::Unauthorized) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+
     async fn ensure_may_manage(
         &self,
         caller: &MacroUserIdStr<'static>,
