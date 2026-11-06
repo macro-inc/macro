@@ -77,8 +77,8 @@ test('shows agent computer status and supports retry and removal through the row
   await expect(page.getByText('Agent', { exact: true })).toHaveCount(3);
   await expect(page.getByText('Starting computer (2/5)')).toHaveCount(0);
   await expect(
-    page.getByRole('progressbar', { name: 'Agent setup' })
-  ).toHaveAttribute('aria-valuenow', '2');
+    page.getByRole('progressbar', { name: 'Agent setup' }).first()
+  ).toHaveAttribute('aria-valuenow', '1');
   await expect(page.getByText('Billed', { exact: true })).toHaveCount(0);
   await expect(
     page.getByText('Included for Macro', { exact: true })

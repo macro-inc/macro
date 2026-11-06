@@ -17,6 +17,8 @@ import { AgentStatusPill } from './team-agent-status';
 export function TeamAgentRow(props: {
   agent: TeamAgent;
   avatar: JSX.Element;
+  canManage?: boolean;
+  onOpenBilling?(): void;
   retrying: boolean;
   retryError?: boolean;
   onRetry?(): void;
@@ -55,7 +57,14 @@ export function TeamAgentRow(props: {
         </>
       }
       detail={<span>Member</span>}
-      status={<AgentStatusPill agent={props.agent} activity={lastActive()} />}
+      status={
+        <AgentStatusPill
+          agent={props.agent}
+          activity={lastActive()}
+          canManage={props.canManage}
+          onOpenBilling={props.onOpenBilling}
+        />
+      }
       actions={
         <TeamAgentMenu
           agent={props.agent}
@@ -90,7 +99,13 @@ export function TeamAgentMenu(props: {
         <DotsIcon class="size-4" />
       </Dropdown.Trigger>
       <Dropdown.Content>
-        <Show when={props.agent.statusReason}>
+        <Show
+          when={
+            props.agent.statusReason &&
+            props.agent.payment !== 'pending' &&
+            props.agent.payment !== 'unbilled'
+          }
+        >
           <div
             class="max-w-64 px-3 py-2 text-xs text-ink-muted break-words"
             role="note"

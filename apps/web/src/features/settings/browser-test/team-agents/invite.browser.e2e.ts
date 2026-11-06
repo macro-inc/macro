@@ -95,7 +95,11 @@ test('blocks pending payment actions and permits unbilled removal and paid provi
   ).toBeDisabled();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Set payment failure' }).click();
-  await expect(page.getByText('Payment failed', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Couldn't add Assistant: payment didn't go through", {
+      exact: true,
+    })
+  ).toBeVisible();
 
   await expect(
     page.getByRole('button', { name: 'Retry', exact: true })
@@ -110,7 +114,7 @@ test('blocks pending payment actions and permits unbilled removal and paid provi
   await expect(page.getByText('Retry requests: 1')).toBeVisible();
   await expect(
     page.getByRole('progressbar', { name: 'Agent setup' })
-  ).toHaveAttribute('aria-valuetext', 'Booting — step 3 of 5');
+  ).toHaveAttribute('aria-valuetext', 'Booting — step 2 of 3');
   await expect(
     page.getByRole('button', { name: 'Retry', exact: true })
   ).toHaveCount(0);
@@ -345,4 +349,21 @@ test('portrait failure offers an explicit retry without discarding profile field
   await page.getByRole('button', { name: 'Review price' }).click();
   await page.getByRole('button', { name: 'Confirm and invite' }).click();
   await expect(page.getByText('Purchases: 1', { exact: true })).toBeVisible();
+});
+
+test('keeps payment diagnostics out of a non-admin setup row', async ({
+  page,
+}) => {
+  await page.goto('/?payments&non-admin');
+  await expect(page.getByText('Setting up…', { exact: true })).toBeVisible();
+  await expect(page.getByText('Paying', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText('Confirming payment', { exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Set payment failure' }).click();
+  await expect(page.getByText('Setting up…', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Billing', exact: true })
+  ).toHaveCount(0);
+  await expect(page.getByText(/Couldn't add Assistant/)).toHaveCount(0);
 });

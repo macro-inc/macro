@@ -103,7 +103,7 @@ const initialAgent: TeamAgent = {
   status: 'provisioning',
   payment: 'pending',
   retryable: false,
-  setup: { step: 'paying', position: 1, total: 5 },
+  setup: undefined,
 };
 const [agent, setAgent] = createSignal(initialAgent);
 const [retryRequests, setRetryRequests] = createSignal(0);
@@ -192,7 +192,12 @@ render(
               >
                 Set paid failure
               </Button>
-              <AgentStatusPill agent={agent()} />
+              <AgentStatusPill
+                agent={agent()}
+                canManage={
+                  !new URLSearchParams(location.search).has('non-admin')
+                }
+              />
               <TeamAgentMenu
                 agent={agent()}
                 onRetry={() => {

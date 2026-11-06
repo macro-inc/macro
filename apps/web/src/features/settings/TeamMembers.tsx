@@ -10,6 +10,7 @@ import {
   enableAiUsageBilling,
   enableTeamAgents,
 } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -403,6 +404,7 @@ function MemberName(props: { memberId: string }) {
 
 /** Team › Members: the roster, roles and seats, and how people join. */
 export function TeamMembers(props: { team: TeamSummary }) {
+  const settings = useSettingsState();
   const userId = useUserId();
   const {
     teamQuery,
@@ -799,6 +801,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             />
                           }
                           agent={agent}
+                          canManage={canManageAgents()}
+                          onOpenBilling={() => settings.openSettings('Billing')}
                           onViewComputer={
                             canViewAgentComputers()
                               ? () => {

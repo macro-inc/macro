@@ -1,5 +1,7 @@
 /** Invitation identity, computer selection, and purchase review. */
 export default {
+  addFailed: "Couldn't add {{name}}: payment didn't go through",
+  billing: 'Billing',
   profileChanged: 'The name changed. Generate a new photo for this profile.',
   photoFailed: "Couldn't prepare the photo. Try again or upload one.",
   generatingPhoto: 'Generating agent photo',

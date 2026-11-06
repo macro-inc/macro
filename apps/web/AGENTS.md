@@ -1333,8 +1333,10 @@ only on Generate portrait, then offers Generate another; typing never starts a
 request. Preserve the existing avatar uploader and selected static-file URL; keep prompts and profiles out
 of telemetry attributes. Keep the face beside the identity fields at the top;
 show a shimmer while a named portrait is pending and an inline retry on failure.
-Render setup as compact five-step progress from server
-Paying/Creating/Booting/Connecting/Ready data, never a client timer. Keep size
+Show Setting up… before the agent runs, with Creating/Booting/Connecting
+steps only when supplied by the server; never show a payment state. Treat
+retired or absent steps as generic setup. Show a failed-payment invitation
+sentence and Billing link only to admins; other viewers keep generic setup. Keep size
 specification items atomic and prices aligned with titles at 390px and 320px.
 
 Use the provider-backed `VoicePicker` in invitations and admin voice settings;

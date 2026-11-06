@@ -324,7 +324,9 @@ shows **Included for Macro**, with no currency charge.
    roster is nonempty. **Unhealthy** means a ready computer's agent is
    disconnected, missing, stale, or unhealthy; its reason is in the status tooltip and row menu without
    a provisioning Retry action. Before the first connection, setup stays
-   in a compact five-step bar: **Paying → Creating → Booting → Connecting → Ready**, with an accessible current step. Running, unhealthy, and failed rows keep refreshing, so
+   as **Setting up…**, with **Creating**, **Booting**, or **Connecting** when
+   the server supplies a step. No payment stage is displayed; absent or retired
+   steps leave the generic setup label. Running, unhealthy, and failed rows keep refreshing, so
    transient health failures can recover without a manual refresh. Billing
    shows the same live agent health without changing the subscription amounts.
 5. **Retry** appears only for terminal `failed` status when `retryable=true`
@@ -333,19 +335,15 @@ shows **Included for Macro**, with no currency charge.
    workspace and billing. Retry is disabled while the request runs. Failures
    refresh the status and keep an error in the row menu if retry is still available;
    a stale retry rejected with 409 refreshes the row.
-6. Payment controls what can happen next:
-   - **Pending** shows the **Paying** setup step and blocks both Retry and Remove.
-     Wait for payment to settle; do not re-invite while payment is pending.
-   - **Unbilled** shows **Payment failed**, keeps the failure reason in its tooltip
-     and row menu, and offers no Retry. Use **More → Remove agent**
-     for clean removal, then invite another agent if needed.
-   - **Comped** permits provisioning Retry
-     without a charge; removal releases the computer without billing changes.
-   - **Paid** keeps the status-only pill. **More → Remove agent** releases the computer
-     and removes its billed seat and computer from the subscription.
-   - Rows contain no billing labels; Billing and the invitation review show charges or inclusion.
-7. Confirm **Remove agent** to release its resources and permanently delete
-   its repository. Removal remains blocked if payment becomes pending after
+6. Setup never displays a payment state. If payment fails, admins see
+   **Couldn't add <name>: payment didn't go through** and a **Billing** link.
+   Other members continue to see **Setting up…** until setup resolves. No raw
+   payment diagnostic appears in their tooltip or row menu. Existing action
+   eligibility remains enforced: pending settlement blocks Retry and Remove;
+   an admin may remove an unsuccessful invitation and try inviting again.
+7. Confirm **Remove agent** to release its computer and seat and permanently
+   delete its repository. For a billed agent this removes the seat and computer
+   from the subscription. Removal remains blocked if payment becomes pending after
    the confirmation opens. A failed removal keeps the confirmation open for
    another attempt.
 

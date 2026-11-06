@@ -225,11 +225,11 @@ it('updates setup progress to health status without adding billing labels or row
   const [value, setValue] = createSignal<TeamAgent>(agent);
   render(() => <AgentStatusPill agent={value()} />);
   expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
-    '3'
+    '2'
   );
   setValue({ ...agent, setup: { step: 'connecting', position: 4, total: 5 } });
   expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
-    '4'
+    '3'
   );
   setValue({ ...agent, status: 'running' });
   expect(screen.queryByRole('progressbar')).toBeNull();
@@ -241,7 +241,7 @@ it('updates setup progress to health status without adding billing labels or row
   });
   expect(screen.getByRole('status').textContent).toBe('Unhealthy');
   setValue({ ...agent, status: 'failed', payment: 'comped', retryable: true });
-  expect(screen.getByRole('status').textContent).toBe('Failed');
+  expect(screen.getByRole('status').textContent).toContain('Setting up…');
   expect(screen.queryByRole('button')).toBeNull();
 });
 
@@ -513,4 +513,43 @@ it('enforces the server character limits before reviewing a draft, including Uni
   fireEvent.input(role, { target: { value: 'Engineer' } });
   fireEvent.input(personality, { target: { value: 'p'.repeat(4001) } });
   expect(review.hasAttribute('disabled')).toBe(true);
+});
+
+it('shows no retired payment step or diagnostic to non-admins', () => {
+  const [value, setValue] = createSignal<TeamAgent>({
+    ...agent,
+    payment: 'pending',
+    setup: undefined,
+  });
+  render(() => <AgentStatusPill agent={value()} />);
+  expect(screen.getByRole('progressbar').getAttribute('aria-valuetext')).toBe(
+    'Setting up…'
+  );
+  expect(screen.queryByText(/Paying|Confirming payment/)).toBeNull();
+  setValue({
+    ...agent,
+    payment: 'unbilled',
+    status: 'failed',
+    statusReason: 'payment failed',
+  });
+  expect(screen.getByRole('status').textContent).toContain('Setting up…');
+  expect(screen.queryByRole('link', { name: 'Billing' })).toBeNull();
+  expect(screen.queryByText(/payment failed/)).toBeNull();
+});
+
+it('gives admins a plain failed-invitation sentence and a Billing link', () => {
+  const openBilling = vi.fn();
+  render(() => (
+    <AgentStatusPill
+      agent={{ ...agent, payment: 'unbilled', status: 'failed' }}
+      canManage
+      onOpenBilling={openBilling}
+    />
+  ));
+  expect(
+    screen.getByText("Couldn't add Assistant: payment didn't go through")
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('link', { name: 'Billing' }));
+  expect(openBilling).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('Unbilled')).toBeNull();
 });
