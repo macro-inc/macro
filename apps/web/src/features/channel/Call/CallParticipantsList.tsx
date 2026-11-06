@@ -71,7 +71,7 @@ function ParticipantRow(props: {
         </Show>
       </div>
       <Show when={props.compact && props.speaking}>
-        <CallWaveform class="size-4" />
+        <CallWaveform class="size-4" speaking={props.speaking} />
       </Show>
       <Show when={!props.compact || props.muted}>
         <span

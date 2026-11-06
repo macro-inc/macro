@@ -71,6 +71,7 @@ export function MobileCallIsland() {
                     : t('nav.returnToCall')}
                 </span>
                 <CallLiveChip
+                  callId={call?.activeCallId() ?? undefined}
                   bare
                   hideWave
                   startedAt={

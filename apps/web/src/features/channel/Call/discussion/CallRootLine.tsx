@@ -52,7 +52,7 @@ function LiveCallLine(props: {
         class="flex w-(--user-icon-width) shrink-0 justify-center"
         aria-hidden="true"
       >
-        <CallWaveform class="size-4.5" />
+        <CallWaveform class="size-4.5" callId={props.message.id} />
       </span>
       <span class="min-w-0 truncate">
         <span class="font-medium text-ink">{callerName(props.message)}</span>{' '}

@@ -24,19 +24,19 @@ export const normalizeChannelTab = (tab: ChannelTabId) => {
   return tab === 'call' && !canUseInlineCallTab() ? DEFAULT_CHANNEL_TAB : tab;
 };
 
-function LiveCallDot(props: { class?: string }) {
+function LiveCallDot(props: { class?: string; channelId?: string }) {
   return (
     <span class={cn('flex items-center justify-center', props.class)}>
-      <CallWaveform class="size-3.5" />
+      <CallWaveform class="size-3.5" channelId={props.channelId} />
     </span>
   );
 }
 
 /** The live Call tab's label in menus that draw their own icon. */
-export function CallTabLabel() {
+export function CallTabLabel(props: { channelId: string }) {
   return (
     <span class="flex items-center gap-1.5">
-      <LiveCallDot />
+      <LiveCallDot channelId={props.channelId} />
       Call
     </span>
   );
@@ -77,8 +77,11 @@ export function useChannelTabItems(
     return filtered;
   };
 
+  const LiveIcon = (props: { class?: string }) => (
+    <LiveCallDot class={props.class} channelId={channelId} />
+  );
   return () =>
     availableTabs().map((tab) =>
-      tab.value === 'call' ? { ...tab, icon: LiveCallDot } : { ...tab }
+      tab.value === 'call' ? { ...tab, icon: LiveIcon } : { ...tab }
     );
 }

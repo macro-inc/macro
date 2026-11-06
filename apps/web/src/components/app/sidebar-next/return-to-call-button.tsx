@@ -63,7 +63,10 @@ function ReturnToCallButtonContent() {
           draggable={false}
           data-sidebar-next-item="active-call"
         >
-          <CallWaveform class="size-5" />
+          <CallWaveform
+            class="size-5"
+            callId={call?.activeCallId() ?? undefined}
+          />
         </Popover.Trigger>
         <Popover.Portal>
           <Suspense>

@@ -148,6 +148,7 @@ export function CallMiniPlayer(props: {
             {title()}
           </span>
           <CallLiveChip
+            callId={call.activeCallId() ?? undefined}
             bare
             startedAt={record.isSuccess ? record.data.startedAt : undefined}
           />

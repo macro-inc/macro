@@ -2,12 +2,15 @@ import { cn } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { CallWaveform } from './CallWaveform';
 import { formatCallElapsed } from './discussion/format-call-elapsed';
+import type { SpeakingCall } from './use-call-speaking';
 
-export function CallLiveChip(props: {
-  startedAt?: string;
-  bare?: boolean;
-  hideWave?: boolean;
-}) {
+export function CallLiveChip(
+  props: SpeakingCall & {
+    startedAt?: string;
+    bare?: boolean;
+    hideWave?: boolean;
+  }
+) {
   const [now, setNow] = createSignal(Date.now());
   const timer = globalThis.setInterval(() => setNow(Date.now()), 1000);
   onCleanup(() => globalThis.clearInterval(timer));
@@ -20,7 +23,11 @@ export function CallLiveChip(props: {
       )}
     >
       <Show when={!props.hideWave}>
-        <CallWaveform class="size-3.5" />
+        <CallWaveform
+          class="size-3.5"
+          callId={props.callId}
+          channelId={props.channelId}
+        />
       </Show>
       <Show when={elapsed()}>{elapsed()}</Show>
     </span>

@@ -327,7 +327,7 @@ export function ChannelsMobileView(props: {
                     <ChannelCardLayout
                       icon={
                         joined(channel.id) ? (
-                          <CallWaveform class="size-6" />
+                          <CallWaveform class="size-6" channelId={channel.id} />
                         ) : undefined
                       }
                       preview={

@@ -24,6 +24,9 @@ export function withChannelTabIcons(
 ): TabOption<ChannelTabId>[] {
   return options.map((option) => ({
     ...option,
-    icon: CHANNEL_TAB_ICONS[option.value],
+    icon:
+      option.value === 'call' && option.icon
+        ? option.icon
+        : CHANNEL_TAB_ICONS[option.value],
   }));
 }

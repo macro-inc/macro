@@ -205,8 +205,16 @@ function NewTop(props: { channelId: string }) {
     title: 'View',
     options: tabs().map((tab) => ({
       value: tab.value,
-      label: tab.value === 'call' ? <CallTabLabel /> : tab.label,
-      icon: CHANNEL_TAB_ICONS[tab.value],
+      label:
+        tab.value === 'call' ? (
+          <CallTabLabel channelId={props.channelId} />
+        ) : (
+          tab.label
+        ),
+      icon:
+        tab.value === 'call' && tab.icon
+          ? tab.icon
+          : CHANNEL_TAB_ICONS[tab.value],
     })),
     value: activeTab(),
     onSelect: (value: string) => setActiveTab(value as ChannelTabId),

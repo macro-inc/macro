@@ -10,6 +10,7 @@ export function ActiveCallHeader(props: { channelId: string; link?: boolean }) {
   return (
     <>
       <CallLiveChip
+        channelId={props.channelId}
         startedAt={active.isSuccess ? active.data?.createdAt : undefined}
       />
       <Show when={props.link}>
@@ -39,6 +40,7 @@ export function JoinableCallStatus(props: { channelId: string }) {
         suppressClick
       />
       <CallLiveChip
+        channelId={props.channelId}
         bare
         startedAt={active.isSuccess ? active.data?.createdAt : undefined}
       />

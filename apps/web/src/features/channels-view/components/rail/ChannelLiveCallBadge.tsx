@@ -38,7 +38,12 @@ export function ChannelLiveCallBadge(props: { channelId: string }) {
           suppressClick
         />
       </Show>
-      <CallLiveChip bare hideWave={joined()} startedAt={summary()?.createdAt} />
+      <CallLiveChip
+        channelId={props.channelId}
+        bare
+        hideWave={joined()}
+        startedAt={summary()?.createdAt}
+      />
     </span>
   );
 }

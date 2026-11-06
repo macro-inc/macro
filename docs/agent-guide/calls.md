@@ -83,6 +83,10 @@ uses the waveform as its channel icon and shows live participant avatars.
 Ringing conversations keep their existing Answer and Decline actions; these
 use the real incoming-call signal rather than treating every active call as ringing.
 
+Live waveforms animate only while someone in the joined call is speaking, using
+the same speaking state as the participant tiles. Silent calls, other live calls
+without speech data, and reduced-motion preferences keep the waveform still.
+
 ### Calls whose discussion is a channel thread
 
 With the `enable-call-channel-thread` server flag on for the caller, a new call in a channel stores

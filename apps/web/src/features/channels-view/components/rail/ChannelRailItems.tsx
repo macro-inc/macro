@@ -102,6 +102,7 @@ export function ChannelRailItemContextMenu(
 
 export function ChannelCallIndicator(props: {
   status: ChannelCallStatus | undefined;
+  channelId?: string;
   class?: string;
 }) {
   return (
@@ -119,7 +120,7 @@ export function ChannelCallIndicator(props: {
               <PhoneIncomingIcon class="incoming-call-shake size-full" />
             </Match>
             <Match when={true}>
-              <CallWaveform class="size-full" />
+              <CallWaveform class="size-full" channelId={props.channelId} />
             </Match>
           </Switch>
         </span>
@@ -211,7 +212,7 @@ export function ChannelAvatar(props: {
             sizeClass()
           )}
         >
-          <CallWaveform class="size-full" />
+          <CallWaveform class="size-full" channelId={props.channel.id} />
         </span>
       </Match>
       <Match when={isDirectMessage(props.channel)}>
@@ -328,6 +329,7 @@ export function ConversationCard(props: ConversationCardProps) {
             </span>
             <ChannelMutedIndicator muted={props.muted} class="size-3.5" />
             <ChannelCallIndicator
+              channelId={props.channel.id}
               status={props.incomingCallId ? undefined : props.callStatus}
               class="size-3.5"
             />

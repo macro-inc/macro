@@ -1,5 +1,5 @@
 @media (prefers-reduced-motion: no-preference) {
-  .call-waveform [data-waveform-bar] {
+  .call-waveform[data-speaking='true'] [data-waveform-bar] {
     transform-box: fill-box;
     transform-origin: center;
     animation: call-waveform-live 1s ease-in-out infinite;
