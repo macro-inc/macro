@@ -13,6 +13,9 @@ use macro_uuid::Uuid;
 
 use secretsmanager_client::LocalOrRemoteSecret;
 
+mod livekit;
+pub(crate) use livekit::LiveKitCredentials;
+
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.
     pub struct StaticStorageBucket;
@@ -222,11 +225,10 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
-    /// Explicit LiveKit Cloud credentials for the server-side inference proxy.
-    pub livekit_api_key: String,
-    /// Required alongside the key; an explicitly empty pair disables speech.
-    /// Never forwarded to a computer; signs inference-only project tokens at the gateway.
-    pub livekit_api_secret: String,
+    /// LiveKit Cloud key, paired with the secret. Both absent disables calls.
+    pub livekit_api_key: Option<String>,
+    /// Server-only project secret. Partial or blank credentials are invalid.
+    pub livekit_api_secret: Option<String>,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
@@ -330,6 +332,19 @@ pub struct Config {
 }
 
 impl Config {
+    /// Resolve the explicit calls switch without treating empty credentials as off.
+    pub(crate) fn livekit_credentials(&self) -> anyhow::Result<Option<LiveKitCredentials>> {
+        match (&self.livekit_api_key, &self.livekit_api_secret) {
+            (None, None) => Ok(None),
+            (Some(key), Some(secret)) => {
+                LiveKitCredentials::new(key.clone(), secret.clone()).map(Some)
+            }
+            _ => {
+                anyhow::bail!("LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be configured together")
+            }
+        }
+    }
+
     /// The AI pricing every billing component is composed with. Every value
     /// is validated when the configuration loads.
     pub fn ai_pricing(&self) -> ai_billing::AiPricing {

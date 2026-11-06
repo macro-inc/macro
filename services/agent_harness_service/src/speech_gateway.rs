@@ -1,5 +1,6 @@
 //! Agent-key proxy for LiveKit Inference; project credentials stay on the server.
 
+use crate::config::LiveKitCredentials;
 use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageAmount, UsageContext, UsageRecorder};
 use axum::{
@@ -45,7 +46,7 @@ pub(crate) struct SpeechGateway {
     admission: Arc<dyn AiAdmissionService>,
     recorder: Arc<dyn UsageRecorder>,
     client: reqwest::Client,
-    credentials: Option<(String, EncodingKey)>,
+    credentials: Option<LiveKitCredentials>,
     upstream: String,
     catalog_url: String,
     catalog: tokio::sync::Mutex<Option<(std::time::Instant, Vec<Voice>)>>,
@@ -56,20 +57,10 @@ impl SpeechGateway {
         access: Arc<dyn BrainGatewayAccess>,
         admission: Arc<dyn AiAdmissionService>,
         recorder: Arc<dyn UsageRecorder>,
-        api_key: &str,
-        api_secret: &str,
+        credentials: Option<LiveKitCredentials>,
         upstream: &str,
         catalog_url: &str,
     ) -> anyhow::Result<Self> {
-        if api_key.is_empty() != api_secret.is_empty() {
-            anyhow::bail!("LiveKit API key and secret must be configured together");
-        }
-        let credentials = (!api_key.is_empty()).then(|| {
-            (
-                api_key.to_owned(),
-                EncodingKey::from_secret(api_secret.as_bytes()),
-            )
-        });
         Ok(Self {
             access,
             admission,
@@ -110,19 +101,20 @@ impl SpeechGateway {
         Ok(identity)
     }
     fn provider_authorization(&self) -> Result<HeaderValue, StatusCode> {
-        let (key, secret) = self
+        let credentials = self
             .credentials
             .as_ref()
             .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
         let now = chrono::Utc::now().timestamp();
         let claims = InferenceClaims {
-            iss: key,
+            iss: credentials.api_key(),
             sub: "agent",
             nbf: now,
             exp: now + 60,
             inference: InferenceGrant { perform: true },
         };
-        let token = jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, secret)
+        let secret = EncodingKey::from_secret(credentials.api_secret().as_bytes());
+        let token = jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &secret)
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         let mut header = HeaderValue::from_str(&format!("Bearer {token}"))
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;

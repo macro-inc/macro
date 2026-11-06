@@ -79,8 +79,10 @@ async fn authorization_rejects_ordinary_revoked_stopped_and_other_team_keys_befo
             Arc::new(Access),
             admission.clone(),
             recorder.clone(),
-            "project-key",
-            "project-secret",
+            Some(
+                LiveKitCredentials::new("project-key".to_owned(), "project-secret".to_owned())
+                    .unwrap(),
+            ),
             "http://127.0.0.1:1",
             "http://127.0.0.1:1/models",
         )
@@ -103,8 +105,9 @@ fn provider_tokens_are_short_lived_inference_only_and_contain_no_project_secret(
         Arc::new(Access),
         Arc::new(Admission::default()),
         Arc::new(Recorder::default()),
-        "project-key",
-        "project-secret",
+        Some(
+            LiveKitCredentials::new("project-key".to_owned(), "project-secret".to_owned()).unwrap(),
+        ),
         "http://localhost",
         "http://localhost/models",
     )
@@ -303,8 +306,10 @@ async fn websocket_proxy_replaces_agent_auth_and_relays_inference_events_with_me
             Arc::new(Access),
             Arc::new(Admission::default()),
             recorder.clone(),
-            "project-key",
-            "project-secret",
+            Some(
+                LiveKitCredentials::new("project-key".to_owned(), "project-secret".to_owned())
+                    .unwrap(),
+            ),
             &upstream,
             &format!("{upstream}/models"),
         )
@@ -418,8 +423,10 @@ async fn supported_aura_catalog_and_fixed_inference_samples_are_cached() {
             Arc::new(Access),
             admission.clone(),
             recorder.clone(),
-            "project-key",
-            "project-secret",
+            Some(
+                LiveKitCredentials::new("project-key".to_owned(), "project-secret".to_owned())
+                    .unwrap(),
+            ),
             &endpoint,
             &format!("{endpoint}/models"),
         )
@@ -456,4 +463,27 @@ async fn supported_aura_catalog_and_fixed_inference_samples_are_cached() {
     assert_eq!(recorder.0.lock().unwrap().len(), 2);
     assert!(state.samples.lock().await.is_empty());
     server.abort();
+}
+
+#[tokio::test]
+async fn absent_credentials_disable_both_inference_connections() {
+    let gateway = SpeechGateway::new(
+        Arc::new(Access),
+        Arc::new(Admission::default()),
+        Arc::new(Recorder::default()),
+        None,
+        "http://127.0.0.1:1",
+        "http://127.0.0.1:1/models",
+    )
+    .unwrap();
+    assert_eq!(
+        gateway.provider_authorization().unwrap_err(),
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    for operation in [Operation::Stt, Operation::Tts] {
+        assert_eq!(
+            gateway.connect(operation).await.err().unwrap(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
 }

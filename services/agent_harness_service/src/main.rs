@@ -263,6 +263,7 @@ async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
         .await
         .context("failed to resolve agent harness service secrets")?;
+    let livekit_credentials = config.livekit_credentials()?;
     let non_user_owners = config.non_user_owners()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     let enable_dev_commands = matches!(
@@ -1354,8 +1355,7 @@ async fn run() -> anyhow::Result<()> {
         brain_access.clone(),
         admission.clone(),
         recorder.clone(),
-        &config.livekit_api_key,
-        &config.livekit_api_secret,
+        livekit_credentials,
         "https://agent-gateway.livekit.cloud/v1",
         "https://api.deepgram.com/v1/models",
     )?);

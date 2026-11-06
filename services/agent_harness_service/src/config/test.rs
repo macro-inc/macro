@@ -1,16 +1,13 @@
 use super::Config;
 
-#[test]
-fn speech_disable_requires_explicit_empty_credentials() {
+fn values() -> serde_json::Value {
     let mut values = serde_json::json!({
         "ENVIRONMENT": "local",
         "HARNESS_BOT_ID": "00000000-0000-0000-0000-000000000001",
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 1500,
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 15000,
-        "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25,
-        "LIVEKIT_API_KEY": "",
-        "LIVEKIT_API_SECRET": ""
+        "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25
     });
     for key in [
         "FUSIONAUTH_BASE_URL",
@@ -39,13 +36,58 @@ fn speech_disable_requires_explicit_empty_credentials() {
     ] {
         values[key] = serde_json::json!("local");
     }
-    let config: Config = serde_json::from_value(values.clone()).unwrap();
-    assert!(config.livekit_api_key.is_empty());
-    assert!(config.livekit_api_secret.is_empty());
-    for key in ["LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"] {
-        let mut incomplete = values.clone();
-        incomplete.as_object_mut().unwrap().remove(key);
-        let error = serde_json::from_value::<Config>(incomplete).err().unwrap();
-        assert!(error.to_string().contains(key), "{error}");
+    values
+}
+
+#[test]
+fn absent_credentials_are_an_explicit_calls_off_option() {
+    let config: Config = serde_json::from_value(values()).unwrap();
+    assert!(config.livekit_credentials().unwrap().is_none());
+}
+
+#[test]
+fn configured_calls_require_both_valid_credentials() {
+    let mut values = values();
+    values["LIVEKIT_API_KEY"] = serde_json::json!("project-key");
+    values["LIVEKIT_API_SECRET"] = serde_json::json!("project-secret");
+    let config: Config = serde_json::from_value(values).unwrap();
+    let credentials = config
+        .livekit_credentials()
+        .unwrap()
+        .expect("calls enabled");
+    assert_eq!(credentials.api_key(), "project-key");
+    assert_eq!(credentials.api_secret(), "project-secret");
+}
+
+#[test]
+fn partial_blank_and_padded_credentials_fail_without_exposing_values() {
+    for (key, secret) in [
+        (Some("project-key"), None),
+        (None, Some("project-secret")),
+        (Some(""), Some("")),
+        (Some("project-key"), Some("")),
+        (Some(""), Some("project-secret")),
+        (Some("  "), Some("project-secret")),
+        (Some("project-key"), Some("\t")),
+        (Some(" project-key"), Some("project-secret")),
+        (Some("project-key"), Some("project-secret ")),
+    ] {
+        let mut values = values();
+        if let Some(key) = key {
+            values["LIVEKIT_API_KEY"] = serde_json::json!(key);
+        }
+        if let Some(secret) = secret {
+            values["LIVEKIT_API_SECRET"] = serde_json::json!(secret);
+        }
+        let config: Config = serde_json::from_value(values).unwrap();
+        let error = config
+            .livekit_credentials()
+            .err()
+            .expect("invalid credentials")
+            .to_string();
+        assert!(error.contains("LIVEKIT_API_KEY"));
+        assert!(error.contains("LIVEKIT_API_SECRET"));
+        assert!(!error.contains("project-key"));
+        assert!(!error.contains("project-secret"));
     }
 }

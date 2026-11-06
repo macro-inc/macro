@@ -311,8 +311,11 @@ The computer egress listener proxies `/brain/inference/stt` and
 BrainGatewayAccess with Anthropic: only registered agents on their team's
 running computer qualify. Server-only `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`
 sign 60-second `inference.perform` JWTs; neither secret nor upstream token is
-returned to the guest. Both configuration fields are required at startup;
-configure both together, or explicitly set both empty to disable speech.
+returned to the guest. Composition uses `Option<LiveKitCredentials>`: both env
+values absent means calls are off; both present must be nonblank and have no
+surrounding whitespace. Partial or blank credentials fail startup. The dev/prd
+Doppler check validates the same option and accepts `None`; it never substitutes
+empty credentials or requires credentials for a deployment with calls off.
 The local stack already supplies them through its LiveKit configuration.
 There is no Deepgram key or direct Deepgram speech connection.
 

@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .expect("able to grab doppler project");
 
-    dev.load::<config::Config>().await?;
+    dev.load::<config::Config>().await?.livekit_credentials()?;
     dev.load::<preview_config::Config>().await?;
     dev.load::<scheduling_config::Config>().await?;
     dev.load::<agent_harness_service::cognition::config::Config>()
@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .expect("able to grab doppler project");
 
-    prd.load::<config::Config>().await?;
+    prd.load::<config::Config>().await?.livekit_credentials()?;
     prd.load::<preview_config::Config>().await?;
     prd.load::<scheduling_config::Config>().await?;
     prd.load::<agent_harness_service::cognition::config::Config>()
