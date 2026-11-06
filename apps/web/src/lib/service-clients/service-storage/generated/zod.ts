@@ -57174,6 +57174,37 @@ export const messageTimelineEntriesResponse = zod
                     updated_at: zod.iso
                       .datetime({})
                       .describe('Last persisted update.'),
+                    visibility: zod
+                      .union([
+                        zod
+                          .object({
+                            type: zod.enum(['public']),
+                          })
+                          .describe(
+                            'Everyone with access to the conversation.'
+                          ),
+                        zod
+                          .object({
+                            bot_ids: zod
+                              .array(zod.string())
+                              .describe(
+                                'Canonical bot principals invited when the thread was created.'
+                              ),
+                            type: zod.enum(['private']),
+                            user_id: zod
+                              .string()
+                              .describe(
+                                'Authenticated user who started the thread.'
+                              ),
+                          })
+                          .describe(
+                            'Only the initiating user and explicitly invited agents.'
+                          ),
+                      ])
+                      .optional()
+                      .describe(
+                        'The immutable audience of a durable message thread.'
+                      ),
                   })
                   .describe(
                     'Shared message representation for channel timelines and entity discussions.'
@@ -57313,6 +57344,37 @@ export const messageTimelineEntriesResponse = zod
                             .string()
                             .describe(
                               'User who owns this discussion, including imported discussions.'
+                            ),
+                          visibility: zod
+                            .union([
+                              zod
+                                .object({
+                                  type: zod.enum(['public']),
+                                })
+                                .describe(
+                                  'Everyone with access to the conversation.'
+                                ),
+                              zod
+                                .object({
+                                  bot_ids: zod
+                                    .array(zod.string())
+                                    .describe(
+                                      'Canonical bot principals invited when the thread was created.'
+                                    ),
+                                  type: zod.enum(['private']),
+                                  user_id: zod
+                                    .string()
+                                    .describe(
+                                      'Authenticated user who started the thread.'
+                                    ),
+                                })
+                                .describe(
+                                  'Only the initiating user and explicitly invited agents.'
+                                ),
+                            ])
+                            .optional()
+                            .describe(
+                              'The immutable audience of a durable message thread.'
                             ),
                         })
                         .describe(
@@ -57561,6 +57623,37 @@ export const messageTimelineEntriesResponse = zod
                                   updated_at: zod.iso
                                     .datetime({})
                                     .describe('Last persisted update.'),
+                                  visibility: zod
+                                    .union([
+                                      zod
+                                        .object({
+                                          type: zod.enum(['public']),
+                                        })
+                                        .describe(
+                                          'Everyone with access to the conversation.'
+                                        ),
+                                      zod
+                                        .object({
+                                          bot_ids: zod
+                                            .array(zod.string())
+                                            .describe(
+                                              'Canonical bot principals invited when the thread was created.'
+                                            ),
+                                          type: zod.enum(['private']),
+                                          user_id: zod
+                                            .string()
+                                            .describe(
+                                              'Authenticated user who started the thread.'
+                                            ),
+                                        })
+                                        .describe(
+                                          'Only the initiating user and explicitly invited agents.'
+                                        ),
+                                    ])
+                                    .optional()
+                                    .describe(
+                                      'The immutable audience of a durable message thread.'
+                                    ),
                                 })
                                 .describe(
                                   'Shared message representation for channel timelines and entity discussions.'
