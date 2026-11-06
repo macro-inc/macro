@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, team_id, name, size, state, harness_id, persona, created_by,\n                   created_at, enrolled_at\n            FROM hosted_runtime\n            WHERE awake AND state->'phase'->>'phase' = 'running'\n            ",
+  "query": "\n            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,\n                   created_at, enrolled_at\n            FROM hosted_runtime\n            WHERE harness_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -25,43 +25,75 @@
       },
       {
         "ordinal": 4,
-        "name": "state",
-        "type_info": "Jsonb"
+        "name": "vcpus",
+        "type_info": "Int4"
       },
       {
         "ordinal": 5,
-        "name": "harness_id",
-        "type_info": "Uuid"
+        "name": "memory_gib",
+        "type_info": "Int4"
       },
       {
         "ordinal": 6,
-        "name": "persona",
-        "type_info": "Jsonb"
+        "name": "disk_gib",
+        "type_info": "Int4"
       },
       {
         "ordinal": 7,
-        "name": "created_by",
+        "name": "catalog_entry",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "price_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "state",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "persona",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 14,
         "name": "enrolled_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid"
+      ]
     },
     "nullable": [
       false,
       false,
       false,
       false,
+      false,
+      false,
+      false,
+      false,
+      true,
       false,
       true,
       true,
@@ -70,5 +102,5 @@
       true
     ]
   },
-  "hash": "0bf5e1cc81d30c1ceaf51554ae5d1861f8800ebbfd60615c2e681d55f6846c96"
+  "hash": "6edcc3ed7efd5485a52105566b41792fb9d4d03232f1b7f208ad0ca9b299639a"
 }

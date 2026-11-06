@@ -180,8 +180,8 @@ impl Fleet for DockerFleet {
                 computer_id: computer.id,
                 control_plane_id: self.config.control_plane_id.clone(),
                 created_at: Utc::now(),
-                memory_gb: computer.size.memory_gb(),
-                vcpus: computer.size.vcpus(),
+                memory_gb: computer.resources.memory_gib.get(),
+                vcpus: computer.resources.vcpus.get(),
                 enrollment_dir: dir,
             };
             docker("create", &create_args(&spec)).await?;
@@ -303,6 +303,27 @@ impl Fleet for DockerFleet {
             }
             _ => Ok(()),
         }
+    }
+
+    #[tracing::instrument(name = "docker_fleet.resources_match", skip_all, fields(computer_id = %computer.id), err)]
+    async fn resources_match(&self, computer: &Computer) -> Result<bool, Self::Err> {
+        let output = docker(
+            "inspect",
+            &[
+                "inspect".to_owned(),
+                "--format".to_owned(),
+                "{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}".to_owned(),
+                container_name(computer.id),
+            ],
+        )
+        .await?;
+        // Docker overlayfs has no disk quota; only CPU and memory are enforced.
+        Ok(output.trim()
+            == format!(
+                "{} {}",
+                u64::from(computer.resources.memory_gib.get()) * 1024 * 1024 * 1024,
+                u64::from(computer.resources.vcpus.get()) * 1_000_000_000
+            ))
     }
 
     #[tracing::instrument(name = "docker_fleet.instances", skip(self), err)]

@@ -74,6 +74,7 @@ impl Clock for SystemClock {
 /// and a member receipt for reads, and pass the receipt's team id here.
 pub struct ComputerService<Repo, Bill, Time, Policy = NoComps> {
     comp_policy: Policy,
+    catalog: Vec<crate::domain::size::CatalogEntry>,
     repo: Repo,
     billing: Bill,
     clock: Time,
@@ -88,6 +89,7 @@ where
     pub fn new(repo: Repo, billing: Bill, clock: Time) -> Self {
         Self {
             comp_policy: NoComps,
+            catalog: crate::domain::size::current_catalog(),
             repo,
             billing,
             clock,
@@ -104,6 +106,7 @@ where
             billing: self.billing,
             clock: self.clock,
             comp_policy,
+            catalog: self.catalog,
         }
     }
 }
@@ -111,6 +114,22 @@ where
 impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
     ComputerService<Repo, Bill, Time, Policy>
 {
+    /// Select the purchase catalog at the composition root.
+    pub fn with_catalog(mut self, catalog: Vec<crate::domain::size::CatalogEntry>) -> Self {
+        self.catalog = catalog;
+        self
+    }
+
+    fn catalog_entry(
+        &self,
+        size: ComputerSize,
+    ) -> Result<&crate::domain::size::CatalogEntry, ComputerError> {
+        self.catalog
+            .iter()
+            .find(|entry| entry.size == size)
+            .ok_or_else(|| ComputerError::BadRequest("size is not offered".to_owned()))
+    }
+
     /// Resolve complimentary eligibility on the server.
     #[tracing::instrument(skip(self), err)]
     async fn purchase_billing(&self, team_id: Uuid) -> Result<PurchaseBilling, ComputerError> {
@@ -155,6 +174,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         size: ComputerSize,
         billing: &PurchaseBilling,
     ) -> Result<Quote, ComputerError> {
+        self.catalog_entry(size)?;
         let quote = self.billing.quote(team_id, size).await;
         match billing {
             PurchaseBilling::Stripe => Ok(quote?),
@@ -173,7 +193,11 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         team_id: Uuid,
         user_id: String,
     ) -> Result<Vec<SizeOffer>, ComputerError> {
-        let sold_out = self.repo.sold_out_sizes().await.map_err(internal)?;
+        let sold_out = self
+            .repo
+            .sold_out_sizes(&self.catalog)
+            .await
+            .map_err(internal)?;
         let notify = self
             .repo
             .notify_requests(team_id, user_id)
@@ -182,12 +206,13 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
 
         let billing = self.purchase_billing(team_id).await?;
         let mut offers = Vec::new();
-        for size in ComputerSize::ALL {
+        for entry in &self.catalog {
+            let size = entry.size;
             offers.push(SizeOffer {
                 size,
-                vcpus: size.vcpus(),
-                memory_gb: size.memory_gb(),
-                disk_gb: size.disk_gb(),
+                vcpus: entry.resources.vcpus.get(),
+                memory_gb: entry.resources.memory_gib.get(),
+                disk_gb: entry.resources.disk_gib.get(),
                 quote: self.quote(team_id, size, &billing).await?,
                 sold_out: sold_out.contains(&size),
                 notify_requested: notify.contains(&size),
@@ -222,6 +247,17 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         let computer_id = ComputerId::new(Uuid::now_v7());
         tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
 
+        let entry = self.catalog_entry(request.size)?;
+        let price_id = match request.billing {
+            PurchaseBilling::Stripe => Some(
+                self.billing
+                    .quote(request.team_id, request.size)
+                    .await?
+                    .price_id,
+            ),
+            PurchaseBilling::Comped { .. } => None,
+        };
+
         let reserved = self
             .repo
             .reserve(
@@ -232,6 +268,9 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
                     team_id: request.team_id,
                     name,
                     size: request.size,
+                    resources: entry.resources,
+                    catalog_entry: entry.id.clone(),
+                    price_id,
                     persona: request.persona,
                     created_by: request.created_by,
                 },
@@ -356,39 +395,38 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             .map_err(internal)
     }
 
-    /// The team subscription lost computer items outside our timers (a
-    /// webhook saw fewer than we bill): cancel the newest computers of that
-    /// size until the counts match.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn reconcile_billed_count(
+    /// Reconcile a complete subscription snapshot against saved purchase prices.
+    /// Keep the oldest computers for each paid item; cancel only its excess rows.
+    #[tracing::instrument(skip(self, items), err)]
+    pub async fn reconcile_billed_counts(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
-        billed: u32,
+        items: &[crate::domain::models::SubscriptionItem],
     ) -> Result<(), ComputerError> {
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
         let mut paid: Vec<&Computer> = computers
             .iter()
-            .filter(|computer| computer.size == size && computer.is_billed())
+            .filter(|computer| computer.is_billed())
             .collect();
         paid.sort_by_key(|computer| computer.created_at);
-
-        if billed as usize > paid.len() {
-            tracing::error!(
-                team_id = %team_id,
-                size = size.as_ref(),
-                billed,
-                computers = paid.len(),
-                "team billed for more computers than it has"
-            );
+        let mut remaining = std::collections::BTreeMap::<&str, u64>::new();
+        for item in items {
+            *remaining.entry(item.price_id.as_str()).or_default() += u64::from(item.quantity);
         }
-        let excess = paid.len().saturating_sub(billed as usize);
-        for computer in paid.iter().rev().take(excess) {
-            tracing::warn!(computer_id = %computer.id, "subscription item removed outside Macro");
-            self.repo
-                .apply(computer.id, Event::SubscriptionCanceled, self.clock.now())
-                .await
-                .map_err(internal)?;
+        for computer in paid {
+            let price_id = computer.price_id.as_ref().ok_or_else(|| {
+                ComputerError::BadRequest("paid computer has no price id".to_owned())
+            })?;
+            let quantity = remaining.entry(price_id.as_str()).or_default();
+            if *quantity > 0 {
+                *quantity -= 1;
+            } else {
+                tracing::warn!(computer_id = %computer.id, "subscription item removed outside Macro");
+                self.repo
+                    .apply(computer.id, Event::SubscriptionCanceled, self.clock.now())
+                    .await
+                    .map_err(internal)?;
+            }
         }
         Ok(())
     }
@@ -494,7 +532,9 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             .billing
             .add_computer(
                 computer.team_id,
-                computer.size,
+                computer.price_id.as_ref().ok_or_else(|| {
+                    ComputerError::BadRequest("paid computer has no price id".to_owned())
+                })?,
                 extra_items,
                 &format!("computer-add:{computer_id}"),
             )
@@ -536,7 +576,9 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         self.billing
             .remove_computer(
                 computer.team_id,
-                computer.size,
+                computer.price_id.as_ref().ok_or_else(|| {
+                    ComputerError::BadRequest("paid computer has no price id".to_owned())
+                })?,
                 &format!("computer-remove:{effect_id}"),
             )
             .await?;

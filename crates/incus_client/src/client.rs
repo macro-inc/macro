@@ -521,6 +521,10 @@ fn instance_info(instance: types::Instance) -> Result<InstanceInfo, IncusError> 
         kind: parse_kind(instance.type_)?,
         stateful: instance.stateful.unwrap_or(false),
         config: instance.config.map(|config| config.0).unwrap_or_default(),
+        devices: instance
+            .devices
+            .map(|devices| devices.0)
+            .unwrap_or_default(),
     })
 }
 

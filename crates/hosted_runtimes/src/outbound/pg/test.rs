@@ -45,6 +45,14 @@ fn standard(id: u128) -> NewComputer {
         team_id: TEAM,
         name: ComputerName::try_new(&format!("Computer {id}")).unwrap(),
         size: ComputerSize::Standard,
+        resources: crate::domain::size::ComputerResources {
+            vcpus: crate::domain::size::Vcpus::new(4),
+            memory_gib: crate::domain::size::MemoryGib::new(8),
+            disk_gib: crate::domain::size::DiskGib::new(100),
+        },
+        catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-11".to_owned())
+            .unwrap(),
+        price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
         persona: None,
         created_by: "macro|owner@example.com".to_owned(),
     }
@@ -76,7 +84,9 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
 
     assert!(matches!(tenth, Err(ReserveError::SoldOut)));
     assert_eq!(
-        repo.sold_out_sizes().await.unwrap(),
+        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+            .await
+            .unwrap(),
         vec![
             ComputerSize::Standard,
             ComputerSize::Large,
@@ -255,7 +265,12 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
         .unwrap();
     assert!(matches!(crashed.state.phase, Phase::Restarting { .. }));
     assert_eq!(repo.list_for_team(TEAM).await.unwrap().len(), 1);
-    assert_eq!(repo.sold_out_sizes().await.unwrap(), vec![]);
+    assert_eq!(
+        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+            .await
+            .unwrap(),
+        vec![]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -529,6 +544,7 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
     .await
     .unwrap();
     let mut request = standard(19);
+    request.price_id = None;
     request.billing = crate::domain::models::PurchaseBilling::Comped {
         reason: "internal team".to_owned(),
     };
@@ -539,6 +555,7 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
         crate::domain::lifecycle::PaymentOutcome::Pending
     );
     assert_eq!(pending.state.comp_reason.as_deref(), Some("internal team"));
+    assert_eq!(pending.price_id, None);
     let comped = repo
         .apply(
             reserved.id,
@@ -564,4 +581,52 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
             .as_deref(),
         Some("internal team")
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) {
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool);
+    repo.register_host(HostRegistration {
+        name: "resource-host".to_owned(),
+        memory_gb: 24,
+        reserve_gb: 0,
+        oversell_factor: 1,
+    })
+    .await
+    .unwrap();
+    let mut request = standard(50);
+    request.resources = ComputerResources {
+        vcpus: Vcpus::new(6),
+        memory_gib: MemoryGib::new(12),
+        disk_gib: DiskGib::new(150),
+    };
+    repo.reserve(request, now()).await.unwrap();
+    let stored = repo
+        .get(ComputerId::new(Uuid::from_u128(50)))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.size, ComputerSize::Standard);
+    assert_eq!(
+        stored.resources,
+        ComputerResources {
+            vcpus: Vcpus::new(6),
+            memory_gib: MemoryGib::new(12),
+            disk_gib: DiskGib::new(150)
+        }
+    );
+    assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
+    assert_eq!(stored.price_id.unwrap().as_str(), "price_standard");
+    assert_eq!(
+        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+            .await
+            .unwrap(),
+        vec![ComputerSize::Large, ComputerSize::Xl]
+    );
+    repo.reserve(standard(51), now()).await.unwrap();
+    assert!(matches!(
+        repo.reserve(standard(52), now()).await,
+        Err(ReserveError::SoldOut)
+    ));
 }

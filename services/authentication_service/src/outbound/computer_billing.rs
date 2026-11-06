@@ -86,7 +86,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     async fn add_computer(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
+        price_id: &stripe_price_id::StripePriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
@@ -98,13 +98,15 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         {
             return Ok(());
         }
-        let (price_id, _) = self.computer_price(team_id, size).await?;
-        let changes = std::iter::once(ItemQuantityChange { price_id, delta: 1 })
-            .chain(extra_items.iter().map(|item| ItemQuantityChange {
-                price_id: item.price_id.clone(),
-                delta: i64::from(item.quantity),
-            }))
-            .collect();
+        let changes = std::iter::once(ItemQuantityChange {
+            price_id: price_id.clone(),
+            delta: 1,
+        })
+        .chain(extra_items.iter().map(|item| ItemQuantityChange {
+            price_id: item.price_id.clone(),
+            delta: i64::from(item.quantity),
+        }))
+        .collect();
         self.teams
             .change_team_subscription_items(&team_id, changes, idempotency_key)
             .await
@@ -115,7 +117,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     async fn remove_computer(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
+        price_id: &stripe_price_id::StripePriceId,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
         if self
@@ -126,12 +128,11 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         {
             return Ok(());
         }
-        let (price_id, _) = self.computer_price(team_id, size).await?;
         self.teams
             .change_team_subscription_items(
                 &team_id,
                 vec![ItemQuantityChange {
-                    price_id,
+                    price_id: price_id.clone(),
                     delta: -1,
                 }],
                 idempotency_key,
@@ -172,13 +173,12 @@ where
     Time: Clock,
     Policy: hosted_runtimes::domain::ports::CompPolicy,
 {
-    async fn billed_count(
+    async fn billed_counts(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
-        billed: u32,
+        items: Vec<SubscriptionItem>,
     ) -> Result<(), rootcause::Report> {
-        self.reconcile_billed_count(team_id, size, billed)
+        self.reconcile_billed_counts(team_id, &items)
             .await
             .map_err(|error| rootcause::Report::new(error).into_dynamic())
     }

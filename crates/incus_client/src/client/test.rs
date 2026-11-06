@@ -108,7 +108,7 @@ async fn instance_decodes_the_sync_envelope() {
                     "limits.memory": "4GiB",
                     "user.macro.enrollment": "token-1"
                 },
-                "devices": {},
+                "devices": {"root": {"size": "100GiB", "size.state": "9GiB"}},
                 "ephemeral": false,
                 "profiles": ["default"],
                 "stateful": true,
@@ -147,6 +147,13 @@ async fn instance_decodes_the_sync_envelope() {
     assert_eq!(
         instance,
         InstanceInfo {
+            devices: BTreeMap::from([(
+                "root".to_owned(),
+                BTreeMap::from([
+                    ("size".to_owned(), "100GiB".to_owned()),
+                    ("size.state".to_owned(), "9GiB".to_owned())
+                ])
+            )]),
             name: "mc-01900000000070008000000000000001".to_owned(),
             status: InstanceStatus::Frozen,
             kind: InstanceKind::VirtualMachine,

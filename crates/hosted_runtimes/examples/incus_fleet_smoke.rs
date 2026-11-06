@@ -120,6 +120,17 @@ async fn main() -> Result<(), rootcause::Report> {
         team_id: Uuid::now_v7(),
         name: ComputerName::try_new("fleet smoke test")?,
         size: ComputerSize::Standard,
+        resources: hosted_runtimes::domain::size::ComputerResources {
+            vcpus: hosted_runtimes::domain::size::Vcpus::new(4),
+            memory_gib: hosted_runtimes::domain::size::MemoryGib::new(8),
+            disk_gib: hosted_runtimes::domain::size::DiskGib::new(100),
+        },
+        catalog_entry: hosted_runtimes::domain::size::CatalogEntryId::try_new(
+            "standard@2026-11".to_owned(),
+        )?,
+        price_id: Some(hosted_runtimes::domain::models::StripePriceId::parse(
+            "price_standard",
+        )?),
         state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
         harness_id: None,
         persona: None,

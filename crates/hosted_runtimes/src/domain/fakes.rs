@@ -73,9 +73,9 @@ impl ComputerRepo for FakeRepo {
         let sold: u32 = computers
             .values()
             .filter(|existing| existing.state.holds_units())
-            .map(|existing| existing.size.units())
+            .map(|existing| existing.resources.units())
             .sum();
-        if sold + computer.size.units() > self.sold_units {
+        if sold + computer.resources.units() > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
         let mut state = ComputerState::reserved(HOST, now);
@@ -87,6 +87,9 @@ impl ComputerRepo for FakeRepo {
             team_id: computer.team_id,
             name: computer.name,
             size: computer.size,
+            resources: computer.resources,
+            catalog_entry: computer.catalog_entry,
+            price_id: computer.price_id,
             state,
             harness_id: None,
             persona: computer.persona,
@@ -299,7 +302,10 @@ impl ComputerRepo for FakeRepo {
         })
     }
 
-    async fn sold_out_sizes(&self) -> Result<Vec<ComputerSize>, FakeError> {
+    async fn sold_out_sizes(
+        &self,
+        _catalog: &[crate::domain::size::CatalogEntry],
+    ) -> Result<Vec<ComputerSize>, FakeError> {
         Ok(vec![])
     }
 

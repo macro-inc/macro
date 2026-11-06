@@ -19,7 +19,7 @@ use crate::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
 use crate::domain::ids::ComputerId;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
-use crate::domain::size::ComputerSize;
+use crate::domain::size::ComputerResources;
 
 #[cfg(test)]
 mod test;
@@ -150,13 +150,7 @@ impl Fleet for IncusFleet {
                     .await?;
             }
             None => {
-                let body = instance_body(
-                    &self.config,
-                    computer.id,
-                    computer.size,
-                    &enrollment_json,
-                    Utc::now(),
-                );
+                let body = instance_body(&self.config, computer, &enrollment_json, Utc::now());
                 let started = self
                     .client
                     .api()
@@ -294,6 +288,14 @@ impl Fleet for IncusFleet {
         }
     }
 
+    #[tracing::instrument(name = "incus_fleet.resources_match", skip_all, fields(computer_id = %computer.id), err)]
+    async fn resources_match(&self, computer: &Computer) -> Result<bool, Self::Err> {
+        Ok(self
+            .find(computer.id)
+            .await?
+            .is_some_and(|instance| limits_match(&instance, computer.resources)))
+    }
+
     #[tracing::instrument(name = "incus_fleet.instances", skip(self), err)]
     async fn instances(&self) -> Result<Vec<FleetInstance>, IncusFleetError> {
         let instances = self.client.list_instances().await?;
@@ -329,7 +331,7 @@ fn instance_config(
     control_plane_id: &ControlPlaneId,
     created_at: DateTime<Utc>,
     computer_id: ComputerId,
-    size: ComputerSize,
+    resources: ComputerResources,
     enrollment_json: &str,
 ) -> BTreeMap<String, String> {
     BTreeMap::from([
@@ -340,25 +342,28 @@ fn instance_config(
         ),
         (CREATED_AT_KEY.to_owned(), created_at.to_rfc3339()),
         (INCUS_ENROLLMENT_KEY.to_owned(), enrollment_json.to_owned()),
-        ("limits.cpu".to_owned(), size.spec().incus_cpu.to_owned()),
+        ("limits.cpu".to_owned(), resources.vcpus.get().to_string()),
         (
             "limits.memory".to_owned(),
-            size.spec().incus_memory.to_owned(),
+            format!("{}GiB", resources.memory_gib.get()),
         ),
     ])
 }
 
 /// The root disk, sized to the computer, with `size.state` room for a
 /// stateful stop's RAM image (RAM plus 1 GiB of device state).
-fn root_device(pool: &str, size: ComputerSize) -> BTreeMap<String, String> {
+fn root_device(pool: &str, resources: ComputerResources) -> BTreeMap<String, String> {
     BTreeMap::from([
         ("type".to_owned(), "disk".to_owned()),
         ("path".to_owned(), "/".to_owned()),
         ("pool".to_owned(), pool.to_owned()),
-        ("size".to_owned(), size.spec().incus_root_size.to_owned()),
+        (
+            "size".to_owned(),
+            format!("{}GiB", resources.disk_gib.get()),
+        ),
         (
             "size.state".to_owned(),
-            size.spec().incus_state_size.to_owned(),
+            format!("{}GiB", u64::from(resources.memory_gib.get()) + 1),
         ),
     ])
 }
@@ -368,11 +373,12 @@ fn root_device(pool: &str, size: ComputerSize) -> BTreeMap<String, String> {
 /// `size.state`.
 fn instance_body(
     config: &IncusFleetConfig,
-    computer_id: ComputerId,
-    size: ComputerSize,
+    computer: &Computer,
     enrollment_json: &str,
     created_at: DateTime<Utc>,
 ) -> types::InstancesPost {
+    let computer_id = computer.id;
+    let resources = computer.resources;
     let (alias, fingerprint) = match &config.image.reference {
         ImageReference::Alias(alias) => (Some(alias.as_str().to_owned()), None),
         ImageReference::Fingerprint(fingerprint) => (None, Some(fingerprint.clone())),
@@ -395,12 +401,12 @@ fn instance_body(
             &config.control_plane_id,
             created_at,
             computer_id,
-            size,
+            resources,
             enrollment_json,
         ))),
         devices: Some(types::DevicesMap(BTreeMap::from([(
             "root".to_owned(),
-            root_device(config.storage_pool.as_str(), size),
+            root_device(config.storage_pool.as_str(), resources),
         )]))),
         source: Some(types::InstanceSource {
             type_: Some("image".to_owned()),
@@ -467,4 +473,15 @@ fn computer_instances(
             })
         })
         .collect()
+}
+
+fn limits_match(instance: &InstanceInfo, resources: ComputerResources) -> bool {
+    instance.config.get("limits.cpu") == Some(&resources.vcpus.get().to_string())
+        && instance.config.get("limits.memory")
+            == Some(&format!("{}GiB", resources.memory_gib.get()))
+        && instance.devices.get("root").is_some_and(|root| {
+            root.get("size") == Some(&format!("{}GiB", resources.disk_gib.get()))
+                && root.get("size.state")
+                    == Some(&format!("{}GiB", u64::from(resources.memory_gib.get()) + 1))
+        })
 }

@@ -333,6 +333,17 @@ where
 
         for computer in &expected {
             let observed = instances.get(&computer.id).map(|instance| instance.status);
+            if observed.is_some() {
+                match self.fleet.resources_match(computer).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        tracing::error!(computer_id = %computer.id, resources = ?computer.resources, reason = "resource limits drifted", "computer needs an operator")
+                    }
+                    Err(error) => {
+                        tracing::warn!(computer_id = %computer.id, error = ?error, "could not check computer resource limits")
+                    }
+                }
+            }
             let crashed = match computer.state.phase {
                 Phase::Running { .. } | Phase::Booting { .. } => {
                     observed.is_none() || observed == Some(InstanceStatus::Stopped)

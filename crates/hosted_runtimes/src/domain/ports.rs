@@ -166,7 +166,10 @@ pub trait ComputerRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Host, Self::Err>> + Send;
 
     /// Sizes that no host can sell right now.
-    fn sold_out_sizes(&self) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
+    fn sold_out_sizes(
+        &self,
+        catalog: &[crate::domain::size::CatalogEntry],
+    ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 
     /// Ask to hear when `size` can be bought again.
     fn request_notify(
@@ -210,22 +213,22 @@ pub trait Billing: Send + Sync + 'static {
         size: ComputerSize,
     ) -> impl Future<Output = Result<Quote, BillingError>> + Send;
 
-    /// Add one `size` computer plus `extra_items` to the team subscription
+    /// Add one computer at its saved `price_id` plus `extra_items` to the team subscription
     /// in ONE update, invoiced now with proration. `idempotency_key` makes a
     /// retried call a no-op.
     fn add_computer(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
+        price_id: &crate::domain::models::StripePriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
 
-    /// Remove one `size` computer from the team subscription, without a refund.
+    /// Remove one computer at its saved `price_id`, without a refund.
     fn remove_computer(
         &self,
         team_id: Uuid,
-        size: ComputerSize,
+        price_id: &crate::domain::models::StripePriceId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
 
@@ -287,6 +290,12 @@ pub trait Fleet: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Whether enforced fleet limits still match the recorded sale. Never resize here.
+    fn resources_match(
+        &self,
+        computer: &Computer,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Only instances stamped with this fleet's control-plane identity.
     fn instances(&self) -> impl Future<Output = Result<Vec<FleetInstance>, Self::Err>> + Send;

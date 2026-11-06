@@ -13,9 +13,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   state, outbox effects and timers in one transaction.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
-- Keep each size's resources and Incus limits literal in `ComputerSize::spec`;
-  never derive one resource or limit from another.
-- Capacity is in units (`domain::size`): Standard 1, Large 2, XL 4. Purchase
+- Keep literal purchase resources in the versioned `domain::size::current_catalog`.
+- Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
   reserves sold units on a host; waking checks awake units (`Context::host_has_room`).
 
 ## Start here
@@ -48,6 +47,17 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Contracts (PR B, agent brains, builds on these — keep them stable)
 
+- **Sold resources**: Snapshot `ComputerResources { vcpus: Vcpus, memory_gib: MemoryGib, disk_gib: DiskGib }`,
+  `CatalogEntryId` and `price_id` once at purchase. Comped rows have NULL price IDs;
+  Stripe retries and removal use the saved price. Use the versioned catalog only
+  for new offers and purchases; never infer size from resources. Fleet CPU/RAM/root
+  limits, capacity and reconcile drift checks read recorded resources; Incus state
+  space is memory + 1 GiB. Drift logs an operator error without resizing.
+  Docker enforces/checks CPU and RAM only (overlayfs has no disk quota).
+  Subscription reconcile compares saved price ids, never current catalog prices.
+  `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
+  PR B: the unpublished hosted-runtimes migration was rewritten in place;
+  reset existing local databases before applying it.
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
   `COMPUTERS_FLEET` is set, shared across replicas but distinct per control plane.
   Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;
@@ -90,7 +100,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Payment and reason remain latched through release. The optional persisted reason
   is absent on legacy Stripe rows; no migration is required.
   Comped computers never carry a charged subscription item, emit
-  `RemoveBillingItem`, or count in `reconcile_billed_count`; subscription webhooks
+  `RemoveBillingItem`, or count in `reconcile_billed_counts`; subscription webhooks
   cannot cancel them. Cancel-at-period-end stops them immediately (`at = now`)
   and retains the disk for the usual 14 days; undo is unavailable afterward.
   Cancel, release, retention expiry and delayed payment recovery make no Billing

@@ -124,6 +124,10 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
+    async fn resources_match(&self, _computer: &Computer) -> Result<bool, Self::Err> {
+        Ok(true)
+    }
+
     async fn instances(&self) -> Result<Vec<FleetInstance>, FakeFleetError> {
         Ok(self.instances.lock().unwrap().clone())
     }
@@ -266,6 +270,18 @@ async fn paid_computer(
                 team_id: TEAM,
                 name: ComputerName::try_new("Ada").unwrap(),
                 size: ComputerSize::Standard,
+                resources: crate::domain::size::ComputerResources {
+                    vcpus: crate::domain::size::Vcpus::new(4),
+                    memory_gib: crate::domain::size::MemoryGib::new(8),
+                    disk_gib: crate::domain::size::DiskGib::new(100),
+                },
+                catalog_entry: crate::domain::size::CatalogEntryId::try_new(
+                    "standard@2026-11".to_owned(),
+                )
+                .unwrap(),
+                price_id: Some(
+                    crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
+                ),
                 persona: None,
                 created_by: "macro|owner@example.com".to_owned(),
             },

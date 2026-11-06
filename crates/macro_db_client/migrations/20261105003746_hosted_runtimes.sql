@@ -1,6 +1,6 @@
 -- Macro computers: team-owned hosted VMs running macrod. Owned by crates/hosted_runtimes.
 
--- A fleet host, counted in size units (one unit = 8 GB RAM).
+-- A fleet host, counted in units: max(ceil(memory_gib / 8), ceil(vcpus / 4)).
 CREATE TABLE hosted_runtime_host (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -18,8 +18,13 @@ CREATE TABLE hosted_runtime (
     id UUID PRIMARY KEY,
     team_id UUID NOT NULL REFERENCES team (id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    -- Display/pricing label; resources are independent purchase facts.
     size TEXT NOT NULL CHECK (size IN ('standard', 'large', 'xl')),
-    units INTEGER NOT NULL CHECK (units > 0),
+    vcpus INTEGER NOT NULL CHECK (vcpus > 0),
+    memory_gib INTEGER NOT NULL CHECK (memory_gib > 0),
+    disk_gib INTEGER NOT NULL CHECK (disk_gib > 0),
+    catalog_entry TEXT NOT NULL,
+    price_id TEXT,
     host_id UUID REFERENCES hosted_runtime_host (id) ON DELETE RESTRICT,
     awake BOOLEAN NOT NULL DEFAULT false,
     holds_units BOOLEAN NOT NULL DEFAULT true,
@@ -30,7 +35,8 @@ CREATE TABLE hosted_runtime (
     created_by TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    enrolled_at TIMESTAMPTZ
+    enrolled_at TIMESTAMPTZ,
+    CHECK ((price_id IS NULL) = (state->>'comp_reason' IS NOT NULL))
 );
 
 CREATE INDEX hosted_runtime_team_idx ON hosted_runtime (team_id, created_at);

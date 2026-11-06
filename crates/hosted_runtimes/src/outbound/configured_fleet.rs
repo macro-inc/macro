@@ -117,6 +117,13 @@ impl Fleet for ConfiguredFleet {
         }
     }
 
+    async fn resources_match(&self, computer: &Computer) -> Result<bool, Self::Err> {
+        match self {
+            Self::Incus(fleet) => Ok(fleet.resources_match(computer).await?),
+            Self::Docker(fleet) => Ok(fleet.resources_match(computer).await?),
+        }
+    }
+
     async fn instances(&self) -> Result<Vec<FleetInstance>, Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.instances().await?),

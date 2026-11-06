@@ -60,13 +60,14 @@ key issuance, and account merge/link flows.
   `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the
   subscription's interval). Prices are `ComputerPrices`
   (`src/domain/computer_billing.rs`), not seat plans. Replay durable item-change
-  receipts before resolving current prices or subscription terms.
+  receipts before applying changes. Purchase snapshots the quoted price id;
+  retries and removal use that saved id rather than resolving current prices.
 - With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
-- Every team subscription webhook re-reads the subscription and reports each
-  size's billed count to `ComputerBillingObserver` (`ComputerService`), which
-  cancels computers whose items were removed outside Macro. Its failures are
-  logged, never fail the webhook. With no computer price configured it does
-  nothing; changing a configured price id strands items on the old price.
+- Every team subscription webhook re-reads the complete subscription and reports
+  item quantities by price id to `ComputerBillingObserver` (`ComputerService`).
+  Reconcile against each row's saved price id, including prices no longer in
+  configuration; cancel newest excess computers per price. Ignore partial
+  subscription snapshots. Observer failures are logged, never fail the webhook.
 
 ## Subscription checkout
 

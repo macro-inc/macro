@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, team_id, name, size, state, harness_id, persona, created_by,\n                   created_at, enrolled_at\n            FROM hosted_runtime\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,\n                   created_at, enrolled_at\n            FROM hosted_runtime\n            WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'pending_payment'\n            ",
   "describe": {
     "columns": [
       {
@@ -25,31 +25,56 @@
       },
       {
         "ordinal": 4,
-        "name": "state",
-        "type_info": "Jsonb"
+        "name": "vcpus",
+        "type_info": "Int4"
       },
       {
         "ordinal": 5,
-        "name": "harness_id",
-        "type_info": "Uuid"
+        "name": "memory_gib",
+        "type_info": "Int4"
       },
       {
         "ordinal": 6,
-        "name": "persona",
-        "type_info": "Jsonb"
+        "name": "disk_gib",
+        "type_info": "Int4"
       },
       {
         "ordinal": 7,
-        "name": "created_by",
+        "name": "catalog_entry",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "price_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "state",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "persona",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 14,
         "name": "enrolled_at",
         "type_info": "Timestamptz"
       }
@@ -65,6 +90,11 @@
       false,
       false,
       false,
+      false,
+      false,
+      false,
+      true,
+      false,
       true,
       true,
       false,
@@ -72,5 +102,5 @@
       true
     ]
   },
-  "hash": "574d10d0b4874d6f5c3fa8bd1e098d4c0a09b825604769b9b4673e0f34f3b335"
+  "hash": "02a271216591f1103db35dd571958e831ac0c082e7063f9ed508f052c5977a09"
 }

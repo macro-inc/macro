@@ -11,9 +11,12 @@ use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{
     ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, TimerKind, transition,
 };
+use crate::domain::models::StripePriceId;
 use crate::domain::models::{Computer, ComputerName, Host, HostRegistration, NewComputer};
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
-use crate::domain::size::ComputerSize;
+use crate::domain::size::{
+    CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
+};
 
 #[cfg(test)]
 mod test;
@@ -74,6 +77,11 @@ struct ComputerRow {
     team_id: Uuid,
     name: String,
     size: String,
+    vcpus: i32,
+    memory_gib: i32,
+    disk_gib: i32,
+    catalog_entry: String,
+    price_id: Option<String>,
     state: serde_json::Value,
     harness_id: Option<Uuid>,
     persona: Option<serde_json::Value>,
@@ -101,6 +109,20 @@ impl TryFrom<ComputerRow> for Computer {
             name: ComputerName::try_new(&row.name)
                 .map_err(|error| PgComputerError::Corrupt(error.to_string()))?,
             size,
+            resources: ComputerResources {
+                vcpus: Vcpus::new(u32::try_from(row.vcpus)?),
+                memory_gib: MemoryGib::new(u32::try_from(row.memory_gib)?),
+                disk_gib: DiskGib::new(u32::try_from(row.disk_gib)?),
+            },
+            catalog_entry: CatalogEntryId::try_new(row.catalog_entry)
+                .map_err(|error| PgComputerError::Corrupt(error.to_string()))?,
+            price_id: row
+                .price_id
+                .map(|id| {
+                    StripePriceId::parse(&id)
+                        .map_err(|error| PgComputerError::Corrupt(error.to_string()))
+                })
+                .transpose()?,
             state: serde_json::from_value(row.state)?,
             harness_id: row.harness_id.map(HarnessId::new_from_uuid),
             persona,
@@ -111,8 +133,8 @@ impl TryFrom<ComputerRow> for Computer {
     }
 }
 
-fn units(size: ComputerSize) -> Result<i32, PgComputerError> {
-    Ok(i32::try_from(size.units())?)
+fn units(resources: ComputerResources) -> Result<i32, PgComputerError> {
+    Ok(i32::try_from(resources.units())?)
 }
 
 impl PgComputerRepo {
@@ -127,7 +149,7 @@ impl PgComputerRepo {
         let row = sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, state, harness_id, persona, created_by,
+            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
             WHERE id = $1
@@ -230,7 +252,7 @@ impl PgComputerRepo {
         };
         let others = sqlx::query_scalar!(
             r#"
-            SELECT COALESCE(SUM(units), 0)::INTEGER AS "units!"
+            SELECT COALESCE(SUM(GREATEST((memory_gib::BIGINT + 7) / 8, (vcpus::BIGINT + 3) / 4)), 0)::INTEGER AS "units!"
             FROM hosted_runtime
             WHERE host_id = $1 AND awake AND id <> $2
             "#,
@@ -240,7 +262,7 @@ impl PgComputerRepo {
         .fetch_one(&mut **tx)
         .await?;
 
-        Ok(others + units(computer.size)? <= capacity)
+        Ok(others + units(computer.resources)? <= capacity)
     }
 
     async fn fetch_many(&self, rows: Vec<ComputerRow>) -> Result<Vec<Computer>, PgComputerError> {
@@ -272,7 +294,7 @@ impl ComputerRepo for PgComputerRepo {
         now: DateTime<Utc>,
     ) -> Result<Computer, ReserveError<PgComputerError>> {
         let storage = |error: sqlx::Error| ReserveError::Storage(PgComputerError::from(error));
-        let computer_units = units(computer.size).map_err(ReserveError::Storage)?;
+        let computer_units = units(computer.resources).map_err(ReserveError::Storage)?;
         let mut tx = self.pool.begin().await.map_err(storage)?;
 
         // Lock every host: purchases are rare and hosts few, and this keeps
@@ -287,8 +309,8 @@ impl ComputerRepo for PgComputerRepo {
             LEFT JOIN hosted_runtime computer
                 ON computer.host_id = locked.id AND computer.holds_units
             GROUP BY locked.id, locked.sold_capacity_units
-            HAVING locked.sold_capacity_units - COALESCE(SUM(computer.units), 0) >= $1::BIGINT
-            ORDER BY locked.sold_capacity_units - COALESCE(SUM(computer.units), 0) DESC
+            HAVING locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) >= $1::BIGINT
+            ORDER BY locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) DESC
             LIMIT 1
             "#,
             i64::from(computer_units),
@@ -315,20 +337,24 @@ impl ComputerRepo for PgComputerRepo {
         sqlx::query!(
             r#"
             INSERT INTO hosted_runtime
-                (id, team_id, name, size, units, host_id, awake, holds_units, state,
-                 persona, created_by, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, false, true, $7, $8, $9, $10, $10)
+                (id, team_id, name, size, host_id, awake, holds_units, state,
+                 persona, created_by, created_at, updated_at, vcpus, memory_gib, disk_gib, catalog_entry, price_id)
+            VALUES ($1, $2, $3, $4, $5, false, true, $6, $7, $8, $9, $9, $10, $11, $12, $13, $14)
             "#,
             computer.id.into_inner(),
             computer.team_id,
             computer.name.as_str(),
             computer.size.as_ref(),
-            computer_units,
             host,
             state_json,
             persona_json,
             computer.created_by,
             now,
+            i32::try_from(computer.resources.vcpus.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
+            i32::try_from(computer.resources.memory_gib.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
+            i32::try_from(computer.resources.disk_gib.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
+            computer.catalog_entry.as_str(),
+            computer.price_id.as_ref().map(|id| id.as_str()),
         )
         .execute(&mut *tx)
         .await
@@ -354,6 +380,9 @@ impl ComputerRepo for PgComputerRepo {
             team_id: computer.team_id,
             name: computer.name,
             size: computer.size,
+            resources: computer.resources,
+            catalog_entry: computer.catalog_entry,
+            price_id: computer.price_id,
             state,
             harness_id: None,
             persona: computer.persona,
@@ -380,7 +409,7 @@ impl ComputerRepo for PgComputerRepo {
         sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, state, harness_id, persona, created_by,
+            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
             WHERE id = $1
@@ -397,7 +426,7 @@ impl ComputerRepo for PgComputerRepo {
         let rows = sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, state, harness_id, persona, created_by,
+            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
             WHERE team_id = $1 AND state->'phase'->>'phase' <> 'destroyed'
@@ -417,7 +446,7 @@ impl ComputerRepo for PgComputerRepo {
         sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, state, harness_id, persona, created_by,
+            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
             WHERE harness_id = $1
@@ -464,7 +493,7 @@ impl ComputerRepo for PgComputerRepo {
         let rows = sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, state, harness_id, persona, created_by,
+            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
             WHERE awake AND state->'phase'->>'phase' = 'running'
@@ -494,7 +523,7 @@ impl ComputerRepo for PgComputerRepo {
         let rows = sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, state, harness_id, persona, created_by,
+            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at
             FROM hosted_runtime
             WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'pending_payment'
@@ -671,12 +700,15 @@ impl ComputerRepo for PgComputerRepo {
         })
     }
 
-    async fn sold_out_sizes(&self) -> Result<Vec<ComputerSize>, PgComputerError> {
+    async fn sold_out_sizes(
+        &self,
+        catalog: &[crate::domain::size::CatalogEntry],
+    ) -> Result<Vec<ComputerSize>, PgComputerError> {
         let free = sqlx::query_scalar!(
             r#"
             SELECT COALESCE(MAX(free), 0)::INTEGER AS "free!"
             FROM (
-                SELECT host.sold_capacity_units - COALESCE(SUM(computer.units), 0) AS free
+                SELECT host.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) AS free
                 FROM hosted_runtime_host host
                 LEFT JOIN hosted_runtime computer
                     ON computer.host_id = host.id AND computer.holds_units
@@ -687,9 +719,10 @@ impl ComputerRepo for PgComputerRepo {
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(ComputerSize::ALL
-            .into_iter()
-            .filter(|size| i64::from(size.units()) > i64::from(free))
+        Ok(catalog
+            .iter()
+            .filter(|entry| i64::from(entry.resources.units()) > i64::from(free))
+            .map(|entry| entry.size)
             .collect())
     }
 

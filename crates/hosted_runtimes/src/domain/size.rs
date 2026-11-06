@@ -25,74 +25,149 @@ pub enum ComputerSize {
     Xl,
 }
 
-/// Resources and fleet limits pinned independently for each computer size.
+/// Immutable resources sold with a computer. One unit is 8 GiB or 4 vCPUs,
+/// whichever requires more units, rounding each resource up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ComputerSpec {
-    pub units: u32,
-    pub vcpus: u32,
-    pub memory_gb: u32,
-    pub disk_gb: u32,
-    pub incus_cpu: &'static str,
-    pub incus_memory: &'static str,
-    pub incus_root_size: &'static str,
-    pub incus_state_size: &'static str,
+pub struct ComputerResources {
+    pub vcpus: Vcpus,
+    pub memory_gib: MemoryGib,
+    pub disk_gib: DiskGib,
+}
+
+impl ComputerResources {
+    pub fn units(self) -> u32 {
+        self.memory_gib
+            .get()
+            .div_ceil(8)
+            .max(self.vcpus.get().div_ceil(4))
+    }
+}
+
+/// A versioned purchase offer. Labels never determine a purchased VM's limits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogEntry {
+    pub id: CatalogEntryId,
+    pub size: ComputerSize,
+    pub resources: ComputerResources,
+}
+
+/// The catalog offered for new purchases; existing rows retain their snapshot.
+pub fn current_catalog() -> Vec<CatalogEntry> {
+    vec![
+        CatalogEntry {
+            id: CatalogEntryId("standard@2026-11".to_owned()),
+            size: ComputerSize::Standard,
+            resources: ComputerResources {
+                vcpus: Vcpus::new(4),
+                memory_gib: MemoryGib::new(8),
+                disk_gib: DiskGib::new(100),
+            },
+        },
+        CatalogEntry {
+            id: CatalogEntryId("large@2026-11".to_owned()),
+            size: ComputerSize::Large,
+            resources: ComputerResources {
+                vcpus: Vcpus::new(8),
+                memory_gib: MemoryGib::new(16),
+                disk_gib: DiskGib::new(200),
+            },
+        },
+        CatalogEntry {
+            id: CatalogEntryId("xl@2026-11".to_owned()),
+            size: ComputerSize::Xl,
+            resources: ComputerResources {
+                vcpus: Vcpus::new(16),
+                memory_gib: MemoryGib::new(32),
+                disk_gib: DiskGib::new(400),
+            },
+        },
+    ]
 }
 
 impl ComputerSize {
     pub const ALL: [ComputerSize; 3] = [Self::Standard, Self::Large, Self::Xl];
-
-    pub const fn spec(self) -> ComputerSpec {
-        match self {
-            Self::Standard => ComputerSpec {
-                units: 1,
-                vcpus: 4,
-                memory_gb: 8,
-                disk_gb: 100,
-                incus_cpu: "4",
-                incus_memory: "8GiB",
-                incus_root_size: "100GiB",
-                incus_state_size: "9GiB",
-            },
-            Self::Large => ComputerSpec {
-                units: 2,
-                vcpus: 8,
-                memory_gb: 16,
-                disk_gb: 200,
-                incus_cpu: "8",
-                incus_memory: "16GiB",
-                incus_root_size: "200GiB",
-                incus_state_size: "17GiB",
-            },
-            Self::Xl => ComputerSpec {
-                units: 4,
-                vcpus: 16,
-                memory_gb: 32,
-                disk_gb: 400,
-                incus_cpu: "16",
-                incus_memory: "32GiB",
-                incus_root_size: "400GiB",
-                incus_state_size: "33GiB",
-            },
-        }
-    }
-
-    /// Host capacity this size takes while awake, and sold capacity always.
-    pub fn units(self) -> u32 {
-        self.spec().units
-    }
-
-    pub fn memory_gb(self) -> u32 {
-        self.spec().memory_gb
-    }
-
-    pub fn vcpus(self) -> u32 {
-        self.spec().vcpus
-    }
-
-    pub fn disk_gb(self) -> u32 {
-        self.spec().disk_gb
-    }
 }
 
 #[cfg(test)]
 mod test;
+
+/// A recorded resource quantity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(transparent)]
+pub struct Vcpus(u32);
+impl Vcpus {
+    pub const fn new(value: u32) -> Self {
+        Self(value)
+    }
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// A recorded resource quantity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(transparent)]
+pub struct MemoryGib(u32);
+impl MemoryGib {
+    pub const fn new(value: u32) -> Self {
+        Self(value)
+    }
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// A recorded resource quantity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(transparent)]
+pub struct DiskGib(u32);
+impl DiskGib {
+    pub const fn new(value: u32) -> Self {
+        Self(value)
+    }
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// The versioned identity recorded at purchase.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(transparent)]
+pub struct CatalogEntryId(String);
+impl CatalogEntryId {
+    pub fn try_new(value: String) -> Result<Self, InvalidCatalogEntryId> {
+        let Some((label, version)) = value.split_once('@') else {
+            return Err(InvalidCatalogEntryId);
+        };
+        if label.is_empty()
+            || version.is_empty()
+            || !label
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            || !version
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.'))
+        {
+            return Err(InvalidCatalogEntryId);
+        }
+        Ok(Self(value))
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A catalog identity must include a label and version separated by `@`.
+#[derive(Debug, thiserror::Error)]
+#[error("catalog entry must be a label@version identity")]
+pub struct InvalidCatalogEntryId;
+
+impl<'de> Deserialize<'de> for CatalogEntryId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
