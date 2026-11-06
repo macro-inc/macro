@@ -536,6 +536,46 @@ impl PatchAgentRequest {
     }
 }
 
+/// The most an agent's memory may hold, in bytes. Every session of the agent
+/// carries it, so it stays a short list of durable facts, not a transcript.
+pub const AGENT_MEMORY_MAX_BYTES: usize = 16_000;
+
+/// What an agent remembers across its sessions: one markdown document shared
+/// by every session it runs, whoever starts them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+pub struct AgentMemory {
+    /// The remembered markdown; empty before anything is remembered.
+    pub content: String,
+    /// The revision to name in the next write; 0 before the first.
+    pub revision: i64,
+    /// When the memory last changed; absent before the first write.
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl AgentMemory {
+    /// The memory of an agent that has never remembered anything.
+    pub fn empty() -> Self {
+        Self {
+            content: String::new(),
+            revision: 0,
+            updated_at: None,
+        }
+    }
+}
+
+/// Request to replace an agent's memory, whole.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct UpdateAgentMemoryRequest {
+    /// The revision the edit was made against. A write against any other
+    /// revision changes nothing and fails with a conflict.
+    pub revision: i64,
+    /// The whole new memory, at most [`AGENT_MEMORY_MAX_BYTES`] bytes.
+    pub content: String,
+}
+
 /// Channel containing a bot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

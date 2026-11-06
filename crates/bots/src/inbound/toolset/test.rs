@@ -10,10 +10,11 @@ use super::{
 };
 use crate::domain::models::{
     Agent, AgentChannelScope, AgentChannelSelection, AgentHarnessSelection, AgentMcpServer,
-    AgentMcpServers, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType,
-    BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-    CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-    HarnessId, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+    AgentMcpServers, AgentMemory, AuthenticatedBot, BotChannel, BotChannelListCaller,
+    BotChannelType, BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest,
+    CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse, HarnessId, PatchAgentRequest, PatchBotRequest,
+    UpdateAgentMemoryRequest, UpdateAgentRequest,
 };
 use crate::domain::{
     models::{Bot, BotKind, BotOwner},
@@ -200,6 +201,35 @@ impl BotService for ToolTestBotService {
 
     async fn get_owner_profiles(&self, _ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
         Ok(Vec::new())
+    }
+
+    async fn agent_memory(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<AgentMemory, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent_memory(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        unimplemented!()
+    }
+
+    async fn own_memory(&self, _bot_id: BotId) -> Result<AgentMemory, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_own_memory(
+        &self,
+        _bot_id: BotId,
+        _req: UpdateAgentMemoryRequest,
+    ) -> Result<AgentMemory, BotError> {
+        unimplemented!()
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
