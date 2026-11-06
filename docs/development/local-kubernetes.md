@@ -34,7 +34,8 @@ stub limitations as credential-free Compose. It does not create cloud tunnels.
 
 ## Inner loop and lifecycle
 
-Rebuild a service with the normal host build, preserving its binary directory,
+Run `cargo x zigbuild` after editing Rust (it reuses unchanged artifacts),
+preserving the binary directory,
 then roll just its Deployment. For a new Nix output, pass its binary directory
 so the one Deployment adopts the new content-addressed path:
 
@@ -77,3 +78,36 @@ The runtime and performance comparison are under active verification. Do not
 interpret the fixed HTTPS slots as verified live links until the full login and
 document-creation checks pass. Benchmark results will record the tested commit,
 raw runs, host load, cache definitions and medians of at least three runs.
+
+## Record measurements
+
+Use a disposable instance for destructive startup measurements. Run both
+runtimes at the same commit with identical binaries and tracing settings.
+`measure.py` appends timestamps, commit, host load and CPU/memory/I/O pressure
+to every raw JSONL record. It fails when the timed command or an HTTP probe fails.
+
+```sh
+python3 tooling/local-kubernetes/measure.py \
+  --output infra/local/generated/kubernetes/perf.jsonl \
+  --runtime kube --instance kube-bench --label cold-start \
+  -- just kube-local up kube-bench --slot 0
+python3 tooling/local-kubernetes/measure.py \
+  --output infra/local/generated/kubernetes/perf.jsonl \
+  --runtime kube --instance kube-bench --label steady --sample-seconds 60
+python3 tooling/local-kubernetes/measure.py \
+  --output infra/local/generated/kubernetes/perf.jsonl \
+  --runtime kube --instance kube-bench --label latency \
+  --url "https://$(hostname):32443"
+python3 tooling/local-kubernetes/summarize.py \
+  infra/local/generated/kubernetes/perf.jsonl
+```
+
+The summary refuses mixed commits or fewer than three runs per runtime and
+measurement. Gateway probes make 100 sequential requests per route. `/app/`
+measures HTML transfer, not browser rendering: collect browser navigation timings
+separately. Resource sampling uses kubelet working-set/cumulative CPU statistics
+for the selected namespace, and Docker cache-adjusted memory/CPU statistics for
+only the selected Compose project. Account separately for the host Vite process,
+shared node overhead, shared images and read-only binaries in a final comparison.
+State cache conditions explicitly: empty data, init snapshot, persisted volumes,
+already-built images/binaries, browser cache. Never flush machine-wide caches.

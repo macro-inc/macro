@@ -32,3 +32,6 @@ on one Nix-declared kind node. This is a local development runtime only.
   current Kubernetes context.
 - The two fixed HTTPS slots are 32443 and 32444; initialization forwards bind
   loopback temporarily and must be serialized.
+- `measure.py` records raw JSONL timings, host pressure, gateway transfer latency
+  and runtime resource samples. Keep browser page-load timings separate from HTML
+  transfer times; never invent missing runs or silently compare different commits.
