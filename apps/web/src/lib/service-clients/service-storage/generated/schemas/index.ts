@@ -2359,6 +2359,8 @@ export * from './setChannelPictureRequest';
 export * from './setChannelPictureRequestProfilePictureId';
 export * from './setCompanyHiddenRequest';
 export * from './setCompanyNameRequest';
+export * from './setContactCompanyRequest';
+export * from './setContactEmailRequest';
 export * from './setContactHiddenRequest';
 export * from './setContactNameRequest';
 export * from './setDirectAccess';

@@ -84,7 +84,12 @@ export function createEmailLogin(
       code: value,
     });
     if (result.t === 'verified') {
-      await finish();
+      try {
+        await finish();
+      } catch (error) {
+        setVerifying(false);
+        throw error;
+      }
       return;
     }
     setVerifying(false);

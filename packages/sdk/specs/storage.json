@@ -8458,6 +8458,208 @@
         }
       }
     },
+    "/crm/contacts/{contact_id}/company": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_company"],
+        "summary": "Update an existing team-owned contact without merging its identity.",
+        "operationId": "set_crm_contact_company",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactCompanyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}/email": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::set_contact_email"],
+        "summary": "Update an existing team-owned contact without merging its identity.",
+        "operationId": "set_crm_contact_email",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The contact to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/contacts/{contact_id}/hidden": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_contact_hidden"],
@@ -32321,6 +32523,10 @@
             "type": ["string", "null"],
             "description": "Display name observed for the contact, if any."
           },
+          "personalEmail": {
+            "type": "boolean",
+            "description": "Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only."
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -49340,6 +49546,29 @@
           "name": {
             "type": "string",
             "description": "New display name for the company. Stored on the team-scoped\n`crm_companies.custom_name` override, which read paths COALESCE\nover the global directory name — the shared directory is never\nmodified. Must be non-blank (400 otherwise)."
+          }
+        }
+      },
+      "SetContactCompanyRequest": {
+        "type": "object",
+        "description": "Link or switch a contact with a known personal-provider email.",
+        "required": ["companyId"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Destination company in the same team. Unlinking is not supported."
+          }
+        }
+      },
+      "SetContactEmailRequest": {
+        "type": "object",
+        "description": "Add a missing contact email. Existing addresses are read-only.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to add. An identical retry is accepted."
           }
         }
       },
