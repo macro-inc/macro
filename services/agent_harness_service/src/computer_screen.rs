@@ -59,6 +59,7 @@ pub struct ComputerScreenState<Harnesses, Auth> {
     rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     control: ComputerControl,
     redis: redis::Client,
+    cleanup: TaskTracker,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
@@ -69,6 +70,7 @@ impl<Harnesses, Auth> Clone for ComputerScreenState<Harnesses, Auth> {
             rollout: self.rollout.clone(),
             control: self.control.clone(),
             redis: self.redis.clone(),
+            cleanup: self.cleanup.clone(),
             authorization_state: self.authorization_state.clone(),
         }
     }
@@ -102,6 +104,7 @@ where
         control,
         rollout,
         redis,
+        cleanup: tasks.clone(),
         authorization_state,
     };
     Router::new()
@@ -208,7 +211,8 @@ where
     state
         .authorize_computer(caller, path.harness_id, HarnessAccess::Manage)
         .await?;
-    let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
+    let account_change =
+        bus::AccountChange::claim(&state.redis, path.harness_id, &state.cleanup).await?;
     let result = match state
         .control
         .send(path.harness_id, ComputerCommand::ClaudeSignInStart)
@@ -247,7 +251,8 @@ where
     state
         .authorize_computer(caller, path.harness_id, HarnessAccess::Manage)
         .await?;
-    let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
+    let account_change =
+        bus::AccountChange::claim(&state.redis, path.harness_id, &state.cleanup).await?;
     let result = match state
         .control
         .send(
@@ -293,7 +298,8 @@ where
     state
         .authorize_computer(caller, path.harness_id, HarnessAccess::Manage)
         .await?;
-    let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
+    let account_change =
+        bus::AccountChange::claim(&state.redis, path.harness_id, &state.cleanup).await?;
     let result = match state
         .control
         .send(path.harness_id, ComputerCommand::ClaudeSignOut)

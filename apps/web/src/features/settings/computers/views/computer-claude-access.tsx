@@ -38,8 +38,12 @@ export function ComputerClaudeAccess(props: {
       const result = await start.mutateAsync(props.harnessId);
       setUrl(result.url);
       openExternalUrl(result.url);
-    } catch {
-      setError(t('computers.claudeStartFailed'));
+    } catch (error) {
+      setError(
+        thrownResultErrorHasCode(error, 'CONFLICT')
+          ? t('computers.claudeSignInConflict')
+          : t('computers.claudeStartFailed')
+      );
     }
   };
   const submit = async () => {
@@ -59,7 +63,11 @@ export function ComputerClaudeAccess(props: {
         setError(t('computers.claudeInvalidCode'));
         return;
       }
-      setError(t('computers.claudeCompleteFailed'));
+      setError(
+        thrownResultErrorHasCode(error, 'CONFLICT')
+          ? t('computers.claudeSignInConflict')
+          : t('computers.claudeCompleteFailed')
+      );
     }
   };
   const useCredits = async () => {

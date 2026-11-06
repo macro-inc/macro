@@ -60,7 +60,9 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
   written to the harness row on macrod's confirmation; a shared 180-second
   account-change lease covers the command and mode write, preventing opposing
-  requests from persisting out of order; concurrent requests get 409),
+  requests from persisting out of order; concurrent requests get 409; terminal
+  responses release the lease after the mode write, and failed or dropped
+  requests schedule owner-checked cleanup instead of waiting for expiry),
   `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights), and two
   websockets: the viewer's `GET /harnesses/{id}/screen[?control=true]` (view
   rights; `control` needs manage, else `rfb.rs` drops input messages and
@@ -159,7 +161,7 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset).
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset; computer account-lease tests require `REDIS_URI` pointing at isolated local Redis).
 - `just check` (`SQLX_OFFLINE=true cargo check`).
 - `just run-local` — needs `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`,
   `GITHUB_TOKEN` in the environment or a local `.env`.

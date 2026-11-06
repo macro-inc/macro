@@ -24,6 +24,8 @@ export default {
   billingHint:
     'Computers are billed on your team subscription. Manage them in Settings → Runtimes.',
   cancels: 'Cancels {{date}}',
+  claudeSignInConflict:
+    'Another sign-in is in progress on this computer — try again shortly',
   claudeStartFailed: 'Could not start Claude sign-in. Please try again.',
   claudeCompleteFailed:
     'Could not complete Claude sign-in. Check the code and try again.',

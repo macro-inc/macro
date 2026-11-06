@@ -516,31 +516,43 @@ pub(crate) async fn publish_close(
 }
 
 /// Serializes account mutations through their database confirmation, across
-/// replicas. A cancelled or unanswered command retains the lease until expiry:
-/// macrod may still be finishing its side effect.
+/// replicas. Drop schedules owner-checked cleanup when a request is abandoned.
 pub(super) struct AccountChange {
     connection: MultiplexedConnection,
     key: String,
     token: String,
+    cleanup: TaskTracker,
+    released: bool,
 }
 
 impl AccountChange {
     pub(super) async fn claim(
         redis: &redis::Client,
         harness: HarnessId,
+        cleanup: &TaskTracker,
     ) -> Result<Self, ComputerRouteError> {
-        let mut connection = redis
+        let connection = redis
             .get_multiplexed_async_connection()
             .await
             .map_err(redis_error)?;
         let key = format!("agent-harness.computer-account.{harness}");
         let token = Uuid::now_v7().to_string();
+        let mut lease = Self {
+            connection,
+            key,
+            token,
+            cleanup: cleanup.clone(),
+            released: false,
+        };
+        // Arm cleanup before SET: dropping the request during the Redis write
+        // must release a lease the server may already have accepted.
         // Longer than the longest command deadline plus bus admission.
         const LEASE_SECONDS: u64 = 180;
-        let acquired: Option<String> = connection
+        let acquired: Option<String> = lease
+            .connection
             .set_options(
-                &key,
-                &token,
+                &lease.key,
+                &lease.token,
                 SetOptions::default()
                     .conditional_set(ExistenceCheck::NX)
                     .with_expiration(SetExpiry::EX(LEASE_SECONDS)),
@@ -552,23 +564,48 @@ impl AccountChange {
                 "another Claude account change is in progress".to_owned(),
             ));
         }
-        Ok(Self {
-            connection,
-            key,
-            token,
-        })
+        Ok(lease)
     }
 
     /// Release only our own lease after its runtime result and mode write.
     pub(super) async fn release(mut self) -> Result<(), ComputerRouteError> {
-        const RELEASE: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end";
-        redis::cmd("EVAL")
-            .arg(RELEASE)
-            .arg(1)
-            .arg(self.key)
-            .arg(self.token)
-            .query_async::<()>(&mut self.connection)
-            .await
-            .map_err(redis_error)
+        release_account_lease(&mut self.connection, &self.key, &self.token).await?;
+        self.released = true;
+        Ok(())
     }
 }
+
+impl Drop for AccountChange {
+    fn drop(&mut self) {
+        if self.released {
+            return;
+        }
+        let mut connection = self.connection.clone();
+        let key = self.key.clone();
+        let token = self.token.clone();
+        self.cleanup.spawn(async move {
+            if let Err(error) = release_account_lease(&mut connection, &key, &token).await {
+                tracing::error!(error = ?error, "could not release the abandoned account lease");
+            }
+        }.instrument(tracing::Span::current()));
+    }
+}
+
+async fn release_account_lease(
+    connection: &mut MultiplexedConnection,
+    key: &str,
+    token: &str,
+) -> Result<(), ComputerRouteError> {
+    const RELEASE: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end";
+    redis::cmd("EVAL")
+        .arg(RELEASE)
+        .arg(1)
+        .arg(key)
+        .arg(token)
+        .query_async::<()>(connection)
+        .await
+        .map_err(redis_error)
+}
+
+#[cfg(test)]
+mod test;

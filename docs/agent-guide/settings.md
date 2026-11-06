@@ -826,7 +826,8 @@ on each row:
 **Sign in with Claude** opens Claude's OAuth page. Paste the code or localhost
 callback URL back into the form and press **Complete sign-in**. A rejected code
 shows “That code didn't work — sign in again to get a new one”; start again to
-obtain a fresh code. New sessions then use that Claude account. **Use Macro
+obtain a fresh code. A 409 shows “Another sign-in is in progress on this computer
+— try again shortly”. New sessions then use that Claude account. **Use Macro
 credits** signs out on the computer.
 
 Team **Billing** lists the same computers under **Macro computers** with size,

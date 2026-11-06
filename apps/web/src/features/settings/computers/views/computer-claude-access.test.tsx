@@ -97,3 +97,18 @@ it('explains a rejected code and lets the user start again', async () => {
     screen.queryByLabelText('Paste the code or the URL you were sent to')
   ).toBeNull();
 });
+
+it('explains a conflicting sign-in instead of showing a generic failure', async () => {
+  mocks.start.mockRejectedValueOnce(
+    new ThrownResultError([{ code: 'CONFLICT', message: 'Resource conflict' }])
+  );
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Another sign-in is in progress on this computer — try again shortly'
+    )
+  );
+});
