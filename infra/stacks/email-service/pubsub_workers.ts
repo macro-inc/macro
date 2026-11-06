@@ -33,6 +33,8 @@ type Args = {
 };
 
 export class EmailPubSubWorkers extends pulumi.ComponentResource {
+  // AWSX uses the containers map key as the ECS container name.
+  public readonly containerName = 'service';
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
   public imageUri: pulumi.Output<string>;
@@ -129,8 +131,8 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: withTelemetry(BASE_NAME, {
-            service: {
-              name: BASE_NAME,
+            [this.containerName]: {
+              name: this.containerName,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,

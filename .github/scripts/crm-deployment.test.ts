@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { checkDeploymentResults } from "./check-service-deployment-results";
 import {
 	consumersReady,
+	type ExpectedConsumer,
+	expectedConsumer,
 	isCliTimeout,
 	isRetryableAwsFailure,
 	rethrowAwsFailure,
 	snapshotTasks,
 	TransientSnapshotError,
-	type ExpectedConsumer,
-	expectedConsumer,
 	waitForConsumers,
 } from "./wait-crm-email-consumers";
 
@@ -60,6 +61,104 @@ function ready() {
 }
 
 describe("exact consumer readiness", () => {
+	test("the real pub/sub infrastructure exports its AWSX container map key", () => {
+		const source = (path: string) =>
+			readFileSync(new URL(path, import.meta.url), "utf8");
+		const workers = source(
+			"../../infra/stacks/email-service/pubsub_workers.ts",
+		);
+		const index = source("../../infra/stacks/email-service/index.ts");
+		const actualName = workers.match(
+			/readonly containerName = ['"]([^'"]+)['"]/u,
+		)?.[1];
+		expect(actualName).toBe("service");
+		if (!actualName) throw new Error("Missing pub/sub container name");
+		// Verify the actual construction/export wiring, without loading Pulumi
+		// configuration, secrets, or a separately mocked infrastructure fixture.
+		expect(workers).toMatch(
+			/containers: withTelemetry\(BASE_NAME, \{\s*\[this\.containerName\]: \{/u,
+		);
+		expect(index).toMatch(
+			/export const crmBackfillConsumer = \{[^}]*\}[\s\S]*?container: pubsubWorkers\.containerName,/u,
+		);
+		// AWSX uses the map key as the ECS name, overriding an inner name.
+
+		const state = ready();
+		state.tasks[0].containers[0].name = actualName;
+		expect(
+			consumersReady(
+				{ ...expected, container: "email-service-pubsub-workers" },
+				state,
+			),
+		).toBe(false);
+		expect(consumersReady({ ...expected, container: actualName }, state)).toBe(
+			true,
+		);
+	});
+
+	test("timeout diagnostics identify the missing container and bound/redact snapshot fields", async () => {
+		let clock = 0;
+		const reports: object[] = [];
+		const state = ready();
+		state.tasks[0].containers[0].name = "service";
+		Object.assign(state.tasks[0], { overrides: { secret: "DO_NOT_LOG" } });
+		Object.assign(state.tasks[0].containers[0], { environment: "DO_NOT_LOG" });
+		state.tasks[0].taskArn = "x".repeat(2_000);
+		state.tasks = Array.from({ length: 100 }, () => state.tasks[0]);
+		await expect(
+			waitForConsumers(
+				expected,
+				() => state,
+				() => clock,
+				async () => {
+					clock += 10_000;
+				},
+				130_000,
+				(report) => reports.push(report),
+			),
+		).rejects.toThrow("Timed out");
+		expect(reports).toHaveLength(4); // first, minute boundaries, then final timeout
+		const last = reports.at(-1) as {
+			consumerReadiness: string;
+			blockers: string[];
+			activeTaskCount: number;
+			tasksTruncated: boolean;
+			tasks: { taskArn: string; containers: { name: string }[] }[];
+		};
+		expect(last.consumerReadiness).toBe("timed-out");
+		expect(last.blockers).toContain("expected-container-missing");
+		expect(last.blockers).toContain("active-task-count-mismatch");
+		expect(last.activeTaskCount).toBe(100);
+		expect(last.tasksTruncated).toBe(true);
+		expect(last.tasks).toHaveLength(20);
+		expect(last.tasks[0].taskArn).toHaveLength(256);
+		expect(last.tasks[0].containers[0].name).toBe("service");
+		expect(JSON.stringify(reports)).not.toContain("DO_NOT_LOG");
+	});
+
+	test("transient timeout diagnostics never claim a complete or ready snapshot", async () => {
+		let clock = 0;
+		const reports: object[] = [];
+		await expect(
+			waitForConsumers(
+				expected,
+				() => {
+					throw new TransientSnapshotError("DO_NOT_LOG raw AWS response");
+				},
+				() => clock,
+				async () => {
+					clock += 10;
+				},
+				20,
+				(report) => reports.push(report),
+			),
+		).rejects.toThrow("Timed out");
+		expect(reports.at(-1)).toEqual({
+			consumerReadiness: "timed-out",
+			blockers: ["transient-incomplete-snapshot"],
+		});
+		expect(JSON.stringify(reports)).not.toContain("DO_NOT_LOG");
+	});
 	test("accepts completed matching rollout, including an unchanged expected revision", () => {
 		expect(consumersReady(expectedConsumer(expected), ready())).toBe(true);
 		const state = ready();

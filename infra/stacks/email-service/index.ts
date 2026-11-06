@@ -444,7 +444,7 @@ export const crmBackfillConsumer = {
     return definition.arn;
   }),
   image: pubsubWorkers.imageUri,
-  container: 'email-service-pubsub-workers',
+  container: pubsubWorkers.containerName,
 };
 
 // Classifies signal threads for the Focus view. It reads mail only for
