@@ -354,6 +354,11 @@ leaving a speaking-person chip on the share. It resets when sharing stops and is
 disabled without a share. Tracks stay mounted and audio continues; the old
 maximize/restore button no longer appears over the share.
 
+Desktop **More → Reactions** sends a temporary emoji to the connected room, not
+chat history. The emoji rises above its sender's name tag and fades; when the
+sender's tile is off screen it appears at the stage's bottom-left. Reduced motion
+fades without movement. Reactions have no sound and disappear when leaving.
+
 Open **Chat** and **People** from the button beside the media controls.
 The sidebar and phone drawer share a compact grouped section switcher at the top.
 **People** shows the live attendee count on phones and a scrollable roster, including

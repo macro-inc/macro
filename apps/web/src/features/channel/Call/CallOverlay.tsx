@@ -46,12 +46,14 @@ import {
   ParticipantTile,
   ScreenShareTile,
 } from './CallParticipantTiles';
+import { CallReactionLayer } from './CallReactionLayer';
 import { CallWaveform } from './CallWaveform';
 import {
   type CallLayout,
   normalizeCallLayout,
   selectCallStageParticipant,
 } from './call-layout';
+import { createCallReactions } from './call-reactions';
 import {
   CallChatPanel,
   type CallPanelTab,
@@ -89,6 +91,8 @@ export function CallOverlay(props: {
   };
 }) {
   const callCtx = useCallContext();
+  const reactions = createCallReactions(callCtx.room);
+  const [reactionRoot, setReactionRoot] = createSignal<HTMLDivElement>();
   const currentUserId = useUserId();
   const currentUserName = useAuthor();
   const isConnecting = () => callCtx.isConnecting();
@@ -352,6 +356,7 @@ export function CallOverlay(props: {
       isVideoMuted={callCtx.isVideoMuted()}
       track={localVideoTrack()}
       userId={localUserId()}
+      identity={callCtx.room()?.localParticipant.identity}
       fallbackName={
         props.localName ||
         callCtx.room()?.localParticipant.name ||
@@ -434,6 +439,7 @@ export function CallOverlay(props: {
           <Resize.Panel id="call-stage" minSize={widePanel() ? 320 : 0}>
             <div class="relative flex h-full min-h-0 min-w-0 flex-col @container/call-stage">
               <div
+                ref={setReactionRoot}
                 class={cn(
                   'relative flex min-h-0 flex-1',
                   sideStrip() ? 'flex-row gap-2' : 'flex-col'
@@ -615,6 +621,10 @@ export function CallOverlay(props: {
                     </div>
                   </Show>
                 </div>
+                <CallReactionLayer
+                  root={reactionRoot}
+                  reactions={reactions.entries()}
+                />
               </div>
               {/* Settings expand over the tiles; the chat keeps its own full-height column. */}
               <div
@@ -660,6 +670,15 @@ export function CallOverlay(props: {
                         <CallMoreMenu
                           compact={compactControls()}
                           layout={layout()}
+                          onReaction={
+                            callCtx.room()
+                              ? (emoji) =>
+                                  fireAndForget(
+                                    reactions.send(emoji),
+                                    'call-reaction'
+                                  )
+                              : undefined
+                          }
                           onLayoutChange={(value) => {
                             const interaction =
                               beginInteraction('call.layout.change');

@@ -1,0 +1,14 @@
+.call-reaction { animation: call-reaction-rise 1800ms ease-out both; }
+@keyframes call-reaction-rise {
+  0% { opacity: 0; transform: translateY(0); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-72px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-reaction { animation-name: call-reaction-fade; }
+}
+@keyframes call-reaction-fade {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  100% { opacity: 0; }
+}

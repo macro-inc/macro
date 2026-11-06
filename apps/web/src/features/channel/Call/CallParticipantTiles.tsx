@@ -48,6 +48,7 @@ function VideoTag(props: {
 
 function ParticipantTileWrapper(props: {
   isSpeaking: boolean;
+  participantId?: string;
   children: JSXElement;
   isConnecting?: boolean;
   isFocused?: boolean;
@@ -70,6 +71,7 @@ function ParticipantTileWrapper(props: {
     >
       <div
         data-call-tile=""
+        data-call-participant={props.participantId}
         class={cn(
           'relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
           props.isConnecting && 'animate-pulse'
@@ -139,6 +141,7 @@ function ParticipantAvatar(props: {
 }
 
 export function LocalParticipantTile(props: {
+  identity?: string;
   isSpeaking: boolean;
   isConnecting: boolean;
   isAudioMuted: boolean;
@@ -155,6 +158,7 @@ export function LocalParticipantTile(props: {
   return (
     <ParticipantTileWrapper
       isSpeaking={props.isSpeaking}
+      participantId={props.identity ?? props.userId}
       isConnecting={props.isConnecting}
       class={props.class}
       isFocused={props.isFocused}
@@ -228,6 +232,7 @@ export function ParticipantTile(props: {
   return (
     <ParticipantTileWrapper
       isSpeaking={isSpeaking()}
+      participantId={props.participant.identity}
       isFocused={props.isFocused}
       onToggleFocus={props.onToggleFocus}
       focusLabel={`${props.isFocused ? 'Unfocus' : 'Focus'} ${displayName()}`}

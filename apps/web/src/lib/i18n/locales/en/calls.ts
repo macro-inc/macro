@@ -1,5 +1,6 @@
 export default {
   layout: 'Layout',
+  reactions: 'Reactions',
   layoutAuto: 'Auto',
   layoutGrid: 'Grid',
   layoutSpeaker: 'Speaker',

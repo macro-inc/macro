@@ -190,6 +190,8 @@ function setUpCallState(
     isVideoMuted: () => false,
     remoteParticipants: participants,
     room: () => ({
+      on: () => {},
+      off: () => {},
       localParticipant: {
         identity: 'current-user',
         getTrackPublication: () => ({ track: localCameraTrack }),
