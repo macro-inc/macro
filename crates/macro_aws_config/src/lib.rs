@@ -47,12 +47,22 @@ pub async fn get_macro_aws_config() -> aws_config::SdkConfig {
 }
 
 /// Creates an AWS SDK config pointed at a local AWS-API endpoint (LocalStack,
-/// or the platform's AWS gateway). Credentials come from the standard chain:
-/// the local stack's environment sets them. LocalStack accepts any key; the
-/// platform's backends (RustFS, ExtendDB) verify the instance's own key.
+/// or the platform's AWS gateway). It signs with the key in the environment when
+/// one is set: the platform's backends (RustFS, ExtendDB) verify the instance's
+/// own key. Otherwise it uses test credentials, which LocalStack and test servers
+/// accept.
 pub async fn local_aws_config(local_aws_url: &str) -> aws_config::SdkConfig {
+    let credentials = aws_config::meta::credentials::CredentialsProviderChain::first_try(
+        "environment",
+        aws_config::environment::EnvironmentVariableCredentialsProvider::new(),
+    )
+    .or_else(
+        "test",
+        aws_credential_types::Credentials::new("test", "test", None, None, "macro-local-test"),
+    );
     aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region("us-east-1")
+        .credentials_provider(credentials)
         .endpoint_url(local_aws_url)
         .load()
         .await

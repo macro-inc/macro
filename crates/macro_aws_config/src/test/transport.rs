@@ -53,3 +53,17 @@ async fn sqs_default_transport_works_without_the_legacy_rustls_feature() {
     let result = client.list_queues().send().await.unwrap();
     assert_eq!(result.queue_urls(), ["http://localhost/fixture-queue"]);
 }
+
+#[tokio::test]
+async fn local_config_signs_without_credentials_in_the_environment() {
+    use aws_credential_types::provider::ProvideCredentials;
+
+    let config = local_aws_config("http://127.0.0.1:1").await;
+    let credentials = config
+        .credentials_provider()
+        .expect("a credentials provider")
+        .provide_credentials()
+        .await
+        .expect("credentials, from the environment or the test fallback");
+    assert!(!credentials.access_key_id().is_empty());
+}
