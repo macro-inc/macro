@@ -240,7 +240,7 @@ impl PersonaConfigKey {
 
     /// Reject credential names in persisted persona configuration.
     pub fn validate_non_secret(&self) -> Result<(), PersonaFieldError> {
-        if lazy_regex::regex_is_match!(r"(?i)_(TOKEN|KEY|SECRET)$", self.as_str()) {
+        if lazy_regex::regex_is_match!(r"_(TOKEN|KEY|SECRET)$", self.as_str()) {
             return Err(PersonaFieldError::ReservedConfigKey);
         }
         Ok(())

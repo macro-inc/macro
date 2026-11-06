@@ -227,7 +227,6 @@ fn persisted_persona_rejects_bootstrap_keys_in_both_maps() {
         "OTHER_TOKEN",
         "OTHER_KEY",
         "OTHER_SECRET",
-        "other_token",
     ] {
         let key = PersonaConfigKey::parse(name).unwrap();
         assert_eq!(
@@ -247,5 +246,17 @@ fn persisted_persona_rejects_bootstrap_keys_in_both_maps() {
             }
             assert!(serde_json::from_value::<Persona>(json).is_err());
         }
+    }
+}
+
+#[test]
+fn bootstrap_suffix_rules_are_case_sensitive() {
+    for name in ["other_token", "other_key", "other_secret", "REPO_URL"] {
+        assert!(
+            PersonaConfigKey::parse(name)
+                .unwrap()
+                .validate_non_secret()
+                .is_ok()
+        );
     }
 }

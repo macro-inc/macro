@@ -158,3 +158,113 @@ async fn enrollment_guard_uses_the_claim_transaction_namespace(pool: PgPool) {
     ).fetch_one(&mut *claim).await.unwrap();
     assert!(locked);
 }
+
+#[sqlx::test(migrations = false)]
+async fn personas_decode_after_forward_bootstrap_cleanup(pool: PgPool) {
+    // SQLx owns this disposable test database; CI may seed it from a migrated template.
+    sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        .execute(&pool)
+        .await
+        .unwrap();
+    const STRIP_VERSION: i64 = 20261106175722;
+    let before_strip = sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(
+            MACRO_DB_MIGRATIONS
+                .iter()
+                .filter(|migration| migration.version < STRIP_VERSION)
+                .cloned()
+                .collect(),
+        ),
+        ..sqlx::migrate::Migrator::DEFAULT
+    };
+    before_strip.run(&pool).await.unwrap();
+    insert_team(&pool).await;
+    let id = ComputerId::new(Uuid::from_u128(1));
+    let persona = serde_json::json!({
+        "name": "Worker", "os_user": "worker",
+        "config": {"MACRO_API_KEY": "fixture-api-value", "REPO_TOKEN": "fixture-repo-value", "SOME_SECRET": "fixture-secret-value", "REPO_URL": "https://example.com/repo"},
+        "extra_service": {"unit_name": "worker", "exec": "/bin/worker", "env": {"MACRO_API_KEY": "fixture-api-value", "REPO_TOKEN": "fixture-repo-value", "SOME_SECRET": "fixture-secret-value", "REPO_URL": "https://example.com/service"}}
+    });
+    // Insert raw JSON using the schema before stripping; no Persona has decoded it.
+    sqlx::query!(
+        r#"INSERT INTO hosted_runtime
+        (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry,
+         price_id, state, persona, created_by)
+        VALUES ($1, $2, 'Worker', 'standard', 4, 8, 100, 'standard@2026-11',
+                'price_standard', $3, $4, 'macro|owner@example.com')"#,
+        id.into_inner(),
+        TEAM,
+        serde_json::to_value(ComputerState::reserved(
+            HostId::new(Uuid::from_u128(2)),
+            now()
+        ))
+        .unwrap(),
+        persona,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgComputerRepo::new(pool.clone());
+    assert!(repo.get(id).await.is_err());
+    // Apply the original strip and every forward migration before decoding.
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+    let persona = repo.get(id).await.unwrap().unwrap().persona.unwrap();
+    assert_eq!(persona.config.len(), 1);
+    assert_eq!(
+        persona.config.get("REPO_URL").unwrap(),
+        "https://example.com/repo"
+    );
+    assert_eq!(persona.extra_service.env.len(), 1);
+    assert_eq!(
+        persona.extra_service.env.get("REPO_URL").unwrap(),
+        "https://example.com/service"
+    );
+
+    // The new forward cleanup matches the case-sensitive validator exactly.
+    let persona = serde_json::json!({
+        "name": "Worker", "os_user": "worker",
+        "config": {"MACRO_API_KEY": "fixture-api-value", "lower_key": "non-secret", "REPO_URL": "https://example.com/repo"},
+        "extra_service": {"unit_name": "worker", "exec": "/bin/worker", "env": {"SOME_SECRET": "fixture-secret-value", "lower_token": "non-secret"}}
+    });
+    sqlx::query!(
+        "UPDATE hosted_runtime SET persona = $2 WHERE id = $1",
+        id.into_inner(),
+        persona
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
+        "/../macro_db_client/migrations/20261106183859_strip_persona_bootstrap_keys_case_sensitively.sql")))
+        .execute(&pool).await.unwrap();
+    let persona = repo.get(id).await.unwrap().unwrap().persona.unwrap();
+    assert_eq!(persona.config.len(), 2);
+    assert_eq!(persona.config.get("lower_key").unwrap(), "non-secret");
+    assert_eq!(persona.extra_service.env.len(), 1);
+    assert_eq!(
+        persona.extra_service.env.get("lower_token").unwrap(),
+        "non-secret"
+    );
+}
+
+#[test]
+fn bootstrap_strip_follows_every_persona_schema_migration() {
+    // Persona's creating migration must precede the cleanup. Later cleanups are
+    // data-only; future persona schema changes must also preserve this ordering.
+    let schema_changes: Vec<_> = MACRO_DB_MIGRATIONS
+        .iter()
+        .filter(|migration| {
+            migration.sql.contains("CREATE TABLE hosted_runtime (")
+                || (migration.sql.contains("ALTER TABLE hosted_runtime")
+                    && migration.sql.contains("persona"))
+        })
+        .collect();
+    assert!(!schema_changes.is_empty());
+    for migration in schema_changes {
+        assert!(
+            migration.version < 20261106175722,
+            "{}",
+            migration.description
+        );
+    }
+}

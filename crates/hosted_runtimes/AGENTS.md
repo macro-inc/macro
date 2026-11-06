@@ -135,7 +135,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `PersonaService` Debug redact config and env values.
   `service::validate_persona` checks commands and values. Persisted config and
   service env reject credential names ending in `_TOKEN`, `_KEY`, or `_SECRET`
-  (case-insensitive) with `PersonaFieldError::ReservedConfigKey`.
+  (case-sensitive) with `PersonaFieldError::ReservedConfigKey`.
+  Run the forward bootstrap stripping migrations before decoding stored Personas;
+  both `config` and `extra_service.env` are cleaned without recovery copies.
+  The original cleanup also stripped lowercase suffixes; the forward cleanup and
+  validator use case-sensitive suffix matching.
 - **Persona credentials**: `PersonaCredentialSource::issue(computer, generation)`
   returns `PersonaEnrollment { secrets: PersonaCredentials, env: PersonaEnv }`.
   Each call rotates credentials; neither half is stored in `hosted_runtime`,
