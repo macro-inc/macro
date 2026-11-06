@@ -10,6 +10,21 @@ import { Document } from './document';
 import { Spreadsheet } from './spreadsheet';
 import { SystemSkill } from './system-skill';
 
+/** One skill found by {@link DocumentNamespace.skills}. */
+export interface SkillListing {
+  /**
+   * The skill: a skill document, or a built-in skill with no document. Read
+   * either one's instructions with `content()`.
+   */
+  skill: Document | SystemSkill;
+  /** The skill's name. */
+  name: string;
+  /** When to use the skill, when it says. Built-in skills have none. */
+  description: string | undefined;
+  /** When the skill document was last updated (ISO 8601); built-in skills have none. */
+  updatedAt: string | undefined;
+}
+
 /** A file's content: its bytes, or text stored as UTF-8. */
 export type FileContent = Uint8Array<ArrayBuffer> | ArrayBuffer | Blob | string;
 
@@ -244,8 +259,7 @@ export class DocumentNamespace {
    * ```
    *
    * Read a skill the request names before doing the task, and follow it for
-   * that request only. `systemSkills()` lists the built-in skills, whose
-   * instructions have no document; read those with the ReadSkill tool.
+   * that request only. Find skills, built-in ones included, with `skills()`.
    *
    * `description` says when to use the skill, in one line starting "Use when"
    * (at most 300 characters); agents load the skill for requests it describes.
@@ -260,9 +274,44 @@ export class DocumentNamespace {
   }
 
   /**
+   * Find skills by name, or list them, built-in skills included; read the
+   * instructions of the one a request needs with `skill.content()` before
+   * doing the task, and follow them for that request only.
+   *
+   * With `query`, searches skill names: pass 1-3 words that literally appear
+   * in the name, matched as one adjacent phrase whose last word may be a
+   * prefix (`matchType: 'exact'` for whole words). Without it, lists the 100
+   * most recently updated skills. User skills come first, most recently
+   * updated first, then built-in skills.
+   *
+   * ```js
+   * const [match] = await macro.documents.skills({ query: 'deploy' });
+   * const instructions = match && (await match.skill.content());
+   * ```
+   */
+  async skills(opts?: {
+    query?: string;
+    matchType?: 'partial' | 'exact';
+  }): Promise<SkillListing[]> {
+    const { skills } = unwrap(
+      await this.client.cognition.listSkills({
+        query: { query: opts?.query, matchType: opts?.matchType },
+      }),
+    );
+    return skills.map((listing) => ({
+      skill: listing.builtIn
+        ? SystemSkill.from(this.client, listing)
+        : Document.byId(this.client, listing.id),
+      name: listing.name,
+      description: listing.description ?? undefined,
+      updatedAt: listing.updatedAt ?? undefined,
+    }));
+  }
+
+  /**
    * The built-in system skills: static AI instructions with no document
-   * behind them. Unlike user skills they cannot be opened or edited, and
-   * their instructions are read with the ReadSkill tool, not `content()`.
+   * behind them. Unlike user skills they cannot be opened or edited; read
+   * their instructions with `content()`.
    */
   systemSkills(): Promise<SystemSkill[]> {
     return SystemSkill.list(this.client);

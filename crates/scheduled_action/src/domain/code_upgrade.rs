@@ -195,6 +195,11 @@ async fn rewrite(
                 .unwrap_or_default()
         )));
     }
+    let Some(routine_id) = action.id else {
+        return Err(failed(
+            "Only a saved routine's code can be updated.".to_owned(),
+        ));
+    };
     let mut dry = context.clone();
     if let Some(run) = dry.get_mut("run").and_then(Value::as_object_mut) {
         run.insert("dryRun".into(), Value::Bool(true));
@@ -214,6 +219,8 @@ async fn rewrite(
                     context: &dry,
                     steps: &json!({}),
                     dry_run: true,
+                    acts_as: program.code_identity(),
+                    routine_id,
                 },
             )
             .await;
