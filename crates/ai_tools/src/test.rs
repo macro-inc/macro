@@ -713,6 +713,30 @@ fn booking_management_has_mcp_and_chat_parity() {
 }
 
 #[test]
+fn code_mode_manages_booking_links_through_the_sdk_instead_of_the_tools() {
+    let standard = tools_for(AiHost::AgentSession);
+    let direct = tools_for_agent_code_mode();
+    for name in [
+        "ReadBookingSettings",
+        "UpdateBookingSettings",
+        "ListBookings",
+        "GetBookingInsights",
+        "GetBookingRescheduleSlots",
+        "ChangeBooking",
+        "ListBookingLinks",
+        "CreateBookingLink",
+        "EditBookingLink",
+    ] {
+        assert!(standard.toolset.tools.contains_key(name), "{name}");
+        assert!(!direct.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !direct.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery() {
     let standard = tools_for(AiHost::AgentSession);
     let direct = tools_for_agent_code_mode();
