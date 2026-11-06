@@ -26,7 +26,6 @@ export function CallRecordingSidePanel(props: {
         <div class="flex shrink-0 items-center justify-between gap-2 px-3 py-2">
           <Tabs
             aria-label={t('calls.detailSidePanel')}
-            variant="pills"
             size="sm"
             options={[
               { value: 'transcript', label: t('calls.detailTranscript') },

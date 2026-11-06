@@ -48,7 +48,8 @@ stored Markdown, not generated client-side sections.
 
 The full-width top bar stays above both content and the side panel, with a
 single panel toggle beside Share. The side panel is docked below that top bar
-in wide panes and has Transcript and Details tabs.
+in wide panes and has Transcript and Details tabs using the same shared pill
+treatment as the reading tabs.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
