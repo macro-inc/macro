@@ -221,6 +221,32 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Task templates
+
+`macro.taskTemplates` manages personal and team templates. Selected fields can
+stay blank or carry a default; description Markdown fills a blank task body.
+
+Pass a client-generated UUID as `idempotencyKey` and retain it with the same input
+when retrying creation. The server returns the same template rather than creating
+a duplicate; changed content or ownership conflicts.
+
+```ts
+const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008');
+const template = await macro.taskTemplates.create({
+  name: 'Bug report',
+  team: await macro.teams.current(), // omit for a personal template
+  properties: [{ property: effort, defaultValue: { type: 'number', value: 0 } }],
+  descriptionMarkdown: '## Details\n\n- [ ] Describe the task',
+});
+const templates = await macro.taskTemplates.list({ team: await macro.teams.current() });
+await template.update({ name: 'Detailed bug report' });
+```
+
+Current team members can use team templates; the creator and current team admins
+can edit or delete them. Ownership cannot change. Updates and `template.delete()`
+use the observed revision; after a conflict, read a fresh handle before retrying.
+Template edits and deletion never change tasks already created from them.
+
 ### Databases
 
 Databases are collections of tables. Tables, columns, and views are parts of

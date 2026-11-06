@@ -241,6 +241,9 @@ stay unchanged. Unpinning a default preserves the other pins, and clearing all p
 stays cleared after reopening. The empty Project placeholder can also be pinned or
 unpinned without creating an assignment; its pin follows the real assignment when
 one is saved. Builtin task properties cannot be deleted from the title or side panel.
+At creation, the first shared task snapshot pins the visible composer fields and default task pins,
+including custom fields with no value. Empty selected fields persist as task-owned assignments,
+so every authorized task viewer sees and can edit them according to their task permissions.
 
 Property edits should update the visible task before the save finishes. To verify,
 delay the GraphQL mutation and change Status, an existing Priority, and an unset
@@ -815,6 +818,48 @@ keyboard stays up throughout. Desktop uses
 the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
+
+Desktop places the secondary template selector at the left of the header and
+`Continue editing in split` immediately left of Close. The selector starts at
+`No template` and opens an anchored searchable dropdown, not another dialog.
+`No template` and `New template` appear first above a divider, followed by saved
+personal and team templates. The trigger and selection check show the active choice.
+Empty collections and unmatched searches show a short empty state. ArrowDown from
+search enters the menu; Escape dismisses it. On touch, keep the picker sheet.
+Browse saved templates without edits: each selection replaces the previous
+fields, defaults, and description instead of combining templates. No template
+restores the starting fields and defaults. Task titles, contextual Source values,
+and explicit launch presets stay intact. After editing properties or description,
+switching asks for confirmation; Cancel preserves the current draft. Existing
+prefilled task text also requires confirmation before a template replaces it;
+No template restores that text. Clearing a field or removing a property also
+counts as an edit. Reopening a saved draft preserves this distinction. The
+Customer / Contact row participates in template defaults and creation-time title
+pins without adding duplicate property pills.
+
+New template adds one compact row for template name and personal/team ownership.
+Necessary explanations live behind an info icon: hover or focus on desktop, tap
+on touch. Unsaved name or visibility changes also require confirmation before
+switching. Use the existing property picker and description editor. With no
+task title, `Create template` saves the selected fields, even when their values
+are empty, without creating a task. Adding a task title offers `Create task &
+template`. Source links are not copied into reusable defaults. `Create More`
+changes the normal task action to `Create & add another`; the first combined
+save reads `Create task & template, then another`. Each fresh task reapplies the
+selected template's saved fields, defaults, and description, discarding edits
+specific to the task just submitted. After a new template is saved, it becomes
+the selection for subsequent tasks. If task creation fails after the template
+saves, task recovery keeps the saved template identity rather than saving it again.
+
+Edit also uses the same composer. Confirm before replacing an unsaved draft,
+show the existing name, fields, defaults, and description, and keep ownership
+fixed. `Save template` updates the template without creating a task. Deleting a
+template requires confirmation and leaves existing tasks and the current draft
+unchanged; deleting the selected template only detaches its selection. Verify
+personal/team creation, template-only creation, combined creation, no-template
+selection, repeated Create More, editing, cancellation, conflicts, and deletion.
+On touch, entering New template or Edit leaves name-field focus to an explicit
+tap. At narrow desktop widths, the dropdown stays within the viewport.
 
 After creation, the `Task created` toast shows primary `Open` and, on desktop,
 secondary `Open split` to its left, with a close icon instead of Dismiss.

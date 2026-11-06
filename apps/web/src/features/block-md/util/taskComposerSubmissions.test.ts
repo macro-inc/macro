@@ -7,6 +7,8 @@ import {
   saveTaskComposerDraft,
 } from './taskComposerStorage';
 import {
+  checkpointTaskTemplate,
+  clearTaskSubmission,
   createTaskSubmissionList,
   loadTaskSubmissions,
   submitTaskDraft,
@@ -205,4 +207,225 @@ it('recovers Markdown when an older editor envelope is malformed', async () => {
   const recovered = loadTaskSubmissions('alice')[0];
   expect(recovered.draft.editorState).toBeUndefined();
   expect(recovered.draft.content).toBe('Keep this description');
+});
+
+it('persists the saved template identity before creating a task and recovers task-only after failure', async () => {
+  const events: string[] = [];
+  const pending = {
+    ...submission,
+    draft: {
+      ...submission.draft,
+      templateSelection: {
+        kind: 'new' as const,
+        creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+        name: 'Reusable',
+        teamId: null,
+      },
+    },
+  };
+  await submitTaskDraft(client, pending, async () => {
+    events.push('template saved');
+    checkpointTaskTemplate(pending, {
+      id: 'template-1',
+      revision: 1,
+      name: 'Reusable',
+      teamId: null,
+      contents: {
+        propertyIds: ['due'],
+        propertyDefaults: {
+          due: { valueType: 'DATE', value: new Date('2026-10-22T00:00:00Z') },
+        },
+        descriptionMarkdown: 'Keep this description',
+      },
+    });
+    events.push('task attempted');
+    return null;
+  });
+  expect(events).toEqual(['template saved', 'task attempted']);
+  const recovered = loadTaskSubmissions('alice')[0];
+  expect(recovered.draft.templateSelection).toEqual({
+    kind: 'saved',
+    template: {
+      id: 'template-1',
+      revision: 1,
+      name: 'Reusable',
+      teamId: null,
+      contents: {
+        propertyIds: ['due'],
+        propertyDefaults: {
+          due: { valueType: 'DATE', value: new Date('2026-10-22T00:00:00Z') },
+        },
+        descriptionMarkdown: 'Keep this description',
+      },
+    },
+  });
+  await submitTaskDraft(client, recovered, async () => {
+    events.push('task retried');
+    return { documentId: 'created' };
+  });
+  expect(events).toEqual(['template saved', 'task attempted', 'task retried']);
+  expect(loadTaskSubmissions('alice')).toEqual([]);
+});
+
+it('does not checkpoint a template when the durable submission is absent', () => {
+  expect(() =>
+    checkpointTaskTemplate(submission, {
+      id: 'template-1',
+      revision: 1,
+      name: 'Saved',
+      teamId: null,
+      contents: {
+        propertyIds: [],
+        propertyDefaults: {},
+        descriptionMarkdown: '',
+      },
+    })
+  ).toThrow('Pending task draft is unavailable');
+});
+
+it('retires a template-only submission after the saved template checkpoint', async () => {
+  const pending = {
+    ...submission,
+    draft: {
+      ...submission.draft,
+      title: '',
+      templateSelection: {
+        kind: 'new' as const,
+        creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+        name: 'Reusable',
+        teamId: null,
+      },
+    },
+  };
+  await submitTaskDraft(client, pending, async () => {
+    expect(loadTaskSubmissions('alice')[0].draft.templateSelection).toEqual({
+      kind: 'new',
+      creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+      name: 'Reusable',
+      teamId: null,
+    });
+    checkpointTaskTemplate(pending, {
+      id: 'saved',
+      revision: 1,
+      name: 'Reusable',
+      teamId: null,
+      contents: {
+        propertyIds: [],
+        propertyDefaults: {},
+        descriptionMarkdown: 'Keep this description',
+      },
+    });
+    expect(loadTaskSubmissions('alice')[0].draft.templateSelection?.kind).toBe(
+      'saved'
+    );
+    expect(
+      loadTaskSubmissions('alice')[0].draft.templateRequest
+    ).toBeUndefined();
+    clearTaskSubmission('alice', pending.id);
+    return null;
+  });
+  expect(loadTaskSubmissions('alice')).toEqual([]);
+});
+
+it('persists the creation ID before the first request and keeps it on retry', async () => {
+  const pending = {
+    ...submission,
+    draft: {
+      ...submission.draft,
+      templateSelection: {
+        kind: 'new' as const,
+        creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+        name: 'Reusable',
+        teamId: null,
+      },
+    },
+  };
+  await submitTaskDraft(
+    client,
+    pending,
+    async () => {
+      expect(loadTaskSubmissions('alice')[0].draft.templateSelection).toEqual(
+        pending.draft.templateSelection
+      );
+      return null;
+    },
+    { templateOnly: true }
+  );
+  const recovered = loadTaskSubmissions('alice')[0];
+  expect(recovered.draft.templateSelection).toEqual(
+    pending.draft.templateSelection
+  );
+  await submitTaskDraft(
+    client,
+    recovered,
+    async () => {
+      expect(loadTaskSubmissions('alice')[0].draft.templateSelection).toEqual(
+        pending.draft.templateSelection
+      );
+      return null;
+    },
+    { templateOnly: true }
+  );
+});
+
+it('keeps the first template creation request when a recovered editor changes it', async () => {
+  const request = {
+    creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+    name: 'Original',
+    teamId: null,
+    contents: {
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: 'Original',
+    },
+  };
+  const pending = {
+    ...submission,
+    draft: {
+      ...submission.draft,
+      templateSelection: {
+        kind: 'new' as const,
+        creationId: request.creationId,
+        name: request.name,
+        teamId: null,
+      },
+      templateRequest: request,
+    },
+  };
+  await submitTaskDraft(client, pending, async () => null, {
+    templateOnly: true,
+  });
+  const changed = {
+    ...pending,
+    draft: {
+      ...pending.draft,
+      templateSelection: {
+        ...pending.draft.templateSelection,
+        name: 'Changed',
+      },
+      templateRequest: { ...request, name: 'Changed' },
+    },
+  };
+  let sent = false;
+  await expect(
+    submitTaskDraft(
+      client,
+      changed,
+      async () => {
+        sent = true;
+        return null;
+      },
+      { templateOnly: true }
+    )
+  ).rejects.toThrow('Template creation input changed');
+  expect(sent).toBe(false);
+  expect(loadTaskSubmissions('alice')[0].draft.templateRequest).toEqual(
+    request
+  );
+  await submitTaskDraft(client, pending, async () => null, {
+    templateOnly: true,
+  });
+  expect(loadTaskSubmissions('alice')[0].draft.templateRequest).toEqual(
+    request
+  );
 });

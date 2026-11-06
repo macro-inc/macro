@@ -195,7 +195,7 @@ where
 
             match self
                 .markdown_initializer
-                .initialize_existing_markdown(&document_context.document_id, markdown)
+                .initialize_existing_markdown(&document_context.document_id, markdown, None)
                 .await
             {
                 Ok(_) => {}

@@ -116,6 +116,7 @@ export async function createTaskWithProperties(
   >,
   upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void,
   options?: {
+    pinnedPropertyDefinitionIds?: string[];
     revalidateSoup?: boolean;
     shareWithTeam?: boolean;
     /** Disable when the caller provides its own recovery notification. */
@@ -149,6 +150,7 @@ export async function createTaskWithProperties(
     title: taskTitle,
     content: taskContent,
     propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
+    pinnedPropertyDefinitionIds: options?.pinnedPropertyDefinitionIds,
   });
 
   if (!createdTask) {
@@ -343,6 +345,16 @@ export function createTaskComposerProperties(args: {
 
   const projects = useFeatureFlag(enableProjects);
 
+  // Host-controlled fields still belong to the draft even without separate pills.
+  const selectedPropertyIds = () => {
+    const values = args.values?.() ?? propertyValues;
+    return [
+      ...new Set([
+        ...visiblePropertyIds(),
+        ...(args.hiddenPropertyIds ?? []).filter((id) => id in values),
+      ]),
+    ];
+  };
   const visibleIds = () =>
     taskComposerVisiblePropertyIds(
       [
@@ -374,17 +386,19 @@ export function createTaskComposerProperties(args: {
       return;
     setVisiblePropertyIds((current) => [...current, id]);
   };
-  const availableProperties = () =>
+  const writableProperties = () =>
     availableDefinitions()
       .filter(
         (definition) =>
-          (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT ||
-            projects().enabled) &&
-          !args.hiddenPropertyIds?.includes(definition.id)
+          definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled
       )
       .map((definition) =>
         toPropertyDefinitionDomain(definition, options().get(definition.id))
       );
+  const availableProperties = () =>
+    writableProperties().filter(
+      (definition) => !args.hiddenPropertyIds?.includes(definition.id)
+    );
 
   const properties = (): Property[] => {
     return filterMap(visibleIds(), (id) => {
@@ -455,7 +469,10 @@ export function createTaskComposerProperties(args: {
     properties,
     visiblePropertyIds,
     setVisiblePropertyIds,
+    selectedPropertyIds,
+    writableProperties,
     availableProperties,
+    definitionsReady: () => systemPropertiesQuery.isSuccess,
     addProperty,
     saveHandler,
     composerTags,

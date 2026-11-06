@@ -51,8 +51,48 @@ const editorState = z.object({
   }),
 });
 
+const templateContents = z.object({
+  propertyIds: z.array(z.string()),
+  propertyDefaults: z.record(z.string(), propertyValue),
+  descriptionMarkdown: z.string(),
+});
+
+const savedTemplate = z.object({
+  id: z.string(),
+  name: z.string(),
+  teamId: z.string().nullable(),
+  revision: z.number(),
+  contents: templateContents,
+});
+
+const templateSelection = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('none') }),
+  z.object({
+    kind: z.literal('new'),
+    creationId: z.string().uuid(),
+    name: z.string(),
+    teamId: z.string().nullable(),
+  }),
+  z.object({ kind: z.literal('saved'), template: savedTemplate }),
+  z.object({
+    kind: z.literal('editing'),
+    template: savedTemplate,
+    name: z.string(),
+  }),
+]);
+
 export const taskComposerDraftSchema = z.object({
   title: z.string(),
+  templateSelection: templateSelection.optional(),
+  templateBaseline: templateContents.optional(),
+  templateRequest: z
+    .object({
+      creationId: z.string().uuid(),
+      name: z.string(),
+      teamId: z.string().nullable(),
+      contents: templateContents,
+    })
+    .optional(),
   content: z.string(),
   editorState: editorState.optional().catch(undefined),
   propertyValues: z.record(z.string(), propertyValue),

@@ -75,6 +75,8 @@ watchers; its queries and policy belong to `agent_preview`. Leases have a bounde
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
 unreferenced replicas. These additive tables do not change agent-session claims.
 
+Task-template rows cascade with personal users or teams; nullable creator attribution clears on account deletion while team-owned content remains.
+
 ## Gotchas
 
 - Migrations deploy before service code: never drop a column/table in the

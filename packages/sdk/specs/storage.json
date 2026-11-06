@@ -22218,6 +22218,249 @@
         }
       }
     },
+    "/task_templates": {
+      "get": {
+        "tags": ["task_templates"],
+        "operationId": "list_task_templates",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskTemplate"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["task_templates"],
+        "operationId": "create_task_template",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/task_templates/{id}": {
+      "get": {
+        "tags": ["task_templates"],
+        "operationId": "get_task_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["task_templates"],
+        "operationId": "update_task_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["task_templates"],
+        "operationId": "delete_task_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/threads/{thread_id}": {
       "patch": {
         "tags": ["threads"],
@@ -31072,6 +31315,13 @@
             "type": ["string", "null"],
             "description": "Markdown source text. Defaults to an empty task document."
           },
+          "pinnedPropertyDefinitionIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults."
+          },
           "projectId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -31136,6 +31386,32 @@
             "description": "A pre-generated permission token that you can use for SS"
           }
         }
+      },
+      "CreateTaskTemplateRequest": {
+        "type": "object",
+        "description": "Create a personal template or one owned by a current team.",
+        "required": ["name", "configuration"],
+        "properties": {
+          "configuration": {
+            "$ref": "#/components/schemas/TaskTemplateConfiguration",
+            "description": "Reusable task fields and description."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Client-generated creation identity; reuse the same ID and input when retrying."
+          },
+          "name": {
+            "type": "string",
+            "description": "Template name."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Owning team; omission creates a personal template."
+          }
+        },
+        "additionalProperties": false
       },
       "CreateToken": {
         "type": "string",
@@ -46761,6 +47037,22 @@
           }
         }
       },
+      "PropertyDefault": {
+        "type": "object",
+        "description": "A reusable default using the task creation property's existing value contract.",
+        "required": ["propertyId", "value"],
+        "properties": {
+          "propertyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Definition that receives the default."
+          },
+          "value": {
+            "$ref": "#/components/schemas/SetPropertyValue",
+            "description": "Default value; absence from the configuration leaves the field blank."
+          }
+        }
+      },
       "PropertyDefinition": {
         "type": "object",
         "description": "Property definition model (service representation).",
@@ -53876,6 +54168,93 @@
           }
         }
       },
+      "TaskTemplate": {
+        "type": "object",
+        "description": "A personal or team-owned template with viewer-specific management capability.",
+        "required": [
+          "id",
+          "name",
+          "configuration",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "canManage"
+        ],
+        "properties": {
+          "canManage": {
+            "type": "boolean",
+            "description": "Whether the current viewer can update or delete the template."
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/TaskTemplateConfiguration",
+            "description": "Reusable task fields and description."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "creatorId": {
+            "type": ["string", "null"],
+            "description": "Original creator; cleared when that account is deleted."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable template ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-supplied template name."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Positive revision used for conditional updates and deletes."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Owning team; absent for personal templates."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last content update time."
+          },
+          "userId": {
+            "type": ["string", "null"],
+            "description": "Personal owner; absent for team-owned templates."
+          }
+        }
+      },
+      "TaskTemplateConfiguration": {
+        "type": "object",
+        "description": "Selected fields, optional default values, and description Markdown.",
+        "required": ["propertyIds", "descriptionMarkdown"],
+        "properties": {
+          "defaults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyDefault"
+            },
+            "description": "Defaults for selected fields only."
+          },
+          "descriptionMarkdown": {
+            "type": "string",
+            "description": "Markdown inserted only when the current description is blank."
+          },
+          "propertyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Visible definition IDs, including fields without a default value."
+          }
+        },
+        "additionalProperties": false
+      },
       "TeamCalendarContent": {
         "oneOf": [
           {
@@ -55138,6 +55517,27 @@
             ]
           }
         }
+      },
+      "UpdateTaskTemplateRequest": {
+        "type": "object",
+        "description": "Replace content without changing ownership.",
+        "required": ["revision", "name", "configuration"],
+        "properties": {
+          "configuration": {
+            "$ref": "#/components/schemas/TaskTemplateConfiguration",
+            "description": "Replacement task fields and description."
+          },
+          "name": {
+            "type": "string",
+            "description": "Replacement name."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Revision observed when editing began."
+          }
+        },
+        "additionalProperties": false
       },
       "UploadDescriptor": {
         "type": "object",

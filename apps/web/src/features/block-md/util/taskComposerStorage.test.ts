@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { isTemplateStateDirty } from '@app/features/task-composer/core/template-state';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -157,4 +158,130 @@ it('preserves specific message references through draft recovery', () => {
     valueType: 'ENTITY',
     refs: [reference],
   });
+});
+
+it('restores template mode and scope with the edited draft', () => {
+  localStorage.clear();
+  saveTaskComposerDraft({
+    ...draft,
+    templateSelection: {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: 'team-1',
+      creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+    },
+  });
+  expect(loadTaskComposerDraft()?.templateSelection).toEqual({
+    kind: 'new',
+    name: 'Reusable',
+    teamId: 'team-1',
+    creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+  });
+});
+
+it('restores the captured revision and edited name', () => {
+  localStorage.clear();
+  const template = {
+    id: 'saved',
+    revision: 3,
+    name: 'Before',
+    teamId: null,
+    contents: {
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: 'Original',
+    },
+  };
+  saveTaskComposerDraft({
+    ...draft,
+    templateSelection: { kind: 'editing', template, name: 'After' },
+  });
+  expect(loadTaskComposerDraft()?.templateSelection).toEqual({
+    kind: 'editing',
+    template,
+    name: 'After',
+  });
+});
+
+it('retains the admitted template request beside later composer edits', () => {
+  const request = {
+    creationId: '0195dbd0-7b5d-7000-8000-000000000001',
+    name: 'First',
+    teamId: null,
+    contents: {
+      propertyIds: ['due'],
+      propertyDefaults: {
+        due: {
+          valueType: 'DATE' as const,
+          value: new Date('2025-10-22T00:00:00Z'),
+        },
+      },
+      descriptionMarkdown: 'First',
+    },
+  };
+  const storage = taskComposerContextStorage('pending-template');
+  saveTaskComposerDraft(
+    { ...draft, templateRequest: request, content: 'Edited' },
+    storage
+  );
+  expect(loadTaskComposerDraft(storage)?.templateRequest).toEqual(request);
+  expect(loadTaskComposerDraft(storage)?.content).toBe('Edited');
+});
+
+it('restores the template baseline independently of edited draft values', () => {
+  localStorage.clear();
+  const baseline = {
+    propertyIds: ['priority'],
+    propertyDefaults: {
+      priority: {
+        valueType: 'DATE' as const,
+        value: new Date('2026-10-22T00:00:00Z'),
+      },
+    },
+    descriptionMarkdown: 'Preset',
+  };
+  saveTaskComposerDraft({
+    ...draft,
+    content: '',
+    visiblePropertyIds: [],
+    propertyValues: { priority: { valueType: 'DATE', value: null } },
+    templateBaseline: baseline,
+  });
+  const restored = loadTaskComposerDraft();
+  if (!restored) throw new Error('Draft was not restored');
+  expect(
+    isTemplateStateDirty(
+      {
+        propertyIds: restored.visiblePropertyIds ?? [],
+        propertyDefaults: restored.propertyValues,
+        descriptionMarkdown: restored.content,
+      },
+      restored.templateBaseline
+    )
+  ).toBe(true);
+  expect(restored.content).toBe('');
+  expect(restored?.visiblePropertyIds).toEqual([]);
+  expect(restored?.propertyValues.priority).toEqual({
+    valueType: 'DATE',
+    value: null,
+  });
+  expect(restored?.templateBaseline).toEqual(baseline);
+  expect(restored?.templateBaseline?.propertyDefaults.priority).toEqual({
+    valueType: 'DATE',
+    value: new Date('2026-10-22T00:00:00Z'),
+  });
+  saveTaskComposerDraft(draft);
+  const olderDraft = loadTaskComposerDraft();
+  expect(olderDraft?.templateBaseline).toBeUndefined();
+  if (!olderDraft) throw new Error('Older draft was not restored');
+  expect(
+    isTemplateStateDirty(
+      {
+        propertyIds: olderDraft.visiblePropertyIds ?? [],
+        propertyDefaults: olderDraft.propertyValues,
+        descriptionMarkdown: olderDraft.content,
+      },
+      olderDraft.templateBaseline
+    )
+  ).toBe(true);
 });

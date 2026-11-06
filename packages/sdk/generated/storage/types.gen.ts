@@ -5228,6 +5228,10 @@ export type CreateTaskRequest = {
      */
     markdown?: string | null;
     /**
+     * Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.
+     */
+    pinnedPropertyDefinitionIds?: Array<string> | null;
+    /**
      * Optional project ID to associate the task with.
      */
     projectId?: string | null;
@@ -5279,6 +5283,28 @@ export type CreateTaskResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * Create a personal template or one owned by a current team.
+ */
+export type CreateTaskTemplateRequest = {
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Client-generated creation identity; reuse the same ID and input when retrying.
+     */
+    id?: string | null;
+    /**
+     * Template name.
+     */
+    name: string;
+    /**
+     * Owning team; omission creates a personal template.
+     */
+    teamId?: string | null;
 };
 
 /**
@@ -14728,6 +14754,20 @@ export type PropertyDateRanges = {
 };
 
 /**
+ * A reusable default using the task creation property's existing value contract.
+ */
+export type PropertyDefault = {
+    /**
+     * Definition that receives the default.
+     */
+    propertyId: string;
+    /**
+     * Default value; absence from the configuration leaves the field blank.
+     */
+    value: SetPropertyValue;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -19206,6 +19246,70 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * A personal or team-owned template with viewer-specific management capability.
+ */
+export type TaskTemplate = {
+    /**
+     * Whether the current viewer can update or delete the template.
+     */
+    canManage: boolean;
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Creation time.
+     */
+    createdAt: string;
+    /**
+     * Original creator; cleared when that account is deleted.
+     */
+    creatorId?: string | null;
+    /**
+     * Stable template ID.
+     */
+    id: string;
+    /**
+     * User-supplied template name.
+     */
+    name: string;
+    /**
+     * Positive revision used for conditional updates and deletes.
+     */
+    revision: number;
+    /**
+     * Owning team; absent for personal templates.
+     */
+    teamId?: string | null;
+    /**
+     * Last content update time.
+     */
+    updatedAt: string;
+    /**
+     * Personal owner; absent for team-owned templates.
+     */
+    userId?: string | null;
+};
+
+/**
+ * Selected fields, optional default values, and description Markdown.
+ */
+export type TaskTemplateConfiguration = {
+    /**
+     * Defaults for selected fields only.
+     */
+    defaults?: Array<PropertyDefault>;
+    /**
+     * Markdown inserted only when the current description is blank.
+     */
+    descriptionMarkdown: string;
+    /**
+     * Visible definition IDs, including fields without a default value.
+     */
+    propertyIds: Array<string>;
+};
+
+/**
  * Disjoint busy/detail shapes prevent new event fields leaking by default.
  */
 export type TeamCalendarContent = {
@@ -20087,6 +20191,24 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Replace content without changing ownership.
+ */
+export type UpdateTaskTemplateRequest = {
+    /**
+     * Replacement task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Replacement name.
+     */
+    name: string;
+    /**
+     * Revision observed when editing began.
+     */
+    revision: number;
 };
 
 /**
@@ -30602,6 +30724,115 @@ export type BulkWakeupSyncServiceDocumentsResponses = {
 };
 
 export type BulkWakeupSyncServiceDocumentsResponse = BulkWakeupSyncServiceDocumentsResponses[keyof BulkWakeupSyncServiceDocumentsResponses];
+
+export type ListTaskTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        teamId?: string;
+    };
+    url: '/task_templates';
+};
+
+export type ListTaskTemplatesErrors = {
+    403: ErrorResponse;
+};
+
+export type ListTaskTemplatesError = ListTaskTemplatesErrors[keyof ListTaskTemplatesErrors];
+
+export type ListTaskTemplatesResponses = {
+    200: Array<TaskTemplate>;
+};
+
+export type ListTaskTemplatesResponse = ListTaskTemplatesResponses[keyof ListTaskTemplatesResponses];
+
+export type CreateTaskTemplateData = {
+    body: CreateTaskTemplateRequest;
+    path?: never;
+    query?: never;
+    url: '/task_templates';
+};
+
+export type CreateTaskTemplateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type CreateTaskTemplateError = CreateTaskTemplateErrors[keyof CreateTaskTemplateErrors];
+
+export type CreateTaskTemplateResponses = {
+    201: TaskTemplate;
+};
+
+export type CreateTaskTemplateResponse = CreateTaskTemplateResponses[keyof CreateTaskTemplateResponses];
+
+export type DeleteTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        revision: number;
+    };
+    url: '/task_templates/{id}';
+};
+
+export type DeleteTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type DeleteTaskTemplateError = DeleteTaskTemplateErrors[keyof DeleteTaskTemplateErrors];
+
+export type DeleteTaskTemplateResponses = {
+    204: void;
+};
+
+export type DeleteTaskTemplateResponse = DeleteTaskTemplateResponses[keyof DeleteTaskTemplateResponses];
+
+export type GetTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type GetTaskTemplateErrors = {
+    404: ErrorResponse;
+};
+
+export type GetTaskTemplateError = GetTaskTemplateErrors[keyof GetTaskTemplateErrors];
+
+export type GetTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type GetTaskTemplateResponse = GetTaskTemplateResponses[keyof GetTaskTemplateResponses];
+
+export type UpdateTaskTemplateData = {
+    body: UpdateTaskTemplateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type UpdateTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateTaskTemplateError = UpdateTaskTemplateErrors[keyof UpdateTaskTemplateErrors];
+
+export type UpdateTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type UpdateTaskTemplateResponse = UpdateTaskTemplateResponses[keyof UpdateTaskTemplateResponses];
 
 export type EditThreadV2Data = {
     body: PatchThreadRequestV2;

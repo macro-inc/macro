@@ -72,6 +72,7 @@ pub async fn create_task_handler<
                 markdown,
                 subtype: MarkdownSubtype::Task {
                     property_values: req.property_values,
+                    pinned_property_definition_ids: req.pinned_property_definition_ids,
                     share_with_team: req.share_with_team && team_id.is_some(), // we should only try and share if the user is in a team and they have share_with_team set
                     team_id,
                 },

@@ -86,7 +86,12 @@ export function packageEntityDocs(
           : directory.replace(/-([a-z])/g, (_, letter: string) =>
               letter.toUpperCase()
             ),
-      prefixes: [`src/entities/${directory}/`],
+      // Task templates share the task routing sentence; other namespaces
+      // retain their own discovery topics.
+      prefixes: (directory === 'tasks'
+        ? ['tasks', 'task-templates']
+        : [directory]
+      ).map((value) => `src/entities/${value}/`),
     })),
     { name: 'core', prefixes: core },
   ];

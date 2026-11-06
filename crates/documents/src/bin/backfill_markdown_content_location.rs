@@ -225,6 +225,7 @@ impl MarkdownInitializationPort for OptionalMarkdownInitializer {
         &self,
         document_id: &str,
         markdown: &str,
+        initial_pins: Option<&[String]>,
     ) -> Result<Vec<u8>, DocumentError> {
         match self {
             Self::Disabled => Err(DocumentError::Internal(anyhow::anyhow!(
@@ -232,7 +233,7 @@ impl MarkdownInitializationPort for OptionalMarkdownInitializer {
             ))),
             Self::Enabled(initializer) => {
                 initializer
-                    .initialize_existing_markdown(document_id, markdown)
+                    .initialize_existing_markdown(document_id, markdown, initial_pins)
                     .await
             }
         }

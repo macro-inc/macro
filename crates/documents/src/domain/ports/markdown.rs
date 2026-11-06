@@ -21,6 +21,7 @@ pub trait MarkdownInitializationPort: Send + Sync {
         &self,
         document_id: &str,
         markdown: &str,
+        initial_pins: Option<&[String]>,
     ) -> impl Future<Output = Result<Vec<u8>, DocumentError>> + Send;
 
     /// Initialize an already-created markdown document from a Notion page
@@ -39,6 +40,7 @@ pub trait LexicalSnapshotPort: Send + Sync + 'static {
     fn markdown_to_loro_snapshot(
         &self,
         markdown: &str,
+        initial_pins: Option<Vec<String>>,
     ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send;
 
     /// Convert a Notion page to loro via lexical using lexical service

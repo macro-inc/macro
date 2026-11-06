@@ -1,4 +1,9 @@
+import {
+  TaskTemplateControls,
+  TaskTemplateDetails,
+} from '@app/features/task-templates/task-template-controls';
 import { EntityComposer } from '@ui';
+import { Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
 import { TaskComposer } from './task-composer-parts';
 
@@ -9,15 +14,19 @@ export function DesktopTaskComposer(props: {
   return (
     <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header>
-        <div class="flex-1 flex items-center">
-          <TaskComposer.ContinueInSplit />
+        <div class="min-w-0 flex-1 flex items-center gap-1">
+          <TaskTemplateControls composer={props.composer} />
         </div>
         <TaskComposer.ClearDraft />
+        <TaskComposer.ContinueInSplit />
         <TaskComposer.Close />
       </EntityComposer.Header>
       <TaskComposer.Recovery />
-      <EntityComposer.Main>
-        <TaskComposer.Title />
+      <EntityComposer.Main inert={props.composer.isSavingTemplate()}>
+        <TaskTemplateDetails composer={props.composer} />
+        <Show when={props.composer.templateSelection().kind !== 'editing'}>
+          <TaskComposer.Title />
+        </Show>
         <TaskComposer.Body />
         <div class="shrink-0 flex items-center py-2">
           <TaskComposer.Attach />
@@ -29,7 +38,7 @@ export function DesktopTaskComposer(props: {
           narrow split wraps the actions to their own row. */}
       <EntityComposer.Footer class="flex-wrap items-center">
         <TaskComposer.ShareToggle />
-        <div class="ml-auto flex items-center gap-3">
+        <div class="min-w-0 ml-auto flex flex-wrap items-center justify-end gap-3">
           <TaskComposer.LinkInSourceToggle />
           <TaskComposer.CreateMoreToggle />
           <TaskComposer.Submit />

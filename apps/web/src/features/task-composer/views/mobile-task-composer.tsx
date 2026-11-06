@@ -1,8 +1,12 @@
+import {
+  TaskTemplateControls,
+  TaskTemplateDetails,
+} from '@app/features/task-templates/task-template-controls';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
 import { InlineTagsSheetPill } from '@property/tags';
 import { cn, EntityComposer } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
 import { TaskComposer } from './task-composer-parts';
 
@@ -53,8 +57,9 @@ export function MobileTaskComposer(props: {
           headerPinned() && 'bg-menu'
         )}
       >
-        <div class="flex-1 flex items-center">
+        <div class="flex-1 flex items-center gap-1">
           <TaskComposer.ContinueInSplit />
+          <TaskTemplateControls composer={props.composer} compact />
         </div>
         {/* Far enough from Create Task that a tap meant for one cannot land
             on the other. */}
@@ -69,10 +74,14 @@ export function MobileTaskComposer(props: {
           to the sheet's edges. */}
       <EntityComposer.Main
         class="overflow-visible"
+        inert={props.composer.isSavingTemplate()}
         onPointerDown={keepTypingFocus}
         onMouseDown={keepTypingFocus}
       >
-        <TaskComposer.Title />
+        <TaskTemplateDetails composer={props.composer} />
+        <Show when={props.composer.templateSelection().kind !== 'editing'}>
+          <TaskComposer.Title />
+        </Show>
         <TaskComposer.Body />
         <div class="shrink-0 flex items-center py-2">
           <TaskComposer.Attach />

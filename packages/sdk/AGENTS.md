@@ -40,6 +40,9 @@ enforced by the ordinary backend APIs.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves.
+- `src/entities/task-templates/`: personal/team template handles, replay-safe
+  creation keys, selected fields with optional defaults, and revision-guarded
+  writes. Team membership and creator/admin management stay server-authorized.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -114,12 +117,13 @@ the existing gateway prefixes.
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
   generation otherwise restores dependencies from the old SDK snapshot.
-- Every entity's namespace class carries one `@routing` sentence ("Use when …;
-  not …") that agents route on, and may carry an `@agent` block: how that area
-  of Macro works, for agents only. Both are stripped from the public
-  reference, and code-mode generation fails without the routing sentence. Put
-  an area's rules there, never in `crates/prompt`; cross-namespace search
-  guidance lives on `SearchNamespace` in `search/namespace.ts`.
+- Give each code-mode documentation topic exactly one `@routing` sentence
+  ("Use when …; not …") on a participating namespace class; tasks and task
+  templates share that sentence. An `@agent` block describes the area for agents
+  only. Both tags are stripped from the public reference, and code-mode
+  generation fails without the routing sentence. Put area rules there, never
+  in `crates/prompt`; cross-namespace search guidance lives on
+  `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
   characters. Anything else reaches an agent only through `ReadCodeDocs`, which
