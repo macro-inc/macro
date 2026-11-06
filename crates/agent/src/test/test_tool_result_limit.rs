@@ -24,7 +24,6 @@ fn limited_bridge(
                 Box::pin(async {}) as Pin<Box<dyn Future<Output = ()> + Send>>
             }),
             tool_loads: ToolLoads::default(),
-            user_tool_finisher: None,
             stream_tool_calls: false,
             result_limit: Some(limit.clone()),
         },

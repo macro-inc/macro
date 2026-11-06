@@ -134,7 +134,7 @@ where
 }
 
 /// The full calendar toolset, for hosts that finish user tools: the deferring
-/// `CreateCalendarEvent`, which a composer or review card confirms, beside
+/// `CreateCalendarEvent`, which chat's composer confirms, beside
 /// `CreateConfirmedCalendarEvent`, which creates on a confirmation the user
 /// already gave in conversation. Both are always registered; the prompt
 /// decides which fits the surface the prompt came from. Reads, updates,

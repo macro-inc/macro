@@ -382,21 +382,23 @@ fn document_answers_expose_discovery_and_the_one_query_tool() {
     assert!(tools.user_tools.is_empty());
 }
 
-/// An agent session finishes user tools in the turn, so it keeps chat's
-/// deferring registrations - and gets the prompt that says a review card,
-/// not a pending composer, is what follows the call.
+/// An agent session presents email and calendar drafts on a saved review
+/// card that never pauses the turn. The deferring user tools stay registered
+/// for review submission, but the model cannot call them, so no turn ever
+/// waits on a review elicitation.
 #[test]
-fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
+fn the_agent_session_host_presents_drafts_instead_of_calling_user_tools() {
     let session = tools_for(AiHost::AgentSession);
-    assert!(
-        session
-            .toolset
-            .user_tools
-            .contains_key("CreateCalendarEvent")
-    );
-    assert!(session.toolset.user_tools.contains_key("SendEmail"));
-    // The confirmed twins execute in the loop, beside the deferring tools,
-    // for the prompts a session reads out of a thread.
+    for name in ["SendEmail", "CreateCalendarEvent"] {
+        assert!(session.toolset.user_tools.contains_key(name), "{name}");
+        assert!(!session.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !session.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    // The confirmed twins execute in the loop, for the prompts a session
+    // reads out of a thread.
     assert!(session.toolset.tools.contains_key("SendConfirmedEmail"));
     assert!(
         session
@@ -405,7 +407,8 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
             .contains_key("CreateConfirmedCalendarEvent")
     );
     let prompt = session.prompt.to_string();
-    assert!(prompt.contains("review card"));
+    assert!(prompt.contains("`PresentReview`"));
+    assert!(!prompt.contains("the turn waits"));
     assert!(!prompt.contains("PendingUserExecution"));
     assert_eq!(
         session.toolset.request_schemas().map(|schemas| schemas
@@ -417,10 +420,14 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
             .request_schemas()
             .map(|schemas| schemas
                 .into_iter()
-                .filter(|schema| schema.name != "DisplayResults")
+                .filter(|schema| !matches!(
+                    schema.name.as_str(),
+                    "DisplayResults" | "SendEmail" | "CreateCalendarEvent"
+                ))
                 .count()),
-        "the same tools as chat except agent-session connector discovery and \
-         chat's DisplayResults, which sessions replace with the harness's execution.views.present"
+        "the same tools as chat except agent-session connector discovery, chat's \
+         DisplayResults, which sessions replace with the harness's execution.views.present, \
+         and the user tools, which sessions replace with PresentReview"
     );
 }
 
@@ -827,8 +834,8 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
     let eager = deferred.request_schemas().unwrap();
     for name in ["SendEmail", "CreateCalendarEvent"] {
-        assert!(standard.toolset.tools.contains_key(name));
-        assert!(sdk.tools.contains_key(name));
+        assert!(!standard.toolset.tools.contains_key(name));
+        assert!(sdk.user_tools.contains_key(name));
         assert!(!eager.iter().any(|tool| tool.name == name));
         assert!(deferred.routing_description(name).is_none());
     }

@@ -9,23 +9,22 @@
  * Editors can answer; viewers see the same live card with inert controls.
  *
  * The form, URL consent, and unrecognized-request controls are the
- * `LiveElicitation` ones the channel's Magic Chip shares; a Macro user tool
- * under review opens the tool's own composer here.
+ * `LiveElicitation` ones the channel's Magic Chip shares. Agents now present
+ * email and calendar drafts on a saved review card, so a Macro user tool
+ * review only survives in older sessions: live, it is the flat form the
+ * agent also sent; resolved, it reads as the tool it ran.
  */
 
 import {
   LiveQuestionCard,
-  parseDraftedTool,
   type RespondToElicitation,
-  UserToolComposer,
-  type UserToolRequest,
 } from '@app/features/agent-interactions/components/LiveElicitation';
 import type {
   AnsweredField,
   AnsweredValue,
   MessagePart,
 } from '@service-agent-fold/generated/types';
-import { createMemo, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import { ToolCard } from '../../ui';
@@ -98,9 +97,8 @@ export function ElicitationPart(props: {
           </Show>
           {match(props.part.request)
             .with({ kind: 'user_tool' }, (request) => (
-              <LiveUserTool
-                request={request}
-                toolCall={props.part.toolCall ?? String(props.part.requestId)}
+              <LiveQuestionCard
+                request={{ kind: 'form', schema: request.schema }}
                 locked={locked()}
                 onRespond={respond}
               />
@@ -118,48 +116,6 @@ export function ElicitationPart(props: {
             .exhaustive()}
         </div>
       </ToolCard>
-    </Show>
-  );
-}
-
-/**
- * A Macro user tool under review, in the tool's own composer. A draft the
- * tool's schema rejects, or a tool with no composer here, falls back to the
- * flat form the agent also sent. The email composer has only Send, so the
- * card adds a Cancel: without it the turn could only be refused from the
- * chip, or by stopping it.
- */
-function LiveUserTool(props: {
-  request: UserToolRequest;
-  toolCall: string;
-  locked: boolean;
-  onRespond: RespondToElicitation;
-}) {
-  const { interactions } = useAgentSession();
-  const drafted = createMemo(() =>
-    parseDraftedTool(props.request, props.toolCall)
-  );
-  const fallback = (
-    <LiveQuestionCard
-      request={{ kind: 'form', schema: props.request.schema }}
-      locked={props.locked}
-      onRespond={props.onRespond}
-    />
-  );
-  return (
-    <Show when={drafted()} fallback={fallback}>
-      {(tool) => (
-        <UserToolComposer
-          tool={tool()}
-          toolCall={props.toolCall}
-          cancel
-          fallback={fallback}
-          review={{
-            canAnswer: () => interactions.canAnswer() && !props.locked,
-            respond: props.onRespond,
-          }}
-        />
-      )}
     </Show>
   );
 }

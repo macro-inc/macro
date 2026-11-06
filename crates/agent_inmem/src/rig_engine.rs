@@ -7,13 +7,9 @@
 //! prompt, the agent's name and handle, any session instructions, and the
 //! owner's memory, with usage recorded per turn against the session owner.
 //!
-//! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
-//! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
-//! carries a reviewer over the ACP connection, and the agent loop's
-//! user-tool finisher puts each pending call to it - the session renders the
-//! elicitation - then runs or rejects the tool before the model reads the
-//! result. Without a reviewer (a client with no form support) a pending call
-//! stays pending, as in chat.
+//! Email and calendar drafts go on a `PresentReview` card, which never pauses
+//! the turn; the deferring user tools (`SendEmail`, `CreateCalendarEvent`) are
+//! not offered to the model.
 //!
 //! This is also where a session's own instructions become a system prompt.
 //! Nothing has to be transported for it - the loop runs in this process - which
@@ -24,7 +20,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
-use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
@@ -161,7 +156,6 @@ struct GatedToolSet<Context> {
     gate: Arc<dyn NativeToolGate>,
     session: agent_session::domain::model::AgentSessionId,
     awaiting: Arc<crate::domain::engine::AwaitingUser>,
-    reviewed_tools: Vec<String>,
 }
 
 impl<Context> AiToolSet<Context> for GatedToolSet<Context>
@@ -182,12 +176,7 @@ where
                 && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
             let arguments = if native {
                 let _waiting = self.awaiting.begin();
-                let verdict = if self.reviewed_tools.iter().any(|name| name == tool_name) {
-                    NativeToolVerdict::Run
-                } else {
-                    self.gate.check(self.session, tool_name, json).await
-                };
-                match verdict {
+                match self.gate.check(self.session, tool_name, json).await {
                     NativeToolVerdict::RunAs(user) => request_context.user_id = user,
                     NativeToolVerdict::Run => {}
                     NativeToolVerdict::Refuse(reason) => {
@@ -292,7 +281,7 @@ fn tools_for_turn(
 
 /// Native definitions contain schemas and deserializers, not a user's context.
 /// Build both client-capability variants once, before the first prompt. Each
-/// turn still supplies its own identity, reviewer, gate, MCP tools and memory.
+/// turn still supplies its own identity, gate, MCP tools and memory.
 struct NativeTools {
     with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
@@ -549,7 +538,6 @@ async fn drive_turn(
         mcp_tools,
         cancel,
         user_input,
-        reviewer,
         agent_key,
     } = request;
     let started = tokio::time::Instant::now();
@@ -626,9 +614,7 @@ async fn drive_turn(
             )
         })
     };
-    // Chat's tools with the session's prompt: the user tools (`SendEmail`,
-    // `CreateCalendarEvent`) defer to the user, and this runtime finishes
-    // them in the turn through `reviewer`.
+    // The session's tools and prompt; a summary turn gets neither.
     let (system_prompt, toolset, deferred, loaded_skills) = if summarizing {
         (
             SystemPrompt::from(instructions.unwrap_or_default()),
@@ -755,56 +741,8 @@ async fn drive_turn(
         }
         None => usage_ctx,
     };
-    let mut reviewed_tools = Vec::new();
-    if let Some(reviewer) = reviewer.filter(|_| !summarizing) {
-        reviewed_tools = toolset.user_tools.keys().cloned().collect();
-        let tools = Arc::clone(&toolset);
-        let context = tool_context.clone();
-        let gate = Arc::clone(&gate);
-        let cancel = cancel.clone();
-        let awaiting = Arc::clone(&awaiting);
-        agent_loop = agent_loop.with_user_tool_finisher(Arc::new(move |mut call: agent::PendingUserTool| {
-            let tools = Arc::clone(&tools);
-            let context = context.clone();
-            let gate = Arc::clone(&gate);
-            let cancel = cancel.clone();
-            let reviewer = Arc::clone(&reviewer);
-            let awaiting = Arc::clone(&awaiting);
-            Box::pin(async move {
-                if !tools.user_tools.contains_key(&call.tool_name) { return None; }
-                let (actor, arguments) = match ai_toolset::actor::ToolActor::take(&call.args) {
-                    Ok(selection) => selection,
-                    Err(error) => return Some(agent::FinishedUserTool::Error(error.to_string())),
-                };
-                let authorize_cancel = cancel.clone();
-                let authorize: UserToolAuthorizer = Arc::new(move |name, mut args| {
-                    let gate = Arc::clone(&gate);
-                    let cancel = authorize_cancel.clone();
-                    let awaiting = Arc::clone(&awaiting);
-                    Box::pin(async move {
-                        args[ai_toolset::actor::ACTING_AS] = serde_json::to_value(actor).map_err(|error| ReviewError::Failed(error.to_string()))?;
-                        let _waiting = awaiting.begin();
-                        let verdict = tokio::select! {
-                            biased;
-                            _ = cancel.cancelled() => return Err(ReviewError::Failed("The turn was cancelled; nothing was done.".into())),
-                            verdict = gate.check(session_id, &name, &args) => verdict,
-                        };
-                        match verdict {
-                            NativeToolVerdict::RunAs(user) => Ok(user),
-                            NativeToolVerdict::Refuse(reason) => Err(ReviewError::Failed(reason)),
-                            NativeToolVerdict::Run => Err(ReviewError::Failed("Could not resolve the tool actor.".into())),
-                        }
-                    })
-                });
-                call.args = arguments;
-                authorized_user_tool_finisher(tools, context, reviewer, cancel, authorize)(call).await
-            })
-        }));
-    }
-    // Native tools use the actor gate unless the installed finisher authorizes
-    // their final reviewed arguments. Remote MCP tools use the egress gate.
-    // Keep remote MCP tools alongside the native and AskUser tools. The
-    // finisher above reviews only Macro's native user tools.
+    // Native tools use the actor gate; remote MCP tools use the egress gate.
+    // Keep remote MCP tools alongside the native and AskUser tools.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
         Some(mcp) => Arc::new(
             mcp_select::CombinedToolSet::new(toolset, mcp)
@@ -820,7 +758,6 @@ async fn drive_turn(
         gate,
         session: session_id,
         awaiting,
-        reviewed_tools,
     });
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), system_prompt, loop_usage)
