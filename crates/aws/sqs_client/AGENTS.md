@@ -34,7 +34,7 @@ crate that produces or consumes an SQS queue.
   feature, so this crate stays at the bottom of the compile chain.
 - Used by: most SQS-producing services (`document_storage_service`,
   `email_service`, `search_processing_service`, `authentication_service`,
-  the `*_handler`/`*_trigger` Lambda services) and `crates/teams`,
+  the `*_handler`/`*_trigger` Lambda services) and `crates/accounts/teams`,
   `crates/webhook`, `crates/documents`, `crates/ai_projections`,
   `crates/ai_tools`, `crates/projects`, `crates/memory`.
 

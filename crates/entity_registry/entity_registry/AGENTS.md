@@ -32,7 +32,7 @@ plus the owner-grant policy for what access that owner implies.
 - Depends on: `shared_entity_registry`, `model_entity`, `model_owner`,
   `macro_authorization` (feature `axum`), `bot_id`.
 - Used by: `crates/memory`, `crates/ai_tools`, `crates/projects`,
-  `crates/agent_harness`, `crates/teams`, `crates/agent_session`,
+  `crates/agent_harness`, `crates/accounts/teams`, `crates/agent_session`,
   `crates/chat`, `crates/documents`, `crates/bots`,
   `crates/clients/document_storage_service_client`, and most services that create
   owned entities.

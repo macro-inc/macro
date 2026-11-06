@@ -12,34 +12,34 @@ worker that sends email/mobile-push/websocket notifications.
 - `src/main.rs`: composition root — wires `NotificationEgressService`,
   `NotificationWorker`, `NotificationEventsListener`, and the outbound adapters
   (`EmailAdapter`, `MobilePushAdapter`, `WebSocketGatewayAdapter`,
-  `Kafka*RealtimePublisher`, `RedisRateLimitAdapter`) from `crates/notification`.
+  `Kafka*RealtimePublisher`, `RedisRateLimitAdapter`) from `crates/notifications/notification`.
 - `src/api.rs` + `src/api/context.rs`: HTTP routes — `user_notification.rs`
   (list/read), `unsubscribe.rs` (single and atomic bulk item mute/snooze), `health.rs`.
 - `src/model/notification.rs`: service-local request/response shapes.
 - Push payload schemas come from `notification::domain::models::apple`; keep the
   frontend push validators generated from those same OpenAPI components.
 - `README.md`: local DB setup (`sqlx database setup` from
-  `crates/notification_db_client`).
+  `crates/notifications/notification_db_client`).
 
 ## Scope
 
 - Owns: process wiring (config, adapters, HTTP routes) for notifications; the
   domain logic (digesting, egress rules, send decisions) lives in
-  `crates/notification` and `crates/notification_db_client`.
-- Not here: notification domain logic itself → `crates/notification`.
+  `crates/notifications/notification` and `crates/notifications/notification_db_client`.
+- Not here: notification domain logic itself → `crates/notifications/notification`.
 
 ## Recipes
 
 - Add a notification HTTP route: `src/api/user_notification.rs` (or a new
   module) → `src/api.rs` → `src/api/swagger.rs`.
-- Add a new egress channel: implement the port in `crates/notification`
+- Add a new egress channel: implement the port in `crates/notifications/notification`
   (`outbound/`) → wire the adapter in `src/main.rs`.
 
 ## Checks
 
 - `cargo test -p notification_service` (`SQLX_OFFLINE` unset; needs local
   MacroDB — `just run_dbs -d`, then `sqlx database setup` from
-  `crates/notification_db_client`).
+  `crates/notifications/notification_db_client`).
 
 ## Gotchas
 

@@ -26,7 +26,7 @@ invites, and the colleague-joined email.
 
 - Owns: invite/referral/colleague-joined email notification metadata and
   templates.
-- Not here: sending/queuing the notification → `crates/notification`; who
+- Not here: sending/queuing the notification → `crates/notifications/notification`; who
   triggers an invite → `crates/call`, `crates/referral`, `model_notifications`.
 
 ## Boundaries

@@ -20,7 +20,7 @@ mutations, and the realtime subscription.
 
 - Owns: GraphQL types/resolvers/subscriptions for notifications and the
   notification edge.
-- Not here: notification generation, storage, and delivery → `crates/notification`,
+- Not here: notification generation, storage, and delivery → `crates/notifications/notification`,
   `crates/types/notification_state`.
 
 ## Boundaries
@@ -32,7 +32,7 @@ mutations, and the realtime subscription.
 
 ## Recipes
 
-- Add a new notification event payload: `crates/notification` (domain event)
+- Add a new notification event payload: `crates/notifications/notification` (domain event)
   → `src/notification_event/<kind>.rs` → wire it into
   `src/notification_event.rs`.
 - Add a mutation: `src/mutations.rs` → the `notification` domain port.
