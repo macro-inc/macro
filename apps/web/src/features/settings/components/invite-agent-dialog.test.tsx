@@ -43,8 +43,12 @@ vi.mock('@service-auth/client', () => ({
     quoteTeamAgent: vi.fn(),
   },
 }));
+vi.mock('@service-agent-harness/client', () => ({
+  agentHarnessServiceClient: { voices: vi.fn() },
+}));
 
 import { queryClient } from '@queries/client';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { authServiceClient } from '@service-auth/client';
 import { InviteAgentDialog } from './invite-agent-dialog';
 
@@ -61,6 +65,17 @@ const quote = {
 };
 
 beforeEach(() => {
+  vi.mocked(agentHarnessServiceClient.voices).mockResolvedValue(
+    ok([
+      {
+        model: 'aura-2-arcas-en',
+        name: 'Arcas',
+        accent: 'American',
+        languages: ['en'],
+        tags: ['male', 'confident'],
+      },
+    ])
+  );
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -95,11 +110,13 @@ it('keeps a cold invitation pending until rollout resolves, then loads it only w
   );
   expect(authServiceClient.getTeamAgentSizes).not.toHaveBeenCalled();
   expect(authServiceClient.quoteTeamAgent).not.toHaveBeenCalled();
+  expect(agentHarnessServiceClient.voices).not.toHaveBeenCalled();
   expect(close).not.toHaveBeenCalled();
   setFlag({ enabled: true, loading: false });
   await screen.findByRole('dialog');
   expect(authServiceClient.getTeamAgentSizes).toHaveBeenCalledTimes(1);
   expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledTimes(3);
+  expect(agentHarnessServiceClient.voices).toHaveBeenCalledTimes(1);
   setFlag({ enabled: false, loading: false });
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(close).not.toHaveBeenCalled();
@@ -162,6 +179,7 @@ it('bounds reactive updates while typing with quotes loaded for all sizes', asyn
     expect(screen.getByRole('dialog')).toBe(dialog);
     expect(updates.mock.calls.length).toBeLessThanOrEqual(100);
     expect(queryUpdates).toBe(0);
+    expect(agentHarnessServiceClient.voices).toHaveBeenCalledTimes(1);
     expect(authServiceClient.getTeamAgentSizes).toHaveBeenCalledTimes(1);
     expect(authServiceClient.quoteTeamAgent).toHaveBeenCalledTimes(3);
 
