@@ -6,6 +6,7 @@ import {
   DocumentEditRefusedError,
   EditOutcomeUnknownError,
   Macro,
+  StaticImage,
 } from '../src/macro';
 
 const originalFetch = globalThis.fetch;
@@ -143,7 +144,7 @@ test('edit sends instructions and keeps a partial clarification', async () => {
   expect(result).toEqual({
     operationsApplied: 2,
     summary: 'Moved one box.',
-    webUrl: 'https://macro.com/app/md/canvas-1',
+    webUrl: 'https://macro.com/app/canvas/canvas-1',
     clarification: 'Which colour for the other?',
   });
   expect(new URL(requests[0].url).pathname).toBe(
@@ -219,9 +220,43 @@ test('render returns a static image that maps onto the canvas', async () => {
     objects,
     unavailable: [],
     textLayout: [],
+    markdown:
+      '<m-image>{"url":"https://static.example.test/file/0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e","alt":"","srcType":"sfs","id":"0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e","width":200,"height":160,"scale":1,"constrainedWidth":400,"constrainedHeight":400}</m-image>',
   });
   expect(new URL(requests[0].url).pathname).toBe(
     '/documents/canvas-1/canvas/render',
   );
   expect(await requests[0].json()).toEqual({ itemIds: ['box'] });
+});
+
+test('a render shows as an image in a reply, never as a document mention', () => {
+  const image = StaticImage.byId(
+    macro()._client,
+    '0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e',
+    { width: 200, height: 160 },
+  );
+
+  expect(image.toMarkdown('Plan</m-image>')).toBe(
+    '<m-image>{"url":"https://static.example.test/file/0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e","alt":"Plan\\u003c/m-image\\u003e","srcType":"sfs","id":"0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e","width":200,"height":160,"scale":1,"constrainedWidth":400,"constrainedHeight":400}</m-image>',
+  );
+});
+
+test('a canvas links to the canvas route', () => {
+  expect(macro().documents.byId('canvas-1').canvas().webUrl()).toBe(
+    'https://macro.com/app/canvas/canvas-1',
+  );
+  expect(macro().documents.byId('canvas-1').canvas().toJSON()).toEqual({
+    id: 'canvas-1',
+    url: 'https://macro.com/app/canvas/canvas-1',
+  });
+});
+
+test('a loaded canvas document links to the canvas route', async () => {
+  answer(200, {
+    data: { documentMetadata: { documentId: 'canvas-1', fileType: 'canvas' } },
+  });
+  const document = macro().documents.byId('canvas-1');
+
+  expect(await document.fileType()).toBe('canvas');
+  expect(document.webUrl()).toBe('https://macro.com/app/canvas/canvas-1');
 });
