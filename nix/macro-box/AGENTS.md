@@ -91,6 +91,10 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 
 ## Gotchas
 
+- DockerFleet enforces recorded vCPU and memory limits through cgroups without
+  CPU pinning; dev-only Docker guests still see host totals in `/proc` and
+  `nproc`. Do not add lxcfs; Incus VMs see their real CPU and memory limits.
+
 - Set enrollment's `HOME` to `/home/macro` so agent discovery works in a root
   system service and records adapter paths usable by the unprivileged daemon.
 - import-tree imports every `.nix` file under `nix/`; helpers start with `_`.

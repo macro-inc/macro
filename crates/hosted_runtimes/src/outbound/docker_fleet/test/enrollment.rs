@@ -22,6 +22,11 @@ impl DockerCommand for FakeDocker {
                 .iter()
                 .any(|arg| arg.contains("fixture-bootstrap-value"))
         );
+        if command == "create" {
+            assert!(args.iter().any(|arg| arg == "--cpus=6"));
+            assert!(args.windows(2).any(|args| args == ["--memory", "12g"]));
+            assert!(!args.iter().any(|arg| arg.starts_with("--cpuset")));
+        }
         Ok(match command {
             "ps" if self.exists => "running".to_owned(),
             "ps" => String::new(),
@@ -106,8 +111,8 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
             name: ComputerName::try_new("Fixture computer").unwrap(),
             size: crate::domain::size::ComputerSize::Standard,
             resources: crate::domain::size::ComputerResources {
-                vcpus: crate::domain::size::Vcpus::new(4),
-                memory_gib: crate::domain::size::MemoryGib::new(8),
+                vcpus: crate::domain::size::Vcpus::new(6),
+                memory_gib: crate::domain::size::MemoryGib::new(12),
                 disk_gib: crate::domain::size::DiskGib::new(100),
             },
             catalog_entry: crate::domain::size::CatalogEntryId::try_new(

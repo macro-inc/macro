@@ -268,6 +268,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Gotchas
 
+- DockerFleet enforces recorded vCPU and memory limits through cgroups without
+  CPU pinning; dev-only Docker guests still see host totals in `/proc` and
+  `nproc`. Do not add lxcfs; Incus VMs see their real CPU and memory limits.
+
 - Demo Incus access uses Wolf's personal Tailscale tailnet; production must use
   the company tailnet. Admin access is Tailscale SSH via `root@runtime-dev-1`
   (MagicDNS); serial console is break-glass. See `nix/hosts/README.md` for the
