@@ -120,7 +120,13 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         self
     }
 
-    fn catalog_entry(
+    /// The purchase catalog selected at composition, independent of billing.
+    pub fn catalog(&self) -> &[crate::domain::size::CatalogEntry] {
+        &self.catalog
+    }
+
+    /// The configured offer for a size, or an error when that size is not offered.
+    pub fn size_spec(
         &self,
         size: ComputerSize,
     ) -> Result<&crate::domain::size::CatalogEntry, ComputerError> {
@@ -174,7 +180,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         size: ComputerSize,
         billing: &PurchaseBilling,
     ) -> Result<Quote, ComputerError> {
-        self.catalog_entry(size)?;
+        self.size_spec(size)?;
         let quote = self.billing.quote(team_id, size).await;
         match billing {
             PurchaseBilling::Stripe => Ok(quote?),
@@ -247,7 +253,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         let computer_id = ComputerId::new(Uuid::now_v7());
         tracing::Span::current().record("computer_id", tracing::field::display(computer_id));
 
-        let entry = self.catalog_entry(request.size)?;
+        let entry = self.size_spec(request.size)?;
         let price_id = match request.billing {
             PurchaseBilling::Stripe => Some(
                 self.billing

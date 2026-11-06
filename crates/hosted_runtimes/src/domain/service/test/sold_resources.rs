@@ -148,3 +148,37 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
             .any(|(price, _)| price.as_str() == "price_old")
     );
 }
+
+#[test]
+fn catalog_accessors_return_the_composed_catalog_without_billing() {
+    use crate::domain::size::{
+        CatalogEntry, CatalogEntryId, ComputerResources, DiskGib, MemoryGib, Vcpus,
+    };
+    let entry = CatalogEntry {
+        id: CatalogEntryId::try_new("standard@custom".to_owned()).unwrap(),
+        size: ComputerSize::Standard,
+        resources: ComputerResources {
+            vcpus: Vcpus::new(6),
+            memory_gib: MemoryGib::new(12),
+            disk_gib: DiskGib::new(150),
+        },
+    };
+    let service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling {
+            not_sold: true,
+            no_subscription: true,
+            ..FakeBilling::default()
+        },
+        FixedClock,
+    )
+    .with_catalog(vec![entry.clone()]);
+
+    assert_eq!(service.catalog(), std::slice::from_ref(&entry));
+    assert_eq!(service.size_spec(ComputerSize::Standard).unwrap(), &entry);
+    assert!(matches!(
+        service.size_spec(ComputerSize::Large),
+        Err(ComputerError::BadRequest(_))
+    ));
+    assert!(service.billing.calls.lock().unwrap().is_empty());
+}
