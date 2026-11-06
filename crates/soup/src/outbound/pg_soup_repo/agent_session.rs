@@ -305,8 +305,8 @@ pub(super) const FOLLOWED_SQL: &str = r#"EXISTS (
         WHERE f.agent_session_id = s.id AND f.user_id = $1
     )"#;
 
-/// The viewer holds a grant on the document or call whose live thread the
-/// session runs in. Mirrors the parent inheritance `entity_access` applies to
+/// The viewer holds a grant on the document or call whose live, shared thread
+/// the session runs in. Mirrors the parent inheritance `entity_access` applies to
 /// agent sessions, over the same stored grants Soup reads for documents.
 pub(super) const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
         SELECT 1 FROM comms_messages m
@@ -316,6 +316,7 @@ pub(super) const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
             AND ea.entity_type = m.parent_entity_type
         WHERE m.id = s.thread_id
             AND m.parent_entity_type IN ('document', 'call')
+            AND m.visibility->>'type' = 'public'
             AND ea.source_id IN (SELECT source_id FROM user_source_ids)
     )"#;
 

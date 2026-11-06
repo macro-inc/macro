@@ -696,6 +696,56 @@ async fn by_ids_inherits_the_parent_thread_access(pool: PgPool) -> anyhow::Resul
     Ok(())
 }
 
+/// A private thread's audience is its initiating person and invited agents,
+/// so a document viewer cannot open a session that runs in one.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_private_document_thread_does_not_share_its_session(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
+    let root = Uuid::now_v7();
+    let document = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, visibility)
+           VALUES ($1, 'document', $2, $3, '@helper look', jsonb_build_object('type', 'private', 'user_id', $3::text, 'bot_ids', '[]'::jsonb))"#,
+        root,
+        document.to_string(),
+        OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE agent_session SET thread_id = $1 WHERE id = $2",
+        root,
+        fixture.private,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'document', $2, 'user', 'view')
+        "#,
+        document,
+        STRANGER,
+    )
+    .execute(&pool)
+    .await?;
+
+    let items = by_ids(
+        &pool,
+        AdvancedSortParams {
+            entities: &entities,
+            user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
+        },
+    )
+    .await?;
+
+    assert!(items.is_empty());
+    Ok(())
+}
+
 /// A session started from a document thread is hidden, so mentioning the
 /// agent there lists it for nobody, owner included. Prompting it from the
 /// session itself follows it: it then lists for that one person while they

@@ -69,6 +69,49 @@ async fn discussion_attachments_use_the_parents_typed_owner_audience(
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("typed_owner_team"))
+)]
+async fn private_discussion_attachments_are_not_shared_with_parent_viewers(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let child = fixture_entity_id(40);
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner)
+        VALUES ($1, 'Attachment', 'macro|typed-teamless@example.com')"#,
+        child.to_string()
+    )
+    .execute(&pool)
+    .await?;
+    let message = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO comms_messages (id, sender_id, content, parent_entity_type, parent_entity_id, visibility)
+        VALUES ($1, 'macro|typed-teamless@example.com', 'attachment', 'document', $2,
+            '{"type":"private","user_id":"macro|typed-teamless@example.com","bot_ids":[]}'::jsonb)"#,
+        message,
+        fixture_entity_id(31).to_string()
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO comms_attachments (id, message_id, entity_type, entity_id)
+        VALUES ($1, $2, 'document', $3)"#,
+        Uuid::now_v7(),
+        message,
+        child.to_string()
+    )
+    .execute(&pool)
+    .await?;
+
+    let sources = SourceIds(vec!["90000000-0000-0000-0000-000000000011".to_string()]);
+    assert_eq!(
+        document_access::get_document_access(&pool, &child, &sources, None).await?,
+        None
+    );
+    Ok(())
+}
+
 fn fixture_entity_id(suffix: u8) -> Uuid {
     Uuid::parse_str(&format!("90000000-0000-0000-0000-{suffix:012}")).unwrap()
 }
