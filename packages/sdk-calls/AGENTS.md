@@ -1,0 +1,38 @@
+# SDK call rooms
+
+## What it is
+
+This package turns a core SDK call connection into a LiveKit room and provides
+screen-share publishing for Node and browsers.
+
+## Start here
+
+- `src/common.ts`: handle contract, connection lifecycle, and one-time leave.
+- `src/node.ts`: rtc-node connection and frame-based screen publishing.
+- `src/browser.ts`: browser connection and MediaStream screen publishing.
+
+## Scope
+
+- Owns: room connection defaults, screen publication, and cleanup.
+- Not here: Macro call authorization and token issuance → `packages/sdk`.
+
+## Boundaries
+
+- Depends on: `@macro-inc/sdk` as a peer, one optional LiveKit runtime peer,
+  and the observability facade.
+- Used by: programs that participate in calls outside the app.
+
+## Checks
+
+- `bun test`, `bun run check`, and `bun run lint` from this directory.
+
+## Gotchas
+
+- Never log, attach to spans, or serialize the room token.
+- rtc-node has no room-wide publish defaults, so its local audio publication
+  path sets `dtx` false after connection.
+- Frame capture is supplied by the caller; rtc-node has no capture engine.
+
+## Related
+
+- Design: `docs/design/sdk-calls.md`.
