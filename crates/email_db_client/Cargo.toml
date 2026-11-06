@@ -13,9 +13,6 @@ futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_email = { path = "../models_email" }
-models_pagination = { path = "../models_pagination" }
-once_cell = { workspace = true }
-regex = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

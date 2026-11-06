@@ -74,5 +74,4 @@ futures = { workspace = true }
 # Building the stored OAuth grants the custom-server resolver reads.
 rmcp = { workspace = true, features = ["auth"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
-uuid = { workspace = true }
 tower = { workspace = true }

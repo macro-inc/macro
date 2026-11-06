@@ -49,7 +49,6 @@ attachment = [
 ]
 axum = [
   "dep:axum",
-  "dep:axum-extra",
   "dep:base64",
   "dep:entity_registry",
   "dep:jsonwebtoken",
@@ -161,7 +160,6 @@ tokio-retry = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-axum-extra = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
@@ -214,7 +212,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 channel_sender = { path = "../channel_sender" }
 messages = { path = "../messages", features = ["ports", "test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
-dotenvy = { workspace = true }
 embedding = { path = "../embedding" }
 http-body-util = { workspace = true }
 kafka_util = { path = "../kafka_util" }

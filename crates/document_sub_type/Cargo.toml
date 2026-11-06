@@ -13,7 +13,6 @@ sqlx = ["dep:sqlx"]
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
-thiserror = { workspace = true }
 utoipa = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 

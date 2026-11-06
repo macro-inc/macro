@@ -7,11 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 email = { path = "../email", features = ["axum", "inbound"] }
-model = { path = "../model" }
 models_email = { path = "../models_email" }
 reqwest = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
