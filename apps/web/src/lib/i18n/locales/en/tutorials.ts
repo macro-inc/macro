@@ -85,6 +85,11 @@ export default {
   agentsSnippet:
     'Agents in your channels, tasks for agents, macroD and unified memory',
   agentsLength: '1:05',
+  macrodTitle: 'Learn how to use MacroD',
+  macrodBlock: 'MacroD',
+  macrodSnippet:
+    'Connect the coding agent you already use, then @mention it or assign it a task',
+  macrodLength: '1:17',
   driveTitle: 'Learn how to use Macro Drive',
   driveBlock: 'Macro Drive',
   driveSnippet:
