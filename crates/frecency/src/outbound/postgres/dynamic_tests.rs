@@ -1418,7 +1418,12 @@ async fn test_dynamic_filter_document_crm_literals(pool: PgPool) {
     .execute(&mut *tx)
     .await
     .unwrap();
-    let (contact, message, attachment_row) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    let (contact, thread, message, attachment_row) = (
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+    );
     sqlx::query(
         "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, 'cfo@acme.com')",
     )
@@ -1429,15 +1434,17 @@ async fn test_dynamic_filter_document_crm_literals(pool: PgPool) {
     .unwrap();
     sqlx::query("INSERT INTO email_messages (id, thread_id, link_id, from_contact_id) VALUES ($1, $2, $3, $4)")
         .bind(message)
-        .bind(Uuid::new_v4())
+        .bind(thread)
         .bind(Uuid::new_v4())
         .bind(contact)
         .execute(&mut *tx)
         .await
         .unwrap();
-    sqlx::query("INSERT INTO email_attachments (id, message_id) VALUES ($1, $2)")
+    // Triggers are off in this transaction, so thread_id is set explicitly.
+    sqlx::query("INSERT INTO email_attachments (id, message_id, thread_id) VALUES ($1, $2, $3)")
         .bind(attachment_row)
         .bind(message)
+        .bind(thread)
         .execute(&mut *tx)
         .await
         .unwrap();
