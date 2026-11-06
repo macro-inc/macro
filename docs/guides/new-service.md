@@ -29,8 +29,8 @@ cautionary example.
   `Cargo.toml`. Workspace crates and third-party dependencies both use
   `{ workspace = true }`; add
   `workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }`.
-- Run `just hakari` (`cargo x deps`) and commit what it regenerates: the new
-  crate's root `[workspace.dependencies]` entry, `crates/workspace-hack` and
+- Run `just hakari` (`cargo x deps`) and commit what it regenerates: manifests,
+  `crates/workspace-hack` and
   `.github/workspace-dep-closures.json`. CI and nix both fail without it.
 - The binary is a composition root. Domain logic goes in `crates/<domain>` with
   `inbound/`, `domain/`, and `outbound/` (see the

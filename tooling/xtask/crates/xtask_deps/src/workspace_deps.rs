@@ -1,12 +1,16 @@
 //! Keeps workspace crates declared once, in the root `[workspace.dependencies]`.
 //!
-//! Every member gets a root entry `name = { path = "<dir>" }`, and members
-//! depend on each other with `name = { workspace = true }` instead of a
-//! relative `path`. Moving a crate then changes one root line, which this step
-//! writes itself. Regenerate mode adds missing entries, corrects their paths,
-//! sorts `members` one per line and rewrites any relative path dependency on a
-//! member; check mode reports the root and each member manifest it would
-//! change as drift.
+//! Every crate another member depends on gets a root entry
+//! `name = { path = "<dir>" }`, and members depend on each other with
+//! `name = { workspace = true }` instead of a relative `path`. Moving a crate
+//! then needs only its `members` line changed; this step corrects the root
+//! entry. Regenerate mode adds missing entries, corrects their paths, removes
+//! entries nothing depends on (`cargo shear` rejects them), sorts `members` one
+//! per line and rewrites any relative path dependency on a member; check mode
+//! reports the root and each member manifest it would change as drift.
+//!
+//! A crate's first dependent may write a relative `path`; this step turns it
+//! into a root entry.
 //!
 //! hakari writes the `workspace-hack` dependency lines, so they keep their
 //! relative path and the hack crate gets no root entry.
@@ -24,7 +28,7 @@ use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
 
 const ROOT_MANIFEST: &str = "Cargo.toml";
 
-const MEMBER_BLOCK_COMMENT: &str = "\n# Workspace crates. `cargo x deps` keeps one entry per member, at its current\n# path; depend on them with `name = { workspace = true }`.\n";
+const MEMBER_BLOCK_COMMENT: &str = "\n# Workspace crates other members depend on, kept by `cargo x deps` at their\n# current paths. Depend on them with `name = { workspace = true }`.\n";
 
 const DEPENDENCY_TABLES: [&str; 3] = ["dependencies", "dev-dependencies", "build-dependencies"];
 
@@ -131,9 +135,13 @@ pub fn normalize(root: &mut DocumentMut, members: &mut [Member], hack: &str) -> 
         .collect();
 
     let mut path_dependencies = Vec::new();
+    let mut inherited_keys: BTreeSet<String> = BTreeSet::new();
     for member in members.iter() {
         for table in dependency_tables(&member.manifest) {
             for (key, item) in table.iter() {
+                if item.get("workspace").and_then(Item::as_bool) == Some(true) {
+                    inherited_keys.insert(key.to_owned());
+                }
                 let Some(path) = dependency_path(item) else {
                     continue;
                 };
@@ -158,13 +166,11 @@ pub fn normalize(root: &mut DocumentMut, members: &mut [Member], hack: &str) -> 
         }
     }
 
-    // Root entry key → package. A key differs from its package only where a
-    // dependent renames the crate.
-    let mut entries: BTreeMap<String, String> = members
-        .iter()
-        .filter(|m| m.name != hack)
-        .map(|m| (m.name.clone(), m.name.clone()))
-        .collect();
+    // Root entry key → package, for every crate some member depends on (an
+    // entry nothing uses fails `cargo shear`). A key differs from its package
+    // only where a dependent renames the crate.
+    let mut entries: BTreeMap<String, String> = BTreeMap::new();
+    let mut stale: Vec<String> = Vec::new();
     if let Some(existing) = root
         .get("workspace")
         .and_then(|workspace| workspace.get("dependencies"))
@@ -176,7 +182,11 @@ pub fn normalize(root: &mut DocumentMut, members: &mut [Member], hack: &str) -> 
                 && dir_by_name.contains_key(package)
                 && package != hack
             {
-                entries.insert(key.to_owned(), package.to_owned());
+                if inherited_keys.contains(key) {
+                    entries.insert(key.to_owned(), package.to_owned());
+                } else {
+                    stale.push(key.to_owned());
+                }
             }
         }
     }
@@ -204,6 +214,9 @@ pub fn normalize(root: &mut DocumentMut, members: &mut [Member], hack: &str) -> 
         .or_insert_with(|| Item::Table(Table::new()))
         .as_table_mut()
         .context("[workspace.dependencies] is not a table")?;
+    for key in &stale {
+        workspace_dependencies.remove(key);
+    }
     write_root_entries(
         workspace_dependencies,
         &entries,
@@ -519,10 +532,9 @@ members = [
 [workspace.dependencies]
 serde = "1"
 
-# Workspace crates. `cargo x deps` keeps one entry per member, at its current
-# path; depend on them with `name = { workspace = true }`.
+# Workspace crates other members depend on, kept by `cargo x deps` at their
+# current paths. Depend on them with `name = { workspace = true }`.
 a = { path = "crates/a", default-features = false }
-app = { path = "services/app" }
 b = { path = "crates/b" }
 b_renamed = { package = "b", path = "crates/b" }
 "#
@@ -567,22 +579,33 @@ b = { workspace = true, features = ["x"] }
     }
 
     #[test]
-    fn moves_a_root_entry_with_its_crate() {
+    fn moves_a_root_entry_with_its_crate_and_drops_unused_ones() {
         let mut root: DocumentMut = r#"[workspace]
 members = [
   "crates/group/a",
+  "services/app",
 ]
 
 [workspace.dependencies]
 a = { path = "crates/a", default-features = false }
+app = { path = "services/app" }
 "#
         .parse()
         .unwrap();
-        let mut members = vec![Member {
-            name: "a".to_owned(),
-            dir: "crates/group/a".to_owned(),
-            manifest: "[package]\nname = \"a\"\n".parse().unwrap(),
-        }];
+        let mut members = vec![
+            Member {
+                name: "a".to_owned(),
+                dir: "crates/group/a".to_owned(),
+                manifest: "[package]\nname = \"a\"\n".parse().unwrap(),
+            },
+            Member {
+                name: "app".to_owned(),
+                dir: "services/app".to_owned(),
+                manifest: "[package]\nname = \"app\"\n\n[dependencies]\na = { workspace = true }\n"
+                    .parse()
+                    .unwrap(),
+            },
+        ];
 
         normalize(&mut root, &mut members, "workspace-hack").unwrap();
 
@@ -591,12 +614,13 @@ a = { path = "crates/a", default-features = false }
             r#"[workspace]
 members = [
   "crates/group/a",
+  "services/app",
 ]
 
 [workspace.dependencies]
 
-# Workspace crates. `cargo x deps` keeps one entry per member, at its current
-# path; depend on them with `name = { workspace = true }`.
+# Workspace crates other members depend on, kept by `cargo x deps` at their
+# current paths. Depend on them with `name = { workspace = true }`.
 a = { path = "crates/group/a", default-features = false }
 "#
         );
@@ -605,7 +629,7 @@ a = { path = "crates/group/a", default-features = false }
     #[test]
     fn rejects_disabling_defaults_the_root_entry_keeps() {
         let mut root: DocumentMut = r#"[workspace]
-members = ["crates/a", "crates/b"]
+members = ["crates/a", "crates/b", "crates/c"]
 
 [workspace.dependencies]
 a = { path = "crates/a" }
@@ -624,6 +648,13 @@ a = { path = "crates/a" }
                 name: "b".to_owned(),
                 dir: "crates/b".to_owned(),
                 manifest: "[package]\nname = \"b\"\n\n[dependencies]\na = { path = \"../a\", default-features = false }\n"
+                    .parse()
+                    .unwrap(),
+            },
+            Member {
+                name: "c".to_owned(),
+                dir: "crates/c".to_owned(),
+                manifest: "[package]\nname = \"c\"\n\n[dependencies]\na = { workspace = true }\n"
                     .parse()
                     .unwrap(),
             },
