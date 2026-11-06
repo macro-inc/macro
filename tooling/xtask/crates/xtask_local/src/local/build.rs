@@ -7,6 +7,7 @@
 
 mod binaries_dir;
 mod cargo_build;
+mod dep_cache;
 mod runtime_image;
 
 pub use binaries_dir::{Adoption, BinariesDir};
@@ -36,7 +37,7 @@ pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<Bin
         }
         None => {
             super::arch::ensure_linux_host()?;
-            cargo_build::run(stage)?;
+            cargo_build::run(stage, target)?;
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
     };
