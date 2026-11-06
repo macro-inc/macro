@@ -80,7 +80,9 @@ export function TeamBillingBreakdown(props: {
       target="subscription-breakdown"
     >
       <SettingsCard>
+        {/* Billing keeps two columns even when sheet settings rows wrap controls. */}
         <SettingsRow
+          class="grid! grid-cols-[minmax(0,1fr)_auto]"
           label={t('settingsBilling.humanSeats')}
           description={t('settingsBilling.paidSeats', {
             count: props.billing.humanSeats.quantity,
@@ -91,6 +93,7 @@ export function TeamBillingBreakdown(props: {
           </span>
         </SettingsRow>
         <SettingsRow
+          class="grid! grid-cols-[minmax(0,1fr)_auto]"
           label={t('settingsBilling.agentSeats')}
           description={t('settingsBilling.paidSeats', {
             count: props.billing.agentSeats.quantity,
@@ -102,6 +105,7 @@ export function TeamBillingBreakdown(props: {
         </SettingsRow>
         <Show when={computerLines().length > 0}>
           <SettingsRow
+            class="grid! grid-cols-[minmax(0,1fr)_auto]"
             label={t('settingsBilling.computers')}
             description={t('settingsBilling.computerCount', {
               count: computerLines().reduce(
@@ -123,6 +127,7 @@ export function TeamBillingBreakdown(props: {
         <For each={computerLines()}>
           {(line) => (
             <SettingsRow
+              class="grid! grid-cols-[minmax(0,1fr)_auto]"
               label={
                 <span class="break-words">
                   {line.size
@@ -141,7 +146,7 @@ export function TeamBillingBreakdown(props: {
                   : t('settingsBilling.computer')
               }
             >
-              <div class="flex max-w-48 flex-wrap items-center justify-end gap-2 text-sm">
+              <div class="flex max-w-48 flex-col items-end gap-1 text-right text-sm sm:flex-row sm:items-center sm:gap-2">
                 <span
                   class="rounded-full bg-ink/6 px-2 py-1 text-xs"
                   classList={{
@@ -163,6 +168,7 @@ export function TeamBillingBreakdown(props: {
         <For each={otherLines()}>
           {(line) => (
             <SettingsRow
+              class="grid! grid-cols-[minmax(0,1fr)_auto]"
               label={<span class="break-words">{line.name}</span>}
               description={
                 line.unitAmount != null
@@ -179,6 +185,7 @@ export function TeamBillingBreakdown(props: {
           )}
         </For>
         <SettingsRow
+          class="grid! grid-cols-[minmax(0,1fr)_auto]"
           label={t('settingsBilling.total', { interval: interval() })}
         >
           <strong class="text-sm tabular-nums">
@@ -186,6 +193,7 @@ export function TeamBillingBreakdown(props: {
           </strong>
         </SettingsRow>
         <SettingsRow
+          class="grid! grid-cols-[minmax(0,1fr)_auto]"
           label={t('settingsBilling.nextInvoice')}
           description={
             invoiceDate() ??

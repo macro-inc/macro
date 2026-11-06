@@ -4,7 +4,7 @@ import type {
 } from '@service-auth/generated/schemas';
 import { createSignal, Show } from 'solid-js';
 import { TeamBillingBreakdown } from '../../components/team-billing-breakdown';
-import { SettingsPage } from '../../primitives';
+import { SettingsPage, SettingsSheetContext } from '../../primitives';
 
 export const BILLING: SubscriptionBilling = {
   currency: 'usd',
@@ -120,22 +120,24 @@ export function BillingFixture() {
     currency: params.get('currency') ?? (params.has('eur') ? 'eur' : 'usd'),
   });
   return (
-    <SettingsPage
-      title="Billing"
-      actions={
-        <Show when={params.has('unhealthy')}>
-          <button type="button" onClick={() => setHealth('running')}>
-            Restore agent health
-          </button>
-        </Show>
-      }
-    >
-      <Show
-        when={!params.has('no-plan')}
-        fallback={<p>No active subscription</p>}
+    <SettingsSheetContext.Provider value={params.has('sheet')}>
+      <SettingsPage
+        title="Billing"
+        actions={
+          <Show when={params.has('unhealthy')}>
+            <button type="button" onClick={() => setHealth('running')}>
+              Restore agent health
+            </button>
+          </Show>
+        }
       >
-        <TeamBillingBreakdown billing={billing()} agents={agents()} />
-      </Show>
-    </SettingsPage>
+        <Show
+          when={!params.has('no-plan')}
+          fallback={<p>No active subscription</p>}
+        >
+          <TeamBillingBreakdown billing={billing()} agents={agents()} />
+        </Show>
+      </SettingsPage>
+    </SettingsSheetContext.Provider>
   );
 }

@@ -1,5 +1,39 @@
 import { expect, test } from '@playwright/test';
 
+for (const width of [390, 320]) {
+  for (const theme of ['light', 'dark']) {
+    test(`keeps sheet amounts aligned at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`/?billing&sheet${theme === 'dark' ? '&dark' : ''}`);
+      const amounts = page.getByText(/^(?:\$\d[\d,.]*|Included for Macro)$/);
+      await expect(amounts).toHaveCount(9);
+      const geometry = await amounts.evaluateAll((elements) =>
+        elements.map((element) => ({
+          right: element.getBoundingClientRect().right,
+          figures: getComputedStyle(element).fontVariantNumeric,
+        }))
+      );
+      for (const amount of geometry) {
+        expect(Math.abs(amount.right - geometry[0].right)).toBeLessThanOrEqual(
+          0.5
+        );
+        expect(amount.figures).toContain('tabular-nums');
+      }
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth
+        )
+      ).toBe(false);
+      await page.screenshot({
+        path: testInfo.outputPath(`billing-${width}-${theme}.png`),
+        fullPage: true,
+      });
+    });
+  }
+}
+
 test('live unhealthy agent health overrides ready computer status without changing billing', async ({
   page,
 }) => {
