@@ -344,8 +344,10 @@ confirmed booking. Current integrations check hosts' connected calendars and
 write invitations/Google Meet through the existing calendar service.
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
-above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
-`Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
+above the mini calendar offers `Event`, `Task`, feature-gated `Call`, and
+feature-gated `Reminder`. `Task` opens the task composer with the due date set
+to the day the calendar is showing, and turns on the Tasks overlay when the
+task is created so the new task appears on that day. An icon-only shortcut in the `Upcoming events` header opens the
 availability dialog. Start/end time selectors and a weekend switch sit above
 copy ranges that wrap on narrow screens. The dialog checks all ranges using one
 calendar-occurrence query; ranges without free time are disabled, show an X
@@ -380,8 +382,9 @@ it opens over the grid. Phones do not show the sidebar or its navigation drawer.
 The mobile split header places a month selector and Today in its left island;
 selecting the month opens the date-selection drawer. The right island keeps
 full-sized Availability, Search, and Settings actions. The New menu
-beside the bottom AI input offers Event, feature-gated Call, and feature-gated
-Reminder. Inline Calendar previews retain their host's chrome without adding
+beside the bottom AI input offers Event, Task, feature-gated Call, and
+feature-gated Reminder. Task uses the day the calendar is showing as the due
+date. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
 
@@ -1545,4 +1548,4 @@ native details that cannot be safely copied are rejected before any invitations.
 For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
 opens the actual occurrence so you can clear your own response there.
 
-Calendar's New menus explain Event, Call, and Booking link with icons and muted descriptions. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.
+Calendar's New menus explain Event, Task, Call, and Booking link with icons and muted descriptions. Task opens the task composer with the due date set to the day the calendar is showing. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.

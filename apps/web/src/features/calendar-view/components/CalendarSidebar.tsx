@@ -38,6 +38,7 @@ import {
   CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
   CalendarCreateEventItem,
+  CalendarCreateTaskItem,
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
@@ -403,6 +404,7 @@ export function CalendarSidebar() {
           }
         >
           <CalendarCreateEventItem onSelect={closeOverlay} />
+          <CalendarCreateTaskItem onSelect={closeOverlay} />
           <CalendarCreateCallItem onSelect={closeOverlay} />
           <CalendarCreateBookingLinkItem onSelect={closeOverlay} />
         </CalendarCreateMenu>
