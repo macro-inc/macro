@@ -442,8 +442,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   after its public wrapper retires. On login, remove only session-written contact
   records before refetch; recover typed owner/bootstrap failures only through the
   original backend/scope factory. Preserve queued offline edits, report failed
-  repair, and keep admission closed until cleanup succeeds; serialize login behind
-  every logout wipe;
+  repair, release email verification's busy state on failure, and keep admission
+  closed until cleanup succeeds; serialize login behind every logout wipe;
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
