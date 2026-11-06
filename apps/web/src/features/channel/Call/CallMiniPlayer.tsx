@@ -174,7 +174,7 @@ export function CallMiniPlayer(props: {
             <div
               class={cn(
                 'relative mx-2 flex items-center justify-center overflow-hidden rounded-xl bg-panel',
-                audioOnly() ? 'min-h-16 gap-3 px-3' : 'aspect-video',
+                audioOnly() ? 'min-h-36 gap-3 px-5 py-4' : 'aspect-video',
                 participant().speaking &&
                   'outline-2 -outline-offset-2 outline-success'
               )}
@@ -187,7 +187,8 @@ export function CallMiniPlayer(props: {
                     fallback={
                       <span
                         class={cn(
-                          'flex size-10 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold',
+                          'flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold',
+                          audioOnly() ? 'size-12' : 'size-10',
                           participant().speaking &&
                             'outline-2 -outline-offset-2 outline-success'
                         )}
