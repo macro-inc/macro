@@ -16,7 +16,15 @@ use macro_user_id::user_id::MacroUserIdStr;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn linked_personal_parent_consent_and_domain_matrix(pool: PgPool) -> anyhow::Result<()> {
     let member = "macro|member@example.com";
-    seed_team(&pool, Uuid::now_v7(), member).await?;
+    let reader_team = Uuid::now_v7();
+    seed_team(&pool, reader_team, member).await?;
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'member')",
+        reader_team,
+        member
+    )
+    .execute(&pool)
+    .await?;
     let reader = MacroUserIdStr::try_from(member.to_string()).unwrap();
     let access = EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone()));
     for (index, (case, parent_enabled, consent, block)) in [
