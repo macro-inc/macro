@@ -246,3 +246,7 @@ bridge hostname, preserving Host validation for other origins.
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
 
 - `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
+
+Computer operator construction requires an explicit persona credential source.
+The composition currently passes `NoPersonaCredentials`, which returns empty
+material only for computers without a persona and rejects persona computers.

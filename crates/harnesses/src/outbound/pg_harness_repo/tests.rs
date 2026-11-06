@@ -113,6 +113,7 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
     let claimed = repo
         .claim_pairing(
             pairing.id,
+            harness_token::hash_token("secret"),
             Uuid::new_v4(),
             HashedHarnessToken::from_raw(&token),
         )
@@ -125,6 +126,7 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
     assert!(
         repo.claim_pairing(
             pairing.id,
+            harness_token::hash_token("secret"),
             Uuid::new_v4(),
             HashedHarnessToken::from_raw(&token)
         )
@@ -697,9 +699,22 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     // Expiry cleanup never touches an approved pairing.
     repo.delete_expired_pairings().await.unwrap();
     let token = tokens::generate_harness_token();
+    // A claim whose earlier hash check raced rotation must fail under the lock.
+    assert!(
+        repo.claim_pairing(
+            pairing_id,
+            harness_token::hash_token("first-secret"),
+            Uuid::now_v7(),
+            HashedHarnessToken::from_raw(&token)
+        )
+        .await
+        .unwrap()
+        .is_none()
+    );
     let claimed = repo
         .claim_pairing(
             pairing_id,
+            harness_token::hash_token("second-secret"),
             Uuid::new_v4(),
             HashedHarnessToken::from_raw(&token),
         )
@@ -749,6 +764,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     assert!(
         repo.claim_pairing(
             pairing_id,
+            harness_token::hash_token("second-secret"),
             Uuid::now_v7(),
             HashedHarnessToken::from_raw(&token)
         )
@@ -779,6 +795,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     let reclaimed = repo
         .claim_pairing(
             replacement_id,
+            harness_token::hash_token("third-secret"),
             Uuid::now_v7(),
             HashedHarnessToken::from_raw(&new_token),
         )
@@ -811,7 +828,25 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     .unwrap();
     assert_eq!(bound_harness, Some(harness_id.as_uuid()));
 
-    // Re-key still works after cleanup removes a claimed pairing.
+    // Cleanup must retain the durable claim used by a fleet Create retry.
+    sqlx::query!(
+        "UPDATE harness_pairing_requests SET expires_at = now() - interval '1 hour' WHERE id = $1",
+        replacement_id.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.delete_expired_pairings().await.unwrap();
+    assert_eq!(
+        repo.pairing_claim_facts(replacement_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        PairingStatus::Claimed
+    );
+
+    // Explicit retirement can still be followed by re-enrollment.
     sqlx::query!(
         "DELETE FROM harness_pairing_requests WHERE id = $1",
         replacement_id.as_uuid()

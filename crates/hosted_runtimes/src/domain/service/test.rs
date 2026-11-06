@@ -216,6 +216,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             Effect::Create {
                 host: HOST,
                 start: true,
+                generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
             }
         ]
     );
@@ -468,6 +469,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
                 created_by: "macro|admin@example.com".to_owned(),
                 created_at,
                 enrolled_at: Some(created_at),
+                enrollment_generation: Default::default(),
             },
         );
     }
@@ -540,6 +542,7 @@ async fn retry_failed_computer_restarts_without_billing() {
             created_by: "macro|admin@example.com".to_owned(),
             created_at: now(),
             enrolled_at: Some(now()),
+            enrollment_generation: Default::default(),
         },
     );
     let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
@@ -610,6 +613,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
             created_by: "macro|admin@example.com".to_owned(),
             created_at: now(),
             enrolled_at: Some(now()),
+            enrollment_generation: Default::default(),
         },
     );
     let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
@@ -658,6 +662,7 @@ async fn retry_another_teams_computer_is_not_found() {
             created_by: "macro|admin@example.com".to_owned(),
             created_at: now(),
             enrolled_at: Some(now()),
+            enrollment_generation: Default::default(),
         },
     );
     let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);

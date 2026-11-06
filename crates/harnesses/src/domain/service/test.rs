@@ -208,6 +208,7 @@ impl HarnessRepo for FakeRepo {
     async fn claim_pairing(
         &self,
         pairing_id: PairingId,
+        _device_secret_hash: [u8; 32],
         _token_id: Uuid,
         _token: HashedHarnessToken,
     ) -> Result<Option<Harness>, Self::Err> {

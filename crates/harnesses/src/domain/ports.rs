@@ -185,6 +185,7 @@ pub trait HarnessRepo: Send + Sync + 'static {
     fn claim_pairing(
         &self,
         pairing_id: PairingId,
+        device_secret_hash: [u8; 32],
         token_id: Uuid,
         token: HashedHarnessToken,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
@@ -339,6 +340,13 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         req: CreateHostedPairing,
     ) -> impl Future<Output = Result<HostedPairing, HarnessError>> + Send;
+
+    /// Trusted control-plane lookup of the exact hosted pairing claim. Presence
+    /// is insufficient: a claim may commit before the daemon connects.
+    fn hosted_pairing_claimed(
+        &self,
+        pairing_id: PairingId,
+    ) -> impl Future<Output = Result<bool, HarnessError>> + Send;
 
     /// Soft-delete a computer's harness and revoke its tokens. Succeeds when
     /// the computer has no live harness.

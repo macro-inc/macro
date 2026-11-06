@@ -32,12 +32,13 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
   `macrod.toml` with the deployment URLs resolved from its
   `macro_service_urls` `OVERRIDE_*` values (API, storage and app together, plus an optional
-  computer-reachable egress URL; macrod.toml stays the one URL source at runtime), claims the
-  pre-approved pairing after installing the persona, chowns the config to its directory's owner, installs
-  the persona (names and keys validated by `hosted_runtimes::domain::enrollment`; useradd, `/etc/macro/personas/<os_user>.env` 0600 merging non-secret config
-  with the transient `persona_enrollment.env` and zeroizing `persona_enrollment.secrets`,
-  `/etc/systemd/system/<unit>.service`, `enable --now`), then writes
-  `/var/lib/macrod/enrolled`. A stored credential skips the claim, so retries
+  computer-reachable egress URL; macrod.toml stays the one URL source at runtime).
+  It installs the persona (validated names and keys; useradd, the mode-0600
+  `/etc/macro/personas/<os_user>.env` merging non-secret config with transient
+  `persona_enrollment.env` and zeroizing `persona_enrollment.secrets`, and
+  `/etc/systemd/system/<unit>.service`, `enable --now`) before claiming the
+  pre-approved pairing. It chowns the config to its directory's owner, then
+  writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so retries
   are safe. `--root` (hidden) prefixes system paths for tests.
 - `src/capabilities.rs`: on an enrolled Macro computer only (the marker
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on

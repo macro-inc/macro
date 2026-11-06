@@ -35,6 +35,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         &state,
         &Event::PromptArrived,
         Context {
+            enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration::new(0),
             now: now(),
             host_has_room: true,
         },
@@ -108,6 +109,7 @@ fn cases() -> Vec<Case> {
             expected_effects: vec![Effect::Create {
                 host: HOST,
                 start: true,
+                generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
             }],
         },
         Case {
@@ -133,6 +135,7 @@ fn cases() -> Vec<Case> {
             expected_effects: vec![Effect::Create {
                 host: HOST,
                 start: false,
+                generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
             }],
         },
         Case {
@@ -893,6 +896,8 @@ fn transitions() {
             &state,
             &case.event,
             Context {
+                enrollment_generation:
+                    crate::domain::persona_credentials::EnrollmentGeneration::new(0),
                 now: now(),
                 host_has_room: case.host_has_room,
             },
@@ -972,6 +977,7 @@ impl Fleet {
         let (units, state) = &self.computers[index];
         let others = self.awake_units() - if state.is_awake() { *units } else { 0 };
         let context = Context {
+            enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration::new(0),
             now: at,
             host_has_room: others + units <= self.capacity,
         };

@@ -21,9 +21,10 @@ use chrono::{DateTime, Utc};
 use macro_env::Environment;
 
 use crate::domain::enrollment::Enrollment;
-use crate::domain::ids::ComputerId;
+use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
+use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
+use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, InstanceStatus};
 
 #[cfg(test)]
 mod test;
@@ -31,6 +32,8 @@ mod test;
 /// Label carrying the control-plane owner.
 pub const CONTROL_PLANE_LABEL: &str = "macro.control_plane";
 const CREATED_AT_LABEL: &str = "macro.created_at";
+const GENERATION_LABEL: &str = "macro.enrollment_generation";
+const PAIRING_LABEL: &str = "macro.pairing_id";
 
 /// Label every computer container carries, valued with its computer id.
 pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
@@ -58,6 +61,10 @@ pub struct DockerFleetConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DockerFleetError {
+    #[error(transparent)]
+    Credential(#[from] PersonaCredentialError),
+    #[error("instance enrollment identity does not match the Create generation")]
+    EnrollmentMismatch,
     #[error("instance {computer_id} is missing")]
     Missing { computer_id: ComputerId },
     #[error("DockerFleet only runs in the local environment, not {0:?}")]
@@ -137,10 +144,10 @@ impl DockerFleet {
             .map_err(io_error(&dir))?;
 
         let file = dir.join(ENROLLMENT_FILE);
-        let body = serde_json::to_vec(enrollment)?;
+        let body = zeroize::Zeroizing::new(serde_json::to_vec(enrollment)?);
         // Written in place, never renamed over: a running container keeps
         // seeing the same inode through the directory mount either way.
-        tokio::fs::write(&file, body)
+        tokio::fs::write(&file, body.as_slice())
             .await
             .map_err(io_error(&file))?;
         tokio::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600))
@@ -168,26 +175,63 @@ impl Fleet for DockerFleet {
     async fn create(
         &self,
         computer: &Computer,
-        enrollment: &Enrollment,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<(), DockerFleetError> {
-        // Rewritten on reuse too: a retried create re-keys the pairing.
-        let dir = self.write_enrollment(computer.id, enrollment).await?;
-        if self.state(computer.id).await?.is_none() {
+        if self.state(computer.id).await?.is_some() {
+            let identity = docker("inspect", &[
+                "inspect".to_owned(), "--format".to_owned(),
+                format!("{{{{index .Config.Labels \"{CONTROL_PLANE_LABEL}\"}}}} {{{{index .Config.Labels \"{GENERATION_LABEL}\"}}}} {{{{index .Config.Labels \"{PAIRING_LABEL}\"}}}}"),
+                container_name(computer.id),
+            ]).await?;
+            let fields: Vec<_> = identity.split_whitespace().collect();
+            let pairing = match fields.as_slice() {
+                [owner, stored_generation, pairing]
+                    if *owner == self.config.control_plane_id.as_str()
+                        && *stored_generation == generation.get().to_string() =>
+                {
+                    pairing.parse::<PairingId>().ok()
+                }
+                _ => None,
+            }
+            .ok_or(DockerFleetError::EnrollmentMismatch)?;
+            if enrollment.claimed(pairing).await? {
+                return Ok(());
+            }
+            let enrollment = enrollment.issue().await?;
+            self.write_enrollment(computer.id, &enrollment).await?;
+            self.restart(computer.id).await?;
+            if !start {
+                self.stop(computer.id).await?;
+            }
+        } else {
+            if !matches!(
+                computer.state.phase,
+                crate::domain::lifecycle::Phase::Provisioning { .. }
+            ) {
+                return Err(DockerFleetError::Missing {
+                    computer_id: computer.id,
+                });
+            }
+            let enrollment = enrollment.issue().await?;
+            let dir = self.write_enrollment(computer.id, &enrollment).await?;
             let spec = CreateSpec {
                 image: self.config.image.clone(),
                 network: self.config.network.clone(),
                 computer_id: computer.id,
                 control_plane_id: self.config.control_plane_id.clone(),
                 created_at: Utc::now(),
+                generation,
+                pairing_id: enrollment.pairing_id,
                 memory_gb: computer.resources.memory_gib.get(),
                 vcpus: computer.resources.vcpus.get(),
                 enrollment_dir: dir,
             };
             docker("create", &create_args(&spec)).await?;
-        }
-        if start {
-            self.start(computer.id).await?;
+            if start {
+                self.start(computer.id).await?;
+            }
         }
         Ok(())
     }
@@ -386,6 +430,8 @@ impl ContainerState {
 /// What `docker create` needs for one computer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CreateSpec {
+    generation: EnrollmentGeneration,
+    pairing_id: PairingId,
     control_plane_id: ControlPlaneId,
     created_at: DateTime<Utc>,
     image: String,
@@ -416,6 +462,10 @@ fn create_args(spec: &CreateSpec) -> Vec<String> {
         format!("{CONTROL_PLANE_LABEL}={}", spec.control_plane_id.as_str()),
         "--label".to_owned(),
         format!("{CREATED_AT_LABEL}={}", spec.created_at.to_rfc3339()),
+        "--label".to_owned(),
+        format!("{GENERATION_LABEL}={}", spec.generation.get()),
+        "--label".to_owned(),
+        format!("{PAIRING_LABEL}={}", spec.pairing_id),
         "--network".to_owned(),
         spec.network.clone(),
         "--memory".to_owned(),

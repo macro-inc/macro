@@ -10,6 +10,8 @@ fn payment_resolves_once_and_survives_release() {
             let state = ComputerState::reserved(HOST, now());
             assert_eq!(state.payment, PaymentOutcome::Pending);
             let context = Context {
+                enrollment_generation:
+                    crate::domain::persona_credentials::EnrollmentGeneration::new(0),
                 now: now(),
                 host_has_room,
             };

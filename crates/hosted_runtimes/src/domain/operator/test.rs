@@ -24,6 +24,8 @@ const HARNESS: HarnessId =
 enum FakeFleetError {
     #[error("fleet unavailable")]
     Unavailable,
+    #[error(transparent)]
+    Enrollment(#[from] PersonaCredentialError),
     #[error("instance missing")]
     Missing,
 }
@@ -43,6 +45,7 @@ struct FakeFleet {
     missing: bool,
     calls: Mutex<Vec<String>>,
     enrollments: Mutex<Vec<(Enrollment, bool)>>,
+    created: Mutex<HashMap<ComputerId, (EnrollmentGeneration, PairingId)>>,
     instances: Mutex<Vec<FleetInstance>>,
 }
 
@@ -57,19 +60,38 @@ impl Fleet for FakeFleet {
 
     async fn create(
         &self,
-        _computer: &Computer,
-        enrollment: &Enrollment,
+        computer: &Computer,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<(), FakeFleetError> {
-        let mut failures = self.failures.lock().unwrap();
-        if *failures > 0 {
-            *failures -= 1;
-            return Err(FakeFleetError::Unavailable);
+        {
+            let mut failures = self.failures.lock().unwrap();
+            if *failures > 0 {
+                *failures -= 1;
+                return Err(FakeFleetError::Unavailable);
+            }
         }
-        self.enrollments
+        let existing = if self.missing {
+            None
+        } else {
+            self.created.lock().unwrap().get(&computer.id).copied()
+        };
+        if let Some((stored, pairing)) = existing {
+            assert_eq!(stored, generation);
+            if enrollment.claimed(pairing).await? {
+                return Ok(());
+            }
+        }
+        let enrollment = enrollment.issue().await?;
+        self.created
             .lock()
             .unwrap()
-            .push((enrollment.clone(), start));
+            .insert(computer.id, (generation, enrollment.pairing_id));
+        self.enrollments.lock().unwrap().push((enrollment, start));
+        if existing.is_some() {
+            self.restart(computer.id).await?;
+        }
         Ok(())
     }
 
@@ -167,7 +189,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
         EnrollmentDefaults {
             service_url_overrides: BTreeMap::new(),
         },
-        FixedCredentials,
+        FixedCredentials::default(),
     )
     .await
     .unwrap();
@@ -201,6 +223,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
 
 #[derive(Default)]
 struct FakeHarnesses {
+    claimed: std::sync::atomic::AtomicBool,
     enrollments: Mutex<Vec<Option<HarnessId>>>,
 }
 
@@ -224,6 +247,10 @@ impl Harnesses for FakeHarnesses {
                 format!("secret-{generation}")
             }),
         })
+    }
+
+    async fn pairing_claimed(&self, _pairing_id: PairingId) -> Result<bool, FakeError> {
+        Ok(self.claimed.load(Ordering::SeqCst))
     }
 
     async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, FakeError> {
@@ -252,7 +279,7 @@ async fn operator(
                 "http://10.210.0.1:8080".to_owned(),
             )]),
         },
-        FixedCredentials,
+        FixedCredentials::default(),
     )
     .await
     .unwrap()
@@ -388,6 +415,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
         vec![(
             Enrollment {
                 computer_id: id,
+                generation: EnrollmentGeneration::new(1),
                 pairing_id: PairingId::new(Uuid::from_u128(
                     0x0000_0000_0000_7000_8000_0000_0000_0909
                 )),
@@ -645,6 +673,7 @@ async fn a_lost_guest_is_recreated_with_the_saved_persona_and_fresh_pairing() {
         .get_mut(&id)
         .unwrap()
         .persona = Some(saved_persona.clone());
+    operator.fleet.created.lock().unwrap().remove(&id);
     operator
         .repo
         .apply(id, Event::InstanceLost, now())
@@ -726,17 +755,39 @@ fn control_plane_identity_rejects_missing_or_invalid_values() {
     );
 }
 
-struct FixedCredentials;
+#[derive(Default)]
+struct FixedCredentials {
+    include_persona: std::sync::atomic::AtomicBool,
+    issues: Mutex<Vec<(EnrollmentGeneration, String, bool)>>,
+}
 impl PersonaCredentialSource for FixedCredentials {
     async fn issue(
         &self,
         _computer: ComputerId,
-        _generation: crate::domain::persona_credentials::EnrollmentGeneration,
-    ) -> Result<
-        crate::domain::persona_credentials::PersonaEnrollment,
-        crate::domain::persona_credentials::PersonaCredentialError,
-    > {
-        Ok(Default::default())
+        generation: EnrollmentGeneration,
+    ) -> Result<crate::domain::persona_credentials::PersonaEnrollment, PersonaCredentialError> {
+        use crate::domain::persona_credentials::{
+            PersonaCredentials, PersonaEnrollment, PersonaEnv,
+        };
+        let mut issues = self.issues.lock().unwrap();
+        for (_, _, revoked) in issues.iter_mut() {
+            *revoked = true;
+        }
+        let value = format!("fixture-issued-value-{}", issues.len() + 1);
+        issues.push((generation, value.clone(), false));
+        if !self.include_persona.load(Ordering::SeqCst) {
+            return Ok(Default::default());
+        }
+        Ok(PersonaEnrollment {
+            secrets: PersonaCredentials::new(BTreeMap::from([(
+                PersonaConfigKey::parse("MACRO_API_KEY").unwrap(),
+                value,
+            )]))?,
+            env: PersonaEnv::new(BTreeMap::from([(
+                PersonaConfigKey::parse("OVERRIDE_APP_SERVICE_URL").unwrap(),
+                "https://app.example.com".to_owned(),
+            )]))?,
+        })
     }
 }
 

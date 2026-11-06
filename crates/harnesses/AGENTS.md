@@ -14,7 +14,14 @@ pairing for the same harness row and id, preserving agent bindings). Claim
 and re-key serialize on the harness row so retired credentials cannot be reissued.
 `revoke_hosted_harness(computer_id)` and
 `harness_computer(harness_id)` are the control plane's other entry points.
-These three take no caller: they are for trusted in-process callers that
+`hosted_pairing_claimed(pairing_id)` reads the durable pairing claim for the
+fleet generation gate, including the interval before macrod connects. Hosted
+claims take the same `hosted-enrollment:<computer UUID>` advisory guard as
+fleet Create before the harness lock, then recheck the presented device-secret
+hash while claiming. A claim waiting through rotation cannot use its old secret.
+Expiry cleanup retains claimed pairing rows for live hosted harnesses; a missing
+pairing fails closed rather than treating the guest as unclaimed.
+These trusted entry points take no caller: they are for trusted in-process callers that
 already authorized the team admin, never for an HTTP route.
 
 ## Start here

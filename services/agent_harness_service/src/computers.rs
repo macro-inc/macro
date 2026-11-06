@@ -246,6 +246,11 @@ pub trait HostedHarnessService: Send + Sync + 'static {
         >,
     >;
 
+    fn hosted_pairing_claimed(
+        &self,
+        pairing_id: PairingId,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, HarnessError>> + Send + '_>>;
+
     fn revoke_hosted_harness(
         &self,
         computer_id: Uuid,
@@ -269,6 +274,16 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
         >,
     > {
         Box::pin(HarnessService::create_hosted_pairing(self, request))
+    }
+
+    fn hosted_pairing_claimed(
+        &self,
+        pairing_id: PairingId,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, HarnessError>> + Send + '_>> {
+        Box::pin(HarnessService::hosted_pairing_claimed(
+            self,
+            pairing_id::PairingId::new_from_uuid(pairing_id.into_inner()),
+        ))
     }
 
     fn revoke_hosted_harness(
@@ -330,6 +345,10 @@ impl Harnesses for HostedHarnesses {
                 pairing.device_secret.expose().to_owned(),
             ),
         })
+    }
+
+    async fn pairing_claimed(&self, pairing_id: PairingId) -> Result<bool, Self::Err> {
+        Ok(self.service.hosted_pairing_claimed(pairing_id).await?)
     }
 
     async fn computer_for(&self, harness_id: HarnessId) -> Result<Option<ComputerId>, Self::Err> {

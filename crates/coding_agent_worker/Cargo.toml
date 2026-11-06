@@ -66,6 +66,7 @@ uuid = { workspace = true }
 webbrowser = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs", "pty", "termios"] }
@@ -88,8 +89,6 @@ windows-sys = { workspace = true, features = [
   "Win32_System_JobObjects",
 ] }
 zip = { workspace = true }
-
-zeroize = { workspace = true }
 
 [dev-dependencies]
 bot_id = { path = "../bot_id", features = ["test-utils"] }

@@ -12,7 +12,7 @@ use std::borrow::Borrow;
 use std::collections::BTreeMap;
 
 use crate::domain::models::ComputerName;
-use crate::domain::persona_credentials::PersonaEnrollment;
+use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaEnrollment};
 use serde::{Deserialize, Serialize};
 
 /// Instance config key carrying the JSON [`Enrollment`].
@@ -23,6 +23,8 @@ pub const INCUS_ENROLLMENT_KEY: &str = "user.macro.enrollment";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Enrollment {
     pub computer_id: ComputerId,
+    /// Guest creation this one-time enrollment belongs to.
+    pub generation: EnrollmentGeneration,
     pub pairing_id: PairingId,
     #[serde(serialize_with = "serialize_device_secret")]
     pub device_secret: DeviceSecret,

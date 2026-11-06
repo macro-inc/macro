@@ -59,6 +59,8 @@ pub struct Computer {
     /// The harness macrod claims, created when the instance is created.
     pub harness_id: Option<HarnessId>,
     pub persona: Option<Persona>,
+    /// Last guest creation begun by the fleet; retries keep the same generation.
+    pub enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration,
     pub created_by: String,
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.

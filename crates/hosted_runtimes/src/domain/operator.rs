@@ -9,12 +9,13 @@ use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 
 use crate::domain::enrollment::Enrollment;
-use crate::domain::ids::ComputerId;
+use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
 use crate::domain::models::{Computer, EnrollmentDefaults};
+use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
 use crate::domain::ports::{
-    ComputerRepo, Fleet, FleetError, FleetInstance, Harnesses, InstanceStatus, PendingEffect,
-    PersonaCredentialSource,
+    ComputerRepo, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses, InstanceStatus,
+    PendingEffect, PersonaCredentialSource,
 };
 use crate::domain::service::{Clock, ComputerError};
 
@@ -223,38 +224,57 @@ where
         }
 
         match effect {
-            Effect::Create { start, .. } => {
+            Effect::Create {
+                start, generation, ..
+            } => {
+                // An expired effect lease may have been acquired by another replica.
+                // The same guard also fences the harness claim transaction.
+                let _guard = self
+                    .repo
+                    .lock_enrollment(computer_id)
+                    .await
+                    .map_err(internal)?;
                 let computer = self.computer(computer_id).await?;
-                let pairing = self
-                    .harnesses
-                    .create_hosted_pairing(&computer)
-                    .await
-                    .map_err(internal)?;
-                let enrollment = Enrollment {
-                    computer_id,
-                    pairing_id: pairing.pairing_id,
-                    device_secret: pairing.device_secret,
-                    name: computer.name.clone(),
-                    service_url_overrides: self.defaults.service_url_overrides.clone(),
-                    persona: computer.persona.clone(),
-                    persona_enrollment: self
-                        .credentials
-                        .issue(
-                            computer_id,
-                            crate::domain::persona_credentials::EnrollmentGeneration::new(0),
-                        )
-                        .await
-                        .map_err(internal)?,
+                if *generation < computer.enrollment_generation {
+                    return Ok(None);
+                }
+                if computer.enrollment_generation != *generation
+                    && computer.enrollment_generation.next() != Some(*generation)
+                {
+                    return Err(ComputerError::BadRequest(
+                        "invalid enrollment generation".to_owned(),
+                    ));
+                }
+                let enrollment = CreateEnrollment {
+                    harnesses: &self.harnesses,
+                    credentials: &self.credentials,
+                    defaults: &self.defaults,
+                    computer: &computer,
+                    generation: *generation,
                 };
-                self.fleet
-                    .create(&computer, &enrollment, *start)
-                    .await
-                    .map_err(internal)?;
-                Ok(Some(if *start {
-                    Event::InstanceStarted
-                } else {
-                    Event::InstanceStopped
-                }))
+                let result = self
+                    .fleet
+                    .create(&computer, *generation, &enrollment, *start)
+                    .await;
+                if result.is_ok()
+                    && !self
+                        .repo
+                        .record_generation(computer_id, *generation)
+                        .await
+                        .map_err(internal)?
+                {
+                    return Err(ComputerError::BadRequest(
+                        "stale enrollment generation".to_owned(),
+                    ));
+                }
+                fleet_completion(
+                    result,
+                    Some(if *start {
+                        Event::InstanceStarted
+                    } else {
+                        Event::InstanceStopped
+                    }),
+                )
             }
             Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
             Effect::Resume { .. } => fleet_completion(self.fleet.resume(computer_id).await, None),
@@ -551,5 +571,49 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. } => None,
+    }
+}
+
+struct CreateEnrollment<'a, Registry, Credentials> {
+    harnesses: &'a Registry,
+    credentials: &'a Credentials,
+    defaults: &'a EnrollmentDefaults,
+    computer: &'a Computer,
+    generation: EnrollmentGeneration,
+}
+
+impl<Registry: Harnesses, Credentials: PersonaCredentialSource> FleetEnrollment
+    for CreateEnrollment<'_, Registry, Credentials>
+{
+    async fn claimed(&self, pairing: PairingId) -> Result<bool, PersonaCredentialError> {
+        self.harnesses
+            .pairing_claimed(pairing)
+            .await
+            .map_err(|_| PersonaCredentialError::IssuanceFailed)
+    }
+
+    #[tracing::instrument(name = "computer.enrollment.issue", skip_all, fields(computer_id = %self.computer.id, generation = i64::from(self.generation.get())), err)]
+    async fn issue(&self) -> Result<Enrollment, PersonaCredentialError> {
+        // Retire the earlier claim secret first. If issuance loses its response,
+        // the old guest must not claim with persona credentials now revoked.
+        let pairing = self
+            .harnesses
+            .create_hosted_pairing(self.computer)
+            .await
+            .map_err(|_| PersonaCredentialError::IssuanceFailed)?;
+        let persona_enrollment = self
+            .credentials
+            .issue(self.computer.id, self.generation)
+            .await?;
+        Ok(Enrollment {
+            computer_id: self.computer.id,
+            generation: self.generation,
+            pairing_id: pairing.pairing_id,
+            device_secret: pairing.device_secret,
+            name: self.computer.name.clone(),
+            service_url_overrides: self.defaults.service_url_overrides.clone(),
+            persona: self.computer.persona.clone(),
+            persona_enrollment,
+        })
     }
 }

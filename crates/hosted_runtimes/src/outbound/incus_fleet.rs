@@ -15,10 +15,11 @@ use incus_client::{
     InstanceKind, InstanceName, ProfileName, StoragePoolName,
 };
 
-use crate::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
-use crate::domain::ids::ComputerId;
+use crate::domain::enrollment::INCUS_ENROLLMENT_KEY;
+use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetError, FleetInstance, InstanceStatus};
+use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
+use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, InstanceStatus};
 use crate::domain::size::ComputerResources;
 
 #[cfg(test)]
@@ -27,6 +28,8 @@ mod test;
 /// Instance config key carrying the control-plane owner.
 pub const CONTROL_PLANE_KEY: &str = "user.macro.control_plane";
 const CREATED_AT_KEY: &str = "user.macro.created_at";
+const GENERATION_KEY: &str = "user.macro.enrollment_generation";
+const PAIRING_KEY: &str = "user.macro.pairing_id";
 
 /// Instance config key carrying the computer id.
 pub const COMPUTER_ID_KEY: &str = "user.macro.computer_id";
@@ -53,6 +56,10 @@ pub struct IncusFleetConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum IncusFleetError {
+    #[error(transparent)]
+    Enrollment(#[from] PersonaCredentialError),
+    #[error("instance enrollment identity does not match the Create generation")]
+    EnrollmentMismatch,
     #[error("instance {computer_id} is missing")]
     Missing { computer_id: ComputerId },
     #[error(transparent)]
@@ -137,20 +144,62 @@ impl Fleet for IncusFleet {
     async fn create(
         &self,
         computer: &Computer,
-        enrollment: &Enrollment,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> Result<(), IncusFleetError> {
         let name = instance_name(computer.id);
-        let enrollment_json = serde_json::to_string(enrollment)?;
         match self.find(computer.id).await? {
-            // A retried create re-keys the pairing, so the enrollment changes.
-            Some(_) => {
+            Some(instance) => {
+                if instance.config.get(CONTROL_PLANE_KEY).map(String::as_str)
+                    != Some(self.config.control_plane_id.as_str())
+                    || instance.config.get(GENERATION_KEY) != Some(&generation.get().to_string())
+                {
+                    return Err(IncusFleetError::EnrollmentMismatch);
+                }
+                let pairing = instance
+                    .config
+                    .get(PAIRING_KEY)
+                    .and_then(|value| value.parse::<PairingId>().ok())
+                    .ok_or(IncusFleetError::EnrollmentMismatch)?;
+                if enrollment.claimed(pairing).await? {
+                    return Ok(());
+                }
+                let enrollment = enrollment.issue().await?;
+                let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
                 self.client
                     .set_config_key(&name, INCUS_ENROLLMENT_KEY, &enrollment_json)
                     .await?;
+                // Claim has not happened: reboot the enroll oneshot with the fresh payload.
+                self.restart(computer.id).await?;
+                if !start {
+                    self.stop(computer.id).await?;
+                }
             }
             None => {
-                let body = instance_body(&self.config, computer, &enrollment_json, Utc::now());
+                if !matches!(
+                    computer.state.phase,
+                    crate::domain::lifecycle::Phase::Provisioning { .. }
+                ) {
+                    return Err(IncusFleetError::Missing {
+                        computer_id: computer.id,
+                    });
+                }
+                let enrollment = enrollment.issue().await?;
+                let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
+                let mut body = instance_body(&self.config, computer, &enrollment_json, Utc::now());
+                {
+                    let config = body
+                        .config
+                        .as_mut()
+                        .ok_or(IncusFleetError::EnrollmentMismatch)?;
+                    config
+                        .0
+                        .insert(GENERATION_KEY.to_owned(), generation.get().to_string());
+                    config
+                        .0
+                        .insert(PAIRING_KEY.to_owned(), enrollment.pairing_id.to_string());
+                }
                 let started = self
                     .client
                     .api()
@@ -158,10 +207,10 @@ impl Fleet for IncusFleet {
                     .await
                     .map_err(IncusError::from)?;
                 self.client.run_operation(started.into_inner()).await?;
+                if start {
+                    self.start(computer.id).await?;
+                }
             }
-        }
-        if start {
-            self.start(computer.id).await?;
         }
         Ok(())
     }

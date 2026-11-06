@@ -253,17 +253,19 @@ async fn read_enrollment(
     paths: &SystemPaths,
 ) -> rootcause::Result<Enrollment> {
     let raw = match source {
-        EnrollmentSource::File(path) => std::fs::read_to_string(path).context(format!(
-            "could not read the enrollment at {}",
-            path.display()
-        ))?,
+        EnrollmentSource::File(path) => {
+            zeroize::Zeroizing::new(std::fs::read_to_string(path).context(format!(
+                "could not read the enrollment at {}",
+                path.display()
+            ))?)
+        }
         EnrollmentSource::Incus => read_incus_enrollment(&paths.at(INCUS_SOCKET)).await?,
     };
     Ok(serde_json::from_str(&raw).context("the enrollment is not valid Enrollment JSON")?)
 }
 
 /// `GET /1.0/config/<key>` on the guest API answers the raw value.
-async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<String> {
+async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<zeroize::Zeroizing<String>> {
     let http = reqwest::Client::builder()
         .unix_socket(socket)
         .timeout(INCUS_TIMEOUT)
@@ -280,15 +282,14 @@ async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<String> {
             socket.display()
         ))?;
     let status = response.status();
-    let body = response
-        .text()
-        .await
-        .context("could not read the Incus guest API answer")?;
+    let body = zeroize::Zeroizing::new(
+        response
+            .text()
+            .await
+            .context("could not read the Incus guest API answer")?,
+    );
     if !status.is_success() {
-        rootcause::bail!(
-            "the Incus guest API answered {status} for {INCUS_ENROLLMENT_KEY}: {}",
-            body.trim()
-        );
+        rootcause::bail!("the Incus guest API answered {status} for {INCUS_ENROLLMENT_KEY}");
     }
     Ok(body)
 }
@@ -430,7 +431,6 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
 }
 
 /// A persona's validated, rendered files.
-#[derive(Debug)]
 struct PersonaFiles {
     os_user: PersonaOsUser,
     unit_name: SystemdUnitName,

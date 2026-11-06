@@ -12,6 +12,9 @@ use crate::domain::models::{
     BillingInterval, Computer, ControlPlaneId, Host, HostRegistration, NewComputer, Quote,
     SubscriptionItem,
 };
+use crate::domain::persona_credentials::{
+    EnrollmentGeneration, PersonaCredentialError, PersonaEnrollment,
+};
 use crate::domain::size::ComputerSize;
 
 /// Classifies a fleet failure that requires replacing a lost guest.
@@ -54,6 +57,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
 
     /// Serializes payment resolution through its lifecycle write across replicas.
     type PaymentGuard: Send;
+
+    /// Serializes fleet enrollment with the harness claim transaction.
+    type EnrollmentGuard: Send;
+
+    fn lock_enrollment(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Self::EnrollmentGuard, Self::Err>> + Send;
 
     fn lock_payment(
         &self,
@@ -101,6 +112,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
         computer_id: ComputerId,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Record a creation generation exactly once, allowing retries of that generation.
+    /// Reject stale effects and skipped generations.
+    fn record_generation(
+        &self,
+        computer_id: ComputerId,
+        generation: EnrollmentGeneration,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Record the first macrod connection; later calls keep the first time.
     fn mark_enrolled(
@@ -248,12 +267,14 @@ pub trait Fleet: Send + Sync + 'static {
     /// Stable owner of every instance this fleet creates and lists.
     fn control_plane_id(&self) -> &ControlPlaneId;
 
-    /// Create the instance from the base image, carrying `enrollment`, and
-    /// start it when `start`. An instance that already exists is reused.
+    /// Create lazily: an existing guest with the same generation and claimed
+    /// pairing completes without polling `enrollment.issue()`. An unclaimed
+    /// guest gets a fresh payload and is restarted to apply it.
     fn create(
         &self,
         computer: &Computer,
-        enrollment: &Enrollment,
+        generation: EnrollmentGeneration,
+        enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -339,6 +360,12 @@ pub trait Harnesses: Send + Sync + 'static {
         computer: &Computer,
     ) -> impl Future<Output = Result<HostedPairing, Self::Err>> + Send;
 
+    /// Whether this exact pairing has been claimed, independently of presence.
+    fn pairing_claimed(
+        &self,
+        pairing_id: PairingId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// The computer a harness runs on, if it is a computer's.
     fn computer_for(
         &self,
@@ -379,11 +406,19 @@ pub trait PersonaCredentialSource: Send + Sync + 'static {
     fn issue(
         &self,
         computer: ComputerId,
-        generation: crate::domain::persona_credentials::EnrollmentGeneration,
-    ) -> impl Future<
-        Output = Result<
-            crate::domain::persona_credentials::PersonaEnrollment,
-            crate::domain::persona_credentials::PersonaCredentialError,
-        >,
-    > + Send;
+        generation: EnrollmentGeneration,
+    ) -> impl Future<Output = Result<PersonaEnrollment, PersonaCredentialError>> + Send;
+}
+
+/// A lazy one-time enrollment, requested only after the fleet checks its guest.
+/// It borrows the operator for the duration of one Create effect.
+pub trait FleetEnrollment: Send + Sync {
+    /// Check the persisted pairing claim, not WebSocket presence.
+    fn claimed(
+        &self,
+        pairing: PairingId,
+    ) -> impl Future<Output = Result<bool, PersonaCredentialError>> + Send;
+
+    /// Rotate credentials and pairing, without retaining or replaying plaintext.
+    fn issue(&self) -> impl Future<Output = Result<Enrollment, PersonaCredentialError>> + Send;
 }

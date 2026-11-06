@@ -160,14 +160,16 @@ async fn apply_stores_state_effects_and_timers_and_wakes_only_with_room(pool: Pg
                 ComputerId::new(Uuid::from_u128(1)),
                 Effect::Create {
                     host: host.id,
-                    start: true
+                    start: true,
+                    generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
                 }
             ),
             (
                 ComputerId::new(Uuid::from_u128(2)),
                 Effect::Create {
                     host: host.id,
-                    start: false
+                    start: false,
+                    generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
                 }
             ),
         ]

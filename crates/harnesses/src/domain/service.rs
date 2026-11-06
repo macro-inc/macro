@@ -276,6 +276,7 @@ where
             .repo
             .claim_pairing(
                 pairing_id,
+                presented,
                 Uuid::new_v4(),
                 HashedHarnessToken::from_raw(&token),
             )
@@ -467,6 +468,23 @@ where
             pairing_id,
             device_secret,
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn hosted_pairing_claimed(&self, pairing_id: PairingId) -> Result<bool, HarnessError> {
+        let facts = self
+            .repo
+            .pairing_claim_facts(pairing_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown hosted pairing".to_owned()))?;
+        match facts.status {
+            PairingStatus::Claimed => Ok(true),
+            PairingStatus::Approved => Ok(false),
+            PairingStatus::Pending => Err(HarnessError::BadRequest(
+                "hosted pairing is not approved".to_owned(),
+            )),
+        }
     }
 
     #[tracing::instrument(skip(self), fields(harness_id = tracing::field::Empty), err)]

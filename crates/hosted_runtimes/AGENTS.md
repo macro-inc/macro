@@ -143,6 +143,20 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `PersonaConfigKey` names, Debug lists keys only, values zeroize on drop,
   and it does not implement Serialize. Only `Enrollment.persona_enrollment`
   serializes it for the one-time `user.macro.enrollment` JSON or Docker file.
+  `Effect::Create { host, start, generation: EnrollmentGeneration }` carries no
+  issuance material. `hosted_runtime.enrollment_generation` starts at zero and
+  advances after fleet creation succeeds, using the generation reserved by the
+  effect. Retries keep that generation; `InstanceLost` reserves its successor.
+  Fleet Create checks the persisted generation and pairing identity before
+  polling `FleetEnrollment::issue`: an already-claimed guest completes without
+  issuance or re-keying. An unclaimed guest receives a fresh enrollment and a
+  restart so its enroll oneshot applies the replacement values. Creation runs
+  under the per-computer enrollment guard (`hosted-enrollment:<computer UUID>`
+  advisory key), also taken by the harness claim transaction. Claims recheck the
+  device-secret hash after acquiring it. This fences claims racing a retry,
+  including retries after an expired effect lease.
+  The explicit `NoPersonaCredentials` composition permits only computers without
+  personas; persona computers fail until a provider is installed.
   That is the only transient fleet copy, removed by `clear_enrollment` after
   macrod connects. Enrollment Debug redacts secrets. macrod merges both halves
   with non-secret persona config into the guest's mode-0600

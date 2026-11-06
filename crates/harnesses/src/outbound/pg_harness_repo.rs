@@ -158,6 +158,11 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             DELETE FROM harness_pairing_requests
             WHERE expires_at <= now() AND status <> 'approved'
+              AND NOT EXISTS (
+                  SELECT 1 FROM harnesses h
+                  WHERE h.id = harness_pairing_requests.harness_id
+                    AND h.computer_id IS NOT NULL AND h.deleted_at IS NULL
+              )
             "#
         )
         .execute(&self.pool)
@@ -336,10 +341,22 @@ impl HarnessRepo for PgHarnessRepo {
     async fn claim_pairing(
         &self,
         pairing_id: PairingId,
+        device_secret_hash: [u8; 32],
         token_id: Uuid,
         token: HashedHarnessToken,
     ) -> Result<Option<Harness>, Self::Err> {
         let mut tx = self.pool.begin().await.context("failed to begin tx")?;
+
+        // Fleet Create holds this guard through its claim check, issuance and
+        // enrollment write. A committed claim is therefore never re-keyed by retry.
+        sqlx::query!(
+            r#"
+            SELECT pg_advisory_xact_lock(hashtextextended('hosted-enrollment:' || h.computer_id::text, 0))
+            FROM harnesses h JOIN harness_pairing_requests p ON p.harness_id = h.id
+            WHERE p.id = $1 AND h.computer_id IS NOT NULL
+            "#,
+            pairing_id.as_uuid(),
+        ).execute(&mut *tx).await.context("failed to lock hosted enrollment")?;
 
         // Re-key and claim lock the harness before touching pairings or tokens.
         let harness_id = sqlx::query_scalar!(
@@ -368,10 +385,11 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             UPDATE harness_pairing_requests
             SET status = 'claimed', claimed_at = now()
-            WHERE id = $1 AND status = 'approved'
+            WHERE id = $1 AND status = 'approved' AND device_secret_hash = $2
             RETURNING harness_id AS "harness_id!"
             "#,
             pairing_id.as_uuid(),
+            &device_secret_hash[..],
         )
         .fetch_optional(&mut *tx)
         .await

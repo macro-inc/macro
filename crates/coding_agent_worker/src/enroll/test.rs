@@ -7,6 +7,7 @@ use uuid::Uuid;
 use super::*;
 
 const ENROLLMENT_JSON: &str = r#"{
+    "generation": 1,
     "computer_id": "00000000-0000-0000-0000-00000000000c",
     "pairing_id": "00000000-0000-0000-0000-00000000000a",
     "device_secret": "mhds_secret",

@@ -20,6 +20,8 @@ fn config() -> DockerFleetConfig {
 #[test]
 fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
     let spec = CreateSpec {
+        generation: EnrollmentGeneration::new(1),
+        pairing_id: PairingId::new(Uuid::from_u128(1)),
         control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         image: "macro-box:latest".to_owned(),
@@ -46,6 +48,10 @@ fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
             "macro.control_plane=test-a",
             "--label",
             "macro.created_at=2026-11-05T10:00:00+00:00",
+            "--label",
+            "macro.enrollment_generation=1",
+            "--label",
+            "macro.pairing_id=00000000-0000-0000-0000-000000000001",
             "--network",
             "macro_services",
             "--memory",

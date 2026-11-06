@@ -5,6 +5,7 @@ fn comped_lifecycle_never_removes_subscription_items() {
     let reason = "internal team".to_owned();
     for host_has_room in [true, false] {
         let context = Context {
+            enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration::new(0),
             now: now(),
             host_has_room,
         };
@@ -19,7 +20,7 @@ fn comped_lifecycle_never_removes_subscription_items() {
             comped.phase,
             Phase::Provisioning {
                 host: HOST,
-                start: host_has_room
+                start: host_has_room,
             }
         );
         assert_eq!(comped.payment, PaymentOutcome::Comped);
@@ -28,7 +29,8 @@ fn comped_lifecycle_never_removes_subscription_items() {
             effects,
             vec![Effect::Create {
                 host: HOST,
-                start: host_has_room
+                start: host_has_room,
+                generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
             }]
         );
 

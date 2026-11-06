@@ -21,10 +21,10 @@ use crate::domain::size::{
 #[cfg(test)]
 mod test;
 
-/// Payment guards may not occupy every connection needed to persist outcomes.
-const PAYMENT_GUARD_CONNECTIONS: u32 = 4;
-/// Release unused payment-guard connections between billing passes.
-const PAYMENT_GUARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+/// Long-lived guards may not occupy every connection needed to persist outcomes.
+const COMPUTER_GUARD_CONNECTIONS: u32 = 4;
+/// Release unused guard connections between passes.
+const COMPUTER_GUARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Errors from the Postgres adapter.
 #[derive(Debug, thiserror::Error)]
@@ -50,25 +50,22 @@ impl From<serde_json::Error> for PgComputerError {
 #[derive(Clone)]
 pub struct PgComputerRepo {
     pool: PgPool,
-    payment_locks: PgPool,
+    guards: PgPool,
 }
 
 impl PgComputerRepo {
     pub fn new(pool: PgPool) -> Self {
-        // Payment guards outlive provider calls; keep their waiters off the
+        // Guards outlive provider calls; keep their waiters off the
         // pool used to persist the outcome while the guard is held.
-        let payment_locks = sqlx::postgres::PgPoolOptions::new()
+        let guards = sqlx::postgres::PgPoolOptions::new()
             .max_connections(
                 pool.options()
                     .get_max_connections()
-                    .min(PAYMENT_GUARD_CONNECTIONS),
+                    .min(COMPUTER_GUARD_CONNECTIONS),
             )
-            .idle_timeout(PAYMENT_GUARD_IDLE_TIMEOUT)
+            .idle_timeout(COMPUTER_GUARD_IDLE_TIMEOUT)
             .connect_lazy_with(pool.connect_options().as_ref().clone());
-        Self {
-            pool,
-            payment_locks,
-        }
+        Self { pool, guards }
     }
 }
 
@@ -88,6 +85,7 @@ struct ComputerRow {
     created_by: String,
     created_at: DateTime<Utc>,
     enrolled_at: Option<DateTime<Utc>>,
+    enrollment_generation: i64,
 }
 
 impl TryFrom<ComputerRow> for Computer {
@@ -129,6 +127,9 @@ impl TryFrom<ComputerRow> for Computer {
             created_by: row.created_by,
             created_at: row.created_at,
             enrolled_at: row.enrolled_at,
+            enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration::new(
+                u32::try_from(row.enrollment_generation)?,
+            ),
         })
     }
 }
@@ -150,7 +151,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
-                   created_at, enrolled_at
+                   created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE id = $1
             FOR UPDATE
@@ -168,7 +169,15 @@ impl PgComputerRepo {
             Some(host) => Self::host_has_room(tx, host, &computer).await?,
             None => false,
         };
-        let (state, effects) = transition(&computer.state, event, Context { now, host_has_room });
+        let (state, effects) = transition(
+            &computer.state,
+            event,
+            Context {
+                now,
+                host_has_room,
+                enrollment_generation: computer.enrollment_generation,
+            },
+        );
 
         for effect in effects {
             match effect {
@@ -273,13 +282,27 @@ impl PgComputerRepo {
 impl ComputerRepo for PgComputerRepo {
     type Err = PgComputerError;
     type PaymentGuard = sqlx::Transaction<'static, sqlx::Postgres>;
+    type EnrollmentGuard = sqlx::Transaction<'static, sqlx::Postgres>;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn lock_enrollment(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Self::EnrollmentGuard, PgComputerError> {
+        let mut guard = self.guards.begin().await?;
+        let key = format!("hosted-enrollment:{computer_id}");
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut *guard)
+            .await?;
+        Ok(guard)
+    }
 
     #[tracing::instrument(skip(self), err)]
     async fn lock_payment(
         &self,
         computer_id: ComputerId,
     ) -> Result<Self::PaymentGuard, PgComputerError> {
-        let mut guard = self.payment_locks.begin().await?;
+        let mut guard = self.guards.begin().await?;
         let key = format!("computer-payment:{computer_id}");
         sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
             .execute(&mut *guard)
@@ -389,6 +412,7 @@ impl ComputerRepo for PgComputerRepo {
             created_by: computer.created_by,
             created_at: now,
             enrolled_at: None,
+            enrollment_generation: Default::default(),
         })
     }
 
@@ -410,7 +434,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
-                   created_at, enrolled_at
+                   created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE id = $1
             "#,
@@ -427,7 +451,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
-                   created_at, enrolled_at
+                   created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE team_id = $1 AND state->'phase'->>'phase' <> 'destroyed'
             ORDER BY created_at
@@ -447,7 +471,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
-                   created_at, enrolled_at
+                   created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE harness_id = $1
             "#,
@@ -474,6 +498,19 @@ impl ComputerRepo for PgComputerRepo {
         Ok(())
     }
 
+    async fn record_generation(
+        &self,
+        computer_id: ComputerId,
+        generation: crate::domain::persona_credentials::EnrollmentGeneration,
+    ) -> Result<bool, PgComputerError> {
+        let generation = i64::from(generation.get());
+        let updated = sqlx::query!(
+            "UPDATE hosted_runtime SET enrollment_generation = $2 WHERE id = $1 AND enrollment_generation IN ($2::BIGINT, $2::BIGINT - 1)",
+            computer_id.into_inner(), generation,
+        ).execute(&self.pool).await?;
+        Ok(updated.rows_affected() == 1)
+    }
+
     async fn mark_enrolled(
         &self,
         computer_id: ComputerId,
@@ -494,7 +531,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
-                   created_at, enrolled_at
+                   created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE awake AND state->'phase'->>'phase' = 'running'
             "#,
@@ -524,7 +561,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
-                   created_at, enrolled_at
+                   created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'pending_payment'
             "#,

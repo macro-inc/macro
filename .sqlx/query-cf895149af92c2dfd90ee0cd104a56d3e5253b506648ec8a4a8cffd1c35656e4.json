@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime SET enrollment_generation = $2 WHERE id = $1 AND enrollment_generation IN ($2::BIGINT, $2::BIGINT - 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf895149af92c2dfd90ee0cd104a56d3e5253b506648ec8a4a8cffd1c35656e4"
+}
