@@ -50,7 +50,9 @@ just kube-local up kube-a --slot 0
 just kube-local down kube-a
 ```
 
-`stop` preserves PVCs; the next `up` resumes the instance. `down` deletes only
+`stop` preserves PVCs; the next `up` starts backing stores first, restores
+LocalStack resources and then starts application pods. As in Compose, restoring
+LocalStack resources does not recover objects lost from its ephemeral storage. `down` deletes only
 that namespace and its data. A fresh `up` initializes clean databases, Kafka
 topics, local AWS resources, auth and search indices using the existing xtask
 initialization functions. Initialization uses temporary loopback port forwards;

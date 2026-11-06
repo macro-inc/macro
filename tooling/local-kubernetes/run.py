@@ -53,10 +53,28 @@ def claim(path):
     marker.write_text(json.dumps(OWNER))
 
 
+def scratch_path():
+    record = STATE / 'scratch.json'
+    if not record.exists():
+        return None
+    value = json.loads(record.read_text())
+    if value['owner'] != OWNER:
+        raise RuntimeError('build scratch belongs to another checkout')
+    path = Path(value['path']).resolve(strict=True)
+    if not path.is_relative_to('/tmp') or not path.name.startswith('macro-eks-build-'):
+        raise RuntimeError('build scratch must be a task-owned temporary directory')
+    return path
+
+
 def cluster():
     claim(STATE)
     if (STATE / 'kubeconfig').exists():
         kube('get', 'nodes')
+        scratch = scratch_path()
+        if scratch is not None:
+            mounts = json.loads(run(['docker', 'inspect', f'{CLUSTER}-control-plane'], capture=True))[0]['Mounts']
+            if not any(mount['Source'] == str(scratch) for mount in mounts):
+                raise RuntimeError('the owned node does not mount the recorded build scratch; recreate it before starting instances')
         return
     # Docker's default address pools are exhausted on devboxes with many stacks.
     # Creation fails on an overlapping subnet; never prune other stacks.
@@ -75,6 +93,9 @@ def cluster():
         {'hostPath': str(ROOT), 'containerPath': str(ROOT)},
         {'hostPath': '/nix/store', 'containerPath': '/nix/store', 'readOnly': True},
     ]
+    scratch = scratch_path()
+    if scratch is not None:
+        config['nodes'][0]['extraMounts'].append({'hostPath': str(scratch), 'containerPath': str(scratch)})
     for mapping in config['nodes'][0]['extraPortMappings']:
         with socket.socket() as listener:
             listener.bind(('0.0.0.0', mapping['hostPort']))
@@ -134,7 +155,7 @@ def manifests(config, namespace, slot):
             volume = {'name': volume_name}
             if mount['type'] == 'bind':
                 source = Path(mount['source'])
-                if not (source.is_relative_to(ROOT) or source.is_relative_to('/nix/store') or str(source) == '/var/run/docker.sock'):
+                if not (source.is_relative_to(ROOT) or source.is_relative_to('/nix/store') or str(source) == '/var/run/docker.sock' or (scratch_path() is not None and source.is_relative_to(scratch_path()))):
                     raise RuntimeError(f'unsupported host mount {source}; keep inputs in this worktree')
                 if not source.exists():
                     if source.is_relative_to(ROOT / 'infra/local/generated') and target in ['/data', '/config']:
@@ -253,9 +274,11 @@ def forwards(namespace, config):
             log.close()
 
 
-def wait_deployments(namespace):
+def wait_deployments(namespace, names=None):
     deployments = json.loads(kube('-n', namespace, 'get', 'deployments', '-o', 'json', capture=True))
     for deployment in deployments['items']:
+        if names is not None and deployment['metadata']['name'] not in names:
+            continue
         kube('-n', namespace, 'rollout', 'status', 'deployment/' + deployment['metadata']['name'], '--timeout=600s')
 
 
@@ -280,6 +303,15 @@ def up(args):
         previous = json.loads(state.read_text())
         if previous['slot'] != args.slot:
             raise RuntimeError('existing instance has a different HTTPS slot')
+        for service in sorted(INFRA):
+            kube('-n', namespace, 'scale', f'deployment/{service}', '--replicas=1')
+        wait_deployments(namespace, INFRA)
+        _, _, config = compose(args.name)
+        flags = ['--instance', args.name, '--port-base', str(32434 + args.slot),
+                 '--no-doppler', '--traces', 'off', '--env-file',
+                 str(directory / 'local.generated.env')]
+        with forwards(namespace, config):
+            xtask('kubernetes-init', *flags)
         kube('-n', namespace, 'scale', 'deployment', '--all', '--replicas=1')
         wait_deployments(namespace)
     else:
@@ -373,7 +405,7 @@ def main():
             binary_dir = Path(args.binaries_dir).resolve(strict=True)
             if (binary_dir / 'bin').is_dir():
                 binary_dir = binary_dir / 'bin'
-            if not (binary_dir.is_relative_to(ROOT) or binary_dir.is_relative_to('/nix/store')):
+            if not (binary_dir.is_relative_to(ROOT) or binary_dir.is_relative_to('/nix/store') or (scratch_path() is not None and binary_dir.is_relative_to(scratch_path()))):
                 raise RuntimeError('binary directory must be inside the worktree or Nix store')
             current = json.loads(kube('-n', namespace, 'get', deployment, '-o', 'json', capture=True))
             pod = current['spec']['template']['spec']

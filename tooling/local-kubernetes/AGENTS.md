@@ -15,6 +15,8 @@ on one Nix-declared kind node. This is a local development runtime only.
 
 - Owns only `macro-eks-local`, its checkout-owned network and
   `macro-kube-<name>` namespaces annotated with this checkout path.
+- Optional build scratch is recorded with checkout ownership in `scratch.json`;
+  mount it into the node before starting instances.
 - Generated state and manifests belong in `infra/local/generated/`, never git.
 - Keep Compose as the service, image, env, route and backing-container inventory.
 
