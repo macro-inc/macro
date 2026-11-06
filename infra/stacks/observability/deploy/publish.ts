@@ -143,6 +143,20 @@ export async function publishImage(
         ...extraTags
       );
     }
+    // A run cancelled during registration can leave the AMI still pending.
+    execFileSync(
+      'aws',
+      [
+        '--region',
+        region,
+        'ec2',
+        'wait',
+        'image-available',
+        '--image-ids',
+        reused,
+      ],
+      { stdio: 'inherit' }
+    );
     const snapshot = aws<{
       Images: { BlockDeviceMappings: { Ebs?: { SnapshotId: string } }[] }[];
     }>(region, 'ec2', 'describe-images', '--image-ids', reused).Images[0]
@@ -244,6 +258,19 @@ export async function publishImage(
           DeleteOnTermination: true,
         },
       },
+    ]),
+    // Tagged as it is created: an untagged AMI would block a retry, which finds
+    // earlier work by ImageSHA256 and cannot reuse the AMI's name.
+    '--tag-specifications',
+    JSON.stringify([
+      {
+        ResourceType: 'image',
+        Tags: [
+          { Key: 'project', Value: 'observability' },
+          { Key: 'ImageSHA256', Value: digest },
+          ...(options.tags ?? []),
+        ],
+      },
     ])
   ).ImageId;
   console.log(`AMI: ${ami}; SHA256: ${digest}`);
@@ -252,12 +279,10 @@ export async function publishImage(
     'ec2',
     'create-tags',
     '--resources',
-    ami,
     snapshot,
     '--tags',
     'Key=project,Value=observability',
-    `Key=ImageSHA256,Value=${digest}`,
-    ...extraTags
+    `Key=ImageSHA256,Value=${digest}`
   );
   execFileSync(
     'aws',

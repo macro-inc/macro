@@ -476,8 +476,10 @@ nix build . --cores 2
 bun deploy/publish.ts result macro-observability-images-569036502058-us-east-2 --role macro-observability-vmimport
 ```
 
-A hand-published AMI has no `ImageSource` tag, so Pulumi will not use it; the
-workflow smoke-boots and tags it when its `NixSystem` matches.
+A hand-published AMI has no `ImageSource` or `NixSystem` tag, so neither Pulumi
+nor the workflow's `find` step uses it. The workflow builds its own image; only
+when that build produces a byte-identical VHD does `publish` reuse the
+hand-published AMI (matched by `ImageSHA256`) and tag it.
 
 ### Runtime
 
