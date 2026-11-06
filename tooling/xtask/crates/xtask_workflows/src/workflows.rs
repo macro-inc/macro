@@ -39,6 +39,7 @@ mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
+mod deploy_mcp_chatgpt_worker;
 mod deploy_observability;
 mod deploy_on_push;
 mod deploy_sdk_docs;
@@ -240,6 +241,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
             render_patched(
                 deploy_ai_editing_worker::deploy_ai_editing_worker,
                 deploy_ai_editing_worker::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_mcp_chatgpt_worker",
+        file_name: "deploy_mcp_chatgpt_worker.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_mcp_chatgpt_worker::deploy_mcp_chatgpt_worker,
+                deploy_mcp_chatgpt_worker::patch,
             )
         },
     },
