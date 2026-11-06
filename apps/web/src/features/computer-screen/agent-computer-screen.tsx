@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { resolveScreenUrl } from '@app/lib/service-clients/service-agent-harness/screen-url';
 import { enableMacroComputers } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -8,7 +9,6 @@ import { createMemo, type ParentProps } from 'solid-js';
 import { type ScreenHost, ScreenProvider } from './context/screen-context';
 import { createScreenPaneState } from './pane-state';
 import { connectScreen } from './queries/novnc';
-import { resolveScreenUrl } from './queries/screen-url';
 import { ScreenSplit } from './views/screen-split';
 
 export function AgentComputerScreen(
