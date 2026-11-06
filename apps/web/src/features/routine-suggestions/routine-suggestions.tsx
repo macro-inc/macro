@@ -137,6 +137,9 @@ function SuggestionList(props: {
           <SuggestionRow
             summary={row.summary}
             surface={row.suggestion.surface}
+            catalogKey={
+              row.suggestion.kind === 'starter' ? row.suggestion.key : undefined
+            }
             reason={row.suggestion.reason}
             drafted={row.suggestion.kind === 'request'}
             surfaceLabel={

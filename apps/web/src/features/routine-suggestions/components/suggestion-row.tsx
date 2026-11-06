@@ -15,6 +15,8 @@ import { SuggestionIcon } from './suggestion-icon';
 export function SuggestionRow(props: {
   summary: SuggestionSummary;
   surface: Surface;
+  /** The catalog routine it suggests, for its icon. */
+  catalogKey?: string;
   reason: string;
   /** A request the drafter writes on review, rather than a catalog routine. */
   drafted: boolean;
@@ -30,7 +32,11 @@ export function SuggestionRow(props: {
   return (
     <li class="group/suggestion list-none rounded-xl border border-transparent transition-colors not-touch:hover:bg-hover">
       <div class="flex min-w-0 items-start gap-3 p-3">
-        <SuggestionIcon surface={props.surface} class="mt-0.5" />
+        <SuggestionIcon
+          surface={props.surface}
+          catalogKey={props.catalogKey}
+          class="mt-0.5"
+        />
         <div class="min-w-0 flex-1">
           <span class="flex min-w-0 items-center gap-2">
             <span class="truncate text-sm font-medium text-ink">
