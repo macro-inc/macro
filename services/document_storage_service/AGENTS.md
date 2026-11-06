@@ -36,6 +36,9 @@ threads, pins, recents, notifications, folders, activity.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
+- Authenticated call routes are composed from `crates/call` under `/call`;
+  `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
+  `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
   across item types. Folder duplication runs on its own task and copies
   documents and chats through `entity_mutation/project_contents.rs`, the

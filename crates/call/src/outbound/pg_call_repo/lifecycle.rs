@@ -8,6 +8,7 @@ impl PgCallRepo {
         &self,
         call_id: &Uuid,
         require_empty: bool,
+        program_only_before: Option<DateTime<Utc>>,
     ) -> Result<Option<ArchivedCall>, CallError> {
         let mut tx = self.pool.begin().await?;
         // The live share-with-team intent is translated into canonical team
@@ -41,6 +42,26 @@ impl PgCallRepo {
             .await?
         {
             return Ok(None);
+        }
+
+        if let Some(before) = program_only_before {
+            let eligible = sqlx::query_scalar!(
+                r#"SELECT (
+                    EXISTS (SELECT 1 FROM call_participants WHERE call_id = $1 AND left_at IS NULL AND client <> 'person')
+                    AND NOT EXISTS (SELECT 1 FROM call_participants WHERE call_id = $1 AND left_at IS NULL AND client = 'person')
+                    AND NOT EXISTS (SELECT 1 FROM call_guests WHERE call_id = $1 AND left_at IS NULL)
+                    AND COALESCE((SELECT MAX(left_at) FROM call_participants WHERE call_id = $1 AND client = 'person'), $2) <= $3
+                    AND COALESCE((SELECT MAX(left_at) FROM call_guests WHERE call_id = $1), $2) <= $3
+                ) AS "eligible!""#,
+                call_id,
+                call.created_at,
+                before,
+            )
+            .fetch_one(tx.as_mut())
+            .await?;
+            if !eligible {
+                return Ok(None);
+            }
         }
 
         let ended_at = Utc::now().trunc_subsecs(6);

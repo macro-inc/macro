@@ -14,6 +14,10 @@ fn maps_domain_errors_to_status_codes() {
             StatusCode::NOT_FOUND,
         ),
         (CallError::NotInCall, StatusCode::BAD_REQUEST),
+        (CallError::Ended, StatusCode::GONE),
+        (CallError::InOtherCall, StatusCode::CONFLICT),
+        (CallError::AlreadyConnected, StatusCode::CONFLICT),
+        (CallError::RateLimited, StatusCode::TOO_MANY_REQUESTS),
         (
             CallError::AlreadyInCall("channel".to_string()),
             StatusCode::CONFLICT,
@@ -43,6 +47,19 @@ fn maps_domain_errors_to_status_codes() {
         let description = format!("{error:?}");
         assert_eq!(error.into_response().status(), status, "{description}");
     }
+}
+
+#[test]
+fn token_routes_refuse_code_execution_header() {
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    assert!(matches!(
+        super::refuse_code_execution_token(&headers),
+        Err(CallError::Forbidden(_))
+    ));
 }
 
 /// The entity-access service resolves a call to an access level, never a

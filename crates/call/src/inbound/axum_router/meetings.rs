@@ -274,13 +274,19 @@ pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriza
     State(state): State<CallRouterState<S, Svc, Auth>>,
     Path(token): Path<String>,
     actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
+    request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
+    refuse_code_execution_token(&headers)?;
     Ok(Json(
         state
             .service
-            .join_meeting(
+            .join_meeting_with_options(
                 MeetingToken::try_from(token)?,
                 actor.authorization.user.macro_user_id.clone(),
+                request.map_or_else(JoinCallRequest::default, |body| body.0),
+                credential_is_program(&actor.authorization.user.origin),
+                actor.authorization.user.agent_id.is_some(),
             )
             .await?,
     ))
@@ -312,8 +318,10 @@ pub async fn lookup<S: CallService>(
 pub async fn guest_join<S: CallService>(
     State(state): State<WebhookRouterState<S>>,
     Path(token): Path<String>,
+    headers: HeaderMap,
     Json(request): Json<GuestJoinRequest>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
+    refuse_code_execution_token(&headers)?;
     Ok(Json(
         state
             .service

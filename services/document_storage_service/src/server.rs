@@ -901,7 +901,14 @@ async fn run_server() -> anyhow::Result<()> {
             call_root_poster.clone(),
         ),
     ));
-    let call_service = Arc::new(call_service_builder);
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
+    let call_service = Arc::new(call_service_builder.with_start_limiter(
+        call::inbound::axum_router::RateLimitedCallStarts(call_public_rate_limiter.clone()),
+    ));
 
     consumer_tracker.spawn({
         let service = call_service.clone();
@@ -922,11 +929,6 @@ async fn run_server() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
-    let call_public_rate_limiter = RateLimitServiceImpl {
-        repo: RedisRateLimitAdapter {
-            redis: redis_client.clone(),
-        },
-    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
