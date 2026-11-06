@@ -338,7 +338,9 @@ In wide desktop panes, the sidebar fills the call content height alongside the
 video and controls, with a rounded, raised background. Drag its divider, or focus
 the divider and use the arrow keys, to resize it between 280px and 480px while
 leaving at least 320px for the call. It starts at 320px and retains its resized
-width when closed and reopened. Narrow desktop panes overlay the sidebar;
+width when closed and reopened. Below 640px, media controls use the compact
+button sizes and the self view joins the grid. Narrow desktop panes overlay the
+whole call, controls included, with an inset full-width chat card;
 phones use the shared bottom sheet instead of a resize handle.
 
 Desktop has a **Close chat and participants** button beside the tabs.

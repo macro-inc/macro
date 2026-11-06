@@ -87,7 +87,7 @@ export function CallChatPanel(props: {
         aria-label={t('calls.panel')}
         hidden={isMobile() || !props.open}
         inert={isMobile() || !props.open}
-        class="absolute top-2 right-0 bottom-2 z-20 w-full max-w-90 min-h-0 flex-col overflow-hidden rounded-2xl border border-edge-muted bg-surface-2 transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none @min-[800px]/call:static @min-[800px]/call:h-full @min-[800px]/call:max-w-none"
+        class="absolute top-1 inset-x-2 bottom-2 z-30 w-auto max-w-none min-h-0 flex-col overflow-hidden rounded-2xl border border-edge-muted bg-surface-2 transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none @min-[800px]/call:static @min-[800px]/call:w-full @min-[800px]/call:h-full"
         classList={{
           flex: !isMobile() && props.open,
           'opacity-0 translate-x-3 pointer-events-none': !props.open,

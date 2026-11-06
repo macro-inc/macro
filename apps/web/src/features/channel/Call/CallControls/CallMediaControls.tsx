@@ -51,6 +51,7 @@ export function CallMediaControls(props: {
   screenUnavailable?: boolean;
   onLeave: () => void | Promise<void>;
   onSettingsOpenChange?: (open: boolean) => void;
+  compact?: boolean;
   children?: JSX.Element;
 }) {
   const call = props.media;
@@ -113,6 +114,7 @@ export function CallMediaControls(props: {
   return (
     <>
       <CallControlBar
+        compact={props.compact}
         onSettingsOpenChange={props.onSettingsOpenChange}
         disabled={call.isConnecting()}
         audioMuted={call.isAudioMuted()}

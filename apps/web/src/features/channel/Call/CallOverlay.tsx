@@ -381,6 +381,8 @@ export function CallOverlay(props: {
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
+  const compactControls = () =>
+    !isMobile() && (resizeContext()?.size() ?? 0) < 640;
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [sharingOpen, setSharingOpen] = createSignal(false);
   const [keyboardFocus, setKeyboardFocus] = createSignal(false);
@@ -429,7 +431,7 @@ export function CallOverlay(props: {
       ref={panelButton}
       class="relative"
       variant={panelOpen() ? 'accent' : 'secondary'}
-      size={isMobile() ? 'icon-xl' : 'icon-lg'}
+      size={isMobile() ? 'icon-xl' : compactControls() ? 'icon-md' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
       tooltip={{
         content: panelOpen() ? t('calls.closePanel') : t('calls.openPanel'),
@@ -550,6 +552,11 @@ export function CallOverlay(props: {
 
   const [screenShareMaximized, setScreenShareMaximized] = createSignal(false);
   const showScreenShare = () => hasAnyScreenShare() && !focusedParticipant();
+  const selfInGrid = () =>
+    compactControls() &&
+    participants().length > 0 &&
+    !hasAnyScreenShare() &&
+    !focusedParticipant();
   const maximizeLabel = () =>
     screenShareMaximized()
       ? t('calls.restoreScreenShare')
@@ -673,7 +680,7 @@ export function CallOverlay(props: {
               {/* Participants area; stays mounted while the screen share is maximized. */}
               <div
                 hidden={showScreenShare() && screenShareMaximized()}
-                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} ${focusedParticipant() === 'local' ? 'relative' : ''} pt-2 mobile:pt-0`}
+                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} ${focusedParticipant() === 'local' ? 'relative' : ''} ${selfInGrid() ? 'grid grid-cols-2 auto-rows-fr gap-2' : ''} pt-2 mobile:pt-0`}
               >
                 <Show
                   when={participants().length > 0}
@@ -700,12 +707,16 @@ export function CallOverlay(props: {
                 >
                   {/* Remote participants grid */}
                   <div
-                    class={cn(
-                      `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
-                      focusedParticipant() === 'local'
-                        ? 'absolute bottom-4 right-4 z-20 w-40 aspect-video shadow-lg sm:w-48'
-                        : 'size-full'
-                    )}
+                    class={
+                      selfInGrid()
+                        ? 'contents'
+                        : cn(
+                            `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
+                            focusedParticipant() === 'local'
+                              ? 'absolute bottom-4 right-4 z-20 w-40 aspect-video shadow-lg sm:w-48'
+                              : 'size-full'
+                          )
+                    }
                   >
                     <For each={participants()}>
                       {(participant) => (
@@ -739,10 +750,11 @@ export function CallOverlay(props: {
                   {/* Local participant PIP (Google Meet style: small, bottom-right) */}
                   <div
                     class={cn(
-                      'absolute z-10',
-                      focusedParticipant() === 'local'
-                        ? 'inset-0'
-                        : `right-4 w-48 aspect-video shadow-lg ${panelOpen() && widePanel() ? 'bottom-24' : 'bottom-4'}`
+                      selfInGrid() ? 'relative min-h-0' : 'absolute z-10',
+                      !selfInGrid() &&
+                        (focusedParticipant() === 'local'
+                          ? 'inset-0'
+                          : `right-4 w-48 aspect-video shadow-lg ${panelOpen() && widePanel() ? 'bottom-24' : 'bottom-4'}`)
                     )}
                   >
                     <LocalParticipantTile
@@ -777,20 +789,22 @@ export function CallOverlay(props: {
                 inert={controlsHidden()}
                 data-holds-prompts={isTouchDevice() ? undefined : ''}
               >
-                <div class="grid w-fit max-w-full grid-cols-[3.5rem_auto_3.5rem] items-center gap-3 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]">
+                <div class="grid w-fit max-w-full grid-cols-[3.5rem_auto_3.5rem] items-center gap-3 @max-[640px]/call:grid-cols-[2.75rem_auto_2.75rem] @max-[640px]/call:gap-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]">
                   <div
                     aria-hidden={!props.footerLeading}
-                    class="w-14 mobile:hidden"
+                    class="w-full mobile:hidden"
                   >
                     {props.footerLeading}
                   </div>
                   <div class="flex min-w-0 justify-center">
                     <CallControls
+                      compact={compactControls()}
                       onLeave={props.onLeave}
                       onSettingsOpenChange={setSettingsOpen}
                     >
                       <Show when={canShareWithTeam()}>
                         <CallSharingMenu
+                          compact={compactControls()}
                           channelName={props.sharingChannelName}
                           sharedWithTeam={sharedWithTeam()}
                           disabled={teamShareLocked()}

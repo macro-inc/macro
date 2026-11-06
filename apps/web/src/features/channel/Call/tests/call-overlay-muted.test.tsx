@@ -425,7 +425,11 @@ describe('CallOverlay muted microphone badges', () => {
     controls.setParticipants(new Map([[remote.identity, remote]]));
 
     const pipBadge = screen.getByRole('status', { name: 'You are muted' });
-    expect(pipBadge.closest('.bottom-4')).not.toBeNull();
+    expect(
+      pipBadge
+        .closest('[data-call-tile]')
+        ?.querySelector('[data-testid="track-local-camera"]')
+    ).not.toBeNull();
 
     controls.setAudioMuted(false);
     expect(screen.queryByRole('status', { name: 'You are muted' })).toBeNull();

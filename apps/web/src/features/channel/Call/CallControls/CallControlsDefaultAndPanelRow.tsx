@@ -6,6 +6,7 @@ import { CallMediaControls } from './CallMediaControls';
 export function CallControlsDefaultAndPanelRow(props: {
   onLeave: () => void | Promise<void>;
   onSettingsOpenChange?: (open: boolean) => void;
+  compact?: boolean;
   children?: JSX.Element;
 }) {
   const call = useCallContext();
@@ -27,6 +28,7 @@ export function CallControlsDefaultAndPanelRow(props: {
   };
   return (
     <CallMediaControls
+      compact={props.compact}
       media={call}
       screenUnavailable={screenUnavailable()}
       onLeave={props.onLeave}

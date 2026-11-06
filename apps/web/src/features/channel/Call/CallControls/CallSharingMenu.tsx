@@ -100,7 +100,7 @@ export function CallSharingMenu(props: {
       trigger={(triggerProps) => (
         <Button
           {...triggerProps}
-          size={isMobile() ? 'md' : 'lg'}
+          size={isMobile() || props.compact ? 'md' : 'lg'}
           variant="secondary"
           aria-label={t('calls.sharingLabel', { mode: label() })}
           disabled={props.disabled}

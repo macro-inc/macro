@@ -20,6 +20,7 @@ function MediaSplitButton(props: {
   toggleLabel: string;
   menuLabel: string;
   disabled?: boolean;
+  compact?: boolean;
   /** Set for a toggle whose icon stays the same in both states. */
   pressed?: boolean;
   onToggle: () => void;
@@ -40,7 +41,7 @@ function MediaSplitButton(props: {
       mobileContent={props.mobileContent}
       trigger={(triggerProps) => (
         <ButtonGroup
-          size={isMobile() ? 'icon-md' : 'icon-lg'}
+          size={isMobile() || props.compact ? 'icon-md' : 'icon-lg'}
           aria-label={props.label}
           class="shrink-0"
         >
@@ -59,7 +60,7 @@ function MediaSplitButton(props: {
             {...triggerProps}
             disabled={props.disabled}
             variant="ghost"
-            size={isMobile() ? 'icon-md' : 'icon-lg'}
+            size={isMobile() || props.compact ? 'icon-md' : 'icon-lg'}
             aria-label={props.menuLabel}
             tooltip={{
               content: props.menuLabel,
@@ -83,6 +84,7 @@ function MediaSplitButton(props: {
 
 export function CallControlBar(props: {
   disabled: boolean;
+  compact?: boolean;
   audioMuted: boolean;
   videoMuted: boolean;
   screenSharing: boolean;
@@ -112,6 +114,7 @@ export function CallControlBar(props: {
       <div class="menu-surface mx-auto flex w-fit max-w-full items-center justify-center gap-2 rounded-full p-1.5 text-ink">
         <MediaSplitButton
           label="Microphone"
+          compact={props.compact}
           onOpenChange={(open) => {
             audioOpen = open;
             props.onSettingsOpenChange?.(audioOpen || videoOpen || screenOpen);
@@ -136,6 +139,7 @@ export function CallControlBar(props: {
         </MediaSplitButton>
         <MediaSplitButton
           label="Camera"
+          compact={props.compact}
           onOpenChange={(open) => {
             videoOpen = open;
             props.onSettingsOpenChange?.(audioOpen || videoOpen || screenOpen);
@@ -159,6 +163,7 @@ export function CallControlBar(props: {
         <Show when={!isMobile()}>
           <MediaSplitButton
             label="Screen share"
+            compact={props.compact}
             onOpenChange={(open) => {
               screenOpen = open;
               props.onSettingsOpenChange?.(
@@ -180,7 +185,7 @@ export function CallControlBar(props: {
         </Show>
         {props.children}
         <Button
-          size={isMobile() ? 'icon-md' : 'icon-lg'}
+          size={isMobile() || props.compact ? 'icon-md' : 'icon-lg'}
           variant="danger"
           aria-label="Leave call"
           class="min-w-14 rounded-full"
