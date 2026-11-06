@@ -519,7 +519,12 @@ pub async fn list_links<R: Repository, C: Calendars, D: Directory, A: MacroAutho
 
 /// Create a booking link; an identical replay at the same slug returns the saved link.
 #[utoipa::path(post, path = "/scheduling/links", operation_id = "create_booking_link", params(Scope), request_body = CreateBookingLinkRequest, responses((status = 200, body = BookingLink), (status = 400), (status = 403), (status = 409)), tag = "scheduling")]
-pub async fn create_link<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+pub async fn create_link<
+    R: Repository,
+    C: Calendars,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Query(q): Query<Scope>,
