@@ -7,7 +7,6 @@ export function CallChatEmptyState() {
     <EmptyStatePanel
       centered
       graphic={EmptyStateChannelsGraphic}
-      graphicClass="size-16"
       description={t('calls.emptyChat')}
       topSpacerClass="basis-0 grow"
       class="min-h-48 px-4 pb-4 touch:pt-0"
