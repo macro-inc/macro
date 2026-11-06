@@ -34,7 +34,7 @@ ports = []
 [dependencies]
 activity = { path = "../activity", default-features = false }
 # Domain (always included)
-agent = { path = "../agent" }
+chat_message = { path = "../types/chat_message", features = ["schema"] }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }

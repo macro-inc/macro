@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use agent::types::Role;
 use attachment::{AttachmentContent, AttachmentPart, Attachments};
+use chat_message::Role;
 use chrono::Utc;
 use macro_event_broker::{EventBrokerError, MacroEvent};
 use model::chat::{ChatMessageWithAttachments, NewAttachment};

@@ -11,7 +11,7 @@ team = ["dep:models_team"]
 
 [dependencies]
 messages = { path = "../messages", features = ["outbound", "annotations"] }
-agent = { path = "../agent" }
+chat_message = { path = "../types/chat_message" }
 anyhow = { workspace = true }
 rootcause = { workspace = true }
 async-recursion = "1.1.1"

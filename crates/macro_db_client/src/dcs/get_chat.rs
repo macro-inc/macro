@@ -1,7 +1,7 @@
 // biohazard
-use agent::types::ChatMessageContent;
-use agent::types::Role;
 use anyhow::{Error, Result};
+use chat_message::ChatMessageContent;
+use chat_message::Role;
 use model::chat::{AttachmentType, Chat, ChatAttachment, ChatMessageWithAttachments};
 use model_entity::{Entity, EntityType};
 use model_owner::Owner;

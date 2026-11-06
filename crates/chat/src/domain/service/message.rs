@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod test;
 
-use agent::types::ChatMessageContent;
 use attachment::{Attachable, AttachmentService, FormattedParts};
+use chat_message::ChatMessageContent;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -205,7 +205,7 @@ impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageService
         let messages = self.repo.get_messages(chat_id).await?;
         let mut chain = Vec::new();
         for msg in &messages {
-            if msg.role != agent::types::Role::User || msg.attachments.is_empty() {
+            if msg.role != chat_message::Role::User || msg.attachments.is_empty() {
                 continue;
             }
             match self.repo.get_resolved_message(&msg.id).await {

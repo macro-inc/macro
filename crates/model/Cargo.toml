@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-agent = { path = "../agent" }
+chat_message = { path = "../types/chat_message", features = ["schema"] }
 anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }

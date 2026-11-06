@@ -1,5 +1,5 @@
-use agent::types::ChatMessageContent;
 use attachment::FormattedParts;
+use chat_message::ChatMessageContent;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::{ChatMessageWithAttachments, NewChatMessage};
 use std::future::Future;

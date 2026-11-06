@@ -1,5 +1,5 @@
-use agent::types::Role;
 use anyhow::Context;
+use chat_message::Role;
 use model::chat::{AttachmentType, NewChatMessage};
 use model_entity::EntityType;
 use sqlx::PgPool;

@@ -10,8 +10,8 @@ use crate::domain::models::{
     Result, WebCitation,
 };
 use crate::domain::ports::{ChatRepo, MessageRepo};
-use agent::types::ChatMessageContent;
 use attachment::FormattedParts;
+use chat_message::ChatMessageContent;
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::cowlike::CowLike;
@@ -168,7 +168,7 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
     async fn get_chat(&self, chat_id: &str) -> Result<ChatResponse> {
         let chat = self.get_metadata(chat_id).await?;
         let mut messages = self.get_messages(chat_id).await.map_err(to_chat_err)?;
-        messages.retain(|m| m.role != agent::types::Role::System);
+        messages.retain(|m| m.role != chat_message::Role::System);
         Ok(ChatResponse {
             id: chat.id,
             user_id: chat.user_id,

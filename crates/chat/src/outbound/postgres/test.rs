@@ -2,7 +2,7 @@ mod owner;
 
 use std::time::Duration;
 
-use agent::types::{ChatMessageContent, Role};
+use chat_message::{ChatMessageContent, Role};
 use chrono::Utc;
 use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
 use entity_registry_db_utils::OwnedEntityRegistrar;
