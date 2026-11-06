@@ -166,7 +166,7 @@ members = [
   "crates/whatsmeow_proto",
   "crates/whatsmeow_signal",
   "crates/work_feed",
-  "crates/worker-rs-otel",
+  "crates/worker_rs_otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
   "services/agent_harness_service/load-test",
@@ -722,8 +722,8 @@ mention_utils = { path = "crates/mention_utils" }
 messages = { path = "crates/messages" }
 mobile_welcome_email_db_client = { path = "crates/mobile_welcome_email_db_client" }
 model = { path = "crates/model" }
-model-entity = { path = "crates/model-entity" }
-model-error-response = { path = "crates/model-error-response" }
+model_entity = { path = "crates/model_entity" }
+model_error_response = { path = "crates/model_error_response" }
 model_file_type = { path = "crates/model_file_type" }
 model_notifications = { path = "crates/model_notifications" }
 model_owner = { path = "crates/model_owner" }
@@ -824,7 +824,7 @@ whatsmeow = { path = "crates/whatsmeow" }
 whatsmeow_proto = { path = "crates/whatsmeow_proto" }
 whatsmeow_signal = { path = "crates/whatsmeow_signal" }
 work_feed = { path = "crates/work_feed" }
-worker-rs-otel = { path = "crates/worker-rs-otel" }
+worker_rs_otel = { path = "crates/worker_rs_otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }
 

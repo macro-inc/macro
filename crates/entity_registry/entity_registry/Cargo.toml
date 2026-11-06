@@ -14,7 +14,7 @@ axum = { workspace = true, optional = true }
 bot_id = { workspace = true }
 chrono = { workspace = true }
 macro_authorization = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 rootcause = { workspace = true }
 shared_entity_registry = { workspace = true }

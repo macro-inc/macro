@@ -15,7 +15,7 @@ inbound = [
   "dep:axum",
   "dep:axum-extra",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "entity_access/inbound",
   "ports",
@@ -37,9 +37,9 @@ entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 rootcause = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, default-features = true, optional = true }
 serde = { workspace = true }

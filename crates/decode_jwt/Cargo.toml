@@ -12,7 +12,7 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 macro_auth = { workspace = true }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true }
+model_error_response = { workspace = true }
 model_user = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }

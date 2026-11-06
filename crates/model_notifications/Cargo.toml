@@ -10,7 +10,7 @@ chrono-tz = { workspace = true }
 html-escape = { workspace = true }
 macro_user_id = { workspace = true }
 mention_utils = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 notification = { workspace = true }
 paste = { workspace = true }

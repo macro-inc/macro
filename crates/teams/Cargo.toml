@@ -20,7 +20,7 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "entity_access/axum",
   "entity_access/inbound",
@@ -47,7 +47,7 @@ outbound = [
   "ports",
 ]
 ports = [
-  "dep:model-entity",
+  "dep:model_entity",
   "dep:model_notifications",
   "dep:notification",
   "dep:tokio",
@@ -99,12 +99,12 @@ tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true }
 utoipa = { workspace = true, optional = true }
 
 # Notification dependencies (for ports)
-model-entity = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, optional = true }
 

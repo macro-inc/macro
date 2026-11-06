@@ -38,7 +38,7 @@ tokio-util.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 non_empty = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }

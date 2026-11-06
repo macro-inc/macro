@@ -192,7 +192,7 @@ fn run_rust(env: &BTreeMap<String, String>, test_args: &[String]) -> Result<()> 
         .arg(repo_root().join("Cargo.toml"))
         .args([
             "-p",
-            "local_e2e_integration_tests",
+            "local_e2e",
             "--",
             "--ignored",
             "--nocapture",

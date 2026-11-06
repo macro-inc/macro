@@ -16,7 +16,7 @@ ai_tool = [
 axum = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:model_user",
   "dep:serde_with",
   "models_pagination/axum",
@@ -58,8 +58,8 @@ macro_event_topics = { workspace = true }
 macro_service_urls = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model-entity = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true, optional = true }
 models_pagination = { workspace = true }
 notification_state = { workspace = true, features = ["postgres"] }

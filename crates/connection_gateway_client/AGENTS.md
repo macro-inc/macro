@@ -27,7 +27,7 @@ connected users.
 
 ## Boundaries
 
-- Depends on: `connection_gateway_models`, `model-entity`,
+- Depends on: `connection_gateway_models`, `model_entity`,
   `macro_tower_layers` (trace header injection).
 - Used by: most services and several domain crates (`connection`, `channels`,
   `messages`, `forms`, `databases`, `ai_tools`, `slack_integration`, ...) —

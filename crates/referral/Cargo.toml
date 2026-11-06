@@ -10,7 +10,7 @@ axum = [
   "dep:axum-extra",
   "dep:ip_extractor",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:model_user",
   "dep:tower",
   "dep:utoipa",
@@ -37,7 +37,7 @@ macro_authorization = { workspace = true, optional = true, features = [
 ] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 notification = { workspace = true, default-features = true }
 rate_limit = { workspace = true, features = ["axum"] }
 
@@ -45,7 +45,7 @@ rate_limit = { workspace = true, features = ["axum"] }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 ip_extractor = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }

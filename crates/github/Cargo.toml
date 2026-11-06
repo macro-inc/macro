@@ -9,7 +9,7 @@ axum = [
   "dep:axum",
   "dep:entity_access",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "github_pull_requests/schema",
   "upstream_error/axum",
@@ -35,7 +35,7 @@ sync = [
   "dep:documents",
   "dep:entity_access",
   "dep:foreign_entity",
-  "dep:model-entity",
+  "dep:model_entity",
   "dep:model_notifications",
   "dep:notification",
   "dep:reqwest",
@@ -72,7 +72,7 @@ macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
 macro_service_urls = { workspace = true }
-model-entity = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, default-features = true, optional = true }
 regex = { workspace = true }
@@ -97,7 +97,7 @@ redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
 
 axum = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

@@ -12,7 +12,7 @@ sqlx = { workspace = true }
 tracing = { workspace = true }
 
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_entity_access_management = { workspace = true, default-features = true, features = [
   "db",

@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

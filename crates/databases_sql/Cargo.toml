@@ -7,14 +7,14 @@ version = "0.1.0"
 [features]
 default = []
 # Authenticated HTTP query adapter.
-inbound = ["dep:axum", "dep:macro_authorization", "dep:model-error-response", "dep:utoipa", "database_sql/openapi"]
+inbound = ["dep:axum", "dep:macro_authorization", "dep:model_error_response", "dep:utoipa", "database_sql/openapi"]
 # The SQL agent tools: QueryDatabase and SaveDatabaseQuery.
 ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
 macro_authorization = { workspace = true, features = ["axum"], optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }

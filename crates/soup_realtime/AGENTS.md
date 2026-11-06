@@ -30,7 +30,7 @@ tasks itself.
 
 ## Boundaries
 
-- Depends on: `macro_event_broker`, `macro_event_topics`, `model-entity`,
+- Depends on: `macro_event_broker`, `macro_event_topics`, `model_entity`,
   `model_owner`; feature-gated: `channels`, `chat`, `documents`, `email`,
   `call`, `github_pull_requests`, `initiative`, `properties`, `projects`,
   `system_properties`, `rdkafka` (`consumer`), `agent_session`/`entity_access`

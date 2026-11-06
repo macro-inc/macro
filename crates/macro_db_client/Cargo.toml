@@ -23,7 +23,7 @@ futures = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 model = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_dcs = { workspace = true }
 models_opensearch = { workspace = true }

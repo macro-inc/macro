@@ -27,7 +27,7 @@ authentication — one of the most widely depended-on crates in the backend.
 
 ## Boundaries
 
-- Depends on: `model-entity`, `model_owner`, `model_file_type`, `model_user`,
+- Depends on: `model_entity`, `model_owner`, `model_file_type`, `model_user`,
   `models_permissions`, `models_pagination`, `models_bulk_upload`.
 - Used by: dozens of services and crates — `agent_harness`, `ai_tools`,
   `authentication_service(_client)`, `chat`, `collab_surface`,

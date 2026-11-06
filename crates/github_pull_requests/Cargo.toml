@@ -9,7 +9,7 @@ default = ["outbound", "ports", "service"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "entity_access/inbound",
   "schema",
   "service",
@@ -40,7 +40,7 @@ macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 models_pagination = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

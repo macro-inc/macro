@@ -23,7 +23,7 @@ soup, ai_tools, memory, channels, email, scheduled actions): frecency
 
 ## Boundaries
 
-- Depends on: `filter_ast`, `item_filters`, `model-entity`.
+- Depends on: `filter_ast`, `item_filters`, `model_entity`.
 - Used by: `soup`, `ai_tools`, `memory`, `channels`, `email`,
   `document_storage_service`, `connection_gateway`, `document_cognition_service`,
   `scheduled_action`, `mcp_service`, `email_service`.

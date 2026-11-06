@@ -11,7 +11,7 @@ inbound = [
   "dep:axum",
   "dep:ip_extractor",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:rate_limit",
   "dep:utoipa",
   "entity_access/inbound",
@@ -78,8 +78,8 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 feature_flags = { workspace = true, optional = true }
 messages = { workspace = true, features = ["ports"], optional = true }
-model-entity = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
 models_pagination = { workspace = true }
 models_permissions = { workspace = true }
 notification = { workspace = true, default-features = true }

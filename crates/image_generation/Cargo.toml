@@ -24,7 +24,7 @@ macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
 model = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 non_empty = { workspace = true }
 reqwest.workspace = true

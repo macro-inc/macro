@@ -32,7 +32,7 @@ DMs, and the shared message store other domains discuss things on.
 ## Boundaries
 
 - Depends on: `entity_access`, `macro_authorization`, `attachment` (feature
-  `attachment`), `model-entity`.
+  `attachment`), `model_entity`.
 - Used by: widely — `bots`, `call`, `teams`, `webhook`, `soup`/`soup_realtime`,
   `agent_harness`, `agent_trigger`, `coding_agent_worker`, `comms_db_client`,
   `graphql_channel`, `search_service`, `name_search`, `ai_tools`, `memory`.

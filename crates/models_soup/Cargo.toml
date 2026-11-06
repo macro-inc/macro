@@ -18,7 +18,7 @@ doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 email = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_pagination = { workspace = true }
 models_properties = { workspace = true }

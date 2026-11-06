@@ -47,7 +47,7 @@ macro_authorization = { workspace = true, default-features = true, features = [
   "outbound",
 ] }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_notifications = { workspace = true }
 notification = { workspace = true, default-features = true }
 predicate-index = { workspace = true }

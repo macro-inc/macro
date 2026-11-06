@@ -55,7 +55,7 @@ kafka_util = { workspace = true, optional = true }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_properties = { workspace = true, optional = true }
 projects = { workspace = true, features = ["service"], optional = true }
