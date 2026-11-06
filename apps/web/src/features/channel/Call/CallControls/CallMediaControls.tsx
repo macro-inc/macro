@@ -8,6 +8,7 @@ import {
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { fireAndForget } from '@core/util/fireAndForget';
+import SpeakerIcon from '@icon/system/regular/speaker-high.svg';
 import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import type { CallState } from '../CallContext';
@@ -197,39 +198,39 @@ export function CallMediaControls(props: {
         screenMenu={
           <Dropdown.Group>
             <Dropdown.CheckboxItem
+              class="flex-row-reverse"
+              aria-label="Share audio"
               checked={call.shareScreenAudio()}
               disabled={call.isConnecting() || call.isScreenSharing()}
               closeOnSelect={false}
               onChange={(checked) => call.setShareScreenAudio(checked)}
+              indicator={
+                <span inert aria-hidden="true">
+                  <ToggleSwitch
+                    size="md"
+                    checked={call.shareScreenAudio()}
+                    disabled={call.isConnecting() || call.isScreenSharing()}
+                  />
+                </span>
+              }
             >
-              Share audio
+              <ShareAudioLabel sharing={call.isScreenSharing()} />
             </Dropdown.CheckboxItem>
-            <p class="px-2 pb-1 text-xs text-ink-muted">
-              {call.isScreenSharing()
-                ? 'Stop sharing to change this.'
-                : 'Shares audio from a tab, or from your whole system where the browser supports it.'}
-            </p>
           </Dropdown.Group>
         }
         screenDrawer={
-          <>
-            <MobileDrawer.Section>
-              <ToggleSwitch
-                size="md"
-                label="Share audio"
-                labelClass="order-first flex-1"
-                class="min-h-11 w-full px-3 py-2.5 text-sm"
-                checked={call.shareScreenAudio()}
-                disabled={call.isConnecting() || call.isScreenSharing()}
-                onChange={(checked) => call.setShareScreenAudio(checked)}
-              />
-            </MobileDrawer.Section>
-            <p class="mt-2 px-3 text-xs text-ink-muted">
-              {call.isScreenSharing()
-                ? 'Stop sharing to change this.'
-                : 'Shares audio from a tab, or from your whole system where the browser supports it.'}
-            </p>
-          </>
+          <MobileDrawer.Section>
+            <ToggleSwitch
+              size="md"
+              label={<ShareAudioLabel sharing={call.isScreenSharing()} />}
+              aria-label="Share audio"
+              labelClass="order-first flex-1"
+              class="min-h-11 w-full px-3 py-2.5 text-sm"
+              checked={call.shareScreenAudio()}
+              disabled={call.isConnecting() || call.isScreenSharing()}
+              onChange={(checked) => call.setShareScreenAudio(checked)}
+            />
+          </MobileDrawer.Section>
         }
         videoMenu={
           <>
@@ -469,5 +470,21 @@ function BackgroundTile(props: {
       <Dropdown.ItemLabel class="sr-only">{props.label}</Dropdown.ItemLabel>
       <span aria-hidden="true">{props.caption ?? props.label}</span>
     </Dropdown.RadioItem>
+  );
+}
+
+function ShareAudioLabel(props: { sharing: boolean }) {
+  return (
+    <span class="flex min-w-0 flex-1 items-center gap-2">
+      <SpeakerIcon class="size-4 shrink-0" />
+      <span class="flex-1 text-left">
+        <span class="block">Share audio</span>
+        <span class="block text-xs text-ink-muted">
+          {props.sharing
+            ? 'Stop sharing to change this'
+            : 'Sound from the tab or screen you share'}
+        </span>
+      </span>
+    </span>
   );
 }

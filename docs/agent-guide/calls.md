@@ -318,10 +318,11 @@ opens a settings menu above the toolbar on click only; hovering opens nothing.
 **Audio settings** lists microphones, speakers (when the browser can choose one),
 and a noise suppression switch with its label on the left.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, a selected custom image, and Upload. Screen share is
+Light blur, Strong blur, Recent images, and Upload. Screen share is
 also a split button: the left half starts or stops sharing (pressed while
 sharing), and **Screen share settings** holds **Share audio**, off by default,
-saved per device, and locked while sharing. With it on, the browser picker offers
+saved per device, and locked while sharing. Its switch row explains that it sends
+sound from the tab or screen, or says to stop sharing before changing it. With it on, the browser picker offers
 tab audio (and system audio where Chromium supports it), and other participants
 hear it alongside microphones, even away from the Call tab. Leave call is a
 separate button. Live channel calls also include **Call sharing** in the toolbar:
