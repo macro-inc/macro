@@ -60,7 +60,7 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
         return publish(track, publishOptions);
       };
     },
-    (room, callback) => room.on(RoomEvent.Disconnected, callback)
+    (room, callback) => room.on(RoomEvent.Disconnected, callback),
   );
 }
 
@@ -68,7 +68,7 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
 export async function publishScreen(
   room: Room,
   frames: AsyncIterable<ScreenFrame>,
-  options: ScreenOptions = {}
+  options: ScreenOptions = {},
 ): Promise<ScreenShare> {
   return withSpan('call.sdk.publish_screen', async (span) => {
     const callId = callIdForRoom(room);
@@ -94,7 +94,7 @@ export async function publishScreen(
     const source = new VideoSource(width, height);
     const track = LocalVideoTrack.createVideoTrack(
       options.name ?? 'screen',
-      source
+      source,
     );
     const publishOptions = new TrackPublishOptions({
       source: TrackSource.SOURCE_SCREENSHARE,
@@ -122,7 +122,7 @@ export async function publishScreen(
             if (publicationSid)
               await room.localParticipant?.unpublishTrack(
                 publicationSid,
-                false
+                false,
               );
           } finally {
             try {
@@ -160,8 +160,8 @@ export async function publishScreen(
               height,
               value.format === 'I420'
                 ? VideoBufferType.I420
-                : VideoBufferType.RGBA
-            )
+                : VideoBufferType.RGBA,
+            ),
           );
           frame = await iterator.next();
         }
@@ -170,11 +170,11 @@ export async function publishScreen(
       }
     };
     pump().catch((error: unknown) =>
-      reportError('call.sdk.publish_screen', error, callId)
+      reportError('call.sdk.publish_screen', error, callId),
     );
     room.on(RoomEvent.Disconnected, () => {
       stop().catch((error: unknown) =>
-        reportError('call.sdk.publish_screen', error, callId)
+        reportError('call.sdk.publish_screen', error, callId),
       );
     });
 

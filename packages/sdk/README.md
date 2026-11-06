@@ -956,3 +956,10 @@ for (const shared of await personal.externalChats.list()) {
 Keep the same idempotency key when retrying the same request. A delivery state of
 `unknown` must be reconciled; never automatically resend it. Uploads, quoted
 messages, mentions, mutations, and delivery references must belong to the same chat.
+
+## Live call media
+
+Use `@macro-inc/sdk/calls/node` or `@macro-inc/sdk/calls/browser` for room
+connections and screen sharing. Install the optional LiveKit runtime only when
+using those helpers. The core import does not load or bundle call media code.
+See [Call rooms](CALLS.md) for installation and examples.
