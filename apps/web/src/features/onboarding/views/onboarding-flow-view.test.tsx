@@ -9,6 +9,7 @@ import {
 } from '../primitives/flow-storage';
 import { renderDemoBookingStub } from '../tests/demo-booking-stub';
 import {
+  defaultFakeWorld,
   FAKE_VIEWER_ID,
   type FakeOnboardingWorld,
 } from '../tests/fake-onboarding-context';
@@ -60,6 +61,12 @@ function setup(
   );
   return { fake, navigate, redirect, signedOut };
 }
+
+/** A fresh copy per test: the fake backend mutates the world it is given. */
+const licensedViewer = () => ({
+  ...defaultFakeWorld().viewer!,
+  licensed: true,
+});
 
 const heading = (name: string | RegExp, options?: { timeout: number }) =>
   screen.findByRole('heading', { name, level: 1 }, options);
@@ -627,19 +634,16 @@ describe('onboarding flow', () => {
       resume: 'team',
       world: {
         teams: [{ name: 'Acme', owned: true }],
-        viewer: {
-          id: FAKE_VIEWER_ID,
-          email: 'ada@acme.com',
-          tutorialComplete: false,
-          licensed: true,
-        },
+        viewer: licensedViewer(),
       },
     });
     await heading('Built for teams.');
     click('Continue');
     await heading('Book a demo with our team.');
     expect(readSavedStep(FAKE_VIEWER_ID)).toBe('demo');
-    expect(screen.getByText('Booking as ada@acme.com')).toBeTruthy();
+    expect(
+      screen.getByText(`Booking as ${licensedViewer().email}`)
+    ).toBeTruthy();
     expect(
       screen.queryByRole('button', { name: 'Back to previous step' })
     ).toBeNull();
@@ -666,12 +670,7 @@ describe('onboarding flow', () => {
       resume: 'team',
       world: {
         teams: [{ name: 'Acme', owned: true }],
-        viewer: {
-          id: FAKE_VIEWER_ID,
-          email: 'ada@acme.com',
-          tutorialComplete: false,
-          licensed: true,
-        },
+        viewer: licensedViewer(),
       },
     });
     await heading('Built for teams.');

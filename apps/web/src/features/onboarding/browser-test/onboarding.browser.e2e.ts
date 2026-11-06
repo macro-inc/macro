@@ -9,6 +9,13 @@ import {
   openFixture,
 } from './fixture-page';
 
+const TEAM_OWNER = {
+  id: 'macro|owner@example.com',
+  email: 'owner@example.com',
+  tutorialComplete: false,
+  licensed: false,
+};
+
 test('a new user signs up, connects everything, and starts the trial', async ({
   page,
 }) => {
@@ -301,6 +308,7 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await openFixture(page, '/?view=flow&step=team', {
       teams: [{ name: 'Acme', owned: true }],
+      viewer: TEAM_OWNER,
     });
     await expect(page.getByText("You're on Acme")).toBeVisible();
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -325,7 +333,9 @@ for (const width of [1280, 390]) {
     await day.last().click();
     await page.getByRole('button', { name: /1:00/ }).first().click();
     await page.getByLabel('Name').fill('Ada Lovelace');
-    await expect(page.getByLabel('Email address')).toHaveValue('ada@acme.com');
+    await expect(page.getByLabel('Email address')).toHaveValue(
+      TEAM_OWNER.email
+    );
     await page
       .getByRole('button', { name: /Book|Confirm/ })
       .last()
@@ -344,12 +354,7 @@ for (const width of [1280, 390]) {
 test('a team owner can skip the demo call', async ({ page }) => {
   await openFixture(page, '/?view=flow&step=demo', {
     teams: [{ name: 'Acme', owned: true }],
-    viewer: {
-      id: 'macro|ada@acme.com',
-      email: 'ada@acme.com',
-      tutorialComplete: false,
-      licensed: true,
-    },
+    viewer: { ...TEAM_OWNER, licensed: true },
   });
   await expect(heading(page, 'Book a demo with our team.')).toBeVisible();
   await page.getByRole('button', { name: 'Skip for now' }).click();
