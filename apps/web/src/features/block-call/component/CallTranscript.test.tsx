@@ -1,0 +1,98 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
+import { afterEach, expect, it, vi } from 'vitest';
+import { CallTranscript } from './CallTranscript';
+
+vi.mock('@channel/Message', () => ({
+  Message: {
+    Root: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    SenderIcon: () => null,
+    SenderName: () => <span>Speaker</span>,
+    Content: () => null,
+    Attachments: () => null,
+  },
+}));
+vi.mock('@core/component/CustomScrollbar', () => ({
+  CustomScrollbar: () => null,
+}));
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdownContext: (props: { children: JSX.Element }) => props.children,
+  })
+);
+vi.mock('@queries/messages/message-sender', () => ({
+  senderFromStorageId: () => ({ type: 'user', user_id: 'speaker' }),
+}));
+vi.mock('@ui', () => ({
+  Button: (props: { children: JSX.Element; onClick: () => void }) => (
+    <button onClick={props.onClick}>{props.children}</button>
+  ),
+  Avatar: Object.assign(
+    (props: { children: JSX.Element }) => <span>{props.children}</span>,
+    { Fallback: (props: { children: JSX.Element }) => props.children }
+  ),
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+it('seeks from a transcript row and resumes following after manual scrolling', () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  );
+  const seek = vi.fn();
+  const scroll = vi.fn();
+  const viewport = document.createElement('div');
+  viewport.scrollTo = scroll;
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      const top = this.hasAttribute('data-call-transcript-row') ? 200 : 0;
+      return {
+        top,
+        bottom: top + 100,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 100,
+        x: 0,
+        y: top,
+        toJSON() {},
+      };
+    }
+  );
+  const [active, setActive] = createSignal<number | null>(null);
+  render(() => (
+    <CallTranscript
+      transcript={[
+        {
+          transcriptId: 'line',
+          speakerId: 'speaker',
+          content: 'A recorded sentence',
+          sequenceNum: 1,
+          startedAt: '2026-01-01T00:00:10Z',
+        },
+      ]}
+      timelineStartMs={Date.parse('2026-01-01T00:00:00Z')}
+      activeSequenceNum={active()}
+      onSeekToSeconds={seek}
+      hideHeader
+      scrollElement={viewport}
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: /A recorded sentence/ }));
+  expect(seek).toHaveBeenCalledWith(10);
+  fireEvent.wheel(viewport);
+  setActive(1);
+  const sync = screen.getByRole('button', { name: 'Sync to video' });
+  fireEvent.click(sync);
+  expect(scroll).toHaveBeenCalled();
+});

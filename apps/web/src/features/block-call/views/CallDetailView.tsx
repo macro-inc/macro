@@ -1,7 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createSearchParams } from '@app/lib/split-router';
-import { SidePanel } from '@components/app/side-panel';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { getPermissions } from '@core/component/SharePermissions';
@@ -59,6 +59,7 @@ export function CallDetailActions(props: {
   name: string;
 }) {
   const panel = useSplitPanelOrThrow();
+  const sidePanel = useSidePanel();
   const openShare = useShareModal(() => ({
     id: props.callId,
     blockAlias: 'call',
@@ -77,7 +78,9 @@ export function CallDetailActions(props: {
         blockType="call"
         hotkeyScope={panel.splitHotkeyScope}
       />
-      <SidePanel.Toggle />
+      <Show when={!sidePanel?.isOpen() || sidePanel?.isOverlayMode()}>
+        <SidePanel.Toggle />
+      </Show>
     </div>
   );
 }
@@ -85,7 +88,7 @@ export function CallDetailActions(props: {
 /** Keep side-panel state alive across call-record query updates. */
 export function CallDetailRoot(props: ParentProps<{ callId: string }>) {
   return (
-    <SidePanel.Root floating persistKey={`call:${props.callId}`}>
+    <SidePanel.Root persistKey={`call:${props.callId}`}>
       {props.children}
     </SidePanel.Root>
   );
@@ -106,7 +109,7 @@ function LoadedCallContent(props: {
     }
   });
   return (
-    <SidePanel.Layout headerToggle={false} floating>
+    <>
       <CallSidePanelSections callId={props.callId} record={props.record} />
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <CallRecordingBody
@@ -120,7 +123,7 @@ function LoadedCallContent(props: {
           }
         />
       </div>
-    </SidePanel.Layout>
+    </>
   );
 }
 

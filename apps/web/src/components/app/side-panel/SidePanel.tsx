@@ -198,6 +198,9 @@ function Layout(
     headerToggle?: boolean;
     /** Render the panel over the block instead of reserving horizontal space. */
     floating?: boolean;
+    /** Compose content around the standard sections in every panel mode. */
+    panel?: (sections: JSX.Element) => JSX.Element;
+    narrowThreshold?: number;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -222,6 +225,8 @@ function Layout(
             setIsOpen={ctx.setIsOpen}
             setIsOverlayMode={ctx.setIsOverlayMode}
             floating={props.floating ?? ctx.isFloating()}
+            panel={props.panel}
+            narrowThreshold={props.narrowThreshold}
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -257,6 +262,8 @@ function SidePanelLayoutInner(
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsOverlayMode: Setter<boolean>;
     floating: boolean;
+    panel?: (sections: JSX.Element) => JSX.Element;
+    narrowThreshold?: number;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -267,7 +274,9 @@ function SidePanelLayoutInner(
   }
 
   const isNarrow = createMemo(
-    () => isMobile() || zoneCtx.size() < NARROW_THRESHOLD_PX
+    () =>
+      isMobile() ||
+      zoneCtx.size() < (props.narrowThreshold ?? NARROW_THRESHOLD_PX)
   );
   const hasSections = createMemo(() => props.sections().length > 0);
 
@@ -295,6 +304,9 @@ function SidePanelLayoutInner(
     () => !isTouchDevice() && props.floating && hasSections() && props.isOpen()
   );
 
+  const renderPanel = (sections: JSX.Element) =>
+    props.panel ? props.panel(sections) : sections;
+
   return (
     <>
       <Resize.Panel id="side-panel-main" minSize={MAIN_MIN_PX} index={0}>
@@ -308,11 +320,13 @@ function SidePanelLayoutInner(
           index={1}
         >
           <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
-            <SidePanelOutlet
-              sections={props.sections}
-              openIds={props.openIds}
-              setOpenIds={props.setOpenIds}
-            />
+            {renderPanel(
+              <SidePanelOutlet
+                sections={props.sections}
+                openIds={props.openIds}
+                setOpenIds={props.setOpenIds}
+              />
+            )}
           </div>
         </Resize.Panel>
       </Show>
@@ -337,11 +351,13 @@ function SidePanelLayoutInner(
                   Back to content
                 </Button>
               </div>
-              <SidePanelOutlet
-                sections={props.sections}
-                openIds={props.openIds}
-                setOpenIds={props.setOpenIds}
-              />
+              {renderPanel(
+                <SidePanelOutlet
+                  sections={props.sections}
+                  openIds={props.openIds}
+                  setOpenIds={props.setOpenIds}
+                />
+              )}
             </div>
           </Scroll>
         </div>
@@ -359,13 +375,15 @@ function SidePanelLayoutInner(
             <MobileDrawer.Content aria-label="Item details">
               <MobileDrawer.Handle />
               <MobileDrawer.ScrollBody>
-                <SidePanelOutlet
-                  floating
-                  scrollable={false}
-                  sections={props.sections}
-                  openIds={props.openIds}
-                  setOpenIds={props.setOpenIds}
-                />
+                {renderPanel(
+                  <SidePanelOutlet
+                    floating
+                    scrollable={false}
+                    sections={props.sections}
+                    openIds={props.openIds}
+                    setOpenIds={props.setOpenIds}
+                  />
+                )}
               </MobileDrawer.ScrollBody>
             </MobileDrawer.Content>
           </MobileDrawer.Portal>
@@ -401,12 +419,14 @@ function SidePanelLayoutInner(
                 }}
                 onClick={(event) => event.stopPropagation()}
               >
-                <SidePanelOutlet
-                  floating
-                  sections={props.sections}
-                  openIds={props.openIds}
-                  setOpenIds={props.setOpenIds}
-                />
+                {renderPanel(
+                  <SidePanelOutlet
+                    floating
+                    sections={props.sections}
+                    openIds={props.openIds}
+                    setOpenIds={props.setOpenIds}
+                  />
+                )}
               </aside>
             </Show>
           </Transition>

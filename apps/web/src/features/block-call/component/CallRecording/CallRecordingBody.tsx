@@ -5,20 +5,14 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
-import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import type { CallTranscriptTarget } from '../../constants';
+import { recordingChatMessages } from '../../core/recording-chat';
 import { createRecordingPlayback } from '../../primitives/recording-playback';
 import { CallTranscript } from '../CallTranscript';
+import { CallRecordingSidePanel } from '../sidepanel/CallRecordingSidePanel';
 import {
   getActiveTranscriptSequenceNum,
   getSegmentVideoSeconds,
@@ -44,7 +38,6 @@ export function CallRecordingBody(props: {
   onClearMessageTarget?: () => void;
 }) {
   const record = () => props.record;
-  const hasTranscripts = createMemo(() => record().transcript.length > 0);
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
   const [allowFutureLead, setAllowFutureLead] = createSignal(true);
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
@@ -153,100 +146,96 @@ export function CallRecordingBody(props: {
       discussion={record().discussion}
       callId={props.callId}
       render={(discussion) => (
-        <div class="relative flex-1 min-h-0 overflow-hidden">
-          <SidePanel.HeaderActions>
-            <HeaderActionGroup label="Actions">
-              <AskMacroButton
-                grouped
-                entity={{
-                  type: 'document',
-                  id: props.callId,
-                  name: callTitle(),
-                  fileType: 'call',
-                }}
-              />
-            </HeaderActionGroup>
-          </SidePanel.HeaderActions>
-          <div
-            data-channel-scroll
-            class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
-            ref={setScrollRef}
-          >
-            <div class="mx-auto max-w-3xl min-w-0 px-6 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-              <div class="flex flex-col gap-7">
-                <CallRecordingTitle record={record()} />
-                <Show when={canJoin()}>
-                  <Button
-                    variant="success"
-                    size="xl"
-                    class="mt-6"
-                    onClick={callAgain}
-                  >
-                    <PhoneCallIcon />
-                    Join call
-                  </Button>
-                </Show>
-
-                <Show when={record().recordingUrl}>
-                  {(url) => (
-                    <section class="flex flex-col gap-3">
-                      <div class="overflow-hidden rounded-2xl">
-                        <CallRecordingVideo
-                          url={url()}
-                          playback={playback}
-                          posterUrl={record().recordingPreviewUrl ?? undefined}
-                          onTimeUpdate={handleTimeUpdate}
-                          setVideoRef={setVideoRef}
-                        />
-                      </div>
-                    </section>
-                  )}
-                </Show>
-
-                <CallRecordingSummarySection record={props.record} />
-
-                <Show when={hasTranscripts()}>
-                  <section class="flex flex-col gap-3">
-                    <h3 class="text-sm font-semibold text-ink">Transcript</h3>
-                    <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
-                      <Suspense
-                        fallback={
-                          <div class="grid min-h-32 place-items-center text-ink-muted">
-                            <SpinnerIcon
-                              aria-hidden={false}
-                              aria-label="Loading transcript"
-                              class="size-5 animate-spin"
-                            />
-                          </div>
-                        }
-                      >
-                        <CallTranscript
-                          transcript={record().transcript}
-                          channelId={record().channelId}
-                          record={record()}
-                          timelineStartMs={timelineStartMs()}
-                          activeSequenceNum={activeSequenceNum()}
-                          videoSeekGeneration={videoSeekGeneration()}
-                          onSeekToSeconds={seekToSeconds}
-                          hideHeader
-                        />
-                      </Suspense>
-                    </div>
-                  </section>
-                </Show>
-                <CallRecordingChat
-                  source={discussion}
+        <SidePanel.Layout
+          headerToggle={false}
+          narrowThreshold={960}
+          panel={(details) => (
+            <CallRecordingSidePanel
+              details={details}
+              transcript={
+                <CallTranscript
+                  transcript={record().transcript}
+                  channelId={record().channelId}
+                  record={record()}
                   timelineStartMs={timelineStartMs()}
-                  onSeek={record().recordingUrl ? seekToSeconds : undefined}
-                  targetId={props.messageTarget}
-                  requestKey={props.messageTargetRequestKey}
-                  onClearTarget={props.onClearMessageTarget}
+                  activeSequenceNum={activeSequenceNum()}
+                  videoSeekGeneration={videoSeekGeneration()}
+                  onSeekToSeconds={seekToSeconds}
+                  messages={recordingChatMessages(discussion.thread())}
+                  hideHeader
                 />
+              }
+            />
+          )}
+        >
+          <div class="relative flex-1 min-h-0 overflow-hidden">
+            <SidePanel.HeaderActions>
+              <HeaderActionGroup label="Actions">
+                <AskMacroButton
+                  grouped
+                  entity={{
+                    type: 'document',
+                    id: props.callId,
+                    name: callTitle(),
+                    fileType: 'call',
+                  }}
+                />
+              </HeaderActionGroup>
+            </SidePanel.HeaderActions>
+            <div
+              data-channel-scroll
+              class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
+              ref={setScrollRef}
+            >
+              <div class="mx-auto max-w-3xl min-w-0 px-6 pt-4 pb-24 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                <div class="flex flex-col gap-7">
+                  <CallRecordingTitle record={record()} />
+                  <Show when={canJoin()}>
+                    <Button
+                      variant="success"
+                      size="xl"
+                      class="mt-6"
+                      onClick={callAgain}
+                    >
+                      <PhoneCallIcon />
+                      Join call
+                    </Button>
+                  </Show>
+
+                  <Show when={record().recordingUrl}>
+                    {(url) => (
+                      <section class="flex flex-col gap-3">
+                        <div class="overflow-hidden rounded-2xl">
+                          <CallRecordingVideo
+                            url={url()}
+                            playback={playback}
+                            posterUrl={
+                              record().recordingPreviewUrl ?? undefined
+                            }
+                            onTimeUpdate={handleTimeUpdate}
+                            setVideoRef={setVideoRef}
+                          />
+                        </div>
+                      </section>
+                    )}
+                  </Show>
+
+                  <CallRecordingSummarySection record={props.record} />
+
+                  <CallRecordingChat
+                    source={discussion}
+                    timelineStartMs={timelineStartMs()}
+                    onSeek={record().recordingUrl ? seekToSeconds : undefined}
+                    targetId={props.messageTarget}
+                    requestKey={props.messageTargetRequestKey}
+                    onClearTarget={props.onClearMessageTarget}
+                  />
+                </div>
               </div>
             </div>
+            <CustomScrollbar scrollContainer={scrollRef} />
           </div>
-          <CustomScrollbar scrollContainer={scrollRef} />
-        </div>
+        </SidePanel.Layout>
       )}
     />
   );

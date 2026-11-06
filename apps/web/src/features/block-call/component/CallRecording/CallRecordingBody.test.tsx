@@ -35,7 +35,11 @@ vi.mock('@components/app/HeaderActionGroup', () => ({
   HeaderActionGroup: () => null,
 }));
 vi.mock('@components/app/side-panel', () => ({
-  SidePanel: { HeaderActions: () => null },
+  SidePanel: {
+    HeaderActions: () => null,
+    Layout: (props: { children: JSX.Element }) => props.children,
+  },
+  useSidePanel: () => null,
 }));
 vi.mock('@core/component/CustomScrollbar', () => ({
   CustomScrollbar: () => null,
