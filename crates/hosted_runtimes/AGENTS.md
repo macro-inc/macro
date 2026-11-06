@@ -62,7 +62,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   the computer or team is deleted; harness deletion clears its reference, and
   user deletion cascades waitlist requests.
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
-  `COMPUTERS_FLEET` is set, shared across replicas but distinct per control plane.
+  `COMPUTERS_FLEET` is `incus` or `docker`, shared across replicas but distinct per control plane.
   Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;
   `Fleet::instances` lists only that owner's instances. Reconcile independently
   checks ownership and deletes orphans only after ten minutes. Creation timestamps
