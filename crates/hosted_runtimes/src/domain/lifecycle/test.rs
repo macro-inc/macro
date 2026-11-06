@@ -27,6 +27,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
         payment: PaymentOutcome::Paid,
         comp_reason: None,
         macrod_connected: false,
+        macrod_misses: 0,
         recent_crashes: vec![],
         wake_requested: false,
     };
@@ -50,6 +51,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
             payment: PaymentOutcome::Paid,
             comp_reason: None,
             macrod_connected: false,
+            macrod_misses: 0,
             recent_crashes: vec![],
             wake_requested: false,
         }
@@ -405,7 +407,9 @@ fn cases() -> Vec<Case> {
             macrod_connected: false,
             recent_crashes: vec![],
             wake_requested: false,
-            event: Event::MacrodMissing,
+            event: Event::MacrodMissing {
+                instance_status: None,
+            },
             host_has_room: true,
             expected_phase: Phase::Restarting { host: HOST },
             expected_power: Power::On,
@@ -888,6 +892,7 @@ fn transitions() {
             power: case.power,
             billing: case.billing,
             macrod_connected: case.macrod_connected,
+            macrod_misses: 0,
             recent_crashes: case.recent_crashes,
             wake_requested: case.wake_requested,
         };
@@ -930,7 +935,15 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::InstanceStopped),
         Just(Event::MacrodConnected),
         Just(Event::MacrodDisconnected),
-        Just(Event::MacrodMissing),
+        Just(Event::MacrodMissing {
+            instance_status: None
+        }),
+        Just(Event::MacrodMissing {
+            instance_status: Some(InstanceStatus::Running)
+        }),
+        Just(Event::MacrodMissing {
+            instance_status: Some(InstanceStatus::Stopped)
+        }),
         Just(Event::SessionsIdle),
         Just(Event::PromptArrived),
         Just(Event::SuspendDue),

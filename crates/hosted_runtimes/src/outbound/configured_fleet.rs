@@ -85,6 +85,13 @@ impl Fleet for ConfiguredFleet {
         }
     }
 
+    async fn restart_macrod(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
+        match self {
+            Self::Incus(fleet) => Ok(fleet.restart_macrod(computer_id).await?),
+            Self::Docker(fleet) => Ok(fleet.restart_macrod(computer_id).await?),
+        }
+    }
+
     async fn freeze(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.freeze(computer_id).await?),

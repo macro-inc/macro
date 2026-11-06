@@ -100,7 +100,7 @@ impl ComputerRepo for FakeRepo {
         if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
             state.comp_reason = Some(reason.clone());
         }
-        let reserved = Computer {
+        let mut reserved = Computer {
             id: computer.id,
             team_id: computer.team_id,
             name: computer.name,
@@ -116,20 +116,41 @@ impl ComputerRepo for FakeRepo {
             enrolled_at: None,
             enrollment_generation: Default::default(),
         };
-        let mut effects = self.effects.lock().unwrap();
-        let id = effects.iter().map(|effect| effect.id).max().unwrap_or(0) + 1;
-        effects.push(PendingEffect {
-            id,
-            computer_id: reserved.id,
-            effect: Effect::ConfirmPayment {
-                extra_items: computer.extra_items,
-            },
-            attempts: 0,
-        });
-        self.effect_run_after
-            .lock()
-            .unwrap()
-            .insert(id, now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY);
+        let (effects, run_after) = match computer.billing {
+            crate::domain::models::PurchaseBilling::Comped { reason } => {
+                let (state, effects) = transition(
+                    &reserved.state,
+                    &Event::Comped { reason },
+                    Context {
+                        now,
+                        host_has_room: true,
+                        enrollment_generation: reserved.enrollment_generation,
+                    },
+                );
+                reserved.state = state;
+                (effects, now)
+            }
+            crate::domain::models::PurchaseBilling::Stripe => (
+                vec![Effect::ConfirmPayment {
+                    extra_items: computer.extra_items,
+                }],
+                now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY,
+            ),
+        };
+        let mut outbox = self.effects.lock().unwrap();
+        for effect in effects {
+            if let Effect::Create { generation, .. } = &effect {
+                reserved.enrollment_generation = *generation;
+            }
+            let id = outbox.iter().map(|effect| effect.id).max().unwrap_or(0) + 1;
+            outbox.push(PendingEffect {
+                id,
+                computer_id: reserved.id,
+                effect,
+                attempts: 0,
+            });
+            self.effect_run_after.lock().unwrap().insert(id, run_after);
+        }
         computers.insert(reserved.id, reserved.clone());
         Ok(reserved)
     }
@@ -311,9 +332,18 @@ impl ComputerRepo for FakeRepo {
     async fn fire_timer(
         &self,
         _timer: DueTimer,
+        _instance_status: Option<crate::domain::ports::InstanceStatus>,
         _now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
         Ok(None)
+    }
+
+    async fn postpone_macrod_timers(
+        &self,
+        _host: HostId,
+        _deadline: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        Ok(())
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, FakeError> {

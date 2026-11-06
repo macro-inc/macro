@@ -18,8 +18,10 @@ mod test;
 pub const PAYMENT_CONFIRM_DELAY: Duration = Duration::minutes(2);
 /// Frozen this long without a prompt, a computer saves its RAM and suspends.
 pub const SUSPEND_AFTER: Duration = Duration::minutes(30);
-/// macrod may be gone this long while awake before we treat it as a crash.
+/// Grace between fleet-backed checks of a missing macrod.
 pub const MACROD_GRACE: Duration = Duration::minutes(3);
+/// Consecutive missing connections on a running guest before restarting macrod.
+pub const MAX_MACROD_MISSES: u8 = 3;
 /// Crashes inside this window count toward [`MAX_CRASHES`].
 pub const CRASH_WINDOW: Duration = Duration::minutes(15);
 /// This many crashes inside [`CRASH_WINDOW`] moves a computer to Failed.
@@ -157,6 +159,9 @@ pub struct ComputerState {
     pub comp_reason: Option<String>,
     /// Whether macrod is currently connected.
     pub macrod_connected: bool,
+    /// Consecutive grace expirations while the guest remains running.
+    #[serde(default)]
+    pub macrod_misses: u8,
     /// Crash times inside the current [`CRASH_WINDOW`].
     pub recent_crashes: Vec<DateTime<Utc>>,
     /// A prompt or power-on is waiting for the computer to wake.
@@ -173,6 +178,7 @@ impl ComputerState {
             payment: PaymentOutcome::Pending,
             comp_reason: None,
             macrod_connected: false,
+            macrod_misses: 0,
             recent_crashes: Vec::new(),
             wake_requested: false,
         }
@@ -235,8 +241,11 @@ pub enum Event {
     MacrodConnected,
     /// The guest disconnected from the harness service.
     MacrodDisconnected,
-    /// Timer: macrod has been gone for [`MACROD_GRACE`].
-    MacrodMissing,
+    /// Timer: macrod has been gone for [`MACROD_GRACE`], with a fresh fleet observation.
+    MacrodMissing {
+        /// Guest status; None means the fleet confirmed the instance is absent.
+        instance_status: Option<InstanceStatus>,
+    },
     /// All guest sessions are idle.
     SessionsIdle,
     /// A prompt needs the guest awake.
@@ -315,9 +324,9 @@ pub enum TimerKind {
 
 impl TimerKind {
     /// The event a timer delivers when it fires.
-    pub fn event(self) -> Event {
+    pub fn event(self, instance_status: Option<InstanceStatus>) -> Event {
         match self {
-            Self::MacrodMissing => Event::MacrodMissing,
+            Self::MacrodMissing => Event::MacrodMissing { instance_status },
             Self::SuspendDue => Event::SuspendDue,
             Self::RestartDue => Event::RestartDue,
             Self::WakeRetry => Event::WakeRetry,
@@ -380,6 +389,11 @@ pub enum Effect {
         /// Host holding the computer.
         host: HostId,
     },
+    /// Restart only the guest connection daemon, preserving the guest and its sessions.
+    RestartMacrod {
+        /// Host holding the computer.
+        host: HostId,
+    },
     /// Delete the guest and its disk.
     Destroy {
         /// Host holding the computer.
@@ -434,6 +448,18 @@ pub enum EffectWorker {
     Billing,
     /// Persists scheduled lifecycle events.
     Timers,
+}
+
+/// What the fleet observes about an instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstanceStatus {
+    /// Guest is running.
+    Running,
+    /// Guest is paused in RAM.
+    Frozen,
+    /// Guest is powered off.
+    Stopped,
 }
 
 /// Facts the applier gathers under the host lock before a transition.
@@ -550,6 +576,7 @@ pub fn transition(
 
         Event::MacrodConnected => {
             next.macrod_connected = true;
+            next.macrod_misses = 0;
             if let Phase::Booting { .. } = state.phase {
                 if state.power == Power::On {
                     next.phase = Phase::Running { host };
@@ -570,11 +597,29 @@ pub fn transition(
             }
         }
 
-        Event::MacrodMissing => {
+        Event::MacrodMissing { instance_status } => {
             let gone = !state.macrod_connected
                 && matches!(state.phase, Phase::Booting { .. } | Phase::Running { .. });
             if gone {
-                crash(&mut next, &mut effects, host, now);
+                if *instance_status == Some(InstanceStatus::Running) {
+                    next.macrod_misses =
+                        state.macrod_misses.saturating_add(1).min(MAX_MACROD_MISSES);
+                    effects.push(Effect::ScheduleTimer {
+                        kind: TimerKind::MacrodMissing,
+                        at: now + MACROD_GRACE,
+                    });
+                    if state.macrod_misses < MAX_MACROD_MISSES
+                        && next.macrod_misses == MAX_MACROD_MISSES
+                    {
+                        effects.push(Effect::RestartMacrod { host });
+                        effects.push(Effect::PageOperator {
+                            reason: "macrod missing repeatedly while the guest is running"
+                                .to_owned(),
+                        });
+                    }
+                } else {
+                    crash(&mut next, &mut effects, host, now);
+                }
             }
         }
 
@@ -772,6 +817,7 @@ fn boot(
     start: Option<Effect>,
 ) {
     next.phase = Phase::Booting { host };
+    next.macrod_misses = 0;
     next.wake_requested = false;
     next.macrod_connected = false;
     effects.extend(start);

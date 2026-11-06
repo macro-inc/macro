@@ -1,5 +1,7 @@
 //! What the computer services need from the outside world.
 
+pub use crate::domain::lifecycle::InstanceStatus;
+
 use macro_user_id::user_id::MacroUserIdStr;
 
 use harness_id::HarnessId;
@@ -183,8 +185,16 @@ pub trait ComputerRepo: Send + Sync + 'static {
     fn fire_timer(
         &self,
         timer: DueTimer,
+        instance_status: Option<InstanceStatus>,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
+
+    /// Give pending macrod timers a fresh grace after operator startup, scoped to its host.
+    fn postpone_macrod_timers(
+        &self,
+        host: HostId,
+        deadline: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Insert or refresh a host and its capacity.
     fn register_host(
@@ -302,6 +312,11 @@ pub trait Fleet: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Restart macrod without rebooting the guest.
+    fn restart_macrod(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Pause a running guest in RAM.
     fn freeze(&self, computer_id: ComputerId)
     -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -357,17 +372,6 @@ pub struct FleetInstance {
     pub control_plane_id: ControlPlaneId,
     /// Missing or malformed timestamps never permit orphan deletion.
     pub created_at: Option<DateTime<Utc>>,
-}
-
-/// What the fleet observes about an instance.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InstanceStatus {
-    /// Guest is running.
-    Running,
-    /// Guest is paused in RAM.
-    Frozen,
-    /// Guest is powered off.
-    Stopped,
 }
 
 /// A harness pre-approved for a computer.

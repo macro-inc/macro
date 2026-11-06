@@ -10,7 +10,9 @@ use chrono::{DateTime, Duration, Utc};
 
 use crate::domain::enrollment::Enrollment;
 use crate::domain::ids::{ComputerId, PairingId};
-use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
+use crate::domain::lifecycle::{
+    Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind,
+};
 use crate::domain::models::{Computer, EnrollmentDefaults};
 use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
 use crate::domain::ports::{
@@ -124,6 +126,10 @@ where
         .await;
         match registration {
             Ok(host) => {
+                self.repo
+                    .postpone_macrod_timers(host.id, self.clock.now() + MACROD_GRACE)
+                    .await
+                    .map_err(internal)?;
                 tracing::info!(host_id = %host.id, host = %host.name, healthy = true,
                     awake_units = host.awake_capacity_units, sold_units = host.sold_capacity_units,
                     "computer host registered");
@@ -267,6 +273,9 @@ where
             Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
             Effect::Resume { .. } => fleet_completion(self.fleet.resume(computer_id).await, None),
             Effect::Restart { .. } => fleet_completion(self.fleet.restart(computer_id).await, None),
+            Effect::RestartMacrod { .. } => {
+                fleet_completion(self.fleet.restart_macrod(computer_id).await, None)
+            }
             Effect::Freeze { .. } => fleet_completion(self.fleet.freeze(computer_id).await, None),
             Effect::Unfreeze { .. } => {
                 fleet_completion(self.fleet.unfreeze(computer_id).await, None)
@@ -327,8 +336,22 @@ where
         let count = due.len();
         for timer in due {
             let computer_id = timer.computer_id;
+            let instance_status = if timer.kind == TimerKind::MacrodMissing {
+                self.fleet
+                    .instances()
+                    .await
+                    .map_err(internal)?
+                    .into_iter()
+                    .find(|instance| {
+                        instance.computer_id == computer_id
+                            && &instance.control_plane_id == self.fleet.control_plane_id()
+                    })
+                    .map(|instance| instance.status)
+            } else {
+                None
+            };
             self.repo
-                .fire_timer(timer, now)
+                .fire_timer(timer, instance_status, now)
                 .await
                 .inspect_err(|error| tracing::warn!(computer_id = %computer_id, error = ?error, "timer failed"))
                 .ok();
@@ -553,6 +576,7 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::Resume { host }
         | Effect::Stop { host }
         | Effect::Restart { host }
+        | Effect::RestartMacrod { host }
         | Effect::Destroy { host }
         | Effect::MakeRoom { host } => Some(*host),
         Effect::ConfirmPayment { .. }

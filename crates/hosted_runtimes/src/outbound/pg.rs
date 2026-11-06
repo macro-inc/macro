@@ -392,6 +392,25 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&mut *tx)
         .await
         .map_err(storage)?;
+        if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
+            let comped = Self::apply_locked(
+                &mut tx,
+                computer.id,
+                &Event::Comped {
+                    reason: reason.clone(),
+                },
+                now,
+            )
+            .await
+            .map_err(ReserveError::Storage)?
+            .ok_or_else(|| {
+                ReserveError::Storage(PgComputerError::Corrupt(
+                    "reserved computer disappeared".to_owned(),
+                ))
+            })?;
+            tx.commit().await.map_err(storage)?;
+            return Ok(comped);
+        }
         let effect_json = serde_json::to_value(Effect::ConfirmPayment {
             extra_items: computer.extra_items,
         })
@@ -682,6 +701,7 @@ impl ComputerRepo for PgComputerRepo {
     async fn fire_timer(
         &self,
         timer: DueTimer,
+        instance_status: Option<crate::domain::ports::InstanceStatus>,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
         let mut tx = self.pool.begin().await?;
@@ -699,10 +719,29 @@ impl ComputerRepo for PgComputerRepo {
         if deleted.rows_affected() == 0 {
             return Ok(None);
         }
-        let computer =
-            Self::apply_locked(&mut tx, timer.computer_id, &timer.kind.event(), now).await?;
+        let computer = Self::apply_locked(
+            &mut tx,
+            timer.computer_id,
+            &timer.kind.event(instance_status),
+            now,
+        )
+        .await?;
         tx.commit().await?;
         Ok(computer)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn postpone_macrod_timers(
+        &self,
+        host: HostId,
+        deadline: DateTime<Utc>,
+    ) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime_timer t SET fire_at = $2 FROM hosted_runtime c WHERE t.computer_id = c.id AND c.host_id = $1 AND t.kind = 'macrod_missing'",
+            host.into_inner(),
+            deadline,
+        ).execute(&self.pool).await?;
+        Ok(())
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, PgComputerError> {

@@ -295,6 +295,17 @@ impl Fleet for IncusFleet {
         Ok(())
     }
 
+    #[tracing::instrument(name = "incus_fleet.restart_macrod", skip(self), err)]
+    async fn restart_macrod(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
+        self.client
+            .exec(
+                &instance_name(computer_id),
+                &["systemctl", "restart", "macrod"],
+            )
+            .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(name = "incus_fleet.freeze", skip(self), err)]
     async fn freeze(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         if self.status(computer_id).await? != Some(InstanceStatus::Frozen) {

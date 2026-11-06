@@ -259,10 +259,10 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
 
     let mut stale = due[0].clone();
     stale.fire_at -= Duration::seconds(1);
-    assert_eq!(repo.fire_timer(stale, now()).await.unwrap(), None);
+    assert_eq!(repo.fire_timer(stale, None, now()).await.unwrap(), None);
 
     let crashed = repo
-        .fire_timer(due[0].clone(), now() + Duration::hours(1))
+        .fire_timer(due[0].clone(), None, now() + Duration::hours(1))
         .await
         .unwrap()
         .unwrap();
@@ -538,7 +538,7 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
+async fn comped_reservation_commits_provisioning_without_payment_recovery(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool);
     repo.register_host(HostRegistration {
@@ -555,24 +555,27 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
         reason: "internal team".to_owned(),
     };
     let reserved = repo.reserve(request, now()).await.unwrap();
-    let pending = repo.get(reserved.id).await.unwrap().unwrap();
-    assert_eq!(
-        pending.state.payment,
-        crate::domain::lifecycle::PaymentOutcome::Pending
-    );
-    assert_eq!(pending.state.comp_reason.as_deref(), Some("internal team"));
-    assert_eq!(pending.price_id, None);
-    let comped = repo
-        .apply(
-            reserved.id,
-            Event::Comped {
-                reason: "internal team".to_owned(),
-            },
-            now(),
+    assert!(matches!(reserved.state.phase, Phase::Provisioning { .. }));
+    assert_eq!(reserved.price_id, None);
+    let comped = repo.get(reserved.id).await.unwrap().unwrap();
+    assert!(matches!(comped.state.phase, Phase::Provisioning { .. }));
+    assert!(
+        repo.lease_effects(
+            EffectWorker::Billing,
+            10,
+            now() + Duration::days(1),
+            now() + Duration::days(2),
         )
         .await
         .unwrap()
+        .is_empty()
+    );
+    let effects = repo
+        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .await
         .unwrap();
+    assert_eq!(effects.len(), 1);
+    assert!(matches!(effects[0].effect, Effect::Create { .. }));
     assert_eq!(
         comped.state.payment,
         crate::domain::lifecycle::PaymentOutcome::Comped

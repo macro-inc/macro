@@ -118,6 +118,14 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
+    async fn restart_macrod(&self, id: ComputerId) -> Result<(), FakeFleetError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("restart_macrod {id}"));
+        Ok(())
+    }
+
     async fn freeze(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("freeze {id}"));
         Ok(())
@@ -492,6 +500,7 @@ async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
         computer.state = ComputerState {
             phase: Phase::Running { host: HOST },
             macrod_connected: true,
+            macrod_misses: 0,
             ..computer.state.clone()
         };
     }

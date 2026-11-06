@@ -332,6 +332,22 @@ impl Fleet for DockerFleet {
     }
 
     #[tracing::instrument(name = "docker_fleet.freeze", skip(self), err)]
+    #[tracing::instrument(name = "docker_fleet.restart_macrod", skip(self), err)]
+    async fn restart_macrod(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
+        self.docker(
+            "exec",
+            &[
+                "exec".to_owned(),
+                container_name(computer_id),
+                "systemctl".to_owned(),
+                "restart".to_owned(),
+                "macrod".to_owned(),
+            ],
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn freeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
         if self.state(computer_id).await? != Some(ContainerState::Paused) {
             self.docker("pause", &verb_args("pause", computer_id))
