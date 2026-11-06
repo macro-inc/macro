@@ -1,7 +1,7 @@
+import type { FirstPartyBotMark } from '@core/component/firstPartyBotMark';
 import { CURSOR_BOT_PRINCIPAL_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
-import type { FirstPartyBotMark } from '@core/component/firstPartyBotMark';
 import type { MessageData } from '@core/messages/types';
 import { cleanup, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';

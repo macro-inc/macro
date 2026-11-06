@@ -5,10 +5,10 @@ import type {
   NotificationInboxRowActionKind,
   NotificationInboxRowType,
 } from '@service-storage/graphql/generated/graphql';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import { commentNotification, inboxEntry } from '../tests/wire';
-import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { encodeInboxScope, toInboxGroup } from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
