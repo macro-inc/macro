@@ -249,6 +249,7 @@ deny = [
     "notification",              # Call-push trace propagation and baggage-redaction tests only
     "notification_sandbox",      # This is not production code its just tooling
     "opentelemetry-appender-tracing", # OpenTelemetry tracing-to-OTLP log bridge requires tracing-subscriber
+    "passwords",                 # Provider credential-redaction tests only (dev-dependency)
     "projects",                  # Dev logging only
     "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
