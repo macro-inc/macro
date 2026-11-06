@@ -6,6 +6,7 @@ pub(crate) mod fakes;
 pub mod ids;
 pub mod lifecycle;
 pub mod models;
+pub mod no_persona_credentials;
 #[cfg(feature = "ports")]
 pub mod operator;
 pub mod persona_credentials;

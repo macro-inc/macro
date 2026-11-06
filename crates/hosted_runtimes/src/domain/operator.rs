@@ -14,6 +14,7 @@ use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
 use crate::domain::models::{Computer, EnrollmentDefaults};
 use crate::domain::ports::{
     ComputerRepo, Fleet, FleetError, FleetInstance, Harnesses, InstanceStatus, PendingEffect,
+    PersonaCredentialSource,
 };
 use crate::domain::service::{Clock, ComputerError};
 
@@ -49,7 +50,8 @@ pub trait SessionActivity: Send + Sync + 'static {
 }
 
 /// Drives one host's computers. V1 runs one fleet (one host) per control plane.
-pub struct ComputerOperator<Repo, Machines, Registry, Time> {
+pub struct ComputerOperator<Repo, Machines, Registry, Time, Credentials> {
+    credentials: Credentials,
     repo: Repo,
     fleet: Machines,
     harnesses: Registry,
@@ -65,12 +67,14 @@ struct HostReadiness {
     failures: u32,
 }
 
-impl<Repo, Machines, Registry, Time> ComputerOperator<Repo, Machines, Registry, Time>
+impl<Repo, Machines, Registry, Time, Credentials>
+    ComputerOperator<Repo, Machines, Registry, Time, Credentials>
 where
     Repo: ComputerRepo,
     Machines: Fleet,
     Registry: Harnesses,
     Time: Clock,
+    Credentials: PersonaCredentialSource,
 {
     /// Build the operator; unavailable host discovery is retried by its passes.
     #[tracing::instrument(skip_all, err)]
@@ -80,8 +84,10 @@ where
         harnesses: Registry,
         clock: Time,
         defaults: EnrollmentDefaults,
+        credentials: Credentials,
     ) -> Result<Self, ComputerError> {
         let operator = Self {
+            credentials,
             repo,
             fleet,
             harnesses,
@@ -231,7 +237,14 @@ where
                     name: computer.name.clone(),
                     service_url_overrides: self.defaults.service_url_overrides.clone(),
                     persona: computer.persona.clone(),
-                    persona_enrollment: Default::default(),
+                    persona_enrollment: self
+                        .credentials
+                        .issue(
+                            computer_id,
+                            crate::domain::persona_credentials::EnrollmentGeneration::new(0),
+                        )
+                        .await
+                        .map_err(internal)?,
                 };
                 self.fleet
                     .create(&computer, &enrollment, *start)

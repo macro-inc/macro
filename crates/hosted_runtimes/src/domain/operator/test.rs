@@ -167,6 +167,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
         EnrollmentDefaults {
             service_url_overrides: BTreeMap::new(),
         },
+        FixedCredentials,
     )
     .await
     .unwrap();
@@ -236,7 +237,7 @@ impl Harnesses for FakeHarnesses {
 
 async fn operator(
     fleet: FakeFleet,
-) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock> {
+) -> ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FixedCredentials> {
     ComputerOperator::start(
         FakeRepo {
             sold_units: 9,
@@ -251,13 +252,14 @@ async fn operator(
                 "http://10.210.0.1:8080".to_owned(),
             )]),
         },
+        FixedCredentials,
     )
     .await
     .unwrap()
 }
 
 async fn paid_computer(
-    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock>,
+    operator: &ComputerOperator<FakeRepo, FakeFleet, FakeHarnesses, FixedClock, FixedCredentials>,
 ) -> ComputerId {
     let id = ComputerId::new(Uuid::from_u128(1));
     operator
@@ -722,4 +724,49 @@ fn control_plane_identity_rejects_missing_or_invalid_values() {
             .as_str(),
         "local-test_a"
     );
+}
+
+struct FixedCredentials;
+impl PersonaCredentialSource for FixedCredentials {
+    async fn issue(
+        &self,
+        _computer: ComputerId,
+        _generation: crate::domain::persona_credentials::EnrollmentGeneration,
+    ) -> Result<
+        crate::domain::persona_credentials::PersonaEnrollment,
+        crate::domain::persona_credentials::PersonaCredentialError,
+    > {
+        Ok(Default::default())
+    }
+}
+
+#[tokio::test]
+async fn unconfigured_credentials_fail_closed_for_persona_computers() {
+    use crate::domain::no_persona_credentials::NoPersonaCredentials;
+    use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
+    for has_persona in [false, true] {
+        let operator = operator(FakeFleet::default()).await;
+        let id = paid_computer(&operator).await;
+        if has_persona {
+            operator.repo.computers.lock().unwrap().get_mut(&id).unwrap().persona = Some(serde_json::from_str(r#"{
+                "name":"Worker","os_user":"worker","extra_service":{"unit_name":"worker","exec":"/bin/worker","env":{}},"config":{}
+            }"#).unwrap());
+        }
+        let source = NoPersonaCredentials::new(operator.repo);
+        let result = source.issue(id, EnrollmentGeneration::new(1)).await;
+        if has_persona {
+            assert!(matches!(result, Err(PersonaCredentialError::Unavailable)));
+        } else {
+            assert_eq!(result.unwrap(), Default::default());
+        }
+        assert!(matches!(
+            source
+                .issue(
+                    ComputerId::new(Uuid::from_u128(2)),
+                    EnrollmentGeneration::new(1)
+                )
+                .await,
+            Err(PersonaCredentialError::NotFound)
+        ));
+    }
 }
