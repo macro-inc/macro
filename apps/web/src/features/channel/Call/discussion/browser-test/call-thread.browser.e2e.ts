@@ -74,6 +74,12 @@ type Scenario = {
   outside?: boolean;
   shell?: 'docked' | 'overlay';
   historyCount?: number;
+  fullOverlay?: boolean;
+  work?: 'present' | 'empty' | 'off';
+  chat?: 'on' | 'off';
+  baseline?: boolean;
+  unread?: boolean;
+  theme?: string;
 };
 
 async function open(
@@ -81,6 +87,11 @@ async function open(
   view: 'messages' | 'panel',
   scenario: Scenario
 ) {
+  if (scenario.fullOverlay) {
+    page.on('pageerror', (error) =>
+      console.error('Fixture error:', error.message)
+    );
+  }
   const replies = scenario.replies ?? [];
   const posted: unknown[] = [];
   const entries = [
@@ -113,7 +124,32 @@ async function open(
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (url.pathname.endsWith('/timeline')) {
+    if (url.pathname === '/fixture/work') {
+      await route.fulfill({
+        json: {
+          data: {
+            user: {
+              registeredWork:
+                scenario.work === 'present'
+                  ? [
+                      {
+                        id: 'registration-1',
+                        accountId: 'macro|member@example.com',
+                        registeredAt: STARTED_AT,
+                        session: {
+                          id: '00000000-0000-7000-8000-00000000a001',
+                          sessionName: 'Review the draft',
+                          turnState: 'running',
+                          pullRequestUrl: null,
+                        },
+                      },
+                    ]
+                  : [],
+            },
+          },
+        },
+      });
+    } else if (url.pathname.endsWith('/timeline')) {
       await route.fulfill({
         json: { entries, next_cursor: null, previous_cursor: null },
       });
@@ -159,7 +195,12 @@ async function open(
     }
   });
   await page.routeWebSocket('**/*', (socket) => socket.close());
-  await page.goto(`${PATH}?view=${view}&shell=${scenario.shell ?? ''}`);
+  const path = scenario.fullOverlay
+    ? PATH.replace('call-thread.html', 'call-overlay.html')
+    : PATH;
+  await page.goto(
+    `${path}?view=${view}&shell=${scenario.shell ?? ''}&work=${scenario.work ?? 'off'}&chat=${scenario.chat ?? 'on'}&baseline=${scenario.baseline ? 'main' : 'branch'}&unread=${scenario.unread ?? false}&theme=${scenario.theme ?? 'dark'}`
+  );
   return { posted, replies };
 }
 
@@ -359,8 +400,16 @@ for (const shell of ['docked', 'overlay'] as const) {
       page,
     }, testInfo) => {
       test.skip(testInfo.project.name === 'phone' && shell === 'docked');
+      const fullOverlay = process.env.CALL_FULL_HOST === 'true';
+      if (
+        fullOverlay &&
+        shell === 'overlay' &&
+        testInfo.project.name === 'desktop'
+      )
+        await page.setViewportSize({ width: 640, height: 860 });
       await open(page, 'panel', {
         status: { state: 'live' },
+        fullOverlay,
         shell,
         historyCount: 40,
         replies: withMessages
@@ -393,20 +442,36 @@ for (const shell of ['docked', 'overlay'] as const) {
         const composerBox = await composer.boundingBox();
         expect(panelBox).not.toBeNull();
         expect(composerBox).not.toBeNull();
-        expect(
-          panelBox!.y + panelBox!.height - composerBox!.y - composerBox!.height
-        ).toBeLessThanOrEqual(testInfo.project.name === 'phone' ? 32 : 24);
+        const gap =
+          panelBox!.y + panelBox!.height - composerBox!.y - composerBox!.height;
+        expect(gap).toBeGreaterThanOrEqual(0);
+        expect(gap).toBeLessThanOrEqual(
+          testInfo.project.name === 'phone' ? 32 : 24
+        );
       }
       await expectBottom();
       await page.getByText(/^(People|Participants)( \d+)?$/).click();
       await expect(
-        page.getByText('Call participant', { exact: true })
-      ).toBeVisible();
+        page.getByRole('radio', { name: /^(People|Participants)/ })
+      ).toBeChecked();
       await page.getByText('Chat', { exact: true }).click();
       await expectBottom();
       if (testInfo.project.name === 'desktop') {
-        await page.getByRole('button', { name: 'Leave call view' }).click();
-        await page.getByRole('button', { name: 'Return to call view' }).click();
+        await page
+          .getByRole('button', {
+            name: fullOverlay
+              ? 'Close chat and participants'
+              : 'Leave call view',
+          })
+          .last()
+          .click();
+        await page
+          .getByRole('button', {
+            name: fullOverlay
+              ? 'Open chat and participants'
+              : 'Return to call view',
+          })
+          .click();
         await expectBottom();
       }
     });
@@ -421,6 +486,7 @@ for (const readingHistory of [false, true]) {
     const { posted, replies } = await open(page, 'panel', {
       status: { state: 'live' },
       shell: 'docked',
+      fullOverlay: process.env.CALL_FULL_HOST === 'true',
       historyCount: 40,
       replies: Array.from({ length: 40 }, (_, index) =>
         reply(
@@ -442,8 +508,8 @@ for (const readingHistory of [false, true]) {
     const previous = await scroll.evaluate((el) => el.scrollTop);
     await page.getByText(/^(People|Participants)$/).click();
     await expect(
-      page.getByText('Call participant', { exact: true })
-    ).toBeVisible();
+      page.getByRole('radio', { name: /^(People|Participants)/ })
+    ).toBeChecked();
     await page.evaluate(
       () =>
         new Promise<void>((resolve) =>
@@ -473,6 +539,7 @@ for (const readingHistory of [false, true]) {
         contentType: 'image/png',
       });
     }
+    await expect(page.getByText('Message 41', { exact: true })).toBeAttached();
     const current = await scroll.evaluate((el) => el.scrollTop);
     console.log(JSON.stringify({ readingHistory, previous, current }));
     if (readingHistory) expect(Math.abs(current - previous)).toBeLessThan(2);
@@ -484,5 +551,52 @@ for (const readingHistory of [false, true]) {
     await page.getByRole('button', { name: /send/i }).click();
     await expect.poll(() => posted.length).toBe(1);
     expect(posted[0]).toMatchObject({ thread_id: CALL_ID });
+    expect(JSON.stringify(posted[0])).toContain('Draft in the call');
   });
+}
+
+for (const baseline of [false, true]) {
+  for (const work of ['present', 'empty', 'off'] as const) {
+    test(`registered work gating in the real call host: ${baseline ? 'main' : 'branch'} ${work}`, async ({
+      page,
+    }) => {
+      test.skip(process.env.CALL_FULL_HOST !== 'true');
+      await open(page, 'messages', {
+        status: { state: 'live' },
+        fullOverlay: true,
+        work,
+        baseline,
+      });
+      const prompt = page.getByRole('button', { name: 'View active work' });
+      if (work === 'present') {
+        await expect(prompt).toBeVisible({ timeout: 30_000 });
+        const trigger = page.getByRole('button', {
+          name: 'Open chat and participants',
+        });
+        await expect(trigger.locator('.bg-accent')).toBeVisible();
+        if (process.env.CALL_REPRO_DIR)
+          await page.screenshot({
+            path: `${process.env.CALL_REPRO_DIR}/L-79-${baseline ? 'main' : 'branch'}-closed.png`,
+          });
+        await prompt.click();
+        await expect(page.getByRole('radio', { name: 'Work' })).toBeChecked();
+        await expect(
+          page.getByText('Review the draft', { exact: true })
+        ).toBeVisible();
+      } else {
+        await expect(
+          page.getByRole('button', { name: 'Open chat and participants' })
+        ).toBeVisible({ timeout: 30_000 });
+        await expect(prompt).toHaveCount(0);
+        await page
+          .getByRole('button', { name: 'Open chat and participants' })
+          .click();
+        await expect(page.getByRole('radio', { name: 'Work' })).toHaveCount(0);
+      }
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/L-79-${baseline ? 'main' : 'branch'}-${work}.png`,
+        });
+    });
+  }
 }
