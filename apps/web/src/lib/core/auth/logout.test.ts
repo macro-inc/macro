@@ -1,12 +1,16 @@
+import { syncLoginStorage } from '@core/util/cookies';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   beginCacheWriteSession,
   captureCacheWriteSession,
 } from '@graphql-cache/session-writes';
+import { setEmailOutboxSession } from '@queries/email/outbox-session';
 import { notificationKeys } from '@queries/notification/keys';
 import { graphqlSoupKeys } from '@queries/soup/graphql/keys';
 import { isCancelledError, QueryClient } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -24,6 +28,9 @@ vi.mock('@queries/client', () => ({
   get queryClient() {
     return client.current;
   },
+}));
+vi.mock('@app/observability/reload', () => ({
+  reloadApp: () => window.location.reload(),
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn(), reset: vi.fn() }),
@@ -82,6 +89,7 @@ vi.mock('./push-registration-lifecycle', () => ({
 
 import {
   clearRegisteredCaches,
+  recordSessionCacheWrite,
   registerCacheHost,
   replaceCacheWriteSession,
 } from '@graphql-cache/lifecycle';
@@ -338,4 +346,92 @@ it('keeps replacement contact writes closed until every logout wipe and teardown
   expect(capturedDuringLogout.isCurrent()).toBe(false);
   await captureCacheWriteSession().run(wrote);
   expect(wrote).toHaveBeenCalledOnce();
+});
+
+it('starts local and server sign-out while a write is held, and waits for physical cleanup before reload', async () => {
+  client.current = new QueryClient();
+  await beginCacheWriteSession(async () => {}).ready;
+  isTauri.mockReturnValue(true);
+  const held = Promise.withResolvers<void>();
+  const writingStarted = Promise.withResolvers<void>();
+  const serverStarted = Promise.withResolvers<void>();
+  const localStarted = Promise.withResolvers<void>();
+  const stored = new Set<string>();
+  const order: string[] = [];
+  const inner = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    writeQuery: async () => {
+      writingStarted.resolve();
+      await held.promise;
+      stored.add('GraphqlSoupCrmContact:old-contact');
+      order.push('write');
+      return createNoopCacheHost().writeQuery({ query: '', data: {} });
+    },
+    clear: async () => {
+      stored.clear();
+      order.push('clear');
+      return createNoopCacheHost().clear();
+    },
+    dispose: vi.fn(() => {
+      order.push('dispose');
+    }),
+  };
+  const host = createRetirableCacheHost(inner);
+  const unregister = registerCacheHost(host);
+  const writing = captureCacheWriteSession().run(async () => {
+    recordSessionCacheWrite(host, 'GraphqlSoupCrmContact:old-contact');
+    await host.writeQuery({ query: '', data: {} });
+  });
+  await writingStarted.promise;
+  vi.mocked(syncLoginStorage).mockImplementationOnce(() => {
+    // The real login-cookie effect retires its public host on false auth.
+    unregister();
+    host.dispose();
+    localStarted.resolve();
+  });
+  vi.mocked(authServiceClient.logout).mockImplementationOnce(async () => {
+    serverStarted.resolve();
+    return ok({});
+  });
+  const location = {
+    hash: '#/home',
+    reload: vi.fn(() => {
+      order.push('reload');
+    }),
+  };
+  vi.stubGlobal('window', { location, history: { replaceState: vi.fn() } });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response())
+  );
+  const { logout, dispose } = createRoot((dispose) => ({
+    logout: useLogout(),
+    dispose,
+  }));
+  const ending = logout();
+  try {
+    await Promise.all([localStarted.promise, serverStarted.promise]);
+    expect(setEmailOutboxSession).toHaveBeenLastCalledWith(undefined);
+    expect(host.disabled).toBe(true);
+    expect(inner.dispose).not.toHaveBeenCalled();
+    expect(order).toEqual([]);
+    expect(location.reload).not.toHaveBeenCalled();
+    const replacement = replaceCacheWriteSession();
+    expect(replacement.isCurrent()).toBe(false);
+    held.resolve();
+    await Promise.all([writing, ending, replacement.ready]);
+    expect(order).toEqual(['write', 'clear', 'dispose', 'reload']);
+    expect(stored.size).toBe(0);
+    expect(replacement.isCurrent()).toBe(true);
+  } finally {
+    held.resolve();
+    await Promise.allSettled([writing, ending]);
+    unregister();
+    dispose();
+    isTauri.mockReturnValue(false);
+    vi.mocked(authServiceClient.logout).mockClear();
+    vi.unstubAllGlobals();
+    client.current.clear();
+  }
 });

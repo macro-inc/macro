@@ -77,13 +77,24 @@ entire cache in browser memory. With 10s of thousands of cached objects
     rebinds (“silent restart”) and all active operations re-execute. Eager
     path: clear on logout. REST contact-edit responses use a separate captured
     write-session token: logout closes admission and drains admitted durable
-    write/delete operations before clearing registered hosts. Successful login
+    write/delete operations before clearing registered hosts. Independent local
+    auth cleanup and server sign-out begin without waiting for this drain; reload
+    and replacement admission still wait for all cleanup. Tracked contact writes
+    retain their exact physical host even if auth propagation retires the public
+    wrapper, whose callbacks and subsequent operations are silenced immediately.
+    Successful login
     also retires this token, drains writes and deletes only the contact records
     written by that session before refetching. This preserves unrelated durable
     queues during same-account reauthentication, while handling native account
-    replacement that keeps the same client and host objects. Failed repair or a
-    retired owning host leaves admission closed; a no-op delete is not proof of
-    storage cleanup. Login waits for all logout wipes and teardown, not just
+    replacement that keeps the same client and host objects. A readiness probe
+    precedes tracking so failed initialization cannot strand a never-written key.
+    Logical retirement keeps narrow cleanup usable through the retained owner.
+    Typed recoverable bootstrap/owner failures may reconstruct a cleanup-only host
+    from the original backend/scope factory without booting a user client or queue;
+    unknown or quarantined failures cannot use this path. Failed repair retains
+    keys/ownership, reports the failure, and leaves admission closed for retry.
+    A no-op delete is not proof of storage cleanup, and a never-settling durable
+    write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
     normalized-cache clearing. A post-write identity check cannot
     undo a native mutation already dispatched.
     Additive GraphQL schema changes retain existing normalized records;

@@ -437,9 +437,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep add-only email and personal-provider company edits in shared CRM field views, using Tasks
   property primitives and committed-response/session-fenced cache updates. Close
   direct cache-write admission on logout and login replacement, and drain admitted
-  durable writes before clearing storage. On login, remove only session-written
-  contact records before refetch, preserve queued offline edits, and keep admission
-  closed if repair fails; serialize login behind every logout wipe;
+  durable writes before clearing storage, while starting independent local/server
+  sign-out immediately. Retain the exact physical cache owner through cleanup even
+  after its public wrapper retires. On login, remove only session-written contact
+  records before refetch; recover typed owner/bootstrap failures only through the
+  original backend/scope factory. Preserve queued offline edits, report failed
+  repair, and keep admission closed until cleanup succeeds; serialize login behind
+  every logout wipe;
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
