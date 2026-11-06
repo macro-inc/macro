@@ -7,6 +7,7 @@ import { AuthButton } from './form-fields';
 export function LoginPicker(props: {
   /** Sign in with Apple is required for App Store review and iOS-only. */
   showApple: boolean;
+  showMicrosoft: boolean;
   onGoogle: () => void;
   onMicrosoft: () => void;
   onApple: () => void;
@@ -24,10 +25,12 @@ export function LoginPicker(props: {
         />
         Continue with Google
       </AuthButton>
-      <AuthButton variant="secondary" onClick={props.onMicrosoft}>
-        <IconMicrosoft class="size-[18px] shrink-0" aria-hidden="true" />
-        Continue with Microsoft
-      </AuthButton>
+      <Show when={props.showMicrosoft}>
+        <AuthButton variant="secondary" onClick={props.onMicrosoft}>
+          <IconMicrosoft class="size-[18px] shrink-0" aria-hidden="true" />
+          Continue with Microsoft
+        </AuthButton>
+      </Show>
       <Show when={props.showApple}>
         <AuthButton variant="secondary" onClick={props.onApple}>
           <IconApple class="size-5 shrink-0" aria-hidden="true" />

@@ -20,8 +20,8 @@ import { StoryStageView } from './story-stage-view';
 export function SignupJourneyView(props: {
   /** Starts Google sign-up; on web the page navigates away. */
   onGoogle: () => Promise<void>;
-  /** Starts Microsoft sign-up; on web the page navigates away. */
-  onMicrosoft: () => Promise<void>;
+  /** Starts Microsoft sign-up; absent while Microsoft sign-up is off. */
+  onMicrosoft?: () => Promise<void>;
   onBackFromEmail: () => void;
   /** Sends a returning user to sign in. */
   onSignIn: () => void;
@@ -121,11 +121,17 @@ export function SignupJourneyView(props: {
                     'onboarding'
                   )
                 }
-                onConnectMicrosoft={() =>
-                  fireAndForget(
-                    journey.connect('microsoft', props.onMicrosoft),
-                    'onboarding'
-                  )
+                onConnectMicrosoft={
+                  props.onMicrosoft
+                    ? () => {
+                        const start = props.onMicrosoft;
+                        if (!start) return;
+                        fireAndForget(
+                          journey.connect('microsoft', start),
+                          'onboarding'
+                        );
+                      }
+                    : undefined
                 }
                 onConnectPersonal={() => {}}
               />
@@ -134,10 +140,9 @@ export function SignupJourneyView(props: {
             <div class="mx-auto flex w-full max-w-sm flex-col gap-8">
               <h1
                 tabindex="-1"
-                class="text-center font-[Roboto_Slab_Variable] text-3xl font-[315] leading-tight tracking-tight"
+                class="text-center font-[Roboto_Slab_Variable] text-[clamp(24px,7.6vw,30px)] font-[315] leading-tight tracking-tight"
               >
-                Sign up with your
-                <br /> work email.
+                Sign up with your email.
               </h1>
               {props.emailForm}
             </div>

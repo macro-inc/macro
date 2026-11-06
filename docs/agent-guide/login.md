@@ -229,7 +229,8 @@ page should remain stable after the session check returns
 Verify that Continue advances without signing in. Below the color
 picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
 step, Continue with Google creates the Macro account and links the primary
-inbox; Continue with Microsoft below it creates the account through the
+inbox; Continue with Microsoft below it (behind the `enable-microsoft-signup`
+flag, on in dev builds) creates the account through the
 FusionAuth `microsoft` identity provider (work, school, and personal accounts),
 then the signed-in work step continues straight into Outlook consent (mail and
 calendar) when `enable-outlook` admits the user. Declining or a tenant that

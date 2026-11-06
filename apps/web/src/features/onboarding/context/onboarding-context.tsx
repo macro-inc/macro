@@ -109,7 +109,10 @@ export type OnboardingContext = {
    * a provider the app asks which one.
    */
   connectInbox(provider?: InboxProvider): Promise<void>;
-  /** Whether this user may connect an Outlook inbox; false until known. */
+  /**
+   * Whether to offer Outlook beside Google: Microsoft sign-up is on and this
+   * user may connect an Outlook inbox. False until both are known.
+   */
   createOutlookAvailability(): Accessor<boolean>;
   createToolCatalog(): ToolCatalogSource;
   /**

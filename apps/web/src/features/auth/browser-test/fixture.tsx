@@ -173,6 +173,8 @@ function Fixture() {
           <AuthView
             intent={page === 'signup' ? 'signup' : 'login'}
             showApple={params.apple !== undefined}
+            // On, as in dev builds; `?microsoft=off` is the production default.
+            showMicrosoft={params.microsoft !== 'off'}
             compact={false}
             initialEmail={params.email}
             token={sessionTokenParam(params.token)}

@@ -26,7 +26,8 @@ import {
 /** What desktop sign-up hands onboarding's opening slides. */
 export type SignupJourneySlots = {
   onGoogle: () => Promise<void>;
-  onMicrosoft: () => Promise<void>;
+  /** Absent while Microsoft sign-up is off. */
+  onMicrosoft?: () => Promise<void>;
   onBackFromEmail: () => void;
   onSignIn: () => void;
   onAgentSignup: () => void;
@@ -38,6 +39,8 @@ export type SignupJourneySlots = {
 export function AuthView(props: {
   intent: AuthIntent;
   showApple: boolean;
+  /** Continue with Microsoft, behind `enable-microsoft-signup`. */
+  showMicrosoft?: boolean;
   /** The header yields to the on-screen keyboard on phones. */
   compact: boolean;
   initialEmail?: string;
@@ -84,7 +87,9 @@ export function AuthView(props: {
         {(journey) =>
           journey()({
             onGoogle: () => context.startSso('google', 'signup'),
-            onMicrosoft: () => context.startSso('microsoft', 'signup'),
+            onMicrosoft: props.showMicrosoft
+              ? () => context.startSso('microsoft', 'signup')
+              : undefined,
             onBackFromEmail: login.back,
             onSignIn: () => props.onSignIn?.(),
             onAgentSignup: () => props.onAgentSignup?.(),
@@ -119,6 +124,7 @@ export function AuthView(props: {
             <Stepper.Step>
               <LoginPicker
                 showApple={props.showApple}
+                showMicrosoft={props.showMicrosoft === true}
                 onGoogle={() =>
                   fireAndForget(
                     context.startSso('google', props.intent),

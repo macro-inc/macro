@@ -1,7 +1,9 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
+import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -229,7 +231,11 @@ export function createAppOnboardingContext(): OnboardingContext {
         )
         .exhaustive();
     },
-    createOutlookAvailability: () => useOutlookAvailable(),
+    createOutlookAvailability: () => {
+      const microsoft = useFeatureFlag(enableMicrosoftSignup);
+      const outlook = useOutlookAvailable();
+      return () => microsoft().enabled && outlook();
+    },
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {

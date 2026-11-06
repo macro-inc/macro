@@ -28,3 +28,4 @@ To click through by hand, run
   email fallback after a Google or Microsoft sign-in comes back without a code.
 - `/?page=mobile-signup` is the mobile-web email capture.
 - Add `&verifyLatency=300` to make code checks take a network round trip.
+- Add `&microsoft=off` for `enable-microsoft-signup` off (no Microsoft button).

@@ -229,3 +229,23 @@ test('a failed provider sign-up falls back to the email form with the reason', a
     page.getByRole('button', { name: 'Continue with Microsoft' })
   ).toHaveCount(0);
 });
+
+test('with Microsoft sign-up off, the work step is Google only as before', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=signup&microsoft=off', {
+    ssoEmail: 'founder@acme.com',
+  });
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: /Connect your work/ })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect work email' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Continue with Microsoft' })
+  ).toHaveCount(0);
+});
