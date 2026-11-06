@@ -7,17 +7,18 @@ README title. The white logo is downscaled to 480 pixels wide on a dark backing;
 the 512×70 asset displays at 256×35. A regular-weight paragraph avoids heading margins
 and GitHub’s horizontal divider.
 
-`header.png` is a 2400×1000 continuous desktop capture of a launch document
-beside its linked internal discussion and an agent scheduling request.
-The global navigation rail remains visible. The crop excludes the native tab
-bar and split close controls; no UI elements or message text were painted out.
-This example demonstrates document/conversation linking, not a completed
-agent-created document. Keep the logo first, title second, product third.
+`header.png` is a 2400×900 continuous crop of the earlier desktop agent request
+and its completed linked code changes. The global navigation rail remains visible.
+The crop excludes native tabs, split close controls, and unrelated later messages.
+It uses a 32-pixel outer corner radius, matching the feature screenshots.
+Keep the logo first, regular-weight title second, product third.
 
 ## Feature screenshots
 
 The nine images in `framed/` use fixed 16:9 frames and the existing grayscale
-Monterey background. Content stops at the viewport edge rather than using a
+Monterey background, 60-pixel inset, 32-pixel corner radius, and one-pixel border.
+All nine frames use the same treatment, including replacement captures.
+Content stops at the viewport edge rather than using a
 different content-dependent aspect ratio for every image. Product pixels are
 never stretched, rewritten, or generated.
 
@@ -28,9 +29,9 @@ never stretched, rewritten, or generated.
   a completed task with its linked discussion and code change.
 - Docs, Agents, Calendar: existing captures reframed consistently.
 - Databases: full original Donations Example capture, preserving all columns.
-- CRM: user-selected populated pipeline table with company, stage, owner, and
-  revenue, sorted by revenue descending. The viewport ends after revenue;
-  private follow-up notes and contact columns are outside the capture.
+- CRM: fresh desktop board capture at 90% app zoom, showing active deal stages,
+  owners, and revenue. Board layout replaces the uneven table rows. No records
+  were edited; neighboring columns stop naturally at the viewport edge.
 - Calls: An internal group recording, paused near 0:35. People are on
   camera without a screen share. Portrait video and black bars are inherent in
   the recording; the transcript was scrolled independently.

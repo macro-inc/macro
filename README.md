@@ -4,7 +4,7 @@
   </a>
   <p>The unified workspace for your team</p>
   <a target="_blank" href="https://macro.com">
-    <img width="2400" height="1000" alt="Macro — a launch document beside its linked team discussion and an agent scheduling request" src=".github/readme/header.png" />
+    <img width="2400" height="900" alt="Macro — an agent request and completed linked code changes in one workspace" src=".github/readme/header.png" />
   </a>
 
   <br />
@@ -163,7 +163,7 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 **Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!
 
-![Macro populated CRM pipeline in table view with company, stage, owner, and revenue columns](.github/readme/framed/crm.png)
+![Macro CRM board with active pipeline stages, assigned owners, and deal revenue](.github/readme/framed/crm.png)
 
 - Customizable sales pipelines and deal stages with board and list views.
 - Company and contact records have their own discussions where your team can leave notes and @mention people and work.
