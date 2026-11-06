@@ -97,19 +97,19 @@ async fn main() -> Result<(), rootcause::Report> {
     };
     let config = IncusFleetConfig {
         image: ImageSource {
-            reference: ImageReference::Alias(args.image),
+            reference: ImageReference::Alias(incus_client::ImageAlias::try_new(&args.image)?),
             remote: args.image_server.map(|server| ImageRemote {
                 server,
                 protocol: ImageProtocol::Simplestreams,
             }),
         },
-        profile: args.profile,
+        profile: incus_client::ProfileName::try_new(&args.profile)?,
         endpoint,
         host_name: "smoke".to_owned(),
         control_plane_id: ControlPlaneId::parse(args.control_plane_id)?,
         reserve_gb: args.reserve_gb,
         oversell_factor: args.oversell_factor,
-        storage_pool: args.storage_pool,
+        storage_pool: incus_client::StoragePoolName::try_new(&args.storage_pool)?,
         shutdown_grace: std::time::Duration::from_secs(args.shutdown_grace_secs),
     };
     let fleet = IncusFleet::new(config)?;

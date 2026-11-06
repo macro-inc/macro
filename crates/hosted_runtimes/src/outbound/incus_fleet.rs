@@ -11,7 +11,8 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use incus_client::generated::types;
 use incus_client::{
-    ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo, InstanceKind,
+    ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo,
+    InstanceKind, InstanceName, ProfileName, StoragePoolName,
 };
 
 use crate::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
@@ -40,9 +41,9 @@ pub struct IncusFleetConfig {
     /// Usually the local alias `macro-box`.
     pub image: ImageSource,
     /// Profile carrying the NIC, `migration.stateful` and `security.guestapi`.
-    pub profile: String,
+    pub profile: ProfileName,
     /// Storage pool of the root disk override; Incus requires it.
-    pub storage_pool: String,
+    pub storage_pool: StoragePoolName,
     pub host_name: String,
     pub reserve_gb: u32,
     pub oversell_factor: u32,
@@ -108,7 +109,7 @@ impl IncusFleet {
             .transpose()
     }
 
-    async fn force_stop(&self, name: &str) -> Result<(), IncusFleetError> {
+    async fn force_stop(&self, name: &InstanceName) -> Result<(), IncusFleetError> {
         match self.client.stop(name, false, true).await {
             Ok(()) | Err(IncusError::NotFound { .. }) => Ok(()),
             Err(error) => Err(error.into()),
@@ -319,8 +320,8 @@ impl Fleet for IncusFleet {
 }
 
 /// Incus names are hostname labels: a leading letter, at most 63 characters.
-pub fn instance_name(computer_id: ComputerId) -> String {
-    format!("mc-{}", computer_id.into_inner().simple())
+pub fn instance_name(computer_id: ComputerId) -> InstanceName {
+    InstanceName::from_uuid(computer_id.into_inner())
 }
 
 /// The instance config: identity, enrollment and limits.
@@ -373,7 +374,7 @@ fn instance_body(
     created_at: DateTime<Utc>,
 ) -> types::InstancesPost {
     let (alias, fingerprint) = match &config.image.reference {
-        ImageReference::Alias(alias) => (Some(alias.clone()), None),
+        ImageReference::Alias(alias) => (Some(alias.as_str().to_owned()), None),
         ImageReference::Fingerprint(fingerprint) => (None, Some(fingerprint.clone())),
     };
     let (server, protocol) = match &config.image.remote {
@@ -385,11 +386,11 @@ fn instance_body(
     };
 
     types::InstancesPost {
-        name: Some(instance_name(computer_id)),
+        name: Some(instance_name(computer_id).into_inner()),
         type_: Some(types::InstanceType(
             InstanceKind::VirtualMachine.as_ref().to_owned(),
         )),
-        profiles: Some(vec![config.profile.clone()]),
+        profiles: Some(vec![config.profile.as_str().to_owned()]),
         config: Some(types::ConfigMap(instance_config(
             &config.control_plane_id,
             created_at,
@@ -399,7 +400,7 @@ fn instance_body(
         ))),
         devices: Some(types::DevicesMap(BTreeMap::from([(
             "root".to_owned(),
-            root_device(&config.storage_pool, size),
+            root_device(config.storage_pool.as_str(), size),
         )]))),
         source: Some(types::InstanceSource {
             type_: Some("image".to_owned()),

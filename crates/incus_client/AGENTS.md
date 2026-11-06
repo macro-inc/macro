@@ -20,6 +20,12 @@ and operation waiting.
 - `src/error.rs`: `IncusError`; `NotFound` is how callers detect drift.
 - `spec/patch.py`: the endpoint allowlist and the reshaping progenitor needs.
 
+## Names
+
+- Pass validated `InstanceName`, `ImageAlias`, `ProfileName`, and `StoragePoolName` through the hand-written API. Computer instance names use `mc-<simple UUID>`.
+- Keep inventory instance names as untrusted strings: listings include unrelated instances that the fleet must ignore by ownership metadata.
+- Validate string deserialization through `TryFrom<String>` while retaining transparent serialization.
+
 ## Scope
 
 - Owns: the Incus wire API, TLS pinning, operation waiting.

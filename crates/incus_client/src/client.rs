@@ -7,7 +7,7 @@ use crate::model::{
     CreateInstance, HostResources, ImageAliasInfo, ImageInfo, ImageReference, IncusEndpoint,
     InstanceInfo, InstanceKind, InstanceStatus, InstanceUsage, ServerAuth, ServerInfo,
 };
-use crate::{IncusError, IncusTimeouts, tls};
+use crate::{ImageAlias, IncusError, IncusTimeouts, InstanceName, tls};
 
 /// The recursion level list endpoints are generated for.
 const RECURSION_FULL_OBJECTS: i64 = 1;
@@ -144,7 +144,7 @@ impl IncusClient {
     )]
     pub async fn create_instance(&self, request: CreateInstance) -> Result<(), IncusError> {
         let (alias, fingerprint) = match request.image.reference {
-            ImageReference::Alias(alias) => (Some(alias), None),
+            ImageReference::Alias(alias) => (Some(alias.into_inner()), None),
             ImageReference::Fingerprint(fingerprint) => (None, Some(fingerprint)),
         };
 
@@ -160,16 +160,22 @@ impl IncusClient {
             let root = BTreeMap::from([
                 ("type".to_owned(), "disk".to_owned()),
                 ("path".to_owned(), "/".to_owned()),
-                ("pool".to_owned(), root_disk.pool),
+                ("pool".to_owned(), root_disk.pool.into_inner()),
                 ("size".to_owned(), root_disk.size),
             ]);
             types::DevicesMap(BTreeMap::from([("root".to_owned(), root)]))
         });
 
         let body = types::InstancesPost {
-            name: Some(request.name),
+            name: Some(request.name.into_inner()),
             type_: Some(types::InstanceType(request.kind.as_ref().to_owned())),
-            profiles: Some(request.profiles),
+            profiles: Some(
+                request
+                    .profiles
+                    .into_iter()
+                    .map(|profile| profile.into_inner())
+                    .collect(),
+            ),
             config: Some(types::ConfigMap(request.config)),
             devices,
             source: Some(types::InstanceSource {
@@ -194,7 +200,7 @@ impl IncusClient {
 
     /// Starts a stopped instance, restoring saved state after a stateful stop.
     #[tracing::instrument(name = "incus.start", skip(self), err)]
-    pub async fn start(&self, name: &str) -> Result<(), IncusError> {
+    pub async fn start(&self, name: &InstanceName) -> Result<(), IncusError> {
         self.change_state(name, StateAction::Start, false, false)
             .await
     }
@@ -202,28 +208,33 @@ impl IncusClient {
     /// Stops an instance. `stateful` saves memory to disk (the VM needs
     /// `migration.stateful=true`); `force` kills instead of shutting down.
     #[tracing::instrument(name = "incus.stop", skip(self), err)]
-    pub async fn stop(&self, name: &str, stateful: bool, force: bool) -> Result<(), IncusError> {
+    pub async fn stop(
+        &self,
+        name: &InstanceName,
+        stateful: bool,
+        force: bool,
+    ) -> Result<(), IncusError> {
         self.change_state(name, StateAction::Stop, stateful, force)
             .await
     }
 
     /// Restarts a running instance; `force` kills instead of shutting down.
     #[tracing::instrument(name = "incus.restart", skip(self), err)]
-    pub async fn restart(&self, name: &str, force: bool) -> Result<(), IncusError> {
+    pub async fn restart(&self, name: &InstanceName, force: bool) -> Result<(), IncusError> {
         self.change_state(name, StateAction::Restart, false, force)
             .await
     }
 
     /// Pauses a running instance in memory.
     #[tracing::instrument(name = "incus.freeze", skip(self), err)]
-    pub async fn freeze(&self, name: &str) -> Result<(), IncusError> {
+    pub async fn freeze(&self, name: &InstanceName) -> Result<(), IncusError> {
         self.change_state(name, StateAction::Freeze, false, false)
             .await
     }
 
     /// Resumes a frozen instance.
     #[tracing::instrument(name = "incus.unfreeze", skip(self), err)]
-    pub async fn unfreeze(&self, name: &str) -> Result<(), IncusError> {
+    pub async fn unfreeze(&self, name: &InstanceName) -> Result<(), IncusError> {
         self.change_state(name, StateAction::Unfreeze, false, false)
             .await
     }
@@ -231,8 +242,12 @@ impl IncusClient {
     /// Deletes a stopped instance with its snapshots and volumes. A missing
     /// instance is [`IncusError::NotFound`]; a running one is rejected.
     #[tracing::instrument(name = "incus.delete", skip(self), err)]
-    pub async fn delete(&self, name: &str) -> Result<(), IncusError> {
-        let started = self.api.instance_delete(name, None).await?.into_inner();
+    pub async fn delete(&self, name: &InstanceName) -> Result<(), IncusError> {
+        let started = self
+            .api
+            .instance_delete(name.as_str(), None)
+            .await?
+            .into_inner();
         self.run_operation(started).await?;
         Ok(())
     }
@@ -240,10 +255,10 @@ impl IncusClient {
     /// `GET /1.0/instances/{name}`. A missing instance is
     /// [`IncusError::NotFound`].
     #[tracing::instrument(name = "incus.instance", skip(self), err)]
-    pub async fn instance(&self, name: &str) -> Result<InstanceInfo, IncusError> {
+    pub async fn instance(&self, name: &InstanceName) -> Result<InstanceInfo, IncusError> {
         let instance = self
             .api
-            .instance_get(name, None)
+            .instance_get(name.as_str(), None)
             .await?
             .into_inner()
             .metadata
@@ -267,10 +282,10 @@ impl IncusClient {
 
     /// Memory and CPU usage of a running instance.
     #[tracing::instrument(name = "incus.instance_usage", skip(self), err)]
-    pub async fn instance_usage(&self, name: &str) -> Result<InstanceUsage, IncusError> {
+    pub async fn instance_usage(&self, name: &InstanceName) -> Result<InstanceUsage, IncusError> {
         let state = self
             .api
-            .instance_state_get(name, None)
+            .instance_state_get(name.as_str(), None)
             .await?
             .into_inner()
             .metadata
@@ -290,7 +305,7 @@ impl IncusClient {
     #[tracing::instrument(name = "incus.set_config_key", skip(self, value), err)]
     pub async fn set_config_key(
         &self,
-        name: &str,
+        name: &InstanceName,
         key: &str,
         value: &str,
     ) -> Result<(), IncusError> {
@@ -302,7 +317,7 @@ impl IncusClient {
             ..Default::default()
         };
 
-        self.api.instance_patch(name, None, &body).await?;
+        self.api.instance_patch(name.as_str(), None, &body).await?;
         Ok(())
     }
 
@@ -310,8 +325,12 @@ impl IncusClient {
     /// remove one, so this rewrites the instance guarded by its ETag; a
     /// concurrent change makes it fail with a 412 [`IncusError::Rejected`].
     #[tracing::instrument(name = "incus.remove_config_key", skip(self), err)]
-    pub async fn remove_config_key(&self, name: &str, key: &str) -> Result<(), IncusError> {
-        let response = self.api.instance_get(name, None).await?;
+    pub async fn remove_config_key(
+        &self,
+        name: &InstanceName,
+        key: &str,
+    ) -> Result<(), IncusError> {
+        let response = self.api.instance_get(name.as_str(), None).await?;
 
         let etag = response
             .headers()
@@ -345,7 +364,7 @@ impl IncusClient {
 
         let started = self
             .api
-            .instance_put(name, None, &etag, &body)
+            .instance_put(name.as_str(), None, &etag, &body)
             .await?
             .into_inner();
         self.run_operation(started).await?;
@@ -371,7 +390,11 @@ impl IncusClient {
                         .into_iter()
                         .flatten()
                         .filter_map(|alias| alias.name)
-                        .collect(),
+                        .map(|alias| {
+                            ImageAlias::try_new(&alias)
+                                .map_err(|error| IncusError::MalformedResponse(error.to_string()))
+                        })
+                        .collect::<Result<_, _>>()?,
                     kind: parse_kind(image.type_)?,
                     size_bytes: image.size.ok_or_else(|| missing("image size"))?,
                 })
@@ -381,17 +404,18 @@ impl IncusClient {
 
     /// A local image alias. A missing alias is [`IncusError::NotFound`].
     #[tracing::instrument(name = "incus.image_alias", skip(self), err)]
-    pub async fn image_alias(&self, alias: &str) -> Result<ImageAliasInfo, IncusError> {
+    pub async fn image_alias(&self, alias: &ImageAlias) -> Result<ImageAliasInfo, IncusError> {
         let entry = self
             .api
-            .image_alias_get(alias, None)
+            .image_alias_get(alias.as_str(), None)
             .await?
             .into_inner()
             .metadata
             .ok_or_else(|| missing("image alias metadata"))?;
 
         Ok(ImageAliasInfo {
-            name: entry.name.ok_or_else(|| missing("alias name"))?,
+            name: ImageAlias::try_new(&entry.name.ok_or_else(|| missing("alias name"))?)
+                .map_err(|error| IncusError::MalformedResponse(error.to_string()))?,
             target_fingerprint: entry.target.ok_or_else(|| missing("alias target"))?,
             kind: parse_kind(entry.type_)?,
         })
@@ -441,7 +465,7 @@ impl IncusClient {
 
     async fn change_state(
         &self,
-        name: &str,
+        name: &InstanceName,
         action: StateAction,
         stateful: bool,
         force: bool,
@@ -455,7 +479,7 @@ impl IncusClient {
 
         let started = self
             .api
-            .instance_state_put(name, None, &body)
+            .instance_state_put(name.as_str(), None, &body)
             .await?
             .into_inner();
         self.run_operation(started).await?;

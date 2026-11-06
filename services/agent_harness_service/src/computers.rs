@@ -124,14 +124,17 @@ pub async fn operator(
                 reserve_gb,
                 oversell_factor,
                 image: ImageSource {
-                    reference: ImageReference::Alias(image),
+                    reference: ImageReference::Alias(incus_client::ImageAlias::try_new(&image)?),
                     remote: None,
                 },
-                profile: required(&config.computers_incus_profile, "COMPUTERS_INCUS_PROFILE")?,
-                storage_pool: required(
+                profile: incus_client::ProfileName::try_new(&required(
+                    &config.computers_incus_profile,
+                    "COMPUTERS_INCUS_PROFILE",
+                )?)?,
+                storage_pool: incus_client::StoragePoolName::try_new(&required(
                     &config.computers_incus_storage_pool,
                     "COMPUTERS_INCUS_STORAGE_POOL",
-                )?,
+                )?)?,
                 shutdown_grace: Duration::from_secs(required_value(
                     &config.computers_incus_shutdown_grace_secs,
                     "COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS",
