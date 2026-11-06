@@ -247,7 +247,7 @@ export function createAppOnboardingContext(): OnboardingContext {
           onboardingConnectedTools(
             new Set(
               queryReadyGate(connected)
-                ? connected.data.filter((c) => c.enabled).map((c) => c.app_slug)
+                ? connected.data.filter((c) => c.enabled).map((c) => c.app_slug) // ast-grep-ignore: ts-no-client-list-filter -- Small complete per-user list; `onboardingToolState` also reads it unfiltered.
                 : []
             ),
             queryReadyGate(native) ? native.data : [],

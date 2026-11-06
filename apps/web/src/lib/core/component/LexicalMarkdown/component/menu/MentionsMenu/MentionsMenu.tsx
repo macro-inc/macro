@@ -307,6 +307,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (!externalChatsEnabled() || !queryReadyGate(externalChatsQuery))
       return [];
     const term = searchTerm().trim().toLocaleLowerCase();
+    // ast-grep-ignore: tsx-no-client-list-filter -- Complete, unpaged list; external view shows it unfiltered.
     return externalChatsQuery.data
       .filter(
         (chat) =>

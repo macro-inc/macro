@@ -120,6 +120,7 @@ function withRowNotifications(
   const data = createMemo(() =>
     queryReadyGate(source)
       ? {
+          // ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: cRM Activity rows: checks the email/drive facets again, and keeps external or internal calls (by guest count); make it a query input.
           entities: source.data.entities
             .filter((entity) => !matches || matches(entity))
             .map((entity) =>

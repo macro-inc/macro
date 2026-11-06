@@ -53,6 +53,8 @@ jobs:
       uses: './.github/actions/setup-nix'
     - name: Setup Nix dev shell
       uses: './.github/actions/setup-nix-dev-shell'
+    - name: Test ast-grep rules
+      run: bunx --yes @ast-grep/cli@0.44.1 test --skip-snapshot-tests
     - name: Run ast-grep
       run: bunx --yes @ast-grep/cli@0.44.1 scan
     - name: Teardown Nix

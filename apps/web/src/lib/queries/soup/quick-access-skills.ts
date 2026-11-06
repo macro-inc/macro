@@ -35,6 +35,7 @@ export function useQuickAccessSkillsQuery() {
   );
 
   const skills = createMemo<SkillEntity[]>(() =>
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by subtype.
     queryReadyGate(query) ? query.data.filter(isSkillEntity) : []
   );
 

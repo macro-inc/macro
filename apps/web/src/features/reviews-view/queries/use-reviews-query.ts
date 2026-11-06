@@ -127,6 +127,7 @@ export function useReviewsQuery(
 
   const reviews = () => {
     if (!query.isEnabled || query.isLoading) return [];
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by type.
     return (query.data?.entities ?? [])
       .filter(isGithubPrEntity)
       .map((entity) => withEntityNotifications(entity, notificationSource));

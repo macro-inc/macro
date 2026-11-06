@@ -100,3 +100,40 @@ Examples: [session query factory](../../../apps/web/src/lib/queries/agent-sessio
   into the cache itself.
 - **FE-51** State moved into the URL round-trips every field. Removed or renamed
   routes and route ids get redirects, and saved split layouts keep working.
+
+## Filters, scopes and sorting
+
+A list filtered in the browser pages through rows the reader never sees: the
+inbox's Unread tab filtered `unseen` after fetching, so a mostly-read inbox
+loaded 20+ pages to fill one screen, and its counts and empty states were wrong.
+
+- **FE-71** Every filter, scope and sort on a list fetched from the server is a
+  query input. The server evaluates it, and the normalized cache evaluates the
+  same input locally. Never filter or sort fetched rows in TypeScript or Solid:
+  not in a query's `select`, a memo, a feature `core/` helper or a list
+  primitive.
+  - Server: add the argument or input field, applied in the domain query before
+    the limit ([add-graphql-field.md](../../../docs/guides/add-graphql-field.md)
+    step 1). If the server lacks it, add it in the same change.
+  - Cache: Soup lists evaluate Soup filters locally (`createSoupLiveQuery`,
+    reached through `useSoupAstItemsQuery`; projections in
+    `crates/soup_filter_cache_adapter`). Other GraphQL lists (`createLiveQuery`,
+    attention feeds) keep the membership the server returned for their
+    variables, so a filter change there is a new variable and a network read
+    until the list has a local collection policy. That is still the rule: wait
+    for the server, don't filter the rows you have.
+  - Exceptions, each with an `ast-grep-ignore` comment giving the reason:
+    dropping holes (`filter(Boolean)` and null checks are already exempt); a
+    small list the server returns whole and the UI also shows unfiltered, such
+    as the viewer's calendars or mail accounts; hiding rows a pending optimistic
+    mutation removes; counting loaded rows for telemetry or a selection.
+  - Enforced by ast-grep `ts-no-client-list-filter` + `tsx-no-client-list-filter`,
+    error, in the required web check. It sees `.filter`/`.sort`/`.toSorted` on
+    `x.data…`, a list source's `rows()`/`items()`, locals bound to those,
+    parameters typed as generated `…Fragment[]`, and query `select` options;
+    review the shapes it can't see (props, memos). Sites that predate the rule
+    carry `// ast-grep-ignore: ts-no-client-list-filter -- predates FE-71 …`;
+    fixing one removes its comment. ast-grep honours the comment alone on the
+    line above the match or on the match's own line; in a ternary branch, put
+    it at the end of the branch's line (as `/* … */` when that line ends in
+    `(`), since Biome moves a leading comment onto the `?` line.

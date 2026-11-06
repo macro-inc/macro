@@ -1,0 +1,158 @@
+id: tsx-no-client-list-filter
+language: tsx
+# Twin of ts-no-client-list-filter — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files. Cases: rules/ast-grep-tests/.
+severity: error
+message: Don't filter or sort a fetched list in TypeScript. Make it a query input the server evaluates, and the cache evaluates locally.
+note: |-
+  Rule FE-71 in .agents/rules/web/data.md. A list filtered after fetching pages
+  through rows the reader never sees: an Unread tab over a mostly-read inbox
+  loaded 20+ pages to fill one screen. Add the filter, scope or sort to the
+  GraphQL input (docs/guides/add-graphql-field.md), and for Soup lists pass it
+  in the Soup filter so createSoupLiveQuery evaluates it in the cache.
+  The rule sees the common shapes only: `.filter`/`.sort`/`.toSorted` on
+  `x.data…`, a list source's `rows()`/`items()`, a local bound to one of those,
+  a parameter typed as a generated `…Fragment[]`, and query `select` options.
+  A justified exception (see FE-71) takes a suppression with its reason on the
+  line above:
+    // ast-grep-ignore: tsx-no-client-list-filter -- <why the server can't or needn't>
+  In a ternary branch put it at the end of the branch's line instead
+  (Biome moves a leading comment where ast-grep doesn't see it).
+files:
+  - apps/web/src/**
+  - packages/*/src/**
+ignores:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.benchmark.ts'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/browser-test/**'
+  - '**/generated/**'
+  # The cache's own local evaluation.
+  - apps/web/src/lib/graphql-cache/**
+utils:
+  # query.data, query.data?.entities, search.data(), props.query.data!.items
+  data-chain:
+    any:
+      - kind: member_expression
+      - kind: call_expression
+      - kind: non_null_expression
+    regex: ^[A-Za-z_$][\w$]*(\(\))?!?((\?\.|\.)[A-Za-z_$][\w$]*(\(\))?!?)*(\?\.|\.)data(\(\))?!?((\?\.|\.)[A-Za-z_$][\w$]*(\(\))?!?)*$
+    not:
+      regex: ^(item|items|event|e|evt|ev|message|msg|payload|props|node|entity|row|detail|ctx|context|args|params|options|opts|el|element|target)(\.|\?\.|\()
+  data-fallback:
+    kind: binary_expression
+    regex: (\?\?|\|\|)\s*\[\]$
+    has:
+      field: left
+      matches: data-chain
+  data-receiver:
+    any:
+      - matches: data-chain
+      # (query.data ?? []).filter(...), const list = query.data ?? []
+      - kind: parenthesized_expression
+        has:
+          matches: data-fallback
+      - matches: data-fallback
+      # query.data?.pages.flatMap((page) => page.items).filter(...)
+      - kind: call_expression
+        has:
+          field: function
+          kind: member_expression
+          all:
+            - has: { field: property, regex: ^flatMap$ }
+            - has: { field: object, matches: data-chain }
+  # feed.rows(), props.source.items(): a list source's accessor
+  source-accessor:
+    kind: call_expression
+    regex: ^([A-Za-z_$][\w$]*\??\.)*[A-Za-z_$]*(feed|Feed|source|Source)\??\.(rows|items|entries|entities|data)\(\)$
+  fetched:
+    any:
+      - matches: data-receiver
+      - matches: source-accessor
+  # null and undefined removal, not a filter on the data
+  structural-predicate:
+    any:
+      - regex: ^(Boolean|isDefined|isNonNullable|isNotNull|isNonNull|notNull|nonNull|isPresent|exists|truthy)$
+      - kind: arrow_function
+        has:
+          field: body
+          regex: ^\(?[\w$]+\)?\s*(!==?)\s*(null|undefined)$|^(null|undefined)\s*(!==?)\s*[\w$]+$|^!![\w$]+$
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        kind: member_expression
+        has:
+          field: property
+          regex: ^(filter|sort|toSorted)$
+    - not:
+        has:
+          field: arguments
+          has:
+            nthChild: 1
+            matches: structural-predicate
+    - any:
+        # query.data.filter(...), feed.rows().filter(...)
+        - has:
+            field: function
+            has:
+              field: object
+              matches: fetched
+        # const loaded = feed.rows(); loaded.filter(...)
+        - has:
+            field: function
+            has:
+              field: object
+              kind: identifier
+              pattern: $LIST
+              inside:
+                stopBy: end
+                any:
+                  - kind: statement_block
+                  - kind: program
+                # Declared in this block or an enclosing one, not in a
+                # nested function that reuses the name.
+                has:
+                  kind: lexical_declaration
+                  has:
+                    kind: variable_declarator
+                    all:
+                      - has: { field: name, pattern: $LIST }
+                      - has: { field: value, matches: fetched }
+        # entries: readonly XFieldsFragment[] → entries.filter(...)
+        - has:
+            field: function
+            has:
+              field: object
+              kind: identifier
+              pattern: $LIST
+              inside:
+                stopBy: end
+                any:
+                  - kind: function_declaration
+                  - kind: arrow_function
+                  - kind: function_expression
+                  - kind: method_definition
+                has:
+                  field: parameters
+                  has:
+                    kind: required_parameter
+                    all:
+                      - has: { field: pattern, pattern: $LIST }
+                      - has:
+                          field: type
+                          regex: (Fragment|Query)(\[\]|>)
+        # select: (data) => data.items.filter(...) in query options
+        - inside:
+            stopBy: end
+            kind: pair
+            all:
+              - has: { field: key, regex: ^select$ }
+              - inside:
+                  kind: object
+                  has:
+                    kind: pair
+                    has: { field: key, regex: ^(queryKey|queryFn|query)$ }

@@ -245,6 +245,7 @@ export function DriveList() {
   const featuredCount = createMemo(() => {
     const ids = new Set(source.featuredIds());
 
+    // ast-grep-ignore: tsx-no-client-list-filter -- Divider position for the featured prefix; display count, not list scoping.
     return source.items().filter((row) => ids.has(row.entity.id)).length;
   });
 

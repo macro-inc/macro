@@ -162,6 +162,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     contacts().map(recipientEntityMapper('user'))
   );
   const writableCalendars = createMemo(
+    // ast-grep-ignore: ts-no-client-list-filter -- Complete small calendar list; the same memo also uses it unfiltered.
     () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []
   );
   const spansInboxes = createMemo(() =>

@@ -93,6 +93,7 @@ export function useEntitiesForProperty(
     if (emailSearchQuery.status !== 'success' || !emailSearchQuery.data) {
       return [];
     }
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by type.
     return emailSearchQuery.data
       .filter((entity) => entity.type === 'email')
       .map((entity) => threadMapper(entity as EmailEntity));

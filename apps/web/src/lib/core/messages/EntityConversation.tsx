@@ -96,7 +96,7 @@ export function EntityConversation(props: {
   // Until the link resolves, the shared latest page would flash before the window jumps.
   const messages = () =>
     target.resolved() && !query.isPending && !unavailable()
-      ? (query.data?.pages
+      ? (query.data?.pages // ast-grep-ignore: tsx-no-client-list-filter -- predates FE-71: drops deleted and anchored roots from the REST message timeline; make it a query input.
           .flatMap(timelineMessages)
           // Only known unanchored roots belong in Discussion. Live roots have
           // undefined anchors until their thread metadata is fetched.

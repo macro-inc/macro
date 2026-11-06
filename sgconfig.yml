@@ -15,3 +15,6 @@ ruleDirs:
 languageGlobs:
   html:
     - '*.plist'
+# Rule tests: `bunx @ast-grep/cli test --skip-snapshot-tests` (CI and `just check`).
+testConfigs:
+  - testDir: rules/ast-grep-tests

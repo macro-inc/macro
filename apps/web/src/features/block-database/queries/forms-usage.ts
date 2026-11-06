@@ -35,7 +35,7 @@ export function useFormsOverTables(
       kind: 'known',
       gated: [],
       names: forms.isSuccess
-        ? forms.data
+        ? forms.data // ast-grep-ignore: ts-no-client-list-filter -- Small complete per-database list; `DatabaseFormEditors` shows it unfiltered.
             .filter((form) => form.tableId === tableId)
             .map((form) => form.name)
         : [],

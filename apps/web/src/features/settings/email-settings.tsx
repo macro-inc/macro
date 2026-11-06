@@ -178,6 +178,7 @@ function EmailReadReceipts() {
   const userId = useUserId();
   const { query } = useEmailLinks();
   const links = () =>
+    // ast-grep-ignore: tsx-no-client-list-filter -- Small, complete, unpaged list; EmailSignatures shows it unfiltered.
     (query.data?.links ?? []).filter((link) => link.macro_id === userId());
   return (
     <Show

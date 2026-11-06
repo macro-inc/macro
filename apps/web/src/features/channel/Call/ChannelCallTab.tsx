@@ -67,6 +67,7 @@ function JoinCallEmptyState(props: {
   );
   const participantIds = createMemo(
     () =>
+      // ast-grep-ignore: tsx-no-client-list-filter -- Nested, bounded array of one fetched call record.
       callRecordQuery.data?.participants
         .filter((participant) => !participant.leftAt)
         .map((participant) => participant.userId) ?? []

@@ -89,6 +89,7 @@ export function useSavedViews(options: {
       viewerId: pages[0]?.user.id,
       items: [
         ...new Map(
+          // ast-grep-ignore: ts-no-client-list-filter -- Structural guard against mixing pages from another viewer; `kind` is already a query arg.
           pages
             .filter((page) => page.user.id === pages[0]?.user.id)
             .flatMap((page) =>

@@ -51,6 +51,7 @@ export function useChannelCallsSource(
 
       if (query.isLoading) return previous;
 
+      // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already confined results to this channel's calls.
       return (query.data?.entities ?? [])
         .filter(isCallEntity)
         .map((entity) => withEntityNotifications(entity, notificationSource));

@@ -409,6 +409,7 @@ function CalendarSearchControl(props: {
 
   const results = createMemo<CalendarSearchResult[]>(() => {
     if (!isCurrent()) return [];
+    // ast-grep-ignore: tsx-no-client-list-filter -- Type narrowing after the server already restricted results to calendar events.
     return (searchQuery.data ?? []).filter(
       (entity): entity is CalendarSearchResult =>
         entity.type === 'calendar_event'

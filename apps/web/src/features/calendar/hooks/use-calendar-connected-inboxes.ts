@@ -16,6 +16,7 @@ export function useCalendarConnectedInboxes() {
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
   return createMemo<EmailLink[]>(() =>
+    // ast-grep-ignore: ts-no-client-list-filter -- Complete small links list; other screens use it whole.
     (linksQuery.data?.links ?? []).filter(
       (link) =>
         link.macro_id === userId() &&

@@ -20,7 +20,9 @@ export function useChannelThreadsQuery(
   // Gate the data read on loading so a pending query never suspends the list.
   const threads = createMemo<ChannelThreadEntity[]>(() =>
     query.isEnabled && !isPending()
-      ? (query.data?.entities ?? []).filter(
+      ? /* ast-grep-ignore: ts-no-client-list-filter -- Type narrowing plus a guard for local deletes the server already filters. */ (
+          query.data?.entities ?? []
+        ).filter(
           (entity): entity is ChannelThreadEntity =>
             isChannelThreadEntity(entity) && !entity.deletedAt
         )

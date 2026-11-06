@@ -34,6 +34,7 @@ export function createFolderList(): {
   const query = useProjectsQuery();
   return {
     folders: () =>
+      // ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: drops deleted folders from REST `/projects`; make it a query input.
       query.isSuccess ? query.data.filter((folder) => !folder.deletedAt) : [],
     isPending: () => query.isPending,
   };

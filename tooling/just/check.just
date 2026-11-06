@@ -99,6 +99,10 @@ check *ARGS:
       echo "── ast-grep code rules (rule ids map to docs/development/style-guide.md)"
       bunx --yes @ast-grep/cli@0.44.1 scan --report-style=short $sg || fail=1
     fi
+    if grep -qE '^(rules/ast-grep(-tests)?/|sgconfig\.yml$)' <<<"$changed"; then
+      echo "── ast-grep rule tests (rules/ast-grep-tests)"
+      bunx --yes @ast-grep/cli@0.44.1 test --skip-snapshot-tests || fail=1
+    fi
     echo "── PII scan (added lines vs merge-base)"
     python3 tooling/pii/scan.py --changed --skip-gitleaks || fail=1
     if grep -q '^tooling/pii/' <<<"$changed"; then

@@ -63,6 +63,7 @@ function SectionChannelsDialog(
       return [];
     }
 
+    // ast-grep-ignore: tsx-no-client-list-filter -- Full membership fetched whole and cached; excludes depend on local dialog state.
     return (query.data ?? [])
       .filter((channel) => {
         if (

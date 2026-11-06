@@ -39,7 +39,7 @@ export function useQuickAccessCrmCompaniesQuery(
 
   const companies = createMemo<CrmCompanyEntity[]>(() =>
     query.isSuccess
-      ? (query.data?.filter(
+      ? /* ast-grep-ignore: ts-no-client-list-filter -- predates FE-71: keeps CRM companies and drops hidden ones; make it a query input. */ (query.data?.filter(
           (entity): entity is CrmCompanyEntity =>
             isCrmCompanyEntity(entity) && !entity.hidden
         ) ?? [])

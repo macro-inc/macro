@@ -36,7 +36,7 @@ function LiveCallLine(props: {
   );
   const liveParticipants = createMemo(() =>
     record.isSuccess
-      ? record.data.participants
+      ? record.data.participants // ast-grep-ignore: tsx-no-client-list-filter -- Nested, bounded array of one fetched call record.
           .filter((participant) => !participant.leftAt)
           .map((participant) => participant.userId)
       : []

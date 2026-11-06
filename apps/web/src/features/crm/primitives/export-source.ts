@@ -33,6 +33,7 @@ export function createCrmExportLoader(
       progress(source.data().length);
     }
     signal.throwIfAborted();
+    // ast-grep-ignore: ts-no-client-list-filter -- Type narrowing after the server already filtered by type; export of the current view.
     let current = source.data().filter(isCompany);
     if (current.some((company) => !company.properties)) {
       const full = new Map(
