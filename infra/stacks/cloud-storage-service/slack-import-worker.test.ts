@@ -110,8 +110,8 @@ describe('Slack import Fargate worker', () => {
       'crates/channels/**',
       'crates/messages/**',
       'crates/import/**',
-      'crates/macro_queues/**',
-      'crates/macro_service_urls/**',
+      'crates/platform/macro_queues/**',
+      'crates/platform/macro_service_urls/**',
     ]) {
       expect(service.source_paths).toContain(path);
     }

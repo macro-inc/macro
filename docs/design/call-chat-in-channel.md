@@ -222,7 +222,7 @@ stale client cannot write to a chat nobody will see.
 
 ### Flag
 
-`enable-call-channel-thread`, through `crates/feature_flags`, evaluated for the caller when
+`enable-call-channel-thread`, through `crates/platform/feature_flags`, evaluated for the caller when
 the call is created and targeted by team in PostHog. The stored type then applies to everyone
 on that call, so people on one call cannot end up in different discussions. There is no client
 flag. `document_storage_service` requires `POSTHOG_API_KEY` at startup and always wires

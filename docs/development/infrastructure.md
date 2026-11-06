@@ -134,7 +134,7 @@ Run it locally with `nix build --no-link .#code-mode-assets`.
 | Need | Use | Example |
 | --- | --- | --- |
 | SQS queue + DLQ + alarms | `Queue` (`packages/resources`) named to match the `macro_queues` constant | `calendar-service/index.ts` |
-| Kafka topic | Add to `crates/macro_event_topics`, run `cargo x kafka-topics`; never hand-edit `.github/kafka-cluster-topics.json` | `kafka-cluster/topics.ts` |
+| Kafka topic | Add to `crates/platform/macro_event_topics`, run `cargo x kafka-topics`; never hand-edit `.github/kafka-cluster-topics.json` | `kafka-cluster/topics.ts` |
 | Kafka access | `getKafkaClusterPolicy()` on the task role, brokers from `bootstrapBrokersSaslIam` | `calendar-service/service.ts` |
 | Lambda | `Lambda` (`packages/lambda`), binary listed under `deploy_lambdas` | `deleted-item-poller/lambda.ts` |
 | Redis | `Redis` (`packages/resources`) | `calendar-service/index.ts` |

@@ -23,7 +23,7 @@ Type design, idioms, errors and observability, performance, and tests.
 - **CS-19** Give third-party errors their own variant — don't collapse e.g. a
   `jsonwebtoken` failure into a generic internal error. A provider outage
   (5xx, 429, unreachable, undecodable) is an `upstream_error::UpstreamError`,
-  answered 502/503 — see `crates/upstream_error`.
+  answered 502/503 — see `crates/platform/upstream_error`.
 - **CS-20** Depending on a rate-limited external provider requires a fallback
   (fallback model, retry story, or documented degradation).
 - **CS-21** Wire usage metering on every invocation path — MCP-triggered tool
@@ -62,7 +62,7 @@ Type design, idioms, errors and observability, performance, and tests.
   mark documentation code blocks `ignore` to skip doctests unless explicitly
   directed.
 - **CS-55** AI spans follow the OpenTelemetry GenAI conventions (`gen_ai.*`, see
-  `crates/genai_telemetry`). Agent sessions of every harness are traced in one
+  `crates/platform/genai_telemetry`). Agent sessions of every harness are traced in one
   place: the session actor projects each session's ACP frames onto
   `invoke_agent` / `execute_tool` spans
   (`crates/agent_session/src/domain/session/telemetry.rs`), so do not add GenAI

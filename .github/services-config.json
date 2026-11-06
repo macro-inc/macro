@@ -110,8 +110,8 @@
         "crates/channels/**",
         "crates/messages/**",
         "crates/import/**",
-        "crates/macro_queues/**",
-        "crates/macro_service_urls/**",
+        "crates/platform/macro_queues/**",
+        "crates/platform/macro_service_urls/**",
         "crates/teams/**",
         "crates/invite_email/**",
         "crates/notification/**",
@@ -297,7 +297,7 @@
     },
     "kafka-cluster": {
       "source_paths": [
-        "crates/macro_event_topics/**"
+        "crates/platform/macro_event_topics/**"
       ],
       "stack_path": "infra/stacks/kafka-cluster/**"
     },

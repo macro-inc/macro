@@ -68,7 +68,7 @@ fn previews_only_stacks_whose_infra_changed() {
             "deploy_binaries": ["email_service"]
         },
         "kafka-cluster": {
-            "source_paths": ["crates/macro_event_topics/**"],
+            "source_paths": ["crates/platform/macro_event_topics/**"],
             "stack_path": "infra/stacks/kafka-cluster/**"
         }
     }});
@@ -80,7 +80,7 @@ fn previews_only_stacks_whose_infra_changed() {
         (&["Cargo.toml", ".sqlx/query-abc.json"], none.clone()),
         (&["services/email_service/src/main.rs"], none.clone()),
         (&["crates/email/src/lib.rs", "flake.lock"], none.clone()),
-        (&["crates/macro_event_topics/src/lib.rs"], none.clone()),
+        (&["crates/platform/macro_event_topics/src/lib.rs"], none.clone()),
         (&[".github/workspace-dep-closures.json"], none.clone()),
         (
             &["infra/stacks/email-service/index.ts"],

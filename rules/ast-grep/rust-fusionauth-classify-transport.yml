@@ -8,7 +8,7 @@ note: |-
   hand-written `Generic` makes it a 500 that blames our code. Map the
   `send()`, `json()`, and `text()` futures with
   `.map_err(FusionAuthClientError::transport)`, and unexpected statuses with
-  `FusionAuthClientError::unexpected_response` (see crates/upstream_error).
+  `FusionAuthClientError::unexpected_response` (see crates/platform/upstream_error).
 files:
   - crates/clients/fusionauth/src/**
 ignores:

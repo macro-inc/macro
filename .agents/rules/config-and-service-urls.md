@@ -33,10 +33,10 @@ startup loudly.
 ## Service URLs
 
 - Stable service URLs and public OAuth/callback/app origins are typed in
-  `crates/macro_service_urls` (`service_url!` with `local`/`dev`/`prod`), chosen by `ENVIRONMENT`. Call
+  `crates/platform/macro_service_urls` (`service_url!` with `local`/`dev`/`prod`), chosen by `ENVIRONMENT`. Call
   `XServiceUrl::new()`. Never declare a `FOO_SERVICE_URL` env var or match on
   `Environment` to build a URL. Queue names follow the same pattern in
-  `crates/macro_queues`.
+  `crates/platform/macro_queues`.
 - The only override is `OVERRIDE_<SNAKE_NAME>`, read from the process
   environment, not from Doppler. Local in-network overrides live in
   `xtask_local`'s `local_env.rs`; `local` defaults are host ports and do not
