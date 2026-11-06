@@ -2472,13 +2472,23 @@ export type internalPurchaseComputerResponse200 = {
   status: 200;
 };
 
+export type internalPurchaseComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type internalPurchaseComputerResponseSuccess =
   internalPurchaseComputerResponse200 & {
     headers: Headers;
   };
+export type internalPurchaseComputerResponseError =
+  internalPurchaseComputerResponse503 & {
+    headers: Headers;
+  };
 
 export type internalPurchaseComputerResponse =
-  internalPurchaseComputerResponseSuccess;
+  | internalPurchaseComputerResponseSuccess
+  | internalPurchaseComputerResponseError;
 
 export const getInternalPurchaseComputerUrl = () => {
   return `/internal/computers`;
@@ -2512,13 +2522,23 @@ export type internalQuoteComputerResponse200 = {
   status: 200;
 };
 
+export type internalQuoteComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type internalQuoteComputerResponseSuccess =
   internalQuoteComputerResponse200 & {
     headers: Headers;
   };
+export type internalQuoteComputerResponseError =
+  internalQuoteComputerResponse503 & {
+    headers: Headers;
+  };
 
 export type internalQuoteComputerResponse =
-  internalQuoteComputerResponseSuccess;
+  | internalQuoteComputerResponseSuccess
+  | internalQuoteComputerResponseError;
 
 export const getInternalQuoteComputerUrl = (
   params: InternalQuoteComputerParams
@@ -5022,6 +5042,11 @@ export type purchaseTeamComputerResponse409 = {
   status: 409;
 };
 
+export type purchaseTeamComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type purchaseTeamComputerResponseSuccess =
   purchaseTeamComputerResponse200 & {
     headers: Headers;
@@ -5029,6 +5054,7 @@ export type purchaseTeamComputerResponseSuccess =
 export type purchaseTeamComputerResponseError = (
   | purchaseTeamComputerResponse402
   | purchaseTeamComputerResponse409
+  | purchaseTeamComputerResponse503
 ) & {
   headers: Headers;
 };
@@ -5115,13 +5141,23 @@ export type listTeamComputerOffersResponse200 = {
   status: 200;
 };
 
+export type listTeamComputerOffersResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type listTeamComputerOffersResponseSuccess =
   listTeamComputerOffersResponse200 & {
     headers: Headers;
   };
+export type listTeamComputerOffersResponseError =
+  listTeamComputerOffersResponse503 & {
+    headers: Headers;
+  };
 
 export type listTeamComputerOffersResponse =
-  listTeamComputerOffersResponseSuccess;
+  | listTeamComputerOffersResponseSuccess
+  | listTeamComputerOffersResponseError;
 
 export const getListTeamComputerOffersUrl = () => {
   return `/team/computers/offers`;
@@ -5155,11 +5191,21 @@ export type quoteTeamComputerResponse200 = {
   status: 200;
 };
 
+export type quoteTeamComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type quoteTeamComputerResponseSuccess = quoteTeamComputerResponse200 & {
   headers: Headers;
 };
+export type quoteTeamComputerResponseError = quoteTeamComputerResponse503 & {
+  headers: Headers;
+};
 
-export type quoteTeamComputerResponse = quoteTeamComputerResponseSuccess;
+export type quoteTeamComputerResponse =
+  | quoteTeamComputerResponseSuccess
+  | quoteTeamComputerResponseError;
 
 export const getQuoteTeamComputerUrl = (params: QuoteTeamComputerParams) => {
   const normalizedParams = new URLSearchParams();
