@@ -175,6 +175,11 @@ export function ChannelCallTab(props: {
           </Show>
           <CallOverlay
             onLeave={handleLeave}
+            sharingChannelName={
+              discussion()?.kind === 'channel_thread'
+                ? (channel()?.name ?? undefined)
+                : undefined
+            }
             discussion={{
               label: () =>
                 discussion()?.kind === 'channel_thread'

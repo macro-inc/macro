@@ -322,6 +322,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 export function CallOverlay(props: {
   onLeave: () => void;
   showTeamSharing?: boolean;
+  sharingChannelName?: string;
   sharedWithTeam?: boolean;
   localName?: string;
   /** The host may hide chat until account or guest session credentials are ready. */
@@ -766,6 +767,7 @@ export function CallOverlay(props: {
                     >
                       <Show when={canShareWithTeam()}>
                         <CallSharingMenu
+                          channelName={props.sharingChannelName}
                           sharedWithTeam={sharedWithTeam()}
                           disabled={teamShareLocked()}
                           onToggle={() =>

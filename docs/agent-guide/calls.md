@@ -267,8 +267,10 @@ saved per device, and locked while sharing. With it on, the browser picker offer
 tab audio (and system audio where Chromium supports it), and other participants
 hear it alongside microphones, even away from the Call tab. Leave call is a
 separate button. Live channel calls also include **Call sharing** in the toolbar:
-its menu offers **Team sharing** and **Private**, each with a short explanation
-and a checkmark on the current choice. The icon changes between team and lock.
+its **After the call ends** menu offers **Share with team** and **Channel only**
+for channel-thread discussions. Legacy call-chat and standalone calls retain
+**Private** rather than promise channel access. The control shows Team, Channel
+or Private with the corresponding icon and a caret; it locks while saving.
 Audio settings, video settings, screen share settings, and call sharing use
 bottom drawers on phones, with a handle and scrollable options; desktop and
 tablet keep dropdowns.
