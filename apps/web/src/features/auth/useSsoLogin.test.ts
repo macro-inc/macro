@@ -168,11 +168,21 @@ describe('useSsoLogin', () => {
   // The desktop shell must not depend on the native navigation plugin
   // rewriting this URL: that only happens for navigations it classifies as
   // external, which the development proxy's same-origin auth host is not.
-  it.each([proxyAuthHost, 'https://gateway.macro.com/auth'])(
-    'sends desktop SSO to the system browser with a deep-link callback through %s',
-    async (host) => {
+  // A local stack's handoff only adds `is_mobile` to the web flow; the
+  // desktop and native shells already redeem a code and must run exactly as
+  // they do against hosted services.
+  const shellHosts = [
+    { host: proxyAuthHost, localStack: false },
+    { host: 'https://gateway.macro.com/auth', localStack: false },
+    { host: 'https://localhost:28009/auth', localStack: true },
+  ];
+
+  it.each(shellHosts)(
+    'sends desktop SSO to the system browser with a deep-link callback through $host',
+    async ({ host, localStack }) => {
       mocks.platform = 'desktop';
       mocks.servers['auth-service'] = host;
+      mocks.localStackProxy = localStack;
 
       await useSsoLogin()('google');
 
@@ -231,20 +241,24 @@ describe('useSsoLogin', () => {
     );
   });
 
-  it.each([proxyAuthHost, 'https://gateway.macro.com/auth'])(
-    'uses native authentication and redeems the session code through %s',
-    async (host) => {
+  it.each(shellHosts)(
+    'uses native authentication and redeems the session code through $host',
+    async ({ host, localStack }) => {
       mocks.nativeMobile = true;
       mocks.servers['auth-service'] = host;
+      mocks.localStackProxy = localStack;
 
       await useSsoLogin()('google');
 
+      expect(mocks.createNativeAuthSession).toHaveBeenCalledOnce();
       expect(mocks.createNativeAuthSession).toHaveBeenCalledWith('login');
+      expect(mocks.authenticate).toHaveBeenCalledOnce();
       const authUrl = new URL(mocks.authenticate.mock.calls[0][0]);
       expect(authUrl.searchParams.get('is_mobile')).toBe('true');
       expect(authUrl.searchParams.get('original_url')).toBe(
         'macro://android-auth/test-attempt'
       );
+      expect(mocks.sessionLogin).toHaveBeenCalledOnce();
       expect(mocks.sessionLogin).toHaveBeenCalledWith({
         session_code: 'session-code',
       });
