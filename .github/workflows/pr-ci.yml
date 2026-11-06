@@ -7,6 +7,7 @@ on:
     - labeled
     branches:
     - main
+    - synoet/bench-web-nw-base
 jobs:
   start:
     if: github.event.label.name == 'run-ci'
