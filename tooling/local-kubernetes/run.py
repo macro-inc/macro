@@ -225,7 +225,8 @@ def manifests(config, namespace, slot):
         if not ports:
             ports.add({'lexical_service': 8096, 'sync_service': 8787, 'websocket_service': 6969,
                        'db': 5432, 'static_file_cdn': 80, 'ai_editing_worker': 8933, 'analytics_proxy': 8098}.get(key, 8080))
-        pod = {'containers': [container], 'volumes': volumes, 'terminationGracePeriodSeconds': 30}
+        pod = {'containers': [container], 'volumes': volumes, 'terminationGracePeriodSeconds': 30,
+               'enableServiceLinks': False}
         if key == 'ai_editing_worker':
             volumes.append({'name': 'worker-config', 'emptyDir': {}})
             container.setdefault('volumeMounts', []).append({

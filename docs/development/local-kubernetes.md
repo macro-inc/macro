@@ -80,6 +80,8 @@ Binaries and source mounts
 remain identical to Compose. Auxiliary images are loaded into kind's containerd.
 Compose underscore service hostnames become hyphens for Kubernetes DNS in
 environment values and normalized Caddy/Nginx configuration files.
+Pods use DNS discovery with Service environment links disabled, avoiding injected
+values such as `PROXY_PORT` that conflict with application configuration.
 Application Deployments use rolling updates; single-replica backing stores use
 Recreate and persistent claims. This is a development adapter, not an EKS stack.
 Kafka publishes its service endpoints before readiness so its KRaft controller

@@ -40,6 +40,7 @@ class ManifestTests(unittest.TestCase):
         deployments = {o['metadata']['name']: o for o in objects if o['kind'] == 'Deployment'}
         self.assertNotIn('lgtm', deployments)
         gateway = deployments['connection-gateway']['spec']['template']['spec']['containers'][0]
+        self.assertFalse(deployments['connection-gateway']['spec']['template']['spec']['enableServiceLinks'])
         self.assertEqual(gateway['args'], ['/app/out/connection_gateway'])
         self.assertEqual(gateway['env'], [{'name': 'UPSTREAM', 'value': 'http://connection-gateway:8080'}])
         self.assertEqual(gateway['readinessProbe']['exec']['command'], ['curl', '-f', 'http://localhost:8080/health'])
