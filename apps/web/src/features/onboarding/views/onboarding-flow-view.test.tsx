@@ -639,17 +639,15 @@ describe('onboarding flow', () => {
     });
     await heading('Built for teams.');
     click('Continue');
-    await heading('Book a demo with our team.');
+    await heading('Want a live walkthrough?');
+    expect(screen.getByText('One last thing')).toBeTruthy();
     expect(readSavedStep(FAKE_VIEWER_ID)).toBe('demo');
-    expect(
-      screen.getByText(`Booking as ${licensedViewer().email}`)
-    ).toBeTruthy();
     expect(
       screen.queryByRole('button', { name: 'Back to previous step' })
     ).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
 
-    click('Skip for now');
+    click('Skip');
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
     );
@@ -675,7 +673,12 @@ describe('onboarding flow', () => {
     });
     await heading('Built for teams.');
     click('Continue');
-    await heading('Book a demo with our team.');
+    await heading('Want a live walkthrough?');
+    click('Book now');
+    await heading('Pick a time.');
+    expect(
+      screen.getByText(`Booking as ${licensedViewer().email}`)
+    ).toBeTruthy();
     click('Book Tuesday 5pm');
     await heading("You're booked.");
     expect(navigate).not.toHaveBeenCalled();
@@ -698,7 +701,7 @@ describe('onboarding flow', () => {
         webhookPollsRemaining: 1,
       },
     });
-    await heading('Book a demo with our team.', { timeout: 3_000 });
+    await heading('Want a live walkthrough?', { timeout: 3_000 });
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -714,7 +717,7 @@ describe('onboarding flow', () => {
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
     );
-    expect(screen.queryByText('Book a demo with our team.')).toBeNull();
+    expect(screen.queryByText('Want a live walkthrough?')).toBeNull();
   });
 
   it('sends a signed-out visitor to sign in', async () => {

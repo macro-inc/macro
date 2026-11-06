@@ -41,9 +41,11 @@ ends the trial and charges Max immediately.
 Only a paid (active or trialing license) owner of a team sees this optional last
 step, after payment is confirmed or, for someone already licensed, after the
 team step. Members of someone else's team and Free accounts finish without it.
-It embeds Macro's own demo booking page (the same page the website's **Book
-demo** opens) with the account email prefilled, and has no Back button.
-**Skip for now** finishes onboarding; booking shows **You're booked.** with the
-call time, and **Continue to workspace** finishes. If the booking page can't
-load (for example against the dev backend), it offers **Open booking page**,
-which opens the hosted page.
+It opens on **One last thing / Want a live walkthrough?** (one live onboarding
+for the owner and their team) with **Skip** and **Book now**, and has no Back
+button. **Book now** shows **Pick a time.** with Macro's own demo booking page
+(the same page the website's **Book demo** opens) and the account email
+prefilled; **Skip** stays below it. Booking shows **You're booked.** with the
+call time, and **Continue to workspace** finishes; Skip finishes from either
+screen. If the booking page can't load (for example against the dev backend),
+it offers **Open booking page**, which opens the hosted page.

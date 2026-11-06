@@ -75,8 +75,8 @@ test('a new user signs up, connects everything, and starts the trial', async ({
 
   // Stripe returns on the success leg; the flow waits for the webhook's license,
   // then offers the team's creator an optional demo call.
-  await expect(heading(page, 'Book a demo with our team.')).toBeVisible();
-  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await expect(heading(page, 'Want a live walkthrough?')).toBeVisible();
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
   await expectLanded(page, 'Entered Macro at /home');
   const world = await fakeWorld(page);
   expect(world.viewer).toMatchObject({
@@ -315,7 +315,7 @@ for (const width of [1280, 390]) {
     await page.getByRole('button', { name: 'Start 30 day trial' }).click();
 
     // Stripe returns to the plan step; once the license lands, the demo follows.
-    await expect(heading(page, 'Book a demo with our team.')).toBeVisible({
+    await expect(heading(page, 'Want a live walkthrough?')).toBeVisible({
       timeout: 10_000,
     });
     await expect(
@@ -327,6 +327,8 @@ for (const width of [1280, 390]) {
       )
     ).toBe(true);
 
+    await page.getByRole('button', { name: 'Book now' }).click();
+    await expect(heading(page, 'Pick a time.')).toBeVisible();
     const day = page
       .locator('button:not([disabled])')
       .filter({ hasText: /^\d+$/ });
@@ -356,8 +358,8 @@ test('a team owner can skip the demo call', async ({ page }) => {
     teams: [{ name: 'Acme', owned: true }],
     viewer: { ...TEAM_OWNER, licensed: true },
   });
-  await expect(heading(page, 'Book a demo with our team.')).toBeVisible();
-  await page.getByRole('button', { name: 'Skip for now' }).click();
+  await expect(heading(page, 'Want a live walkthrough?')).toBeVisible();
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
   await expectLanded(page, 'Entered Macro at /home');
 });
 
