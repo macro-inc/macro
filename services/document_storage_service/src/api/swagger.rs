@@ -106,12 +106,12 @@ use databases::inbound::axum_router::ops::{
     OpRefusalResponse as DatabaseOpRefusalResponse,
 };
 use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseViewPositionsResponse;
-use databases::inbound::axum_router::{
-    CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest,
-    saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
-};
+use databases::inbound::axum_router::{CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest};
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
+};
+use databases_sql::inbound::axum_router::{
+    SaveQueryChart as DatabaseSaveQueryChart, SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -265,6 +265,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::spreadsheet::read_spreadsheet_handler,
         documents_hex::inbound::axum_router::spreadsheet::calculate_spreadsheet_handler,
         documents_hex::inbound::axum_router::spreadsheet::edit_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::ai_edit_spreadsheet_handler,
         documents_hex::inbound::axum_router::presentation::read_presentation_handler,
         documents_hex::inbound::axum_router::presentation::edit_presentation_handler,
         documents_hex::inbound::axum_router::presentation::copy_presentation_handler,
@@ -567,7 +568,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
-        databases::inbound::axum_router::saved_queries::save_query_handler,
+        databases_sql::inbound::axum_router::save_query_handler,
         databases::inbound::axum_router::saved_queries::get_query_handler,
         databases::inbound::axum_router::casts::column_casts_handler,
         databases::inbound::axum_router::casts::column_conversion_handler,
@@ -874,6 +875,7 @@ use utoipa::OpenApi;
             DatabaseQueryDefinition,
             DatabaseSavedQuery,
             DatabaseSaveQueryRequest,
+            DatabaseSaveQueryChart,
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,

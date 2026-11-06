@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
 import {
+  DocumentEditRefusedError,
   EditOutcomeUnknownError,
   Macro,
   RevisionConflictError,
@@ -239,4 +240,84 @@ test('createSpreadsheet returns a spreadsheet handle in the project', async () =
     documentName: 'Q4 budget',
     projectId: '0199a1b2-0000-7000-8000-000000000001',
   });
+});
+
+test('edit sends instructions to the spreadsheet writer and links the result', async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = (async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push(request);
+    return Response.json({
+      revision: 'r2',
+      applied: true,
+      changes: [
+        {
+          type: 'set_cells',
+          sheetId: 'sheet1',
+          summary: 'Set 2 cell(s) in “Sales”.',
+          range: 'A21:D21',
+        },
+      ],
+      sheets: [sheetSummary],
+      warnings: [],
+    });
+  }) as typeof fetch;
+
+  const edited = await macro()
+    .documents.spreadsheet(macro().documents.byId('doc-1'))
+    .edit('Add a Total row that sums the Cost column.');
+
+  expect(edited.changes[0].range).toBe('A21:D21');
+  expect(edited.webUrl).toBe('https://macro.com/app/spreadsheet/doc-1');
+  expect(new URL(requests[0].url).pathname).toBe(
+    '/documents/doc-1/spreadsheet/ai-edit',
+  );
+  expect(await requests[0].json()).toEqual({
+    instructions: 'Add a Total row that sums the Cost column.',
+  });
+});
+
+test('a refused spreadsheet edit raises the writer reason', async () => {
+  globalThis.fetch = (async (_input) =>
+    Response.json(
+      { error: 'edit_refused', reason: 'There is no Revenue sheet.' },
+      { status: 422 },
+    )) as typeof fetch;
+
+  const edit = macro()
+    .documents.spreadsheet(macro().documents.byId('doc-1'))
+    .edit('Total the Revenue sheet.');
+
+  await expect(edit).rejects.toBeInstanceOf(DocumentEditRefusedError);
+  await expect(edit).rejects.toMatchObject({
+    reason: 'There is no Revenue sheet.',
+  });
+});
+
+test('a spreadsheet changed during an edit raises a revision conflict', async () => {
+  globalThis.fetch = (async (_input) =>
+    Response.json(
+      { message: 'The spreadsheet changed since it was read.' },
+      { status: 409 },
+    )) as typeof fetch;
+
+  await expect(
+    macro()
+      .documents.spreadsheet(macro().documents.byId('doc-1'))
+      .edit('Add a Summary sheet.'),
+  ).rejects.toBeInstanceOf(RevisionConflictError);
+});
+
+test('a spreadsheet edit that may have saved has an unknown outcome', async () => {
+  globalThis.fetch = (async (_input) =>
+    Response.json(
+      { error: 'edit_failed', message: 'The edit may have been saved.' },
+      { status: 502 },
+    )) as typeof fetch;
+
+  await expect(
+    macro()
+      .documents.spreadsheet(macro().documents.byId('doc-1'))
+      .edit('Add a Summary sheet.'),
+  ).rejects.toBeInstanceOf(EditOutcomeUnknownError);
 });

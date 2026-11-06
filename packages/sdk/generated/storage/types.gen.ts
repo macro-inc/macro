@@ -9400,6 +9400,11 @@ export type ExternalChatParticipant = {
      * Their id at the provider (WhatsApp: phone-number or LID JID).
      */
     jid: string;
+    /**
+     * What to call them: their provider name, else their phone number,
+     * else a generic name.
+     */
+    name: string;
 };
 
 /**
@@ -15592,16 +15597,39 @@ export type SaveDocumentResponseData = {
 };
 
 /**
- * Request body for saving a query.
+ * The result columns a chart of a saved question plots.
+ */
+export type SaveQueryChart = {
+    /**
+     * The column whose values split the series.
+     */
+    color?: string;
+    /**
+     * The label column.
+     */
+    x: string;
+    /**
+     * The value columns, each a number.
+     */
+    y: Array<string>;
+};
+
+/**
+ * Request body for saving a question.
  */
 export type SaveQueryRequest = {
+    /**
+     * The result columns a chart of the answer plots, checked against what
+     * the `SELECT` returns. The chart itself lives with the answer's block.
+     */
+    chart?: SaveQueryChart;
     /**
      * The database whose tables win name resolution. The caller must be
      * able to see it.
      */
     databaseId?: string;
     /**
-     * What the query asks: `{"version": 1, "query": "<SELECT>"}`.
+     * What the question asks: `{"version": 1, "query": "<SELECT>"}`.
      */
     definition: QueryDefinition;
 };
@@ -17707,6 +17735,43 @@ export type SourceIdentity = {
     sourceId: SourceId;
 } | {
     kind: 'confirmed_unknown';
+};
+
+/**
+ * What to change in a workbook, in words.
+ */
+export type SpreadsheetAiEditRequest = {
+    /**
+     * Natural-language instructions. Name the sheet and the cells, columns
+     * or table to change, describe the outcome, and say what must stay.
+     */
+    instructions: string;
+};
+
+/**
+ * A completed edit by instructions.
+ */
+export type SpreadsheetAiEdited = {
+    /**
+     * Whether a new change was persisted.
+     */
+    applied: boolean;
+    /**
+     * What changed, one summary per operation.
+     */
+    changes: Array<SpreadsheetChange>;
+    /**
+     * Revision after the edit.
+     */
+    revision: string;
+    /**
+     * Every sheet after the edit.
+     */
+    sheets: Array<SpreadsheetSheetSummary>;
+    /**
+     * Issues to check, such as formula errors; they are not repaired.
+     */
+    warnings: Array<string>;
 };
 
 /**
@@ -25023,6 +25088,10 @@ export type SaveDatabaseQueryData = {
 
 export type SaveDatabaseQueryErrors = {
     /**
+     * Not a SELECT, does not compile, or the chart names a column it does not return
+     */
+    400: ErrorResponse;
+    /**
      * Missing or invalid credentials
      */
     401: ErrorResponse;
@@ -27213,6 +27282,69 @@ export type SetSkillDescriptionResponses = {
 };
 
 export type SetSkillDescriptionResponse = SetSkillDescriptionResponses[keyof SetSkillDescriptionResponses];
+
+export type EditSpreadsheetWithAiData = {
+    body: SpreadsheetAiEditRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/spreadsheet/ai-edit';
+};
+
+export type EditSpreadsheetWithAiErrors = {
+    /**
+     * Not a native spreadsheet, or empty instructions
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
+    /**
+     * Document edit access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The workbook changed while the edit ran; nothing changed
+     */
+    409: ErrorResponse;
+    /**
+     * The writer could not do the edit; nothing changed
+     */
+    422: DocumentAiEditRefused;
+    /**
+     * The edit failed before saving; nothing changed
+     */
+    500: ErrorResponse;
+    /**
+     * The edit may have been saved
+     */
+    502: DocumentAiEditFailed;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
+};
+
+export type EditSpreadsheetWithAiError = EditSpreadsheetWithAiErrors[keyof EditSpreadsheetWithAiErrors];
+
+export type EditSpreadsheetWithAiResponses = {
+    200: SpreadsheetAiEdited;
+};
+
+export type EditSpreadsheetWithAiResponse = EditSpreadsheetWithAiResponses[keyof EditSpreadsheetWithAiResponses];
 
 export type CalculateSpreadsheetData = {
     body: CalculateSpreadsheetRequest;
