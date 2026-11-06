@@ -78,6 +78,13 @@ export function consumersReady(
 	expected: ExpectedConsumer,
 	snapshot: Snapshot,
 ): boolean {
+	return readinessBlockers(expected, snapshot).length === 0;
+}
+
+function readinessBlockers(
+	expected: ExpectedConsumer,
+	snapshot: Snapshot,
+): string[] {
 	if (snapshot.failures?.length || snapshot.services?.length !== 1) {
 		throw new Error("Email consumer service/tasks could not be described");
 	}
@@ -98,37 +105,89 @@ export function consumersReady(
 		throw new Error("Expected email consumer deployment is not primary");
 	}
 	const desired = service.desiredCount;
-	if (
-		service.status !== "ACTIVE" ||
-		!desired ||
-		desired < 1 ||
-		deployments.length !== 1 ||
-		primary.rolloutState !== "COMPLETED" ||
-		service.pendingCount !== 0 ||
-		service.runningCount !== desired ||
-		primary.pendingCount !== 0 ||
-		primary.runningCount !== desired
-	)
-		return false;
+	const blockers = new Set<string>();
+	if (service.status !== "ACTIVE") blockers.add("service-not-active");
+	if (!desired || desired < 1) blockers.add("nonpositive-desired-count");
+	if (deployments.length !== 1) blockers.add("multiple-deployments");
+	if (primary.rolloutState !== "COMPLETED")
+		blockers.add("primary-rollout-incomplete");
+	if (service.pendingCount !== 0 || primary.pendingCount !== 0)
+		blockers.add("pending-tasks");
+	if (service.runningCount !== desired || primary.runningCount !== desired)
+		blockers.add("running-count-mismatch");
 	const active = snapshot.tasks.filter((task) => task.lastStatus !== "STOPPED");
-	if (active.length !== desired) return false;
-	return active.every((task) => {
+	if (active.length !== desired) blockers.add("active-task-count-mismatch");
+	for (const task of active) {
 		const container = task.containers?.find(
 			(item) => item.name === expected.container,
 		);
-		return (
-			task.taskDefinitionArn === expected.taskDefinition &&
-			task.lastStatus === "RUNNING" &&
-			task.desiredStatus === "RUNNING" &&
-			task.healthStatus !== "UNHEALTHY" &&
-			container?.lastStatus === "RUNNING" &&
-			// The pinned URI may identify an OCI index while ECS reports its
-			// selected platform manifest in imageDigest. Compare the immutable
-			// input URI, not those different digest types.
-			container.image === expected.image &&
-			/^sha256:[a-f0-9]{64}$/.test(container.imageDigest ?? "")
-		);
-	});
+		if (task.taskDefinitionArn !== expected.taskDefinition)
+			blockers.add("unexpected-task-revision");
+		if (task.lastStatus !== "RUNNING" || task.desiredStatus !== "RUNNING")
+			blockers.add("task-not-running");
+		if (task.healthStatus === "UNHEALTHY") blockers.add("unhealthy-task");
+		if (!container) {
+			blockers.add("expected-container-missing");
+			continue;
+		}
+		if (container.lastStatus !== "RUNNING")
+			blockers.add("container-not-running");
+		// The pinned URI may identify an OCI index while ECS reports its
+		// selected platform manifest in imageDigest. Compare the immutable
+		// input URI, not those different digest types.
+		if (container.image !== expected.image) blockers.add("image-uri-mismatch");
+		if (!/^sha256:[a-f0-9]{64}$/.test(container.imageDigest ?? ""))
+			blockers.add("image-digest-missing-or-invalid");
+	}
+	return [...blockers];
+}
+
+// Project only readiness inputs, never arbitrary AWS response fields (which may
+// contain environment, overrides or failure messages). Bound both rows and text.
+function readinessObservation(expected: ExpectedConsumer, state: Snapshot) {
+	const text = (value: string | undefined) => value?.slice(0, 256);
+	const active = state.tasks.filter((task) => task.lastStatus !== "STOPPED");
+	return {
+		expected: {
+			cluster: text(expected.cluster),
+			service: text(expected.service),
+			taskDefinition: text(expected.taskDefinition),
+			image: text(expected.image),
+			container: text(expected.container),
+		},
+		services: state.services?.slice(0, 1).map((service) => ({
+			status: text(service.status),
+			taskDefinition: text(service.taskDefinition),
+			desiredCount: service.desiredCount,
+			runningCount: service.runningCount,
+			pendingCount: service.pendingCount,
+			deploymentCount: service.deployments?.length,
+			deployments: service.deployments?.slice(0, 10).map((deployment) => ({
+				status: text(deployment.status),
+				taskDefinition: text(deployment.taskDefinition),
+				rolloutState: text(deployment.rolloutState),
+				runningCount: deployment.runningCount,
+				pendingCount: deployment.pendingCount,
+			})),
+		})),
+		activeTaskCount: active.length,
+		stoppedTaskCount: state.tasks.length - active.length,
+		tasksTruncated: active.length > 20,
+		tasks: active.slice(0, 20).map((task) => ({
+			taskArn: text(task.taskArn),
+			taskDefinition: text(task.taskDefinitionArn),
+			lastStatus: text(task.lastStatus),
+			desiredStatus: text(task.desiredStatus),
+			healthStatus: text(task.healthStatus),
+			containerCount: task.containers?.length,
+			containers: task.containers?.slice(0, 10).map((container) => ({
+				name: text(container.name),
+				image: text(container.image),
+				imageDigest: text(container.imageDigest),
+				lastStatus: text(container.lastStatus),
+			})),
+		})),
+	};
 }
 
 /** Incomplete observations require a fresh read; they never prove readiness. */
@@ -284,19 +343,31 @@ export async function waitForConsumers(
 	now: () => number = Date.now,
 	pause: () => Promise<unknown> = () => sleep(10_000),
 	timeoutMs = 15 * 60_000,
+	report: (observation: object) => void = (observation) =>
+		console.error(JSON.stringify(observation)),
 ): Promise<void> {
 	const deadline = now() + timeoutMs;
+	let nextReport = now();
+	let lastObservation: object = { blockers: ["no-complete-snapshot"] };
 	while (now() < deadline) {
 		try {
-			const ready = consumersReady(expected, read());
+			const state = read();
+			const blockers = readinessBlockers(expected, state);
+			lastObservation = { blockers, ...readinessObservation(expected, state) };
 			if (now() >= deadline) break;
-			if (ready) return;
+			if (blockers.length === 0) return;
 		} catch (error) {
 			if (!(error instanceof TransientSnapshotError)) throw error;
+			lastObservation = { blockers: ["transient-incomplete-snapshot"] };
+		}
+		if (now() >= nextReport) {
+			report({ consumerReadiness: "waiting", ...lastObservation });
+			nextReport = now() + 60_000;
 		}
 		if (now() >= deadline) break;
 		await pause();
 	}
+	report({ consumerReadiness: "timed-out", ...lastObservation });
 	throw new Error(
 		"Timed out waiting for exact email consumers and old-task termination",
 	);
