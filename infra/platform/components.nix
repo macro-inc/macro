@@ -622,8 +622,11 @@ in
           bao secrets enable transit 2>/dev/null || true
           printf 'path "transit/*" { capabilities = ["create", "read", "update"] }\n' \
             | bao policy write transit -
-          bao token create -id="$OPENBAO_TOKEN" -policy=transit -orphan -ttl=87600h \
-            >/dev/null 2>&1 || true
+          # Exits before the root token goes, so the next start can finish this.
+          bao token lookup "$OPENBAO_TOKEN" >/dev/null 2>&1 \
+            || bao token create -id="$OPENBAO_TOKEN" -policy=transit -orphan -ttl=87600h \
+              >/dev/null \
+            || exit 1
           bao token revoke -self
           unset BAO_TOKEN
           rm -f "$state.init"

@@ -32,6 +32,8 @@ REGION = "us-east-1"
 BATCH_SIZE = 1
 LONG_POLL_SECONDS = 20
 DEADLINE_SECONDS = 900
+# A message stays hidden past its handler's deadline, as a Lambda queue's timeout must.
+VISIBILITY_SECONDS = DEADLINE_SECONDS + 30
 
 
 def scheduled_event(now=None):
@@ -196,27 +198,28 @@ def run_queue(invocations, queue_name, unwrap_s3):
                     "QueueUrl": queue_url,
                     "MaxNumberOfMessages": BATCH_SIZE,
                     "WaitTimeSeconds": LONG_POLL_SECONDS,
+                    "VisibilityTimeout": VISIBILITY_SECONDS,
                 },
             )
-        except OSError as error:
-            print(f"receiving from {queue_name}: {error}", file=sys.stderr)
+            messages = received.get("Messages") or []
+            if not messages:
+                continue
+            if unwrap_s3:
+                payload = json.loads(messages[0]["Body"])
+            else:
+                payload = sqs_event(messages, queue_name)
+            ok, result = invocations.invoke(payload)
+            if not ok:
+                continue  # Redelivered after the visibility timeout, like Lambda.
+            for message in handled_messages(messages, result):
+                sqs_call(
+                    "DeleteMessage",
+                    {"QueueUrl": queue_url, "ReceiptHandle": message["ReceiptHandle"]},
+                )
+        # This thread is the worker: a bad message or a failed call must not end it.
+        except (OSError, ValueError) as error:
+            print(f"handling {queue_name}: {error}", file=sys.stderr)
             time.sleep(5)
-            continue
-        messages = received.get("Messages") or []
-        if not messages:
-            continue
-        if unwrap_s3:
-            payload = json.loads(messages[0]["Body"])
-        else:
-            payload = sqs_event(messages, queue_name)
-        ok, result = invocations.invoke(payload)
-        if not ok:
-            continue  # Redelivered after the visibility timeout, like Lambda.
-        for message in handled_messages(messages, result):
-            sqs_call(
-                "DeleteMessage",
-                {"QueueUrl": queue_url, "ReceiptHandle": message["ReceiptHandle"]},
-            )
 
 
 def main():
