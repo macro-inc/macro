@@ -4,29 +4,6 @@ name: Web App Pr Checks
 'on':
   workflow_call: {}
 jobs:
-  cancel-older:
-    name: Cancel older runs
-    runs-on: namespace-profile-linux-tiny-no-cache
-    permissions:
-      actions: write
-    steps:
-    - name: Cancel this PR's older runs of this workflow
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
-      with:
-        script: |
-          // [ci-speed] A workflow-level concurrency group makes the new run wait until
-          // the old one has finished cancelling. Cancelling here lets the new run start
-          // at once while the old one winds down.
-          const { owner, repo } = context.repo;
-          const { data: me } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: context.runId });
-          const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-            owner, repo, workflow_id: me.workflow_id, branch: me.head_branch, event: 'pull_request', per_page: 100,
-          });
-          for (const run of runs) {
-            if (run.id >= me.id || run.status === 'completed') continue;
-            core.info(`cancelling run ${run.id} (${run.head_sha})`);
-            await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id }).catch((e) => core.warning(String(e)));
-          }
   path-check:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
