@@ -477,14 +477,18 @@ export const SearchableMultiSelectInline = (
   const sortedOptions = () =>
     props.preserveOrder ? props.options() : selectedFirstOptions();
   // Typed text that is a value but no option leads the list, ready for Enter.
-  const displayOptions = createMemo(() => {
+  const created = createMemo(() => {
     const query = searchQuery().trim();
-    const created = query ? props.createOption?.(query) : undefined;
-    const options = sortedOptions();
-    return created && !options.some((option) => option.id === created.id)
-      ? [created, ...options]
-      : options;
+    const option = query ? props.createOption?.(query) : undefined;
+    return option && !sortedOptions().some((other) => other.id === option.id)
+      ? option
+      : undefined;
   });
+  const displayOptions = createMemo(() => {
+    const option = created();
+    return option ? [option, ...sortedOptions()] : sortedOptions();
+  });
+  let listbox: HTMLDivElement | undefined;
   const hasMatches = useHasMatches(displayOptions, searchQuery);
 
   const handleChange = (selected: SearchableOption[]) => {
@@ -521,9 +525,19 @@ export const SearchableMultiSelectInline = (
       case 'Escape':
         // Let parent close
         return;
+      case 'Enter': {
+        e.stopPropagation();
+        // Enter adds typed text unless an arrow key picked a row, as chip
+        // fields do.
+        const option = created();
+        if (!option || listbox?.querySelector('[data-highlighted]')) return;
+        e.preventDefault();
+        props.onChange([...props.activeIds(), option.id]);
+        props.onSelectionComplete?.();
+        return;
+      }
       case 'ArrowDown':
       case 'ArrowUp':
-      case 'Enter':
       case 'Home':
       case 'End':
       case 'PageUp':
@@ -567,7 +581,13 @@ export const SearchableMultiSelectInline = (
           placeholder={props.placeholder ?? 'Search...'}
         />
       </div>
-      <div ref={selectionIntent.track} class="p-1">
+      <div
+        ref={(element) => {
+          listbox = element;
+          selectionIntent.track(element);
+        }}
+        class="p-1"
+      >
         <Show
           when={hasMatches()}
           fallback={
