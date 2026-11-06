@@ -356,9 +356,11 @@ def up(args):
         previous = json.loads(state.read_text())
         if previous['slot'] != args.slot:
             raise RuntimeError('existing instance has a different HTTPS slot')
-        for service in sorted(INFRA):
+        for service in sorted(INFRA - {'fusionauth'}):
             kube('-n', namespace, 'scale', f'deployment/{service}', '--replicas=1')
-        wait_deployments(namespace, INFRA)
+        wait_deployments(namespace, INFRA - {'fusionauth'})
+        kube('-n', namespace, 'scale', 'deployment/fusionauth', '--replicas=1')
+        wait_deployments(namespace, {'fusionauth'})
         _, _, config = compose(args.name)
         flags = ['--instance', args.name, '--port-base', str(32434 + args.slot),
                  '--no-doppler', '--traces', 'off', '--env-file',
@@ -410,8 +412,18 @@ def up(args):
         path.write_text(json.dumps(objects, indent=2))
         path.chmod(0o600)
         backing = [o for o in objects if o['kind'] != 'Deployment' or o['metadata']['name'] in INFRA]
-        apply(backing)
-        wait_deployments(namespace, INFRA)
+        # FusionAuth enters maintenance mode permanently if its database is
+        # unavailable on boot. Compose gates this with depends_on: healthy.
+        previous_auth = kube('-n', namespace, 'get', 'deployment/fusionauth',
+                             '--ignore-not-found', '-o', 'name', capture=True)
+        if previous_auth.strip():
+            kube('-n', namespace, 'scale', 'deployment/fusionauth', '--replicas=0')
+            kube('-n', namespace, 'wait', 'pod', '-l', 'app=fusionauth', '--for=delete', '--timeout=120s')
+        auth = [o for o in backing if o['kind'] == 'Deployment' and o['metadata']['name'] == 'fusionauth']
+        apply([o for o in backing if o not in auth])
+        wait_deployments(namespace, INFRA - {'fusionauth'})
+        apply(auth)
+        wait_deployments(namespace, {'fusionauth'})
         with forwards(namespace, config):
             xtask('kubernetes-init', *flags)
         apply(objects)

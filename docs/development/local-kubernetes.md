@@ -73,6 +73,8 @@ independent databases, local AWS emulators, volumes and service discovery.
 Local Wrangler workers get namespace-specific state volumes and pod-local
 configuration files even where their Compose definitions bind-mount the shared
 worktree.
+FusionAuth starts only after its database is healthy; a partial-start retry
+restarts FusionAuth after that dependency check to recover maintenance mode.
 
 The node mounts this worktree, the Nix store and the local Docker sandbox socket.
 Containers with unlimited Compose memlock receive the `IPC_LOCK` capability.
