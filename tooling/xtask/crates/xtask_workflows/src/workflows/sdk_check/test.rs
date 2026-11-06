@@ -8,11 +8,11 @@ fn rendered_yaml() -> String {
 
 /// Merges to `main` publish, so the package suite has to guard them too.
 #[test]
-fn checks_the_package_on_pull_requests_and_main() {
+fn checks_the_package_in_pr_ci_and_on_main() {
     let yaml = rendered_yaml();
 
     assert!(yaml.contains("check-package"));
-    assert!(yaml.contains("pull_request:"));
+    assert!(yaml.contains("workflow_call:"));
     assert!(yaml.contains("push:"));
 }
 
@@ -27,4 +27,15 @@ fn the_package_job_needs_no_rust_toolchain() {
         !yaml.contains("crates/**"),
         "Rust changes reach the SDK through the web app's Generated Code Check: {yaml}"
     );
+}
+
+#[test]
+fn checks_sdk_calls_after_building_the_sdk() {
+    let yaml = rendered_yaml();
+
+    assert!(yaml.contains("packages/sdk-calls/**"));
+    let build = yaml.find("Build SDK").expect("SDK build");
+    let check = yaml.find("Check sdk-calls").expect("sdk-calls check");
+    assert!(build < check);
+    assert!(yaml.contains("check:pack"));
 }

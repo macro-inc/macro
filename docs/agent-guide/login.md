@@ -298,10 +298,16 @@ then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
 When the server suggests a work domain, the create form has no Skip button and
-shows an **Allow @domain emails to join** switch, on by default. Creating the
-team with it on sets the team's auto-join domain and, after the invites, emails
-up to 25 of the creator's same-domain contacts who are not on Macro, invited,
-or already sent a notice (`POST /team/domain-notice`). Creating the team does not leave the step: it
+shows two switches, both on by default and marked recommended: **Allow @domain
+emails to join** and **Notify your team via email**. Creating the team with the
+first on sets the team's auto-join domain. With both on, it then, after the
+invites, emails up to 25 of the creator's same-domain contacts who are not on
+Macro, invited, or already sent a notice (`POST /team/domain-notice`). The
+notice switch is disabled and reads off while domain join is off, because the
+server sends nothing to a team without an auto-join domain; turning domain
+join back on restores its earlier setting. Each switch has an info button
+beside it that explains the setting in a tooltip on hover or focus, and in a
+popover on tap on touch devices; pressing it never toggles the switch. Creating the team does not leave the step: it
 switches to the **You're on <team>** confirmation, the same panel members who
 were already on a team (auto-joined or invite-accepted) see. That panel has
 **Copy invite link** beside **Continue**; it copies the team's
@@ -406,6 +412,16 @@ The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-t
 survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
+
+### Stalled session refresh
+
+When an expired session triggers cookie-auth refresh, every waiting request and
+socket setup shares one refresh, which settles within 12 seconds as a
+retryable network failure, or sooner when the native network path drops.
+Cancelling one view stops only its own wait. After a timeout the next request
+starts a fresh refresh; a timeout never signs the user out or reloads the app.
+Returning to the app expires a refresh that started more than 12 seconds
+earlier, so requests after a resume start a fresh one instead of waiting.
 
 ### Google OAuth through a remote local stack
 

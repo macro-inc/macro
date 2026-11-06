@@ -98,6 +98,13 @@ meter on every row except on phones, with the direction in its label while
 importance moves:
 `bunx playwright test --config src/features/email-view/browser-test/playwright.config.ts`.
 
+A channel call's row and its call panel (the real `Channel` over synthetic service
+responses) have a backend-free desktop and phone regression: the collapsed row, the
+blank slate, composer pinning, quote replies and the outside-message popup:
+`bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
+On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
+Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -217,7 +224,8 @@ ranking and insertion on desktop and phone.
 Channel composer draft persistence has a backend-free browser regression:
 `bunx playwright test --config src/features/channel/Input/browser-test/playwright.config.ts`.
 It checks draft blank lines across remounts, that a sent message renders its
-lines with the spacing the draft showed, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
+lines with the spacing the draft showed, that the one-line composer centers its
+buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
@@ -509,6 +517,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [reload diagnostics](tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
 - Disable GraphQL cache sessions and clear login hints on confirmed auth 401s,
   even with retained user data; preserve session state on transient failures.
+- Bound shared cookie-auth refresh (`core/auth/session-refresh.ts`), including
+  proactive socket setup, to 12 seconds and native network availability; let
+  each caller cancel its wait independently, and keep refresh timeouts retryable.
+  On foregrounding, expire a pending refresh older than that deadline by wall
+  clock; suspension can pause its timer.
 - Treat a repeated worker-ready frame as a coordinator restart: retire the old
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,
@@ -536,6 +549,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
   backlog, not the engine's per-message queue; keep reset fences, mutation
   settlements, and query-specific invalidations immediate.
+- Open tabs share one cache engine, so a source that reads on cache changes must
+  not read while hidden: use `createVisibleRefresh` to throttle too, or
+  `createHiddenDeferral` when its own reads already coalesce. Initial and
+  explicit reads still run.
+- Report cache operation failures through `createCacheErrorThrottle`: one owner
+  loss rejects every queued operation, and each report reaches the console and
+  session replay. The next report for that kind carries `cache.suppressed_count`.
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.

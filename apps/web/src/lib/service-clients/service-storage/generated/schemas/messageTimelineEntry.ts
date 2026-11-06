@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MessageTimelineEntryOneOf } from './messageTimelineEntryOneOf';
+import type { MessageTimelineEntryOneOfFive } from './messageTimelineEntryOneOfFive';
 import type { MessageTimelineEntryOneOfThree } from './messageTimelineEntryOneOfThree';
 
 /**
@@ -12,4 +13,5 @@ import type { MessageTimelineEntryOneOfThree } from './messageTimelineEntryOneOf
  */
 export type MessageTimelineEntry =
   | MessageTimelineEntryOneOf
-  | MessageTimelineEntryOneOfThree;
+  | MessageTimelineEntryOneOfThree
+  | MessageTimelineEntryOneOfFive;

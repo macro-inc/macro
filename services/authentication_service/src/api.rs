@@ -63,9 +63,15 @@ pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::R
     )]);
 
     let env = state.environment;
+    let correlation =
+        agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
 
     let app = api_router(state.clone())
         .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(
+            correlation,
+            agent_correlation::inbound::propagate,
+        ))
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())

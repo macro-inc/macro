@@ -1,0 +1,119 @@
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f4;
+  color: #1c1917;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  margin: 24px 16px;
+  padding: 32px 28px;
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+}
+h1 {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.destination {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.warning {
+  padding: 12px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  color: #78350f;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+button {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.deny {
+  background: #ffffff;
+  border: 1px solid #d6d3d1;
+  color: #1c1917;
+}
+.approve {
+  background: #1c1917;
+  border: 1px solid #1c1917;
+  color: #ffffff;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.option {
+  display: flex;
+  gap: 8px;
+  margin: 20px 0 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+input[type="email"],
+input[type="text"] {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 15px;
+}
+.copy {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+}

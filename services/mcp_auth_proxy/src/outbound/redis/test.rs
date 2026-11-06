@@ -211,6 +211,7 @@ async fn handshake_state_round_trips_with_its_client_id() {
                 client_state: "state".to_owned(),
                 client_redirect_uri: "https://claude.ai/api/mcp/auth_callback".to_owned(),
                 browser_binding_digest: Some("binding-digest".to_owned()),
+                delivery: crate::domain::models::CodeDelivery::Redirect,
             },
         )
         .await

@@ -25,6 +25,7 @@ const token: CallTokenResponse = {
   token: 'token',
   serverUrl: 'ws://localhost',
   participantId: 'macro|test@example.com',
+  started: false,
   shareToken: null,
 } satisfies CallTokenResponse;
 const cleanups: (() => void)[] = [];
