@@ -24,11 +24,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 mod ledger;
-pub use ledger::{
-    ImportEntityOutcome, ImportNotionPageRequest, ImportOutcome, ListImportEntitiesQuery,
-    TrackImportEntityRequest, discard_entity_handler, import_notion_page_handler,
-    list_entities_handler, track_entity_handler,
-};
+// A glob, so the OpenAPI derive finds the handlers' generated `__path_*` items.
+pub use ledger::*;
 
 #[cfg(test)]
 mod test;

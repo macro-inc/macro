@@ -38,7 +38,12 @@ import type {
   GetChatResponse,
   GetChatsForAttachmentResponse,
   HttpSendChatMessageRequest,
+  ImportEntity,
+  ImportEntityOutcome,
+  ImportErrorBody,
+  ImportNotionPageRequest,
   ImportSource,
+  ListEntitiesHandlerParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
@@ -54,6 +59,7 @@ import type {
   PipedreamRecoverRequest,
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
+  PlanWorkspaceImportRequest,
   ProjectionStateResponse,
   RejectToolCallRequest,
   RunImportOutcome,
@@ -72,6 +78,7 @@ import type {
   StructuredCompletionError,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
+  TrackImportEntityRequest,
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
@@ -1640,6 +1647,197 @@ export const generateImage = async (
 };
 
 /**
+ * @summary List the user's import ledger, newest first: their own rows plus items
+teammates imported into the team.
+ */
+export type listEntitiesHandlerResponse200 = {
+  data: ImportEntity[];
+  status: 200;
+};
+
+export type listEntitiesHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listEntitiesHandlerResponseSuccess =
+  listEntitiesHandlerResponse200 & {
+    headers: Headers;
+  };
+export type listEntitiesHandlerResponseError =
+  listEntitiesHandlerResponse500 & {
+    headers: Headers;
+  };
+
+export type listEntitiesHandlerResponse =
+  | listEntitiesHandlerResponseSuccess
+  | listEntitiesHandlerResponseError;
+
+export const getListEntitiesHandlerUrl = (
+  params?: ListEntitiesHandlerParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/import/entities?${stringifiedParams}`
+    : `/import/entities`;
+};
+
+export const listEntitiesHandler = async (
+  params?: ListEntitiesHandlerParams,
+  options?: RequestInit
+): Promise<listEntitiesHandlerResponse> => {
+  const res = await fetch(getListEntitiesHandlerUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listEntitiesHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listEntitiesHandlerResponse;
+};
+
+/**
+ * @summary Track an external item: stage it as a candidate before creating
+anything, or, with `entityId`, record a Macro entity already created from
+it. Deduplicates against the user's rows and the team's imports.
+ */
+export type trackEntityHandlerResponse200 = {
+  data: ImportEntityOutcome;
+  status: 200;
+};
+
+export type trackEntityHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type trackEntityHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type trackEntityHandlerResponseSuccess =
+  trackEntityHandlerResponse200 & {
+    headers: Headers;
+  };
+export type trackEntityHandlerResponseError = (
+  | trackEntityHandlerResponse400
+  | trackEntityHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type trackEntityHandlerResponse =
+  | trackEntityHandlerResponseSuccess
+  | trackEntityHandlerResponseError;
+
+export const getTrackEntityHandlerUrl = () => {
+  return `/import/entities`;
+};
+
+export const trackEntityHandler = async (
+  trackImportEntityRequest: TrackImportEntityRequest,
+  options?: RequestInit
+): Promise<trackEntityHandlerResponse> => {
+  const res = await fetch(getTrackEntityHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(trackImportEntityRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: trackEntityHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as trackEntityHandlerResponse;
+};
+
+/**
+ * @summary Decline one of the user's staged candidates; it is remembered as
+declined and not proposed again.
+ */
+export type discardEntityHandlerResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type discardEntityHandlerResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type discardEntityHandlerResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type discardEntityHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type discardEntityHandlerResponseSuccess =
+  discardEntityHandlerResponse204 & {
+    headers: Headers;
+  };
+export type discardEntityHandlerResponseError = (
+  | discardEntityHandlerResponse404
+  | discardEntityHandlerResponse409
+  | discardEntityHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type discardEntityHandlerResponse =
+  | discardEntityHandlerResponseSuccess
+  | discardEntityHandlerResponseError;
+
+export const getDiscardEntityHandlerUrl = (id: string) => {
+  return `/import/entities/${id}`;
+};
+
+export const discardEntityHandler = async (
+  id: string,
+  options?: RequestInit
+): Promise<discardEntityHandlerResponse> => {
+  const res = await fetch(getDiscardEntityHandlerUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discardEntityHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discardEntityHandlerResponse;
+};
+
+/**
  * @summary Where the user's Notion workspace import stands.
  */
 export type notionReportHandlerResponse200 = {
@@ -1738,6 +1936,74 @@ export const cancelNotionHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelNotionHandlerResponse;
+};
+
+/**
+ * @summary Import one Notion page as a Macro document through the user's Notion
+connection, deduplicated against the ledger. Databases and pages that
+are mostly a database are not imported.
+ */
+export type importNotionPageHandlerResponse200 = {
+  data: ImportEntityOutcome;
+  status: 200;
+};
+
+export type importNotionPageHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type importNotionPageHandlerResponse409 = {
+  data: ImportErrorBody;
+  status: 409;
+};
+
+export type importNotionPageHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type importNotionPageHandlerResponseSuccess =
+  importNotionPageHandlerResponse200 & {
+    headers: Headers;
+  };
+export type importNotionPageHandlerResponseError = (
+  | importNotionPageHandlerResponse400
+  | importNotionPageHandlerResponse409
+  | importNotionPageHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type importNotionPageHandlerResponse =
+  | importNotionPageHandlerResponseSuccess
+  | importNotionPageHandlerResponseError;
+
+export const getImportNotionPageHandlerUrl = () => {
+  return `/import/notion/pages`;
+};
+
+export const importNotionPageHandler = async (
+  importNotionPageRequest: ImportNotionPageRequest,
+  options?: RequestInit
+): Promise<importNotionPageHandlerResponse> => {
+  const res = await fetch(getImportNotionPageHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(importNotionPageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: importNotionPageHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as importNotionPageHandlerResponse;
 };
 
 /**
@@ -1970,6 +2236,76 @@ export const cancelWorkspaceHandler = async (
     status: res.status,
     headers: res.headers,
   } as cancelWorkspaceHandlerResponse;
+};
+
+/**
+ * @summary Plan a reviewed workspace import, replacing any earlier plan for this
+source. Planning goes on in the background; this answers within seconds
+with where it got. Nothing is written until the plan's import review is
+approved.
+ */
+export type planWorkspaceHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type planWorkspaceHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type planWorkspaceHandlerResponse409 = {
+  data: ImportErrorBody;
+  status: 409;
+};
+
+export type planWorkspaceHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type planWorkspaceHandlerResponseSuccess =
+  planWorkspaceHandlerResponse200 & {
+    headers: Headers;
+  };
+export type planWorkspaceHandlerResponseError = (
+  | planWorkspaceHandlerResponse400
+  | planWorkspaceHandlerResponse409
+  | planWorkspaceHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type planWorkspaceHandlerResponse =
+  | planWorkspaceHandlerResponseSuccess
+  | planWorkspaceHandlerResponseError;
+
+export const getPlanWorkspaceHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}/plan`;
+};
+
+export const planWorkspaceHandler = async (
+  source: ImportSource,
+  planWorkspaceImportRequest: PlanWorkspaceImportRequest,
+  options?: RequestInit
+): Promise<planWorkspaceHandlerResponse> => {
+  const res = await fetch(getPlanWorkspaceHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(planWorkspaceImportRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: planWorkspaceHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as planWorkspaceHandlerResponse;
 };
 
 /**

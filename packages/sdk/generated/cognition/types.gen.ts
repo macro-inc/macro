@@ -939,11 +939,59 @@ export type ImportEntity = {
 };
 
 /**
+ * A ledger row and what the request did to it.
+ */
+export type ImportEntityOutcome = {
+    /**
+     * The row backing the outcome; carries the Macro entity once imported.
+     */
+    entity: ImportEntity;
+    /**
+     * What happened.
+     */
+    outcome: ImportOutcome;
+};
+
+/**
+ * Error body for a request the caller can fix.
+ */
+export type ImportErrorBody = {
+    /**
+     * What to do about it.
+     */
+    code: ImportErrorCode;
+    /**
+     * The explanation.
+     */
+    error: string;
+};
+
+/**
+ * Why an import request could not go ahead, for the caller to act on.
+ */
+export type ImportErrorCode = 'sharing_required' | 'not_connected' | 'not_ready';
+
+/**
  * What an imported item is in its source system. Each source has its own
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
  */
 export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
+
+/**
+ * Body for importing one Notion page.
+ */
+export type ImportNotionPageRequest = {
+    /**
+     * The Notion page URL or 32-character page id.
+     */
+    pageUrl: string;
+};
+
+/**
+ * What became of a ledger request.
+ */
+export type ImportOutcome = 'staged' | 'imported' | 'already_imported' | 'already_imported_by_teammate' | 'previously_declined' | 'import_in_progress';
 
 /**
  * Discovery-run state for one user × source.
@@ -1359,6 +1407,11 @@ export type NotionReportItem = {
 };
 
 /**
+ * Who a Notion workspace import shares what it writes with.
+ */
+export type NotionSharing = 'team' | 'personal' | 'ai';
+
+/**
  * Which Notion columns hold a task list's task fields, by property name.
  */
 export type NotionTaskFields = {
@@ -1628,6 +1681,18 @@ export type PipedreamUpdateRequest = {
      * New display name for the connector.
      */
     server_name?: string | null;
+};
+
+/**
+ * Body for planning a workspace import.
+ */
+export type PlanWorkspaceImportRequest = {
+    /**
+     * Notion only: page or database URLs (or ids) to import, each with
+     * everything under it. Empty plans everything the connection can see.
+     */
+    roots?: Array<string>;
+    sharing?: null | NotionSharing;
 };
 
 /**
@@ -2082,6 +2147,33 @@ export type ToolSet = {
     type: 'databases';
 } | {
     type: 'databases_read_only';
+};
+
+/**
+ * Body for tracking an external item in the ledger.
+ */
+export type TrackImportEntityRequest = {
+    /**
+     * The Macro entity already created from the item, which records it as
+     * imported. Without one the item is staged as a candidate.
+     */
+    entityId?: string | null;
+    /**
+     * Stable id of the item in its source: a Linear identifier such as
+     * `ENG-142`, a Notion page URL or id, or a Slack channel id.
+     */
+    foreignId: string;
+    /**
+     * What the item is. Linear: `{identifier, title, description?, status?,
+     * priority?, assignee?, assignee_email?, url?}`. Notion: `{title, url?,
+     * summary?}`, never page content. Slack: `{name, channel_id?, purpose?,
+     * participants?}`.
+     */
+    metadata: unknown;
+    /**
+     * The external system the item comes from.
+     */
+    source: ImportSource;
 };
 
 export type UpdateChannelSharePermission = {
@@ -3204,6 +3296,95 @@ export type GenerateImageResponses = {
 
 export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
+export type ListEntitiesHandlerData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows from this source.
+         */
+        source?: ImportSource;
+        /**
+         * Only rows in this status.
+         */
+        status?: ImportStatus;
+    };
+    url: '/import/entities';
+};
+
+export type ListEntitiesHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ListEntitiesHandlerResponses = {
+    200: Array<ImportEntity>;
+};
+
+export type ListEntitiesHandlerResponse = ListEntitiesHandlerResponses[keyof ListEntitiesHandlerResponses];
+
+export type TrackEntityHandlerData = {
+    body: TrackImportEntityRequest;
+    path?: never;
+    query?: never;
+    url: '/import/entities';
+};
+
+export type TrackEntityHandlerErrors = {
+    /**
+     * Blank foreign id or entity id
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type TrackEntityHandlerResponses = {
+    200: ImportEntityOutcome;
+};
+
+export type TrackEntityHandlerResponse = TrackEntityHandlerResponses[keyof TrackEntityHandlerResponses];
+
+export type DiscardEntityHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * Ledger row id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/import/entities/{id}';
+};
+
+export type DiscardEntityHandlerErrors = {
+    /**
+     * No such row belongs to the user
+     */
+    404: unknown;
+    /**
+     * Only staged rows can be declined
+     */
+    409: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DiscardEntityHandlerResponses = {
+    /**
+     * Declined
+     */
+    204: void;
+};
+
+export type DiscardEntityHandlerResponse = DiscardEntityHandlerResponses[keyof DiscardEntityHandlerResponses];
+
 export type NotionReportHandlerData = {
     body?: never;
     path?: never;
@@ -3246,6 +3427,36 @@ export type CancelNotionHandlerResponses = {
 };
 
 export type CancelNotionHandlerResponse = CancelNotionHandlerResponses[keyof CancelNotionHandlerResponses];
+
+export type ImportNotionPageHandlerData = {
+    body: ImportNotionPageRequest;
+    path?: never;
+    query?: never;
+    url: '/import/notion/pages';
+};
+
+export type ImportNotionPageHandlerErrors = {
+    /**
+     * Blank page URL
+     */
+    400: unknown;
+    /**
+     * Notion is not connected
+     */
+    409: ImportErrorBody;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type ImportNotionPageHandlerError = ImportNotionPageHandlerErrors[keyof ImportNotionPageHandlerErrors];
+
+export type ImportNotionPageHandlerResponses = {
+    200: ImportEntityOutcome;
+};
+
+export type ImportNotionPageHandlerResponse = ImportNotionPageHandlerResponses[keyof ImportNotionPageHandlerResponses];
 
 export type RunImportHandlerData = {
     body: RunImportRequest;
@@ -3354,6 +3565,41 @@ export type CancelWorkspaceHandlerResponses = {
 };
 
 export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
+
+export type PlanWorkspaceHandlerData = {
+    body: PlanWorkspaceImportRequest;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}/plan';
+};
+
+export type PlanWorkspaceHandlerErrors = {
+    /**
+     * Not a workspace source, or a root that is not a Notion id
+     */
+    400: unknown;
+    /**
+     * Sharing must be chosen, or the source is not connected
+     */
+    409: ImportErrorBody;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type PlanWorkspaceHandlerError = PlanWorkspaceHandlerErrors[keyof PlanWorkspaceHandlerErrors];
+
+export type PlanWorkspaceHandlerResponses = {
+    /**
+     * Where planning stands
+     */
+    200: NotionImportReport;
+};
+
+export type PlanWorkspaceHandlerResponse = PlanWorkspaceHandlerResponses[keyof PlanWorkspaceHandlerResponses];
 
 export type DeleteMcpServerData = {
     body?: never;
