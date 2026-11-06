@@ -3,6 +3,7 @@ import type { ReloadReason } from '@app/observability/generated/native-diagnosti
 import { reloadApp } from '@app/observability/reload';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
 import { invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { deviceLooksOffline } from './connectivity';
@@ -67,6 +68,8 @@ const browserPage: ReloadPage = {
     toast.custom(
       {
         title: 'A new version of Macro is ready',
+        icon: ArrowClockwiseIcon,
+        color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         actions: [{ label: 'Reload', onClick: reload }],
       },

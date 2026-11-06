@@ -5,6 +5,7 @@ import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersiste
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import PlugIcon from '@icon/system/regular/plug.svg';
 import { useReauthenticateGithubMutation } from '@queries/auth';
 import { authServiceClient } from '@service-auth/client';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -73,6 +74,8 @@ export function GithubReauthenticationPrompt() {
     key: (item) => item,
     toast: () => ({
       title: 'Reconnect GitHub',
+      icon: PlugIcon,
+      color: 'var(--color-accent)',
       dismissLabel: t('common.maybeLater'),
       content(): string {
         return 'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.';

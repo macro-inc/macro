@@ -4,6 +4,7 @@ import { useAddInboxFlow } from '@core/email-link';
 import { reconnectScopes } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import {
   useEmailLinksQuery,
   useInboxHealthProbeQuery,
@@ -32,6 +33,8 @@ export function GmailReauthenticationPrompt() {
     key: (link) => link.id,
     toast: (link, dismiss) => ({
       title: 'Reconnect inbox',
+      icon: EnvelopeIcon,
+      color: 'var(--color-accent)',
       dismissLabel: t('common.maybeLater'),
       content(): string {
         return `Sync stopped for ${link.email_address}. Reconnect to restore ${reconnectScopes(link) === 'gmail_and_calendar' ? 'email and calendar' : 'email'} sync.`;

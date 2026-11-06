@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
 import { createSignal, Show } from 'solid-js';
 import type {
   EmailDraftStorage,
@@ -71,8 +71,8 @@ function RecoveryEditor() {
               {
                 title: message,
                 content: () => options.subtext,
-                icon: ExclamationIcon,
-                color: 'var(--color-failure)',
+                icon: FileTextIcon,
+                color: 'var(--color-accent)',
                 actions: options.actions,
               },
               { persistent: true, dismissStyle: 'icon' }

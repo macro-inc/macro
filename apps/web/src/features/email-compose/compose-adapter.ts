@@ -25,6 +25,7 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
@@ -304,25 +305,27 @@ export function createEmailComposeContext(
       feedback: {
         success: (message, options) => toast.success(message, notice(options)),
         failure: (message, options) => {
-          if (options?.persistent)
+          if (options?.persistent) {
+            const isDraftRecovery = options.actions?.some(
+              ({ kind }) => kind === 'save'
+            );
             return toast.custom(
               {
                 title: message,
                 dismissLabel: t('common.maybeLater'),
                 content: () => options.subtext,
-                icon: ExclamationIcon,
-                color: 'var(--color-failure)',
+                icon: isDraftRecovery ? FileTextIcon : ExclamationIcon,
+                color: isDraftRecovery
+                  ? 'var(--color-accent)'
+                  : 'var(--color-failure)',
                 actions: notice(options).actions,
               },
               {
                 persistent: true,
-                dismissStyle: options.actions?.some(
-                  ({ kind }) => kind === 'save'
-                )
-                  ? 'icon'
-                  : undefined,
+                dismissStyle: isDraftRecovery ? 'icon' : undefined,
               }
             );
+          }
           toast.failure(message, notice(options));
           return undefined;
         },

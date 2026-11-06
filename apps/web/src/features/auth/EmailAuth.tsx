@@ -27,6 +27,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { whenSettled } from '@core/util/whenSettled';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
@@ -164,6 +165,8 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
   const toastId = toast.custom(
     {
       title: 'Email access required',
+      icon: EnvelopeIcon,
+      color: 'var(--color-accent)',
       dismissLabel: t('common.maybeLater'),
       content: () =>
         "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",

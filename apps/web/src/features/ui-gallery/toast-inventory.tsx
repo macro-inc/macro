@@ -1,13 +1,16 @@
 import { t } from '@app/lib/i18n';
 import { type ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import Bell from '@icon/system/regular/bell.svg';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
-import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
 import ImportIcon from '@icon/system/regular/tray-arrow-down.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -176,6 +179,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Reconnect inbox',
+        icon: EnvelopeIcon,
+        color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email sync.',
@@ -194,6 +199,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Reconnect inbox',
+        icon: EnvelopeIcon,
+        color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           'Sync stopped for user@example.com. Reconnect to restore email and calendar sync.',
@@ -212,6 +219,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Reconnect GitHub',
+        icon: PlugIcon,
+        color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.',
@@ -231,6 +240,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'Email access required',
+        icon: EnvelopeIcon,
+        color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         content: () =>
           "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
@@ -249,12 +260,14 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
     create: (dismiss) => ({
       custom: {
         title: 'A new version of Macro is ready',
+        icon: ArrowClockwiseIcon,
+        color: 'var(--color-accent)',
         dismissLabel: t('common.maybeLater'),
         actions: [{ label: 'Reload', onClick: dismiss }],
       },
     }),
   },
-  // compose-adapter.ts supplies the custom error icon.
+  // compose-adapter.ts supplies the draft recovery icon.
   {
     name: 'Draft-save recovery',
     category: 'Recovery',
@@ -266,8 +279,8 @@ export const TOAST_INVENTORY: ToastInventoryEntry[] = [
       dismissStyle: 'icon',
       custom: {
         title: 'Draft could not be saved',
-        icon: ExclamationIcon,
-        color: 'var(--color-failure)',
+        icon: FileTextIcon,
+        color: 'var(--color-accent)',
         content: () =>
           'Your edits are still in this editor. Save them as a new draft before closing.',
         actions: [
