@@ -49,7 +49,8 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
         dynacast: false,
       });
       const participant = room.localParticipant;
-      if (!participant) throw new Error('Room connected without a local participant');
+      if (!participant)
+        throw new Error('Room connected without a local participant');
 
       // rtc-node has no room-wide publish defaults or publish hook. Wrapping
       // publishTrack is the only way to set DTX for caller-published audio.
@@ -59,7 +60,7 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
         return publish(track, publishOptions);
       };
     },
-    (room, callback) => room.on(RoomEvent.Disconnected, callback),
+    (room, callback) => room.on(RoomEvent.Disconnected, callback)
   );
 }
 
@@ -67,7 +68,7 @@ export function connectRoom(target: CallTarget, options?: JoinOptions) {
 export async function publishScreen(
   room: Room,
   frames: AsyncIterable<ScreenFrame>,
-  options: ScreenOptions = {},
+  options: ScreenOptions = {}
 ): Promise<ScreenShare> {
   return withSpan('call.sdk.publish_screen', async (span) => {
     const callId = callIdForRoom(room);
@@ -78,7 +79,12 @@ export async function publishScreen(
     if (first.done) throw new Error('Screen source produced no frames');
 
     const { width, height } = first.value;
-    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+    if (
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      width < 1 ||
+      height < 1
+    ) {
       throw new Error('Screen frames require positive integer dimensions');
     }
     span.setAttribute('call.sdk.width', width);
@@ -86,7 +92,10 @@ export async function publishScreen(
     span.setAttribute('call.sdk.fps', options.fps ?? 15);
 
     const source = new VideoSource(width, height);
-    const track = LocalVideoTrack.createVideoTrack(options.name ?? 'screen', source);
+    const track = LocalVideoTrack.createVideoTrack(
+      options.name ?? 'screen',
+      source
+    );
     const publishOptions = new TrackPublishOptions({
       source: TrackSource.SOURCE_SCREENSHARE,
       simulcast: false,
@@ -100,23 +109,30 @@ export async function publishScreen(
     let stopping: Promise<void> | undefined;
     let publicationSid: string | undefined;
     let resolveStopped: () => void = () => {};
-    const stoppedPromise = new Promise<void>((resolve) => { resolveStopped = resolve; });
-    const stop = () => stopping ??= (async () => {
-      stopped = true;
-      try {
-        await iterator.return?.();
-      } finally {
+    const stoppedPromise = new Promise<void>((resolve) => {
+      resolveStopped = resolve;
+    });
+    const stop = () =>
+      (stopping ??= (async () => {
+        stopped = true;
         try {
-          if (publicationSid) await room.localParticipant?.unpublishTrack(publicationSid, false);
+          await iterator.return?.();
         } finally {
           try {
-            await track.close();
+            if (publicationSid)
+              await room.localParticipant?.unpublishTrack(
+                publicationSid,
+                false
+              );
           } finally {
-            resolveStopped();
+            try {
+              await track.close();
+            } finally {
+              resolveStopped();
+            }
           }
         }
-      }
-    })();
+      })());
 
     try {
       const participant = room.localParticipant;
@@ -137,21 +153,29 @@ export async function publishScreen(
           if (value.width !== width || value.height !== height) {
             throw new Error('Screen frame dimensions changed');
           }
-          source.captureFrame(new VideoFrame(
-            value.data,
-            width,
-            height,
-            value.format === 'I420' ? VideoBufferType.I420 : VideoBufferType.RGBA,
-          ));
+          source.captureFrame(
+            new VideoFrame(
+              value.data,
+              width,
+              height,
+              value.format === 'I420'
+                ? VideoBufferType.I420
+                : VideoBufferType.RGBA
+            )
+          );
           frame = await iterator.next();
         }
       } finally {
         await stop();
       }
     };
-    pump().catch((error: unknown) => reportError('call.sdk.publish_screen', error, callId));
+    pump().catch((error: unknown) =>
+      reportError('call.sdk.publish_screen', error, callId)
+    );
     room.on(RoomEvent.Disconnected, () => {
-      stop().catch((error: unknown) => reportError('call.sdk.publish_screen', error, callId));
+      stop().catch((error: unknown) =>
+        reportError('call.sdk.publish_screen', error, callId)
+      );
     });
 
     return { stop, stopped: stoppedPromise };

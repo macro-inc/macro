@@ -34,7 +34,9 @@ export class CallRecordNamespace {
   /** List joinable live calls; use after an event stream reconnects. */
   async active(): Promise<CallRecord[]> {
     const response = unwrap(await this.client.storage.getLiveCalls());
-    return response.calls.map((summary) => CallRecord.fromLive(this.client, summary));
+    return response.calls.map((summary) =>
+      CallRecord.fromLive(this.client, summary),
+    );
   }
 
   /** Preview these calls in input order; missing records are omitted. */
@@ -54,16 +56,18 @@ export class CallRecordNamespace {
     return calls.flatMap((call) => {
       const preview = found.get(call.id);
       if (!preview) return [];
-      return [{
-        call,
-        channel: preview.channelId
-          ? Channel.byId(this.client, preview.channelId)
-          : undefined,
-        channelName: preview.channelName ?? undefined,
-        customName: preview.customName ?? undefined,
-        startedAt: preview.startedAt,
-        endedAt: preview.endedAt ?? undefined,
-      }];
+      return [
+        {
+          call,
+          channel: preview.channelId
+            ? Channel.byId(this.client, preview.channelId)
+            : undefined,
+          channelName: preview.channelName ?? undefined,
+          customName: preview.customName ?? undefined,
+          startedAt: preview.startedAt,
+          endedAt: preview.endedAt ?? undefined,
+        },
+      ];
     });
   }
 }

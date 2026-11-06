@@ -223,7 +223,7 @@ async fn a_person_rejoining_resets_program_attendance() {
         GetOrCreateScenario::ExistingCall,
         started_event_call(STARTED_EVENT_CREATOR),
     );
-    let service = CallServiceImpl::new(
+    let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
         StubConnectionService,

@@ -19,7 +19,8 @@ function serve(routes: Record<string, Route>): Request[] {
   const requests: Request[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = input instanceof Request ? input : new Request(input, init);
+      const request =
+        input instanceof Request ? input : new Request(input, init);
       requests.push(request.clone());
       const key = `${request.method} ${new URL(request.url).pathname}`;
       const route = routes[key];
@@ -52,8 +53,7 @@ test('channel checks active without creating and starts with a body', async () =
     'GET /call/channel-1/active': () => new Response(null, { status: 204 }),
     'POST /call/channel-1': () =>
       Response.json({ ...credential, started: true }),
-    'POST /call/record/call-1/leave': () =>
-      Response.json({ callEnded: false }),
+    'POST /call/record/call-1/leave': () => Response.json({ callEnded: false }),
   });
   const channel = macro().channels.byId('channel-1');
   expect(await channel.activeCall()).toBeUndefined();
@@ -79,7 +79,11 @@ test('call joins by record id and maps admission failures', async () => {
 
   for (const [status, body, expected] of [
     [409, { code: 'in_other_call', message: 'busy' }, InOtherCallError],
-    [409, { code: 'already_connected', message: 'connected' }, AlreadyConnectedError],
+    [
+      409,
+      { code: 'already_connected', message: 'connected' },
+      AlreadyConnectedError,
+    ],
     [410, { message: 'ended' }, CallEndedError],
   ] as const) {
     serve({
@@ -93,38 +97,43 @@ test('live list, ring, roster, decline and recording use call-id routes', async 
   serve({
     'GET /call/active/all': () =>
       Response.json({
-        calls: [{
-          callId: 'call-1',
-          kind: 'channel',
-          channelId: 'channel-1',
-          createdAt: '2026-01-01T00:00:00Z',
-          createdBy: 'user-1',
-          participantCount: 1,
-          ringing: true,
-        }],
+        calls: [
+          {
+            callId: 'call-1',
+            kind: 'channel',
+            channelId: 'channel-1',
+            createdAt: '2026-01-01T00:00:00Z',
+            createdBy: 'user-1',
+            participantCount: 1,
+            ringing: true,
+          },
+        ],
       }),
     'POST /call/record/preview': () =>
       Response.json({
-        previews: [{
-          type: 'exists',
-          callId: 'call-1',
-          channelId: 'channel-1',
-          customName: 'Call',
-          startedAt: '2026-01-01T00:00:00Z',
-        }],
+        previews: [
+          {
+            type: 'exists',
+            callId: 'call-1',
+            channelId: 'channel-1',
+            customName: 'Call',
+            startedAt: '2026-01-01T00:00:00Z',
+          },
+        ],
       }),
-    'GET /call/record/call-1/ring': () =>
-      Response.json({ status: 'ringing' }),
+    'GET /call/record/call-1/ring': () => Response.json({ status: 'ringing' }),
     'GET /call/record/call-1/participants': () =>
       Response.json({
-        participants: [{
-          identity: 'user-1',
-          displayName: 'Program',
-          kind: 'user',
-          userId: 'user-1',
-          isProgram: true,
-          tracks: [{ source: 'microphone', muted: false }],
-        }],
+        participants: [
+          {
+            identity: 'user-1',
+            displayName: 'Program',
+            kind: 'user',
+            userId: 'user-1',
+            isProgram: true,
+            tracks: [{ source: 'microphone', muted: false }],
+          },
+        ],
       }),
     'POST /call/record/call-1/decline': () =>
       new Response(null, { status: 204 }),
@@ -135,14 +144,15 @@ test('live list, ring, roster, decline and recording use call-id routes', async 
   });
   const sdk = macro();
   const [call] = await sdk.calls.active();
-  expect(call?.kind).toBe('channel');
-  expect((await sdk.calls.summaries([call!]))[0]?.customName).toBe('Call');
-  expect(await call!.ringState()).toBe('ringing');
-  const [participant] = await call!.participants();
+  if (!call) throw new Error('expected a live call');
+  expect(call.kind).toBe('channel');
+  expect((await sdk.calls.summaries([call]))[0]?.customName).toBe('Call');
+  expect(await call.ringState()).toBe('ringing');
+  const [participant] = await call.participants();
   expect(participant?.user?.id).toBe('user-1');
   expect(participant?.tracks[0]?.source).toBe('microphone');
-  await call!.decline();
-  expect(await call!.recording.bytes()).toEqual(new Uint8Array([1, 2, 3]));
+  await call.decline();
+  expect(await call.recording.bytes()).toEqual(new Uint8Array([1, 2, 3]));
 });
 
 test('meeting account and guest joins use the invitation link', async () => {
@@ -191,9 +201,9 @@ test('call notifications hydrate entity handles', async () => {
       invited_by: 'user-1',
     },
   });
-  expect(event.call.id).toBe('call-1');
-  expect(event.meeting?.id).toBe('meeting-1');
-  expect(event.inviter?.id).toBe('user-1');
+  expect(event?.call.id).toBe('call-1');
+  expect(event?.meeting?.id).toBe('meeting-1');
+  expect(event?.inviter?.id).toBe('user-1');
 });
 
 test('call previews preserve input order and omit missing records', async () => {
@@ -201,9 +211,17 @@ test('call previews preserve input order and omit missing records', async () => 
     'POST /call/record/preview': () =>
       Response.json({
         previews: [
-          { type: 'exists', callId: 'call-2', startedAt: '2026-01-02T00:00:00Z' },
+          {
+            type: 'exists',
+            callId: 'call-2',
+            startedAt: '2026-01-02T00:00:00Z',
+          },
           { type: 'does_not_exist', callId: 'call-3' },
-          { type: 'exists', callId: 'call-1', startedAt: '2026-01-01T00:00:00Z' },
+          {
+            type: 'exists',
+            callId: 'call-1',
+            startedAt: '2026-01-01T00:00:00Z',
+          },
         ],
       }),
   });

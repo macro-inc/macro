@@ -372,7 +372,10 @@ mod authenticated_join_routes {
             .expect_join_meeting_with_options()
             .times(1)
             .returning(move |_, _, request, is_program, _| {
-                assert_eq!(request.on_other_call, crate::domain::models::OnOtherCall::Switch);
+                assert!(matches!(
+                    request.on_other_call,
+                    crate::domain::models::OnOtherCall::Switch
+                ));
                 assert!(request.replace);
                 assert!(!is_program);
                 Box::pin(async move {

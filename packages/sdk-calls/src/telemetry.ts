@@ -1,4 +1,4 @@
-import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
+import { type Span, SpanStatusCode, trace } from '@opentelemetry/api';
 
 const tracer = trace.getTracer('@macro-inc/sdk-calls');
 
@@ -7,7 +7,10 @@ export function recordError(span: Span, error: unknown): void {
   span.setStatus({ code: SpanStatusCode.ERROR });
 }
 
-export function withSpan<T>(name: string, action: (span: Span) => Promise<T>): Promise<T> {
+export function withSpan<T>(
+  name: string,
+  action: (span: Span) => Promise<T>
+): Promise<T> {
   return tracer.startActiveSpan(name, async (span) => {
     try {
       return await action(span);
@@ -21,7 +24,11 @@ export function withSpan<T>(name: string, action: (span: Span) => Promise<T>): P
   });
 }
 
-export function reportError(name: string, error: unknown, callId?: string): void {
+export function reportError(
+  name: string,
+  error: unknown,
+  callId?: string
+): void {
   const span = startSpan(name);
   if (callId) span.setAttribute('call.id', callId);
   recordError(span, error);

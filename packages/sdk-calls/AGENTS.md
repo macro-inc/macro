@@ -24,7 +24,7 @@ screen-share publishing for Node and browsers.
 
 ## Checks
 
-- `bun test`, `bun run check`, and `bun run lint` from this directory.
+- `bun test` and `bun run check` from this directory; `just check` covers format and lint.
 
 ## Gotchas
 

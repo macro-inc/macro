@@ -16,9 +16,12 @@ export class Meeting extends MacroEntity<MeetingRecord> {
   /** Join this meeting as the current account; always send a program join body. */
   async join(opts: JoinOptions = {}): Promise<CallConnection> {
     try {
-      const response = unwrap(await this.client.storage.meetingJoin({
-        path: { token: (await this.detail.get()).shareToken }, body: opts,
-      }));
+      const response = unwrap(
+        await this.client.storage.meetingJoin({
+          path: { token: (await this.detail.get()).shareToken },
+          body: opts,
+        }),
+      );
       return new CallConnection(this.client, response);
     } catch (error) {
       return callAdmissionError(error);
@@ -27,10 +30,12 @@ export class Meeting extends MacroEntity<MeetingRecord> {
 
   /** Join the link as a named guest. */
   async joinAsGuest(name: string): Promise<CallConnection> {
-    const response = unwrap(await this.client.storage.meetingGuestJoin({
-      path: { token: (await this.detail.get()).shareToken },
-      body: { displayName: name },
-    }));
+    const response = unwrap(
+      await this.client.storage.meetingGuestJoin({
+        path: { token: (await this.detail.get()).shareToken },
+        body: { displayName: name },
+      }),
+    );
     return new CallConnection(this.client, response);
   }
 

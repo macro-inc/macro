@@ -24,7 +24,9 @@ describe('connectRoomWith', () => {
       { onOtherCall: 'fail' },
       room,
       connect,
-      (_room, callback) => { disconnect = callback; },
+      (_room, callback) => {
+        disconnect = callback;
+      }
     );
 
     expect(result).toEqual({ room, connection });
@@ -48,18 +50,24 @@ describe('connectRoomWith', () => {
     };
     const join = mock(async () => connection);
 
-    await expect(connectRoomWith(
-      { join },
-      undefined,
-      {},
-      async () => { throw new Error('connect failed'); },
-      () => {},
-    )).rejects.toThrow('connect failed');
+    await expect(
+      connectRoomWith(
+        { join },
+        undefined,
+        {},
+        async () => {
+          throw new Error('connect failed');
+        },
+        () => {}
+      )
+    ).rejects.toThrow('connect failed');
     expect(leave).toHaveBeenCalledTimes(1);
   });
 
   test('preserves the connection error when leaving also fails', async () => {
-    const leave = mock(async () => { throw new Error('leave failed'); });
+    const leave = mock(async () => {
+      throw new Error('leave failed');
+    });
     const connection = {
       call: { id: 'call-3' },
       url: 'wss://example.invalid',
@@ -70,13 +78,17 @@ describe('connectRoomWith', () => {
       leave,
     };
 
-    await expect(connectRoomWith(
-      { join: async () => connection },
-      undefined,
-      {},
-      async () => { throw new Error('connect failed'); },
-      () => {},
-    )).rejects.toThrow('connect failed');
+    await expect(
+      connectRoomWith(
+        { join: async () => connection },
+        undefined,
+        {},
+        async () => {
+          throw new Error('connect failed');
+        },
+        () => {}
+      )
+    ).rejects.toThrow('connect failed');
     expect(leave).toHaveBeenCalledTimes(1);
   });
 });

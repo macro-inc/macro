@@ -1,6 +1,17 @@
 # Programmatic calls
 
-Status: proposed. Nothing here is implemented.
+Status: phases 1 to 4 are built, except as listed below. Phase 5 (companions) is not.
+
+Not built yet:
+
+- Bot joins. Identities, attendance and orphan-room handling are in place, but the routes
+  still refuse bot tokens: the `enable-programmatic-calls` flag is keyed on a user, and a
+  team-scoped bot token has no acting user.
+- Approved starts. An agent-attributed start is always refused; approval through
+  `execution.reviews` is not wired.
+- Reading other participants' registered work: it has no REST route.
+
+Screen share has not been run end to end.
 
 Goal: one supported way for a program to be a participant in a Macro call, able to do
 everything a person can do there.

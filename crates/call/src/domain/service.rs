@@ -1197,12 +1197,7 @@ impl<
                 .map_err(|e| CallError::Internal(e.into()))?;
             response.token = self
                 .rtc_client
-                .generate_program_token(
-                    &response.room_name,
-                    user_id,
-                    program,
-                    request.name.clone(),
-                )
+                .generate_program_token(&response.room_name, user_id, program, request.name.clone())
                 .await
                 .map_err(CallError::Internal)?;
         } else if let Some(name) = request.name.as_deref() {

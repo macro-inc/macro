@@ -16,9 +16,11 @@ async fn programmatic_call_gate_is_read_for_the_caller() {
     let service = join_service(MockCallRepository::new(), MockRtcClient::new())
         .with_programmatic_call_gate(DisabledProgrammaticCalls);
 
-    assert!(!service
-        .programmatic_calls_enabled(user("requester@example.com"))
-        .await);
+    assert!(
+        !service
+            .programmatic_calls_enabled(user("requester@example.com"))
+            .await
+    );
 }
 
 fn join_service(

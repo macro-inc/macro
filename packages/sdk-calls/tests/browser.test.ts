@@ -1,17 +1,30 @@
 import { describe, expect, mock, test } from 'bun:test';
 
-const published: Array<{ track: MediaStreamTrack; options: { source: string; dtx?: boolean } }> = [];
+const published: Array<{
+  track: MediaStreamTrack;
+  options: { source: string; dtx?: boolean };
+}> = [];
 const unpublished: MediaStreamTrack[] = [];
 
 mock.module('livekit-client', () => ({
   RoomEvent: { Disconnected: 'disconnected' },
-  Track: { Source: { ScreenShare: 'screen_share', ScreenShareAudio: 'screen_share_audio' } },
+  Track: {
+    Source: {
+      ScreenShare: 'screen_share',
+      ScreenShareAudio: 'screen_share_audio',
+    },
+  },
   Room: class {
     localParticipant = {
-      publishTrack: async (track: MediaStreamTrack, options: { source: string; dtx?: boolean }) => {
+      publishTrack: async (
+        track: MediaStreamTrack,
+        options: { source: string; dtx?: boolean }
+      ) => {
         published.push({ track, options });
       },
-      unpublishTrack: async (track: MediaStreamTrack) => { unpublished.push(track); },
+      unpublishTrack: async (track: MediaStreamTrack) => {
+        unpublished.push(track);
+      },
     };
     on(_event: string, _callback: () => void) {}
     async connect() {}
@@ -34,8 +47,12 @@ describe('browser screen share', () => {
       getTracks: () => [video, audio],
     };
     const connection = {
-      call: { id: 'call-1' }, url: 'wss://example.invalid', token: 'secret',
-      identity: 'account-1', roomName: 'room-1', started: false,
+      call: { id: 'call-1' },
+      url: 'wss://example.invalid',
+      token: 'secret',
+      identity: 'account-1',
+      roomName: 'room-1',
+      started: false,
       leave: async () => ({ callEnded: false }),
     };
     const { room } = await connectRoom({ join: async () => connection });
@@ -43,7 +60,8 @@ describe('browser screen share', () => {
     await share.stop();
 
     expect(published.map(({ options }) => options.source)).toEqual([
-      'screen_share', 'screen_share_audio',
+      'screen_share',
+      'screen_share_audio',
     ]);
     expect(published[1]?.options.dtx).toBe(false);
     expect(unpublished).toHaveLength(2);

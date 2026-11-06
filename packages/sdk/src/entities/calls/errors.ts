@@ -28,9 +28,16 @@ export class CallEndedError extends MacroApiError {
 export function callAdmissionError(error: unknown): never {
   if (error instanceof MacroApiError) {
     if (error.status === 410) throw new CallEndedError(error.data);
-    if (error.status === 409 && error.data && typeof error.data === 'object' && 'code' in error.data) {
-      if (error.data.code === 'in_other_call') throw new InOtherCallError(error.data);
-      if (error.data.code === 'already_connected') throw new AlreadyConnectedError(error.data);
+    if (
+      error.status === 409 &&
+      error.data &&
+      typeof error.data === 'object' &&
+      'code' in error.data
+    ) {
+      if (error.data.code === 'in_other_call')
+        throw new InOtherCallError(error.data);
+      if (error.data.code === 'already_connected')
+        throw new AlreadyConnectedError(error.data);
     }
   }
   throw error;

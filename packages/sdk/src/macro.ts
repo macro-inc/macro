@@ -52,12 +52,16 @@ export type {
   StructuredCompletionRequest,
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
-export type { CallMessage } from './entities/calls/message';
 export { CallRecord } from './entities/calls/call-record';
 export { CallConnection, type JoinOptions } from './entities/calls/connection';
-export { CallParticipant } from './entities/calls/participant';
+export {
+  AlreadyConnectedError,
+  CallEndedError,
+  InOtherCallError,
+} from './entities/calls/errors';
+export type { CallMessage } from './entities/calls/message';
 export type { CallSummary } from './entities/calls/namespace';
-export { InOtherCallError, AlreadyConnectedError, CallEndedError } from './entities/calls/errors';
+export { CallParticipant } from './entities/calls/participant';
 export {
   ConnectedApp,
   ConnectedTool,

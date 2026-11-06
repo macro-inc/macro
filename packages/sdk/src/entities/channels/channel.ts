@@ -11,10 +11,10 @@ import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentConversation } from '../agent-sessions/conversation';
+import { Bot } from '../bots/bot';
 import { CallRecord } from '../calls/call-record';
 import { CallConnection, type JoinOptions } from '../calls/connection';
 import { callAdmissionError } from '../calls/errors';
-import { Bot } from '../bots/bot';
 import type { Document } from '../documents/document';
 import { PropertiedEntity } from '../entity';
 import type { StaticImage } from '../images/image';
@@ -49,9 +49,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** Start or join this channel's call, ringing members if a new call starts. */
   async startCall(opts: JoinOptions = {}): Promise<CallConnection> {
     try {
-      const response = unwrap(await this.client.storage.startCall({
-        path: { channel_id: this.id }, body: opts,
-      }));
+      const response = unwrap(
+        await this.client.storage.startCall({
+          path: { channel_id: this.id },
+          body: opts,
+        }),
+      );
       return new CallConnection(this.client, response);
     } catch (error) {
       return callAdmissionError(error);
