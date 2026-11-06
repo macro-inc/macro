@@ -21,7 +21,6 @@ import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import CaretUp from '@icon/system/regular/caret-up.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import Screencast from '@icon/system/regular/screencast.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
@@ -49,6 +48,7 @@ import { CallSharingMenu } from './CallControls/CallSharingMenu';
 import { CallParticipantsList } from './CallParticipantsList';
 import {
   LocalParticipantTile,
+  LocalScreenShareTile,
   ParticipantTile,
   ScreenShareTile,
 } from './CallParticipantTiles';
@@ -57,8 +57,11 @@ import { CallWaveform } from './CallWaveform';
 import { createCallFullscreen } from './call-fullscreen';
 import { createCallHotkeys } from './call-hotkeys';
 import {
+  activeCallPin,
   type CallLayout,
+  type CallPin,
   normalizeCallLayout,
+  sameCallPin,
   selectCallStageParticipant,
 } from './call-layout';
 import { createCallReactions } from './call-reactions';
@@ -237,23 +240,27 @@ export function CallOverlay(props: {
     setPanelOpen(true);
   };
 
-  const [selectedParticipant, setSelectedParticipant] = createSignal<
-    RemoteParticipant | 'local'
-  >();
-  createEffect(() => {
-    if (participants().length === 0) setSelectedParticipant(undefined);
-  });
-  const focusedParticipant = () => {
-    const selected = selectedParticipant();
-    return selected === 'local' ||
-      (selected && participants().includes(selected))
-      ? selected
-      : undefined;
-  };
-  const toggleParticipantFocus = (participant: RemoteParticipant | 'local') =>
-    setSelectedParticipant((selected) =>
-      selected === participant ? undefined : participant
+  // The same selection owns participant and screen pins. A removed target never
+  // becomes pinned again if its identity reconnects later.
+  const [selectedPin, setSelectedPin] =
+    createSignal<CallPin<RemoteParticipant>>();
+  const activePin = () =>
+    activeCallPin(
+      selectedPin(),
+      participants(),
+      remoteScreenShares(),
+      callCtx.isScreenSharing()
     );
+  const togglePin = (target: CallPin<RemoteParticipant>) => {
+    if (isMobile()) return; // Phone long-press integration belongs to L-61.
+    const interaction = beginInteraction('call.pin');
+    try {
+      setSelectedPin(sameCallPin(activePin(), target) ? undefined : target);
+      setHideParticipants(false);
+    } finally {
+      interaction.end();
+    }
+  };
 
   const isLocalSpeaking = () => callCtx.isLocalSpeaking();
 
@@ -282,6 +289,11 @@ export function CallOverlay(props: {
       return !!pub?.track && pub.isSubscribed && !pub.isMuted;
     });
   };
+
+  createEffect(() => {
+    // Consume both roster and publication changes before clearing the stored pin.
+    if (selectedPin() && !activePin()) setSelectedPin(undefined);
+  });
 
   const isAccountSpeaking = (accountId: string) => {
     const participant = participants().find(
@@ -321,8 +333,19 @@ export function CallOverlay(props: {
       if (!sharing) setHideParticipants(false);
     })
   );
-  const showScreenShare = () =>
-    hasAnyScreenShare() && (hideParticipants() || !focusedParticipant());
+  const pinnedShare = () => {
+    const selected = activePin();
+    return selected && typeof selected === 'object' && 'share' in selected
+      ? selected.share
+      : undefined;
+  };
+  const pinnedPerson = () => {
+    const selected = activePin();
+    return selected && typeof selected === 'object' && !('share' in selected)
+      ? selected
+      : undefined;
+  };
+  const showScreenShare = () => hasAnyScreenShare() && !activePin();
   const speakerLayout = () => layout() === 'speaker' || layout() === 'sidebar';
   const primary = () =>
     selectCallStageParticipant(
@@ -330,19 +353,33 @@ export function CallOverlay(props: {
       (participant) => callCtx.isParticipantSpeaking(participant),
       isLocalSpeaking()
     );
-  const remotePrimary = () => {
-    const participant = primary();
-    return participant === 'local' ? undefined : participant;
-  };
   const spotlight = () =>
-    speakerLayout() && !showScreenShare() && !focusedParticipant();
+    speakerLayout() &&
+    participants().length > 0 &&
+    !hasAnyScreenShare() &&
+    !activePin();
+  const staged = () => !!activePin() || spotlight();
   const sideStrip = () =>
-    layout() === 'sidebar' && !focusedParticipant() && !hideParticipants();
+    layout() === 'sidebar' &&
+    (staged() || showScreenShare()) &&
+    !hideParticipants();
+  const sidebarRows = () =>
+    Math.max(
+      2,
+      participants().length +
+        remoteScreenShares().length +
+        Number(callCtx.isScreenSharing())
+    );
+  const stagePerson = () =>
+    pinnedPerson() ??
+    (spotlight() && primary() !== 'local' ? primary() : undefined);
+  const localOnStage = () =>
+    activePin() === 'local' || (spotlight() && primary() === 'local');
   const selfInGrid = () =>
+    !localOnStage() &&
     (layout() === 'grid' ||
       ((isMobile() || compactControls()) && !hasAnyScreenShare())) &&
-    participants().length > 0 &&
-    !focusedParticipant();
+    participants().length > 0;
   const talking = () =>
     participants().find((participant) =>
       callCtx.isParticipantSpeaking(participant)
@@ -365,7 +402,7 @@ export function CallOverlay(props: {
   const LocalTile = (tile: {
     class?: string;
     avatarSize?: 'sm' | 'md';
-    focusable?: boolean;
+    pinEnabled?: boolean;
   }) => (
     <LocalParticipantTile
       class={tile.class}
@@ -385,18 +422,13 @@ export function CallOverlay(props: {
         callCtx.room()?.localParticipant.attributes
       )}
       avatarSize={tile.avatarSize}
-      isFocused={focusedParticipant() === 'local'}
-      onToggleFocus={
-        tile.focusable === false
-          ? undefined
-          : () => toggleParticipantFocus('local')
-      }
+      isPinned={activePin() === 'local'}
+      pinEnabled={!isMobile() && tile.pinEnabled !== false}
+      onTogglePin={() => togglePin('local')}
     />
   );
 
   const gridCols = () => {
-    if (focusedParticipant() && focusedParticipant() !== 'local')
-      return 'grid-cols-1';
     const count = participants().length + (selfInGrid() ? 1 : 0);
     if (count <= 1) return 'grid-cols-1';
     if (count <= 4) return 'grid-cols-2';
@@ -465,43 +497,95 @@ export function CallOverlay(props: {
                 ref={setReactionRoot}
                 class={cn(
                   'relative flex min-h-0 flex-1',
-                  sideStrip() ? 'flex-row gap-2' : 'flex-col'
+                  staged()
+                    ? 'grid grid-rows-[minmax(0,1fr)_6rem] grid-cols-[repeat(auto-fit,minmax(0,9rem))] justify-center gap-2'
+                    : sideStrip()
+                      ? 'flex-row gap-2'
+                      : 'flex-col',
+                  sideStrip() &&
+                    staged() &&
+                    'grid-cols-[minmax(0,1fr)_12rem] overflow-y-auto'
                 )}
+                style={
+                  sideStrip() && staged()
+                    ? {
+                        'grid-template-rows': `repeat(${sidebarRows()}, minmax(0, 1fr))`,
+                      }
+                    : undefined
+                }
               >
                 {/* Screen share area */}
                 <Show when={hasAnyScreenShare()}>
                   <div
-                    class="flex-1 min-h-0 pt-2"
-                    classList={{ hidden: !showScreenShare() }}
+                    class={cn('flex-1 min-h-0', staged() ? 'contents' : 'pt-2')}
+                    classList={{ hidden: !showScreenShare() && !staged() }}
                   >
-                    <div class="group/share relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                    <div
+                      class={cn(
+                        'group/share relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center',
+                        staged() && 'contents'
+                      )}
+                    >
                       <Show when={callCtx.isScreenSharing()}>
-                        <div class="flex size-full flex-col items-center justify-center gap-3 p-4">
-                          <Screencast class="size-10 text-accent" />
-                          <p class="font-semibold">
-                            {t('calls.youAreSharing')}
-                          </p>
-                          <p class="text-sm text-ink-muted">
-                            {t('calls.everyoneCanSee')}
-                          </p>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() =>
-                              fireAndForget(
-                                callCtx.toggleScreenShare(),
-                                'channel-call'
-                              )
-                            }
-                          >
-                            <Screencast class="size-4" />
-                            {t('calls.stopSharing')}
-                          </Button>
+                        <div
+                          class={cn(
+                            'min-h-0 min-w-0 size-full',
+                            staged() &&
+                              (activePin() === 'local-share'
+                                ? sideStrip()
+                                  ? 'col-start-1 row-start-1'
+                                  : 'col-span-full row-start-1'
+                                : sideStrip()
+                                  ? 'col-start-2'
+                                  : 'row-start-2')
+                          )}
+                          style={
+                            sideStrip() && activePin() === 'local-share'
+                              ? { 'grid-row': `1 / span ${sidebarRows()}` }
+                              : undefined
+                          }
+                        >
+                          <LocalScreenShareTile
+                            isPinned={activePin() === 'local-share'}
+                            inStrip={staged() && activePin() !== 'local-share'}
+                            pinEnabled={!isMobile()}
+                            onTogglePin={() => togglePin('local-share')}
+                          />
                         </div>
                       </Show>
                       <For each={remoteScreenShares()}>
                         {(participant) => (
-                          <ScreenShareTile participant={participant} />
+                          <div
+                            class={cn(
+                              'min-w-0 min-h-0',
+                              !staged() && 'flex-1',
+                              staged() &&
+                                (pinnedShare() === participant
+                                  ? sideStrip()
+                                    ? 'col-start-1 row-start-1'
+                                    : 'col-span-full row-start-1'
+                                  : sideStrip()
+                                    ? 'col-start-2'
+                                    : 'row-start-2')
+                            )}
+                            style={
+                              sideStrip() && pinnedShare() === participant
+                                ? { 'grid-row': `1 / span ${sidebarRows()}` }
+                                : undefined
+                            }
+                          >
+                            <ScreenShareTile
+                              participant={participant}
+                              isPinned={pinnedShare() === participant}
+                              inStrip={
+                                staged() && pinnedShare() !== participant
+                              }
+                              pinEnabled={!isMobile()}
+                              onTogglePin={() =>
+                                togglePin({ share: participant })
+                              }
+                            />
+                          </div>
                         )}
                       </For>
                       <Show when={hideParticipants() && talking()}>
@@ -529,7 +613,11 @@ export function CallOverlay(props: {
                           <span>{talkingName()}</span>
                         </div>
                       </Show>
-                      <Show when={!isMobile() && layout() !== 'grid'}>
+                      <Show
+                        when={
+                          !isMobile() && layout() !== 'grid' && !activePin()
+                        }
+                      >
                         <Button
                           appearance="bare"
                           variant="ghost"
@@ -573,26 +661,6 @@ export function CallOverlay(props: {
                     </div>
                   </div>
                 </Show>
-                <Show when={spotlight()}>
-                  <div class="min-h-0 flex-1 pt-2">
-                    <Show
-                      when={remotePrimary()}
-                      fallback={<LocalTile class="size-full" />}
-                    >
-                      {(participant) => (
-                        <ParticipantTile
-                          participant={participant()}
-                          isFocused={false}
-                          hidden={false}
-                          onToggleFocus={() =>
-                            toggleParticipantFocus(participant())
-                          }
-                        />
-                      )}
-                    </Show>
-                  </div>
-                </Show>
-
                 {/* Participants area; stays mounted while the screen share is maximized. */}
                 <div
                   hidden={
@@ -600,67 +668,88 @@ export function CallOverlay(props: {
                     (spotlight() && participants().length === 0)
                   }
                   class={cn(
-                    sideStrip() && (showScreenShare() || spotlight())
-                      ? 'w-48 shrink-0 min-h-0 overflow-y-auto'
-                      : showScreenShare() || spotlight()
-                        ? layout() === 'grid'
-                          ? 'h-48 shrink-0'
-                          : 'h-24 shrink-0'
-                        : 'flex-1 min-h-0',
-                    focusedParticipant() === 'local' && 'relative',
+                    staged()
+                      ? 'contents'
+                      : sideStrip() && (showScreenShare() || spotlight())
+                        ? 'w-48 shrink-0 min-h-0 overflow-y-auto'
+                        : showScreenShare() || spotlight()
+                          ? layout() === 'grid'
+                            ? 'h-48 shrink-0'
+                            : 'h-24 shrink-0'
+                          : 'flex-1 min-h-0',
+
                     selfInGrid() && `grid ${gridCols()} auto-rows-fr gap-2`,
-                    'pt-2 mobile:pt-0'
+                    !staged() && 'pt-2 mobile:pt-0'
                   )}
                 >
                   <Show
                     when={participants().length > 0}
-                    fallback={<LocalTile class="size-full" focusable={false} />}
+                    fallback={
+                      <LocalTile class="size-full" pinEnabled={false} />
+                    }
                   >
                     {/* Remote participants grid */}
                     <div
                       class={
-                        selfInGrid()
+                        staged()
                           ? 'contents'
-                          : cn(
-                              sideStrip() && (showScreenShare() || spotlight())
-                                ? 'flex flex-col gap-2'
-                                : showScreenShare() || spotlight()
-                                  ? 'flex h-full justify-center gap-2 overflow-hidden'
+                          : selfInGrid()
+                            ? 'contents'
+                            : cn(
+                                showScreenShare()
+                                  ? sideStrip()
+                                    ? 'flex h-full flex-col items-center gap-2 overflow-y-auto'
+                                    : 'flex h-full justify-center gap-2 overflow-hidden'
                                   : `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
-                              focusedParticipant() === 'local'
-                                ? 'absolute bottom-4 right-4 z-20 w-40 aspect-video shadow-lg sm:w-48'
-                                : 'size-full'
-                            )
+                                'size-full'
+                              )
                       }
                     >
                       <For each={participants()}>
                         {(participant) => (
-                          <ParticipantTile
-                            participant={participant}
-                            sidebar={
-                              sideStrip() && (showScreenShare() || spotlight())
+                          <div
+                            class={cn(
+                              'min-h-0 min-w-0',
+                              !staged() &&
+                                (showScreenShare()
+                                  ? 'flex-1 max-w-36'
+                                  : 'size-full'),
+                              staged() &&
+                                (stagePerson() === participant
+                                  ? sideStrip()
+                                    ? 'col-start-1 row-start-1'
+                                    : 'col-span-full row-start-1'
+                                  : sideStrip()
+                                    ? 'col-start-2'
+                                    : 'row-start-2')
+                            )}
+                            style={
+                              sideStrip() && stagePerson() === participant
+                                ? { 'grid-row': `1 / span ${sidebarRows()}` }
+                                : undefined
                             }
-                            filmstrip={
-                              (showScreenShare() || spotlight()) && !sideStrip()
-                            }
-                            avatarSize={
-                              focusedParticipant() === 'local' ||
-                              showScreenShare() ||
-                              spotlight()
-                                ? 'sm'
-                                : 'md'
-                            }
-                            isFocused={focusedParticipant() === participant}
-                            hidden={
-                              (spotlight() && primary() === participant) ||
-                              (!!focusedParticipant() &&
-                                focusedParticipant() !== 'local' &&
-                                focusedParticipant() !== participant)
-                            }
-                            onToggleFocus={() =>
-                              toggleParticipantFocus(participant)
-                            }
-                          />
+                          >
+                            <ParticipantTile
+                              participant={participant}
+                              sidebar={
+                                sideStrip() && stagePerson() !== participant
+                              }
+                              filmstrip={
+                                (staged() && stagePerson() !== participant) ||
+                                showScreenShare()
+                              }
+                              avatarSize={
+                                (staged() && stagePerson() !== participant) ||
+                                showScreenShare()
+                                  ? 'sm'
+                                  : 'md'
+                              }
+                              isPinned={pinnedPerson() === participant}
+                              hidden={false}
+                              pinEnabled={!isMobile()}
+                              onTogglePin={() => togglePin(participant)}
+                            />
+                          </div>
                         )}
                       </For>
                     </div>
@@ -675,13 +764,22 @@ export function CallOverlay(props: {
 
                     {/* Local participant PIP (Google Meet style: small, bottom-right) */}
                     <div
-                      hidden={spotlight() && primary() === 'local'}
+                      hidden={false}
+                      style={
+                        sideStrip() && localOnStage()
+                          ? { 'grid-row': `1 / span ${sidebarRows()}` }
+                          : undefined
+                      }
                       class={cn(
-                        selfInGrid() ? 'relative min-h-0' : 'absolute z-10',
-                        !selfInGrid() &&
-                          (focusedParticipant() === 'local'
-                            ? 'inset-0'
-                            : 'bottom-4 right-4 w-48 aspect-video shadow-lg')
+                        localOnStage()
+                          ? sideStrip()
+                            ? 'col-start-1 row-start-1 min-h-0'
+                            : 'col-span-full row-start-1 min-h-0'
+                          : selfInGrid()
+                            ? staged()
+                              ? 'row-start-2 min-h-0'
+                              : 'relative min-h-0'
+                            : 'absolute z-10 bottom-4 right-4 w-48 aspect-video shadow-lg'
                       )}
                     >
                       <LocalTile class="size-full min-h-0" avatarSize="sm" />

@@ -1,6 +1,9 @@
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PinIcon from '@icon/system/regular/push-pin.svg';
+import UnpinIcon from '@icon/system/regular/push-pin-slash.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import { Badge, Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
@@ -19,6 +22,7 @@ function VideoTag(props: {
   muted?: boolean;
   mutedLabel?: string;
   sharing?: boolean;
+  pinned?: boolean;
 }) {
   return (
     <div
@@ -28,6 +32,9 @@ function VideoTag(props: {
         props.class
       )}
     >
+      <Show when={props.pinned}>
+        <PinIcon class="size-3 shrink-0" />
+      </Show>
       <Show when={props.sharing}>
         <Screencast class="size-3 shrink-0" />
       </Show>
@@ -51,9 +58,10 @@ function ParticipantTileWrapper(props: {
   participantId?: string;
   children: JSXElement;
   isConnecting?: boolean;
-  isFocused?: boolean;
-  onToggleFocus?: () => void;
-  focusLabel?: string;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
+  pinName?: string;
+  pinEnabled?: boolean;
   hidden?: boolean;
   class?: string;
 }) {
@@ -73,7 +81,7 @@ function ParticipantTileWrapper(props: {
         data-call-tile=""
         data-call-participant={props.participantId}
         class={cn(
-          'relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
+          'group/tile relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
           props.isConnecting && 'animate-pulse'
         )}
       >
@@ -84,23 +92,39 @@ function ParticipantTileWrapper(props: {
             class="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border-2 border-success"
           />
         </Show>
-        <Show when={props.onToggleFocus}>
+        <Show when={props.pinEnabled && props.onTogglePin}>
           <button
             type="button"
             class="absolute inset-0 z-30 rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-accent"
-            aria-label={props.focusLabel}
-            aria-pressed={props.isFocused ?? false}
-            onClick={props.onToggleFocus}
+            aria-label={t(
+              props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
+              { name: props.pinName ?? '' }
+            )}
+            aria-pressed={props.isPinned ?? false}
+            onClick={props.onTogglePin}
           />
-        </Show>
-        <Show when={props.isFocused && props.onToggleFocus}>
           <Button
-            variant="primary"
-            size="sm"
-            class="absolute right-2 top-2 z-40"
-            onClick={props.onToggleFocus}
+            appearance="bare"
+            variant="ghost"
+            size={props.isPinned ? 'sm' : 'icon-sm'}
+            class={cn(
+              'absolute right-2 top-2 z-40 rounded-full bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto group-focus-within/tile:opacity-100 group-focus-within/tile:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
+              props.isPinned && 'gap-1'
+            )}
+            aria-label={t(
+              props.isPinned ? 'calls.unpinNamed' : 'calls.pinNamed',
+              { name: props.pinName ?? '' }
+            )}
+            tooltip={{
+              content: t(props.isPinned ? 'calls.unpin' : 'calls.pin'),
+              placement: 'top',
+            }}
+            onClick={props.onTogglePin}
           >
-            Back to grid
+            <Show when={props.isPinned} fallback={<PinIcon class="size-4" />}>
+              <UnpinIcon class="size-4" />
+              {t('calls.unpin')}
+            </Show>
           </Button>
         </Show>
       </div>
@@ -152,8 +176,9 @@ export function LocalParticipantTile(props: {
   isProgram: boolean;
   avatarSize?: 'sm' | 'md';
   class?: string;
-  isFocused?: boolean;
-  onToggleFocus?: () => void;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
+  pinEnabled?: boolean;
 }) {
   return (
     <ParticipantTileWrapper
@@ -161,9 +186,10 @@ export function LocalParticipantTile(props: {
       participantId={props.identity ?? props.userId}
       isConnecting={props.isConnecting}
       class={props.class}
-      isFocused={props.isFocused}
-      onToggleFocus={props.onToggleFocus}
-      focusLabel={props.isFocused ? 'Unfocus yourself' : 'Focus yourself'}
+      isPinned={props.isPinned}
+      onTogglePin={props.onTogglePin}
+      pinEnabled={props.pinEnabled}
+      pinName={t('calls.you')}
     >
       <Show
         when={!props.isConnecting && !props.isVideoMuted}
@@ -185,6 +211,7 @@ export function LocalParticipantTile(props: {
             isProgram={props.isProgram}
             muted={props.isAudioMuted}
             mutedLabel="You are muted"
+            pinned={props.isPinned}
           >
             You
           </VideoTag>
@@ -203,9 +230,10 @@ export function ParticipantTile(props: {
   avatarSize?: 'sm' | 'md';
   filmstrip?: boolean;
   sidebar?: boolean;
-  isFocused: boolean;
+  isPinned: boolean;
   hidden: boolean;
-  onToggleFocus: () => void;
+  onTogglePin: () => void;
+  pinEnabled: boolean;
 }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
@@ -233,9 +261,10 @@ export function ParticipantTile(props: {
     <ParticipantTileWrapper
       isSpeaking={isSpeaking()}
       participantId={props.participant.identity}
-      isFocused={props.isFocused}
-      onToggleFocus={props.onToggleFocus}
-      focusLabel={`${props.isFocused ? 'Unfocus' : 'Focus'} ${displayName()}`}
+      isPinned={props.isPinned}
+      onTogglePin={props.onTogglePin}
+      pinEnabled={props.pinEnabled}
+      pinName={displayName()}
       hidden={props.hidden}
       class={cn(
         'min-w-0',
@@ -259,6 +288,7 @@ export function ParticipantTile(props: {
 
       <VideoTag
         variant="truncated"
+        pinned={props.isPinned}
         isProgram={isProgramParticipant(props.participant.attributes)}
         muted={isAudioMuted()}
         mutedLabel={`${displayName()} is muted`}
@@ -276,7 +306,13 @@ export function ParticipantTile(props: {
   );
 }
 
-export function ScreenShareTile(props: { participant: RemoteParticipant }) {
+export function ScreenShareTile(props: {
+  participant: RemoteParticipant;
+  isPinned: boolean;
+  inStrip: boolean;
+  onTogglePin: () => void;
+  pinEnabled: boolean;
+}) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
   const displayName = () =>
@@ -289,11 +325,19 @@ export function ScreenShareTile(props: { participant: RemoteParticipant }) {
   };
 
   return (
-    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted">
+    <ParticipantTileWrapper
+      isSpeaking={false}
+      participantId={props.participant.identity}
+      isPinned={props.isPinned}
+      onTogglePin={props.onTogglePin}
+      pinEnabled={props.pinEnabled}
+      pinName={t('calls.participantScreen', { name: displayName() })}
+    >
       <TrackView track={screenTrack()} fit="contain" />
 
       <VideoTag
         variant="truncated"
+        pinned={props.isPinned}
         isProgram={isProgramParticipant(props.participant.attributes)}
       >
         <span data-call-stage-chip="share" class="flex items-center gap-1.5">
@@ -311,9 +355,51 @@ export function ScreenShareTile(props: { participant: RemoteParticipant }) {
               </span>
             )}
           </Show>
-          {t('calls.presenterSharing', { name: displayName() })}
+          {props.inStrip
+            ? t('calls.participantScreen', { name: displayName() })
+            : t('calls.presenterSharing', { name: displayName() })}
         </span>
       </VideoTag>
-    </div>
+    </ParticipantTileWrapper>
+  );
+}
+
+export function LocalScreenShareTile(props: {
+  isPinned: boolean;
+  inStrip: boolean;
+  pinEnabled: boolean;
+  onTogglePin: () => void;
+}) {
+  const call = useCallContext();
+  return (
+    <ParticipantTileWrapper
+      isSpeaking={false}
+      isPinned={props.isPinned}
+      pinName={t('calls.yourScreen')}
+      pinEnabled={props.pinEnabled}
+      onTogglePin={props.onTogglePin}
+    >
+      <div class="flex size-full flex-col items-center justify-center gap-3 p-4">
+        <Show
+          when={!props.inStrip}
+          fallback={<VideoTag sharing>{t('calls.yourScreen')}</VideoTag>}
+        >
+          <Screencast class="size-10 text-accent" />
+          <p class="font-semibold">{t('calls.youAreSharing')}</p>
+          <p class="text-sm text-ink-muted">{t('calls.everyoneCanSee')}</p>
+          <Button
+            variant="danger"
+            size="sm"
+            class="relative z-40"
+            onClick={() =>
+              fireAndForget(call.toggleScreenShare(), 'channel-call')
+            }
+          >
+            <Screencast class="size-4" />
+            {t('calls.stopSharing')}
+          </Button>
+        </Show>
+      </div>
+    </ParticipantTileWrapper>
   );
 }

@@ -330,17 +330,11 @@ header; Invite remains available on setup screens, desktop, and tablets. Back
 returns to the app without hanging up; when a channel has no navigation history, Back opens its
 Messages tab instead. Only **Leave call** ends participation.
 
-Focus is unavailable when you are the only participant. Otherwise, click or tap
-a participant, including your own tile, to focus them. Focusing
-someone else keeps your own tile in the small picture-in-picture window;
-focusing yourself moves the remote participant grid into that window instead.
-Tap a tile in the small window to switch focus, or use the solid **Back to grid**
-button on the focused tile to restore the grid. If that participant leaves, the grid
-returns automatically. Focus changes keep the existing video tracks mounted.
+On desktop, pin a participant, yourself, or a shared screen to take the stage; see [Pinning call tiles on desktop](#pinning-call-tiles-on-desktop). A phone tap does not pin; long-press support belongs to the next call update.
 A talking participant has a success-colored border above their video or avatar.
 Camera-off tiles are flat and show a neutral initial, never a profile-color gradient.
-On desktop the self view sits at the bottom-right beside the controls, or above
-them while chat is docked. Muted icons sit beside the participant name.
+On desktop the self view stays at the bottom-right beside the controls, or above
+them while chat is docked, unless you pin it to the stage. Muted icons sit beside the participant name.
 
 A shared-screen chip leads with its screen icon, then the presenter's avatar
 and name. A hidden-participant speaking chip uses the same order with a waveform; the
@@ -449,6 +443,10 @@ call uses `POST /call/{channel_id}`; joining an existing call uses
 `POST /call/record/{call_id}/join`, which never starts one. Meeting joins use
 `POST /call/meetings/join/{token}`. When only programs have remained in a call
 for 60 seconds, the call ends automatically.
+
+### Pinning call tiles on desktop
+
+Hover or keyboard-focus a participant, your own view, or a shared screen to reveal Pin. Clicking the tile also pins it. The pinned tile takes the stage, with everyone else and active shares in the strip; your own view stays anchored unless pinned. A share normally occupies the stage when nobody is pinned. Hover the pinned tile for Unpin, or click it again. Switching directly to another tile replaces the pin. Pinning uses Speaker placement unless Sidebar is selected and never changes the saved Layout choice. If the pinned person leaves or the shared screen ends, the pin clears and does not return on reconnection. Desktop pin actions record `call.pin` interactions. Phone taps do not pin; phone long-press is handled separately.
 
 ### Work in a call
 

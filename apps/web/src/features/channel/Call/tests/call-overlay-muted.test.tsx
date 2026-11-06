@@ -524,28 +524,7 @@ describe('CallOverlay muted microphone badges', () => {
     ).toBeNull();
   });
 
-  it('disables solo focus and clears it when the last remote participant leaves', () => {
-    const controls = setUpCallState();
-    render(() => <CallOverlay onLeave={() => undefined} />);
-    expect(screen.queryByRole('button', { name: 'Focus yourself' })).toBeNull();
-    const remote = createRemoteParticipant('remote', {}, 'Remote participant');
-    controls.setParticipants(new Map([[remote.identity, remote]]));
-    fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
-    expect(screen.getByRole('button', { name: 'Back to grid' })).toBeTruthy();
-    controls.setParticipants(new Map());
-    expect(screen.queryByRole('button', { name: 'Focus yourself' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Back to grid' })).toBeNull();
-    controls.setParticipants(new Map([[remote.identity, remote]]));
-    expect(screen.queryByRole('button', { name: 'Back to grid' })).toBeNull();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Focus Remote participant' })
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Back to grid' }));
-    expect(
-      screen.getByRole('button', { name: 'Focus Remote participant' })
-    ).toBeTruthy();
-  });
-  it('focuses a participant without remounting video and restores the grid when they leave', () => {
+  it('pins, switches and unpins without remounting tracks or changing the saved layout', () => {
     const first = createRemoteParticipant(
       'first',
       {
@@ -557,93 +536,231 @@ describe('CallOverlay muted microphone badges', () => {
       },
       'First participant'
     );
-    const second = createRemoteParticipant('second', {}, 'Second participant');
+    const second = createRemoteParticipant(
+      'second',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('second-camera'),
+        },
+      },
+      'Second participant'
+    );
+    setUpCallState([first, second]);
+    localStorage.setItem('call.layout', JSON.stringify('grid'));
+    const { container } = render(() => (
+      <CallOverlay onLeave={() => undefined} />
+    ));
+    const firstTrack = screen.getByTestId('track-first-camera');
+    const secondTrack = screen.getByTestId('track-second-camera');
+    const localTrack = screen.getByTestId('track-local-camera');
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin First participant' })[0]
+    );
+    expect(firstTrack.closest('.row-start-1')).toBeTruthy();
+    expect(secondTrack.closest('.row-start-2')).toBeTruthy();
+    expect(localTrack.closest('.row-start-2')).toBeTruthy();
+    expect(container.querySelector('[data-call-layout="grid"]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Back to grid' })).toBeNull();
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin Second participant' })[0]
+    );
+    expect(secondTrack.closest('.row-start-1')).toBeTruthy();
+    expect(firstTrack.closest('.row-start-2')).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin You' })[0]);
+    expect(localTrack.closest('.row-start-1')).toBeTruthy();
+    expect(screen.getByTestId('track-first-camera')).toBe(firstTrack);
+    expect(screen.getByTestId('track-second-camera')).toBe(secondTrack);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Unpin You' })[0]);
+    expect(localTrack.closest('.relative')).toBeTruthy();
+    expect(container.querySelector('[data-call-layout="grid"]')).toBeTruthy();
+  });
+
+  it('retains the chosen layout and mounted track when changing Layout while pinned', async () => {
+    const participant = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('camera'),
+        },
+      },
+      'First'
+    );
+    setUpCallState([participant]);
+    const { container } = render(() => (
+      <CallOverlay onLeave={() => undefined} />
+    ));
+    const camera = screen.getByTestId('track-camera');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin First' })[0]);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+      key: 'ArrowDown',
+    });
+    const layout = await screen.findByRole('menuitem', { name: /Layout/ });
+    layout.focus();
+    fireEvent.keyDown(layout, { key: 'ArrowRight' });
+    const sidebar = await screen.findByRole('menuitemradio', {
+      name: /Sidebar/,
+    });
+    sidebar.focus();
+    fireEvent.keyDown(sidebar, { key: 'Enter' });
+    fireEvent.keyDown(sidebar, { key: 'Escape' });
+    expect(
+      container.querySelector('[data-call-layout="sidebar"]')
+    ).toBeTruthy();
+    expect(screen.getByTestId('track-camera')).toBe(camera);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Unpin First' })[0]);
+    expect(
+      container.querySelector('[data-call-layout="sidebar"]')
+    ).toBeTruthy();
+    expect(screen.getByTestId('track-camera')).toBe(camera);
+  });
+
+  it('keeps a sharing track mounted in the strip and clears stale pins when sharing ends or someone leaves', () => {
+    const share: MockTrackPublication = {
+      isMuted: false,
+      isSubscribed: true,
+      track: createTrack('screen'),
+    };
+    const first = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('camera'),
+        },
+        screen_share: share,
+      },
+      'Presenter'
+    );
+    const second = createRemoteParticipant('second', {}, 'Second');
     const controls = setUpCallState([first, second]);
     render(() => <CallOverlay onLeave={() => undefined} />);
-    const video = screen.getByTestId('track-first-camera');
+    const video = screen.getByTestId('track-camera');
+    const screenTrack = screen.getByTestId('track-screen');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin Second' })[0]);
+    expect(screenTrack.closest('.row-start-2')).toBeTruthy();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Focus First participant' })
+      screen.getAllByRole('button', { name: "Pin Presenter's screen" })[0]
     );
+    expect(screenTrack.closest('.row-start-1')).toBeTruthy();
+    expect(video.closest('.row-start-2')).toBeTruthy();
+    share.track = undefined;
+    controls.setTrackVersion((version) => version + 1);
     expect(
-      screen
-        .getByRole('button', { name: 'Unfocus First participant' })
-        .getAttribute('aria-pressed')
-    ).toBe('true');
-    expect(
-      screen.queryByRole('button', { name: 'Focus Second participant' })
+      screen.queryByRole('button', { name: "Unpin Presenter's screen" })
     ).toBeNull();
-    expect(screen.getByTestId('track-first-camera')).toBe(video);
+    share.track = createTrack('new-screen');
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      screen.getAllByRole('button', { name: "Pin Presenter's screen" })
+    ).toHaveLength(2);
+    expect(screen.getByTestId('track-camera')).toBe(video);
     fireEvent.click(
-      screen.getByRole('button', { name: 'Unfocus First participant' })
-    );
-    expect(
-      screen.getByRole('button', { name: 'Focus Second participant' })
-    ).toBeTruthy();
-    expect(screen.getByTestId('track-first-camera')).toBe(video);
-    fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
-    expect(
-      screen.getByRole('button', { name: 'Focus First participant' })
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Focus Second participant' })
-    ).toBeTruthy();
-    expect(screen.getByTestId('track-first-camera')).toBe(video);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Focus First participant' })
+      screen.getAllByRole('button', { name: 'Pin Presenter' })[0]
     );
     controls.setParticipants(new Map([[second.identity, second]]));
     expect(
-      screen.getByRole('button', { name: 'Focus Second participant' })
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole('button', { name: 'Unfocus First participant' })
+      screen.queryByRole('button', { name: 'Unpin Presenter' })
     ).toBeNull();
+    controls.setParticipants(
+      new Map([
+        [first.identity, first],
+        [second.identity, second],
+      ])
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Pin Presenter' })
+    ).toHaveLength(2);
   });
 
-  it.each([false, true])(
-    'swaps the local and remote views without remounting video (phone: %s)',
-    (mobile) => {
-      mocks.mobile = mobile;
-      const remote = createRemoteParticipant(
-        'remote',
-        {
-          camera: {
-            isMuted: false,
-            isSubscribed: true,
-            track: createTrack('remote-camera'),
-          },
-        },
-        'Remote participant'
-      );
-      setUpCallState([remote]);
-      render(() => <CallOverlay onLeave={() => undefined} />);
-      const localVideo = screen.getByTestId('track-local-camera');
-      const remoteVideo = screen.getByTestId('track-remote-camera');
-      fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
-      expect(
-        screen.getByRole('button', { name: 'Focus Remote participant' })
-      ).toBeTruthy();
-      expect(screen.getByTestId('track-local-camera')).toBe(localVideo);
-      expect(screen.getByTestId('track-remote-camera')).toBe(remoteVideo);
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Focus Remote participant' })
-      );
-      expect(
-        screen.getByRole('button', { name: 'Focus yourself' })
-      ).toBeTruthy();
-      expect(screen.getByTestId('track-local-camera')).toBe(localVideo);
-      expect(screen.getByTestId('track-remote-camera')).toBe(remoteVideo);
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Unfocus Remote participant' })
-      );
-      expect(
-        screen.getByRole('button', { name: 'Focus Remote participant' })
-      ).toBeTruthy();
-      expect(screen.getByTestId('track-local-camera')).toBe(localVideo);
-      expect(screen.getByTestId('track-remote-camera')).toBe(remoteVideo);
-    }
-  );
+  it('pins the local shared screen and clears the pin when sharing stops', () => {
+    const controls = setUpCallState([
+      createRemoteParticipant('remote', {}, 'Remote'),
+    ]);
+    controls.setScreenSharing(true);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })[0]
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Unpin Your screen' })
+    ).toHaveLength(2);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Unpin Your screen' })[0]
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })
+    ).toHaveLength(2);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })[0]
+    );
+    controls.setScreenSharing(false);
+    expect(
+      screen.queryByRole('button', { name: 'Unpin Your screen' })
+    ).toBeNull();
+    controls.setScreenSharing(true);
+    expect(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })
+    ).toHaveLength(2);
+  });
+
+  it('keeps the only local tile unchanged when a call becomes solo', () => {
+    const remote = createRemoteParticipant('remote', {}, 'Remote');
+    const controls = setUpCallState([remote]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin You' })[0]);
+    controls.setParticipants(new Map());
+    expect(screen.queryByRole('button', { name: 'Unpin You' })).toBeNull();
+    controls.setParticipants(new Map([[remote.identity, remote]]));
+    expect(screen.getAllByRole('button', { name: 'Pin You' })).toHaveLength(2);
+  });
+
+  it('leaves phone taps for long-press integration', () => {
+    mocks.mobile = true;
+    setUpCallState([createRemoteParticipant('remote', {}, 'Remote')]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.queryByRole('button', { name: 'Pin Remote' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pin You' })).toBeNull();
+  });
 });
+
+it.each(['speaker', 'sidebar'] as const)(
+  'keeps pinned tiles on stage in %s without remounting on unpin',
+  (layout) => {
+    const first = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('first-camera'),
+        },
+      },
+      'First'
+    );
+    const second = createRemoteParticipant('second', {}, 'Second');
+    localStorage.setItem('call.layout', JSON.stringify(layout));
+    setUpCallState([first, second]);
+    const { container } = render(() => (
+      <CallOverlay onLeave={() => undefined} />
+    ));
+    const track = screen.getByTestId('track-first-camera');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin First' })[0]);
+    expect(track.closest('.row-start-1')).toBeTruthy();
+    expect(
+      container.querySelector('[data-call-layout="' + layout + '"]')
+    ).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Pin Second' })).toHaveLength(
+      2
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'Unpin First' })[0]);
+    expect(screen.getByTestId('track-first-camera')).toBe(track);
+  }
+);
 
 describe('CallOverlay Work', () => {
   const account = 'macro|agent@example.com';
