@@ -27,8 +27,7 @@
 the opening slides. The first slide of `/app/signup` links to it (`Sign up as
 agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
 notice pointing agents there. A new account made there, or by redeeming an invite
-sent with **Invite as agent** in Settings → Team → Members or
-`team.invite(email, { agent: true })`, is an agent. An existing account keeps its
+sent with `team.invite(email, { agent: true })`, is an agent. An existing account keeps its
 type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
 account that isn't a new agent continues to `/app/team-invite?id=<id>`.
 
