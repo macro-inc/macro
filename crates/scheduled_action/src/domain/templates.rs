@@ -25,8 +25,8 @@ use super::ports::{RoutineTemplateRepo, RoutineTemplateService, ScheduledActionS
 #[cfg(test)]
 mod test;
 
-/// Longest description a template can carry.
-pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
+/// Longest description a template can carry, as for a routine.
+pub use super::models::MAX_DESCRIPTION_CHARS;
 /// Most variables a template can mark.
 pub const MAX_VARIABLES: usize = 100;
 /// PostHog rollout shared with the web app; missing or failed evaluations stay off.
@@ -128,12 +128,18 @@ impl ShareRoutineTemplate {
         if self.variables.len() > MAX_VARIABLES {
             return Err(TemplateInputError::TooManyVariables.into());
         }
+        // Writing as its owner is the owner's choice alone; whoever activates
+        // the template starts attributed to the agent and opts in themselves.
+        let mut task = action.task.clone();
+        if let Value::Object(fields) = &mut task {
+            fields.remove("dangerously_operate_as_user");
+        }
         Ok(TemplateSnapshot {
             action_id,
             name: action.name.clone(),
             description: self.description.trim().to_owned(),
             trigger: action.trigger.clone(),
-            task: action.task.clone(),
+            task,
             variables: self.variables,
         })
     }

@@ -13,6 +13,11 @@ use crate::inbound::axum_router::{
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
+use crate::inbound::draft_router::__path_draft_routine;
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
 use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
@@ -22,9 +27,9 @@ use crate::domain::event_trigger::{
     PayloadConditionInput, PayloadScalar, PropertySelector,
 };
 use crate::domain::models::{
-    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
-    AgentTaskAgent, ExecutionResource, ExecutionResourceType, ExecutionResult, InProgressExecution,
-    LastRun, RoutineModelId, Schedule, ScheduledAction, ScheduledActionUpdate,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind,
+    ExecutionResource, ExecutionResourceType, ExecutionResult, InProgressExecution, Schedule,
+    ScheduledAction, ScheduledActionUpdate,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
@@ -46,6 +51,9 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
+        crate::inbound::axum_router::list_code_upgrades,
+        crate::inbound::axum_router::code_starters,
+        crate::inbound::draft_router::draft_routine,
         crate::inbound::template_router::share_template,
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
@@ -54,11 +62,27 @@ use model::response::EmptyResponse;
     components(
         schemas(
             AiAdmissionErrorBody,
+            crate::domain::code_check::StarterRoutine,
+            crate::inbound::draft_router::DraftRoutineRequest,
+            crate::domain::drafts::DraftRequest,
+            crate::domain::drafts::RoutineSoFar,
+            crate::domain::drafts::StepKind,
+            crate::domain::drafts::DraftContext,
+            crate::domain::drafts::Workspace,
+            crate::domain::drafts::NamedItem,
+            crate::domain::drafts::WorkspaceTag,
+            crate::domain::drafts::WorkspaceAgent,
+            crate::domain::drafts::Draft,
+            crate::domain::drafts::DraftedRoutine,
+            crate::domain::drafts::DraftedStep,
+            crate::domain::drafts::StepProblem,
+            crate::domain::code_upgrade::CodeUpgrade,
+            crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,
             ScheduledActionResponse,
             ActionConfiguration,
             ActionConfigurationUpdate,
-                        ActionTrigger,
+            ActionTrigger,
             crate::domain::event_trigger::RoutineTrigger,
             crate::domain::event_trigger::RoutineTriggers,
             EventFilter,
@@ -71,21 +95,21 @@ use model::response::EmptyResponse;
             SetScheduledActionEnabled,
             Schedule,
             ActionKind,
-            AgentTask,
-            AgentTaskAgent,
-            RoutineModelId,
             ExecutionResource,
             ExecutionResourceType,
             ExecutionResult,
             InProgressExecution,
             ActionExecutionRecord,
-            LastRun,
             ScheduledActionUpdate,
             EmptyResponse,
             crate::domain::templates::RoutineTemplate,
             crate::domain::templates::ShareRoutineTemplate,
             crate::domain::templates::TemplateVariable,
             crate::domain::templates::VariableFill,
+            routine_program::AgentTask,
+            routine_program::AgentSelection,
+            routine_program::RoutineModelId,
+            routine_program::CodeIdentity,
         ),
     ),
     tags(

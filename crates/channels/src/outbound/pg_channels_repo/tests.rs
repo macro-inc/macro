@@ -377,16 +377,15 @@ async fn seed_channel_list_notifications(pool: &Pool<Postgres>) -> anyhow::Resul
 }
 
 #[test]
-fn channel_list_pending_states_read_the_user_notifications_once() {
+fn channel_list_states_seek_the_viewer_entity_index() {
     use item_filters::NotificationState::{Done, Seen, Unseen};
 
-    for state in [Unseen, Seen] {
+    for state in [Unseen, Seen, Done] {
         let sql = super::build_channel_notification_state_clause(state);
-        assert!(sql.contains("= ANY(ARRAY("), "{sql}");
-        assert!(!sql.contains("n.event_item_id = (c.id)"), "{sql}");
+        assert!(sql.contains("un.event_item_id = (c.id)::text"), "{sql}");
+        assert!(!sql.contains("ARRAY("), "{sql}");
+        assert!(!sql.contains("JOIN notification"), "{sql}");
     }
-    let done = super::build_channel_notification_state_clause(Done);
-    assert!(done.contains("n.event_item_id = (c.id)::text"), "{done}");
 }
 
 #[sqlx::test(
@@ -3022,6 +3021,16 @@ fn home_unread_thread_feed_reads_notifications_once() {
     assert_eq!(sql.matches("FROM user_notification").count(), 1, "{sql}");
     assert!(!sql.contains("INTERSECT"), "{sql}");
     assert!(!sql.contains("UNION"), "{sql}");
+    // Matches idx_user_notification_channel_threads' predicate.
+    assert!(
+        sql.contains("un.notification_event_type <> 'channel_message_send'"),
+        "{sql}"
+    );
+    assert!(!sql.contains("tm.id = m.id OR"), "{sql}");
+    assert!(
+        sql.contains("ON c.id = m.channel_message_parent_id"),
+        "{sql}"
+    );
 }
 
 #[sqlx::test(

@@ -14,7 +14,8 @@ before changing ingestion or delivery behavior.
 - `src/domain/delivery.rs`: the delivery state machine and retry policy.
 - `src/inbound/kafka_consumer.rs` / `kafka_stream_consumer.rs`: ingestion
   consumers for `macro.documents`, `macro.channels`, `macro.messages`,
-  `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`.
+  `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
+  and `macro.call_notifications`.
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 
@@ -33,7 +34,9 @@ before changing ingestion or delivery behavior.
 ## Recipes
 
 - Add a new ingestible event: `src/domain/ingestion.rs` (match rule) →
-  `src/inbound/kafka_consumer.rs` (subscribe/decode) → README's event table.
+  `src/inbound/kafka_consumer.rs` and `kafka_stream_consumer.rs`
+  (subscribe/decode) → README's event table. Private call notifications
+  match only the named user's personal workspace and stream.
 - Change delivery retry behavior: `src/domain/delivery.rs` → README's retry
   schedule table (keep them in sync).
 

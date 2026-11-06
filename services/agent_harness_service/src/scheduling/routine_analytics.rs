@@ -51,6 +51,7 @@ impl From<&FinishedRoutineRun> for RunProperties {
             target: match run.target {
                 RunTarget::Model => "model",
                 RunTarget::Agent => "agent",
+                RunTarget::Steps => "steps",
                 RunTarget::Unknown => "unknown",
             },
             outcome: match run.end {

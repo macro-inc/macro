@@ -2,6 +2,7 @@
 use agent_code_mode::domain::{
     CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
 };
+use agent_correlation::domain::CorrelationRepository;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
@@ -12,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct RunCredentials {
     pub signer: MacroApiTokenSigner,
+    pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
     pub hosts: BTreeMap<String, String>,
 }
@@ -25,11 +27,26 @@ impl ExecutionCredentials for RunCredentials {
         cancel: CancellationToken,
     ) -> Result<RunEnvironment, CodeModeError> {
         let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        let correlation = self
+            .correlations
+            .create(identity.session.as_uuid(), identity.agent_id.as_uuid())
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "could not persist code-mode correlation");
+                CodeModeError::Unavailable
+            })?;
         // No refresh credential. Covers the 30-second queue/run deadline plus
         // clock margin; a normal user token expires rather than revoking on exit.
         let token = self
             .signer
-            .mint_for_agent(&actor, 60, Some(identity.agent_id.as_uuid()), None)
+            .mint_for_agent(
+                &actor,
+                60,
+                Some(identity.agent_id.as_uuid()),
+                None,
+                None,
+                Some(correlation),
+            )
             .await
             .map_err(|error| {
                 tracing::error!(?error, "could not mint execution credential");
@@ -41,6 +58,7 @@ impl ExecutionCredentials for RunCredentials {
             hosts: self.hosts.clone(),
             session_id: Some(identity.session.as_uuid()),
             execution_id: Some(identity.execution.as_uuid()),
+            unattended: None,
         })
     }
 }
@@ -53,6 +71,7 @@ impl ExecutionCredentials for RunCredentials {
 /// no owner gate.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
+    pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub hosts: BTreeMap<String, String>,
 }
 
@@ -62,12 +81,25 @@ impl UserExecutionCredentials for UserRunCredentials {
         &self,
         user: &MacroUserIdStr<'static>,
         caller: &ai_toolset::ToolCaller,
+        session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
         let agent = match caller {
             ai_toolset::ToolCaller::Agent(agent) => *agent,
             ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
                 bot_id::MACRO_AI_BOT_ID
             }
+        };
+        let correlation = match session {
+            Some(session) => Some(
+                self.correlations
+                    .create(session, agent.as_uuid())
+                    .await
+                    .map_err(|error| {
+                        tracing::error!(?error, "could not persist code-mode correlation");
+                        CodeModeError::Unavailable
+                    })?,
+            ),
+            None => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
@@ -77,6 +109,8 @@ impl UserExecutionCredentials for UserRunCredentials {
                 60,
                 Some(agent.as_uuid()),
                 caller.via().map(str::to_owned),
+                None,
+                correlation,
             )
             .await
             .map_err(|error| {
@@ -89,12 +123,13 @@ impl UserExecutionCredentials for UserRunCredentials {
             hosts: self.hosts.clone(),
             session_id: None,
             execution_id: None,
+            unattended: None,
         })
     }
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.
-fn trace_headers() -> BTreeMap<String, String> {
+pub(crate) fn trace_headers() -> BTreeMap<String, String> {
     let mut headers = axum::http::HeaderMap::new();
     macro_tower_layers::inject_trace_headers(&mut headers);
     headers

@@ -64,6 +64,18 @@
       assetFilter =
         path: _type:
         builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+      # `crates/routine_program` embeds its starter programs with `include_str!`.
+      # Only these `.ts` files: matching every `.ts` would pull the web app into
+      # the Rust source hash.
+      routineStartersFilter =
+        path: _type: builtins.match ".*/crates/routine_program/src/starters/[^/]*\\.ts$" (toString path) != null;
+      # Rust templates (askama, minijinja) include their stylesheets, such as
+      # `services/mcp_auth_proxy/templates/broker_page.css`. Only `templates/`
+      # stylesheets under Rust crates and services: matching every `.css` would
+      # pull the web app into the Rust source hash.
+      templateCssFilter =
+        path: _type:
+        builtins.match ".*/(crates|services)/[^/]+/templates/.*\\.css$" (toString path) != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
@@ -73,6 +85,8 @@
         || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
+        || (routineStartersFilter path type)
+        || (templateCssFilter path type)
         || (binFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
@@ -1046,6 +1060,7 @@
           zip
           cargo-info
           cargo-udeps
+          cargo-shear
           cargo-tauri
           cargo-lambda
           cargo-zigbuild
