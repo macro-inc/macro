@@ -6,6 +6,8 @@ use std::{collections::HashMap, sync::Arc};
 mod test;
 
 mod item_changes;
+mod subscription_error;
+use subscription_error::SubscriptionDataError;
 
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -83,9 +85,7 @@ impl CustomerRepositoryImpl {
         if let Some(pending) = pending
             && Some(pending.as_str()) != operation
         {
-            return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
-                "subscription has an unresolved item change"
-            )));
+            return Err(SubscriptionDataError::UnresolvedItemChange.into());
         }
         Ok(guard)
     }
@@ -869,10 +869,10 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .iter()
             .find_map(|item| item.price.as_ref()?.recurring.as_ref())
             .map(|recurring| cadence(recurring.interval))
-            .context("subscription has no recurring item")?;
+            .ok_or(SubscriptionDataError::MissingRecurringItem)?;
         let current_period_end =
             chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
-                .context("invalid subscription period end")?;
+                .ok_or(SubscriptionDataError::InvalidPeriodEnd)?;
         Ok(SubscriptionTerms {
             current_period_end,
             interval,
@@ -885,16 +885,20 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         price_id: &stripe_price_id::StripePriceId,
     ) -> Result<PriceInfo, CustomerError> {
-        let id: stripe::PriceId = price_id
-            .as_str()
-            .parse()
-            .map_err(|e| CustomerError::StorageLayerError(anyhow::Error::from(e)))?;
+        let id: stripe::PriceId = price_id.as_str().parse().map_err(|error| {
+            SubscriptionDataError::Internal(rootcause::Report::new(error).into_dynamic())
+        })?;
         let price = stripe::Price::retrieve(&self.client, &id, &[])
             .await
             .map_err(storage)?;
         Ok(PriceInfo {
-            amount: price.unit_amount.context("price has no unit amount")?,
-            currency: price.currency.context("price has no currency")?.to_string(),
+            amount: price
+                .unit_amount
+                .ok_or(SubscriptionDataError::MissingUnitAmount)?,
+            currency: price
+                .currency
+                .ok_or(SubscriptionDataError::MissingCurrency)?
+                .to_string(),
             interval: price.recurring.map(|recurring| cadence(recurring.interval)),
         })
     }
@@ -1048,7 +1052,7 @@ fn item_quantity_updates(
             Some((_, delta)) => {
                 *delta = delta
                     .checked_add(change.delta)
-                    .context("item quantity overflow")?
+                    .ok_or(SubscriptionDataError::QuantityOverflow)?
             }
             None => deltas.push((change.price_id.as_str(), change.delta)),
         }
@@ -1067,7 +1071,7 @@ fn item_quantity_updates(
         let quantity = i64::try_from(current)
             .ok()
             .and_then(|current| current.checked_add(delta))
-            .context("item quantity overflow")?;
+            .ok_or(SubscriptionDataError::QuantityOverflow)?;
         let quantity =
             u64::try_from(quantity).map_err(|_| CustomerError::QuantityBelowZero(price.into()))?;
         updates.push(match existing {

@@ -5,6 +5,9 @@ use pairing_id::PairingId;
 #[cfg(test)]
 mod tests;
 
+mod persistence_error;
+use persistence_error::HarnessPersistenceError;
+
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
@@ -82,7 +85,10 @@ impl TryFrom<HarnessRow> for Harness {
             last_connected_at: row.last_connected_at,
             capabilities: row.capabilities.0,
             computer_id: row.computer_id.map(ComputerId::new_from_uuid),
-            claude_mode: row.claude_mode.parse().map_err(anyhow::Error::msg)?,
+            claude_mode: row
+                .claude_mode
+                .parse()
+                .map_err(HarnessPersistenceError::InvalidClaudeMode)?,
         })
     }
 }
@@ -122,7 +128,7 @@ async fn fetch_harness(
 async fn insert_harness(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     harness: &NewHarness,
-) -> anyhow::Result<()> {
+) -> Result<(), HarnessPersistenceError> {
     let (owner_user_id, team_id) = match &harness.owner {
         HarnessOwner::User { user_id } => (Some(user_id.as_str()), None),
         HarnessOwner::Team { team_id } => (None, Some(*team_id)),
@@ -143,7 +149,7 @@ async fn insert_harness(
     )
     .execute(&mut **tx)
     .await
-    .context("failed to insert harness")?;
+    .map_err(|error| HarnessPersistenceError::Internal(rootcause::Report::new(error).context("failed to insert harness").into_dynamic()))?;
     Ok(())
 }
 
@@ -152,7 +158,7 @@ async fn insert_hosted_pairing(
     pairing: &NewPairing,
     harness_id: Uuid,
     approved_by: &str,
-) -> anyhow::Result<()> {
+) -> Result<(), HarnessPersistenceError> {
     sqlx::query!(
         r#"
         INSERT INTO harness_pairing_requests
@@ -172,7 +178,13 @@ async fn insert_hosted_pairing(
     )
     .execute(&mut **tx)
     .await
-    .context("failed to insert approved pairing")?;
+    .map_err(|error| {
+        HarnessPersistenceError::Internal(
+            rootcause::Report::new(error)
+                .context("failed to insert approved pairing")
+                .into_dynamic(),
+        )
+    })?;
     Ok(())
 }
 
@@ -309,8 +321,14 @@ impl HarnessRepo for PgHarnessRepo {
     ) -> Result<HostedPairingUpsert, Self::Err> {
         let computer_id = harness
             .computer_id
-            .context("a hosted pairing needs the harness's computer id")?;
-        let mut tx = self.pool.begin().await.context("failed to begin tx")?;
+            .ok_or(HarnessPersistenceError::MissingComputer)?;
+        let mut tx = self.pool.begin().await.map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to begin tx")
+                    .into_dynamic(),
+            )
+        })?;
         // Serializes retries for one computer, including the first insert,
         // which has no row to lock yet.
         sqlx::query!(
@@ -319,7 +337,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .execute(&mut *tx)
         .await
-        .context("failed to lock the computer's pairing")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to lock the computer's pairing")
+                    .into_dynamic(),
+            )
+        })?;
 
         let existing = sqlx::query_scalar!(
             r#"
@@ -331,7 +355,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .fetch_optional(&mut *tx)
         .await
-        .context("failed to lock the computer's harness")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to lock the computer's harness")
+                    .into_dynamic(),
+            )
+        })?;
 
         let outcome = match existing {
             None => {
@@ -354,7 +384,13 @@ impl HarnessRepo for PgHarnessRepo {
                 )
                 .fetch_optional(&mut *tx)
                 .await
-                .context("failed to look up the harness's pairing")?;
+                .map_err(|error| {
+                    HarnessPersistenceError::Internal(
+                        rootcause::Report::new(error)
+                            .context("failed to look up the harness's pairing")
+                            .into_dynamic(),
+                    )
+                })?;
                 match existing_pairing {
                     Some(row) if row.status == "approved" => {
                         let pairing_id = row.id;
@@ -369,7 +405,13 @@ impl HarnessRepo for PgHarnessRepo {
                         )
                         .execute(&mut *tx)
                         .await
-                        .context("failed to rotate the pairing's device secret")?;
+                        .map_err(|error| {
+                            HarnessPersistenceError::Internal(
+                                rootcause::Report::new(error)
+                                    .context("failed to rotate the pairing's device secret")
+                                    .into_dynamic(),
+                            )
+                        })?;
                         HostedPairingUpsert::Rotated {
                             pairing_id: PairingId::new_from_uuid(pairing_id),
                         }
@@ -385,14 +427,26 @@ impl HarnessRepo for PgHarnessRepo {
                         )
                         .execute(&mut *tx)
                         .await
-                        .context("failed to revoke harness tokens for re-enrollment")?;
+                        .map_err(|error| {
+                            HarnessPersistenceError::Internal(
+                                rootcause::Report::new(error)
+                                    .context("failed to revoke harness tokens for re-enrollment")
+                                    .into_dynamic(),
+                            )
+                        })?;
                         sqlx::query!(
                             "DELETE FROM harness_pairing_requests WHERE harness_id = $1",
                             harness_id,
                         )
                         .execute(&mut *tx)
                         .await
-                        .context("failed to retire the previous pairing")?;
+                        .map_err(|error| {
+                            HarnessPersistenceError::Internal(
+                                rootcause::Report::new(error)
+                                    .context("failed to retire the previous pairing")
+                                    .into_dynamic(),
+                            )
+                        })?;
                         insert_hosted_pairing(
                             &mut tx,
                             &pairing,
@@ -406,7 +460,13 @@ impl HarnessRepo for PgHarnessRepo {
                 }
             }
         };
-        tx.commit().await.context("failed to commit")?;
+        tx.commit().await.map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to commit")
+                    .into_dynamic(),
+            )
+        })?;
         Ok(outcome)
     }
 
@@ -423,7 +483,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to look up the computer's harness")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to look up the computer's harness")
+                    .into_dynamic(),
+            )
+        })?;
         Ok(harness_id.map(HarnessId::new_from_uuid))
     }
 
@@ -440,7 +506,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to look up the harness's computer")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to look up the harness's computer")
+                    .into_dynamic(),
+            )
+        })?;
         Ok(computer_id.flatten().map(ComputerId::new_from_uuid))
     }
 
@@ -460,7 +532,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .execute(&self.pool)
         .await
-        .context("failed to set harness capabilities")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to set harness capabilities")
+                    .into_dynamic(),
+            )
+        })?;
         Ok(updated.rows_affected() == 1)
     }
 
@@ -480,7 +558,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .execute(&self.pool)
         .await
-        .context("failed to set harness claude mode")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to set harness claude mode")
+                    .into_dynamic(),
+            )
+        })?;
         Ok(updated.rows_affected() == 1)
     }
 
@@ -535,7 +619,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .fetch_optional(&mut *tx)
         .await
-        .context("failed to lock the pairing's harness")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to lock the pairing's harness")
+                    .into_dynamic(),
+            )
+        })?;
         if harness_id.is_none() {
             return Ok(None);
         }
@@ -636,7 +726,13 @@ impl HarnessRepo for PgHarnessRepo {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to update harness")?;
+        .map_err(|error| {
+            HarnessPersistenceError::Internal(
+                rootcause::Report::new(error)
+                    .context("failed to update harness")
+                    .into_dynamic(),
+            )
+        })?;
 
         row.map(Harness::try_from).transpose()
     }

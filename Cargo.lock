@@ -9846,6 +9846,7 @@ dependencies = [
  "model-error-response",
  "pairing_id",
  "rand 0.9.4",
+ "rootcause",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
