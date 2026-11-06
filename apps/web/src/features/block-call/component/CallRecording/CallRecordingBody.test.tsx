@@ -46,6 +46,7 @@ vi.mock('@core/component/CustomScrollbar', () => ({
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@ui', () => ({
+  Tabs: () => null,
   Button: (props: { onClick: () => void; children: JSX.Element }) => (
     <button onClick={() => props.onClick()}>{props.children}</button>
   ),
