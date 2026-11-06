@@ -62,6 +62,10 @@ just kube-local up kube-a --slot 0
 just kube-local down kube-a
 ```
 
+Unchanged isolated worker binaries retain their modification times, so rebuilds
+do not restart them. Changed binaries replace their executable inode atomically;
+running processes continue until their targeted restart or roll.
+
 `stop` preserves PVCs; the next `up` starts backing stores first, restores
 LocalStack resources and then starts application pods. As in Compose, restoring
 LocalStack resources does not recover objects lost from its ephemeral storage. `down` deletes only
