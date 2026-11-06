@@ -204,11 +204,12 @@ impl InstanceName {
                 .bytes()
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
             && !raw.starts_with('-')
-            && !raw.ends_with('-');
+            && !raw.ends_with('-')
+            && !raw.contains("--");
         ensure!(
             ok,
             "instance name '{raw}' must be a DNS label: lowercase [a-z0-9-], at most 30 \
-             characters, not starting or ending with '-'"
+             characters, not starting or ending with '-', without '--'"
         );
         Ok(Self(raw.to_owned()))
     }
@@ -448,7 +449,13 @@ fn read_state(instance: &Instance) -> State {
 
 fn write_state(instance: &Instance, state: &State) -> Result<()> {
     instance.ensure_artifact_dir()?;
-    std::fs::write(state_path(instance), serde_json::to_string_pretty(state)?)?;
+    // It holds every generated credential. Replaced by rename, so a failure cannot lose
+    // them: databases keep the passwords they were created with.
+    let path = state_path(instance);
+    let partial = path.with_extension("json.tmp");
+    let _ = std::fs::remove_file(&partial);
+    write_private(&partial, &serde_json::to_string_pretty(state)?)?;
+    std::fs::rename(&partial, &path)?;
     Ok(())
 }
 
@@ -837,7 +844,8 @@ fn chart(args: &ChartArgs) -> Result<()> {
         .next()
         .context("nix build printed no path")?;
     let out = repo_root().join(&args.out);
-    if out.exists() {
+    // Not `exists`: it follows the link, and garbage collection may have removed the target.
+    if out.symlink_metadata().is_ok() {
         std::fs::remove_file(&out)?;
     }
     std::fs::create_dir_all(out.parent().context("chart path has no parent")?)?;

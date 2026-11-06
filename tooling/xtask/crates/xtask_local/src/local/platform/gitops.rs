@@ -417,8 +417,9 @@ fn deploy_checkout() -> Result<PathBuf> {
 }
 
 /// The file an environment's Application is published as under `apps/`.
-fn app_link(env: &str, application_file: &str) -> String {
-    format!("{}-{application_file}", env.replace('/', "-"))
+pub(super) fn app_link(env: &str, application_file: &str) -> String {
+    // Two dashes, which an instance name cannot hold: `demo`'s prefix must not match `demo-2`.
+    format!("{}--{application_file}", env.replace('/', "-"))
 }
 
 /// Commit an environment's rendered manifests and return the revision.

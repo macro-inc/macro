@@ -278,3 +278,16 @@ fn a_google_provider_exists_without_a_real_client() {
     ]));
     assert_eq!(real.client_id, "abc");
 }
+
+#[test]
+fn an_instance_name_cannot_hold_the_app_link_separator() {
+    assert!(InstanceName::parse("demo-2").is_ok());
+    assert!(InstanceName::parse("demo--2").is_err());
+}
+
+#[test]
+fn one_instance_app_link_is_not_a_prefix_of_another() {
+    let prefix = gitops::app_link("instances/demo", "");
+    assert!(!gitops::app_link("instances/demo-2", "macro-demo-2.yaml").starts_with(&prefix));
+    assert!(gitops::app_link("instances/demo", "macro-demo.yaml").starts_with(&prefix));
+}
