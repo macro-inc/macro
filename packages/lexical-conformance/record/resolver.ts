@@ -10,7 +10,8 @@ export function membranePlugin(): Plugin {
     enforce: 'pre',
     async transform(code, id) {
       if (
-        process.env.LEXICAL_ORACLE === 'production' &&
+        (process.env.LEXICAL_ORACLE === 'production' ||
+          process.env.LEXICAL_REPLAY_ONLY === '1') &&
         id.includes('/lexical-upstream/packages/') &&
         !id.includes('/__tests__/')
       ) {
@@ -19,7 +20,11 @@ export function membranePlugin(): Plugin {
           .replaceAll("process.env.NODE_ENV === 'production'", 'true');
         if (replaced !== code) return { code: replaced, map: null };
       }
-      if (!id.includes('/__tests__/') || id.includes('/lexical-conformance/'))
+      if (
+        process.env.LEXICAL_REPLAY_ONLY === '1' ||
+        !id.includes('/__tests__/') ||
+        id.includes('/lexical-conformance/')
+      )
         return;
       const source = ts.createSourceFile(
         id,
@@ -65,14 +70,17 @@ export function membranePlugin(): Plugin {
         )
           continue;
         if (specifier.startsWith('@lexical/react')) continue;
-        const name = resolved.id.includes('/__tests__/utils')
-          ? 'lexical/__tests__/utils'
-          : specifier.startsWith('.')
-            ? `lexical/${resolved.id
-                .split('/')
-                .at(-1)
-                ?.replace(/\.[^.]+$/, '')}`
-            : specifier;
+        const location = resolved.id.match(
+          /\/packages\/(lexical[^/]*)\/src\/(.+?)\.[cm]?[jt]sx?$/
+        );
+        if (!location) continue;
+        const packageName =
+          location[1] === 'lexical'
+            ? 'lexical'
+            : `@lexical/${location[1].slice(8)}`;
+        const relative = location[2].replace(/\/index$/, '');
+        const name =
+          relative === 'index' ? packageName : `${packageName}/${relative}`;
         const namespace = `__lexModule${serial++}`;
         const bindings = node.importClause.namedBindings;
         const lines = [
