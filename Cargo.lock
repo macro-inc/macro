@@ -1157,16 +1157,11 @@ dependencies = [
 name = "ai_projections"
 version = "0.1.0"
 dependencies = [
- "agent",
- "ai_tools",
- "ai_toolset",
- "ai_usage",
  "anyhow",
  "aws-sdk-sqs",
  "axum",
  "chrono",
  "connection_gateway_client",
- "futures",
  "http-body-util",
  "macro_authorization",
  "macro_db_migrator",

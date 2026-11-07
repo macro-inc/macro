@@ -44,7 +44,7 @@ agent_session_realtime = { workspace = true, default-features = true }
 agent_trigger = { workspace = true, features = ["outbound"] }
 ai_billing = { workspace = true, features = ["pg-admission"] }
 agent_api_keys = { workspace = true }
-ai_projections = { workspace = true, features = ["agent"] }
+ai_projections = { workspace = true }
 ai_tools = { workspace = true }
 ai_toolset = { workspace = true }
 calendar_events = { workspace = true, features = ["postgres"] }

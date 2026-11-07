@@ -102,7 +102,7 @@ pub type DcsAiProjectionService =
     ai_projections::domain::ai_projection_service::AiProjectionServiceImpl<
         ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl,
         sqs_client::SQS,
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator,
+        crate::cognition::service::projection_generator::AgentProjectionGenerator,
         ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier,
     >;
 

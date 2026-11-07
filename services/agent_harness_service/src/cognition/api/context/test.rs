@@ -676,7 +676,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+        crate::cognition::service::projection_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
             ai_tools::tools_for(ai_tools::AiHost::Chat),
         );

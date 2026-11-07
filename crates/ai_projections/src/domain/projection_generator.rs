@@ -24,7 +24,7 @@ pub struct GenerationRequest<'a> {
 ///
 /// This is the seam that keeps the heavy agent/toolset dependencies out of the
 /// domain crate: the service depends on this trait, and an outbound adapter
-/// (`outbound::agent_generator`) implements it using the shared agent loop.
+/// (`agent_harness_service`'s `cognition::service::projection_generator`) implements it using the shared agent loop.
 pub trait ProjectionGenerator: Clone + Send + Sync + 'static {
     /// Runs the request's prompt as `user_id` against the AI toolset, returning
     /// the generated result text (or schema-conforming JSON).

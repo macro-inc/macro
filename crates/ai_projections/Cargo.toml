@@ -20,16 +20,6 @@ outbound = [
   "dep:model-entity",
   "ports",
 ]
-# Agent-backed projection generator (the outbound adapter that runs the AI
-# toolset). Pulls in the heavy agent/toolset dependencies.
-agent = [
-  "outbound",
-  "dep:ai_tools",
-  "dep:ai_toolset",
-  "dep:agent",
-  "dep:ai_usage",
-  "dep:futures",
-]
 ports = ["dep:tokio"]
 worker = [
   "ports",
@@ -73,13 +63,6 @@ model-entity = { workspace = true, optional = true }
 # Worker (inbound SQS poller) dependencies
 sqs_worker = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
-
-# Agent generator dependencies (the AI toolset adapter)
-ai_tools = { workspace = true, optional = true }
-ai_toolset = { workspace = true, optional = true }
-agent = { workspace = true, optional = true }
-ai_usage = { workspace = true, optional = true }
-futures = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
