@@ -30,6 +30,12 @@ partial passing fixtures. Cases with mutating callbacks are A-hand, and DOM
 assertions are view cases. Fixture filenames hash the full test identity so long
 or punctuation-heavy upstream names are safe on every filesystem.
 
+Import-time entropy is captured separately and currently rejects admission because
+the interpreter reuses loaded modules. DOM-built partial initial states and
+unsupported callback or plugin state also remain indexed exclusions. Passing
+regeneration checks proves the admitted corpus is stable; it does not claim that
+every upstream test is recordable.
+
 The source-range manifest in `record/s2-ranges.json` is the resolved file/line
 citations from the S2 feature inventory for this upstream pin. V8 offsets are
 mapped through the oracle's source maps before intersecting these citations;
@@ -46,3 +52,6 @@ concrete operations and the explicitly registered upstream plugins run. Calls
 originating inside upstream source are excluded using both call-site attribution
 and a depth guard; callback scopes restore depth in `finally`. Cached proxies
 preserve identity, while shadow targets permit reads from frozen selections.
+
+The recorded oracle is derived from upstream Lexical; its MIT notice is retained
+in [UPSTREAM-LICENSE](UPSTREAM-LICENSE).
