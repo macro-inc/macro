@@ -184,6 +184,9 @@ tools — hexagonal, heavily feature-gated.
   `MailboxError::Effect` (`defer_reason=effect`) is for a projection effect
   that fails outside the database; email-service's `MailboxEffects` maps its
   database steps with `database_failed` and everything else with `failed`.
+  Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
+  uploads, the attachment (`outlook.attachment_id`); never return one without
+  a cause.
 - "outlook import completed" fires from `settle_import` (`mailbox_pg.rs`)
   under the link lock, once per import run: the folder-catalog stream's
   `import_completed_at` is stamped when every folder is enumerated and no
