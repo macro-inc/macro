@@ -38,3 +38,16 @@ fn nonempty_overflow_delegates_new_block_to_parent() -> crate::Result<()> {
     assert_eq!(tx.text_content(o), "overflow");
     Ok(())
 }
+#[test]
+fn overflow_is_excluded_from_every_copy_destination() -> crate::Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<OverflowNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let overflow = create_overflow_node(&mut tx)?;
+    assert!(tx.exclude_from_copy(overflow, None));
+    assert!(tx.exclude_from_copy(overflow, Some(CopyDestination::Clone)));
+    assert!(tx.exclude_from_copy(overflow, Some(CopyDestination::Html)));
+    Ok(())
+}

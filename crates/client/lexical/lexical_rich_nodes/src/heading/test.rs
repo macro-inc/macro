@@ -273,3 +273,16 @@ fn collapse_preserves_heading_before_nonparagraph_sibling() -> crate::Result<()>
     assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![h.key(), quote.key()]);
     Ok(())
 }
+#[test]
+fn heading_extracts_with_child_for_clone_and_html() -> crate::Result<()> {
+    let mut editor = register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let heading = create_heading_node(&mut tx, HeadingTagType::H1)?;
+    let text = tx.create_text("heading")?;
+    tx.append(heading, &[text.key()])?;
+    assert!(tx.extract_with_child(heading, text.key(), None, CopyDestination::Clone));
+    assert!(tx.extract_with_child(heading, text.key(), None, CopyDestination::Html));
+    Ok(())
+}

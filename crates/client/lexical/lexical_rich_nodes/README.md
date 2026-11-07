@@ -32,3 +32,22 @@ surrogate pairs with `find_from_utf16` would change legacy JavaScript boundaries
 matcher checks. `text/entity/test.rs` exercises transform split/extension,
 mode guards, reversal and property-copy behavior; upstream has no standalone
 text-entity unit suite.
+
+`rich_text` exposes the model command functions; the view owns keyboard event
+routing, host movement targets, clipboard reads, platform/language checks and
+preventDefault. `plain_text` keeps its range-only guards and inserts a line break
+for Enter. `tab` and `utils` share block indentation instead of implementing a
+second path. A supplied maximum is exclusive; zero is unlimited.
+
+Escape-format config retains entry order. Trigger fields are `Option<bool>`:
+omitted fields preserve existing values during shallow merge, while `Some(false)`
+explicitly disables one trigger. This retains upstream JavaScript's distinction
+between an absent property and false, which a plain boolean struct cannot express.
+The format entry itself is `None` to disable that format completely.
+
+Literal test ports include EscapeFormatTriggers (boundary, shift, capitalization,
+merge/null and runtime config cases), LexicalTabNode (both insertion/typing cases),
+RichTextNodeSelectionEnter (block/inline decorators), and both
+RichTextInlineDecoratorMoveToStart/End suites (including no-op/safety cases).
+Additional explicit tests cover rich/plain command return values, host-resolved
+deletion, indentation limits, selection slots and UTF-16 drop positions.

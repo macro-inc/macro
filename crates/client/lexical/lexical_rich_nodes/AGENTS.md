@@ -9,7 +9,7 @@ and text-entity behavior. DOM events, clipboard access and layout stay in views.
 
 - Depends on `lexical_model` and the patched `regress`; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
-- Register node types separately from their transforms and command handlers.
+- Keep block-only registration separate from opt-in transforms and plugins.
 - Use selection slots in hooks; detached selections must not read the active range.
 - Use `text::entity` for every text entity; `text_entity` only re-exports it.
 - Legacy JS regexes match UTF-16 code units with `find_from_ucs2`.
