@@ -136,7 +136,7 @@ mcp_client = { workspace = true }
 mcp_select = { workspace = true }
 memory = { workspace = true }
 messages = { workspace = true, features = ["broker", "delivery", "outbound"] }
-model = { workspace = true }
+model = { workspace = true, features = ["axum"] }
 model-entity = { workspace = true }
 model-error-response = { workspace = true }
 model_notifications = { workspace = true }
