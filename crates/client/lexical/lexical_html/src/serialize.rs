@@ -65,7 +65,9 @@ pub fn outer_html(node: &HtmlNode, output: &mut String) {
                 }
             }
             output.push('>');
-            if !VOID.iter().any(|tag| element.tag.eq_ignore_ascii_case(tag)) {
+            if !element.children.is_empty()
+                || !VOID.iter().any(|tag| element.tag.eq_ignore_ascii_case(tag))
+            {
                 for child in &element.children {
                     outer_html(child, output);
                 }

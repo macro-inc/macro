@@ -11,3 +11,6 @@ thiserror = { workspace = true }
 base64 = { workspace = true }
 regress = { workspace = true }
 nom = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
