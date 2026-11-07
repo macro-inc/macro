@@ -56,6 +56,10 @@ the gateway `/email` prefix.
 
 ## Gotchas
 
+- The API's server spans come from `macro_tower_layers`
+  (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
+  exporter's INFO filter, so an API wrapped in it sends no server spans.
+
 - Provider-sync deletions deferred by active sends publish no deletion event; scheduled recovery reconciles the retained marker before trying to claim delivery.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.
