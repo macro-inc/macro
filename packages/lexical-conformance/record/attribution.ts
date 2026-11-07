@@ -24,5 +24,10 @@ export function isTestFrame(stack?: string): boolean {
 }
 
 export function isOracleFrame(): boolean {
-  return /lexical-upstream\/packages\//.test(callerFrame());
+  const stack = new Error().stack ?? '';
+  const frame = callerFrame(stack);
+  return (
+    /lexical-upstream\/packages\//.test(frame) ||
+    (/\/nanoid\//.test(frame) && /lexical-upstream\/packages\//.test(stack))
+  );
 }

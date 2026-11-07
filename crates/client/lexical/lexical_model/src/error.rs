@@ -7,6 +7,44 @@ pub enum Error {
     /// Required per-editor state was not installed.
     #[error("unknown extension state")]
     UnknownExtensionState,
+    /// Invalid explicit caret offset.
+    #[error("invalid text offset {offset:?} for size {size:?} at {key}")]
+    InvalidTextOffset {
+        /// Requested position.
+        offset: Utf16Offset,
+        /// Available text length.
+        size: Utf16Offset,
+        /// Origin key.
+        key: NodeKey,
+    },
+    /// A text point names a non-text node.
+    #[error("caret text point {key} has node type {type_name}")]
+    CaretFromPointNotText {
+        /// Actual type.
+        type_name: &'static str,
+        /// Origin key.
+        key: NodeKey,
+    },
+    /// An element point names a non-element node.
+    #[error("caret element point {key} has node type {type_name}")]
+    CaretFromPointNotElement {
+        /// Actual type.
+        type_name: &'static str,
+        /// Origin key.
+        key: NodeKey,
+    },
+    /// caret directions do not match.
+    #[error("caret directions do not match")]
+    CaretDirectionMismatch,
+    /// caret origins have no common ancestor.
+    #[error("caret origins have no common ancestor")]
+    NoCommonAncestor,
+    /// caret splice underflow.
+    #[error("caret splice underflow")]
+    CaretSpliceUnderflow,
+    /// caret selection was lost.
+    #[error("caret selection was lost")]
+    RemoveTextSelectionLost,
     /// unknown selection slot.
     #[error("unknown selection slot")]
     UnknownSelectionSlot,
@@ -247,6 +285,13 @@ impl Error {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::UnknownExtensionState => "UnknownExtensionState",
+            Self::InvalidTextOffset { .. } => "InvalidTextOffset",
+            Self::CaretFromPointNotText { .. } => "CaretFromPointNotText",
+            Self::CaretFromPointNotElement { .. } => "CaretFromPointNotElement",
+            Self::CaretDirectionMismatch => "CaretDirectionMismatch",
+            Self::NoCommonAncestor => "NoCommonAncestor",
+            Self::CaretSpliceUnderflow => "CaretSpliceUnderflow",
+            Self::RemoveTextSelectionLost => "RemoveTextSelectionLost",
             Self::UnknownSelectionSlot => "UnknownSelectionSlot",
             Self::NoSelection => "NoSelection",
             Self::NoRangeSelection => "NoRangeSelection",

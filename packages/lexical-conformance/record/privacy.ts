@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import reviewedCases from './privacy-cases.json';
 
 /** Apply the repository's privacy policy without changing oracle values or exceptions. */
 export function privateFixtureNames(files: Map<string, string>): string[] {
@@ -38,6 +39,21 @@ export function excludePrivateFixtures(
   files: Map<string, string>,
   index: Record<string, unknown>[]
 ): void {
+  // Manual review covers real identities that pattern scanners cannot recognize.
+  for (const row of index) {
+    const id = String(row.id);
+    if (!id.startsWith('lexical-core/')) continue;
+    const excluded = Object.entries(reviewedCases).some(
+      ([file, titles]) =>
+        id.includes(`/${file}::`) &&
+        titles.some((title) => title === '*' || id.includes(title))
+    );
+    if (!excluded) continue;
+    if (typeof row.file === 'string') files.delete(row.file);
+    row.file = null;
+    row.tier = 'B-only';
+    (row.reasons as string[]).push('repository-privacy-filter');
+  }
   for (const name of privateFixtureNames(files)) {
     files.delete(name);
     const row = index.find((entry) => entry.file === name);

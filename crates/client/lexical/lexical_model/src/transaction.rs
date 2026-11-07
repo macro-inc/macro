@@ -38,6 +38,7 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "bench-counters")]
     pub(crate) work: WorkCounters,
     pub(crate) detached: Vec<Option<Selection>>,
+    pub(crate) selection_replacements: u64,
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
@@ -68,7 +69,13 @@ impl<'editor> Transaction<'editor> {
             #[cfg(feature = "bench-counters")]
             work: WorkCounters::default(),
             detached: vec![],
+            selection_replacements: 0,
         }
+    }
+    /// Number of active-selection object replacements within this transaction.
+    /// Point edits preserve identity; node replacement clones the selection upstream.
+    pub fn selection_replacements(&self) -> u64 {
+        self.selection_replacements
     }
     /// Borrow the pending state, including uncommitted edits.
     pub fn view(&self) -> StateRef<'_> {

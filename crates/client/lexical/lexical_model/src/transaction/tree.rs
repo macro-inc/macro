@@ -453,6 +453,9 @@ impl Transaction<'_> {
             return Err(Error::IncludeChildrenRequiresElements);
         }
         let selection = self.pending.selection.clone();
+        if selection.is_some() {
+            self.selection_replacements += 1;
+        }
         let previous_size = self.children_size(new);
         let parent = self.parent_or_err(old)?;
         let position = self.index_within_parent(old).ok_or(Error::NoParent(old))?;

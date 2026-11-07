@@ -56,3 +56,6 @@ mod pipeline;
 pub use pipeline::*;
 mod commit;
 pub use commit::*;
+
+mod caret;
+pub use caret::*;

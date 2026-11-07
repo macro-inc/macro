@@ -3,7 +3,7 @@
 ## What it is
 
 Portable editor model for the Lexical port. This crate owns values, registered
-node types, immutable snapshots, transactional tree editing, update processing, JSON interchange and selection editing.
+node types, immutable snapshots, transactional tree editing, update processing, JSON interchange, selection editing and directional caret traversal.
 
 ## Start here
 
@@ -13,6 +13,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
 - `src/command.rs` owns listener ordering and reentrant dispatch; `src/extension.rs` stages per-editor state separately from document snapshots.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
+- `src/caret/` implements directional positions, eager cursors, range removal and splitting.
 - `src/json.rs` preserves export order and JavaScript number serialization.
 
 ## Boundaries
@@ -24,6 +25,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
 - Stock editing-command registration, History, follow-up hooks and view diffs remain later layers.
+- Caret cursors compute successors before returning items; keep the construction-time first step.
 
 ## Checks
 

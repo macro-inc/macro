@@ -233,3 +233,45 @@ fn an_extra_commit_without_a_pending_update_fails() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn caret_metadata_and_object_identity_are_observable() {
+    use serde_json::json;
+    let mut replay = Replayer::default();
+    let actual = json!({"$caretValue":0,"type":"child","direction":"next"});
+    assert!(
+        replay
+            .compare(
+                &json!({"$caret":1,"type":"child","direction":"previous"}),
+                &actual
+            )
+            .is_err()
+    );
+    assert!(
+        replay
+            .compare(
+                &json!({"$caret":1,"type":"text","direction":"next"}),
+                &actual
+            )
+            .is_err()
+    );
+    replay
+        .compare(
+            &json!({"$caret":1,"type":"child","direction":"next"}),
+            &actual,
+        )
+        .unwrap();
+    assert!(
+        replay
+            .compare(
+                &json!({"$caret":2,"type":"child","direction":"next"}),
+                &actual
+            )
+            .is_err()
+    );
+    assert!(
+        replay
+            .compare(&json!({"$caret":1}), &json!({"$caretValue":3}))
+            .is_err()
+    );
+}
