@@ -1,0 +1,27 @@
+# Macro document model
+
+The portable node layer registers all 57 supported classes (41 Macro nodes and
+16 upstream nodes). Payloads preserve JavaScript field order and distinguish
+missing properties from explicit null with `Maybe<T>`. Framework fields remain
+in `lexical_model`; real subtype projections retain code, list and mark behavior.
+`ImportPolicy` is the single mechanism for reproducing each node's NodeState and
+base-field import rules.
+
+Use `export_registry` for gate/export callers and `headless_editor` for authored
+headless content. Export has no replacements. Headless creation replaces code
+and list nodes; importing stored `list` JSON preserves its exact type, matching
+Lexical's static-config importer. Presets match the source node exclusions.
+Unknown types remain errors; collaborative sessions can explicitly enable opaque
+imports on the corresponding builder.
+
+Host-dependent constructors use `NodeClock`, `NodeRandom` and `NodeHost` extension
+state. Install clock/random callbacks through `export_builder`,
+`headless_builder` or `preset_builder` before loading documents that need missing
+timestamps or IDs generated. No model code reads wall time, randomness or a
+browser hostname itself.
+
+`bun packages/lexical-conformance/corpus/synthetic.ts` regenerates JSON oracles
+from the actual TypeScript classes. The fixed corpus covers both registry
+configurations, all Macro own fields, missing/null inputs, Unicode and long
+strings, state filtering, nested contexts and the upstream node classes.
+Markdown transformers and route adapters belong to later work packages.

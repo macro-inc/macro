@@ -4,6 +4,7 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/client/lexical/macro_document_model",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
   "crates/client/lexical/lexical_conformance",
@@ -227,9 +228,10 @@ members = [
 # WP-00 reserves these dependencies for the following Lexical work packages.
 # Remove each exception when its first consumer lands (model, replay, XML, HTML).
 [workspace.metadata.cargo-shear]
-ignored = ["quick-xml", "rand_chacha", "lexical_node_id"]
+ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
+macro_document_model = { path = "crates/client/lexical/macro_document_model" }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_html = { path = "crates/client/lexical/lexical_html" }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
@@ -626,4 +628,3 @@ codegen-units = 1
 inherits = "release"
 lto = "fat"
 codegen-units = 1
-

@@ -26,6 +26,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Boundaries
 
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
+- Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data.
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
 - Direct splice/append moves preserve source element offsets for explicit package remapping; insert-before/after and replace adjust source offsets.

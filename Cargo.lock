@@ -12598,6 +12598,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_document_model"
+version = "0.1.0"
+dependencies = [
+ "document_id",
+ "indexmap 2.14.0",
+ "lexical_model",
+ "lexical_node_id",
+ "lexical_rich_nodes",
+ "nom 8.0.0",
+ "regress",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "time",
+]
+
+[[package]]
 name = "macro_entrypoint"
 version = "0.1.0"
 dependencies = [
