@@ -217,7 +217,7 @@ members = [
 # WP-00 reserves these dependencies for the following Lexical work packages.
 # Remove each exception when its first consumer lands (model, replay, XML, HTML).
 [workspace.metadata.cargo-shear]
-ignored = ["imbl", "libtest-mimic", "quick-xml", "rand_chacha", "ryu-js", "smallvec"]
+ignored = ["libtest-mimic", "quick-xml", "rand_chacha", "ryu-js", "smallvec"]
 
 [workspace.dependencies]
 # Shared dependencies for the portable Lexical model and its conformance suites.

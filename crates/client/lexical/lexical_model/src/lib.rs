@@ -1,6 +1,6 @@
-//! Portable Lexical editor values and UTF-16 text operations.
+//! Portable Lexical editor values, node registry, and transactional model.
 #![deny(missing_docs)]
-mod collections;
+
 mod error;
 mod format;
 mod key;
@@ -11,3 +11,34 @@ pub use format::*;
 pub use key::*;
 pub use offset::*;
 pub use style::*;
+mod editor;
+mod node;
+mod node_state;
+mod read;
+mod registry;
+mod selection;
+mod state;
+mod transaction;
+pub use editor::*;
+pub use node::*;
+pub use node_state::*;
+pub use read::*;
+pub use registry::*;
+pub use selection::*;
+pub use state::*;
+pub use transaction::*;
+
+mod collections;
+mod json;
+pub use json::*;
+mod raw_text;
+pub use raw_text::*;
+
+const _: () = {
+    const fn assert_send_sync<Value: Send + Sync>() {}
+    assert_send_sync::<Editor>();
+    assert_send_sync::<EditorState>();
+    assert_send_sync::<Registry>();
+    assert_send_sync::<Commit>();
+    assert_send_sync::<Selection>();
+};
