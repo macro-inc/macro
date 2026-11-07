@@ -12,7 +12,46 @@ impl Transaction<'_> {
         {
             return Ok(());
         }
-        let original = self.range_at(slot)?.clone();
+        let mut original = self.range_at(slot)?.clone();
+        let backward = original.is_backward(self.view())?;
+        let start = if backward {
+            original.focus
+        } else {
+            original.anchor
+        };
+        let end = if backward {
+            original.anchor
+        } else {
+            original.focus
+        };
+        if let Point::Element { key, offset } = start {
+            // Upstream transfers an element start to a new empty text before
+            // resolving the end boundary. Existing child offsets stay unchanged.
+            let text = self.create_text("")?;
+            self.text(text)?
+                .set_format(original.format)?
+                .set_style(&original.style)?;
+            let placement = self.child_at_index(key, offset);
+            if let Some(paragraph) = placement.filter(|child| self.is::<Paragraph>(*child)) {
+                self.splice(paragraph, ChildIndex(0), 0, &[text.key()])?;
+            } else if key == NodeKey::ROOT {
+                let paragraph = self.create(Paragraph::default())?;
+                self.append(paragraph, &[text.key()])?;
+                self.splice(key, offset, 0, &[paragraph.key()])?;
+            } else {
+                self.splice(key, offset, 0, &[text.key()])?;
+            }
+            let next = Point::text(text, Utf16Offset::ZERO);
+            let end = if start == end { next } else { end };
+            if backward {
+                original.focus = next;
+                original.anchor = end;
+            } else {
+                original.anchor = next;
+                original.focus = end;
+            }
+            self.install_selection_at(slot, Selection::Range(original.clone()))?;
+        }
         let selected = original.nodes(self.view())?;
         let first_format = selected
             .first()
