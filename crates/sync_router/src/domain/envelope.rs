@@ -9,7 +9,7 @@
 mod test;
 
 use bebop::{Record, SliceWrapper, SubRecord};
-use sync_service_bebop_schema::{FromRouter, owned};
+use sync_protocol::{FromRouter, owned};
 
 /// A decoded client envelope: the generated owned `ToRouter`, with the
 /// `Unknown` discriminator already rejected.

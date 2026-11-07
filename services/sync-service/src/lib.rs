@@ -1,5 +1,5 @@
-mod ai_peer;
 use inbound::credentials as auth;
+pub use sync_server_core::domain::ai_peer;
 mod inbound;
 mod outbound;
 use outbound::{d1, dss_internal, lexical_service, secrets, storage};
@@ -7,14 +7,12 @@ mod constants;
 mod domain;
 use inbound::durable_object;
 mod error;
-mod generated;
 pub mod keepalive;
 mod metrics;
-mod mutex;
-mod socket;
-mod state;
 mod tags;
 mod timeout;
+#[cfg(feature = "transcript")]
+mod transcript;
 
 use tracing_subscriber::{
     EnvFilter, fmt::time::UtcTime, layer::SubscriberExt, util::SubscriberInitExt,
@@ -24,7 +22,8 @@ use worker::{Context, Env, Result, event};
 pub const GIT_DESCRIBE: &str = env!("GIT_DESCRIBE");
 
 fn inner_start() {
-    let filter = EnvFilter::new("sync_service=trace,loro=warn");
+    let filter =
+        EnvFilter::new("sync_service=trace,sync_server_core=trace,sync_transcript=info,loro=warn");
 
     let fmt_layer = tracing_subscriber::fmt::layer()
         .json()
@@ -83,3 +82,13 @@ async fn fetch(req: worker::Request, env: Env, ctx: Context) -> Result<worker::R
 
 #[cfg(feature = "openapi")]
 pub mod swagger;
+
+/// Keep background effects in their originating test transcript when enabled.
+pub(crate) fn background(
+    future: impl std::future::Future<Output = ()>,
+) -> impl std::future::Future<Output = ()> {
+    #[cfg(feature = "transcript")]
+    return transcript::background(future);
+    #[cfg(not(feature = "transcript"))]
+    future
+}

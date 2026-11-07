@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import { LoroDoc } from "loro-crdt";
 import { Miniflare } from "miniflare";
 import { beforeEach, expect, test } from "vitest";
-import { FromPeer, FromRemote, InitializeFromSnapshotRequest } from "../bebop/generated/schema";
+import { FromPeer, FromRemote, InitializeFromSnapshotRequest } from "../../../crates/sync_protocol/bebop/generated/schema";
 import { copyDocument, createTestWebSocket, getTokenForDocument, setupMiniflare } from "./utils";
 
 let mf: Miniflare;
