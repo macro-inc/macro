@@ -659,3 +659,5 @@ impl SyncCore {
     }
 }
 
+#[cfg(test)]
+mod test;
