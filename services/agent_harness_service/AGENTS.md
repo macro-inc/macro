@@ -29,10 +29,11 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
-  the harness can run code, every client but ChatGPT gets only
+  the harness can run code, every client gets only
   `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
-  (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
-  direct tools: its plugin directory refuses generic executors.
+  (`tool_service.rs`); hidden native tools stay callable. ChatGPT, whose
+  plugin directory refuses generic executors, connects to
+  `services/mcp-chatgpt-worker` instead.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the

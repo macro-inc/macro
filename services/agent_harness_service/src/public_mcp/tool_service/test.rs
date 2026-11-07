@@ -117,14 +117,6 @@ async fn empty_toolset_lists_no_tools() {
 /// characters. Assert it against the toolset the server actually exposes, so a
 /// newly added tool can't quietly regress the submission.
 #[test]
-fn tools_hidden_from_chatgpt_still_exist() {
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
-    for name in HIDDEN_FROM_CHATGPT {
-        assert!(tools.toolset.tools.contains_key(name), "{name} was renamed");
-    }
-}
-
-#[test]
 fn every_exposed_tool_meets_directory_requirements() {
     let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
     assert!(
@@ -426,12 +418,6 @@ mod code_mode {
         "ReadContent",
         "Subagent",
     ];
-    const CHATGPT_TOOLS: [&str; 4] = [
-        "EditDocument",
-        "ListCalendarEvents",
-        "NameSearch",
-        "ReadContent",
-    ];
 
     fn catalog() -> Arc<AsyncToolCollection<()>> {
         Arc::new(
@@ -536,86 +522,28 @@ mod code_mode {
         })
     }
 
+    /// ChatGPT has its own MCP server; on this one it and a token without a
+    /// recorded client get code mode like every other caller.
     #[tokio::test]
-    async fn chatgpt_lists_standard_tools() {
+    async fn chatgpt_and_unnamed_clients_list_code_mode_tools() {
         let app = app(Arc::new(Runs::default()));
-        let listed = rpc_as(
-            app.clone(),
-            USER,
+        for caller in [
             mcp_client("ChatGPT"),
-            "tools/list",
-            serde_json::json!({}),
-        )
-        .await;
-        assert_eq!(tool_names(&listed), CHATGPT_TOOLS);
-
-        let nameless = rpc_as(
-            app.clone(),
-            USER,
             Some(ToolCaller::McpClient { name: None }),
-            "tools/list",
-            serde_json::json!({}),
-        )
-        .await;
-        assert_eq!(tool_names(&nameless), CHATGPT_TOOLS);
-
-        let other = rpc_as(
-            app,
-            USER,
-            mcp_client("Claude"),
-            "tools/list",
-            serde_json::json!({}),
-        )
-        .await;
-        assert!(tool_names(&other).contains(&"ExecuteCode".to_owned()));
-    }
-
-    #[tokio::test]
-    async fn chatgpt_cannot_call_a_hidden_tool() {
-        let response = rpc_as(
-            app(Arc::new(Runs::default())),
-            USER,
-            mcp_client("ChatGPT"),
-            "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
-        )
-        .await;
-        assert!(
-            response["error"]["message"]
-                .as_str()
-                .is_some_and(|message| message.contains("not found")),
-            "{response}"
-        );
-
-        let other = rpc_as(
-            app(Arc::new(Runs::default())),
-            USER,
-            mcp_client("Claude"),
-            "tools/call",
-            serde_json::json!({"name": "Subagent", "arguments": {}}),
-        )
-        .await;
-        assert!(other.get("error").is_none(), "{other}");
-    }
-
-    #[tokio::test]
-    async fn chatgpt_cannot_run_code() {
-        let runs = Arc::new(Runs::default());
-        let response = rpc_as(
-            app(runs.clone()),
-            USER,
-            mcp_client("ChatGPT"),
-            "tools/call",
-            serde_json::json!({"name": "ExecuteCode", "arguments": {"source": "1"}}),
-        )
-        .await;
-        assert!(
-            response["error"]["message"]
-                .as_str()
-                .is_some_and(|message| message.contains("not found")),
-            "{response}"
-        );
-        assert!(runs.0.lock().unwrap().is_empty());
+        ] {
+            let listed = rpc_as(
+                app.clone(),
+                USER,
+                caller,
+                "tools/list",
+                serde_json::json!({}),
+            )
+            .await;
+            assert_eq!(
+                tool_names(&listed),
+                ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
+            );
+        }
     }
 
     fn tool_names(response: &serde_json::Value) -> Vec<String> {
@@ -630,7 +558,7 @@ mod code_mode {
     }
 
     #[tokio::test]
-    async fn every_client_but_chatgpt_sees_code_mode_tools_and_instructions() {
+    async fn every_client_sees_code_mode_tools_and_instructions() {
         let app = app(Arc::new(Runs::default()));
 
         let listed = rpc(app.clone(), USER, "tools/list", serde_json::json!({})).await;
@@ -668,9 +596,7 @@ mod code_mode {
         }
         let chatgpt = rpc_as(app, USER, mcp_client("ChatGPT"), "initialize", initialize).await;
         let chatgpt_instructions = chatgpt["result"]["instructions"].as_str().unwrap();
-        assert!(!chatgpt_instructions.contains("Code mode is on"));
-        assert!(chatgpt_instructions.contains("ContentSearch"));
-        assert!(chatgpt_instructions.contains("NameSearch"));
+        assert!(chatgpt_instructions.contains("Code mode is on"));
     }
 
     #[tokio::test]
