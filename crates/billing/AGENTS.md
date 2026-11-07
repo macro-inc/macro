@@ -2,7 +2,7 @@
 
 ## What it is
 
-Billing: AI usage metering and quota admission (`ai_usage`, `ai_billing`, which talks to Stripe) and referrals.
+Billing: AI usage metering and quota admission (`ai_usage`, `ai_billing`, which talks to Stripe), the Stripe event inbox, and referrals.
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.

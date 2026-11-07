@@ -2,7 +2,7 @@
 
 ## What it is
 
-Outbound HTTP and SDK clients: clients for Macro's own services (`*_service_client`), for vendors (FusionAuth, Gmail, Loops, Anthropic, OpenSearch, MCP servers), and the Redis-backed cache client. A client crate holds no domain logic; domain crates implement their ports over it.
+Outbound HTTP and SDK clients: clients for Macro's own services (`*_service_client`), for vendors (FusionAuth, Gmail, Loops, Anthropic, OpenSearch, MCP servers, Incus, OpenBao), and the Redis-backed cache client. A client crate holds no domain logic; domain crates implement their ports over it.
 
 Layer: `clients` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.

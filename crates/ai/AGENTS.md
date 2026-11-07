@@ -2,7 +2,7 @@
 
 ## What it is
 
-AI building blocks: the LLM loop (`agent`), the AI tool registry and toolsets, attachments, embeddings, image generation, yes/no classification (`jev`), memory, MCP selection and toolsets, Pipedream MCP, universal input, dictation and web search.
+AI building blocks: the LLM loop (`agent`), the AI tool registry and toolsets, attachments, embeddings, image generation, yes/no classification (`jev`), the shown-text check on AI-written text, memory, MCP selection and toolsets, Pipedream MCP, universal input, dictation and web search.
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.
