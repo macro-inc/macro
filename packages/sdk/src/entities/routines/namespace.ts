@@ -1,5 +1,5 @@
-import { unwrap } from '../../utils';
 import type { RoutineCheck } from '../../../generated/scheduled-action/types.gen';
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
 import { Routine, type RoutineOptions, routineBody } from './routine';
@@ -118,7 +118,10 @@ export class RoutineNamespace {
     return unwrap(
       await this.client.scheduledAction.checkScheduledAction({
         body: {
-          routine: { ...routineBody(options), enabled: options.enabled ?? true },
+          routine: {
+            ...routineBody(options),
+            enabled: options.enabled ?? true,
+          },
           created: (extra?.created ?? []).map((item) => ({
             entityType: item.entityType,
             entityId: item.id,

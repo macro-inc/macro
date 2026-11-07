@@ -45,7 +45,6 @@ import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
 export type { MacroOpts } from './config';
-export type { CreatedEntity } from './entities/routines/namespace';
 export { CodeExecution } from './entities/agent-sessions/code-execution';
 export type {
   DecisionRequest,
@@ -100,6 +99,7 @@ export {
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
+export type { CreatedEntity } from './entities/routines/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
