@@ -1,0 +1,529 @@
+# Crate layering rules, checked by `cargo x deps` (report-only for now).
+#
+# A crate's layer is the [[layer]] whose `paths` glob matches its directory
+# (`*` stays inside one directory, `**` spans several). Each layer lists
+# the layers it may depend on, its own included. The rules cover normal and
+# build dependencies between workspace crates; dev-dependencies are exempt,
+# except that only dev-dependencies may point at a `dev_only` layer.
+#
+# Paths name both today's flat directories and the planned group
+# directories (`crates/<group>/`), so a crate keeps its layer when it moves.
+# `[[allow]]` entries name packages, not paths, and record edges that break
+# the rules today, with the reason. See docs/development/rust.md.
+
+ignore = ["crates/workspace-hack"]
+
+# Leaf ids and wire models: no I/O. Third-party deps are not checked here.
+[[layer]]
+name = "types"
+paths = [
+  "crates/types/**",
+  "crates/bot_id",
+  "crates/bot_token",
+  "crates/channel_sender",
+  "crates/connection_gateway_models",
+  "crates/cowlike",
+  "crates/document_sub_type",
+  "crates/filter_ast",
+  "crates/harness_id",
+  "crates/harness_token",
+  "crates/macro_sync_service_jwt",
+  "crates/macro_user_id",
+  "crates/macro_uuid",
+  "crates/maybe_send",
+  "crates/model",
+  "crates/model-entity",
+  "crates/model-error-response",
+  "crates/model_file_type",
+  "crates/model_owner",
+  "crates/model_user",
+  "crates/natural_time",
+  "crates/models_ai_projection",
+  "crates/models_bulk_upload",
+  "crates/models_databases",
+  "crates/models_dcs",
+  "crates/models_email",
+  "crates/models_entity_access_management",
+  "crates/models_forms",
+  "crates/models_grouping",
+  "crates/models_opensearch",
+  "crates/models_pagination",
+  "crates/models_permissions",
+  "crates/models_properties",
+  "crates/models_search_cursor",
+  "crates/models_sfs",
+  "crates/models_team",
+  "crates/non_empty",
+  "crates/notification_state",
+  "crates/s3_key",
+  "crates/trigger_context",
+  "crates/user_quota",
+]
+may_depend_on = ["types"]
+
+# Service plumbing: config, env, middleware, events, auth.
+[[layer]]
+name = "platform"
+paths = [
+  "crates/platform/**",
+  "crates/agent_correlation",
+  "crates/broadcast",
+  "crates/database_env_vars",
+  "crates/decode_jwt",
+  "crates/ensure_exists",
+  "crates/feature_flags",
+  "crates/genai_telemetry",
+  "crates/ip_extractor",
+  "crates/kafka_util",
+  "crates/macro_auth",
+  "crates/macro_authorization",
+  "crates/macro_axum_utils",
+  "crates/macro_config",
+  "crates/macro_config_derive",
+  "crates/macro_cors",
+  "crates/macro_entrypoint",
+  "crates/macro_env",
+  "crates/macro_env_var",
+  "crates/macro_event_broker",
+  "crates/macro_event_topics",
+  "crates/macro_middleware",
+  "crates/macro_queues",
+  "crates/macro_service_urls",
+  "crates/macro_tower_layers",
+  "crates/rate_limit",
+  "crates/readonly_pool",
+  "crates/remote_env_var",
+  "crates/serde_utils",
+  "crates/stream",
+  "crates/upstream_error",
+  "crates/worker-rs-otel",
+]
+may_depend_on = ["types", "platform"]
+
+# AWS SDK adapters.
+[[layer]]
+name = "aws"
+paths = [
+  "crates/aws/**",
+  "crates/dynamodb_client",
+  "crates/lambda_client",
+  "crates/macro_aws_config",
+  "crates/s3_client",
+  "crates/secretsmanager_client",
+  "crates/ses_client",
+  "crates/sns_client",
+  "crates/sqs_client",
+  "crates/sqs_worker",
+]
+may_depend_on = ["types", "platform", "aws"]
+
+# HTTP and SDK clients with no domain dependencies.
+[[layer]]
+name = "clients"
+paths = [
+  "crates/clients/**",
+  "crates/analytics_client",
+  "crates/anthropic",
+  "crates/authentication_service_client",
+  "crates/connect_client",
+  "crates/connection_gateway_client",
+  "crates/document_storage_service_client",
+  "crates/email_service_client",
+  "crates/fusionauth",
+  "crates/gmail_client",
+  "crates/lexical_client",
+  "crates/loops_client",
+  "crates/macro_cache_client",
+  "crates/macro_redis",
+  "crates/macro_sha_count_client",
+  "crates/mcp_client",
+  "crates/opensearch_client",
+  "crates/opensearch_query_builder",
+  "crates/search_service_client",
+  "crates/static_file_service_client",
+  "crates/sync_service_client",
+]
+may_depend_on = ["types", "platform", "aws", "clients"]
+
+# Format engines; they compile to wasm.
+[[layer]]
+name = "engines"
+paths = [
+  "crates/engines/**",
+  "crates/ai_engine",
+  "crates/docx_engine",
+  "crates/fig_engine",
+  "crates/pptx_engine",
+  "crates/psd_engine",
+]
+may_depend_on = ["types", "engines"]
+
+# Browser, Tauri and wasm crates. agent_fold is the wasm-safe exception.
+[[layer]]
+name = "client"
+paths = [
+  "crates/client/**",
+  "crates/item_filter_index",
+  "crates/predicate_index",
+  "crates/soup_filter_cache_adapter",
+  "crates/soup_filter_projection",
+]
+may_depend_on = ["types", "client"]
+may_depend_on_packages = ["agent_fold"]
+
+# Feature crates (future groups under crates/<group>/), plus macro_db_client and its migrator.
+[[layer]]
+name = "domain"
+paths = [
+  "crates/macro_db_client",
+  "crates/macro_db_migrator",
+  "crates/agents/**",
+  "crates/ai/**",
+  "crates/billing/**",
+  "crates/comms/**",
+  "crates/whatsapp/**",
+  "crates/email/**",
+  "crates/calendar/**",
+  "crates/databases/**",
+  "crates/documents/**",
+  "crates/entities/**",
+  "crates/search/**",
+  "crates/projects/**",
+  "crates/accounts/**",
+  "crates/notifications/**",
+  "crates/integrations/**",
+  "crates/access_requests",
+  "crates/account_manager",
+  "crates/activity",
+  "crates/agent",
+  "crates/agent_api_keys",
+  "crates/agent_changes",
+  "crates/agent_code_mode",
+  "crates/agent_egress",
+  "crates/agent_harness",
+  "crates/agent_inmem",
+  "crates/agent_preview",
+  "crates/agent_runtime_protocol",
+  "crates/agent_session",
+  "crates/agent_session_realtime",
+  "crates/agent_trigger",
+  "crates/ai_billing",
+  "crates/ai_projections",
+  "crates/ai_tools",
+  "crates/ai_toolset",
+  "crates/ai_usage",
+  "crates/attachment",
+  "crates/attention_feed",
+  "crates/bots",
+  "crates/cal",
+  "crates/calendar_events",
+  "crates/calendar_scheduling",
+  "crates/call",
+  "crates/channel_bots",
+  "crates/channel_labels",
+  "crates/channels",
+  "crates/chat",
+  "crates/code_execution",
+  "crates/code_mode_assets",
+  "crates/codex_cloud_agents",
+  "crates/codex_connection",
+  "crates/coding_agent_worker",
+  "crates/cognition",
+  "crates/collab_surface",
+  "crates/comms_db_client",
+  "crates/connection",
+  "crates/contacts",
+  "crates/crm",
+  "crates/cursor_api_key",
+  "crates/cursor_cloud_agents",
+  "crates/database_sql",
+  "crates/database_webhooks",
+  "crates/databases",
+  "crates/databases_sql",
+  "crates/dictation",
+  "crates/documents",
+  "crates/dynamic_ui",
+  "crates/email",
+  "crates/email_api_client",
+  "crates/email_db_client",
+  "crates/email_formatting",
+  "crates/email_utils",
+  "crates/email_validator",
+  "crates/embedding",
+  "crates/entity_access",
+  "crates/entity_access_db_utils",
+  "crates/entity_access_management",
+  "crates/entity_mutation",
+  "crates/entity_registry/entity_registry",
+  "crates/entity_registry/entity_registry_db_utils",
+  "crates/entity_registry/shared_entity_registry",
+  "crates/external_chat",
+  "crates/favorites",
+  "crates/folds/agent_fold",
+  "crates/folds/claude_fold",
+  "crates/folds/codex_fold",
+  "crates/foreign_entity",
+  "crates/forms",
+  "crates/frecency",
+  "crates/generic_email_domains",
+  "crates/git_patch",
+  "crates/github",
+  "crates/github_pull_requests",
+  "crates/google_token",
+  "crates/granola_sync",
+  "crates/gtm_invite",
+  "crates/harnesses",
+  "crates/image_generation",
+  "crates/import",
+  "crates/import_jira",
+  "crates/import_linear",
+  "crates/import_notion",
+  "crates/import_tracker",
+  "crates/initiative",
+  "crates/initiative_description",
+  "crates/invite_email",
+  "crates/item_filters",
+  "crates/jev",
+  "crates/last_online_tracker",
+  "crates/lexical_mention_extractor",
+  "crates/mcp_select",
+  "crates/mcp_toolset",
+  "crates/memory",
+  "crates/mention_utils",
+  "crates/messages",
+  "crates/mobile_welcome_email_db_client",
+  "crates/model_notifications",
+  "crates/models_search",
+  "crates/models_soup",
+  "crates/name_search",
+  "crates/native_app_service",
+  "crates/notification",
+  "crates/notification_db_client",
+  "crates/notification_inbox",
+  "crates/onboarding",
+  "crates/pipedream_mcp",
+  "crates/projects",
+  "crates/prompt",
+  "crates/properties",
+  "crates/properties_service",
+  "crates/referral",
+  "crates/reminders",
+  "crates/roles_and_permissions",
+  "crates/routine_program",
+  "crates/routines",
+  "crates/saved_views",
+  "crates/scheduled_action",
+  "crates/search_service",
+  "crates/share_permission_db_utils",
+  "crates/skills",
+  "crates/slack_integration",
+  "crates/soup",
+  "crates/soup_realtime",
+  "crates/static_file",
+  "crates/sync_router",
+  "crates/sync_service",
+  "crates/system_properties",
+  "crates/system_skills",
+  "crates/system_status",
+  "crates/task_dedup",
+  "crates/teams",
+  "crates/unfurl",
+  "crates/universal_input",
+  "crates/user_api_key",
+  "crates/user_language",
+  "crates/web_search",
+  "crates/webhook",
+  "crates/webhook_signature",
+  "crates/whatsapp_e2e",
+  "crates/whatsapp_fake_server",
+  "crates/whatsapp_linked",
+  "crates/whatsapp_store_pg",
+  "crates/whatsmeow",
+  "crates/whatsmeow_proto",
+  "crates/whatsmeow_signal",
+  "crates/work_feed",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain"]
+
+# GraphQL adapters and the composed schema.
+[[layer]]
+name = "graphql"
+paths = [
+  "crates/graphql/**",
+  "crates/complete_graph",
+  "crates/graphql_activity",
+  "crates/graphql_calendar",
+  "crates/graphql_channel",
+  "crates/graphql_common",
+  "crates/graphql_crm",
+  "crates/graphql_databases",
+  "crates/graphql_email",
+  "crates/graphql_entity_mutation",
+  "crates/graphql_favorite",
+  "crates/graphql_initiative",
+  "crates/graphql_notification",
+  "crates/graphql_notification_inbox",
+  "crates/graphql_permission",
+  "crates/graphql_properties",
+  "crates/graphql_registered_work",
+  "crates/graphql_scheduled_action",
+  "crates/graphql_soup",
+  "crates/graphql_soup_filter_input",
+  "crates/graphql_work_feed",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql"]
+
+# Test support; only dev-dependencies may point here.
+[[layer]]
+name = "testing"
+paths = [
+  "crates/testing/**",
+  "crates/integration_tests/**",
+  "crates/local_e2e_test_support",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql", "testing", "services"]
+dev_only = true
+
+# Deployables. Nothing outside services/ and tooling/ depends on them, and services do not depend on each other.
+[[layer]]
+name = "services"
+paths = [
+  "services/**",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql"]
+
+# Developer tools and xtask.
+[[layer]]
+name = "tooling"
+paths = [
+  "tooling/**",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql", "testing", "services", "tooling"]
+
+# Baseline: edges that violated the rules when the check was added.
+# Delete an entry when its edge is cut; the report lists stale ones.
+
+[[allow]]
+from = "agent_harness_service"
+to = "connection_gateway"
+reason = "AHS mounts the gateway's library half; move it into crates/"
+
+[[allow]]
+from = "agent_harness_service"
+to = "mcp_auth_proxy"
+reason = "library-only crate under services/; the plan moves it to crates/agents/"
+
+[[allow]]
+from = "agent_harness_service"
+to = "unfurl_service"
+reason = "AHS mounts the unfurl service's library half; move it into crates/"
+
+[[allow]]
+from = "anthropic"
+to = "ai_billing"
+reason = "`toolset` feature admits tool calls through ai_billing; move the toolset adapter out of the client"
+
+[[allow]]
+from = "anthropic"
+to = "ai_toolset"
+reason = "`toolset` feature implements ai_toolset traits; move the toolset adapter out of the client"
+
+[[allow]]
+from = "anthropic"
+to = "ai_usage"
+reason = "`toolset` feature records usage through ai_usage; move the toolset adapter out of the client"
+
+[[allow]]
+from = "document_storage_service_client"
+to = "shared_entity_registry"
+reason = "uses RegisteredEntityType; move it to a types crate"
+
+[[allow]]
+from = "email_service_client"
+to = "email"
+reason = "reuses email::service response models; move them to models_email"
+
+[[allow]]
+from = "item-filter-index"
+to = "item_filters"
+reason = "uses the item_filters AST and NotificationState; needs a wasm-safe types crate"
+
+[[allow]]
+from = "lexical_client"
+to = "agent_fold"
+reason = "uses agent_fold MessageId and ActivityCard; move them to a types crate"
+
+[[allow]]
+from = "lexical_client"
+to = "messages"
+reason = "uses MessageParent (plan N8: message_parent types crate)"
+
+[[allow]]
+from = "macro_cache_client"
+to = "email_validator"
+reason = "uses normalize_email; move email_validator to types or the cache client to accounts"
+
+[[allow]]
+from = "macro_middleware"
+to = "entity_access_db_utils"
+reason = "middleware writes entity access rows; move the DB-backed extractors to their domain"
+
+[[allow]]
+from = "macro_middleware"
+to = "macro_db_client"
+reason = "middleware reads documents and thread permissions; move the DB-backed extractors to their domain"
+
+[[allow]]
+from = "mcp_client"
+to = "ai_toolset"
+reason = "implements ai_toolset traits; it may belong in ai/, not clients/"
+
+[[allow]]
+from = "model"
+to = "agent"
+reason = "ChatMessageContent and Role (plan N1: chat_message types crate)"
+
+[[allow]]
+from = "models_email"
+to = "email_utils"
+reason = "computes parsed bodies and token cache keys with email_utils; move those helpers to types or out of the model crate"
+
+[[allow]]
+from = "search_service_client"
+to = "models_search"
+reason = "models_search is a search domain crate because it depends on models_soup and opensearch_client (plan N14)"
+
+[[allow]]
+from = "soup-filter-cache-adapter"
+to = "graphql_soup_filter_input"
+reason = "uses materialize_graphql_filter; move it to a wasm-safe crate"
+
+[[allow]]
+from = "soup-filter-projection"
+to = "models_soup"
+reason = "projects Soup DTOs in the client; models_soup depends on domains until plan N10"
+
+[[allow]]
+from = "soup-filter-projection"
+to = "soup"
+reason = "uses SoupProjectionHydration and SoupDocumentServerFacts; move them to a types crate"
+
+[[allow]]
+from = "sync_router"
+to = "sync_service_bebop_schema"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/"
+
+[[allow]]
+from = "sync_service"
+to = "sync_service_bebop_schema"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/"
+
+[[allow]]
+from = "sync_service_client"
+to = "sync_service_hex"
+reason = "implements the SyncWakeupService port; move the adapter into sync_service_hex's outbound"
+
+[[allow]]
+from = "whatsapp_e2e"
+to = "whatsapp_session_service"
+reason = "e2e crate drives the session service library; move it to testing/ and make the edge a dev-dependency"
