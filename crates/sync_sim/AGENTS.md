@@ -20,6 +20,9 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - Apply `Room::gate_request` before legacy connect/atomic handlers. Record
   `HttpPrepared` as core response preparation, distinct from a durable HTTP ack.
   Forward only successful runtime close requests and preserve their actual code.
+- Configure true surface rooms with `SimConfig.surfaces`; initialize through the
+  surface lifecycle, mint expiring surface grants, and preserve permanent revocation
+  across eviction. GenericSurface form content alone does not imply surface identity.
 - Keep `Hostile` message delays/duplication FIFO within each connection; run S8's
   named safety subset and observe real close causes (`ProtocolError` maps to 1000).
 - Build cached seed versions from one Loro history; install profile-local cache

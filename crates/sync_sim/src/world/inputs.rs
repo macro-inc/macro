@@ -177,7 +177,7 @@ impl Sim {
             return Ok(());
         };
         let input = Input::Connect {
-            grant: server.grant(user, grant),
+            grant: server.grant(user, grant, self.clock.wall(0)),
             key: server.key.clone(),
             socket: uuid_value::Uuid::from_u128(uuid.as_u128()),
         };

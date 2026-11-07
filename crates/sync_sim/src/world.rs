@@ -70,6 +70,7 @@ impl Sim {
             match SimServer::new(
                 doc,
                 sim.config.fields,
+                sim.config.surfaces.contains(&doc),
                 sim.config.seeds.get(&doc).unwrap_or(&SeedDocument::Empty),
                 sim.config.server_storage_latency,
                 now,
