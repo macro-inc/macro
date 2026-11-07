@@ -484,8 +484,8 @@ bind sources on the host. The harness writes them as root. Starting the stack
 again removes the instance's computer containers along with its data.
 
 Brains use a separate local-only HTTP listener on the same Caddy proxy:
-`http://proxy:<ComputerGateway port>` inside Docker. Only host loopback publishes
-this port, for Incus reverse tunnels; the browser keeps its HTTPS origin. This
+`http://proxy:<ComputerGateway port>` inside Docker. Incus guests use the devbox's
+tailnet address and the published host port; the browser keeps its HTTPS origin. This
 avoids guest host-DNS entries, importing the local TLS CA, or bypassing TLS.
 The launcher emits canonical `OVERRIDE_*` values for the computer-facing API,
 git, Anthropic egress and all seven brain service endpoints. Authentication
@@ -522,24 +522,24 @@ Enrollment stores the fleet-reachable egress URL in macrod’s config. Computer
 sessions use it for first-party MCP servers and the Anthropic gateway, while
 other paired runtimes keep the stack’s external egress URL.
 
-Boxes reach the stack at `10.210.0.1:<host port>` through the reverse tunnel.
-Startup prints the command with this instance's ports (computer gateway, egress,
-git, agent harness, document storage, and auth), for example:
+Boxes reach the stack directly over the devbox tailnet address, resolved once
+at stack start with `tailscale ip -4`. Missing, ambiguous, or non-tailnet output
+fails startup. This address must match the runtime's
+`macro.computers.controlPlaneAddress` (`100.116.73.13` in the checked-in config).
+The runtime permits only the seven TCP host ports (agent egress, harness,
+document storage, auth, agent git, computer gateway, connection gateway) and
+masquerades them to `tailscale0`; other tailnet destinations are dropped.
+Cognition and scheduled actions keep their harness route prefixes; MCP is the
+harness service base, and the connection endpoint uses `ws`. The launcher uses
+the same direct devbox address for the fresh git and API gateway URLs. Reused
+harness ports are emitted once in the host-port list; each of the default and
+120 standard named windows is checked against the evaluated Nix allowlist.
+Custom `--port-base` values need a matching `controlPlanePorts` option update.
+The devbox firewall must accept those ports from the runtime's tailnet address;
+see the exact INPUT and Docker forwarding rules in the host README.
 
-```bash
-nix/hosts/computers-tunnels.sh reverse <gateway> <egress> <git> <harness> <storage> <auth> # Incus tunnel running
-nix/hosts/computers-tunnels.sh all <gateway> <egress> <git> <harness> <storage> <auth> # neither tunnel running
-```
+Existing VMs survive stack database replacement; handle their cleanup explicitly.
 
-Run it under `systemd-run --user -p Restart=always` to keep it up. When the
-SSH key comes from an agent, add
-`--setenv=SSH_AUTH_SOCK="$SSH_AUTH_SOCK"` to `systemd-run`; user services do not
-inherit the launching shell's agent socket.
-
-The Incus control API uses the runtime tailnet address. Persona bootstrap
-continues to use the bridge and all six reverse listeners above, including
-the computer gateway and repository service. Preserve these listeners when
-updating a named preview. Existing guests survive stack updates.
 
 Check the generated wiring without starting anything:
 

@@ -48,6 +48,10 @@ fn docker_computers_dial_the_stack_in_network() {
         overrides,
         BTreeMap::from([
             (
+                "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
+                "http://connection-gateway:8080".into()
+            ),
+            (
                 "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL".into(),
                 "http://agent-harness-service:8080/cognition".into()
             ),
@@ -96,7 +100,7 @@ fn docker_computers_dial_the_stack_in_network() {
 }
 
 #[test]
-fn incus_control_uses_tailnet_and_persona_bootstrap_uses_reverse_bridge() {
+fn incus_control_and_all_persona_urls_use_the_tailnet() {
     let instance = Instance::derive(Some("computers"), None).unwrap();
     let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
     let base = local_env(&instance);
@@ -135,50 +139,50 @@ fn incus_control_uses_tailnet_and_persona_bootstrap_uses_reverse_bridge() {
         })
         .map(|(name, value)| (name.clone(), value.clone()))
         .collect();
-    let bridge = |port: Port| format!("http://10.210.0.1:{}", instance.port(port));
+    let devbox = |port: Port| format!("http://100.116.73.13:{}", instance.port(port));
     assert_eq!(
         overrides["OVERRIDE_API_GATEWAY_URL"],
-        bridge(Port::ComputerGateway)
+        devbox(Port::ComputerGateway)
     );
     assert_eq!(
         overrides["OVERRIDE_AGENT_HARNESS_EGRESS_URL"],
-        bridge(Port::AgentHarnessEgress)
+        devbox(Port::AgentHarnessEgress)
     );
     assert_eq!(
         overrides["OVERRIDE_AGENT_GIT_SERVICE_URL"],
-        bridge(Port::AgentGit)
+        devbox(Port::AgentGit)
     );
     assert_eq!(
         overrides["OVERRIDE_AGENT_HARNESS_SERVICE_URL"],
-        bridge(Port::AgentHarness)
+        devbox(Port::AgentHarness)
     );
     assert_eq!(
         overrides["OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL"],
-        bridge(Port::DocStorage)
+        devbox(Port::DocStorage)
     );
-    assert_eq!(overrides["OVERRIDE_AUTH_SERVICE_URL"], bridge(Port::Auth));
+    assert_eq!(overrides["OVERRIDE_AUTH_SERVICE_URL"], devbox(Port::Auth));
     assert_eq!(
         overrides["OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL"],
-        format!("{}/cognition", bridge(Port::AgentHarness))
+        format!("{}/cognition", devbox(Port::AgentHarness))
     );
     assert_eq!(
         overrides["OVERRIDE_SCHEDULED_ACTION_SERVICE_URL"],
-        format!("{}/scheduled-action", bridge(Port::AgentHarness))
+        format!("{}/scheduled-action", devbox(Port::AgentHarness))
     );
     assert_eq!(
         overrides["OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL"],
-        format!("ws://10.210.0.1:{}", instance.port(Port::ConnGateway))
+        format!("ws://100.116.73.13:{}", instance.port(Port::ConnGateway))
     );
     assert_eq!(
         overrides["OVERRIDE_MCP_SERVICE_URL"],
-        bridge(Port::AgentHarness)
+        devbox(Port::AgentHarness)
     );
     assert_eq!(
         overrides["OVERRIDE_APP_SERVICE_URL"],
         base["OVERRIDE_APP_SERVICE_URL"]
     );
     assert_eq!(
-        computers.tunnel_ports(),
+        computers.service_ports(),
         vec![
             instance.port(Port::ComputerGateway),
             instance.port(Port::AgentHarnessEgress),
@@ -253,11 +257,22 @@ fn incus_addresses_reject_missing_or_ambiguous_resolution() {
     ] {
         assert!(IncusNetwork::parse(address, "100.116.73.13").is_err());
     }
-    assert!(IncusNetwork::parse("100.101.102.103", "devbox").is_err());
+    for control_plane in [
+        "",
+        "devbox",
+        "100.116.73.13\n100.104.105.106",
+        "::1",
+        "10.210.0.1",
+        "127.0.0.1",
+        "100.63.255.255",
+        "100.128.0.1",
+    ] {
+        assert!(IncusNetwork::parse("100.101.102.103", control_plane).is_err());
+    }
 }
 
 #[test]
-fn incus_control_plane_address_can_be_overridden() {
+fn incus_uses_the_discovered_devbox_address() {
     let instance = Instance::derive(Some("computers-address"), None).unwrap();
     let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
     let network = IncusNetwork::parse("100.101.102.103\n", "100.104.105.106").unwrap();
@@ -277,7 +292,7 @@ fn incus_control_plane_address_can_be_overridden() {
     assert_eq!(
         overrides["OVERRIDE_AGENT_HARNESS_EGRESS_URL"],
         format!(
-            "http://10.210.0.1:{}",
+            "http://100.104.105.106:{}",
             instance.port(Port::AgentHarnessEgress)
         )
     );
@@ -313,4 +328,140 @@ fn loaded_image_marker_roundtrips() {
     };
     assert_eq!(LoadedImage::parse(&loaded.render()), Some(loaded));
     assert_eq!(LoadedImage::parse(""), None);
+}
+
+#[test]
+fn incus_overrides_use_only_direct_tailnet_service_urls() {
+    for name in [None, Some("computers")] {
+        let instance = Instance::derive(name, None).unwrap();
+        let base = local_env(&instance);
+        let network = IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap();
+        let env = Computers::new(Mode::Local, Fleet::Incus, &instance)
+            .incus_env(&base, &credentials(), &network)
+            .unwrap();
+        let overrides: BTreeMap<_, _> = env
+            .into_iter()
+            .filter(|(key, _)| key.starts_with("OVERRIDE_"))
+            .collect();
+        assert_eq!(overrides.len(), 12);
+        assert_eq!(
+            overrides["OVERRIDE_APP_SERVICE_URL"],
+            base["OVERRIDE_APP_SERVICE_URL"]
+        );
+        for (key, port, scheme, path) in [
+            (
+                "OVERRIDE_API_GATEWAY_URL",
+                Port::ComputerGateway,
+                "http",
+                "",
+            ),
+            ("OVERRIDE_AGENT_GIT_SERVICE_URL", Port::AgentGit, "http", ""),
+            (
+                "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+                Port::AgentHarness,
+                "http",
+                "/cognition",
+            ),
+            (
+                "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
+                Port::AgentHarness,
+                "http",
+                "/scheduled-action",
+            ),
+            ("OVERRIDE_MCP_SERVICE_URL", Port::AgentHarness, "http", ""),
+            (
+                "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
+                Port::AgentHarnessEgress,
+                "http",
+                "",
+            ),
+            (
+                "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
+                Port::AgentHarness,
+                "http",
+                "",
+            ),
+            (
+                "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+                Port::DocStorage,
+                "http",
+                "",
+            ),
+            ("OVERRIDE_AUTH_SERVICE_URL", Port::Auth, "http", ""),
+            (
+                "OVERRIDE_CONNECTION_GATEWAY_URL",
+                Port::ConnGateway,
+                "http",
+                "",
+            ),
+            (
+                "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+                Port::ConnGateway,
+                "ws",
+                "",
+            ),
+        ] {
+            assert_eq!(
+                overrides[key],
+                format!("{scheme}://100.116.73.13:{}{path}", instance.port(port)),
+                "{key}"
+            );
+        }
+    }
+}
+
+#[test]
+fn incus_guest_ports_are_allowed_by_nix() {
+    let output = match Command::new("nix")
+        .args([
+            "eval",
+            "--json",
+            ".#nixosConfigurations.runtime-dev-1.config.macro.computers.controlPlanePorts",
+        ])
+        .current_dir(repo_root())
+        .output()
+    {
+        Ok(output) => output,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("SKIP incus_guest_ports_are_allowed_by_nix: nix is unavailable");
+            return;
+        }
+        Err(error) => panic!("could not run nix eval: {error}"),
+    };
+    assert!(
+        output.status.success(),
+        "nix eval failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let allowed: Vec<u16> = serde_json::from_slice(&output.stdout).unwrap();
+    let network = IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap();
+    let instances = std::iter::once(Instance::derive(None, None).unwrap())
+        .chain((0..120).map(|bucket| {
+            Instance::derive(Some("computers"), Some(20000 + bucket * 100)).unwrap()
+        }));
+    for instance in instances {
+        let env = Computers::new(Mode::Local, Fleet::Incus, &instance)
+            .incus_env(&local_env(&instance), &credentials(), &network)
+            .unwrap();
+        let mut emitted_ports = std::collections::BTreeSet::new();
+        for (key, value) in env {
+            if !key.starts_with("OVERRIDE_") || key == "OVERRIDE_APP_SERVICE_URL" {
+                continue;
+            }
+            let (_, address) = value.split_once("://").unwrap();
+            let authority = address.split('/').next().unwrap();
+            let (host, port) = authority.rsplit_once(':').unwrap();
+            assert_eq!(host, "100.116.73.13");
+            let port: u16 = port.parse().unwrap();
+            emitted_ports.insert(port);
+            assert!(
+                allowed.contains(&port),
+                "{key}={value} is missing from controlPlanePorts"
+            );
+        }
+        let service_ports = Computers::new(Mode::Local, Fleet::Incus, &instance).service_ports();
+        let unique_ports: std::collections::BTreeSet<_> = service_ports.iter().copied().collect();
+        assert_eq!(unique_ports.len(), service_ports.len());
+        assert_eq!(emitted_ports, unique_ports);
+    }
 }
