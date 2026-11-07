@@ -444,3 +444,203 @@ async fn import_counts_from_several_workers_add_up_in_the_snapshot(db: PgPool) {
     assert_eq!(fields["sync_active"], "true");
     assert!(fields.contains_key("seconds_since_last_import"));
 }
+
+/// One page with `ids` changed, ending at a checkpoint.
+fn changed(ids: &[&str]) -> Result<MailboxChangePage, EmailApiError> {
+    Ok(MailboxChangePage {
+        changed: ids.iter().map(|id| ProviderId::new(*id).unwrap()).collect(),
+        removed: Vec::new(),
+        position: StreamPosition::Checkpoint(StreamToken::new("checkpoint".into())),
+    })
+}
+
+/// Lets the next reconcile of every queued row settle it as gone.
+async fn settle_as_absent(db: &PgPool, link: Uuid) {
+    sqlx::query!(
+        "UPDATE email_message_reconciliation SET attempts = 2 WHERE link_id = $1",
+        link
+    )
+    .execute(db)
+    .await
+    .unwrap();
+}
+
+/// A synced mailbox with a bound subscription attempt whose webhook secret is
+/// `secret`; returns the attempt id.
+async fn subscribed_mailbox(db: &PgPool) -> (PgMailboxSync, Uuid, Uuid) {
+    use crate::domain::mailbox::watches::MailboxWatchRepository;
+    use sha2::{Digest, Sha256};
+
+    let (repo, link) = enumerated_mailbox(db).await;
+    sqlx::query!(
+        "INSERT INTO email_mailbox_watch_work(link_id) VALUES($1)",
+        link
+    )
+    .execute(db)
+    .await
+    .unwrap();
+    let watch = repo.claim_watch(Uuid::new_v4()).await.unwrap().unwrap();
+    let attempt = Uuid::new_v4();
+    repo.reserve_watch(
+        &watch,
+        attempt,
+        &Sha256::digest(b"secret"),
+        chrono::Utc::now() + chrono::Duration::days(3),
+    )
+    .await
+    .unwrap();
+    (repo, link, attempt)
+}
+
+/// One webhook delivery announcing a change.
+async fn notify(repo: &PgMailboxSync, attempt: Uuid) {
+    use crate::domain::mailbox::watches::{
+        MailboxWatchNotifications, WatchHint, WatchNotification,
+    };
+
+    MailboxWatchNotifications(repo.clone())
+        .receive(
+            attempt,
+            vec![WatchNotification {
+                subscription_id: "sub".into(),
+                client_state: "secret".into(),
+                hint: WatchHint::Changed,
+            }],
+        )
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_notified_change_reports_its_wait_and_lag_but_a_polled_change_does_not(db: PgPool) {
+    let telemetry = Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link, attempt) = subscribed_mailbox(&db).await;
+    let provider = Provider {
+        messages: Mutex::new(vec![Ok(None), Ok(None)].into()),
+        pages: Mutex::new(
+            vec![
+                Err(EmailApiError::Transient {
+                    message: "Microsoft Graph returned HTTP 503".into(),
+                }),
+                changed(&["notified"]),
+                changed(&["polled"]),
+            ]
+            .into(),
+        ),
+        requests: 1,
+    };
+    let service = sync(&repo, provider);
+    let make_due = || {
+        sqlx::query!(
+            "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1",
+            link
+        )
+        .execute(&db)
+    };
+
+    notify(&repo, attempt).await;
+    // A deferred read leaves the notification pending for the retry.
+    assert!(service.enumerate_once().await.is_err());
+    make_due().await.unwrap();
+    assert!(service.enumerate_once().await.unwrap());
+    settle_as_absent(&db, link).await;
+    assert!(service.reconcile_once().await.unwrap());
+    // The next poll finds a change no notification announced.
+    make_due().await.unwrap();
+    assert!(service.enumerate_once().await.unwrap());
+    settle_as_absent(&db, link).await;
+    assert!(service.reconcile_once().await.unwrap());
+
+    let enumerated = telemetry.spans("outlook.sync.enumerate");
+    let [deferred, notified, polled] = enumerated.as_slice() else {
+        panic!("expected three enumerate spans, got {enumerated:?}");
+    };
+    assert_eq!(deferred["outlook.outcome"], "deferred");
+    assert!(deferred.contains_key("outlook.notification_wait_ms"));
+    assert!(notified.contains_key("outlook.notification_wait_ms"));
+    assert!(!polled.contains_key("outlook.notification_wait_ms"));
+    let reconciled = telemetry.spans("outlook.sync.reconcile");
+    let [notified, polled] = reconciled.as_slice() else {
+        panic!("expected two reconcile spans, got {reconciled:?}");
+    };
+    assert_eq!(notified["outlook.outcome"], "absent");
+    assert!(notified.contains_key("outlook.notification_lag_ms"));
+    assert_eq!(polled["outlook.outcome"], "absent");
+    assert!(!polled.contains_key("outlook.notification_lag_ms"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sync_work_a_notification_made_due_joins_the_webhook_trace_but_retries_do_not(db: PgPool) {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let _guard = tracing::subscriber::set_default(
+        tracing_subscriber::registry()
+            .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("email-test"))),
+    );
+    let (repo, link, attempt) = subscribed_mailbox(&db).await;
+    let service = sync(
+        &repo,
+        Provider {
+            messages: Mutex::new(
+                vec![
+                    Err(EmailApiError::Transient {
+                        message: "Microsoft Graph returned HTTP 503".into(),
+                    }),
+                    Ok(None),
+                ]
+                .into(),
+            ),
+            pages: Mutex::new(vec![changed(&["notified"])].into()),
+            requests: 1,
+        },
+    );
+    // A callsite another test thread registered first can keep a cached
+    // "never" interest; recompute it before the measured calls.
+    tracing::callsite::rebuild_interest_cache();
+
+    notify(&repo, attempt).await;
+    assert!(service.enumerate_once().await.unwrap());
+    settle_as_absent(&db, link).await;
+    assert!(service.reconcile_once().await.is_err());
+    sqlx::query!(
+        "UPDATE email_message_reconciliation SET available_at = now() WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(service.reconcile_once().await.unwrap());
+
+    let spans = exporter.get_finished_spans().unwrap();
+    let named = |name: &str| {
+        spans
+            .iter()
+            .find(|span| span.name == name)
+            .unwrap_or_else(|| panic!("no {name} span in {spans:?}"))
+    };
+    let notified = named("outlook.subscription.notify");
+    let enumerated = named("outlook.sync.enumerate");
+    let reconciled: Vec<_> = spans
+        .iter()
+        .filter(|span| span.name == "outlook.sync.reconcile")
+        .collect();
+    let [first, retry] = reconciled.as_slice() else {
+        panic!("expected two reconcile spans, got {reconciled:?}");
+    };
+    let trace = notified.span_context.trace_id();
+    assert_eq!(enumerated.span_context.trace_id(), trace);
+    assert_eq!(enumerated.parent_span_id, notified.span_context.span_id());
+    assert_eq!(first.span_context.trace_id(), trace);
+    assert_eq!(first.parent_span_id, notified.span_context.span_id());
+    assert_ne!(retry.span_context.trace_id(), trace);
+}

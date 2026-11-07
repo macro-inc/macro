@@ -716,7 +716,7 @@ fn thread_from_normalized_messages(
 }
 
 /// Process and insert message
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, message, resync), fields(message_provider_id = ?message.provider_id))]
 async fn process_and_insert_message(
     db: &PgPool,
     link_id: Uuid,
