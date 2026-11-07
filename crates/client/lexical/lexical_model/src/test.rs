@@ -721,3 +721,5 @@ fn conformance_peer_shares_registry_and_keys_but_owns_its_snapshot() -> Result<(
     assert_eq!(peer.state().view().children_size(NodeKey::ROOT), 2);
     Ok(())
 }
+
+mod recorder_regressions;

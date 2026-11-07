@@ -1,11 +1,10 @@
 //! Strict interpreter: every operation, return value and snapshot is checked.
+use crate::config::validate_config;
 use crate::{fixture::Fixture, snapshot, test_nodes};
 use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-mod config;
 mod initial;
-use config::validate_config;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
 #[derive(Debug, thiserror::Error)]
@@ -60,12 +59,18 @@ pub struct Replayer {
     pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
+    pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
+    pub(crate) caret_origins: HashMap<usize, Value>,
+    pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
     pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
     pub(crate) version: u64,
     pub(crate) states: HashMap<u64, EditorState>,
     pub(crate) saved_states: Vec<EditorState>,
+    pub(crate) committed_version: u64,
+    pub(crate) published_snapshot: Option<(u64, usize)>,
+    pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
     pub(crate) read_state: Option<EditorState>,
     pub(crate) selections: Vec<SelectionSlot>,
     pub(crate) selection_values: Vec<Option<Selection>>,
@@ -205,7 +210,9 @@ impl Replayer {
                             return Err(fail("unexpected state-install update"));
                         }
                         self.updates.push(op["id"].clone());
-                        self.causes.push(op["cause"].clone());
+                        if !self.causes.contains(&op["cause"]) {
+                            self.causes.push(op["cause"].clone());
+                        }
                         Ok(())
                     } else {
                         let commit = self
@@ -219,6 +226,7 @@ impl Replayer {
                         if op["index"] != self.version {
                             return Err(fail("state install commit index"));
                         }
+                        self.committed_version = self.version;
                         self.states.insert(self.version, commit.next.clone());
                         snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
                         self.updates.clear();
@@ -249,6 +257,7 @@ impl Replayer {
                             if pending["index"] != self.version {
                                 return Err(fail("commit index mismatch"));
                             }
+                            self.committed_version = self.version;
                             self.states.insert(self.version, commit.next.clone());
                             snapshot::compare(
                                 self,
@@ -275,7 +284,19 @@ impl Replayer {
                                 ));
                             }
                         }
-                        if pending["op"] == "update" && !self.pending_writes {
+                        let next_update = fixture
+                            .trace
+                            .get(i + 1..)
+                            .and_then(|tail| {
+                                tail.iter().find(|next| {
+                                    !matches!(next["op"].as_str(), Some("clock" | "log"))
+                                })
+                            })
+                            .is_some_and(|next| next["op"] == "update");
+                        if pending["op"] == "update"
+                            && !self.pending_writes
+                            && (pending["opts"]["discrete"] == true || !next_update)
+                        {
                             self.capture_slots(&tx)?;
                             let commit = tx.commit()?;
                             if !commit.is_noop() {
@@ -422,6 +443,9 @@ impl Replayer {
                 tags.insert(tag.parse().map_err(|_| fail("tag"))?);
             }
             self.pending_install = Some(editor.set_editor_state(state, tags)?);
+            if !self.causes.iter().any(|cause| cause == "setEditorState") {
+                self.causes.push(json!("setEditorState"));
+            }
             self.active_selection = None;
             undefined()
         };
@@ -607,7 +631,7 @@ impl Replayer {
     }
     pub(crate) fn decode(&self, value: &Value) -> Result<Value> {
         if let Some(object) = value.as_object() {
-            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret"] {
+            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret", "$iterator"] {
                 if let Some(id) = object.get(tag) {
                     return self
                         .handles
@@ -644,6 +668,7 @@ impl Replayer {
                 ("$sel", "$selection"),
                 ("$pt", "$point"),
                 ("$caret", "$caretValue"),
+                ("$iterator", "$iteratorValue"),
             ] {
                 if let Some(id) = object.get(tag) {
                     if actual.get(actual_tag).is_none() {
@@ -665,6 +690,11 @@ impl Replayer {
                             }
                             if let Some(origin) = object.get("origin") {
                                 self.compare(origin, &actual["origin"])?;
+                            }
+                            for field in ["caret", "distance"] {
+                                if let Some(expected) = object.get(field) {
+                                    self.compare(expected, &actual[field])?;
+                                }
                             }
                         }
                         if tag == "$sel" && object.get("kind") != actual.get("kind") {

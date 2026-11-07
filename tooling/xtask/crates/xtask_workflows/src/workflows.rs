@@ -54,6 +54,7 @@ mod ios_release_drift;
 mod ios_release_watch;
 mod lexical_conformance;
 mod lexical_nightly;
+mod loro_pair;
 mod native_check_label;
 mod observability_image;
 mod path_validation;
@@ -142,6 +143,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "lexical_nightly",
         file_name: "lexical_nightly.yml",
         render_yaml: || render_gh_workflow(lexical_nightly::lexical_nightly)(),
+    },
+    WorkflowFile {
+        slug: "loro_pair",
+        file_name: "loro-pair.yml",
+        render_yaml: || render_gh_workflow(loro_pair::loro_pair)(),
     },
     WorkflowFile {
         slug: "observability_image",

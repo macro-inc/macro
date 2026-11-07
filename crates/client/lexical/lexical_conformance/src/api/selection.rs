@@ -72,10 +72,44 @@ pub(crate) fn call(
         .cloned()
         .ok_or_else(|| fail("empty selection handle"))?;
     match method {
+        "add" => {
+            let key = key_arg(r, a.first().ok_or_else(|| fail("key"))?)?;
+            let mut value = tx.take_detached(slot)?;
+            let Selection::Node(selection) = &mut value else {
+                return Err(fail("node selection required"));
+            };
+            selection.add(key);
+            if slot == SelectionSlot::Active {
+                tx.set_selection(Some(value))?;
+            } else {
+                r.selections[id] = tx.detach_selection(value);
+            }
+            Ok(undefined())
+        }
+        "setTextNodeRange" => {
+            tx.set_text_node_range_at(
+                slot,
+                node_key(a.first().ok_or_else(|| fail("anchor node"))?)?,
+                Utf16Offset(u32_arg(a, 1, 0)?),
+                node_key(a.get(2).ok_or_else(|| fail("focus node"))?)?,
+                Utf16Offset(u32_arg(a, 3, 0)?),
+            )?;
+            Ok(receiver.clone())
+        }
         "isCollapsed" => Ok(json!(selection.is_collapsed())),
         "isBackward" => Ok(json!(selection.is_backward(tx.view())?)),
         "getTextContent" => Ok(json!(selection.text_content(tx.view())?)),
         "getNodes" | "extract" => {
+            let previous = if method == "extract" {
+                selection
+                    .nodes(tx.view())?
+                    .into_iter()
+                    .filter(|key| !tx.is_text(*key))
+                    .map(|key| r.node(tx.view(), key).map(|node| (key, node)))
+                    .collect::<Result<std::collections::HashMap<_, _>>>()?
+            } else {
+                std::collections::HashMap::new()
+            };
             let nodes = if method == "extract" {
                 tx.extract_at(slot)?
             } else {
@@ -83,7 +117,12 @@ pub(crate) fn call(
             };
             nodes
                 .into_iter()
-                .map(|key| r.node(tx.view(), key))
+                .map(|key| {
+                    previous
+                        .get(&key)
+                        .cloned()
+                        .map_or_else(|| r.node(tx.view(), key), Ok)
+                })
                 .collect()
         }
         "deleteCharacter" => {

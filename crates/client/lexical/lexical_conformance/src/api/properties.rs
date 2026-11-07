@@ -68,7 +68,18 @@ pub(crate) fn get(
             .unwrap_or(tx.view());
         let node = view.node_or_err(key)?;
         return match name {
+            "__parent" => Ok(view
+                .parent(key)
+                .map_or(Value::Null, |key| json!({"$nodeKey":key.index()}))),
             "__key" => Ok(json!({"$nodeKey":key.index()})),
+            "__target" | "__rel" | "__title" => {
+                let link = view.get_or_err::<lexical_rich_nodes::link::LinkNode>(key)?;
+                Ok(json!(match name {
+                    "__target" => &link.target,
+                    "__rel" => &link.rel,
+                    _ => &link.title,
+                }))
+            }
             "__url" => Ok(json!(
                 view.get::<lexical_rich_nodes::link::LinkNode>(key)
                     .ok_or_else(|| fail("link"))?

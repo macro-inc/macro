@@ -584,7 +584,7 @@ impl<'editor> Transaction<'editor> {
     /// Replace the active selection.
     pub fn set_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
         self.guard_write()?;
-        self.selection_dirty |= selection.is_some();
+        self.selection_dirty = selection.is_some();
         let selection = selection.map(|mut selection| {
             selection.set_dirty(true);
             selection

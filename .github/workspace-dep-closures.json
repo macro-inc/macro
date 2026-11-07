@@ -10167,6 +10167,16 @@
     ],
     "lexical_conformance_wasm": [
       "crates/client/lexical/lexical_conformance_wasm",
+      "crates/client/lexical/lexical_markdown",
+      "crates/client/lexical/lexical_model",
+      "crates/client/lexical/lexical_rich_nodes"
+    ],
+    "lexical_html": [
+      "crates/client/lexical/lexical_html",
+      "crates/client/lexical/lexical_model"
+    ],
+    "lexical_loro": [
+      "crates/client/lexical/lexical_loro",
       "crates/client/lexical/lexical_model"
     ],
     "lexical_markdown": [
