@@ -110,3 +110,34 @@ fn atomic_viewer_refusal_precedes_storage_and_invalid_update_has_no_effects() {
         assert!(room.ports.runtime.sent.borrow().is_empty());
     });
 }
+
+#[test]
+fn shallow_atomic_reads_preserve_full_server_history_and_the_editable_revision() {
+    block_on(async {
+        let mut room = room();
+        connect_access(&mut room, AccessLevel::Edit).await;
+        room.apply_update(&update(7), None).await.unwrap();
+        let key = SessionKey::new("document".into());
+        let access = DocumentAccess::authorize("document", "document", true).unwrap();
+        let (full, revision) = room
+            .read_document(&key, &access, false)
+            .await
+            .unwrap()
+            .unwrap();
+        let (shallow, shallow_revision) = room
+            .read_document(&key, &access, true)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(revision, shallow_revision);
+        let full = crate::domain::state::DocumentState::try_from_snapshot(&full).unwrap();
+        let shallow = crate::domain::state::DocumentState::try_from_snapshot(&shallow).unwrap();
+        assert_eq!(full.get_json(), shallow.get_json());
+        assert!(shallow.loro_doc.is_shallow());
+        assert!(!room.memory.document.as_ref().unwrap().loro_doc.is_shallow());
+        assert_eq!(
+            full.loro_doc.oplog_vv(),
+            room.memory.document.as_ref().unwrap().loro_doc.oplog_vv()
+        );
+    });
+}

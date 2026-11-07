@@ -81,11 +81,6 @@ impl AuthToken {
         }
     }
 
-    /// The storage identity named by the verified grant.
-    pub fn document_id(&self) -> &str {
-        &self.document_id
-    }
-
     /// Whether a legacy document grant permits access to the requested identity.
     pub fn has_document_id_access(&self, document_id: &str) -> bool {
         self.session_kind == SessionKind::Document

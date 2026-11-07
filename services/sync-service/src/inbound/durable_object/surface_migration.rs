@@ -1,5 +1,5 @@
 //! Migration request decoding and response conversion; policy belongs to Room.
-use super::{SyncSession, response, room_error};
+use super::{HttpHandlers, response, room_error};
 pub(crate) use sync_server_core::domain::migration::SnapshotProof;
 use sync_server_core::domain::room::{FaultPlan, MigrationOutcome};
 use worker::{Request, Response, Result};
@@ -41,7 +41,7 @@ fn migration_response(outcome: MigrationOutcome) -> Result<Response> {
         MigrationOutcome::Export(export) => Response::from_json(&export),
     }
 }
-impl SyncSession<'_> {
+impl HttpHandlers<'_> {
     pub(in crate::inbound) async fn source_migration_handler(
         &mut self,
         mut req: Request,

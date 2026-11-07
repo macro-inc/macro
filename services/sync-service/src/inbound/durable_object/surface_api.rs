@@ -5,10 +5,10 @@ use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use sync_protocol::InitializeFromSnapshotRequest;
 use worker::{Method, Request, Response, Result};
 
-use super::{SyncSession, response, status_codes};
+use super::{HttpHandlers, response, status_codes};
 use crate::error::ResultExt;
 
-impl SyncSession<'_> {
+impl HttpHandlers<'_> {
     pub(in crate::inbound) async fn surface_handler(
         &mut self,
         req: Request,

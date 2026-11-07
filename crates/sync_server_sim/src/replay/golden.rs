@@ -1,17 +1,12 @@
 //! Exact boundary projection for extracted callbacks; unknown raw operations fail closed.
 use super::*;
 use crate::{ports::*, transcript::*};
-use base64::{
-    Engine,
-    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
-};
-use macro_sync_service_jwt::session::SessionKind;
+use base64::{Engine, engine::general_purpose::STANDARD};
+mod http;
+mod receipts;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use sync_server_core::domain::{
-    permissions::{AccessLevel, AuthToken},
-    types::SessionKey,
-};
+use sync_server_core::domain::types::SessionKey;
 
 fn invalid(message: impl Into<String>) -> ReplayError {
     ReplayError::Invalid(message.into())
@@ -26,34 +21,6 @@ fn effect(operation: &str, value: Value) -> Effect {
         operation: operation.into(),
         value,
     }
-}
-fn grant(query: &str) -> Result<AuthToken, ReplayError> {
-    let token = query
-        .strip_prefix("?token=")
-        .ok_or_else(|| invalid("expected local test token"))?;
-    let payload = token
-        .split('.')
-        .nth(1)
-        .ok_or_else(|| invalid("invalid JWT"))?;
-    let claims: Value = serde_json::from_slice(
-        &URL_SAFE_NO_PAD
-            .decode(payload)
-            .map_err(|e| invalid(e.to_string()))?,
-    )
-    .map_err(|e| invalid(e.to_string()))?;
-    Ok(AuthToken::new(
-        claims["document_id"]
-            .as_str()
-            .ok_or_else(|| invalid("missing document grant"))?
-            .into(),
-        serde_json::from_value::<AccessLevel>(claims["access_level"].clone())
-            .map_err(|e| invalid(e.to_string()))?,
-        SessionKind::Document,
-        claims["user_id"].as_str().map(str::to_owned),
-        claims["actor"].as_str().map(str::to_owned),
-        None,
-        None,
-    ))
 }
 fn socket(value: &Value) -> Result<sync_server_core::domain::socket::WebSocketId, ReplayError> {
     sync_server_core::domain::socket::WebSocketId::from_tags(&[value
@@ -169,19 +136,28 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                     "connections.id",
                     json!({"socket":record["tags"][0],"tags":record["tags"]}),
                 ),
+                // Detached HTTP transports are checked against native publication
+                // payloads separately; their schedule stays in this ordered log.
+                "fetch"
+                    if record["url"].as_str().is_some_and(|url| {
+                        url.starts_with("https://dss.test/internal/documents/")
+                    }) =>
+                {
+                    continue;
+                }
                 "wait_until" => effect("background.schedule", Value::Null),
                 "sql.exec" => {
                     let sql = args[0]
                         .as_str()
                         .ok_or_else(|| invalid("SQL text missing"))?;
                     if sql.starts_with("CREATE TABLE IF NOT EXISTS kv_store (") {
-                        let next = records[index + 1..]
+                        // A conflicting target prepares the session backend before
+                        // consulting its receipt, then returns without a SQL read.
+                        let identity = records[index + 1..]
                             .iter()
                             .find(|r| r["port"] == "sql.exec")
-                            .ok_or_else(|| invalid("snapshot preparation without access"))?;
-                        let identity = next["args"][1]
-                            .as_str()
-                            .ok_or_else(|| invalid("snapshot key missing"))?;
+                            .and_then(|next| next["args"][1].as_str())
+                            .unwrap_or(key);
                         result.push(effect("snapshot.prepare", json!(identity)));
                         continue;
                     }
@@ -233,7 +209,23 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                             r["args"][0] == "SELECT 1 FROM kv_store WHERE id = ?1 LIMIT 1"
                                 && r["args"][1] == args[1]
                         }) {
-                            return Err(invalid("orphan snapshot chunk read"));
+                            if args[1]
+                                .as_str()
+                                .is_some_and(|key| key.starts_with("migration-export:"))
+                                && records[..index]
+                                    .iter()
+                                    .rev()
+                                    .find(|r| r["port"] == "sql.exec")
+                                    .is_some_and(|r| {
+                                        r["args"][0].as_str().is_some_and(|sql| {
+                                            sql.starts_with("CREATE TABLE IF NOT EXISTS kv_store (")
+                                        })
+                                    })
+                            {
+                                result.push(effect("snapshot.get", args[1].clone()));
+                            } else {
+                                return Err(invalid("orphan snapshot chunk read"));
+                            }
                         }
                         continue;
                     } else if sql == "INSERT INTO kv_store (id, chunk, data) VALUES (?1, ?2, ?3)" {
@@ -305,11 +297,12 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                     result.push(effect("connections.send_text", value.clone()));
                     result.push(effect("send_text", value));
                 }
+                "close" => result.push(effect("connections.close",json!({"socket":record["ws_id"],"code":record["code"],"reason":record["reason"]}))),
                 "alarm" => result.push(effect(
                     "alarm.response",
                     json!({"status":record["status"],"body":decode(&record["body_b64"])?}),
                 )),
-                "response" | "dump" => {}
+                "response" | "dump" | "fetch_body" => {}
                 other => return Err(ReplayError::Unsupported(format!("raw output {other}"))),
             }
         }
@@ -319,23 +312,29 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
 pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError> {
     let mut rooms: BTreeMap<String, SimRoom> = BTreeMap::new();
     let mut all = Vec::new();
+    let mut receipts = receipts::Receipts::default();
     for recorded in transcript.inputs()? {
         if recorded.room.starts_with('@') {
             continue;
         }
+        // DO fake stores partition attribution by session key. The runtime D1
+        // dump is global, so combine the disjoint partitions for final checking.
+        let other_directories: Vec<_> = rooms
+            .iter()
+            .filter(|(id, _)| **id != recorded.room)
+            .map(|(_, room)| room.room.ports().directory_dump())
+            .collect();
         let room = rooms
             .entry(recorded.room.clone())
             .or_insert_with(|| SimRoom::new(SimPorts::new()));
         let callback = serde_json::json!(recorded.callback);
-        let raw = transcript
-            .records
+        let raw = &transcript.records[recorded.record_index];
+        let end = transcript.records[recorded.record_index + 1..]
             .iter()
-            .find(|r| {
-                r["room"] == recorded.room && r["callback"] == callback && r.get("in").is_some()
-            })
-            .ok_or_else(|| invalid("missing callback"))?;
-        let records: Vec<_> = transcript
-            .records
+            .position(|r| r["room"] == recorded.room && r["in"] == "new")
+            .map(|offset| recorded.record_index + 1 + offset)
+            .unwrap_or(transcript.records.len());
+        let records: Vec<_> = transcript.records[recorded.record_index..end]
             .iter()
             .filter(|r| r["room"] == recorded.room && r["callback"] == callback)
             .collect();
@@ -410,7 +409,14 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 .expect("recorded UUID")
         }));
         let key = match &recorded.input {
-            ServerInput::Http(req) => req.path.split('/').nth(2).unwrap_or("").to_owned(),
+            ServerInput::Http(req) => {
+                let id = req.path.split('/').nth(2).unwrap_or("");
+                if req.path.starts_with("/surface/") {
+                    format!("surface:{}", id.to_lowercase())
+                } else {
+                    id.to_owned()
+                }
+            }
             _ => room
                 .room
                 .memory_view()
@@ -428,115 +434,77 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
             .transpose()
             .map_err(|e| invalid(e.to_string()))?;
         let result = match recorded.input {
-            ServerInput::Http(req) if req.method == "GET" && req.path.ends_with("/connect") => {
+            ServerInput::Http(req) => {
                 ports.set_now(recorded.now);
-                if room
-                    .room
-                    .source_blocked()
-                    .now_or_never()
-                    .ok_or_else(|| invalid("gate blocked"))?
-                    .map_err(|e| invalid(e.to_string()))?
-                {
-                    return Err(ReplayError::Unsupported("blocked source route".into()));
-                }
-                let gate_effects = ports.take_effects();
-                let step = room.step(
-                    recorded.now,
-                    ServerInput::Connect {
-                        grant: grant(&req.query)?,
-                        key: SessionKey::new(key.clone()),
-                    },
-                )?;
-                let StepResult::Done(mut effects) = step else {
-                    return Err(invalid("golden callback crashed"));
-                };
-                let mut effects = gate_effects
-                    .into_iter()
-                    .chain(effects.drain(..))
-                    .collect::<Vec<_>>();
+                http::replay(&mut room.room, &req, &key, &records, &mut receipts)?;
+                ports.take_effects()
+            }
+            // C0 includes manual alarm invocations as well as scheduled firings.
+            // A retained alarm read identifies the manual invocation; scheduled
+            // delivery consumes it before the callback (including final drains).
+            ServerInput::AlarmFired => {
+                ports.set_now(recorded.now);
                 if !records
                     .iter()
-                    .any(|r| r["out"] == "response" && r["status"] == 101 && r["body_b64"] == "")
+                    .any(|r| r["return"] == "storage.getAlarm" && !r["value"].is_null())
                 {
-                    return Err(invalid("missing upgrade response"));
+                    ports.fire_alarm();
                 }
-                effects.shrink_to_fit();
-                effects
-            }
-            ServerInput::Http(req)
-                if req.method == "GET"
-                    && (req.path.ends_with("/raw") || req.path.ends_with("/exists")) =>
-            {
-                ports.set_now(recorded.now);
-                let outcome = async {
-                    use sync_server_core::domain::room::{RequestGate, RouteClass};
-                    if room.room.gate_request(RouteClass::Document).await? != RequestGate::Allowed {
-                        return Err(sync_server_core::domain::room::RoomError::MissingPeer);
-                    }
-                    if req.path.ends_with("/exists") {
-                        Ok(room
-                            .room
-                            .exists(&SessionKey::new(key.clone()))
-                            .await?
-                            .then(String::new))
-                    } else {
-                        room.room.raw_json(&SessionKey::new(key.clone())).await
-                    }
-                }
-                .now_or_never()
-                .ok_or_else(|| invalid("read blocked"))?
-                .map_err(|e| ReplayError::Callback(e.to_string()))?;
-                let (status, body) = match outcome {
-                    Some(json) => (200, json.into_bytes()),
-                    None => (404, vec![]),
+                let outcome = room
+                    .room
+                    .on_alarm()
+                    .now_or_never()
+                    .ok_or_else(|| invalid("alarm blocked"))??;
+                let body = if outcome == AlarmOutcome::Completed {
+                    b"ok".to_vec()
+                } else {
+                    vec![]
                 };
-                let response = records
-                    .iter()
-                    .find(|r| r["out"] == "response")
-                    .ok_or_else(|| invalid("missing HTTP response"))?;
-                let headers = json!({"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"});
-                if response["status"] != status
-                    || decode(&response["body_b64"])? != body
-                    || response["headers"] != headers
-                {
-                    return Err(ReplayError::Mismatch("raw HTTP response differs".into()));
-                }
+                ports.transport_effect(effect("alarm.response", json!({"status":200,"body":body})));
                 ports.take_effects()
             }
-            ServerInput::Http(req) if req.method == "DELETE" && req.path.ends_with("/delete") => {
-                ports.set_now(recorded.now);
-                let outcome = async {
-                    use sync_server_core::domain::room::{RequestGate, RouteClass};
-                    if room.room.gate_request(RouteClass::Document).await? != RequestGate::Allowed {
-                        return Err(sync_server_core::domain::room::RoomError::MissingPeer);
+            other => {
+                // H10 deliberately sends the tail of a pre-eviction partial frame.
+                // C0 did not record callback errors. Pin this one known failure's
+                // exact input and diagnostic, then still compare every port effect.
+                let malformed_tail = transcript.name
+                    == "hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl"
+                    && raw["in"] == "message"
+                    && raw["binary_b64"] == "AQAABA==";
+                match room.step(recorded.now, other) {
+                    Err(ReplayError::Callback(error))
+                        if malformed_tail
+                            && error
+                                == "failed to deserialize message, message length 3 : Deserialization Error, 1 more bytes expected" =>
+                    {
+                        ports.take_effects()
                     }
-                    room.room.delete(&SessionKey::new(key.clone())).await
+                    Ok(StepResult::Done(effects)) if !malformed_tail => effects,
+                    Ok(StepResult::Done(_)) => {
+                        return Err(ReplayError::Mismatch(
+                            "H10 malformed tail unexpectedly succeeded".into(),
+                        ));
+                    }
+                    Ok(StepResult::Crashed(_)) => return Err(invalid("golden callback crashed")),
+                    Err(error) => return Err(error),
                 }
-                .now_or_never()
-                .ok_or_else(|| invalid("delete blocked"))?;
-                outcome.map_err(|e| ReplayError::Callback(e.to_string()))?;
-                let response = records
-                    .iter()
-                    .find(|r| r["out"] == "response")
-                    .ok_or_else(|| invalid("missing delete response"))?;
-                let headers = json!({"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"});
-                if response["status"] != 200
-                    || decode(&response["body_b64"])? != Vec::<u8>::new()
-                    || response["headers"] != headers
-                {
-                    return Err(ReplayError::Mismatch("delete HTTP response differs".into()));
-                }
-                ports.take_effects()
             }
-            other => match room.step(recorded.now, other)? {
-                StepResult::Done(effects) => effects,
-                StepResult::Crashed(_) => return Err(invalid("golden callback crashed")),
-            },
         };
         if ports.remaining_clocks() != 0 {
             return Err(ReplayError::Mismatch("unconsumed clock reads".into()));
         }
-        let expected = projected(&records, &key)?;
+        validate_publications(&records, &result)?;
+        let mut expected = projected(&records, &key).map_err(|error| {
+            invalid(format!("{} callback {callback}: {error}", transcript.name))
+        })?;
+        for effect in &mut expected {
+            if effect.operation == "storage.put" {
+                let key = effect.value["key"]
+                    .as_str()
+                    .ok_or_else(|| invalid("missing put key"))?;
+                effect.value["value"] = receipts.stored(key, &effect.value["value"]);
+            }
+        }
         let actual: Vec<_> = result
             .iter()
             .filter(|e| {
@@ -562,10 +530,22 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 .map_err(|e| invalid(e.to_string()))?
                 .into_iter()
                 .collect::<BTreeMap<_, _>>();
-            if ports.storage_dump() != expected_kv {
-                return Err(ReplayError::Mismatch(
-                    "final transactional storage differs".into(),
-                ));
+            let actual_kv = ports.storage_dump();
+            let mut same_kv = actual_kv.keys().eq(expected_kv.keys());
+            if same_kv {
+                for (key, value) in &expected_kv {
+                    same_kv &= equivalent_stored_value(
+                        key,
+                        &receipts.stored(key, value),
+                        &actual_kv[key],
+                    )?;
+                }
+            }
+            if !same_kv {
+                return Err(ReplayError::Mismatch(format!(
+                    "{} callback {callback}: final transactional storage differs; expected {expected_kv:?}; actual {actual_kv:?}",
+                    transcript.name
+                )));
             }
             let snapshots = ports.snapshot_dump();
             let rows = dump["sql"]
@@ -590,13 +570,24 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                     return Err(ReplayError::Mismatch("final snapshot differs".into()));
                 }
             }
-            if dump["d1"] != ports.directory_dump()
+            let directory = combined_directory(
+                other_directories
+                    .iter()
+                    .chain(std::iter::once(&ports.directory_dump())),
+            )?;
+            if dump["d1"] != directory
                 || dump["snapshots"] != json!([])
                 || dump["alarm"] != json!(ports.alarm_dump())
             {
-                return Err(ReplayError::Unsupported(
-                    "nonempty external store in C8 fixture".into(),
-                ));
+                return Err(ReplayError::Unsupported(format!(
+                    "final stores differ in {}: expected d1 {} actual {}; expected alarm {} actual {:?}; fallback {}",
+                    transcript.name,
+                    dump["d1"],
+                    ports.directory_dump(),
+                    dump["alarm"],
+                    ports.alarm_dump(),
+                    dump["snapshots"]
+                )));
             }
         }
         // A close callback sees the socket listed; removal happens only afterwards.
@@ -620,4 +611,122 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
         all.extend(result);
     }
     Ok(all)
+}
+
+fn validate_publications(records: &[&Value], effects: &[Effect]) -> Result<(), ReplayError> {
+    let fetches: Vec<_> = records.iter().filter(|r| r["port"] == "fetch").collect();
+    if fetches.is_empty() {
+        // Older fixtures have no configured outbound DSS transport. Their
+        // publication scheduling remains part of the strict ordered comparison.
+        return Ok(());
+    }
+    let mut expected = Vec::new();
+    for effect in effects
+        .iter()
+        .filter(|e| e.operation == "background.publish")
+    {
+        let value = &effect.value;
+        if value["noop"] == true {
+            continue;
+        }
+        let document = value["document"]
+            .as_str()
+            .ok_or_else(|| invalid("missing publication identity"))?;
+        let base = format!("https://dss.test/internal/documents/{document}");
+        if value.get("snapshot").is_some() {
+            let snapshot: Vec<u8> = serde_json::from_value(value["snapshot"].clone())
+                .map_err(|e| invalid(e.to_string()))?;
+            expected.push((format!("{base}/snapshot"), snapshot, true));
+            let editors = &value["editors"];
+            let body = if editors == &json!([]) {
+                json!({})
+            } else {
+                json!({"editors":editors})
+            };
+            expected.push((
+                format!("{base}/sync-content-updated"),
+                body.to_string().into_bytes(),
+                false,
+            ));
+        }
+        if !value["interaction"].is_null() {
+            expected.push((
+                format!("{base}/interaction"),
+                json!({"reason":value["interaction"]})
+                    .to_string()
+                    .into_bytes(),
+                false,
+            ));
+        }
+    }
+    let mut actual = Vec::new();
+    let mut body = None;
+    for record in records {
+        if record["out"] == "fetch_body" {
+            if body.replace(decode(&record["body_b64"])?).is_some() {
+                return Err(invalid("orphan outbound body"));
+            }
+        } else if record["port"] == "fetch" {
+            let bytes = if let Some(value) = record.get("body") {
+                value.to_string().into_bytes()
+            } else {
+                body.take()
+                    .ok_or_else(|| invalid("missing outbound body"))?
+            };
+            actual.push((
+                record["url"]
+                    .as_str()
+                    .ok_or_else(|| invalid("missing outbound URL"))?
+                    .to_owned(),
+                bytes,
+            ));
+        }
+    }
+    if body.is_some() || expected.len() != actual.len() {
+        return Err(ReplayError::Mismatch(
+            "publication request count differs".into(),
+        ));
+    }
+    for ((url, bytes, snapshot), (actual_url, actual_bytes)) in expected.into_iter().zip(actual) {
+        if url != actual_url
+            || if snapshot {
+                !equivalent_snapshots(&bytes, &actual_bytes)?
+            } else {
+                bytes != actual_bytes
+            }
+        {
+            return Err(ReplayError::Mismatch(
+                "publication transport payload differs".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn combined_directory<'a>(
+    partitions: impl Iterator<Item = &'a Value>,
+) -> Result<Value, ReplayError> {
+    let mut result = json!({"peer_user_map":[],"blame":[]});
+    for partition in partitions {
+        for (table, id) in [("peer_user_map", "peer_id"), ("blame", "node_id")] {
+            let rows = partition[table]
+                .as_array()
+                .ok_or_else(|| invalid("missing D1 partition"))?;
+            result[table]
+                .as_array_mut()
+                .unwrap()
+                .extend(rows.iter().cloned());
+            let merged = result[table].as_array_mut().unwrap();
+            merged.sort_by(|a, b| {
+                (a["document_id"].as_str(), a[id].as_str())
+                    .cmp(&(b["document_id"].as_str(), b[id].as_str()))
+            });
+            if merged.windows(2).any(|rows| {
+                rows[0]["document_id"] == rows[1]["document_id"] && rows[0][id] == rows[1][id]
+            }) {
+                return Err(invalid("overlapping native D1 partitions"));
+            }
+        }
+    }
+    Ok(result)
 }

@@ -18,7 +18,7 @@ use sync_protocol::{framing::Reassembler, time::WallDuration};
 
 /// Runtime-independent room configuration.
 pub struct RoomConfig {
-    /// Presence expiration; the clock-injected store replaces Loro's in C9a.
+    /// Expiration duration for the clock-injected presence store.
     pub awareness_timeout: WallDuration,
     /// Delay used to debounce persistence alarms.
     pub alarm_delay: Duration,
@@ -37,32 +37,51 @@ pub struct Room<Ports: RoomPorts> {
     memory: RoomMemory,
 }
 
-/// Temporary field access while callback bodies move inward in C8–C15.
-/// No synchronization or runtime handles live here.
-#[doc(hidden)]
-pub struct RoomMemory {
+/// Owned policy state; no runtime handles or synchronization live here.
+struct RoomMemory {
     /// Cached durable identity.
-    pub session_key: Option<SessionKey>,
+    session_key: Option<SessionKey>,
     /// Live imported document and its monotonic save timestamps.
-    pub document: Option<DocumentState>,
+    document: Option<DocumentState>,
     /// Ordered operation IDs and the applied set, reset by H9.
-    pub operation_log: Option<OperationLog>,
-    /// Existing presence implementation, replaced with explicit time in C9a.
-    pub awareness: EphemeralStore,
+    operation_log: Option<OperationLog>,
+    /// Clock-injected presence values and tombstones.
+    awareness: EphemeralStore,
     /// Restored metadata indexed by the unchanged socket tag.
-    pub connections: BTreeMap<WebSocketId, ConnectionMetadata>,
+    connections: BTreeMap<WebSocketId, ConnectionMetadata>,
     /// Partial frames indexed by the unchanged socket tag.
-    pub inbound: HashMap<WebSocketId, Reassembler>,
+    inbound: HashMap<WebSocketId, Reassembler>,
     /// Deferred blame observations.
-    pub pending_blame: Vec<BlameEvent>,
+    pending_blame: Vec<BlameEvent>,
     /// Distinct editors since the last publication.
-    pub pending_editors: BTreeSet<DocumentAttribution>,
+    pending_editors: BTreeSet<DocumentAttribution>,
     /// Writing peers mapped during this activation.
-    pub mapped_writing_peers: BTreeSet<PeerId>,
+    mapped_writing_peers: BTreeSet<PeerId>,
     /// Cached surface lifecycle.
-    pub surface_lifecycle: Option<SurfaceLifecycle>,
+    surface_lifecycle: Option<SurfaceLifecycle>,
     /// Cached source migration state.
-    pub source_migration: Option<SourceState>,
+    source_migration: Option<SourceState>,
+}
+
+/// Read-only diagnostic values from the current room activation.
+pub struct RoomMemoryView<'a> {
+    /// Cached durable identity.
+    pub session_key: Option<&'a SessionKey>,
+    /// Read-only document exports.
+    pub document: Option<DocumentView<'a>>,
+    /// Peers already mapped during this activation.
+    pub mapped_writing_peers: &'a BTreeSet<PeerId>,
+}
+/// Document inspection without exposing Loro's interior-mutable document handle.
+pub struct DocumentView<'a>(&'a DocumentState);
+impl DocumentView<'_> {
+    /// Export content for replay comparison without changing room policy state.
+    pub fn export_snapshot(
+        &self,
+        mode: Option<loro::ExportMode<'_>>,
+    ) -> Result<Vec<u8>, super::state_error::StateError> {
+        self.0.export_snapshot(mode)
+    }
 }
 
 impl<Ports: RoomPorts> Room<Ports> {
@@ -91,23 +110,13 @@ impl<Ports: RoomPorts> Room<Ports> {
     pub fn ports(&self) -> &Ports {
         &self.ports
     }
-    /// Temporary mutable adapter access during the callback extraction.
-    #[doc(hidden)]
-    pub fn ports_mut(&mut self) -> &mut Ports {
-        &mut self.ports
-    }
-    /// Settings supplied by the composition root.
-    pub fn config(&self) -> &RoomConfig {
-        &self.config
-    }
-    /// Read-only room memory for diagnostics and the temporary adapter.
-    pub fn memory_view(&self) -> &RoomMemory {
-        &self.memory
-    }
-    /// Temporary cross-crate callback access, removed as handlers move inward.
-    #[doc(hidden)]
-    pub fn memory_mut(&mut self) -> &mut RoomMemory {
-        &mut self.memory
+    /// Read-only diagnostic memory; adapters cannot mutate or take room fields.
+    pub fn memory_view(&self) -> RoomMemoryView<'_> {
+        RoomMemoryView {
+            session_key: self.memory.session_key.as_ref(),
+            document: self.memory.document.as_ref().map(DocumentView),
+            mapped_writing_peers: &self.memory.mapped_writing_peers,
+        }
     }
 }
 
@@ -127,6 +136,7 @@ mod alarm;
 mod atomic;
 pub use alarm::AlarmOutcome;
 
+mod debug;
 mod http;
 mod migration;
 pub use migration::{MigrationOutcome, SnapshotExport};

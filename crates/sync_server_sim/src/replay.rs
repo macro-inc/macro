@@ -11,6 +11,17 @@ mod golden;
 /// Golden fixtures with every callback implemented by the native room.
 /// Add names with the callback extraction commits starting at C8.
 pub const ENABLED: &[&str] = &[
+    "surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl",
+    "surface_migration.test/isolated_initialization_acknowledges_only_the_identical_verified_operation_and_seed.jsonl",
+    "document_atomic.test/atomic_document_API_returns_compact_state_at_the_same_revision_and_accepts_edits_from_it.jsonl",
+    "surface_isolation.test/same_UUID_has_distinct_grants_snapshots_broadcasts_peers_and_effects.jsonl",
+    "hibernation.test/H1_restores_the_websocket_tag_after_eviction.jsonl",
+    "hibernation.test/H2_lazily_restores_stored_websocket_metadata.jsonl",
+    "hibernation.test/H5_restores_read-only_write_permissions_after_eviction.jsonl",
+    "hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl",
+    "hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl",
+    "hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl",
+    "transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl",
     "document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl",
     "document_sync.test/document_sync_tests_should_be_able_to_load_initial_sync_into_loro.jsonl",
     "websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl",

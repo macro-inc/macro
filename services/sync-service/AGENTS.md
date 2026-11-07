@@ -35,7 +35,7 @@ updates over WebSocket.
   atomic update use cases, connection metadata and migration state.
 - `src/domain.rs`: compatibility re-exports of the shared core.
 - `../../crates/sync_server_core/src/domain/room/connection.rs`: connect/close, metadata restore and surface-grant validation policy.
-- `src/state.rs`: Worker monotonic clock; document state and migration proof decoding live in core; mutable state lives in the core Room.
+- `src/outbound/room_ports.rs`: Worker clocks; document state and migration proof decoding live in core.
 
 ## Scope
 
@@ -53,8 +53,8 @@ updates over WebSocket.
 - Add a storage backend: `src/outbound/storage/backends/` (new file + `mod.rs`) → gate
   it behind a new feature in `Cargo.toml` → wire into `src/outbound/storage.rs`.
 - Add a non-document surface: `src/inbound/durable_object/surface_api.rs` →
-  `src/domain/` (surface-specific logic) → migration in
-  `src/inbound/durable_object/surface_migration.rs` if it changes stored shape.
+  `../../crates/sync_server_core/src/domain/room/surface.rs` → migration policy in
+  `../../crates/sync_server_core/src/domain/room/migration.rs` if it changes stored shape.
 
 Active-peer queries with `include_ai=false` exclude signed agent actors and the
 reserved AI peer blocks (`sync_server_core::domain::ai_peer`); Canvas workers use random full-width
@@ -119,15 +119,15 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 
 - Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.
 
-The request gate and Axum handler share one owned room guard. Handler adapters
-borrow the room for the whole request; background work receives owned snapshots
-and editor batches, never a room guard. `websocket_error` only logs and stays
-lock-free. H9 still replaces the operation log and snapshot transport handle.
+The request gate and Axum handler share one owned room guard (CS-61). `HttpHandlers`
+borrows only Room for request decoding and response serialization; it owns no session
+memory. WebSocket/alarm/close adapters call Room directly. The error callback stays
+lock-free. Background effects receive owned snapshots and editor batches. H9 still
+replaces the operation log; A4 pending-import loss remains a named quirk.
 
-Atomic document snapshot/update orchestration lives in `../../crates/sync_server_core/src/domain/room/atomic.rs`; HTTP method, streaming limits and JSON/base64 parsing remain in the Worker adapter.
-
-Session deletion order and volatile cleanup live in `../../crates/sync_server_core/src/domain/room/delete.rs`; snapshot adapters remove fallback storage before primary storage.
-
-Surface identity binding, lifecycle, seed recovery and revocation live in `../../crates/sync_server_core/src/domain/room/surface.rs`; route/method and Bebop parsing remain in the adapter.
-
-Migration receipts, strict frozen replay and activation policy live in `../../crates/sync_server_core/src/domain/room/migration.rs`. Test-only fault headers map to explicit `FaultPlan`; production always supplies `None`.
+All room policy lives under `../../crates/sync_server_core/src/domain/room/`:
+connections/frames, HTTP reads/atomic updates, alarms/deletion, surfaces/migration.
+The Worker retains credential verification, body limits, HTTP parsing and runtime
+transports. Native replay and fault recovery run with
+`cargo test -p sync_server_core -p sync_server_sim -p sync_protocol` from the root;
+see `../../crates/sync_server_sim/AGENTS.md` for coverage and transcript recipes.

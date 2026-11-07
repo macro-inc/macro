@@ -1,56 +1,60 @@
 use super::*;
 
-impl SyncSession<'_> {
-    pub(super) async fn websocket_message(
-        &mut self,
-        ws: WebSocket,
-        msg: WebSocketIncomingMessage,
-    ) -> Result<()> {
-        use sync_server_core::domain::room::InboundFrame;
-        let frame = match msg {
-            WebSocketIncomingMessage::String(text) => InboundFrame::Text(text),
-            WebSocketIncomingMessage::Binary(bytes) => InboundFrame::Binary(bytes),
-        };
-        let heartbeat = matches!(&frame, InboundFrame::Text(text) if text == sync_protocol::PING);
-        let handled = self.room.on_frame(&ws, frame);
-        if heartbeat {
-            handled.await.map_err(room_error)
-        } else {
-            worker_rs_otel::scope(&self.env, self.state.as_ref(), handled)
-                .await
-                .map_err(room_error)
-        }
-    }
-
-    /// Map the core alarm outcome without changing durable retry behavior.
-    pub(super) async fn alarm(&mut self) -> Result<Response> {
-        use sync_server_core::domain::room::AlarmOutcome;
-        let outcome = worker_rs_otel::scope(
-            &self.env,
-            self.state.as_ref(),
-            self.room
-                .on_alarm()
-                .instrument(tracing::info_span!("do.alarm")),
-        )
-        .await
-        .map_err(room_error)?;
-        match outcome {
-            AlarmOutcome::Skipped => Response::empty(),
-            AlarmOutcome::Completed => Response::ok("ok"),
-        }
-    }
-
-    pub(super) async fn websocket_close(
-        &mut self,
-        ws: WebSocket,
-        _code: usize,
-        _reason: String,
-        _was_clean: bool,
-    ) -> Result<()> {
-        worker_rs_otel::scope(&self.env, self.state.as_ref(), self.room.on_close(&ws))
+pub(super) async fn websocket_message(
+    room: &mut Room<WorkerPorts>,
+    state: &State,
+    env: &Env,
+    ws: WebSocket,
+    msg: WebSocketIncomingMessage,
+) -> Result<()> {
+    use sync_server_core::domain::room::InboundFrame;
+    let frame = match msg {
+        WebSocketIncomingMessage::String(text) => InboundFrame::Text(text),
+        WebSocketIncomingMessage::Binary(bytes) => InboundFrame::Binary(bytes),
+    };
+    let heartbeat = matches!(&frame, InboundFrame::Text(text) if text == sync_protocol::PING);
+    let handled = room.on_frame(&ws, frame);
+    if heartbeat {
+        handled.await.map_err(room_error)
+    } else {
+        worker_rs_otel::scope(env, state, handled)
             .await
             .map_err(room_error)
     }
+}
+
+/// Map the core alarm outcome without changing durable retry behavior.
+pub(super) async fn alarm(
+    room: &mut Room<WorkerPorts>,
+    state: &State,
+    env: &Env,
+) -> Result<Response> {
+    use sync_server_core::domain::room::AlarmOutcome;
+    let outcome = worker_rs_otel::scope(
+        env,
+        state,
+        room.on_alarm().instrument(tracing::info_span!("do.alarm")),
+    )
+    .await
+    .map_err(room_error)?;
+    match outcome {
+        AlarmOutcome::Skipped => Response::empty(),
+        AlarmOutcome::Completed => Response::ok("ok"),
+    }
+}
+
+pub(super) async fn websocket_close(
+    room: &mut Room<WorkerPorts>,
+    state: &State,
+    env: &Env,
+    ws: WebSocket,
+    _code: usize,
+    _reason: String,
+    _was_clean: bool,
+) -> Result<()> {
+    worker_rs_otel::scope(env, state, room.on_close(&ws))
+        .await
+        .map_err(room_error)
 }
 
 fn room_config() -> RoomConfig {
@@ -107,20 +111,10 @@ impl DocumentSyncSession {
             self.state.as_ref(),
             async {
                 async {
-                    if let Some(response) =
-                        SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                            .gate_request(&req)
-                            .await?
-                    {
+                    if let Some(response) = HttpHandlers::new(&mut room).gate_request(&req).await? {
                         return Ok(response);
                     }
-                    crate::inbound::router::dispatch(
-                        room,
-                        self.state.clone(),
-                        self.env.clone(),
-                        req,
-                    )
-                    .await
+                    crate::inbound::router::dispatch(room, self.env.clone(), req).await
                 }
                 .await
                 .context("DurableObject::fetch error")
@@ -156,9 +150,7 @@ impl DurableObject for DocumentSyncSession {
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
         let callback = async {
             let mut room = self.room.lock().await;
-            SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                .websocket_message(ws, msg)
-                .await
+            websocket_message(&mut room, self.state.as_ref(), &self.env, ws, msg).await
         };
         #[cfg(feature = "transcript")]
         return crate::transcript::scope(self.state.id().to_string(), callback).await;
@@ -168,9 +160,7 @@ impl DurableObject for DocumentSyncSession {
     async fn alarm(&self) -> Result<Response> {
         let callback = async {
             let mut room = self.room.lock().await;
-            SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                .alarm()
-                .await
+            alarm(&mut room, self.state.as_ref(), &self.env).await
         };
         #[cfg(feature = "transcript")]
         return crate::transcript::scope(self.state.id().to_string(), callback).await;
@@ -186,9 +176,16 @@ impl DurableObject for DocumentSyncSession {
     ) -> Result<()> {
         let callback = async {
             let mut room = self.room.lock().await;
-            SyncSession::new(&mut room, self.state.clone(), self.env.clone())
-                .websocket_close(ws, code, reason, was_clean)
-                .await
+            websocket_close(
+                &mut room,
+                self.state.as_ref(),
+                &self.env,
+                ws,
+                code,
+                reason,
+                was_clean,
+            )
+            .await
         };
         #[cfg(feature = "transcript")]
         return crate::transcript::scope(self.state.id().to_string(), callback).await;

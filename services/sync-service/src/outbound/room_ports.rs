@@ -3,11 +3,28 @@ use crate::error::ResultExt;
 use std::time::Duration;
 use sync_server_core::domain::ports::{Clock, UnixMillis};
 
+use std::cell::Cell;
+use web_time::Instant;
+thread_local! {
+    static MONOTONIC_ORIGIN: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+pub(crate) fn monotonic() -> Duration {
+    let instant = Instant::now();
+    #[cfg(feature = "transcript")]
+    let instant = crate::transcript::instant("state_instant", instant);
+    MONOTONIC_ORIGIN.with(|origin| {
+        let first = origin.get().unwrap_or(instant);
+        origin.set(Some(first));
+        instant.duration_since(first)
+    })
+}
+
 /// The existing worker clocks, read only when the core requests them.
 pub struct WorkerClock;
 impl Clock for WorkerClock {
     fn monotonic(&self) -> Duration {
-        crate::state::monotonic()
+        monotonic()
     }
     fn unix_time(&self) -> UnixMillis {
         let now = worker::Date::now().as_millis();
@@ -277,7 +294,6 @@ impl BackgroundEffects for WorkerBackground {
 
 /// Concrete worker capabilities; no IO is performed by construction.
 pub struct WorkerPorts {
-    pub(crate) session_storage: Option<Rc<crate::storage::SessionStorage>>,
     clock: WorkerClock,
     entropy: WorkerEntropy,
     connections: WorkerConnections,
@@ -291,7 +307,6 @@ pub struct WorkerPorts {
 impl WorkerPorts {
     pub fn new(state: Rc<State>, env: Env) -> Self {
         Self {
-            session_storage: None,
             clock: WorkerClock,
             entropy: WorkerEntropy,
             connections: WorkerConnections {
