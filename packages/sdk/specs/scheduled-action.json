@@ -1688,9 +1688,15 @@
           },
           {
             "type": "object",
-            "description": "Why there's no draft, for the person.",
+            "description": "Why there's no draft, for the person, and anything AI created before\nit gave up.",
             "required": ["message", "outcome"],
             "properties": {
+              "created": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DraftCreated"
+                }
+              },
               "message": {
                 "type": "string"
               },
@@ -1726,6 +1732,56 @@
           }
         },
         "additionalProperties": false
+      },
+      "DraftCreated": {
+        "type": "object",
+        "description": "Something a draft's session created. It exists whether or not the draft\nis saved.",
+        "required": ["entityType", "entityId", "used"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "Its id."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "crm_pipeline",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative",
+                  "database",
+                  "database_row",
+                  "form",
+                  "external_chat"
+                ]
+              }
+            ],
+            "description": "What kind of item."
+          },
+          "used": {
+            "type": "boolean",
+            "description": "Whether the drafted routine uses it. One it doesn't use was made for\nnothing, or is the routine's own work done early."
+          }
+        }
       },
       "DraftRequest": {
         "oneOf": [
@@ -1816,9 +1872,9 @@
           "created": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreatedItem"
+              "$ref": "#/components/schemas/DraftCreated"
             },
-            "description": "What AI created for the routine to use, such as the database it\nwrites to. These exist whether or not the routine is saved."
+            "description": "What AI created while drafting, such as the database the routine\nwrites to. These exist whether or not the routine is saved."
           },
           "name": {
             "type": "string"
@@ -1858,9 +1914,9 @@
           "created": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreatedItem"
+              "$ref": "#/components/schemas/DraftCreated"
             },
-            "description": "What AI created for the step to use. These exist whether or not the\nstep is saved."
+            "description": "What AI created while drafting the step. These exist whether or not\nthe step is saved."
           },
           "problems": {
             "type": "array",

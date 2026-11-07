@@ -304,6 +304,25 @@ pub struct StaleDraft {
     pub agent: bot_id::BotId,
 }
 
+/// What an agent session's programs created, from the activity recorded for
+/// its code-mode invocations. Written asynchronously, so a read right after
+/// a creation can miss it. Object-safe so the drafter holds it erased.
+#[async_trait::async_trait]
+pub trait SessionCreations: Send + Sync + 'static {
+    /// Items `session` created, as its activity records them so far.
+    async fn created_by(&self, session: Uuid) -> Result<Vec<super::models::CreatedItem>>;
+}
+
+/// A host that records no session activity.
+pub struct NoSessionCreations;
+
+#[async_trait::async_trait]
+impl SessionCreations for NoSessionCreations {
+    async fn created_by(&self, _session: Uuid) -> Result<Vec<super::models::CreatedItem>> {
+        Ok(Vec::new())
+    }
+}
+
 /// The agent session a code-mode request came from, by the invocation its
 /// credential names. Object-safe for the same reason.
 #[async_trait::async_trait]

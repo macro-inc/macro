@@ -231,7 +231,17 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
 fn agent() -> DraftAgent {
     DraftAgent {
         bot: bot_id::MACRO_NEW_BOT_ID,
-        model: Some("google/gemini-3.8-flash".into()),
+    }
+}
+
+/// What the sessions' programs created, as their activity records it.
+#[derive(Default)]
+struct Recorded(Mutex<Vec<CreatedItem>>);
+
+#[async_trait::async_trait]
+impl SessionCreations for Recorded {
+    async fn created_by(&self, _session: Uuid) -> Result<Vec<CreatedItem>> {
+        Ok(self.0.lock().unwrap().clone())
     }
 }
 
@@ -378,7 +388,8 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     assert_eq!(prepared.selection.bot_id, bot_id::MACRO_NEW_BOT_ID);
     assert_eq!(
         prepared.selection.model.as_deref(),
-        Some("google/gemini-3.8-flash")
+        // The model the person's Ask AI steps run on, which their plan allows.
+        Some("anthropic/claude-sonnet-5-5")
     );
     assert!(prepared.selection.mcp_servers.is_empty());
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
@@ -874,9 +885,10 @@ async fn a_draft_that_needs_a_new_database_creates_it_references_it_and_says_so(
 
     assert_eq!(
         drafted.created,
-        [CreatedItem {
+        [DraftCreated {
             entity_type: model_entity::EntityType::Database,
             entity_id: database.clone(),
+            used: true,
         }]
     );
     assert!(
@@ -993,5 +1005,102 @@ async fn a_failing_check_after_a_passing_one_never_replaces_it() {
     assert_eq!(drafted.name, "Log bug reports");
     assert!(drafted.problems.is_empty());
     assert_eq!(drafted.steps.len(), 1);
-    assert_eq!(drafted.created, [database, folder]);
+    // The folder came with a check that failed, so the routine handed back
+    // doesn't use it, and the review says so.
+    assert_eq!(
+        drafted.created,
+        [
+            DraftCreated {
+                entity_type: database.entity_type,
+                entity_id: database.entity_id,
+                used: false,
+            },
+            DraftCreated {
+                entity_type: folder.entity_type,
+                entity_id: folder.entity_id,
+                used: false,
+            },
+        ]
+    );
+}
+
+/// The session does the routine's work now (makes today's task) and never
+/// says so in a check. Its recorded activity still shows the task, marked
+/// as not used by the routine, for the review to point out.
+#[tokio::test(start_paused = true)]
+async fn an_item_the_session_never_named_is_shown_and_marked_unused() {
+    let rows = Arc::new(Rows::default());
+    let database = CreatedItem {
+        entity_type: model_entity::EntityType::Database,
+        entity_id: "bug-log".into(),
+    };
+    let task = CreatedItem {
+        entity_type: model_entity::EntityType::Document,
+        entity_id: "todays-task".into(),
+    };
+    let named = database.clone();
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![(
+                configuration(
+                    "Monday task",
+                    json!({ "type": "cron", "schedule": "0 0 9 * * MON", "timezone": "America/New_York" }),
+                    json!([code_step(
+                        "Make the task",
+                        "export async function main() { /* writes to bug-log */ }"
+                    )]),
+                ),
+                vec![named.clone()],
+            )]
+        }),
+    ));
+    // Its activity has the database (also named) and the task (never named).
+    let recorded = Arc::new(Recorded(Mutex::new(vec![database.clone(), task.clone()])));
+    let drafts = drafts(&rows, &sessions).with_session_creations(recorded);
+
+    let drafted = drafted_routine(draft(&drafts, routine("make a task every Monday")).await);
+
+    assert_eq!(
+        drafted.created,
+        [
+            DraftCreated {
+                entity_type: database.entity_type,
+                entity_id: database.entity_id,
+                used: true,
+            },
+            DraftCreated {
+                entity_type: task.entity_type,
+                entity_id: task.entity_id,
+                used: false,
+            },
+        ]
+    );
+}
+
+/// What the session made before a draft failed is still reported.
+#[tokio::test(start_paused = true)]
+async fn a_failed_draft_still_says_what_its_session_created() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    let task = CreatedItem {
+        entity_type: model_entity::EntityType::Document,
+        entity_id: "todays-task".into(),
+    };
+    let drafts = drafts(&rows, &sessions)
+        .with_session_creations(Arc::new(Recorded(Mutex::new(vec![task.clone()]))));
+
+    let Draft::Failed { message, created } = draft(&drafts, routine("label mail")).await else {
+        panic!("expected a failed draft");
+    };
+
+    assert_eq!(message, ROUTINE_FAILED);
+    assert_eq!(
+        created,
+        [DraftCreated {
+            entity_type: task.entity_type,
+            entity_id: task.entity_id,
+            used: false,
+        }]
+    );
 }

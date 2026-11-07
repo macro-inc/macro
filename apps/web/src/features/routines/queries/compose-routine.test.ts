@@ -133,7 +133,12 @@ describe('composeRoutine', () => {
 describe('a drafted routine in the editor', () => {
   it('lists what AI created for it, which exists even if it isn’t saved', () => {
     const created = [
-      { entityType: 'database' as const, entityId: 'bug-log-database' },
+      {
+        entityType: 'database' as const,
+        entityId: 'bug-log-database',
+        used: true,
+      },
+      { entityType: 'document' as const, entityId: 'todays-task', used: false },
     ];
     const draft = draftFromRoutine(routine({ created }), 'claude');
     if (typeof draft === 'string') throw new Error(draft);

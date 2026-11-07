@@ -16,8 +16,16 @@ export type RunVisibility = 'listed' | 'unlisted';
 /** Runs start unlisted, so a routine that runs often buries nothing. */
 export const DEFAULT_RUN_VISIBILITY: RunVisibility = 'unlisted';
 
-/** Something AI created for a routine while drafting it, such as a database. */
-export type CreatedRoutineItem = { entityType: string; entityId: string };
+/**
+ * Something AI created while drafting a routine, such as a database, and
+ * whether the routine uses it. One it doesn't use was made for nothing, or
+ * is the routine's own work done early.
+ */
+export type CreatedRoutineItem = {
+  entityType: string;
+  entityId: string;
+  used: boolean;
+};
 
 export type ScheduleDraft = {
   id?: string;

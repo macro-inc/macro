@@ -53,6 +53,8 @@ export * from './createdItem';
 export * from './createdItemEntityType';
 export * from './draft';
 export * from './draftContext';
+export * from './draftCreated';
+export * from './draftCreatedEntityType';
 export * from './draftedRoutine';
 export * from './draftedRoutineTrigger';
 export * from './draftedStep';

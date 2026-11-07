@@ -12,6 +12,23 @@ import { withNewDraftSteps } from '../core/routine-draft';
 import { createRoutineComposer } from '../primitives/routine-composer';
 import { routineSections } from './routine-sections';
 
+/** Items AI created while drafting, which stay whether or not it's created. */
+function CreatedItems(props: {
+  label: string;
+  items: CreatedRoutineItem[];
+  Item: Component<{ item: CreatedRoutineItem }>;
+}) {
+  return (
+    <Show when={props.items.length}>
+      <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+        <span>{props.label}</span>
+        <For each={props.items}>{(item) => <props.Item item={item} />}</For>
+        <span>They stay even if you don't create the routine.</span>
+      </div>
+    </Show>
+  );
+}
+
 /**
  * A routine before it exists: its page, laid out like a saved routine's, that
  * is written only when Create routine succeeds. It starts from the draft New
@@ -95,17 +112,16 @@ export function RoutineNewView(props: {
         }
         feedback={
           <>
-            <Show when={draft().created?.length ? draft().created : undefined}>
-              {(created) => (
-                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
-                  <span>Created for this routine:</span>
-                  <For each={created()}>
-                    {(item) => <props.CreatedItem item={item} />}
-                  </For>
-                  <span>They stay even if you don't create the routine.</span>
-                </div>
-              )}
-            </Show>
+            <CreatedItems
+              label="Created for this routine:"
+              items={(draft().created ?? []).filter((item) => item.used)}
+              Item={props.CreatedItem}
+            />
+            <CreatedItems
+              label="Created, not used by this routine:"
+              items={(draft().created ?? []).filter((item) => !item.used)}
+              Item={props.CreatedItem}
+            />
             <Show when={attempted() && formError()}>
               {(message) => (
                 <p role="alert" class="text-sm text-failure">

@@ -40,14 +40,18 @@ each run.
   boxes in the web editor). It runs the draft in an ordinary hidden agent
   session (`RoutineSessions`, source `routine` so it notifies nobody, origin
   `requested`) of the in-process Macro agent, as the person, with its usual
-  tools; the session admits and bills its turns as agent session usage. One
+  tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
+  the session admits and bills its turns as agent session usage. One
   prompt, the brief (`brief`, with the code-step guide): find the items the
   words name with SDK search, create only what the routine must reference
   (such as the database it writes to), never do the routine's own work now,
   and hand the routine back by checking it with `macro.routines.check`
   (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
-  saved), naming what it created (`created`, which comes back on the draft
-  for the review to show). A check from a draft's
+  saved), naming what it created. The draft's `created` merges what its
+  checks named with what its recorded activity shows (`SessionCreations`,
+  read `ACTIVITY_SETTLE` after the turn stops, since activity is written
+  asynchronously), each marked `used` when the routine references it, so the
+  review can show items made for nothing or the routine's work done early. A check from a draft's
   session, found from the request's code-mode invocation (`RequestSessions`),
   is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
   session and the drafter may run on different replicas. The drafter reads

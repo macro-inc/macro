@@ -32,7 +32,9 @@ use utoipa::ToSchema;
 use super::code_check::MAX_TASK_CHARS;
 use super::event_trigger::{ActionTrigger, EventName};
 use super::models::{CreatedItem, RoutineCheck};
-use super::ports::{DraftHandBacks, RoutineCode, RoutineDraftService};
+use super::ports::{
+    DraftHandBacks, NoSessionCreations, RoutineCode, RoutineDraftService, SessionCreations,
+};
 use tracing::Instrument as _;
 
 #[cfg(test)]
@@ -50,6 +52,9 @@ const MAX_POLL: Duration = Duration::from_secs(2);
 /// How long a session that has checked a passing routine gets to finish its
 /// turn before it is stopped and its last check taken.
 const CHECKED_GRACE: Duration = Duration::from_secs(15);
+/// How long the drafter waits, once the session has stopped, for the
+/// activity its last creations wrote, which is recorded asynchronously.
+const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
 
@@ -177,8 +182,13 @@ pub enum Draft {
     Routine(DraftedRoutine),
     /// A step to add, or to put in place of the one changed.
     Step(DraftedStep),
-    /// Why there's no draft, for the person.
-    Failed { message: String },
+    /// Why there's no draft, for the person, and anything AI created before
+    /// it gave up.
+    Failed {
+        message: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        created: Vec<DraftCreated>,
+    },
 }
 
 /// A drafted routine.
@@ -194,9 +204,24 @@ pub struct DraftedRoutine {
     pub steps: Vec<Value>,
     /// Steps whose code still fails the type checker.
     pub problems: Vec<StepProblem>,
-    /// What AI created for the routine to use, such as the database it
+    /// What AI created while drafting, such as the database the routine
     /// writes to. These exist whether or not the routine is saved.
-    pub created: Vec<CreatedItem>,
+    pub created: Vec<DraftCreated>,
+}
+
+/// Something a draft's session created. It exists whether or not the draft
+/// is saved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftCreated {
+    /// What kind of item.
+    #[schema(inline)]
+    pub entity_type: model_entity::EntityType,
+    /// Its id.
+    pub entity_id: String,
+    /// Whether the drafted routine uses it. One it doesn't use was made for
+    /// nothing, or is the routine's own work done early.
+    pub used: bool,
 }
 
 /// A drafted step.
@@ -211,9 +236,9 @@ pub struct DraftedStep {
     pub reason: String,
     /// What the type checker still finds in its code.
     pub problems: Vec<String>,
-    /// What AI created for the step to use. These exist whether or not the
-    /// step is saved.
-    pub created: Vec<CreatedItem>,
+    /// What AI created while drafting the step. These exist whether or not
+    /// the step is saved.
+    pub created: Vec<DraftCreated>,
 }
 
 /// A drafted step whose code still fails the type checker.
@@ -228,13 +253,12 @@ pub struct StepProblem {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct InvalidDraft(pub String);
-/// The agent that drafts, and the model it drafts on.
+/// The agent that drafts. It drafts on the model the person's Ask AI steps
+/// run on (`DraftContext::agent_model`), which their plan allows.
 #[derive(Debug, Clone)]
 pub struct DraftAgent {
     /// The in-process Macro agent.
     pub bot: BotId,
-    /// Which of its models; `None` for its default.
-    pub model: Option<String>,
 }
 
 /// Drafts routines in hidden sessions of `agent`, checking code with `Code`.
@@ -242,6 +266,8 @@ pub struct RoutineDrafts<Code, Sessions> {
     code: Arc<Code>,
     sessions: Arc<Sessions>,
     hand_backs: Arc<dyn DraftHandBacks>,
+    /// What the session's programs created, whether or not it said so.
+    creations: Arc<dyn SessionCreations>,
     agent: DraftAgent,
     /// Whether this host can answer trigger conditions.
     conditions_enabled: bool,
@@ -260,9 +286,17 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
             code,
             sessions,
             hand_backs,
+            creations: Arc::new(NoSessionCreations),
             agent,
             conditions_enabled: false,
         }
+    }
+
+    /// Read what a draft's session created from its recorded activity too,
+    /// so an item it never named in a check is still shown.
+    pub fn with_session_creations(mut self, creations: Arc<dyn SessionCreations>) -> Self {
+        self.creations = creations;
+        self
     }
 
     /// Let drafts ask AI before a run, when this host can answer.
@@ -297,6 +331,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         agent.session.id = tracing::field::Empty,
         routine.draft.checks = tracing::field::Empty,
         routine.draft.created = tracing::field::Empty,
+        routine.draft.created_unused = tracing::field::Empty,
         routine.draft.tool_calls = tracing::field::Empty,
         routine.draft.turns = tracing::field::Empty,
         routine.draft.status_reads = tracing::field::Empty,
@@ -333,7 +368,9 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
             Ok(brief) => brief,
             Err(message) => return Ok(finish(failed(message))),
         };
-        let draft = self.drafted(&owner, &request, &program, brief).await?;
+        let draft = self
+            .drafted(&owner, &request, &program, &context, brief)
+            .await?;
         Ok(finish(draft))
     }
 }
@@ -343,7 +380,7 @@ fn finish(draft: Draft) -> Draft {
     tracing::Span::current().record(
         "routine.draft.outcome",
         match &draft {
-            Draft::Failed { message } if message == TIMED_OUT => "timeout",
+            Draft::Failed { message, .. } if message == TIMED_OUT => "timeout",
             Draft::Failed { .. } => "failed",
             _ => "drafted",
         },
@@ -360,6 +397,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         owner: &MacroUserIdStr<'static>,
         request: &DraftRequest,
         program: &[Step],
+        context: &DraftContext,
         brief: String,
     ) -> Result<Draft> {
         let span = tracing::Span::current();
@@ -385,8 +423,25 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             sessions: Arc::clone(&self.sessions),
             hand_backs: Arc::clone(&self.hand_backs),
             action: Some(action.clone()),
+            stopped: false,
         };
-        let ending = tokio::time::timeout(DRAFT_TIMEOUT, self.run(&action, brief)).await;
+        let ending = tokio::time::timeout(
+            DRAFT_TIMEOUT - ACTIVITY_SETTLE,
+            self.run(&action, &context.agent_model, brief),
+        )
+        .await;
+        // Stop the turn before reading what it made, so nothing it creates
+        // afterwards goes unseen.
+        cleanup.stop().await;
+        tokio::time::sleep(ACTIVITY_SETTLE).await;
+        let recorded = self
+            .creations
+            .created_by(session.as_uuid())
+            .await
+            .inspect_err(
+                |error| tracing::warn!(error = ?error, "could not read what a draft created"),
+            )
+            .unwrap_or_default();
         let handed_back = self
             .hand_backs
             .handed_back(session.as_uuid())
@@ -394,7 +449,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             .inspect_err(|error| tracing::error!(error = ?error, "could not read a draft's check"))
             .unwrap_or_default();
         span.record("routine.draft.checks", handed_back.checks);
-        span.record("routine.draft.created", handed_back.created.len());
         // Counts only; a session that can't say leaves them unset.
         if let Ok(activity) = self.sessions.activity(action.clone()).await {
             span.record("routine.draft.tool_calls", activity.tool_calls);
@@ -409,10 +463,18 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         };
         // The last check that passed wins over a later one that failed.
         let check = handed_back.passed.or(handed_back.check);
+        let created = created_items(handed_back.created, recorded, check.as_ref());
+        span.record("routine.draft.created", created.len());
+        span.record(
+            "routine.draft.created_unused",
+            created.iter().filter(|item| !item.used).count(),
+        );
         Ok(match (check, ending) {
-            (Some(check), _) => drafted(request, program, check, handed_back.created),
-            (None, Ending::TimedOut) => failed(TIMED_OUT),
-            (None, Ending::Finished | Ending::Checked | Ending::Failed) => failed(request.failed()),
+            (Some(check), _) => drafted(request, program, check, created),
+            (None, Ending::TimedOut) => failed_with(TIMED_OUT, created),
+            (None, Ending::Finished | Ending::Checked | Ending::Failed) => {
+                failed_with(request.failed(), created)
+            }
         })
     }
 
@@ -421,6 +483,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
     async fn run(
         &self,
         action: &RoutineSessionAction,
+        model: &str,
         brief: String,
     ) -> Result<Ending, RoutineSessionError> {
         self.sessions
@@ -428,7 +491,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 selection: ValidateRoutineSession {
                     owner: action.owner.clone(),
                     bot_id: action.bot_id,
-                    model: self.agent.model.clone(),
+                    model: Some(model.to_owned()),
                     mcp_servers: Vec::new(),
                 },
                 session_id: action.session_id,
@@ -514,6 +577,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                     session_id: AgentSessionId::new_from_uuid(draft.session),
                     action_id: AgentActionId::mint(),
                 },
+                false,
             )
             .await;
         }
@@ -522,15 +586,28 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
     }
 }
 
-/// Stop a draft's session, delete it and forget the draft. Each part is
-/// tried whatever became of the one before; the sweep catches what fails.
+/// Stop a draft's session.
+async fn stop(sessions: &impl RoutineSessions, action: &RoutineSessionAction) -> bool {
+    sessions
+        .cancel(action.clone())
+        .await
+        .inspect_err(
+            |error| tracing::warn!(error = ?error, "could not stop a routine draft's session"),
+        )
+        .is_ok()
+}
+
+/// Stop a draft's session unless it was `stopped` already, delete it and
+/// forget the draft. Each part is tried whatever became of the one before;
+/// the sweep catches what fails.
 async fn clean_up(
     sessions: &impl RoutineSessions,
     hand_backs: &dyn DraftHandBacks,
     action: &RoutineSessionAction,
+    stopped: bool,
 ) {
-    if let Err(error) = sessions.cancel(action.clone()).await {
-        tracing::warn!(error = ?error, "could not stop a routine draft's session");
+    if !stopped {
+        stop(sessions, action).await;
     }
     if let Err(error) = sessions.delete(action.clone()).await {
         tracing::warn!(error = ?error, "could not delete a routine draft's session");
@@ -546,12 +623,27 @@ struct Cleanup<Sessions: RoutineSessions> {
     sessions: Arc<Sessions>,
     hand_backs: Arc<dyn DraftHandBacks>,
     action: Option<RoutineSessionAction>,
+    /// Whether the session was stopped already.
+    stopped: bool,
 }
 
 impl<Sessions: RoutineSessions> Cleanup<Sessions> {
+    /// Stop the session, keeping it (and its row) for now.
+    async fn stop(&mut self) {
+        if let Some(action) = &self.action {
+            self.stopped = stop(self.sessions.as_ref(), action).await;
+        }
+    }
+
     async fn now(&mut self) {
         if let Some(action) = self.action.take() {
-            clean_up(self.sessions.as_ref(), self.hand_backs.as_ref(), &action).await;
+            clean_up(
+                self.sessions.as_ref(),
+                self.hand_backs.as_ref(),
+                &action,
+                self.stopped,
+            )
+            .await;
         }
     }
 }
@@ -562,9 +654,10 @@ impl<Sessions: RoutineSessions> Drop for Cleanup<Sessions> {
             return;
         };
         let (sessions, hand_backs) = (Arc::clone(&self.sessions), Arc::clone(&self.hand_backs));
+        let stopped = self.stopped;
         tracing::info!("a routine draft's request was dropped; cleaning up its session");
         tokio::spawn(
-            async move { clean_up(sessions.as_ref(), hand_backs.as_ref(), &action).await }
+            async move { clean_up(sessions.as_ref(), hand_backs.as_ref(), &action, stopped).await }
                 .instrument(tracing::Span::current()),
         );
     }
@@ -624,9 +717,41 @@ fn program_steps(steps: &[Value]) -> Result<Vec<Step>, InvalidDraft> {
 }
 
 fn failed(message: &str) -> Draft {
+    failed_with(message, Vec::new())
+}
+
+fn failed_with(message: &str, created: Vec<DraftCreated>) -> Draft {
     Draft::Failed {
         message: message.to_owned(),
+        created,
     }
+}
+
+/// Everything the session created, from what it named in its checks and
+/// what its recorded activity shows, each once, marked by whether the routine
+/// handed back uses it (its id appears anywhere in the routine).
+fn created_items(
+    named: Vec<CreatedItem>,
+    recorded: Vec<CreatedItem>,
+    check: Option<&RoutineCheck>,
+) -> Vec<DraftCreated> {
+    let routine = check
+        .and_then(|check| serde_json::to_string(&check.routine).ok())
+        .unwrap_or_default();
+    let mut items: Vec<CreatedItem> = Vec::new();
+    for item in named.into_iter().chain(recorded) {
+        if !items.contains(&item) {
+            items.push(item);
+        }
+    }
+    items
+        .into_iter()
+        .map(|item| DraftCreated {
+            used: !item.entity_id.is_empty() && routine.contains(&item.entity_id),
+            entity_type: item.entity_type,
+            entity_id: item.entity_id,
+        })
+        .collect()
 }
 
 /// The draft's first prompt: what to draft, from what words, and how to hand
@@ -736,7 +861,7 @@ fn drafted(
     request: &DraftRequest,
     program: &[Step],
     check: RoutineCheck,
-    created: Vec<CreatedItem>,
+    created: Vec<DraftCreated>,
 ) -> Draft {
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());

@@ -300,6 +300,7 @@ export type Draft = (DraftedRoutine & {
 }) | (DraftedStep & {
     outcome: 'step';
 }) | {
+    created?: Array<DraftCreated>;
     message: string;
     outcome: 'failed';
 };
@@ -327,6 +328,26 @@ export type DraftContext = {
      * IANA time zone schedules are written in, e.g. `America/New_York`.
      */
     timezone: string;
+};
+
+/**
+ * Something a draft's session created. It exists whether or not the draft
+ * is saved.
+ */
+export type DraftCreated = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    /**
+     * Whether the drafted routine uses it. One it doesn't use was made for
+     * nothing, or is the routine's own work done early.
+     */
+    used: boolean;
 };
 
 /**
@@ -360,10 +381,10 @@ export type DraftRoutineRequest = {
  */
 export type DraftedRoutine = {
     /**
-     * What AI created for the routine to use, such as the database it
+     * What AI created while drafting, such as the database the routine
      * writes to. These exist whether or not the routine is saved.
      */
-    created: Array<CreatedItem>;
+    created: Array<DraftCreated>;
     name: string;
     /**
      * Steps whose code still fails the type checker.
@@ -382,10 +403,10 @@ export type DraftedRoutine = {
  */
 export type DraftedStep = {
     /**
-     * What AI created for the step to use. These exist whether or not the
-     * step is saved.
+     * What AI created while drafting the step. These exist whether or not
+     * the step is saved.
      */
-    created: Array<CreatedItem>;
+    created: Array<DraftCreated>;
     /**
      * What the type checker still finds in its code.
      */

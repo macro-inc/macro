@@ -67,11 +67,11 @@ Pulumi stacks; they do not host extra agent processes.
   `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
   (`POST /scheduled-actions/drafts`) in ordinary hidden sessions of the
-  in-process Macro agent on the free tier's model, admitted and billed as
-  the person's agent session usage; `scheduling.rs` composes the drafter,
-  its `scheduled_action_draft` store, the check's code-mode invocation
-  lookup (`CorrelationSessions`) and the sweep of drafts a stopped process
-  left.
+  in-process Macro agent on the person's Ask AI model, admitted and billed
+  as their agent session usage; `scheduling.rs` composes the drafter, its
+  `scheduled_action_draft` store, the check's code-mode invocation lookup
+  (`CorrelationSessions`), what a session created from its agent activity
+  (`ActivityCreations`) and the sweep of drafts a stopped process left.
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):

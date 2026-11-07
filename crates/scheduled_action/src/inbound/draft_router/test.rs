@@ -28,6 +28,7 @@ impl RoutineDraftService for Drafts {
             }
             _ => Ok(Draft::Failed {
                 message: owner.as_ref().to_owned(),
+                created: Vec::new(),
             }),
         }
     }
