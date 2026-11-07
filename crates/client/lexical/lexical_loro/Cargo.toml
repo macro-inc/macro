@@ -15,6 +15,5 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 lexical_model = { workspace = true, features = ["model-segmentation"] }
-serde = { workspace = true, features = ["derive"] }
 proptest = { workspace = true }
 lexical_rich_nodes = { workspace = true }
