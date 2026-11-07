@@ -85,10 +85,13 @@ struct State {
     generation: u64,
     confirmed: u64,
     held: Vec<(u64, Effect)>,
+    delivery_proofs: Vec<(u64, u64)>,
+    completed_puts: Vec<(String, Value, u64)>,
     gate: GateMode,
     effects: Vec<Effect>,
     counts: BTreeMap<String, usize>,
     faults: FaultSchedule,
+    operation_errors: BTreeMap<String, String>,
     crashed: bool,
     sockets: Vec<WebSocketId>,
     enumeration: VecDeque<Vec<WebSocketId>>,
@@ -115,6 +118,15 @@ impl State {
         let index = self.counts.entry(operation.into()).or_default();
         let fault = self.faults.get(&(operation.into(), *index)).cloned();
         *index += 1;
+        let all_index = self.counts.entry("*".into()).or_default();
+        let global_fault = self.faults.get(&("*".into(), *all_index)).cloned();
+        *all_index += 1;
+        let fault = fault.or(global_fault).or_else(|| {
+            self.operation_errors
+                .get(operation)
+                .cloned()
+                .map(Fault::Error)
+        });
         self.busy_for += self.latency.get(operation).copied().unwrap_or_default();
         match fault {
             Some(Fault::Error(error)) => Err(SimError::Failure(error)),
@@ -149,6 +161,7 @@ impl State {
         if self.gate == GateMode::Held && self.generation > self.confirmed {
             self.held.push((self.generation, effect));
         } else {
+            self.delivery_proofs.push((self.generation, self.confirmed));
             self.effects.push(effect);
         }
     }
@@ -192,6 +205,41 @@ impl SimPorts {
     pub fn set_faults(&self, faults: FaultSchedule) {
         self.0.borrow_mut().faults = faults;
     }
+    /// Inject a fault after this many additional port calls, across all capabilities.
+    pub fn fault_after_calls(&self, after: usize, fault: Fault) {
+        let mut state = self.0.borrow_mut();
+        let next = state
+            .counts
+            .get("*")
+            .copied()
+            .unwrap_or(0)
+            .saturating_add(after);
+        state.faults.insert(("*".into(), next), fault);
+    }
+    /// Number of calls already made to a capability, for relative fault schedules.
+    pub fn call_count(&self, operation: &str) -> usize {
+        self.0.borrow().counts.get(operation).copied().unwrap_or(0)
+    }
+    /// Enable or clear a capability outage without altering its stored data.
+    pub fn set_operation_error(&self, operation: &str, error: Option<String>) {
+        let mut state = self.0.borrow_mut();
+        if let Some(error) = error {
+            state.operation_errors.insert(operation.into(), error);
+        } else {
+            state.operation_errors.remove(operation);
+        }
+    }
+    /// Fresh runtime over a clone of only confirmed durable storage.
+    /// Loading it cannot change the live activation or its effect log.
+    pub fn fork_durable(&self) -> Self {
+        let state = self.0.borrow();
+        Self(Rc::new(RefCell::new(State {
+            data: state.durable.clone(),
+            durable: state.durable.clone(),
+            now: state.now,
+            ..State::default()
+        })))
+    }
     /// Configure a network operation's simulated busy window.
     pub fn set_latency(&self, operation: &str, latency: Duration) {
         self.0
@@ -227,6 +275,8 @@ impl SimPorts {
         let held = std::mem::take(&mut s.held);
         for (at, effect) in held {
             if at <= s.confirmed {
+                let confirmed = s.confirmed;
+                s.delivery_proofs.push((at, confirmed));
                 s.effects.push(effect);
             } else {
                 s.held.push((at, effect));
@@ -275,6 +325,11 @@ impl SimPorts {
     pub(crate) fn transport_effect(&self, effect: Effect) {
         self.0.borrow_mut().effects.push(effect);
     }
+    /// Drain (required write generation, confirmed generation) proofs in delivery order.
+    /// This side channel observes the output gate without altering recorded effects.
+    pub fn take_delivery_proofs(&self) -> Vec<(u64, u64)> {
+        std::mem::take(&mut self.0.borrow_mut().delivery_proofs)
+    }
     /// Drain the ordered port log.
     pub fn take_effects(&self) -> Vec<Effect> {
         std::mem::take(&mut self.0.borrow_mut().effects)
@@ -283,7 +338,11 @@ impl SimPorts {
     pub fn remaining_clocks(&self) -> usize {
         self.0.borrow().clocks.len()
     }
-    /// Read the logical structured-clone store without causing a port call.
+    /// Completed puts, with exact values and generations, separate from attempted effects.
+    pub fn take_completed_puts(&self) -> Vec<(String, Value, u64)> {
+        std::mem::take(&mut self.0.borrow_mut().completed_puts)
+    }
+    /// Current visible key/value storage, including writes awaiting gate confirmation.
     pub fn storage_dump(&self) -> BTreeMap<String, Value> {
         self.0.borrow().data.values.clone()
     }
@@ -312,8 +371,10 @@ impl SimPorts {
     fn put(&self, key: &str, value: impl Serialize) -> Result<(), SimError> {
         let value = serde_json::to_value(value).map_err(|e| SimError::Failure(e.to_string()))?;
         let mut s = self.0.borrow_mut();
-        s.data.values.insert(key.into(), value);
+        s.data.values.insert(key.into(), value.clone());
         s.write();
+        let generation = s.generation;
+        s.completed_puts.push((key.into(), value, generation));
         Ok(())
     }
     fn clock(&self, kind: &str, fallback: impl FnOnce(&State) -> u128) -> u128 {

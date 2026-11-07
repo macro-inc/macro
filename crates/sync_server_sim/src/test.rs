@@ -662,3 +662,61 @@ fn native_loro_envelopes_allow_export_chunks_but_keep_other_fields_exact() {
     );
     assert!(compare_effects(&extra, &effects(&large)).is_err());
 }
+
+#[test]
+fn cold_forks_include_only_confirmed_writes_and_are_isolated() {
+    let ports = SimPorts::new();
+    ports.set_gate(GateMode::Held);
+    block_on(ports.put_pending_operation(&OperationId::new("first".into()), b"a")).unwrap();
+    assert!(ports.fork_durable().storage_dump().is_empty());
+    let first = ports.write_generation();
+    ports.confirm_through(first);
+    let cold = ports.fork_durable();
+    assert_eq!(cold.storage_dump()["o/first"], serde_json::json!([97]));
+    block_on(cold.put_pending_operation(&OperationId::new("cold".into()), b"b")).unwrap();
+    assert!(!ports.storage_dump().contains_key("o/cold"));
+    block_on(ports.put_pending_operation(&OperationId::new("later".into()), b"c")).unwrap();
+    assert!(!cold.storage_dump().contains_key("o/later"));
+}
+
+#[test]
+fn completed_write_evidence_excludes_failed_attempts_and_matches_generations() {
+    let ports = SimPorts::new();
+    ports.set_gate(GateMode::Held);
+    ports.set_operation_error("storage.put", Some("unavailable".into()));
+    assert!(
+        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"a")).is_err()
+    );
+    assert!(ports.take_completed_puts().is_empty());
+    assert!(
+        ports
+            .take_effects()
+            .iter()
+            .any(|effect| effect.operation == "storage.put")
+    );
+    ports.set_operation_error("storage.put", None);
+    block_on(ports.put_pending_operation(&OperationId::new("ok".into()), b"b")).unwrap();
+    assert_eq!(
+        ports.take_completed_puts(),
+        [(
+            "o/ok".into(),
+            serde_json::json!([98]),
+            ports.write_generation()
+        )]
+    );
+    assert!(ports.take_completed_puts().is_empty());
+}
+
+#[test]
+fn relative_faults_count_across_capabilities_without_matching_clock_reads() {
+    let ports = SimPorts::new();
+    block_on(ports.put_pending_operation(&OperationId::new("before".into()), b"a")).unwrap();
+    ports.fault_after_calls(1, Fault::Error("planned".into()));
+    Clock::unix_time(&ports);
+    block_on(ports.pending_operations()).unwrap();
+    assert!(
+        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"b")).is_err()
+    );
+    assert!(!ports.storage_dump().contains_key("o/failed"));
+    block_on(ports.put_pending_operation(&OperationId::new("after".into()), b"c")).unwrap();
+}
