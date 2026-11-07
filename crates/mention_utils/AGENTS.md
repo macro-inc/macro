@@ -25,7 +25,8 @@ AI editors, lexical, and notification text.
 
 ## Boundaries
 
-- Depends on: `bot_id`, `channel_sender`, `macro_user_id`, `nom`.
+- Depends on: `bot_id`, `channel_sender`, `macro_user_id`, `nom`, `mention_date`.
+- Reuse `mention_date::bare_date_label` for bare ISO mention labels.
 - Used by: `authentication_service`, `model_notifications`, `notification_service`,
   `scheduled_action`, `search_processing_service`, `slack_import_worker`,
   `slack_integration`.
