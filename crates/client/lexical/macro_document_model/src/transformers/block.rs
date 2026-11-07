@@ -102,8 +102,8 @@ impl ElementTransformer for Callback {
                     }
                 }
                 Err(_) => {
-                    let unknown = envelope::unknown(tx, spec.unknown)?;
                     let p = tx.create(Paragraph {})?;
+                    let unknown = envelope::unknown(tx, spec.unknown)?;
                     tx.append(p, &[unknown])?;
                     tx.replace(parent, p, false)?;
                 }
@@ -173,8 +173,8 @@ impl ElementTransformer for Callback {
                         key
                     }
                 } else {
-                    let unknown = envelope::unknown(tx, "Unavailable database question")?;
                     let p = tx.create(Paragraph {})?;
+                    let unknown = envelope::unknown(tx, "Unavailable database question")?;
                     tx.append(p, &[unknown])?;
                     p.key()
                 };

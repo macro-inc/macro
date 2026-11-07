@@ -83,6 +83,7 @@ pub(super) fn replace(
     let node = match imported {
         Ok(node) => node,
         Err(_) => {
+            let p = tx.create(Paragraph {})?;
             let unknown = envelope::unknown(
                 tx,
                 if name == "I_VIDEO" {
@@ -91,7 +92,6 @@ pub(super) fn replace(
                     "Unknown Image"
                 },
             )?;
-            let p = tx.create(Paragraph {})?;
             tx.append(p, &[unknown])?;
             tx.replace(parent, p, false)?;
             return Ok(ReplaceResult::Handled);
