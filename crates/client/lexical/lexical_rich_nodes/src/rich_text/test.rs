@@ -856,3 +856,24 @@ fn boundary_escape_clears_style_even_if_typing_format_was_already_unset() -> cra
     assert_eq!(tx.range_selection()?.style.as_ref(), "");
     Ok(())
 }
+
+#[test]
+fn outdent_at_zero_does_not_create_history_boundary() -> crate::Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let (paragraph, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let text = tx.create_text("aaa")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_end(text)?;
+        Ok(paragraph)
+    })?;
+    let mut tx = editor.transaction();
+    assert!(super::outdent_content(&mut tx)?);
+    let commit = tx.commit()?;
+    assert!(commit.changes.is_empty());
+    assert_eq!(commit.next.indent(paragraph), 0);
+    Ok(())
+}
