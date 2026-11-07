@@ -16,7 +16,7 @@ const workspaceDirectory = fileURLToPath(
 // with a trailing slash). Without one, the tests build their documents.
 const corpusDirectory = process.env.AI_CORPUS_DIR ?? directory;
 
-const interUrl = `/@fs${workspaceDirectory}crates/fig_engine/fonts/InterVariable.ttf`;
+const interUrl = `/@fs${workspaceDirectory}crates/engines/fig_engine/fonts/InterVariable.ttf`;
 
 export default defineConfig({
   root: directory,

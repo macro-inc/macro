@@ -9,7 +9,7 @@ import type {
 import { type LoroDoc, type LoroEvent, LoroMap, LoroText } from 'loro-crdt';
 
 /**
- * Root containers of a collaborative DOCX (see `crates/docx_engine` `collab`).
+ * Root containers of a collaborative DOCX (see `crates/engines/docx_engine` `collab`).
  *
  * Parts, relationships and content types are flat maps of strings. Each
  * block is a map (`k` kind, `p` parent, `o` position key, `a` attributes,

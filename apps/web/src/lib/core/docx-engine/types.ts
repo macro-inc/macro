@@ -1,6 +1,6 @@
 /**
  * Types of the DOCX engine's JSON API. They mirror the Rust serde shapes in
- * `crates/docx_engine` (`edit`, `collab`); positions and sizes are points.
+ * `crates/engines/docx_engine` (`edit`, `collab`); positions and sizes are points.
  */
 
 /** A position in the body: a paragraph and a UTF-16 offset in its text. */

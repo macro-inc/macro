@@ -1,7 +1,7 @@
 # Presentation editor browser fixture
 
 This entry mounts the real `PptxEditor` with the wasm engine in its module
-worker, over decks from `crates/pptx_engine/tests/corpus`. It loads no
+worker, over decks from `crates/engines/pptx_engine/tests/corpus`. It loads no
 authentication, document storage, or product routes: saves are kept in memory
 and exposed to tests. It verifies the editor and engine integration, not
 storage or permissions.

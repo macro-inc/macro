@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-// The engine's synthetic fixture (crates/fig_engine/src/testing.rs): page
+// The engine's synthetic fixture (crates/engines/fig_engine/src/testing.rs): page
 // "Screens" holds frames "Home" and "Settings"; "Home" holds "Header" (a
 // blue-to-purple gradient), "Avatar", a white "Card", and an instance
 // "Primary button" whose "Background" is overridden to orange. Page

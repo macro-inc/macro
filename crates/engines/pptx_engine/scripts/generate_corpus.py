@@ -2,7 +2,7 @@
 """Regenerate the synthetic feature-coverage decks in tests/corpus/generated/.
 
 Usage:
-    python3 crates/pptx_engine/scripts/generate_corpus.py [--only NAME ...] [--list]
+    python3 crates/engines/pptx_engine/scripts/generate_corpus.py [--only NAME ...] [--list]
         [--no-libreoffice] [--xsd-dir DIR] [--no-manifest] [--out DIR]
 
 Every deck is small and focused on one area (text, bullets, shapes, fills, lines,

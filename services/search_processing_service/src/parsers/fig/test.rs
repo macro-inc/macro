@@ -2,7 +2,7 @@ use super::*;
 
 /// Components with text, a component set, and a screen of their instances.
 const DESIGN_SYSTEM: &[u8] =
-    include_bytes!("../../../../../crates/fig_engine/tests/fixtures/design-system.fig");
+    include_bytes!("../../../../../crates/engines/fig_engine/tests/fixtures/design-system.fig");
 
 #[test]
 fn indexes_one_chunk_per_page_keyed_by_page_id() {

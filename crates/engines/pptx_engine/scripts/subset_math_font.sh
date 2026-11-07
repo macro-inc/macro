@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates crates/pptx_engine/fonts/STIXTwoMath-Regular.ttf, the math font
+# Regenerates crates/engines/pptx_engine/fonts/STIXTwoMath-Regular.ttf, the math font
 # equations are typeset with, from STIX Two Math 2.12 (SIL OFL 1.1).
 #
 # Source: the full font as the @fontsource/stix-two-math npm package ships it

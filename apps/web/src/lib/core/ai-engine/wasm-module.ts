@@ -4,7 +4,7 @@
  *
  * Build the package with:
  *   just build-ai-engine-wasm
- * which runs wasm-pack over crates/ai_engine into
+ * which runs wasm-pack over crates/engines/ai_engine into
  * src/lib/core/ai-engine/wasm/ (gitignored).
  */
 

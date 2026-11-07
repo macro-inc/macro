@@ -4,7 +4,7 @@ These tests run the production `DocxEditorView` in real Chromium against the
 real sync service. They do not use the app shell. The compiled Rust sync
 Worker runs in Miniflare (`sync-server.ts`), so they need no dev login,
 backend or Docker. Pages are drawn by the native DOCX engine (Rust compiled
-to wasm, `crates/docx_engine`) in a worker; build it first.
+to wasm, `crates/engines/docx_engine`) in a worker; build it first.
 
 - `fixture.tsx` mounts one editor per tab with `createDocxSession`. Its
   comment threads are stored in a Loro map in place of the message service,

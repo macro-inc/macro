@@ -1,7 +1,7 @@
 /**
  * The JSON shapes the `.fig` engine returns about a file's design system:
  * components, variants, component properties, and shared styles. Mirrors
- * the serde types in `crates/fig_engine/src/inspect/design.rs`.
+ * the serde types in `crates/engines/fig_engine/src/inspect/design.rs`.
  */
 
 import type { EffectInfo, PaintInfo } from './types';

@@ -2,8 +2,8 @@
 """Print a JSON feature inventory for one or more .pptx files.
 
 Usage:
-    python3 crates/pptx_engine/scripts/inspect_pptx.py deck.pptx [more.pptx ...]
-    python3 crates/pptx_engine/scripts/inspect_pptx.py --tags deck.pptx   # only feature tags
+    python3 crates/engines/pptx_engine/scripts/inspect_pptx.py deck.pptx [more.pptx ...]
+    python3 crates/engines/pptx_engine/scripts/inspect_pptx.py --tags deck.pptx   # only feature tags
 
 The inventory is computed straight from the OPC package (zipfile + lxml), so it
 works on decks python-pptx refuses to open. Counts of DrawingML constructs
