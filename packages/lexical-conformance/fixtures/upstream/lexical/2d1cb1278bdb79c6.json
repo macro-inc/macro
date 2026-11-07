@@ -8,7 +8,7 @@
       "LexicalGC tests",
       "RootNode.clear() with a child and three subchildren"
     ],
-    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
   },
   "tier": "A-rec",
   "partial": false,

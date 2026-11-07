@@ -198,6 +198,15 @@ for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
   });
 }
 excludePrivateFixtures(files, index);
+// Only replayable fixtures supply conformance coverage. Rejected tests can
+// execute late DOM cleanup after their assertions, so their diagnostic ranges
+// are retained in the staging cases rather than published as fixture evidence.
+for (const row of index) {
+  if (!row.file) {
+    row.s2Hits = [];
+    row.transformersFired = [];
+  }
+}
 if (!index.some((row) => row.tier === 'A-rec'))
   throw new Error('No replayable fixtures were recorded');
 files.set('index.json', JSON.stringify(index, null, 2) + '\n');

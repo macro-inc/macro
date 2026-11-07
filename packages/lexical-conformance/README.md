@@ -42,6 +42,10 @@ into passing fixtures, and recording does not add privacy exceptions. A test nam
 that contains a flagged value is retained under a stable opaque ID. The complete
 output, including the index, is scanned before publication.
 
+Only admitted fixtures publish `s2Hits` and `transformersFired` as conformance
+evidence. Rejected cases retain diagnostic coverage under `target/lexical-recording`;
+their asynchronous DOM cleanup is not part of a replayable fixture.
+
 The source-range manifest in `record/s2-ranges.json` is the resolved file/line
 citations from the S2 feature inventory for this upstream pin. V8 offsets are
 mapped through the oracle's source maps before intersecting these citations;
