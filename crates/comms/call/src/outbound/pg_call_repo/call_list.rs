@@ -8,7 +8,7 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 
-use channels::outbound::channel_name::batch_resolve_channel_names;
+use channels_outbound::channel_name::batch_resolve_channel_names;
 use entity_access::domain::models::AccessLevel;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};

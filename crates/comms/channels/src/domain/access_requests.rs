@@ -17,7 +17,7 @@ pub const DENIAL_COOLDOWN: TimeDelta = TimeDelta::hours(24);
 
 /// Outcome of one attempt to join.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ChannelAccessRequestStatus {
     /// Awaiting a participant's answer.
@@ -33,7 +33,7 @@ pub enum ChannelAccessRequestStatus {
 /// One attempt to join a channel. Attempts are never reused, so each timeline
 /// entry keeps showing the outcome of the attempt it announced.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelAccessRequest {
     /// Attempt id.
     pub id: Uuid,
@@ -78,7 +78,7 @@ pub fn accepts_requests(channel_type: ChannelType) -> bool {
 
 /// A requester's view of their access to a channel they cannot read.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelAccessRequestState {
     /// The caller's latest attempt, if any.
     pub request: Option<ChannelAccessRequest>,
@@ -90,7 +90,7 @@ pub struct ChannelAccessRequestState {
 
 /// A participant's answer to a pending request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ChannelAccessDecision {
     /// Add the requester to the channel.
@@ -101,7 +101,7 @@ pub enum ChannelAccessDecision {
 
 /// Body of a participant's answer.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ResolveChannelAccessRequest {
     /// The answer.
     pub decision: ChannelAccessDecision,

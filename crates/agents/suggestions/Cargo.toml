@@ -9,7 +9,7 @@ agent_correlation = { workspace = true }
 agent_session = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
-channels = { workspace = true, features = ["outbound"] }
+channels = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 documents = { workspace = true, features = ["outbound", "ports"] }

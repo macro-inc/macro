@@ -1,14 +1,12 @@
 //! Cross-domain composition tests: real reservations, onboarding ledger and channel persistence.
 
-use channels::{
-    domain::{
-        historical::{HistoricalChannel, HistoricalChannelKind},
-        models::GetChannelsRequest,
-        ports::{ChannelListRepo, HistoricalChannelRepo},
-        service::ChannelServiceImpl,
-    },
-    outbound::pg_channels_repo::PgChannelsRepo,
+use channels::domain::{
+    historical::{HistoricalChannel, HistoricalChannelKind},
+    models::GetChannelsRequest,
+    ports::{ChannelListRepo, HistoricalChannelRepo},
+    service::ChannelServiceImpl,
 };
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use import::{
     domain::{
         models::{

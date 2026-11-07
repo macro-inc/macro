@@ -2,7 +2,8 @@ use super::*;
 use crate::domain::model::{AnnounceOrigin, ReplyOutcome};
 use agent_fold::domain::model::TurnId;
 use agent_session::domain::agent_conversation::{AgentConversation, AgentConversationRepo};
-use channels::{domain::agent_dm::AgentDmRepo, outbound::pg_channels_repo::PgChannelsRepo};
+use channels::domain::agent_dm::AgentDmRepo;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 

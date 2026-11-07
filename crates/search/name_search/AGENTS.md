@@ -12,7 +12,7 @@ highlighting.
 - `src/channel.rs` + `src/channel/test.rs`: `search_channel_names`. Viewer-aware:
   a DM is found by the other participant, an unnamed private channel by any
   other member, a persona DM by its bot. The SQL match is
-  `channels::outbound::channel_name::match_channel_names`; this crate splits
+  `channels_outbound::channel_name::match_channel_names`; this crate splits
   the query into terms, builds the patterns, pages, resolves and highlights.
 - `src/chat.rs` + `src/chat/test.rs`: `search_chat_names`.
 - `src/highlight.rs`: `highlight_name` — marks up matched substrings.
@@ -23,8 +23,8 @@ highlighting.
 
 - Owns: name-search patterns, cursors and highlighting for channels/chats; the
   chat name SQL.
-- Not here: the channel naming rule and its SQL → `channels`
-  (`src/outbound/channel_name.rs`); content/full-text search →
+- Not here: the channel naming rule and its SQL → `channels_outbound`
+  (`src/channel_name.rs`); content/full-text search →
   `models_search`, `search_service`; the OpenSearch-indexed entity types →
   `models_opensearch`.
 

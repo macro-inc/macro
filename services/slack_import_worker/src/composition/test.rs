@@ -3,7 +3,7 @@ mod reference_reconciliation;
 use std::collections::HashSet;
 
 use channels::domain::historical::{HistoricalChannel, HistoricalChannelKind};
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use import::{domain::ports::CanonicalImportRepo, outbound::pg_import_repo::PgImportRepo};
@@ -741,10 +741,8 @@ async fn private_reuse_requires_management_or_compatible_prior_provenance(pool: 
 
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
 async fn unrelated_dm_pair_is_not_granted_provenance_and_pair_races_fail_closed(pool: PgPool) {
-    use channels::{
-        domain::{dm::DmPair, historical::DmCreation},
-        outbound::pg_channels_repo::historical::ensure_dm_in,
-    };
+    use channels::domain::{dm::DmPair, historical::DmCreation};
+    use channels_outbound::pg_channels_repo::historical::ensure_dm_in;
     let team = team(&pool).await;
     let context = claim(&pool, team, ConversationKind::DirectMessage, 0).await;
     let mut plan = plan(&pool, &context).await;

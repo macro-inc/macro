@@ -6,13 +6,11 @@ mod test;
 use std::collections::{HashMap, HashSet};
 
 use channel_sender::ChannelSender;
-use channels::{
-    domain::{
-        dm::DmPair,
-        historical::{DmCreation, HistoricalChannel, HistoricalChannelKind},
-    },
-    outbound::pg_channels_repo::{PgChannelsRepo, historical as channels_pg},
+use channels::domain::{
+    dm::DmPair,
+    historical::{DmCreation, HistoricalChannel, HistoricalChannelKind},
 };
+use channels_outbound::pg_channels_repo::{PgChannelsRepo, historical as channels_pg};
 use chrono::{DateTime, Utc};
 use entity_access::domain::ports::EntityAccessService;
 use import::outbound::pg_import_repo::targets as ledger;

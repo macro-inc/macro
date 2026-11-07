@@ -1,4 +1,4 @@
-use channels::outbound::channel_name::batch_resolve_channel_names;
+use channels_outbound::channel_name::batch_resolve_channel_names;
 use indexmap::IndexMap;
 use item_filters::CallStatus;
 use macro_user_id::user_id::MacroUserIdStr;

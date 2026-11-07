@@ -10,7 +10,8 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-channels = { workspace = true, features = ["outbound", "ports"] }
+channels = { workspace = true, features = ["ports"] }
+channels_outbound = { workspace = true }
 database_env_vars = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_user_id = { workspace = true }
