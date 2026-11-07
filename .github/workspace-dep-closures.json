@@ -10161,6 +10161,7 @@
     ],
     "lexical_conformance": [
       "crates/client/lexical/lexical_conformance",
+      "crates/client/lexical/lexical_html",
       "crates/client/lexical/lexical_model",
       "crates/client/lexical/lexical_rich_nodes"
     ],
@@ -10244,6 +10245,7 @@
       "crates/client/lexical/lexical_model"
     ],
     "lexical_rich_nodes": [
+      "crates/client/lexical/lexical_html",
       "crates/client/lexical/lexical_model",
       "crates/client/lexical/lexical_rich_nodes"
     ],

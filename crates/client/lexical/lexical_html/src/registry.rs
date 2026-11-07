@@ -3,13 +3,13 @@ use crate::*;
 use lexical_model::*;
 use std::collections::HashMap;
 /// Export functions keyed by the exact registered model type.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ExportRegistry {
     entries: HashMap<&'static str, ExportFn>,
     overrides: HashMap<&'static str, ExportFn>,
 }
 /// Builder for an immutable export registry.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ExportRegistryBuilder {
     registry: ExportRegistry,
 }
