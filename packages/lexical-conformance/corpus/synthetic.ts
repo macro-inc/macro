@@ -350,6 +350,55 @@ for (const klass of SupportedNodeTypes) {
           { ...base, [field]: value },
         ]);
   }
+  if (type === 'database-query') {
+    for (const stack of [undefined, null, false, true, 0, 'yes']) {
+      variants.push([
+        'chart-stack-' + String(stack),
+        {
+          ...base,
+          chart: {
+            x: 'category',
+            y: ['count'],
+            title: null,
+            color: null,
+            stack,
+          },
+        },
+      ]);
+    }
+    for (const displayMode of [
+      'scalar',
+      'table',
+      'bar',
+      'line',
+      'area',
+      'scatter',
+      'pie',
+    ]) {
+      variants.push(['mode-' + displayMode, { ...base, displayMode }]);
+    }
+  }
+  if (type === 'custom-code') {
+    for (const version of [0, 1, 2, 3]) {
+      for (const language of ['js', 'svg', 'SVG', 'xml', 'unknown']) {
+        variants.push([
+          `legacy-${version}-${language}`,
+          {
+            ...base,
+            version,
+            language,
+            children: [],
+            code: 'legacy code',
+            text: 'legacy text',
+            previewEnabled: true,
+          },
+        ]);
+      }
+    }
+  }
+  if (type === 'agent-session-mention')
+    variants.push(['expanded', { ...base, expanded: true }]);
+  if (type === 'await') variants.push(['block', { ...base, inline: false }]);
   for (const state of [
     { id: '', peerId: 4, sharedPeerIds: 'bad', extra: 1 },
     { id: 0, peerId: '', sharedPeerIds: [], extra: 2 },
