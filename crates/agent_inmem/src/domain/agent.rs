@@ -192,9 +192,16 @@ impl AgentState {
     /// `session/resume` call this so create can return while listing runs.
     fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
         let state = Arc::clone(self);
-        let handle = tokio::spawn(async move {
-            state.connect_mcp(servers).await;
-        });
+        let span = tracing::info_span!(
+            "agent.session.connect_mcp",
+            agent.session.id = %self.session_id,
+        );
+        let handle = tokio::spawn(
+            async move {
+                state.connect_mcp(servers).await;
+            }
+            .instrument(span),
+        );
         // A resume that hands over new servers supersedes a connect still in
         // flight; left running, the older list could land last.
         if let Some(superseded) = self

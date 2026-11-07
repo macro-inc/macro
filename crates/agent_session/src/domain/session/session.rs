@@ -208,7 +208,20 @@ impl<Token> SessionMachine<Token> {
                 if !matches!(self.phase, SessionPhase::Booting) {
                     return vec![];
                 }
-                let mut effects = vec![Effect::EstablishInitialization { context }];
+                // The runtime said it was ready once, to the session that ran
+                // the handshake. This session's history needs the same
+                // boundary: it is what reopens a row an idle teardown marked
+                // disconnected, and egress refuses the session's token until
+                // then.
+                let mut effects = vec![
+                    Effect::Log {
+                        boundary: None,
+                        message: ToServerMessage::Event {
+                            event: SystemEvent::AcpReady,
+                        },
+                    },
+                    Effect::EstablishInitialization { context },
+                ];
                 self.begin_opening(restore, &mut effects);
                 effects
             }

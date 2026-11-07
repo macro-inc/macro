@@ -160,6 +160,10 @@ through `set_name` clears it, so a name a person chose is never replaced.
   (`moves_session_list`: starting/running/stopping/blocked) and metadata
   the viewer asked to change. Do not bump it for claim, release, recovery,
   ACP session id, or system events (`acp_ready`, `disconnected`).
+- Every attach logs `acp_ready` for its own session, including one that opens
+  on a shared connection another session initialized (`Input::SharedReady`).
+  The row's status is the last logged event, and `credentials::open_session`
+  (egress, internal MCP) refuses a row still at `disconnected`.
 
 ## Related
 
