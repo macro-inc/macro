@@ -10161,6 +10161,11 @@
     ],
     "lexical_conformance": [
       "crates/client/lexical/lexical_conformance",
+      "crates/client/lexical/lexical_model",
+      "crates/client/lexical/lexical_rich_nodes"
+    ],
+    "lexical_conformance_wasm": [
+      "crates/client/lexical/lexical_conformance_wasm",
       "crates/client/lexical/lexical_model"
     ],
     "lexical_mention_extractor": [
