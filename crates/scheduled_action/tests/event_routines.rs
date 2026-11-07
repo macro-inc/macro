@@ -42,8 +42,8 @@ use scheduled_action::{
             dispatch::{DispatchResult, EventDispatchService, EventRunDispatch},
         },
         event_trigger::{
-            EventEntityType, EventId, EventPayload, EventReference, EventRejection, IncomingEvent,
-            MessageFact,
+            EventEntityType, EventId, EventPayload, EventReference, EventRejection, EventSource,
+            IncomingEvent, MessageFact,
         },
         execution::ExecutionHandle,
         models::{
@@ -52,13 +52,16 @@ use scheduled_action::{
         },
         ports::{RoutineRun, ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner},
         service::ScheduledActionServiceImpl,
+        webhooks::RoutineWebhookService,
     },
     inbound::{
         axum_router::{ScheduledActionRouterState, scheduled_action_router},
         event_run_worker::run_event_worker,
+        webhook_router::{RoutineWebhookRouterState, routine_webhook_router},
     },
     outbound::{
         inprocess_executor::InProcessExecutor, pg_event_run_repo::PgEventRunRepo,
+        pg_routine_webhook_repo::PgRoutineWebhookRepo,
         pg_scheduled_action_repo::PgScheduledActionRepo,
     },
 };
@@ -116,6 +119,12 @@ impl CurrentOwnerAccess for FakeAccess {
     ) -> Result<Option<EventAccessCapability>, Report> {
         // The event actor is intentionally different from the routine owner.
         assert_eq!(owner.as_ref(), USER);
+        if let EventSource::Webhook(delivery) = event.source() {
+            return Ok(Some(EventAccessCapability::Webhook {
+                owner: owner.clone(),
+                routine_id: delivery.routine_id,
+            }));
+        }
         let entity = Entity {
             entity_id: event.entity_id().unwrap().to_string(),
             entity_type: match event.entity_type() {
@@ -281,11 +290,26 @@ impl Harness {
         let service =
             ScheduledActionServiceImpl::new(actions.clone(), executor.clone(), tx, access.clone())
                 .with_event_management_enabled(true);
+        let webhooks = RoutineWebhookService::new(
+            actions.clone(),
+            Arc::new(PgRoutineWebhookRepo::new(pool.clone())),
+            Arc::new(EventAdmissionService::new(
+                Arc::new(PgEventRunRepo::new(pool.clone())),
+                Arc::new(FakeAccess),
+                page(),
+            )),
+            true,
+        );
         let app = scheduled_action_router(ScheduledActionRouterState {
             service: Arc::new(service),
+            access_service: access.clone(),
+            authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuth)),
+        })
+        .merge(routine_webhook_router(RoutineWebhookRouterState {
+            service: Arc::new(webhooks),
             access_service: access,
             authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuth)),
-        });
+        }));
         Self {
             pool,
             app,
@@ -791,4 +815,93 @@ async fn simulated_bot_document_and_channel_outputs_cannot_start_a_routine_loop(
     assert_eq!(h.count().await, 1);
     assert_eq!(h.event_calls().len(), 1);
     assert!(h.dispatch().pending(page()).await.unwrap().is_empty());
+}
+
+/// A POST without credentials, as another service sends it.
+async fn deliver(app: &Router, url: &str, body: &'static str) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(url)
+                .header(header::CONTENT_TYPE, "text/plain")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_post_to_a_routines_webhook_url_runs_it_with_the_text(pool: PgPool) {
+    let h = Harness::new(pool, FakeRunner::default()).await;
+    let routine = h
+        .create(json!({"name":"webhook", "kind":"Agent", "trigger":{"type":"events", "filters":[{"events":["webhook"]}]}, "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true}))
+        .await;
+    let id = action_id(&routine);
+    let (status, created) = request(
+        &h.app,
+        "POST",
+        &format!("/scheduled-actions/{id}/webhook"),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let url = format!(
+        "/scheduled-actions/webhooks/{}",
+        created["token"].as_str().unwrap()
+    );
+
+    let (status, queued) = deliver(&h.app, &url, "Deploy to production failed").await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{queued}");
+    h.dispatch_head().await;
+
+    let calls = h.runner.calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    let (ran, event) = &calls[0];
+    assert_eq!(*ran, id);
+    let event = event.as_ref().unwrap();
+    assert_eq!(json!(event.event_id().as_uuid()), queued["eventId"]);
+    let EventSource::Webhook(delivery) = event.source() else {
+        panic!("expected the webhook delivery");
+    };
+    assert_eq!(
+        delivery.body.as_deref(),
+        Some("Deploy to production failed")
+    );
+    assert_eq!(delivery.content_type.as_deref(), Some("text/plain"));
+    // The finished run is a tombstone without the text.
+    let context = sqlx::query_scalar!(
+        "SELECT event_context FROM scheduled_action_event_run WHERE action_id = $1",
+        id,
+    )
+    .fetch_one(&h.pool)
+    .await
+    .unwrap();
+    assert!(context["webhook"].get("body").is_none());
+
+    // A paused routine refuses deliveries, and a wrong URL finds nothing.
+    let (status, _) = request(
+        &h.app,
+        "PUT",
+        &format!("/scheduled-actions/{id}/enabled"),
+        json!({ "enabled": false }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(deliver(&h.app, &url, "again").await.0, StatusCode::CONFLICT);
+    assert_eq!(
+        deliver(&h.app, "/scheduled-actions/webhooks/mrw_nope", "x")
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(h.count().await, 1);
 }
