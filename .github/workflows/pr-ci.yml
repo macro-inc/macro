@@ -18,6 +18,7 @@ jobs:
       pull-requests: write
       statuses: write
     outputs:
+      loro_pair: ${{ steps.filter.outputs.loro_pair }}
       cargo_deny: ${{ steps.filter.outputs.cargo_deny }}
       workspace_dependencies: ${{ steps.filter.outputs.workspace_dependencies }}
       generated_workflows: ${{ steps.filter.outputs.generated_workflows }}
@@ -474,6 +475,17 @@ jobs:
       uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
       with:
         filters: |
+          loro_pair:
+            - 'crates/client/lexical/**'
+            - 'packages/loro-mirror/**'
+            - 'packages/lexical-core/markdown-loro-schema.ts'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'package.json'
+            - 'bun.lock'
+            - 'services/sync-service/package-lock.json'
+            - '.github/workflows/loro-pair.yml'
+            - 'tooling/xtask/crates/xtask_workflows/src/workflows/loro_pair.rs'
           cargo_deny:
             - 'Cargo.toml'
             - 'crates/**/Cargo.toml'
@@ -534,6 +546,13 @@ jobs:
           macrod_update:
             - 'crates/coding_agent_worker/**'
             - '.github/workflows/test_macrod_update.yml'
+  loro-pair:
+    needs:
+    - start
+    if: needs.start.outputs.loro_pair == 'true'
+    name: Loro compatibility
+    uses: ./.github/workflows/loro-pair.yml
+    secrets: inherit
   cloud-storage:
     needs:
     - start
@@ -617,6 +636,7 @@ jobs:
   gate:
     needs:
     - start
+    - loro-pair
     - cloud-storage
     - web-app
     - infra
