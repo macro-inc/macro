@@ -174,6 +174,7 @@ fn flush_queue_options_and_commit_tag_carry() -> Result<(), Error> {
         },
         |tx| {
             tx.set_selection(Some(Selection::Range(RangeSelection {
+                dirty: false,
                 anchor: Point::element(NodeKey::ROOT, ChildIndex(0)),
                 focus: Point::element(NodeKey::ROOT, ChildIndex(0)),
                 format: TextFormat::empty(),
@@ -203,6 +204,7 @@ fn paragraph_points_normalize_to_text_s1_18_1() -> Result<(), Error> {
     tx.append(p, &[first.key(), second.key()])?;
     tx.append(NodeKey::ROOT, &[p.key()])?;
     let mut range = RangeSelection {
+        dirty: false,
         anchor: Point::element(p, ChildIndex(0)),
         focus: Point::element(p, ChildIndex(2)),
         format: TextFormat::empty(),
@@ -212,6 +214,7 @@ fn paragraph_points_normalize_to_text_s1_18_1() -> Result<(), Error> {
     assert_eq!(range.anchor, Point::text(first, Utf16Offset(0)));
     assert_eq!(range.focus, Point::text(second, Utf16Offset(1)));
     let slot = tx.detach_selection(Selection::Range(RangeSelection {
+        dirty: false,
         anchor: Point::element(p, ChildIndex(2)),
         focus: Point::element(p, ChildIndex(0)),
         format: TextFormat::empty(),
@@ -219,12 +222,12 @@ fn paragraph_points_normalize_to_text_s1_18_1() -> Result<(), Error> {
     }));
     tx.normalize_selection_at(slot)?;
     assert_eq!(
-        tx.range_at(slot).expect("range").anchor,
+        tx.try_range_at(slot).expect("range").anchor,
         Point::text(second, Utf16Offset(1))
     );
     tx.set_selection(Some(Selection::Range(range.clone())))?;
     tx.normalize_selection()?;
-    assert_eq!(tx.range_at(SelectionSlot::Active), Some(&range));
+    assert_eq!(tx.try_range_at(SelectionSlot::Active), Some(&range));
     Ok(())
 }
 #[test]
@@ -399,6 +402,7 @@ fn missing_text_endpoint_fails_before_gc_and_empty_node_selection_clears() -> Re
     });
     let result = editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            dirty: false,
             anchor: Point::text(missing, Utf16Offset(0)),
             focus: Point::text(missing, Utf16Offset(0)),
             format: TextFormat::empty(),

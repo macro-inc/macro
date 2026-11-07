@@ -62,6 +62,9 @@ impl<'state> StateRef<'state> {
         }
         self.is_before(a.key(), b.key())
     }
+    pub(crate) fn point_is_before(self, a: Point, b: Point) -> Result<bool, Error> {
+        self.boundary_before(self.boundary(a)?, self.boundary(b)?)
+    }
     fn next_boundary(self, boundary: Boundary) -> Option<Boundary> {
         let adjacent = match boundary {
             Boundary::Child(key) => self.first_child(key),
@@ -80,7 +83,7 @@ impl<'state> StateRef<'state> {
         let parent = self.parent(boundary.key())?;
         (parent != NodeKey::ROOT).then_some(Boundary::Sibling(parent))
     }
-    fn selected_nodes(self, range: &RangeSelection) -> Result<Vec<NodeKey>, Error> {
+    pub(crate) fn selected_nodes(self, range: &RangeSelection) -> Result<Vec<NodeKey>, Error> {
         let anchor = self.boundary(range.anchor)?;
         let focus = self.boundary(range.focus)?;
         let (start, end) = if self.boundary_before(focus, anchor)? {
@@ -218,7 +221,9 @@ impl<'state> StateRef<'state> {
         match selection.or(self.selection()) {
             None => false,
             Some(Selection::Node(selection)) => selection.nodes.contains(&key),
-            Some(Selection::Table(_)) => false,
+            Some(selection @ Selection::Table(_)) => selection
+                .nodes(self)
+                .is_ok_and(|nodes| nodes.contains(&key)),
             Some(Selection::Range(range)) => {
                 let selected = self
                     .selected_nodes(range)
@@ -259,15 +264,26 @@ impl<'state> StateRef<'state> {
     }
     /// Plain text of the active selection, empty when no selection is active.
     pub fn selection_text_content(self) -> Result<String, Error> {
-        match self.selection() {
-            None => Ok(String::new()),
-            Some(Selection::Node(selection)) => Ok(selection
+        self.selection().map_or_else(
+            || Ok(String::new()),
+            |selection| self.selection_text_content_for(selection),
+        )
+    }
+    pub(crate) fn selection_text_content_for(self, selection: &Selection) -> Result<String, Error> {
+        match selection {
+            Selection::Node(selection) => Ok(selection
                 .nodes
                 .iter()
                 .map(|key| self.text_content(*key))
                 .collect()),
-            Some(Selection::Table(_)) => Err(Error::UnsupportedSelection),
-            Some(selection @ Selection::Range(range)) => {
+            Selection::Table(table) => self
+                .state
+                .registry
+                .table_selection_hooks
+                .as_ref()
+                .ok_or(Error::UnsupportedSelection)?
+                .text_content(self, table),
+            selection @ Selection::Range(range) => {
                 let nodes = self.selected_nodes(range)?;
                 let (anchor_offset, focus_offset) = self.character_offsets(selection)?;
                 let before = self

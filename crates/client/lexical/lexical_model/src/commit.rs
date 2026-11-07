@@ -129,7 +129,13 @@ impl Transaction<'_> {
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
-        let selection_changed = self.selection_dirty || self.pending.selection != prev.selection;
+        let selection_changed = self.selection_dirty
+            || self
+                .pending
+                .selection
+                .as_ref()
+                .is_some_and(Selection::is_dirty)
+            || self.pending.selection != prev.selection;
         let mut changes = Changes {
             dirty_leaves: self.dirty_leaves.clone(),
             dirty_elements: self.dirty_elements.clone(),
@@ -181,6 +187,9 @@ impl Transaction<'_> {
         }
         crate::pipeline::apply_model_caches(self);
         let dirty = !changes.is_empty();
+        if let Some(selection) = &mut self.pending.selection {
+            selection.set_dirty(false);
+        }
         if dirty || selection_changed {
             self.editor.state = self.pending.clone();
         }

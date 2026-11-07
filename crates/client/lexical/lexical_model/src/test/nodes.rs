@@ -310,12 +310,15 @@ impl TextNode for MovingFocus {
     fn selection_transform(tx: &mut Transaction<'_>, this: Id<Self>) -> Result<(), Error> {
         if tx.get::<Self>(this).expect("node").move_focus {
             let old_focus = tx
-                .range_at(SelectionSlot::Active)
+                .try_range_at(SelectionSlot::Active)
                 .expect("range")
                 .focus
                 .key();
             let last = tx.next_sibling(old_focus).expect("last");
-            let mut range = tx.range_at(SelectionSlot::Active).expect("range").clone();
+            let mut range = tx
+                .try_range_at(SelectionSlot::Active)
+                .expect("range")
+                .clone();
             range.focus = Point::text(last, Utf16Offset(0));
             tx.set_selection(Some(Selection::Range(range)))?;
             tx.remove(old_focus, true)?;
@@ -341,6 +344,7 @@ fn selection_hooks_read_focus_after_anchor_moves_it() -> Result<(), Error> {
         tx.append(p, &[a.key(), b.key(), c.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            dirty: false,
             anchor: Point::text(a, Utf16Offset(0)),
             focus: Point::text(b, Utf16Offset(0)),
             format: TextFormat::empty(),

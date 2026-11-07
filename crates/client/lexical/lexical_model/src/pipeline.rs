@@ -87,7 +87,7 @@ impl Transaction<'_> {
     fn flush_inner(&mut self, mode: FlushMode) -> Result<(), Error> {
         let nested_skip_transforms = self.drain_updates()?;
         let anchor = self
-            .range_at(SelectionSlot::Active)
+            .try_range_at(SelectionSlot::Active)
             .map(|range| range.anchor);
         let mut anchor_key = None;
         if let Some(Point::Text { key, .. }) = anchor {
@@ -96,7 +96,7 @@ impl Transaction<'_> {
         }
         // The anchor hook may move the live focus, including to a newly created node.
         if let Some(Point::Text { key, .. }) = self
-            .range_at(SelectionSlot::Active)
+            .try_range_at(SelectionSlot::Active)
             .map(|range| range.focus)
             && Some(key) != anchor_key
         {
@@ -149,7 +149,7 @@ impl Transaction<'_> {
     }
     /// Normalize a range in the selected slot.
     pub fn normalize_selection_at(&mut self, slot: SelectionSlot) -> Result<(), Error> {
-        let Some(mut range) = self.range_at(slot).cloned() else {
+        let Some(mut range) = self.try_range_at(slot).cloned() else {
             return Ok(());
         };
         let before = range.clone();
