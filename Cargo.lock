@@ -20035,6 +20035,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "teammate_dm_backfill"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "channels",
+ "database_env_vars",
+ "macro_entrypoint",
+ "macro_user_id",
+ "sqlx",
+ "teams",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "teams"
 version = "0.1.0"
 dependencies = [
@@ -20045,16 +20061,13 @@ dependencies = [
  "async-trait",
  "axum",
  "bot_id",
- "channels",
  "chrono",
  "contacts",
- "database_env_vars",
  "entity_access",
  "entity_access_db_utils",
  "generic_email_domains",
  "macro_authorization",
  "macro_db_migrator",
- "macro_entrypoint",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -20065,7 +20078,6 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_email",
- "models_pagination",
  "models_permissions",
  "non_empty",
  "notification",
