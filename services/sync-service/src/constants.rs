@@ -11,4 +11,4 @@ pub const USER_PEER_D1_BINDING: &str = "USER_PEER_MAPPING";
 /// initialize documents from (markdown and Notion imports, uploads, copies of
 /// unattributed history). Keep in sync with the web history UI
 /// (`SYSTEM_AUTHOR_ID`).
-pub const SYSTEM_AUTHOR_ID: &str = "system";
+pub use sync_server_core::domain::types::SYSTEM_AUTHOR_ID;

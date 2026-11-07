@@ -47,12 +47,30 @@ connects require an exact, kind-discriminated surface JWT. WebSocket query token
 are validated against the requested session before accepting the upgrade.
 
 `src/inbound/` owns routing, credential decoding and Cloudflare callbacks;
-`src/domain/` owns permission/write policy and atomic document-update logic;
+`../../crates/sync_server_core/src/domain/` owns room memory, permissions,
+connection/frame callbacks, reads/atomic updates, alarms, deletion and
+surface/migration policy; `src/domain.rs` forwards shared domain types;
 `src/outbound/` owns persistence, secrets and external clients. The Cloudflare
 callback adapter owns one `Room<WorkerPorts>` behind an async mutex. The same
 owned guard covers the request gate and Axum dispatch. WebSocket messages, alarms
 and closes take that room lock; the error callback only logs. Background tasks
 receive owned snapshots and editor batches before the guard is released.
+`HttpHandlers` borrows Room only to parse requests and serialize responses; it
+has no session state or mutable-memory escape hatch. `RoomMemoryView` supplies
+read-only diagnostics. Worker clocks, sockets, storage, D1, alarms, HTTP comment
+validation and publication scheduling implement the core ports in
+`src/outbound/room_ports.rs`. The comment gate remains the existing HTTP call.
+
+For native simulation, run from the repository root:
+
+```sh
+TMPDIR=/home/wolf/tmp cargo test -p sync_server_core -p sync_server_sim -p sync_protocol
+```
+
+`sync_server_sim` drives the real Room with in-memory ports, explicit clocks and
+fault plans. Its checked-in Worker transcripts compare ordered effects and final
+storage. See `../../crates/sync_server_sim/AGENTS.md` for the recording and coverage
+recipes. Same-session reads retain operation IDs and applied keys. Compaction retains unresolved updates until their dependencies arrive.
 
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot

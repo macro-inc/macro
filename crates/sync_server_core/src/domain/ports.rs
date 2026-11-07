@@ -20,12 +20,34 @@ use std::{future::Future, time::Duration};
 /// Wall-clock milliseconds since the Unix epoch. One type for server, client and presence.
 pub use sync_protocol::time::UnixMillis; // `pub struct UnixMillis(pub i64)`
 
+/// Observable purpose of a wall-clock read in the original callback.
+#[derive(Clone, Copy, Debug)]
+pub enum WallClock {
+    /// Surface grant expiry.
+    SurfaceExpiry,
+    /// Comparison against the current durable alarm.
+    AlarmCompare,
+    /// Timestamp assigned to last-editor observations.
+    Blame,
+}
+impl WallClock {
+    /// Stable recording tag for exact clock replay.
+    pub fn tag(self) -> &'static str {
+        match self {
+            Self::SurfaceExpiry => "surface_expiry_ms",
+            Self::AlarmCompare => "alarm_compare_ms",
+            Self::Blame => "blame_ms",
+        }
+    }
+}
 /// Wall and monotonic clocks supplied by the runtime.
 pub trait Clock {
     /// Monotonic time since an arbitrary origin (today `web_time::Instant`, i.e. `performance.now()`).
     fn monotonic(&self) -> Duration;
     /// Wall clock (today `Date::now()` / `SystemTime::now()`; op ids use it as nanos = ms × 10⁶).
     fn unix_time(&self) -> UnixMillis;
+    /// Read wall time at a named legacy callback boundary.
+    fn unix_time_for(&self, purpose: WallClock) -> UnixMillis;
     /// Wall clock in nanoseconds, exactly what `OrederedIds` reads today.
     fn unix_nanos(&self) -> u128;
 }
@@ -178,6 +200,9 @@ pub enum SnapshotReadError<StorageError: std::error::Error + 'static> {
 
 /// The session snapshot (today: DO SQL with a Worker KV fallback) and the migration export slot.
 pub trait SnapshotStore {
+    /// Construct a fresh session transport (including the legacy SQL table setup).
+    /// Exists and initialize do this on every request, even when the snapshot is absent.
+    fn prepare(&self, key: &SessionKey) -> Result<(), Self::Error>;
     /// Adapter-specific failure without thread-safety requirements.
     type Error: std::error::Error + 'static;
     /// Whether a session snapshot is stored.
@@ -297,6 +322,8 @@ pub trait BackgroundEffects {
 
 /// A deferred document notification.
 pub enum DocumentPublication {
+    /// Preserve a scheduled task whose document-only body has no work.
+    Noop,
     /// Send a shallow snapshot, content update and optional interaction.
     Snapshot {
         /// Document receiving the notification.

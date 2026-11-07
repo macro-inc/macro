@@ -72,11 +72,13 @@ test('M12 echoes the exact request version vector', async () => {
   expect(response.value.vv).toEqual(vv);
 });
 
-test('A4 compaction drops acknowledged pending imports from the snapshot', async () => {
+test('A4 compaction retains acknowledged pending imports until dependencies arrive', async () => {
   const id = 'transcript-pending-import';
   const writer = await createTestUser(mf, id);
+  const initialVersion = writer.doc.oplogVersion();
   writer.doc.getText('content').push('missing dependency');
   writer.doc.commit();
+  const dependency = writer.doc.export({ mode: 'update', from: initialVersion });
   const from = writer.doc.oplogVersion();
   writer.doc.getText('content').push('pending suffix');
   writer.doc.commit();
@@ -85,13 +87,17 @@ test('A4 compaction drops acknowledged pending imports from the snapshot', async
   expect((await writer.readNextMessage()).isRemoteUpdateAck()).toBe(true);
   const target = await stub(id);
   expect(await (await target.fetch('http://sync-test/__sync_test_alarm')).text()).toBe('ok');
-  const dump = await (await target.fetch('http://sync-test/__sync_test_dump')).json() as { kv: [string, unknown][] };
-  expect(dump.kv.some(([key]) => key.startsWith('o/'))).toBe(false);
+  const dump = await (await target.fetch('http://sync-test/__sync_test_dump')).json() as { kv: [string, unknown][]; kv_bytes: [string, { bytes_b64: string }][] };
+  expect(dump.kv.some(([key]) => key.startsWith('o/'))).toBe(true);
   expect(dump.kv.some(([key]) => key.startsWith('a/'))).toBe(true);
   const response = await request(id, 'snapshot');
   const restored = new LoroDoc();
   restored.import(new Uint8Array(await response.arrayBuffer()));
+  const retained = dump.kv_bytes.filter(([key]) => key.startsWith('o/'));
+  for (const [, value] of retained) restored.import(Buffer.from(value.bytes_b64, 'base64'));
   expect(restored.getText('content').toString()).toBe('');
+  restored.import(dependency);
+  expect(restored.getText('content').toString()).toBe('missing dependencypending suffix');
   restored.free();
 });
 

@@ -66,3 +66,11 @@ test('does not substitute another socket grant expiry', () => {
   ];
   expect(normalize(record(1000))).not.toBe(normalize(record(2000)));
 });
+
+
+test('excludes only the newly observable presence clock reads', () => {
+  const ordinary = '{"clock":"blame_ms","value":"123"}';
+  const presence = '{"clock":"presence","value":"124"}';
+  expect(normalize([ordinary, presence])).toBe(normalize([ordinary]));
+  expect(normalize([ordinary, presence, ordinary])).not.toBe(normalize([ordinary]));
+});
