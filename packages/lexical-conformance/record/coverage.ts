@@ -4,10 +4,66 @@ import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { eachMapping, TraceMap } from '@jridgewell/trace-mapping';
 
 type Range = { startOffset: number; endOffset: number; count: number };
+type Point = { offset: number; file: string; line: number };
 type Location = { file: string; start: number; end: number; id: string };
 const locations: Location[] = JSON.parse(
   readFileSync(new NodeURL('./s2-ranges.json', import.meta.url), 'utf8')
 );
+
+/** Select the most specific V8 range, retaining zero-count branch exclusions. */
+export function coveredPoints<T extends { offset: number }>(
+  points: T[],
+  input: Range[]
+): T[] {
+  const priority = (
+    a: Range & { order: number },
+    b: Range & { order: number }
+  ) =>
+    a.endOffset - a.startOffset - (b.endOffset - b.startOffset) ||
+    a.order - b.order;
+  const ranges = input
+    .map((range, order) => ({ ...range, order }))
+    .sort((a, b) => a.startOffset - b.startOffset);
+  const heap: (Range & { order: number })[] = [];
+  let cursor = 0;
+  const output: T[] = [];
+  for (const point of points) {
+    while (
+      cursor < ranges.length &&
+      ranges[cursor].startOffset <= point.offset
+    ) {
+      const range = ranges[cursor++];
+      let index = heap.length;
+      heap.push(range);
+      while (index > 0) {
+        const parent = (index - 1) >> 1;
+        if (priority(heap[parent], range) <= 0) break;
+        heap[index] = heap[parent];
+        index = parent;
+      }
+      heap[index] = range;
+    }
+    while (heap.length && heap[0].endOffset <= point.offset) {
+      const last = heap.pop();
+      if (!heap.length || !last) break;
+      let index = 0;
+      while (index * 2 + 1 < heap.length) {
+        let child = index * 2 + 1;
+        if (
+          child + 1 < heap.length &&
+          priority(heap[child + 1], heap[child]) < 0
+        )
+          child++;
+        if (priority(last, heap[child]) <= 0) break;
+        heap[index] = heap[child];
+        index = child;
+      }
+      heap[index] = last;
+    }
+    if (heap[0]?.count) output.push(point);
+  }
+  return output;
+}
 
 /** Per-test V8 branch coverage remapped to the pinned TypeScript source. */
 export class SourceCoverage {
@@ -16,7 +72,7 @@ export class SourceCoverage {
     string,
     { sourceMapURL?: string; startLine: number; startColumn: number }
   >();
-  private sources = new Map<string, { code: string; map: TraceMap }>();
+  private sources = new Map<string, Point[]>();
 
   async start(): Promise<void> {
     this.session.connect();
@@ -60,41 +116,41 @@ export class SourceCoverage {
           /^data:application\/json[^,]*;base64,(.*)$/
         )?.[1];
         if (!encoded) continue;
-        source = {
-          code: scriptSource,
-          map: new TraceMap(
-            JSON.parse(Buffer.from(encoded, 'base64').toString())
-          ),
-        };
+        const map = new TraceMap(
+          JSON.parse(Buffer.from(encoded, 'base64').toString())
+        );
+        const offsets = [0];
+        for (let i = 0; i < scriptSource.length; i++)
+          if (scriptSource[i] === '\n') offsets.push(i + 1);
+        source = [];
+        const points = source;
+        eachMapping(map, (mapping) => {
+          if (!mapping.source || mapping.originalLine === null) return;
+          let file = mapping.source;
+          if (!file.startsWith('/') && !file.startsWith('file:'))
+            file = new NodeURL(file, script.url).href;
+          if (file.startsWith('file:')) file = fileURLToPath(file);
+          const index = file.indexOf('packages/');
+          if (index < 0) return;
+          points.push({
+            offset:
+              (offsets[mapping.generatedLine - 1] ?? 0) +
+              mapping.generatedColumn,
+            file: file.slice(index),
+            line: mapping.originalLine,
+          });
+        });
+        source.sort((a, b) => a.offset - b.offset);
         this.sources.set(script.scriptId, source);
       }
-      const offsets = [0];
-      for (let i = 0; i < source.code.length; i++)
-        if (source.code[i] === '\n') offsets.push(i + 1);
-      const ranges: Range[] = script.functions
-        .flatMap((fn) => fn.ranges)
-        .sort(
-          (a, b) => a.endOffset - a.startOffset - (b.endOffset - b.startOffset)
-        );
-      eachMapping(source.map, (mapping) => {
-        if (!mapping.source || mapping.originalLine === null) return;
-        const offset =
-          (offsets[mapping.generatedLine - 1] ?? 0) + mapping.generatedColumn;
-        const range = ranges.find(
-          (r) => r.startOffset <= offset && offset < r.endOffset
-        );
-        if (!range?.count) return;
-        let file = mapping.source;
-        if (!file.startsWith('/') && !file.startsWith('file:'))
-          file = new NodeURL(file, script.url).href;
-        if (file.startsWith('file:')) file = fileURLToPath(file);
-        const index = file.indexOf('packages/');
-        if (index < 0) return;
-        file = file.slice(index);
-        const hit = lines.get(file) ?? new Set<number>();
-        hit.add(mapping.originalLine);
-        lines.set(file, hit);
-      });
+      for (const point of coveredPoints(
+        source,
+        script.functions.flatMap((fn) => fn.ranges)
+      )) {
+        const hit = lines.get(point.file) ?? new Set<number>();
+        hit.add(point.line);
+        lines.set(point.file, hit);
+      }
     }
     const s2Hits = locations
       .filter((location) =>
