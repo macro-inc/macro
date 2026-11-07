@@ -23,6 +23,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 ## Boundaries
 
+- Use Error::invariant for runtime diagnostic context; static and owned messages share the Invariant classification.
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.

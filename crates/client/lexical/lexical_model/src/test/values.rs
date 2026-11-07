@@ -118,3 +118,17 @@ fn empty_raw_text_and_consecutive_separators_keep_tokens() {
         ]
     );
 }
+
+#[test]
+fn formatted_invariant_messages_keep_the_static_error_classification() {
+    let static_error = Error::invariant("Expected TableNode.");
+    assert!(matches!(
+        static_error,
+        Error::Invariant("Expected TableNode.")
+    ));
+    assert_eq!(static_error.kind(), "Invariant");
+    let dynamic_error = Error::invariant(String::from("Anchor 3 is not in table 1"));
+    assert_eq!(dynamic_error.to_string(), "Anchor 3 is not in table 1");
+    assert_eq!(dynamic_error.kind(), "Invariant");
+    assert!(matches!(dynamic_error, Error::InvariantMessage(_)));
+}
