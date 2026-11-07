@@ -88564,7 +88564,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction/properties.rs",
-        "line": 359,
+        "line": 362,
         "ignored": false,
         "test": "split_text"
       }
@@ -88590,7 +88590,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 604,
+        "line": 603,
         "ignored": false,
         "test": "composition_key"
       }
@@ -155041,7 +155041,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/caret.rs",
-        "line": 395,
+        "line": 394,
         "ignored": false,
         "test": "compare_point_caret_next"
       }
