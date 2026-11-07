@@ -209,6 +209,9 @@ members = [
   "crates/routine_program",
   "crates/routines",
   "crates/scheduled_action",
+  "crates/search/soup_realtime_core",
+  "crates/search/soup_realtime_inbound",
+  "crates/search/soup_realtime_outbound",
   "crates/search_service",
   "crates/shown_text",
   "crates/single_flight",
@@ -216,7 +219,6 @@ members = [
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
-  "crates/soup_realtime",
   "crates/source_items",
   "crates/stripe_inbox",
   "crates/subsequence_match",
@@ -991,7 +993,9 @@ soup = { path = "crates/soup" }
 soup-filter-cache-adapter = { path = "crates/soup_filter_cache_adapter" }
 soup-filter-projection = { path = "crates/soup_filter_projection", default-features = false }
 soup_property = { path = "crates/types/soup_property" }
-soup_realtime = { path = "crates/soup_realtime", default-features = false }
+soup_realtime_core = { path = "crates/search/soup_realtime_core" }
+soup_realtime_inbound = { path = "crates/search/soup_realtime_inbound" }
+soup_realtime_outbound = { path = "crates/search/soup_realtime_outbound" }
 source_items = { path = "crates/source_items" }
 sqs_client = { path = "crates/sqs_client", default-features = false }
 sqs_worker = { path = "crates/sqs_worker" }

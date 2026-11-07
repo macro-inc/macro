@@ -46,7 +46,7 @@ they need.
 - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
   `channel_bots`, `channels`, `coding_agent_worker`, `crm`, `documents`,
   `lexical_client`, `lexical_mention_extractor`, `macro_db_client`,
-  `soup_realtime`, `webhook`.
+  `soup_realtime_inbound`, `webhook`.
 
 ## Recipes
 

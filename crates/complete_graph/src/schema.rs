@@ -88,7 +88,7 @@ use notification::domain::{
     },
 };
 use soup::domain::ports::{NoOpSoupService, SoupService};
-use soup_realtime::domain::ports::{
+use soup_realtime_core::ports::{
     NoOpSoupRealtimeSubscriptionService, SoupRealtimeSubscriptionService,
 };
 

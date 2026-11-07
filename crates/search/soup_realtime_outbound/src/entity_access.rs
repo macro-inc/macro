@@ -7,7 +7,7 @@ use entity_access::domain::ports::EntityAudienceLookup;
 use model_entity::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
 
-use crate::domain::{models::SharedAccess, ports::UserAccessExpander};
+use soup_realtime_core::{models::SharedAccess, ports::UserAccessExpander};
 
 /// Current-access expander backed by an entity-access service.
 pub struct EntityAccessExpander<S> {

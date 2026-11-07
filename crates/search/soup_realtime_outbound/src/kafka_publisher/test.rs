@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 
 use super::*;
-use crate::domain::models::Patch;
+use soup_realtime_core::models::Patch;
 
 const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
 

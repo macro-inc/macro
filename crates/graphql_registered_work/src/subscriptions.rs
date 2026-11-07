@@ -14,7 +14,7 @@ use graphql_common::require_authenticated_user;
 use graphql_soup::{AgentSessionEntityLoader, SoupEntityEdges};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
-use soup_realtime::domain::models::Patch;
+use soup_realtime_core::models::Patch;
 use tokio::sync::mpsc::{self, Receiver};
 use uuid::Uuid;
 

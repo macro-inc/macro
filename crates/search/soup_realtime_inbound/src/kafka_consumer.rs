@@ -12,11 +12,6 @@ mod test;
 
 use std::{collections::HashSet, future::Future, time::Duration};
 
-use crate::domain::{
-    models::{Patch, SoupRealtimePatch},
-    ports::{PullRequestSessions, SoupRealtimeService},
-    service::SoupRealtimeServiceImpl,
-};
 use call::domain::events::{CallMacroEvent, CallTopicEvent};
 use channels::domain::{
     broker_events::{ChannelMacroEvent, ChannelTopicEvent},
@@ -41,6 +36,11 @@ use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use soup_realtime_core::{
+    models::{Patch, SoupRealtimePatch},
+    ports::{PullRequestSessions, SoupRealtimeService},
+    service::SoupRealtimeServiceImpl,
+};
 use system_properties::SystemPropertyKey;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::Instrument as _;
@@ -668,7 +668,7 @@ async fn process_event<S: SoupRealtimeService, L: PullRequestSessions>(
     if let DeclaredMacroEvent::GithubPullRequestMacroEvent(event) = event {
         let GithubPullRequestTopicEvent::Updated(update) = &event.event().event;
         match Retry::start(notify_retry_strategy(), || {
-            crate::domain::service::pull_request_patches(
+            soup_realtime_core::service::pull_request_patches(
                 sessions,
                 &update.github_key,
                 update
@@ -754,87 +754,86 @@ fn commit_logged(consumer: &SoupRealtimeKafkaConsumer, message: &BorrowedMessage
         });
 }
 
-impl SoupRealtimeServiceImpl {
-    /// Runs the Soup-affecting entity event consumer until `shutdown` resolves.
-    ///
-    /// The consumer subscribes to every existing entity topic with events that
-    /// can change a Soup item under the `soup-realtime` group. It commits malformed
-    /// and recognized-but-ignored events immediately. An affecting event's patches
-    /// are published in batches of up to 500, each with one recipient lookup, and
-    /// the event is committed after every batch succeeds or a batch exhausts its
-    /// five publication attempts.
-    /// Exhaustion logs an error and discards the remaining event before committing,
-    /// intentionally preferring consumer progress over delivery during persistent
-    /// failures. Shutdown during processing or retry backoff leaves the event
-    /// uncommitted for replay.
-    #[tracing::instrument(skip(self, sessions, shutdown), fields(brokers), err)]
-    pub async fn run_entity_update_consumer(
-        &self,
-        brokers: &str,
-        sessions: &impl PullRequestSessions,
-        shutdown: impl Future<Output = ()> + Send,
-    ) -> Result<(), Report> {
-        let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
-        let consumer = KafkaConsumerAdapter::<SoupRealtimeConsumerGroup, ()>::new(consumer)
-            .subscribe::<DeclaredMacroEvent>()
-            .context("failed to subscribe to Soup-affecting entity topics")?;
-        let consumer = SoupRealtimeKafkaConsumer::new(consumer);
-        tracing::info!(
-            topics = ?DeclaredMacroEvent::topics(),
-            group = SoupRealtimeConsumerGroup::GROUP_NAME,
-            "realtime Soup entity consumer listening"
-        );
+/// Runs `service`'s Soup-affecting entity event consumer until `shutdown`
+/// resolves.
+///
+/// The consumer subscribes to every existing entity topic with events that
+/// can change a Soup item under the `soup-realtime` group. It commits malformed
+/// and recognized-but-ignored events immediately. An affecting event's patches
+/// are published in batches of up to 500, each with one recipient lookup, and
+/// the event is committed after every batch succeeds or a batch exhausts its
+/// five publication attempts.
+/// Exhaustion logs an error and discards the remaining event before committing,
+/// intentionally preferring consumer progress over delivery during persistent
+/// failures. Shutdown during processing or retry backoff leaves the event
+/// uncommitted for replay.
+#[tracing::instrument(skip(service, sessions, shutdown), fields(brokers), err)]
+pub async fn run_entity_update_consumer(
+    service: &SoupRealtimeServiceImpl,
+    brokers: &str,
+    sessions: &impl PullRequestSessions,
+    shutdown: impl Future<Output = ()> + Send,
+) -> Result<(), Report> {
+    let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
+    let consumer = KafkaConsumerAdapter::<SoupRealtimeConsumerGroup, ()>::new(consumer)
+        .subscribe::<DeclaredMacroEvent>()
+        .context("failed to subscribe to Soup-affecting entity topics")?;
+    let consumer = SoupRealtimeKafkaConsumer::new(consumer);
+    tracing::info!(
+        topics = ?DeclaredMacroEvent::topics(),
+        group = SoupRealtimeConsumerGroup::GROUP_NAME,
+        "realtime Soup entity consumer listening"
+    );
 
-        let mut shutdown = std::pin::pin!(shutdown);
-        loop {
-            tokio::select! {
-                _ = &mut shutdown => {
-                    tracing::info!("realtime Soup entity consumer shutting down");
-                    break;
-                }
-                result = consumer.recv() => {
-                    let Ok(message) = result else { continue; };
-                    let kafka_message = message.inner();
-                    // Parent each event on its producer's trace, so a folder's
-                    // fan-out reads in the trace of the request that changed it
-                    // instead of under the consumer's lifetime span.
-                    let consumer_span = kafka_util::consumer_span(
-                        kafka_message,
-                        SoupRealtimeConsumerGroup::GROUP_NAME,
-                    );
-                    let span = tracing::info_span!(
-                        parent: &consumer_span,
-                        "realtime_soup_source_event",
-                        topic = kafka_message.topic(),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
-                        key = kafka_message.key().and_then(|key| std::str::from_utf8(key).ok()),
-                    );
-                    let decoded = {
-                        let _guard = span.enter();
-                        message.decode_payload()
-                    };
-                    let event = match decoded {
-                        Ok(event) => event,
-                        Err(_) => {
-                            commit_logged(&consumer, kafka_message);
-                            continue;
-                        }
-                    };
-
-                    // Do not advance until delivery succeeds or the event reaches
-                    // the logged terminal-drop outcome after bounded retries.
-                    tokio::select! {
-                        biased;
-                        _ = &mut shutdown => break,
-                        _ = process_event(self, sessions, &event, || {
-                            commit_logged(&consumer, kafka_message);
-                        }).instrument(span) => {}
+    let mut shutdown = std::pin::pin!(shutdown);
+    loop {
+        tokio::select! {
+            _ = &mut shutdown => {
+                tracing::info!("realtime Soup entity consumer shutting down");
+                break;
+            }
+            result = consumer.recv() => {
+                let Ok(message) = result else { continue; };
+                let kafka_message = message.inner();
+                // Parent each event on its producer's trace, so a folder's
+                // fan-out reads in the trace of the request that changed it
+                // instead of under the consumer's lifetime span.
+                let consumer_span = kafka_util::consumer_span(
+                    kafka_message,
+                    SoupRealtimeConsumerGroup::GROUP_NAME,
+                );
+                let span = tracing::info_span!(
+                    parent: &consumer_span,
+                    "realtime_soup_source_event",
+                    topic = kafka_message.topic(),
+                    partition = kafka_message.partition(),
+                    offset = kafka_message.offset(),
+                    key = kafka_message.key().and_then(|key| std::str::from_utf8(key).ok()),
+                );
+                let decoded = {
+                    let _guard = span.enter();
+                    message.decode_payload()
+                };
+                let event = match decoded {
+                    Ok(event) => event,
+                    Err(_) => {
+                        commit_logged(&consumer, kafka_message);
+                        continue;
                     }
+                };
+
+                // Do not advance until delivery succeeds or the event reaches
+                // the logged terminal-drop outcome after bounded retries.
+                tokio::select! {
+                    biased;
+                    _ = &mut shutdown => break,
+                    _ = process_event(service, sessions, &event, || {
+                        commit_logged(&consumer, kafka_message);
+                    }).instrument(span) => {}
                 }
             }
         }
-
-        Ok(())
     }
+
+    Ok(())
 }

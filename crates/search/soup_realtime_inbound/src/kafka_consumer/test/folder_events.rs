@@ -7,8 +7,8 @@ use entity_access::domain::{
 use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 
 use super::*;
-use crate::domain::{models::SoupRealtimeMessage, ports::SoupRealtimePublisher};
-use crate::outbound::entity_access::EntityAccessExpander;
+use soup_realtime_core::{models::SoupRealtimeMessage, ports::SoupRealtimePublisher};
+use soup_realtime_outbound::entity_access::EntityAccessExpander;
 
 /// Resolves audiences the way the entity-access repository does: entities whose
 /// users are the same come back as one audience. Counts every lookup.

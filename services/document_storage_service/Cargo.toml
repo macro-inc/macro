@@ -273,10 +273,9 @@ soup = { workspace = true, features = [
   "inbound",
   "outbound",
 ] }
-soup_realtime = { workspace = true, features = [
-  "consumer",
-  "outbound",
-] }
+soup_realtime_core = { workspace = true }
+soup_realtime_inbound = { workspace = true }
+soup_realtime_outbound = { workspace = true, features = ["consumer"] }
 sqlx = { workspace = true }
 sqs_client = { workspace = true, features = [
   "document",

@@ -138,7 +138,8 @@ macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
-soup_realtime = { workspace = true, features = ["outbound"] }
+soup_realtime_core = { workspace = true }
+soup_realtime_outbound = { workspace = true }
 macro_middleware = { workspace = true, features = ["cloud_storage"] }
 macro_queues = { workspace = true }
 macro_tower_layers = { workspace = true }

@@ -39,7 +39,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { workspace = true, features = ["ports"] }
 soup-filter-projection = { workspace = true, default-features = true }
-soup_realtime = { workspace = true, features = ["ports"] }
+soup_realtime_core = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

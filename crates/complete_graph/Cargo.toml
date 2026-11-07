@@ -56,9 +56,7 @@ notification = { workspace = true, default-features = true }
 predicate-index = { workspace = true }
 soup = { workspace = true, features = ["ports"] }
 soup-filter-projection = { workspace = true }
-soup_realtime = { workspace = true, features = [
-  "ports",
-] }
+soup_realtime_core = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

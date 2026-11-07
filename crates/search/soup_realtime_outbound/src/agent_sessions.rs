@@ -2,13 +2,13 @@
 //! work registration changes to a session's viewers.
 use std::sync::Arc;
 
-use crate::domain::models::{Patch, SoupRealtimePatch};
-use crate::domain::ports::{PullRequestSessions, SoupRealtimeService};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::pull_request_links::SessionPullRequestLinkRepo;
 use agent_session::domain::work_registration::WorkRegistrationSignal;
 use model_entity::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
+use soup_realtime_core::models::{Patch, SoupRealtimePatch};
+use soup_realtime_core::ports::{PullRequestSessions, SoupRealtimeService};
 
 /// Uses the owning session repository to look up links without duplicating its SQL.
 pub struct AgentSessionPullRequestLookup<R>(pub R);

@@ -269,10 +269,10 @@ on the other.
 - **Projection:** `crates/soup_filter_projection/src/lib.rs` returns `Ok(None)` and
   `crates/item_filter_index/src/lib.rs` returns `Unsupported(..)` unless you build
   local-first filtering.
-- **Realtime:** `crates/soup_realtime/src/inbound/kafka_consumer.rs`: add the topic
+- **Realtime:** `crates/search/soup_realtime_inbound/src/kafka_consumer.rs`: add the topic
   to `declare_topics!`, write `patches_from_<kind>_event`, map property events in
   `soup_entity_type_from_property`, and add the channel-reference arm; add the
-  crate to the `consumer` feature in `crates/soup_realtime/Cargo.toml`. Kinds have
+  crate to `crates/search/soup_realtime_inbound/Cargo.toml`. Kinds have
   launched without realtime and lists stopped repainting. Patch the single
   entity; never invalidate every Soup list, which once saturated the production
   replica. Delivery is at least once.

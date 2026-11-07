@@ -38,7 +38,7 @@ use properties::domain::events::{
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::Delivery;
+use soup_realtime_core::models::Delivery;
 
 struct TestMessage {
     payload: Vec<u8>,

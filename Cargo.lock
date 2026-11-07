@@ -857,7 +857,8 @@ dependencies = [
  "share_permission_db_utils",
  "skills",
  "soup",
- "soup_realtime",
+ "soup_realtime_core",
+ "soup_realtime_outbound",
  "sqlx",
  "sqs_client",
  "sse-core",
@@ -2403,7 +2404,7 @@ dependencies = [
  "serde",
  "serde_json",
  "soup",
- "soup_realtime",
+ "soup_realtime_core",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -5324,7 +5325,7 @@ dependencies = [
  "serde_json",
  "soup",
  "soup-filter-projection",
- "soup_realtime",
+ "soup_realtime_core",
  "sqlx",
  "tokio",
  "tokio-util",
@@ -7266,7 +7267,9 @@ dependencies = [
  "sha2 0.10.9",
  "slack_integration",
  "soup",
- "soup_realtime",
+ "soup_realtime_core",
+ "soup_realtime_inbound",
+ "soup_realtime_outbound",
  "sqlx",
  "sqs_client",
  "sqs_worker",
@@ -10335,7 +10338,7 @@ dependencies = [
  "graphql_soup",
  "macro_user_id",
  "model-entity",
- "soup_realtime",
+ "soup_realtime_core",
  "tokio",
  "tracing",
  "uuid",
@@ -10394,7 +10397,7 @@ dependencies = [
  "serde_json",
  "soup",
  "soup-filter-projection",
- "soup_realtime",
+ "soup_realtime_core",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -20476,11 +20479,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "soup_realtime"
+name = "soup_realtime_core"
 version = "0.1.0"
 dependencies = [
- "agent_session",
  "broadcast",
+ "futures",
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "model-entity",
+ "rootcause",
+ "serde",
+ "tokio",
+ "tokio-retry",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "soup_realtime_inbound"
+version = "0.1.0"
+dependencies = [
  "call",
  "channels",
  "chat",
@@ -20493,7 +20512,6 @@ dependencies = [
  "initiative",
  "kafka_util",
  "macro_event_broker",
- "macro_event_topics",
  "macro_user_id",
  "messages",
  "model-entity",
@@ -20503,13 +20521,33 @@ dependencies = [
  "properties",
  "rdkafka",
  "rootcause",
- "serde",
  "serde_json",
+ "soup_realtime_core",
+ "soup_realtime_outbound",
  "system_properties",
  "tokio",
  "tokio-retry",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "soup_realtime_outbound"
+version = "0.1.0"
+dependencies = [
+ "agent_session",
+ "entity_access",
+ "kafka_util",
+ "macro_event_broker",
+ "macro_user_id",
+ "model-entity",
+ "rdkafka",
+ "rootcause",
+ "serde_json",
+ "soup_realtime_core",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 

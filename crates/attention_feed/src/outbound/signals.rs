@@ -2,7 +2,7 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use soup_realtime::domain::{
+use soup_realtime_core::{
     models::{Patch, SoupRealtimeMessage},
     ports::SoupRealtimePublisher,
 };
