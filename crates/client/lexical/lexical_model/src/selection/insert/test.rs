@@ -689,3 +689,25 @@ fn formatting_a_structural_range_without_characters_preserves_typing_flags() -> 
     })?;
     Ok(())
 }
+
+#[test]
+fn replacing_a_token_preserves_typing_format_independently_of_the_new_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let token = tx.create_text("x")?;
+        tx.text(token)?.set_mode(TextMode::Token)?.set_format(TextFormat::BOLD)?;
+        let tail = tx.create_text("tail")?;
+        tx.append(p, &[token.key(), tail.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        let mut range = RangeSelection::new(Point::text(token, Utf16Offset(0)), Point::text(tail, Utf16Offset(1)));
+        range.format = TextFormat::ITALIC;
+        tx.set_selection(Some(Selection::Range(range)))?;
+        tx.insert_text("new")?;
+        assert_eq!(tx.range_selection()?.format, TextFormat::ITALIC);
+        let replacement = tx.first_child(p).unwrap();
+        assert_eq!(tx.view().text_data(replacement)?.format, TextFormat::empty());
+        Ok(())
+    })?;
+    Ok(())
+}

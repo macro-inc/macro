@@ -207,8 +207,8 @@ impl Transaction<'_> {
                 slot,
                 true,
                 Point::text(replacement, TextBuffer::new(text).utf16_len()),
-                TextFormat::empty(),
-                "".into(),
+                range.format,
+                range.style.clone(),
             );
         } else if data.is_segmented() {
             let plain = self.create_text(data.text.as_str())?;
@@ -414,8 +414,8 @@ impl Transaction<'_> {
                 slot,
                 true,
                 Point::text(replacement, TextBuffer::new(text).utf16_len()),
-                TextFormat::empty(),
-                "".into(),
+                range.format,
+                range.style.clone(),
             )?;
         }
         for key in nodes.iter().copied().skip(1) {
