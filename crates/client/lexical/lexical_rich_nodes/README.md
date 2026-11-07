@@ -91,3 +91,10 @@ The replayer now runs all eleven recorded rich-text, one hashtag and both list
 fixtures; there are no recorded plain-text fixtures. JS return objects with an
 undefined checked property retain that marker in the replayer, while model JSON
 correctly omits it from serialized snapshots.
+
+`code::register_code_nodes` registers code-block payloads and import-only legacy
+highlights without a tokenizer. Stored nonempty highlights preserve text, style,
+detail, mode, NodeState and highlight type; format stays zero and normalization
+never merges them. Empty highlights are removed by the orphan transform; other
+orphaned highlights become plain text and drop their attributes as upstream does.
+Language and theme normalize absent/null/empty values to omitted JSON fields.
