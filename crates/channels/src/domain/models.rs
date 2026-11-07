@@ -1266,7 +1266,7 @@ pub struct ChannelWithLatest {
     /// Last interaction timestamp for requesting user.
     pub interacted_at: Option<DateTime<Utc>>,
     /// Aggregate frecency score.
-    pub frecency_score: Option<frecency::domain::models::AggregateFrecency>,
+    pub frecency_score: Option<frecency_core::models::AggregateFrecency>,
 }
 
 #[cfg(feature = "list")]

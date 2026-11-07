@@ -1,6 +1,6 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Duration, Utc};
-use frecency::domain::ports::FrecencyQueryService;
+use frecency_core::ports::FrecencyQueryService;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Instant;

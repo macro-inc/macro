@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "frecency_inbound"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+frecency_core = { path = "../frecency_core", features = ["ports"] }
+tokio = { workspace = true, features = ["sync", "time"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

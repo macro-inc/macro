@@ -10,7 +10,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use frecency::domain::models::AggregateFrecency;
+use frecency_core::models::AggregateFrecency;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };

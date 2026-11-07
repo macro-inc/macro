@@ -1,7 +1,7 @@
 //! this module provides an impl of [TimeGetter] suitable for most use cases
 
-use crate::domain::ports::TimeGetter;
 use chrono::Utc;
+use frecency_core::ports::TimeGetter;
 
 /// The default implementation of time
 pub struct DefaultTime;

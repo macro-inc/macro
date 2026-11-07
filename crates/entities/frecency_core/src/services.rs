@@ -1,5 +1,5 @@
 //! This module defines the services that are exposed by this crate
-use crate::domain::{
+use crate::{
     models::{
         AggregateFrecency, AggregateId, EventAggregationStats, EventRecordWithId,
         FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse, FrecencyQueryErr,
@@ -278,7 +278,7 @@ where
 #[cfg(test)]
 mod pull_aggregator_tests {
     use super::*;
-    use crate::domain::ports::UnprocessedEventsRepo;
+    use crate::ports::UnprocessedEventsRepo;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Default)]

@@ -1,5 +1,5 @@
 use super::*;
-use frecency::domain::models::{
+use frecency_core::models::{
     FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse, FrecencyQueryErr,
 };
 use macro_user_id::user_id::MacroUserIdStr;

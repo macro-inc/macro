@@ -46,7 +46,7 @@ http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
 sqs = ["dep:models_email", "dep:sqs_client", "ports"]
-ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency_core/ports"]
 # The S3 adapter for staged draft attachments.
 s3 = ["dep:aws-sdk-s3", "ports"]
 
@@ -82,7 +82,7 @@ email_utils = { path = "../email_utils" }
 email_db_client = { path = "../email_db_client" }
 email_api_client = { path = "../email_api_client", optional = true, features = ["ports"] }
 filter_ast = { path = "../filter_ast" }
-frecency = { path = "../frecency" }
+frecency_core = { path = "../entities/frecency_core" }
 gmail_client = { path = "../gmail_client", optional = true }
 google_token = { path = "../google_token", optional = true }
 item_filters = { path = "../item_filters" }

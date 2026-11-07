@@ -1,4 +1,4 @@
-use crate::domain::models::{
+use frecency_core::models::{
     AggregateId, FrecencyAction, FrecencyData, FrecencyEntity, FrecencyEvent,
 };
 
@@ -16,16 +16,16 @@ async fn test_set_event(pool: PgPool) {
     let test_user_id = "test_user_set_event";
 
     // Create a test event record
-    let event = EventRecord {
-        event: FrecencyEvent {
+    let event = EventRecord::from_stored(
+        FrecencyEvent {
             entity: FrecencyEntity {
                 user_id: Cow::Borrowed(test_user_id),
                 entity: EntityType::Document.with_entity_str("doc123"),
             },
             action: FrecencyAction::Open,
         },
-        timestamp: Utc::now(),
-    };
+        Utc::now(),
+    );
 
     // Insert the event
     let result = storage.set_event(event).await;
@@ -64,18 +64,13 @@ async fn test_set_and_get_aggregate(pool: PgPool) {
         weight: 1.0,
     });
 
-    let aggregate = AggregateFrecency {
-        id: AggregateId {
+    let aggregate = AggregateFrecency::from_stored(
+        AggregateId {
             entity: EntityType::Document.with_entity_str("doc456"),
             user_id: test_user_id.clone(),
         },
-        data: FrecencyData {
-            event_count: 5,
-            frecency_score: 75.5,
-            first_event: Utc::now(),
-            recent_events,
-        },
-    };
+        FrecencyData::from_stored(5, 75.5, Utc::now(), recent_events),
+    );
 
     // Insert the aggregate
     let result = storage.set_aggregate(aggregate.clone()).await;
@@ -107,18 +102,13 @@ async fn test_update_aggregate(pool: PgPool) {
     let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
 
     // Create initial aggregate
-    let aggregate1 = AggregateFrecency {
-        id: AggregateId {
+    let aggregate1 = AggregateFrecency::from_stored(
+        AggregateId {
             entity: EntityType::Chat.with_entity_str("chat789"),
             user_id: test_user_id.clone(),
         },
-        data: FrecencyData {
-            event_count: 3,
-            frecency_score: 50.0,
-            first_event: Utc::now(),
-            recent_events: VecDeque::new(),
-        },
-    };
+        FrecencyData::from_stored(3, 50.0, Utc::now(), VecDeque::new()),
+    );
 
     storage.set_aggregate(aggregate1).await.unwrap();
 
@@ -129,18 +119,13 @@ async fn test_update_aggregate(pool: PgPool) {
         weight: 2.0,
     });
 
-    let aggregate2 = AggregateFrecency {
-        id: AggregateId {
+    let aggregate2 = AggregateFrecency::from_stored(
+        AggregateId {
             entity: EntityType::Chat.with_entity_str("chat789"),
             user_id: test_user_id.clone(),
         },
-        data: FrecencyData {
-            event_count: 10,
-            frecency_score: 95.0,
-            first_event: Utc::now(),
-            recent_events: updated_events,
-        },
-    };
+        FrecencyData::from_stored(10, 95.0, Utc::now(), updated_events),
+    );
 
     storage.set_aggregate(aggregate2).await.unwrap();
 
@@ -178,18 +163,13 @@ async fn test_get_top_entities(pool: PgPool) {
     ];
 
     for (id, entity_type, score) in entities {
-        let aggregate = AggregateFrecency {
-            id: AggregateId {
+        let aggregate = AggregateFrecency::from_stored(
+            AggregateId {
                 entity: entity_type.with_entity_string(id.to_string()),
                 user_id: test_user_id.clone(),
             },
-            data: FrecencyData {
-                event_count: 1,
-                frecency_score: score,
-                first_event: Utc::now(),
-                recent_events: VecDeque::new(),
-            },
-        };
+            FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+        );
         storage.set_aggregate(aggregate).await.unwrap();
     }
 
@@ -227,18 +207,13 @@ async fn test_get_aggregate_for_user_entities(pool: PgPool) {
     ];
 
     for (id, entity_type, score) in &aggregates {
-        let aggregate = AggregateFrecency {
-            id: AggregateId {
+        let aggregate = AggregateFrecency::from_stored(
+            AggregateId {
                 entity: (*entity_type).with_entity_string(id.to_string()),
                 user_id: test_user_id.clone(),
             },
-            data: FrecencyData {
-                event_count: 1,
-                frecency_score: *score,
-                first_event: Utc::now(),
-                recent_events: VecDeque::new(),
-            },
-        };
+            FrecencyData::from_stored(1, *score, Utc::now(), VecDeque::new()),
+        );
         storage.set_aggregate(aggregate).await.unwrap();
     }
 
@@ -313,18 +288,13 @@ async fn test_get_top_entities_with_from_score(pool: PgPool) {
     ];
 
     for (id, entity_type, score) in entities {
-        let aggregate = AggregateFrecency {
-            id: AggregateId {
+        let aggregate = AggregateFrecency::from_stored(
+            AggregateId {
                 entity: entity_type.with_entity_string(id.to_string()),
                 user_id: test_user_id.clone(),
             },
-            data: FrecencyData {
-                event_count: 1,
-                frecency_score: score,
-                first_event: Utc::now(),
-                recent_events: VecDeque::new(),
-            },
-        };
+            FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+        );
         storage.set_aggregate(aggregate).await.unwrap();
     }
 
@@ -642,30 +612,20 @@ async fn test_processor_set_aggregates(pool: PgPool) {
     });
 
     let aggregates = vec![
-        AggregateFrecency {
-            id: AggregateId {
+        AggregateFrecency::from_stored(
+            AggregateId {
                 entity: EntityType::Document.with_entity_str("doc_set_1"),
                 user_id: test_user_id.clone(),
             },
-            data: FrecencyData {
-                event_count: 10,
-                frecency_score: 85.0,
-                first_event: Utc::now(),
-                recent_events: recent_events.clone(),
-            },
-        },
-        AggregateFrecency {
-            id: AggregateId {
+            FrecencyData::from_stored(10, 85.0, Utc::now(), recent_events.clone()),
+        ),
+        AggregateFrecency::from_stored(
+            AggregateId {
                 entity: EntityType::Chat.with_entity_str("chat_set_1"),
                 user_id: test_user_id.clone(),
             },
-            data: FrecencyData {
-                event_count: 5,
-                frecency_score: 65.0,
-                first_event: Utc::now(),
-                recent_events: recent_events.clone(),
-            },
-        },
+            FrecencyData::from_stored(5, 65.0, Utc::now(), recent_events.clone()),
+        ),
     ];
 
     // Set the aggregates
@@ -744,18 +704,13 @@ async fn test_processor_set_aggregates_update_existing(pool: PgPool) {
         weight: 2.0,
     });
 
-    let updated_aggregate = vec![AggregateFrecency {
-        id: AggregateId {
+    let updated_aggregate = vec![AggregateFrecency::from_stored(
+        AggregateId {
             entity: EntityType::Document.with_entity_str("doc_update_1"),
             user_id: test_user_id.clone(),
         },
-        data: FrecencyData {
-            event_count: 15,
-            frecency_score: 95.0,
-            first_event: Utc::now(),
-            recent_events,
-        },
-    }];
+        FrecencyData::from_stored(15, 95.0, Utc::now(), recent_events),
+    )];
 
     // Update the aggregate
     processor.set_aggregates(updated_aggregate).await.unwrap();
@@ -825,18 +780,13 @@ async fn test_processor_claim_aggregate_lifecycle(pool: PgPool) {
     assert!(test_event.is_some());
 
     // Create an aggregate for the event
-    let aggregate = AggregateFrecency {
-        id: AggregateId {
+    let aggregate = AggregateFrecency::from_stored(
+        AggregateId {
             entity: EntityType::Document.with_entity_str("doc_tx"),
             user_id: test_user_id.clone(),
         },
-        data: FrecencyData {
-            event_count: 1,
-            frecency_score: 100.0,
-            first_event: Utc::now(),
-            recent_events: VecDeque::new(),
-        },
-    };
+        FrecencyData::from_stored(1, 100.0, Utc::now(), VecDeque::new()),
+    );
 
     // Written on its own statement, after the claim committed.
     processor.set_aggregates(vec![aggregate]).await.unwrap();
@@ -988,18 +938,13 @@ async fn test_get_top_entities_mixed_supported_and_unsupported_chat_filters(pool
 
     // Create a chat aggregate
     let chat_id = "11111111-1111-1111-1111-111111111111";
-    let aggregate = AggregateFrecency {
-        id: AggregateId {
+    let aggregate = AggregateFrecency::from_stored(
+        AggregateId {
             entity: EntityType::Chat.with_entity_string(chat_id.to_string()),
             user_id: test_user_id.clone(),
         },
-        data: FrecencyData {
-            event_count: 5,
-            frecency_score: 75.0,
-            first_event: Utc::now(),
-            recent_events: VecDeque::new(),
-        },
-    };
+        FrecencyData::from_stored(5, 75.0, Utc::now(), VecDeque::new()),
+    );
     storage.set_aggregate(aggregate).await.unwrap();
 
     // Create filter with both chat_id (supported) and role (unsupported at frecency level)

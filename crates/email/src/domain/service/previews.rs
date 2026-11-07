@@ -10,7 +10,7 @@ use crate::domain::{
     ports::EmailRepo,
 };
 use filter_ast::Expr;
-use frecency::domain::{
+use frecency_core::{
     models::{AggregateId, FrecencyByIdsRequest, FrecencyData},
     ports::FrecencyQueryService,
 };
@@ -34,8 +34,7 @@ async fn get_frecency_scores<U: FrecencyQueryService>(
     include_frecency: bool,
     user_id: macro_user_id::user_id::MacroUserIdStr<'_>,
     ids: &[model_entity::Entity<'_>],
-) -> Result<HashMap<AggregateId<'static>, FrecencyData>, frecency::domain::models::FrecencyQueryErr>
-{
+) -> Result<HashMap<AggregateId<'static>, FrecencyData>, frecency_core::models::FrecencyQueryErr> {
     if include_frecency {
         service
             .get_frecencies_by_ids(FrecencyByIdsRequest { user_id, ids })

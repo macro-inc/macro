@@ -4,38 +4,17 @@ name = "frecency"
 publish = false
 version = "0.1.0"
 
+# Facade over frecency_core, frecency_inbound and frecency_outbound; see
+# src/lib.rs. Depend on the layer crate you need instead.
 [features]
-inbound = ["ports"]
-mock = ["dep:mockall"]
-outbound = ["ports"]
-ports = ["dep:tokio", "dep:tracing"]
-postgres = ["dep:recursion", "dep:serde_json", "dep:sqlx", "outbound"]
-
+inbound = ["dep:frecency_inbound", "ports"]
+mock = ["frecency_core/mock", "frecency_outbound?/mock"]
+outbound = ["dep:frecency_outbound", "ports"]
+ports = ["frecency_core/ports"]
+postgres = ["frecency_outbound/postgres", "outbound"]
 
 [dependencies]
-anyhow = { workspace = true }
-chrono = { workspace = true, features = ["serde"] }
-cowlike = { path = "../cowlike" }
-filter_ast = { path = "../filter_ast" }
-item_filters = { path = "../item_filters" }
-macro_user_id = { path = "../macro_user_id" }
-mockall = { workspace = true, optional = true }
-model-entity = { path = "../model-entity" }
-num-traits = { version = "0.2" }
-ordered-float = { workspace = true }
-recursion = { workspace = true, optional = true }
-serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
-sqlx = { workspace = true, optional = true }
-strum = { workspace = true, features = ["derive"] }
-thiserror = { workspace = true }
-tokio = { workspace = true, optional = true, features = ["sync", "time"] }
-tracing = { workspace = true, optional = true }
+frecency_core = { path = "../entities/frecency_core" }
+frecency_inbound = { path = "../entities/frecency_inbound", optional = true }
+frecency_outbound = { path = "../entities/frecency_outbound", optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-cool_asserts = "2"
-item_filters = { path = "../item_filters", features = ["mock"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
-serde_json = { workspace = true }
-uuid = { workspace = true }

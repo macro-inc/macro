@@ -85,6 +85,11 @@ impl<'a> EventRecord<'a> {
             timestamp: Utc::now(),
         }
     }
+    /// Rebuilds an [EventRecord] read back from storage, keeping its stored
+    /// timestamp.
+    pub fn from_stored(event: FrecencyEvent<'a>, timestamp: DateTime<Utc>) -> Self {
+        EventRecord { event, timestamp }
+    }
 }
 
 /// A simple record which records a timestamp for an event and the weight of that event
@@ -145,6 +150,13 @@ pub struct AggregateFrecency {
     pub data: FrecencyData,
 }
 
+impl AggregateFrecency {
+    /// Rebuilds an [AggregateFrecency] read back from storage.
+    pub fn from_stored(id: AggregateId<'static>, data: FrecencyData) -> Self {
+        AggregateFrecency { id, data }
+    }
+}
+
 /// struct which contains the frecency score for a given [AggregateId]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[non_exhaustive]
@@ -160,6 +172,23 @@ pub struct FrecencyData {
 
     /// A list of the most recents event timestamps and their weight
     pub recent_events: VecDeque<TimestampWeight>,
+}
+
+impl FrecencyData {
+    /// Rebuilds [FrecencyData] read back from storage.
+    pub fn from_stored(
+        event_count: usize,
+        frecency_score: f64,
+        first_event: DateTime<Utc>,
+        recent_events: VecDeque<TimestampWeight>,
+    ) -> Self {
+        FrecencyData {
+            event_count,
+            frecency_score,
+            first_event,
+            recent_events,
+        }
+    }
 }
 
 #[cfg(feature = "mock")]

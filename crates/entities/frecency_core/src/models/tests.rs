@@ -1,4 +1,4 @@
-use crate::domain::models::{
+use crate::models::{
     AggregateFrecency, AggregateId, EventRecord, FrecencyAction, FrecencyData, FrecencyEntity,
     FrecencyEvent, MAX_RECENT_EVENTS, TimestampWeight,
 };

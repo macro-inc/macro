@@ -1,4 +1,4 @@
-use frecency::domain::models::FrecencyQueryErr;
+use frecency_core::models::FrecencyQueryErr;
 use thiserror::Error;
 use uuid::Uuid;
 

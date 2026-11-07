@@ -34,7 +34,7 @@ use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
     ports::ForeignEntityListQuery,
 };
-use frecency::domain::{
+use frecency_core::{
     models::{
         AggregateFrecency, AggregateId, FrecencyByIdsRequest, FrecencyPageRequest, JoinFrecency,
     },
@@ -1293,7 +1293,7 @@ where
         &self,
         req: Option<GetEmailsRequest>,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
-        use frecency::domain::models::AggregateFrecency;
+        use frecency_core::models::AggregateFrecency;
 
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));

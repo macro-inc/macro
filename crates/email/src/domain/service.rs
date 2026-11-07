@@ -35,7 +35,7 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
-use frecency::domain::ports::FrecencyQueryService;
+use frecency_core::ports::FrecencyQueryService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
