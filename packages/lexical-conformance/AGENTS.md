@@ -31,6 +31,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 ## Gotchas
 
 - `--filter=<file>` is for recorder development only; release fixtures use the full suite.
+- Recorder unit tests require the pinned `target/lexical-upstream/` checkout; the differential oracle uses a separate disposable checkout.
 - The upstream pin is independent of the app's patched npm packages.
 - Macro tests run separately with markdown indent 2; upstream fixtures keep indent 4.
 - `--filter=macro:<file>` selects the worktree lexical-core pool.

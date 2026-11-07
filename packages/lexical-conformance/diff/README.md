@@ -24,18 +24,25 @@ second attached jsdom editor for view events. Hydration notifications are
 suppressed outside the command, then real input, compositionend and
 selectionchange events run upstream DOM-reading code. A pre-reconciliation
 observer copies node identities and dirty sets before view caches are written.
-This observer changes no model state. Hydration reconciles against the previous attached tree, so existing DOM nodes
-refresh typing caches while newly created nodes retain their defaults. Empty roots are synchronized with public root
-setters because upstream rejects empty `setEditorState` calls. Copying the attached state back to the
-headless editor clears only its DOM-owned root text cache, which headless updates
-cannot maintain; state installation also drops carried DOM update tags. R keeps a peer editor sharing its registry and key allocator and mirrors
-these setup operations outside its captured command. Fake timers provide a deterministic clock and drain all updates.
+This observer changes no model state. Hydration reconciles against the previous
+attached tree, so existing DOM nodes refresh typing caches while newly created
+nodes retain their defaults. Empty roots are synchronized with public root
+setters because upstream rejects empty `setEditorState` calls. Copying the
+attached state back to the headless editor clears only its DOM-owned root text
+cache, which headless updates cannot maintain; state installation also drops
+carried DOM update tags. R keeps a peer editor sharing its registry and key
+allocator and mirrors these setup operations outside its captured command.
+Fake timers provide a deterministic clock and drain all updates.
 Geometry stubs return empty rectangles; no layout movement is generated in v0.
 
 R uses `lexical_conformance_wasm` directly, never the shim. JSON, selection,
 root text, persistent key bijection, commit presence, dirty sets including
 intent, mutations, normalized keys and tags are compared after every command.
-No document fields are ignored. Transient identities also enter the bijection.
+No document fields are ignored. Transient identities also enter the bijection;
+destroyed and normalized-away identities retire, so matching key reuse on both
+sides still fails. Each long seed must execute every v0 command in at least 0.5%
+of its steps. The Node and web binding test initializes both optimized artifacts,
+checks independent handles and frees them in a finally block.
 
 S1 D-6/Q6 requires rejecting edits that split surrogate pairs. Generated edits
 therefore use scalar boundaries, including astral and ZWJ text; explicit selection
