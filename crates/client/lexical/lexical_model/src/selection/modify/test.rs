@@ -553,3 +553,25 @@ fn text_selection_and_caret_reads_allow_surrogate_interiors_but_edits_reject_the
     assert_eq!(tx.text_content(text), "a😀b");
     Ok(())
 }
+
+#[test]
+fn collapsing_an_empty_paragraph_selects_its_sibling_element() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let empty = tx.create(Paragraph::default())?;
+    let next = tx.create(Paragraph::default())?;
+    let inline = tx.create(Inline {})?;
+    let text = tx.create_text("link")?;
+    tx.append(inline, &[text.key()])?;
+    tx.append(next, &[inline.key()])?;
+    tx.append(NodeKey::ROOT, &[empty.key(), next.key()])?;
+    tx.select_start(empty)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![next.key()]);
+    assert_eq!(tx.anchor()?, Point::element(next, ChildIndex(0)));
+    assert_eq!(tx.focus()?, Point::element(next, ChildIndex(0)));
+    Ok(())
+}

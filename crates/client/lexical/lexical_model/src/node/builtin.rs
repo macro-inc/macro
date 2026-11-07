@@ -284,13 +284,13 @@ impl ElementNode for Paragraph {
                     .is_some_and(|text| text.text.as_str().trim().is_empty())
             });
         if empty {
-            if let Some(next) = tx.next_sibling(this) {
-                tx.select_start(next)?;
+            if tx.next_sibling(this).is_some() {
+                tx.select_next(this, None, None)?;
                 tx.remove(this, false)?;
                 return Ok(true);
             }
-            if let Some(prev) = tx.prev_sibling(this) {
-                tx.select_end(prev)?;
+            if tx.prev_sibling(this).is_some() {
+                tx.select_previous(this, None, None)?;
                 tx.remove(this, false)?;
                 return Ok(true);
             }
