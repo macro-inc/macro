@@ -719,18 +719,20 @@ impl Transaction<'_> {
                 after = key;
             }
         }
+        let last_inserted_block =
+            self.find_matching_parent(select, |state, key| state.is_block(key));
         if let Some(trailing) = trailing
-            && self.is_element(after)
-            && (self.can_merge_when_empty(trailing) || self.is_block(after))
+            && let Some(last_block) = last_inserted_block.filter(|key| self.is_element(*key))
+            && (self.can_merge_when_empty(trailing) || self.is_block(last))
         {
             let children = self.children_keys(trailing)?;
-            self.append(after, &children)?;
+            self.append(last_block, &children)?;
             self.remove(trailing, false)?;
         }
         if self.is_empty(block) {
             self.remove(block, false)?;
         }
-        if after != block
+        if last_inserted_block != Some(block)
             && let Some(last) = self.last_child(block)
             && self.is_line_break(last)
         {
