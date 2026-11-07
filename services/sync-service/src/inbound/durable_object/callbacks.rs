@@ -6,90 +6,20 @@ impl SyncSession<'_> {
         ws: WebSocket,
         msg: WebSocketIncomingMessage,
     ) -> Result<()> {
-        if self.source_blocked().await? {
-            ws.close(Some(1008), Some("session frozen or retired"))?;
-            return Ok(());
-        }
-        if !self.validate_surface_sockets(Some(&ws)).await? {
-            return Ok(());
-        }
-        use sync_protocol::PING;
-        let binary_message = match msg {
-            WebSocketIncomingMessage::String(message) => {
-                // Heartbeat: deliberately unspanned to keep it out of traces.
-                if message == PING {
-                    self.room.heartbeat(&ws);
-                } else {
-                    return worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
-                        warn!("Received unknown 'String' message: {message:?}");
-                        Ok(())
-                    })
-                    .await;
-                }
-                return Ok(());
-            }
-            WebSocketIncomingMessage::Binary(bm) => bm,
+        use sync_server_core::domain::room::InboundFrame;
+        let frame = match msg {
+            WebSocketIncomingMessage::String(text) => InboundFrame::Text(text),
+            WebSocketIncomingMessage::Binary(bytes) => InboundFrame::Binary(bytes),
         };
-        let ws_id = get_ws_id(&self.state, &ws)?;
-        let Some(binary_message) = Socket::receive(&mut self.inbound, &ws_id, &binary_message)?
-        else {
-            return Ok(());
-        };
-        let env = self.env.clone();
-        let runtime = self.state.clone();
-        worker_rs_otel::scope(&env, runtime.as_ref(), async {
-            let mut telemetry = protocol::InboundMessageTelemetry::new(binary_message.len());
-
-            let res: Result<()> = async {
-                let document_id = self.document_id().await.inspect_err(|_| {
-                    telemetry.record_error_stage("document_context");
-                })?;
-                let ws_id = get_ws_id_from_tags(&self.state.get_tags(&ws)).ok();
-                telemetry.record_context(&document_id, ws_id);
-
-                let message = protocol::deserialize_message(&binary_message).inspect_err(|_| {
-                    telemetry.record_message_type("invalid");
-                    telemetry.record_error_stage("deserialize");
-                })?;
-                telemetry.record_message_type(protocol::message_type(&message));
-
-                let document_state = self.document_state().await?;
-                self.session_storage().await?;
-                protocol::process_message(
-                    &self.socket_for(&ws),
-                    &document_id,
-                    &document_state,
-                    message,
-                    self,
-                    &mut telemetry,
-                )
+        let heartbeat = matches!(&frame, InboundFrame::Text(text) if text == sync_protocol::PING);
+        let handled = self.room.on_frame(&ws, frame);
+        if heartbeat {
+            handled.await.map_err(room_error)
+        } else {
+            worker_rs_otel::scope(&self.env, self.state.as_ref(), handled)
                 .await
-                .inspect_err(|_| {
-                    telemetry.record_error_stage("process");
-                })
-                .context("failed to process websocket message")?;
-
-                bump_alarm(&self.state)
-                    .await
-                    .inspect_err(|_| {
-                        telemetry.record_error_stage("alarm");
-                    })
-                    .context("failed to keep document alive")?;
-
-                Ok(())
-            }
-            .await;
-
-            if let Err(error) = &res {
-                let span = telemetry.error_span();
-                {
-                    let _entered = span.enter();
-                    tracing::error!(error = ?error, "failed to handle websocket message");
-                }
-            }
-            res
-        })
-        .await
+                .map_err(room_error)
+        }
     }
 
     /// Save document if needed
@@ -164,7 +94,7 @@ impl SyncSession<'_> {
         // snapshot to every client on every alarm tick only burned bandwidth
         // and stalled clients on large documents.
         if !self.state.get_websockets().is_empty() {
-            bump_alarm(&self.state)
+            self.room.bump_alarm()
                 .await
                 .context("failed to keep document alive")?;
         } else {

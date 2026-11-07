@@ -1,20 +1,20 @@
-//! Native replay starts empty; callbacks are enabled only after moving into core.
+//! Native replay enables callbacks only after their implementation moves into core.
 use crate::{
     ports::{Effect, SimNow, SimPorts},
     transcript::{ServerInput, Transcript},
 };
 use futures::FutureExt;
 use sync_protocol::time::WallDuration;
-use sync_server_core::domain::{
-    ports::{Connections, RoomPorts},
-    room::{Room, RoomConfig},
-};
+use sync_server_core::domain::room::{InboundFrame, Room, RoomConfig};
 mod golden;
 
 /// Golden fixtures with every callback implemented by the native room.
 /// Add names with the callback extraction commits starting at C8.
-pub const ENABLED: &[&str] =
-    &["document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl"];
+pub const ENABLED: &[&str] = &[
+    "document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl",
+    "document_sync.test/document_sync_tests_should_be_able_to_load_initial_sync_into_loro.jsonl",
+    "websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl",
+];
 
 /// Parsing, unsupported-callback and parity failures stay distinguishable.
 #[derive(Debug, thiserror::Error)]
@@ -78,8 +78,9 @@ impl SimRoom {
             | ServerInput::AdvanceClock(_)
             | ServerInput::RuntimeCloses(_)
             | ServerInput::Connect { .. }
-            | ServerInput::Close(_) => {}
-            ServerInput::Text { text, .. } if text == sync_protocol::PING => {}
+            | ServerInput::Close(_)
+            | ServerInput::Text { .. }
+            | ServerInput::Binary { .. } => {}
             other => return Err(ReplayError::Unsupported(other.kind().into())),
         }
         match input {
@@ -99,12 +100,15 @@ impl SimRoom {
                             self.room.connect(grant, key).await?;
                         }
                         ServerInput::Close(socket) => self.room.on_close(&socket).await?,
-                        ServerInput::Text { socket, text } if text == sync_protocol::PING => {
-                            if self.room.source_blocked().await? {
-                                self.room.ports().connections().close(&socket, sync_server_core::domain::ports::CloseReason::SessionFrozenOrRetired).map_err(sync_server_core::domain::room::RoomError::runtime_connections)?;
-                            } else if self.room.validate_surface_sockets(Some(&socket)).await? {
-                                self.room.heartbeat(&socket);
-                            }
+                        ServerInput::Text { socket, text } => {
+                            self.room
+                                .on_frame(&socket, InboundFrame::Text(text))
+                                .await?
+                        }
+                        ServerInput::Binary { socket, bytes } => {
+                            self.room
+                                .on_frame(&socket, InboundFrame::Binary(bytes))
+                                .await?
                         }
                         _ => unreachable!("unsupported inputs rejected before polling"),
                     }
@@ -131,7 +135,7 @@ impl SimRoom {
     }
 }
 /// Replay enabled recordings through real native Room callbacks.
-/// C7 intentionally enables none: a successful no-op must never masquerade as parity.
+/// Unsupported callbacks fail explicitly rather than masquerading as parity.
 pub fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError> {
     if !ENABLED.contains(&transcript.name.as_str()) {
         return Err(ReplayError::NotEnabled(transcript.name.clone()));

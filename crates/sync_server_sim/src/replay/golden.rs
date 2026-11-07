@@ -171,23 +171,14 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
         let room = rooms
             .entry(recorded.room.clone())
             .or_insert_with(|| SimRoom::new(SimPorts::new()));
+        let callback = serde_json::json!(recorded.callback);
         let raw = transcript
             .records
             .iter()
             .find(|r| {
-                r["room"] == recorded.room
-                    && r.get("in").is_some()
-                    && r["unix_ms"] == recorded.now.unix_ms
-                    && match &recorded.input {
-                        ServerInput::NewObject => r["in"] == "new",
-                        ServerInput::Http(_) => r["in"] == "fetch",
-                        ServerInput::Close(_) => r["in"] == "close",
-                        ServerInput::Text { .. } => r["in"] == "message",
-                        _ => false,
-                    }
+                r["room"] == recorded.room && r["callback"] == callback && r.get("in").is_some()
             })
             .ok_or_else(|| invalid("missing callback"))?;
-        let callback = raw["callback"].clone();
         let records: Vec<_> = transcript
             .records
             .iter()

@@ -17,14 +17,14 @@ use loro::ExportMode;
 use macro_sync_service_jwt::session::SessionKind;
 use tracing::{Instrument, debug, error, info, instrument, trace, warn};
 use worker::{
-    Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody, ResponseBuilder,
-    Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage, durable_object,
+    DurableObject, Env, Error, Method, Request, Response, ResponseBody, ResponseBuilder, Result,
+    State, WebSocket, WebSocketIncomingMessage, durable_object,
 };
 
 use crate::{
-    auth::{AuthToken, WriteAccess},
+    auth::AuthToken,
     constants::{SYSTEM_AUTHOR_ID, USER_PEER_D1_BINDING},
-    d1::{get_user_id_from_peer_id, insert_missing_user_mappings, insert_user_mapping},
+    d1::{get_user_id_from_peer_id, insert_missing_user_mappings},
     domain::document::{DocumentAttribution, writing_peers},
     dss_internal::InteractionReason,
     error::ResultExt,
@@ -54,7 +54,6 @@ mod callbacks;
 pub(crate) mod document_api;
 mod document_delete;
 mod document_effects;
-mod peer_ids;
 mod surface_api;
 pub(crate) mod surface_migration;
 
@@ -110,35 +109,10 @@ impl std::ops::DerefMut for SyncSession<'_> {
 pub struct Wsm<'a, 'room> {
     dss: &'a mut SyncSession<'room>,
     ws: &'a WebSocket,
-    ws_id: Option<String>,
 }
 impl<'a, 'room> Wsm<'a, 'room> {
     pub fn new(dss: &'a mut SyncSession<'room>, ws: &'a WebSocket) -> Self {
-        Self {
-            dss,
-            ws,
-            ws_id: None,
-        }
-    }
-    fn get_ws_id(&mut self) -> Result<&str> {
-        if self.ws_id.is_none() {
-            let tags = self.dss.state.get_tags(self.ws);
-            let ws_id = get_ws_id_from_tags(&tags)?;
-            self.ws_id = Some(ws_id);
-        }
-        Ok(self.ws_id.as_ref().unwrap())
-    }
-    async fn maybe_update_ws_meta_map(&mut self) -> Result<()> {
-        let id = sync_server_core::domain::socket::WebSocketId::from_tags(&[self
-            .get_ws_id()?
-            .to_owned()])
-        .map_err(|e| Error::from(e.to_string()))?;
-        self.dss
-            .room
-            .connection_metadata_by_id(&id)
-            .await
-            .map_err(room_error)?;
-        Ok(())
+        Self { dss, ws }
     }
     pub async fn get_peer_ids(&mut self, include_ai: bool) -> Result<Vec<u64>> {
         self.dss
@@ -147,89 +121,10 @@ impl<'a, 'room> Wsm<'a, 'room> {
             .await
             .map_err(room_error)
     }
-
-    pub async fn edit_attribution(&mut self) -> Result<Option<DocumentAttribution>> {
-        self.dss
-            .room
-            .connection_attribution(self.ws)
-            .await
-            .map_err(room_error)
-    }
-
-    pub async fn write_access(&mut self) -> Result<WriteAccess> {
-        self.dss
-            .room
-            .connection_write_access(self.ws)
-            .await
-            .map_err(room_error)
-    }
-
-    pub async fn add_new_peerid(&mut self, peerid: u64, document_id: &str) -> Result<()> {
-        self.maybe_update_ws_meta_map().await?;
-
-        let ws_id = self.get_ws_id()?.to_string();
-
-        let new_peer = {
-            let wmm = &mut self.dss.connections;
-            let meta = wmm
-                .get_mut(&ws_id)
-                .ok_or(Error::from("missing ws metadata"))?;
-
-            if meta.peer_ids.insert(peerid) {
-                Some(meta.clone())
-            } else {
-                None
-            }
-        };
-        if let Some(meta) = new_peer {
-            self.dss.state.storage().put(&ws_id, &meta).await?;
-            // if user is not-anon
-            if let Some(user_id) = meta.user_id {
-                let db = self.dss.env.d1(USER_PEER_D1_BINDING)?;
-                let span = tracing::info_span!(
-                    "peer.register",
-                    document.id = document_id,
-                    peer.id = peerid
-                );
-                insert_user_mapping(db, &user_id, meta.actor.as_deref(), peerid, document_id)
-                    .instrument(span)
-                    .await?;
-            }
-        }
-        Ok(())
-    }
 }
 pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
     let tags = state.get_tags(ws);
     get_ws_id_from_tags(&tags)
-}
-
-/// Schedule an alarm 5 seconds from now.
-async fn bump_alarm(state: &State) -> Result<()> {
-    let current_alarm = state.storage().get_alarm().await?;
-
-    if let Some(current_alarm) = current_alarm
-        && current_alarm as f64 > {
-            let now = Date::now().as_millis();
-            #[cfg(feature = "transcript")]
-            crate::transcript::clock("alarm_compare_ms", now);
-            now as f64
-        }
-    {
-        return Ok(());
-    }
-
-    #[cfg(feature = "transcript")]
-    let scheduled = {
-        let now = Date::now().as_millis();
-        crate::transcript::clock("alarm_set_ms", now);
-        ScheduledTime::new(worker::js_sys::Date::new(&((now + 5000) as f64).into()))
-    };
-    #[cfg(not(feature = "transcript"))]
-    let scheduled = ScheduledTime::from(5000);
-    state.storage().set_alarm(scheduled).await?;
-
-    Ok(())
 }
 
 fn take_editors(editors: &mut BTreeSet<DocumentAttribution>) -> Vec<DocumentAttribution> {
@@ -237,10 +132,6 @@ fn take_editors(editors: &mut BTreeSet<DocumentAttribution>) -> Vec<DocumentAttr
 }
 
 impl SyncSession<'_> {
-    pub(crate) fn env(&self) -> &Env {
-        &self.env
-    }
-
     pub(crate) fn socket_for(&self, ws: &WebSocket) -> Socket {
         Socket::new(ws.clone())
     }
@@ -260,13 +151,6 @@ impl SyncSession<'_> {
         if let Some(attribution) = attribution {
             self.pending_editors.insert(attribution.clone());
         }
-    }
-
-    pub fn push_blame_events(&mut self, events: Vec<crate::d1::BlameEvent>) {
-        if events.is_empty() {
-            return;
-        }
-        self.pending_blame.extend(events);
     }
 
     /// Drain the pending blame buffer and write all events via a single D1

@@ -1,4 +1,4 @@
-pub use crate::domain::permissions::{AccessLevel, AuthToken, WriteAccess};
+pub use crate::domain::permissions::{AccessLevel, AuthToken};
 use macro_sync_service_jwt::session::{
     SessionIdentity, SessionKind, SurfaceAccessLevel, decode_surface,
 };

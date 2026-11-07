@@ -12,6 +12,7 @@ updates over WebSocket.
 - `README.md`: project structure, Durable Object lifecycle (in-memory vs
   persistent state, the keep-alive alarm), JWT auth, and Bebop codegen. Read
   it before changing this service.
+- `../../crates/sync_server_core/src/domain/room/frame.rs`: inbound frame policy and message telemetry, including the fail-closed HTTP comment gate.
 - `src/inbound/durable_object.rs` + `src/inbound/durable_object/document_api.rs`: the Durable
   Object — WebSocket handling, loro document state, alarm-driven snapshotting.
 - `src/inbound/durable_object/surface_api.rs`, `surface_migration.rs`: non-document

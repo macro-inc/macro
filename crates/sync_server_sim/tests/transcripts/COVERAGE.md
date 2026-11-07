@@ -122,3 +122,13 @@ notification destination, so its observable publication is the scheduling call;
 core fake tests separately assert FirstJoin/LastLeave payload selection.
 The four C8 invariant tests live in `sync_server_core::domain::room::test`.
 Other callbacks remain explicitly unsupported until their extraction commits.
+
+C9 additionally enables the websocket ping and initial-sync import fixtures.
+`SimRoom::step` dispatches text and binary messages to `Room::on_frame`;
+callback IDs identify replay groups independently of timestamp equality. The
+core's frame invariant tests cover persistence/D1/ACK order and failures, viewer
+refusal, commenter and editor comment-gate refusal, exact RequestSince VV bytes,
+broadcast sender exclusion and continuation, and ping's identity requirement.
+Fixtures that also contain alarms or HTTP initialization remain disabled until
+those callbacks are extracted; their complete Worker re-records are compared
+after every commit.
