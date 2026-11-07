@@ -91,6 +91,9 @@ workspace-members = [
     # soup-filter-cache-adapter -> cache-wasm) and must stay wasm-safe.
     "model_owner",
     "bot_id",
+    # Leaf type crates under crates/types/: workspace-hack would make them
+    # wait for, and compile, its heavy union (rig-core, async-graphql, ...).
+    "entity_basic_types",
     "macro_uuid",
     "non_empty",
     "cowlike",

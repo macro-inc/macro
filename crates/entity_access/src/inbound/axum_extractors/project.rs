@@ -26,7 +26,7 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model::project::BasicProject;
+use entity_basic_types::BasicProject;
 
 /// Validates that the user has at least the required access level to a project.
 ///

@@ -24,7 +24,7 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model::chat::ChatBasic;
+use entity_basic_types::ChatBasic;
 
 /// Validates that the user has at least the required access level to a chat.
 ///

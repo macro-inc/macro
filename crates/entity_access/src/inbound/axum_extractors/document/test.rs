@@ -18,6 +18,7 @@ use axum::{
     http::{Request, StatusCode, header},
     response::IntoResponse,
 };
+use entity_basic_types::DocumentBasic;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
@@ -28,7 +29,6 @@ use macro_authorization::{
     LEGACY_DSS_INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::DocumentBasic;
 use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;

@@ -40,16 +40,7 @@ pub struct Chat {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Returns basic information of a chat used for some db queries
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
-pub struct ChatBasic {
-    pub id: String,
-    pub name: String,
-    /// Who the chat belongs to
-    pub user_id: Owner,
-    pub project_id: Option<String>,
-    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-}
+pub use entity_basic_types::ChatBasic;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, ToSchema, Debug, Clone, Display, sqlx::Type)]
 #[sqlx(type_name = "CloudStorageType", rename_all = "lowercase")]

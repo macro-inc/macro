@@ -12,8 +12,8 @@ required-features = ["explain_binary"]
 [features]
 axum = [
   "dep:axum",
+  "dep:entity_basic_types",
   "dep:macro_authorization",
-  "dep:model",
   "dep:model-error-response",
 ]
 default = ["axum", "inbound", "outbound", "ports"]
@@ -49,6 +49,7 @@ models_permissions = { path = "../models_permissions" }
 
 clap = { workspace = true, optional = true }
 database_env_vars = { path = "../database_env_vars", optional = true }
+entity_basic_types = { path = "../types/entity_basic_types", optional = true }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 
 # Async runtime (for ports)
@@ -57,7 +58,6 @@ tokio = { workspace = true, optional = true }
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
-model = { path = "../model", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_owner = { path = "../model_owner" }
 

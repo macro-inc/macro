@@ -3,10 +3,6 @@
   "closures": {
     "access_requests": [
       "crates/access_requests",
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -14,7 +10,6 @@
       "crates/document_sub_type",
       "crates/entity_access",
       "crates/entity_access_db_utils",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -24,19 +19,15 @@
       "crates/macro_env_var",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "account_manager": [
@@ -110,6 +101,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_api_key",
       "crates/workspace-hack"
     ],
@@ -243,6 +235,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "agent_changes": [
@@ -340,6 +333,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "agent_code_mode": [
@@ -462,6 +456,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -598,6 +593,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -748,6 +744,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -953,6 +950,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/universal_input",
       "crates/upstream_error",
@@ -1146,6 +1144,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -1153,12 +1152,9 @@
       "crates/workspace-hack"
     ],
     "agent_preview": [
-      "crates/agent",
       "crates/agent_preview",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -1178,19 +1174,16 @@
       "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "agent_runtime_protocol": [
@@ -1288,6 +1281,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "agent_session_realtime": [
@@ -1382,6 +1376,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "agent_trigger": [
@@ -1482,6 +1477,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "agent_trigger_service": [
@@ -1589,6 +1585,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack",
       "services/agent_trigger_service"
@@ -1675,6 +1672,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "ai_billing_cli": [
@@ -1759,6 +1757,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "tooling/ai_billing_cli"
     ],
@@ -1945,6 +1944,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2129,6 +2129,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2251,6 +2252,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "attachment": [
@@ -2402,6 +2404,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -2563,6 +2566,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -2602,6 +2606,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "bot_id": [
@@ -2685,6 +2690,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "broadcast": [
@@ -2830,6 +2836,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -2917,6 +2924,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "calendar_scheduling": [
@@ -3005,6 +3013,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "calendar_service": [
@@ -3103,6 +3112,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/calendar_service"
     ],
@@ -3179,6 +3189,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "call_recording_preview_handler": [
@@ -3368,6 +3379,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -3375,10 +3387,6 @@
       "crates/workspace-hack"
     ],
     "channel_labels": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/channel_labels",
@@ -3386,7 +3394,6 @@
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/entity_access",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -3395,20 +3402,15 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
-      "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "channel_sender": [
@@ -3488,6 +3490,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "chat": [
@@ -3540,6 +3543,7 @@
       "crates/remote_env_var",
       "crates/roles_and_permissions",
       "crates/share_permission_db_utils",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "claude_fold": [
@@ -3654,6 +3658,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "codex_connection": [
@@ -3749,6 +3754,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "codex_fold": [
@@ -3887,6 +3893,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/webhook",
       "crates/webhook_signature",
@@ -3976,6 +3983,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "collab_surface": [
@@ -4054,6 +4062,7 @@
       "crates/sync_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -4128,6 +4137,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "complete_graph": [
@@ -4302,6 +4312,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -4314,10 +4325,6 @@
       "crates/workspace-hack"
     ],
     "connection": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/connection",
@@ -4327,7 +4334,6 @@
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/entity_access",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -4337,20 +4343,15 @@
       "crates/macro_env_var",
       "crates/macro_tower_layers",
       "crates/macro_user_id",
-      "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "connection_gateway": [
@@ -4402,6 +4403,7 @@
       "crates/remote_env_var",
       "crates/secretsmanager_client",
       "crates/stream",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/connection_gateway"
     ],
@@ -4551,6 +4553,7 @@
       "crates/sqs_client",
       "crates/sqs_worker",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/convert_service"
@@ -4636,6 +4639,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -4735,6 +4739,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "database_env_vars": [
@@ -4760,11 +4765,8 @@
     ],
     "database_webhooks": [
       "crates/activity",
-      "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
@@ -4801,14 +4803,12 @@
       "crates/macro_uuid",
       "crates/maybe_send",
       "crates/mention_utils",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_notifications",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_databases",
       "crates/models_entity_access_management",
       "crates/models_pagination",
@@ -4817,21 +4817,18 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/prompt",
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "databases": [
       "crates/activity",
-      "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
@@ -4867,14 +4864,12 @@
       "crates/macro_uuid",
       "crates/maybe_send",
       "crates/mention_utils",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_notifications",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_databases",
       "crates/models_entity_access_management",
       "crates/models_pagination",
@@ -4883,12 +4878,12 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/prompt",
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "databases_sql": [
@@ -5009,6 +5004,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -5179,6 +5175,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/deleted_item_poller"
@@ -5430,6 +5427,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -5475,6 +5473,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "document_sub_type": [
@@ -5513,6 +5512,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/s3_key",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/document_text_extractor"
     ],
@@ -5631,6 +5631,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/document_upload_finalizer_handler"
@@ -5748,6 +5749,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -5832,6 +5834,7 @@
       "crates/share_permission_db_utils",
       "crates/sqs_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/docx_unzip_handler"
@@ -5948,6 +5951,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -6030,6 +6034,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "email_db_client": [
@@ -6180,6 +6185,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/universal_input",
       "crates/upstream_error",
@@ -6262,6 +6268,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/sqs_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/email_refresh_handler"
     ],
@@ -6363,6 +6370,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack",
       "services/email_scheduled_handler"
@@ -6480,6 +6488,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -6583,6 +6592,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -6624,6 +6634,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/sqs_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/email_sfs_delete_handler"
     ],
@@ -6694,6 +6705,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/email_suppression_handler"
@@ -6715,17 +6727,12 @@
       "crates/workspace-hack"
     ],
     "entity_access": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/entity_access",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -6734,20 +6741,15 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
-      "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "entity_access_db_utils": [
@@ -6777,11 +6779,16 @@
       "crates/models_permissions",
       "crates/workspace-hack"
     ],
+    "entity_basic_types": [
+      "crates/bot_id",
+      "crates/cowlike",
+      "crates/document_sub_type",
+      "crates/macro_user_id",
+      "crates/model_file_type",
+      "crates/model_owner",
+      "crates/types/entity_basic_types"
+    ],
     "entity_mutation": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -6789,7 +6796,6 @@
       "crates/document_sub_type",
       "crates/entity_access",
       "crates/entity_mutation",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -6798,20 +6804,15 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
-      "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "entity_registry": [
@@ -6861,10 +6862,6 @@
       "crates/workspace-hack"
     ],
     "external_chat": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -6873,7 +6870,6 @@
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/external_chat",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -6883,27 +6879,20 @@
       "crates/macro_env_var",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "favorites": [
-      "crates/agent",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -6920,20 +6909,15 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
-      "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "feature_flags": [
@@ -6949,10 +6933,6 @@
       "crates/filter_ast"
     ],
     "foreign_entity": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -6961,7 +6941,6 @@
       "crates/entity_access",
       "crates/filter_ast",
       "crates/foreign_entity",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/item_filters",
@@ -6972,20 +6951,18 @@
       "crates/macro_env_var",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
       "crates/notification_state",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "forms": [
@@ -7095,6 +7072,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -7246,16 +7224,13 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
     "github_pull_requests": [
-      "crates/agent",
       "crates/agent_correlation",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -7264,7 +7239,6 @@
       "crates/entity_access",
       "crates/filter_ast",
       "crates/foreign_entity",
-      "crates/genai_telemetry",
       "crates/git_patch",
       "crates/github_pull_requests",
       "crates/harness_id",
@@ -7280,20 +7254,18 @@
       "crates/macro_event_topics",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
       "crates/notification_state",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "gmail_client": [
@@ -7339,6 +7311,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "granola_sync": [
@@ -7418,15 +7391,13 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "graphql_activity": [
       "crates/activity",
-      "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
@@ -7451,22 +7422,19 @@
       "crates/macro_event_broker",
       "crates/macro_event_topics",
       "crates/macro_user_id",
-      "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/models_properties",
       "crates/non_empty",
       "crates/notification_state",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "graphql_calendar": [
@@ -7547,6 +7515,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "graphql_channel": [
@@ -7621,6 +7590,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "graphql_common": [
@@ -7730,6 +7700,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -7883,6 +7854,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -7986,6 +7958,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -8138,6 +8111,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8292,6 +8266,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8446,6 +8421,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8646,22 +8622,18 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
     "graphql_permission": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/entity_access",
-      "crates/genai_telemetry",
       "crates/graphql_permission",
       "crates/harness_id",
       "crates/harness_token",
@@ -8671,29 +8643,21 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
-      "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "graphql_properties": [
       "crates/activity",
-      "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
@@ -8724,14 +8688,12 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_notifications",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
@@ -8739,11 +8701,11 @@
       "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/prompt",
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "graphql_registered_work": [
@@ -8896,6 +8858,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9035,6 +8998,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -9188,6 +9152,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9370,6 +9335,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",
@@ -9509,6 +9475,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "image_optimizer": [
@@ -9592,6 +9559,7 @@
       "crates/secretsmanager_client",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/image_proxy_service"
@@ -9696,6 +9664,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "import_jira": [
@@ -9794,11 +9763,8 @@
     ],
     "initiative": [
       "crates/activity",
-      "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
@@ -9826,27 +9792,24 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_notifications",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/models_properties",
-      "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/prompt",
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "initiative_description": [
@@ -9926,6 +9889,7 @@
       "crates/sync_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10074,6 +10038,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "kafka_util": [
@@ -10157,6 +10122,7 @@
       "crates/share_permission_db_utils",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "lexical_mention_extractor": [
@@ -10225,6 +10191,7 @@
       "crates/share_permission_db_utils",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "load-test": [
@@ -10373,6 +10340,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10480,6 +10448,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10530,6 +10499,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "macro_sync_service_jwt": [
@@ -10582,6 +10552,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/upstream_error",
       "crates/workspace-hack",
       "services/mcp_auth_proxy"
@@ -10618,6 +10589,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "mcp_select": [
@@ -10657,6 +10629,7 @@
       "crates/pipedream_mcp",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "mcp_toolset": [
@@ -10804,6 +10777,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -10877,6 +10851,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "mobile_welcome_email_db_client": [
@@ -10913,6 +10888,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "model-entity": [
@@ -11143,6 +11119,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -11252,6 +11229,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -11332,6 +11310,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "native_app_server": [
@@ -11558,6 +11537,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -11711,6 +11691,7 @@
       "crates/share_permission_db_utils",
       "crates/sns_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/notification_service"
@@ -11752,6 +11733,7 @@
       "crates/onboarding",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "opensearch_client": [
@@ -11803,6 +11785,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/sqs_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/organization_retention_handler"
     ],
@@ -11844,6 +11827,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/sqs_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/organization_retention_trigger"
     ],
@@ -11990,6 +11974,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -11999,11 +11984,8 @@
     ],
     "properties": [
       "crates/activity",
-      "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
@@ -12030,35 +12012,29 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_notifications",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/models_properties",
-      "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/prompt",
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "properties_service": [
       "crates/activity",
-      "crates/agent",
       "crates/agent_correlation",
       "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
@@ -12085,27 +12061,24 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_notifications",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/models_properties",
-      "crates/non_empty",
       "crates/notification",
       "crates/notification_state",
-      "crates/prompt",
       "crates/properties",
       "crates/properties_service",
       "crates/rate_limit",
       "crates/remote_env_var",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "psd_engine": [
@@ -12252,6 +12225,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -12342,6 +12316,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "routines": [
@@ -12419,6 +12394,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "s3_client": [
@@ -12572,6 +12548,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -12722,6 +12699,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -12848,6 +12826,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -12956,6 +12935,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -12994,6 +12974,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/s3_key",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/search_upload_handler"
     ],
@@ -13096,6 +13077,7 @@
       "crates/sync_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -13143,6 +13125,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/sha_cleanup_worker"
     ],
@@ -13312,6 +13295,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -13420,6 +13404,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/slack_import_worker"
     ],
@@ -13525,6 +13510,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "sns_client": [
@@ -13648,6 +13634,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -13775,6 +13762,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -13898,6 +13886,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -14035,6 +14024,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -14074,6 +14064,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/sqs_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "sqs_worker": [
@@ -14129,6 +14120,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/secretsmanager_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/static_file_service"
     ],
@@ -14192,6 +14184,7 @@
       "crates/remote_env_var",
       "crates/sync_service",
       "crates/sync_service_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "sync_service_hex": [
@@ -14316,6 +14309,7 @@
       "crates/system_properties",
       "crates/task_dedup",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "teams": [
@@ -14398,6 +14392,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack"
     ],
     "trigger_context": [
@@ -14509,6 +14504,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/universal_input",
       "crates/workspace-hack"
     ],
@@ -14556,6 +14552,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/sqs_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/upload_extractor_lambda_handler"
     ],
@@ -14598,6 +14595,7 @@
       "crates/remote_env_var",
       "crates/s3_key",
       "crates/sqs_client",
+      "crates/types/entity_basic_types",
       "crates/workspace-hack",
       "services/upload_extractor_lambda_trigger"
     ],
@@ -14706,6 +14704,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/user_link_cleanup_handler"
@@ -14796,6 +14795,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/teams",
+      "crates/types/entity_basic_types",
       "crates/web_search",
       "crates/workspace-hack"
     ],
@@ -14920,6 +14920,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/user_quota",
       "crates/webhook",
       "crates/webhook_signature",
@@ -14930,10 +14931,6 @@
       "crates/workspace-hack"
     ],
     "whatsapp_e2e": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -14945,7 +14942,6 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/external_chat",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -14959,20 +14955,16 @@
       "crates/macro_service_urls",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/types/entity_basic_types",
       "crates/whatsapp_e2e",
       "crates/whatsapp_fake_server",
       "crates/whatsapp_linked",
@@ -14991,10 +14983,6 @@
       "crates/workspace-hack"
     ],
     "whatsapp_linked": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -15006,7 +14994,6 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/external_chat",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -15016,28 +15003,20 @@
       "crates/macro_env_var",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/types/entity_basic_types",
       "crates/whatsapp_linked",
       "crates/workspace-hack"
     ],
     "whatsapp_session_service": [
-      "crates/agent",
-      "crates/ai_toolset",
-      "crates/ai_usage",
-      "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -15049,7 +15028,6 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/external_chat",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -15063,20 +15041,16 @@
       "crates/macro_service_urls",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
       "crates/model_owner",
       "crates/model_user",
-      "crates/models_bulk_upload",
       "crates/models_entity_access_management",
-      "crates/models_pagination",
       "crates/models_permissions",
-      "crates/non_empty",
-      "crates/prompt",
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
+      "crates/types/entity_basic_types",
       "crates/whatsapp_linked",
       "crates/whatsapp_store_pg",
       "crates/whatsmeow",
@@ -15247,6 +15221,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/entity_basic_types",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",
