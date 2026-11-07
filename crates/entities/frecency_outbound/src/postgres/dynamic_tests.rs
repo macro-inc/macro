@@ -1,9 +1,9 @@
 //! Tests for dynamic frecency filtering
 
 use super::*;
-use crate::domain::models::{AggregateId, FrecencyData};
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
+use frecency_core::models::{AggregateId, FrecencyData};
 use item_filters::ast::{date::DateLiteral, document::DocumentLiteral};
 use item_filters::{
     ChatFilters, DocumentFilters, EntityFilters, NotificationFilters, ProjectFilters, TaskFilters,
@@ -48,18 +48,13 @@ async fn date_literals_match_nothing_and_preserve_negation(pool: PgPool) {
     let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
     let id = Uuid::from_u128(1);
     storage
-        .set_aggregate(AggregateFrecency {
-            id: AggregateId {
+        .set_aggregate(AggregateFrecency::from_stored(
+            AggregateId {
                 entity: EntityType::Document.with_entity_string(id.to_string()),
                 user_id: user.clone(),
             },
-            data: FrecencyData {
-                event_count: 1,
-                frecency_score: 100.0,
-                first_event: Utc::now(),
-                recent_events: VecDeque::new(),
-            },
-        })
+            FrecencyData::from_stored(1, 100.0, Utc::now(), VecDeque::new()),
+        ))
         .await
         .unwrap();
     sqlx::query!(
@@ -110,18 +105,13 @@ async fn test_dynamic_filter_by_document_ids(pool: PgPool) {
         (chat_id_1.to_string(), EntityType::Chat, 90.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: entity_type.with_entity_string(id.clone()),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -170,18 +160,13 @@ async fn test_dynamic_filter_by_chat_ids(pool: PgPool) {
         (doc_id_1.to_string(), EntityType::Document, 90.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: entity_type.with_entity_string(id.clone()),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -267,18 +252,13 @@ async fn test_dynamic_filter_by_project_ids(pool: PgPool) {
         (doc_id_1.to_string(), EntityType::Document, 90.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: entity_type.with_entity_string(id.clone()),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -363,18 +343,13 @@ async fn test_dynamic_filter_by_project_ids_include_root(pool: PgPool) {
         (unrelated_project_id.to_string(), 80.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Project.with_entity_string(id.clone()),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -426,18 +401,13 @@ async fn test_dynamic_filter_multiple_document_ids(pool: PgPool) {
         (doc_id_3.to_string(), EntityType::Document, 80.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: entity_type.with_entity_string(id.clone()),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -488,18 +458,13 @@ async fn test_dynamic_filter_mixed_entity_types(pool: PgPool) {
         (doc_id_2.to_string(), EntityType::Document, 70.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: entity_type.with_entity_string(id.clone()),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -556,18 +521,13 @@ async fn test_dynamic_filter_with_from_score_pagination(pool: PgPool) {
         (chat_id_1.to_string(), EntityType::Chat, 90.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: entity_type.with_entity_string(id.clone()),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -619,18 +579,13 @@ async fn test_dynamic_filter_no_matches(pool: PgPool) {
     let non_existent_id = Uuid::new_v4();
 
     storage
-        .set_aggregate(AggregateFrecency {
-            id: AggregateId {
+        .set_aggregate(AggregateFrecency::from_stored(
+            AggregateId {
                 entity: EntityType::Document.with_entity_string(doc_id_1.to_string()),
                 user_id: test_user_id.clone(),
             },
-            data: FrecencyData {
-                event_count: 1,
-                frecency_score: 100.0,
-                first_event: Utc::now(),
-                recent_events: VecDeque::new(),
-            },
-        })
+            FrecencyData::from_stored(1, 100.0, Utc::now(), VecDeque::new()),
+        ))
         .await
         .unwrap();
 
@@ -668,18 +623,13 @@ async fn test_dynamic_filter_document_notification_done(pool: PgPool) {
 
     for (id, score) in [(doc_id_1.to_string(), 100.0), (doc_id_2.to_string(), 90.0)] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Document.with_entity_string(id),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -874,18 +824,13 @@ async fn test_dynamic_filter_document_task_include_cbm_atm_nc(pool: PgPool) {
         (non_matching_task_id.to_string(), 90.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Document.with_entity_string(id),
                     user_id: test_user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -1010,18 +955,13 @@ async fn test_dynamic_filter_document_date_created_at_gt(pool: PgPool) {
         (doc_late.to_string(), 80.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Document.with_entity_string(id),
                     user_id: user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -1112,18 +1052,13 @@ async fn test_dynamic_filter_document_date_created_at_lt(pool: PgPool) {
         (doc_late.to_string(), 80.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Document.with_entity_string(id),
                     user_id: user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -1210,18 +1145,13 @@ async fn test_dynamic_filter_document_date_updated_at_gt(pool: PgPool) {
         (doc_late.to_string(), 80.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Document.with_entity_string(id),
                     user_id: user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -1313,18 +1243,13 @@ async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
         (doc_late.to_string(), 80.0),
     ] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Document.with_entity_string(id),
                     user_id: user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: score,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }
@@ -1384,18 +1309,13 @@ async fn test_dynamic_filter_document_crm_literals(pool: PgPool) {
     let company = Uuid::new_v4();
     for id in [associated, attachment, unrelated] {
         storage
-            .set_aggregate(AggregateFrecency {
-                id: AggregateId {
+            .set_aggregate(AggregateFrecency::from_stored(
+                AggregateId {
                     entity: EntityType::Document.with_entity_string(id.to_string()),
                     user_id: user_id.clone(),
                 },
-                data: FrecencyData {
-                    event_count: 1,
-                    frecency_score: 10.0,
-                    first_event: Utc::now(),
-                    recent_events: VecDeque::new(),
-                },
-            })
+                FrecencyData::from_stored(1, 10.0, Utc::now(), VecDeque::new()),
+            ))
             .await
             .unwrap();
     }

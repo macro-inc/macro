@@ -16,7 +16,7 @@ use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::PreviewView;
 use entity_access::domain::models::MemberTeamRole;
 use foreign_entity::domain::models::SourceId;
-use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
+use frecency_core::models::{AggregateFrecency, FrecencyQueryErr};
 use github_pull_requests::domain::models::GithubPullRequestError;
 use item_filters::{
     EntityFilters,

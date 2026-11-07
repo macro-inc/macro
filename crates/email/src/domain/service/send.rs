@@ -3,7 +3,7 @@ use crate::domain::{
     models::{CreateDraftInput, CreatedDraft, EmailErr, Link},
     ports::{EmailMessageEnqueuer, EmailRepo},
 };
-use frecency::domain::ports::FrecencyQueryService;
+use frecency_core::ports::FrecencyQueryService;
 use macro_event_broker::MacroEventBroker;
 
 use super::EmailServiceImpl;
