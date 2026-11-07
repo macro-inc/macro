@@ -3,7 +3,7 @@
 ## What it is
 
 Portable editor model for the Lexical port. This crate owns values, registered
-node types, immutable snapshots, transactional tree editing, update processing and JSON interchange.
+node types, immutable snapshots, transactional tree editing, update processing, JSON interchange and selection editing.
 
 ## Start here
 
@@ -18,12 +18,16 @@ node types, immutable snapshots, transactional tree editing, update processing a
 
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
-- Selection editing and view diffs build on the transaction and commit pipeline.
+- Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
+- Movement consumes explicit host points; `NoView` runs structural rules only.
+- Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
+- View diffs and command dispatch remain later layers.
 
 ## Checks
 
 - `cargo test -p lexical_model -j4`
-- `cargo check -p lexical_model --target wasm32-unknown-unknown -j4`
+- `cargo test -p lexical_model --all-features -j4`
+- `cargo check -p lexical_model --all-features --target wasm32-unknown-unknown -j4`
 - `cargo clippy -p lexical_model --all-targets -j4 -- -D warnings`
 - `cargo tree -p lexical_model --target wasm32-unknown-unknown -i workspace-hack`
 - `cargo x deps --check`, `cargo shear`, `just check`
@@ -41,5 +45,6 @@ node types, immutable snapshots, transactional tree editing, update processing a
 
 The sibling test modules cover values, reads, node dispatch, tree edits and NodeState.
 `pipeline/test.rs` covers ordering and transaction boundaries; `json/test.rs` checks
-literal exported bytes. The §18.5 full-span fixture uses `splice`; the range-editing
-`remove_text` API belongs to WP-10.
+literal exported bytes. `selection/*/test.rs` and `selection/test.rs` port explicit
+upstream selection examples, including the §18.5 `remove_text` fixture, detached-slot
+side effects, UTF-16 boundaries, formatting, block deletion and host movement.
