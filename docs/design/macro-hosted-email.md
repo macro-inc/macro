@@ -49,7 +49,7 @@ The email stack currently runs two provider architectures side by side:
   (`services/email_service/src/outbound/scheduled_delivery.rs`).
 - **Outlook** uses the provider-neutral path that #7461 introduced:
   `MailboxGateway`, `MailboxCommandGateway` and `DraftGateway`
-  (`crates/email/src/domain/mailbox.rs`, `mailbox/commands.rs`,
+  (`crates/email/email/src/domain/mailbox.rs`, `mailbox/commands.rs`,
   `mailbox/drafts/ports.rs`), normalized `MailboxState`
   (`crates/email/email_api_client_core/src/models/provider.rs`) stored in
   `email_messages.mailbox_state`, `email_mailbox_folders` with a `FolderRole`,
@@ -66,7 +66,7 @@ reconcile:
 | --- | --- |
 | `MailboxGateway` (content, folder changes) | Reads our own S3 object store; there is no change feed to poll. |
 | `MailboxCommandGateway` (read, star, archive, trash, junk, label) | Confirms immediately: the command's local write *is* the mailbox. No `email_pending_mailbox_state` overlay. |
-| `DraftGateway::submit_draft` | Builds MIME with the existing builder (`crates/email/src/domain/mailbox/drafts/content.rs`), sends through SES `SendEmail` (raw), stores the sent copy. Records the attempt in `email_send_attempts`. |
+| `DraftGateway::submit_draft` | Builds MIME with the existing builder (`crates/email/email/src/domain/mailbox/drafts/content.rs`), sends through SES `SendEmail` (raw), stores the sent copy. Records the attempt in `email_send_attempts`. |
 | `MailboxIngest` | Called by the inbound pipeline below with a fully parsed message instead of a provider fetch. |
 | Watches, subscriptions, token sources | Not implemented; the gateway reports that it needs none. |
 
@@ -76,7 +76,7 @@ These are the Gmail/Outlook assumptions a third provider trips over. Each is a
 prerequisite PR in phase 0, behaviour-neutral for existing providers:
 
 1. **Provider discriminator.** Add `Macro` to `UserProvider`
-   (`crates/email/src/domain/models/link.rs`), its legacy copies in
+   (`crates/email/email/src/domain/models/link.rs`), its legacy copies in
    `models_email`, `DbUserProvider` (two crates plus a private copy in
    `services/email_refresh_handler`), the Postgres `email_user_provider_enum`,
    `GraphqlEmailProvider`, and the generated SDK types. Replace the web app's
@@ -84,7 +84,7 @@ prerequisite PR in phase 0, behaviour-neutral for existing providers:
    `context/compose-capabilities.ts`, `settings/connections/integration-items.tsx`)
    with the generated enum, matched exhaustively, and delete the string parsers
    that match `"OUTLOOK"` (`services/email_service/src/api/middleware/link.rs`,
-   `crates/email/src/outbound/mailbox_pg/lifecycle.rs`) in favour of the typed
+   `crates/email/email/src/outbound/mailbox_pg/lifecycle.rs`) in favour of the typed
    enum.
 2. **One dispatch point.** Provider selection is an ad hoc `match link.provider`
    in about 30 outbound adapters. Replace those with one
@@ -156,7 +156,7 @@ headers today. The Macro provider computes it:
    fallback groups unrelated "Invoice" mails, and users notice wrong merges more
    than missed ones.
 
-This lives in a pure function in `crates/email/src/domain` with golden tests
+This lives in a pure function in `crates/email/email/src/domain` with golden tests
 over the `.eml` corpus, and writes `provider_thread_id` as a Macro-minted id so
 the existing thread queries work unchanged. Sent messages join their thread
 through the same headers, which the draft builder already sets.

@@ -207,4 +207,4 @@ a local stack, without Google accounts.
 
 - Rules: `.agents/rules/config-and-service-urls.md` ·
   `crates/clients/gmail_client/AGENTS.md`, `services/email_service/AGENTS.md` (running the service),
-  `crates/calendar_events/AGENTS.md`, `services/calendar_service/AGENTS.md`
+  `crates/calendar/calendar_events/AGENTS.md`, `services/calendar_service/AGENTS.md`

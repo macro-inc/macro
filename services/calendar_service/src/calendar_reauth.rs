@@ -4,7 +4,7 @@
 //! [`LinkManagerMessage::NotifyReauthRequired`] onto the shared email
 //! link-manager queue, whose email_service consumer owns the single
 //! reconnect-your-inbox notification. Enqueued directly rather than through
-//! `sqs_client`, whose `email` feature would pull `crates/email` back into
+//! `sqs_client`, whose `email` feature would pull `crates/email/email` back into
 //! this service; the wire body is the shared `models_email` serde impl, so it
 //! stays byte-compatible with the messages email_service enqueues.
 

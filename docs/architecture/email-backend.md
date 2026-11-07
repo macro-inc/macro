@@ -8,10 +8,10 @@ composer, and rendering boundaries.
 
 | Layer | Location | Responsibility |
 | --- | --- | --- |
-| Inbound | [HTTP API](../../services/email_service/src/api.rs), [queue workers](../../services/email_service/src/pubsub/mod.rs), [email routes and tools](../../crates/email/src/inbound.rs) | Extract identity and requests, decode messages, call a domain service, render errors, acknowledge or retain deliveries. |
-| Domain | [email domain](../../crates/email/src/domain.rs) | Authorization and workflow decisions, retry/disposition policy, state transitions, and ports for effects. |
-| Outbound | [service adapters](../../services/email_service/src/outbound.rs), [email adapters](../../crates/email/src/outbound.rs) | Implement ports using PostgreSQL, provider APIs, Redis, queues, storage and notifications. |
-| SQL access | [email_db_client](../../crates/email_db_client/AGENTS.md) | Existing statements, relational predicates, locks, and legacy storage helpers that remain to be separated. |
+| Inbound | [HTTP API](../../services/email_service/src/api.rs), [queue workers](../../services/email_service/src/pubsub/mod.rs), [email routes and tools](../../crates/email/email/src/inbound.rs) | Extract identity and requests, decode messages, call a domain service, render errors, acknowledge or retain deliveries. |
+| Domain | [email domain](../../crates/email/email/src/domain.rs) | Authorization and workflow decisions, retry/disposition policy, state transitions, and ports for effects. |
+| Outbound | [service adapters](../../services/email_service/src/outbound.rs), [email adapters](../../crates/email/email/src/outbound.rs) | Implement ports using PostgreSQL, provider APIs, Redis, queues, storage and notifications. |
+| SQL access | [email_db_client](../../crates/email/email_db_client/AGENTS.md) | Existing statements, relational predicates, locks, and legacy storage helpers that remain to be separated. |
 | Composition | [API composition](../../services/email_service/src/composition/api.rs), [shared composition](../../services/email_service/src/composition.rs), [worker types](../../services/email_service/src/composition/workers.rs) | Build clients and adapters, then inject them into services. Worker-specific composition stays beside each worker in `worker::context`. |
 
 HTTP handlers obtain identity or typed access receipts at the edge. The domain
@@ -48,19 +48,19 @@ each delivery. Those are transport lifecycles, distinct from domain retry policy
 
 | Worker | Domain owner | Service adapter |
 | --- | --- | --- |
-| Gmail operations | [message_labels/gmail_ops](../../crates/email/src/domain/message_labels/gmail_ops.rs): pending-write ordering, partial settlement, retry and terminal outcomes | [message_labels/gmail_ops](../../services/email_service/src/outbound/message_labels/gmail_ops.rs) |
-| Inbox sync | [mailbox/inbox_sync](../../crates/email/src/domain/mailbox/inbox_sync.rs): history, catalog, recovery, deletion, upsert and follow-up policy | [inbox_lifecycle/inbox_sync](../../services/email_service/src/outbound/inbox_lifecycle/inbox_sync.rs) |
-| Backfill | [backfill_jobs/worker](../../crates/email/src/domain/backfill_jobs/worker.rs): admission, deferral, import, initialization, completion and effect leases | [backfill_jobs/worker](../../services/email_service/src/outbound/backfill_jobs/worker.rs) |
-| Link manager | [mailbox/link_manager](../../crates/email/src/domain/mailbox/link_manager.rs): probes, reauthentication recipients and link deletion | [link_manager](../../services/email_service/src/outbound/link_manager.rs) |
-| Scheduled delivery | [scheduled_delivery](../../crates/email/src/domain/scheduled_delivery.rs): claims, delivery fences, reconciliation and retained deletion | [scheduled_delivery](../../services/email_service/src/outbound/scheduled_delivery.rs) |
-| CRM cleanup | [crm_cleanup](../../crates/email/src/domain/crm_cleanup.rs): jobs, pruning, dispatch, teardown and retry | [crm_cleanup](../../services/email_service/src/outbound/crm_cleanup.rs) |
-| Contact-photo upload | [mailbox/contacts/sfs_upload](../../crates/email/src/domain/mailbox/contacts/sfs_upload.rs): mapping reuse, best-effort writes and refresh | [sfs_upload](../../services/email_service/src/outbound/sfs_upload.rs) |
-| Stored-file deletion | [attachment_cleanup/sfs_deletion](../../crates/email/src/domain/attachment_cleanup/sfs_deletion.rs): file/row deletion order and already-missing files | [sfs_deletion](../../services/email_service/src/outbound/sfs_deletion.rs) |
+| Gmail operations | [message_labels/gmail_ops](../../crates/email/email/src/domain/message_labels/gmail_ops.rs): pending-write ordering, partial settlement, retry and terminal outcomes | [message_labels/gmail_ops](../../services/email_service/src/outbound/message_labels/gmail_ops.rs) |
+| Inbox sync | [mailbox/inbox_sync](../../crates/email/email/src/domain/mailbox/inbox_sync.rs): history, catalog, recovery, deletion, upsert and follow-up policy | [inbox_lifecycle/inbox_sync](../../services/email_service/src/outbound/inbox_lifecycle/inbox_sync.rs) |
+| Backfill | [backfill_jobs/worker](../../crates/email/email/src/domain/backfill_jobs/worker.rs): admission, deferral, import, initialization, completion and effect leases | [backfill_jobs/worker](../../services/email_service/src/outbound/backfill_jobs/worker.rs) |
+| Link manager | [mailbox/link_manager](../../crates/email/email/src/domain/mailbox/link_manager.rs): probes, reauthentication recipients and link deletion | [link_manager](../../services/email_service/src/outbound/link_manager.rs) |
+| Scheduled delivery | [scheduled_delivery](../../crates/email/email/src/domain/scheduled_delivery.rs): claims, delivery fences, reconciliation and retained deletion | [scheduled_delivery](../../services/email_service/src/outbound/scheduled_delivery.rs) |
+| CRM cleanup | [crm_cleanup](../../crates/email/email/src/domain/crm_cleanup.rs): jobs, pruning, dispatch, teardown and retry | [crm_cleanup](../../services/email_service/src/outbound/crm_cleanup.rs) |
+| Contact-photo upload | [mailbox/contacts/sfs_upload](../../crates/email/email/src/domain/mailbox/contacts/sfs_upload.rs): mapping reuse, best-effort writes and refresh | [sfs_upload](../../services/email_service/src/outbound/sfs_upload.rs) |
+| Stored-file deletion | [attachment_cleanup/sfs_deletion](../../crates/email/email/src/domain/attachment_cleanup/sfs_deletion.rs): file/row deletion order and already-missing files | [sfs_deletion](../../services/email_service/src/outbound/sfs_deletion.rs) |
 
 Backfill and inbox sync share the domain's catalog, contact and pending-label
 rules; inbox sync and link manager share notification-recipient selection.
 Backfill's durable publication is a separate
-[domain outbox](../../crates/email/src/domain/backfill_jobs/outbox.rs), with the
+[domain outbox](../../crates/email/email/src/domain/backfill_jobs/outbox.rs), with the
 service's `backfill_outbox` facade retaining polling and cancellation.
 
 ## Persistent state
@@ -108,7 +108,7 @@ clean scan does not prove that every outbound helper is free of workflow policy.
 | Attachment and projection effects | [inbox import effects](../../services/email_service/src/outbound/inbox_lifecycle/inbox_sync/import_effects.rs), [mailbox_projection.rs](../../services/email_service/src/outbound/mailbox_projection.rs) and [upload_attachment.rs](../../services/email_service/src/util/upload_attachment.rs) retain eligibility and multi-effect decisions. |
 | Invitation and calendar refresh selection | [invitation_extraction.rs](../../services/email_service/src/outbound/invitation_extraction.rs) selects inline versus attachment parts; [pubsub/util.rs](../../services/email_service/src/pubsub/util.rs) selects calendar refresh recipients as well as hosting legacy adapter helpers. |
 | Legacy database composites | `email_db_client` retains message ingestion/savepoints, label mapping during ingestion, parsed-read assembly, contact normalization and backfill lease/completion helpers. Moving label state, purge and delivery policy did not remove these. |
-| Other persistence-adapter decisions | [draft_transfer.rs](../../crates/email/src/outbound/email_pg_repo/draft_transfer.rs), [scheduled.rs](../../crates/email/src/outbound/email_pg_repo/scheduled.rs) and [focus_pg.rs](../../crates/email/src/outbound/focus_pg.rs) still need review of eligibility, authorization and read selection versus atomic storage guards. |
+| Other persistence-adapter decisions | [draft_transfer.rs](../../crates/email/email/src/outbound/email_pg_repo/draft_transfer.rs), [scheduled.rs](../../crates/email/email/src/outbound/email_pg_repo/scheduled.rs) and [focus_pg.rs](../../crates/email/email/src/outbound/focus_pg.rs) still need review of eligibility, authorization and read selection versus atomic storage guards. |
 | Adapter composition | [inbox import repository](../../services/email_service/src/outbound/inbox_lifecycle/inbox_sync/import_repository.rs) still constructs email-crate repositories; scheduled delivery embeds a concrete read-receipt repository. Prefer host composition when separating these dependencies. |
 | Scheduled content preparation | [scheduled content](../../services/email_service/src/outbound/scheduled_delivery/content.rs) and [Gmail send helpers](../../services/email_service/src/util/gmail/send.rs) retain content selection, attachment reconciliation and provider draft cleanup. |
 

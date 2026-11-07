@@ -20,7 +20,7 @@ preview endpoint.
 ## Scope
 
 - Owns: typed request/response wrapping for `email_service`'s HTTP API.
-- Not here: `email_service`'s own domain logic → `crates/email`.
+- Not here: `email_service`'s own domain logic → `crates/email/email`.
 
 ## Boundaries
 

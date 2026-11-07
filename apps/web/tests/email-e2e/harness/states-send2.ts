@@ -565,7 +565,7 @@ async function outlookMailbox(mailbox: Mailbox) {
 /**
  * The body of the Outlook mailbox's draft with this subject, and its id, if
  * the mailbox holds one. Macro writes its drafts into the mailbox only for
- * Outlook (crates/email/src/outbound/mailbox_pg/drafts.rs).
+ * Outlook (crates/email/email/src/outbound/mailbox_pg/drafts.rs).
  */
 export async function mailboxDraft(
   mailbox: Mailbox,

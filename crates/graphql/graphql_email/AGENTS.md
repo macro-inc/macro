@@ -21,7 +21,7 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 
 - Owns: GraphQL types and resolvers for email messages, threads, drafts, and
   viewer email settings.
-- Not here: email sync, sending, and storage — `crates/email`; thread
+- Not here: email sync, sending, and storage — `crates/email/email`; thread
   membership in Soup → `crates/graphql/graphql_soup`.
 
 ## Boundaries

@@ -28,7 +28,7 @@ async fn email_delivery_upgrade_preserves_existing_schedules_and_attachments(poo
     };
     before_delivery.run(&pool).await.unwrap();
     sqlx::raw_sql(include_str!(
-        "../../email_db_client/fixtures/get_process_scheduled_messages.sql"
+        "../../email/email_db_client/fixtures/get_process_scheduled_messages.sql"
     ))
     .execute(&pool)
     .await

@@ -3,7 +3,7 @@
 // that it is ready to reload.
 //
 // Outlook only: Macro writes its drafts into the mailbox only for Outlook
-// (crates/email/src/outbound/mailbox_pg/drafts.rs, the `l.provider =
+// (crates/email/email/src/outbound/mailbox_pg/drafts.rs, the `l.provider =
 // 'OUTLOOK'` claim); a Gmail inbox's drafts stay in Macro, so there is no
 // mailbox copy to change.
 

@@ -8,8 +8,8 @@ note: |-
   Existing UUID/chrono aliases are I/O-free; InboxPersistenceError is an error translation contract.
   Only the existing GetThreadError::QueryError and ImportSignatureError::GmailApiError payload types are allowed, not their clients.
 files:
-  - crates/email/src/inbound.rs
-  - crates/email/src/inbound/**
+  - crates/email/email/src/inbound.rs
+  - crates/email/email/src/inbound/**
   - services/email_service/src/api.rs
   - services/email_service/src/api/**
   - services/email_service/src/pubsub/**/process.rs

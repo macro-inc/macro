@@ -482,7 +482,7 @@ F-016	the service counts mail held before connecting as imported without storing
 F-017	the service fetches a new message and does not store it
 F-018	new mail does not reach the open list until a reload
 F-019	the service does not apply a change made in the provider's client
-F-020	the email service's thread reads (messages_by_thread_id_paginated in crates/email, get_paginated_parsed_messages_by_thread_id in email_db_client) leave out a message missing at the provider only when it is a draft, as main had them, so an Outlook message deleted at the provider stays in its thread after the service marks it provider_missing
+F-020	the email service's thread reads (messages_by_thread_id_paginated in crates/email/email, get_paginated_parsed_messages_by_thread_id in email_db_client) leave out a message missing at the provider only when it is a draft, as main had them, so an Outlook message deleted at the provider stays in its thread after the service marks it provider_missing
 F-021	the Drafts tab lists no drafts
 F-022	the service does not store mail sent from the provider's client
 F-023	Force sync starts nothing
@@ -988,7 +988,7 @@ STL-712	The email list header in EmailHeader.tsx no longer shows the open saved 
 STL-713	not shown as the row says ("Save changes" disabled while saving or when the view has skipped settings): its rendering is switched off or changed in src/features/email-view/views/email-saved-views.tsx
 STL-900	The open list's live updates are cut off: graphql-soup-websocket.ts no longer subscribes to SoupUpdates and use-notification-updates.ts no longer refetches the thread of a new_email notification.
 STL-901	The Archived tab's slice in email-query.ts asks for threads that are not done, so a thread archived in the provider's client is not listed there.
-STL-902	The Gmail inbox sync's delete_message (crates/email/src/domain/mailbox/inbox_sync/delete_message.rs) returns Ok before deleting anything, so a message deleted at Gmail stays in its thread in the service.
+STL-902	The Gmail inbox sync's delete_message (crates/email/email/src/domain/mailbox/inbox_sync/delete_message.rs) returns Ok before deleting anything, so a message deleted at Gmail stays in its thread in the service.
 STL-903	A draft's row in the mail list shows no snippet (the draft's text is emptied) in list-entity/email.tsx.
 STL-904	The Sent tab asks the service for the drafts view instead of the sent view (`emailViewForTab` in email-query.ts), so sent mail, such as mail sent from the provider's client, is not listed in Sent.
 STL-905	The thread's messages are sorted newest first instead of oldest first, in selectThreadMessages in thread-messages.ts.

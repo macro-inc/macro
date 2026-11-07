@@ -189,7 +189,7 @@ predicates alongside this one, without changing thread exceptions.
 legacy company `email_sync = false` exclusions. The ingestion interaction scan
 (`crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) and the
 Team view's read of one record's emails (`push_allowed` in
-`crates/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`, with the
+`crates/email/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`, with the
 contributing inboxes in `dynamic/resolve.rs`) apply the same rules set-based, once
 per call instead of once per thread and participant; change them together, and
 keep their parity tests against the functions passing.

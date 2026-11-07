@@ -41,7 +41,7 @@ fn display_is_the_cli_seam() {
 #[test]
 fn crate_change_maps_to_rdeps_of_that_crate() {
     let graph = build_graph(false).expect("cargo metadata");
-    let selection = select_in_repo(&graph, &["crates/email_validator/src/lib.rs"]);
+    let selection = select_in_repo(&graph, &["crates/email/email_validator/src/lib.rs"]);
     assert_ne!(selection, PackageSelection::None);
     assert_ne!(selection, PackageSelection::All);
     assert!(
@@ -99,7 +99,7 @@ fn embedded_assets_select_their_consumers() {
     let mixed = select_in_repo(
         &graph,
         &[
-            "crates/email_validator/src/lib.rs",
+            "crates/email/email_validator/src/lib.rs",
             "static_assets/markdown-golden.1.bin",
         ],
     );
@@ -452,12 +452,12 @@ fn only_manifests_and_lockfiles_need_the_graph_diff() {
     for path in [
         "Cargo.toml",
         "Cargo.lock",
-        "crates/email_validator/Cargo.toml",
+        "crates/email/email_validator/Cargo.toml",
     ] {
         assert!(changes_cargo_graph(Path::new(path)), "{path}");
     }
     for path in [
-        "crates/email_validator/src/lib.rs",
+        "crates/email/email_validator/src/lib.rs",
         "Cargo.toml.orig",
         "docs/Cargo.md",
         "static_assets/schema.graphql",

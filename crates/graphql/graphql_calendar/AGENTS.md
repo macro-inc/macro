@@ -20,7 +20,7 @@ user's calendar query root.
 
 - Owns: the GraphQL shape over calendar data.
 - Not here: calendar domain logic and Google Calendar sync →
-  `crates/calendar_events`, `crates/calendar_scheduling`.
+  `crates/calendar/calendar_events`, `crates/calendar/calendar_scheduling`.
 
 ## Boundaries
 

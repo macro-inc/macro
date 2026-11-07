@@ -5,7 +5,7 @@
 //
 // Outlook only: only an Outlook mailbox takes Macro's changes as operations
 // the thread lists, and only an Outlook inbox has its drafts written into
-// the mailbox (crates/email/src/outbound/mailbox_pg/drafts.rs, the
+// the mailbox (crates/email/email/src/outbound/mailbox_pg/drafts.rs, the
 // `l.provider = 'OUTLOOK'` claim), so only there can a draft conflict or a
 // send stay unconfirmed. A Gmail inbox's drafts and sends stay in Macro.
 
@@ -40,7 +40,7 @@ async function operations(mailbox: Mailbox, id: string) {
 /**
  * Moves the start of the inbox's unconfirmed send back past the ten minutes
  * the service waits for the mailbox to show it sent (`UNCERTAIN_WAIT` in
- * crates/email/src/domain/mailbox/drafts.rs), and lets it look again now.
+ * crates/email/email/src/domain/mailbox/drafts.rs), and lets it look again now.
  * Answers how many sends it moved: none until the send waits for
  * confirmation.
  */

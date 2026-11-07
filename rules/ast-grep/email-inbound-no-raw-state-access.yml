@@ -6,8 +6,8 @@ note: |-
   The SQS receive/ack handle (sqs_worker) and composed service/broker capabilities remain allowed.
   API context declarations use the companion worker rule; outbound, composition roots and tests are outside this rule.
 files:
-  - crates/email/src/inbound.rs
-  - crates/email/src/inbound/**
+  - crates/email/email/src/inbound.rs
+  - crates/email/email/src/inbound/**
   - services/email_service/src/api.rs
   - services/email_service/src/api/**
   - services/email_service/src/pubsub/**/process.rs
