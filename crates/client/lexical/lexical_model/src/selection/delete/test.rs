@@ -390,7 +390,7 @@ fn cross_block_deletion_merges_below_the_common_ancestor() -> Result<(), Error> 
 }
 
 #[test]
-fn deletion_stops_before_an_unentered_block() -> Result<(), Error> {
+fn deletion_merges_the_separator_before_an_unentered_block() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .build()
         .expect("builder");
@@ -407,9 +407,9 @@ fn deletion_stops_before_an_unentered_block() -> Result<(), Error> {
         Point::element(q, ChildIndex(0)),
     ))))?;
     tx.remove_text()?;
-    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![p.key(), q.key()]);
-    assert_eq!(tx.text_content(p), "fi");
-    assert_eq!(tx.text_content(q), "second");
+    // Pinned upstream removes the paragraph separator and preserves the end block text.
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![p.key()]);
+    assert_eq!(tx.text_content(p), "fisecond");
     Ok(())
 }
 
