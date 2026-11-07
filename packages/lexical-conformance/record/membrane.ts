@@ -5,6 +5,7 @@ import {
   namedFunctions,
   namedTransformers,
 } from './encode';
+import { preorderKeys } from './initial';
 import {
   errorValue,
   type Fields,
@@ -25,12 +26,31 @@ export function activate(recorder?: Recorder): void {
   current = recorder;
 }
 
+function registerValues(value: unknown, name: string, seen: Set<object>): void {
+  if (
+    !value ||
+    (typeof value !== 'function' && typeof value !== 'object') ||
+    seen.has(value)
+  )
+    return;
+  seen.add(value);
+  if (typeof value === 'function') {
+    namedFunctions.set(value, name);
+    return;
+  }
+  if (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype)
+    for (const [key, item] of Object.entries(value))
+      registerValues(item, `${name}.${key}`, seen);
+}
+
 /** Wrap the test boundary only; upstream imports keep their original identity. */
 export function wrapModule<T extends Record<string, unknown>>(
   module: T,
   name: string
 ): T {
   modules.set(name, module);
+  for (const [key, value] of Object.entries(module))
+    registerValues(value, `${name}.${key}`, new Set());
   instrumentTransformers(module, name, () => current);
   for (const [key, value] of Object.entries(module)) {
     if (key.endsWith('_COMMAND') && value && typeof value === 'object')
@@ -98,12 +118,16 @@ export function wrapModule<T extends Record<string, unknown>>(
 }
 
 export class Recorder {
+  constructor(readonly modelProjection = false) {}
+  projectingView = false;
   readonly encoder = new Encoder();
   readonly trace: Op[] = [];
   readonly tapes: Fixture['tapes'] = [];
   readonly editors = new Map<object, number>();
   readonly reasons = new Set<string>();
   readonly transformersFired = new Set<string>();
+  initial: Fixture['initial'] = { editorState: null, selection: null };
+  private partialRequested = false;
   private proxies = new WeakMap<object, object>();
   private raw = new WeakMap<object, object>();
   private calls = this.trace;
@@ -115,13 +139,18 @@ export class Recorder {
   private pending = new Map<object, number[]>();
   private causes = new Map<object, Set<string>>();
   private awaitingTest = new WeakSet<object>();
+  private implementationEditors = new WeakSet<object>();
   private cause?: string;
 
-  enter(cause: string): () => void {
+  enter(cause?: string): () => void {
     const depth = this.depth;
     const previous = this.cause;
     this.depth++;
-    if (!['commit', 'microtask'].includes(cause) && previous !== 'history')
+    if (
+      cause &&
+      !['commit', 'microtask'].includes(cause) &&
+      previous !== 'history'
+    )
       this.cause = cause;
     return () => {
       this.depth = depth;
@@ -169,6 +198,9 @@ export class Recorder {
         if (!descriptor) return undefined;
         return {
           ...descriptor,
+          ...(Array.isArray(object) && key === 'length'
+            ? { writable: true }
+            : {}),
           configurable: !(Array.isArray(object) && key === 'length'),
         };
       },
@@ -268,6 +300,25 @@ export class Recorder {
         this.unwrap(receiver),
         args.map((arg) => this.unwrap(arg))
       );
+    if (this.modelProjection && name.endsWith('.$generateNodesFromDOM'))
+      this.partialRequested = true;
+    if (
+      this.modelProjection &&
+      name === '@lexical/html.$generateHtmlFromNodes'
+    ) {
+      this.projectingView = true;
+      this.depth++;
+      try {
+        return Reflect.apply(
+          fn,
+          this.unwrap(receiver),
+          args.map((arg) => this.unwrap(arg))
+        );
+      } finally {
+        this.depth--;
+        this.projectingView = false;
+      }
+    }
     if (/dispatchEvent|generateNodesFromDOM|applyDOMRange/.test(name))
       this.reasons.add('B-only:dom-driver');
     if (/createDOM|exportDOM|getElementByKey|getRootElement/.test(name))
@@ -313,6 +364,7 @@ export class Recorder {
     }
     if (/\.(update|read)$/.test(name) && typeof args[0] === 'function') {
       const kind = name.endsWith('.update') ? 'update' : 'read';
+      if (kind === 'read' && this.partialRequested) this.startPartial();
       const object = fields(rawReceiver);
       const editor = '_editorState' in object ? object : undefined;
       if (!editor && !('_nodeMap' in object))
@@ -325,6 +377,8 @@ export class Recorder {
         calls,
       };
       if (!editor) op.state = this.encode(object);
+      if (kind === 'read' && args[1] !== undefined)
+        op.opts = this.encode(this.argument(args[1]));
       if (kind === 'update') {
         op.id = id;
         op.cause = 'test';
@@ -387,11 +441,26 @@ export class Recorder {
     const op: Op = { op: 'call', fn: name, args: [] };
     if (rawReceiver && typeof rawReceiver === 'object')
       op.this = this.encode(rawReceiver);
-    const wrappedArgs = args.map((arg) => {
-      const raw = this.unwrap(arg);
-      if (typeof raw !== 'function') return raw;
-      const exported = this.encoder.functions.get(raw);
-      if (exported) return raw;
+    const wrappedArgs = args.map((arg) => this.argument(arg));
+    op.args = wrappedArgs.map((arg) => this.encode(arg));
+    this.calls.push(op);
+    this.depth++;
+    try {
+      const result = Reflect.apply(fn, rawReceiver, wrappedArgs);
+      op.ret = this.encode(result);
+      return this.wrap(result);
+    } catch (error) {
+      op.throws = errorValue(error);
+      throw error;
+    } finally {
+      this.depth--;
+    }
+  }
+
+  private argument(value: unknown): unknown {
+    const raw = this.unwrap(value);
+    if (typeof raw === 'function') {
+      if (this.encoder.functions.has(raw) || 'getType' in raw) return raw;
       const tape = this.tapes.length;
       this.tapes.push({ invocations: [] });
       const wrapped = (...values: unknown[]) => {
@@ -418,26 +487,69 @@ export class Recorder {
       };
       this.encoder.functions.set(wrapped, `tape:${tape}`);
       return wrapped;
-    });
-    op.args = wrappedArgs.map((arg) => {
-      const exported =
-        typeof arg === 'function' ? this.encoder.functions.get(arg) : undefined;
-      return exported?.startsWith('tape:')
-        ? { $tape: Number(exported.slice(5)) }
-        : this.encode(arg);
-    });
-    this.calls.push(op);
-    this.depth++;
-    try {
-      const result = Reflect.apply(fn, rawReceiver, wrappedArgs);
-      op.ret = this.encode(result);
-      return this.wrap(result);
-    } catch (error) {
-      op.throws = errorValue(error);
-      throw error;
-    } finally {
-      this.depth--;
     }
+    if (!raw || typeof raw !== 'object' || namedTransformers.has(raw))
+      return raw;
+    if (Array.isArray(raw)) {
+      const items = raw.map((item) => this.argument(item));
+      return items.every((item, i) => item === raw[i]) ? raw : items;
+    }
+    if (
+      Object.getPrototypeOf(raw) === Object.prototype ||
+      Object.getPrototypeOf(raw) === null
+    ) {
+      const entries = Object.entries(raw).map(
+        ([key, item]) => [key, this.argument(item)] as const
+      );
+      return entries.every(([key, item]) => item === Reflect.get(raw, key))
+        ? raw
+        : Object.fromEntries(entries);
+    }
+    return raw;
+  }
+
+  private startPartial(): void {
+    this.partialRequested = false;
+    const editor = [...this.editors.keys()].at(-1);
+    const createIndex = this.trace.findIndex((op) => op.op === 'createEditor');
+    if (!editor || createIndex < 0 || this.editors.size !== 1) {
+      this.reasons.add('partial:unsupported-editor-layout');
+      return;
+    }
+    const state = fields(editor)._editorState;
+    const raw = snapshot(editor);
+    const getCounter = modules.get(
+      'lexical/LexicalUtils'
+    )?.getRecorderKeyCounter;
+    if (typeof getCounter !== 'function')
+      throw new Error('Missing initial key counter');
+    this.initial = {
+      editorState: raw.json,
+      selection: raw.selection,
+      keys: preorderKeys(fields(state)),
+      nodeMapKeys: raw.nodeMapKeys as string[],
+      nextKey: getCounter(),
+    };
+    this.encoder.reset();
+    const prefix = this.trace.slice(0, createIndex + 1);
+    prefix[createIndex].ret = this.encode(editor);
+    this.trace.splice(0, this.trace.length, ...prefix);
+    this.calls = this.trace;
+    this.commits.clear();
+    this.pending.clear();
+    this.causes.clear();
+    this.updateId = 0;
+    this.tapes.length = 0;
+    for (const reason of this.reasons)
+      if (!/test-defined-model-class|node-replacement/.test(reason))
+        this.reasons.delete(reason);
+    this.trace.push({
+      op: 'call',
+      fn: 'LexicalEditor.getEditorState',
+      this: this.encode(editor),
+      args: [],
+      ret: this.encode(state),
+    });
   }
 
   editor(editor: object, config?: Record<string, unknown>): number {
@@ -461,11 +573,11 @@ export class Recorder {
           'getType' in node &&
           typeof node.getType === 'function'
         ) {
-          const known = [...modules.entries()].some(
-            ([name, exports]) =>
-              !name.includes('/__tests__/') &&
-              Object.values(exports).includes(node)
-          );
+          const symbol = namedFunctions.get(node);
+          const known =
+            symbol &&
+            !symbol.includes('/__tests__/') &&
+            !symbol.includes('/tests/');
           const defaults = [
             'TestElementNode',
             'TestTextNode',
@@ -478,6 +590,14 @@ export class Recorder {
           if (!known && !defaults.includes(node.name))
             this.reasons.add('A-hand:test-defined-model-class');
           encodedNodes.push(node.getType());
+        } else if (
+          node &&
+          typeof node === 'object' &&
+          'replace' in node &&
+          'with' in node
+        ) {
+          if (typeof node.with !== 'function' || !namedFunctions.has(node.with))
+            this.reasons.add('A-hand:test-defined-node-replacement');
         } else this.reasons.add('B-only:node-replacement');
       }
     }
@@ -486,11 +606,19 @@ export class Recorder {
       id,
       config: {
         namespace: String(actual.namespace),
+        namespaceGenerated: config?.namespace === undefined,
         nodes: encodedNodes,
-        replacements: [],
+        replacements: Array.isArray(nodes)
+          ? nodes
+              .filter(
+                (node) => node && typeof node === 'object' && 'replace' in node
+              )
+              .map((node) => this.encode(node))
+          : [],
         plugins: [],
         theme: this.encode(actual.theme ?? {}),
         editable: raw._editable !== false,
+        headless: raw._headless === true,
         rootElement: raw._rootElement !== null,
       },
       ret: this.encode(editor),
@@ -507,6 +635,9 @@ export class Recorder {
   }
 
   begin(editor: object, options?: { discrete?: boolean }): void {
+    if (!this.editors.has(editor) && this.depth > 0)
+      this.implementationEditors.add(editor);
+    if (this.implementationEditors.has(editor)) return;
     this.editor(editor);
     const cause = this.awaitingTest.has(editor)
       ? 'test'
@@ -537,6 +668,11 @@ export class Recorder {
     dirtyElements: Map<string, boolean>,
     normalized: Set<string>
   ): void {
+    if (
+      this.implementationEditors.has(editor) ||
+      (!this.editors.has(editor) && this.depth > 0)
+    )
+      return;
     const index = (this.commits.get(editor) ?? 0) + 1;
     this.commits.set(editor, index);
     this.encoder.version = index;
@@ -594,6 +730,11 @@ export class Recorder {
   }
 
   error(editor: object, error: unknown, during: string): void {
+    if (
+      this.implementationEditors.has(editor) ||
+      (!this.editors.has(editor) && this.depth > 0)
+    )
+      return;
     this.trace.push({
       op: 'error',
       editor: this.editor(editor),
