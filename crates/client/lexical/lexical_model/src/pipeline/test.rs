@@ -753,3 +753,18 @@ fn moving_children_keeps_source_element_offsets_for_explicit_remap() -> Result<(
     tx.commit()?;
     Ok(())
 }
+
+#[test]
+fn explicit_selection_replacement_reports_an_object_identity_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))?;
+    let before = tx.selection().cloned();
+    assert_eq!(tx.selection_replacements(), 0);
+    tx.replace_selection(before.clone())?;
+    assert_eq!(tx.selection_replacements(), 1);
+    assert_eq!(tx.selection(), before.as_ref());
+    Ok(())
+}
