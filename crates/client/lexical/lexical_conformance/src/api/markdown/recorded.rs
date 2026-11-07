@@ -22,6 +22,17 @@ impl RecordedLink {
             .as_object()
             .ok_or_else(|| fail("markdown transformer object"))?;
         if object.len() != 7
+            || ![
+                "dependencies",
+                "export",
+                "importRegExp",
+                "regExp",
+                "replace",
+                "trigger",
+                "type",
+            ]
+            .iter()
+            .all(|key| object.contains_key(*key))
             || value["type"] != "text-match"
             || value["dependencies"] != json!([{"$klass":"link"}])
             || value["export"]

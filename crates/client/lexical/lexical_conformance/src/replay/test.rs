@@ -487,6 +487,17 @@ fn inline_markdown_transformer_matches_and_enforces_its_empty_callback_tape() ->
         .expect("transformers");
     transformers.last_mut().expect("inline transformer")["importRegExp"]["$regexp"] = json!(".+");
     assert!(Replayer::default().replay(&wrong).is_err());
+    let mut missing = fixture.clone();
+    let object = missing.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers")
+        .last_mut()
+        .expect("transformer")
+        .as_object_mut()
+        .expect("fields");
+    object.remove("importRegExp");
+    object.insert("unknown".into(), Value::Null);
+    assert!(Replayer::default().replay(&missing).is_err());
     let mut wrong = fixture;
     wrong.trace[3]["calls"][0]["args"][1]
         .as_array_mut()
