@@ -173,12 +173,14 @@ members = [
   "crates/routine_program",
   "crates/routines",
   "crates/scheduled_action",
+  "crates/search/soup_realtime_core",
+  "crates/search/soup_realtime_inbound",
+  "crates/search/soup_realtime_outbound",
   "crates/search_service",
   "crates/skills",
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
-  "crates/soup_realtime",
   "crates/sync_router",
   "crates/system_skills",
   "crates/system_status",
@@ -881,7 +883,9 @@ soup = { path = "crates/soup" }
 soup-filter-cache-adapter = { path = "crates/soup_filter_cache_adapter" }
 soup-filter-projection = { path = "crates/soup_filter_projection", default-features = false }
 soup_property = { path = "crates/types/soup_property" }
-soup_realtime = { path = "crates/soup_realtime", default-features = false }
+soup_realtime_core = { path = "crates/search/soup_realtime_core" }
+soup_realtime_inbound = { path = "crates/search/soup_realtime_inbound" }
+soup_realtime_outbound = { path = "crates/search/soup_realtime_outbound" }
 sqs_client = { path = "crates/sqs_client", default-features = false }
 sqs_worker = { path = "crates/sqs_worker" }
 static_file = { path = "crates/static_file", default-features = false }
@@ -924,6 +928,7 @@ work_feed = { path = "crates/work_feed" }
 worker-rs-otel = { path = "crates/worker-rs-otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }
+
 
 
 

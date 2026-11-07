@@ -266,10 +266,6 @@ soup = { workspace = true, features = [
   "inbound",
   "outbound",
 ] }
-soup_realtime = { workspace = true, features = [
-  "consumer",
-  "outbound",
-] }
 sqlx = { workspace = true }
 sqs_client = { workspace = true, features = [
   "document",
@@ -322,6 +318,9 @@ connection_gateway_url = { workspace = true }
 lexical_service_url = { workspace = true }
 static_file_service_url = { workspace = true }
 sync_service_url = { workspace = true }
+soup_realtime_core = { workspace = true }
+soup_realtime_inbound = { workspace = true }
+soup_realtime_outbound = { workspace = true, features = ["consumer"] }
 
 [dev-dependencies]
 bebop = { workspace = true }

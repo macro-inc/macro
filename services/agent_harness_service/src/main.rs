@@ -328,12 +328,12 @@ async fn run() -> anyhow::Result<()> {
     // Registered work viewers hear session changes as Soup patches, which the GraphQL process
     // already streams to each of them. Signals run off the publishing task.
     let work_registration_signal =
-        soup_realtime::outbound::agent_sessions::SoupWorkRegistrationSignal(Arc::new(
-            soup_realtime::domain::service::SoupRealtimeServiceImpl::new(
-                soup_realtime::outbound::entity_access::EntityAccessExpander::new(
+        soup_realtime_outbound::agent_sessions::SoupWorkRegistrationSignal(Arc::new(
+            soup_realtime_core::service::SoupRealtimeServiceImpl::new(
+                soup_realtime_outbound::entity_access::EntityAccessExpander::new(
                     (*entity_access).clone(),
                 ),
-                soup_realtime::outbound::kafka_publisher::KafkaSoupRealtimePublisher::new(
+                soup_realtime_outbound::kafka_publisher::KafkaSoupRealtimePublisher::new(
                     broker.clone(),
                 ),
             ),

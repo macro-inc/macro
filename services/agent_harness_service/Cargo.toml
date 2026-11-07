@@ -123,7 +123,6 @@ macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
-soup_realtime = { workspace = true, features = ["outbound"] }
 macro_middleware = { workspace = true, features = ["cloud_storage"] }
 macro_queues = { workspace = true }
 macro_tower_layers = { workspace = true }
@@ -216,6 +215,8 @@ sync_service_url = { workspace = true }
 chat_id = { workspace = true }
 code_execution_core = { workspace = true }
 code_execution_outbound = { workspace = true }
+soup_realtime_core = { workspace = true }
+soup_realtime_outbound = { workspace = true }
 
 [dev-dependencies]
 agent = { workspace = true }

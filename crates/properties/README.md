@@ -135,7 +135,7 @@ in one transaction, and reports that as a label event plus one
 - Both emit one `entity_property.updated` per affected entity, carrying the
   entity's team-definition row. There is no event for the personal-definition
   row the option was stripped from; the entity event is enough for consumers
-  that rebuild an entity's whole property set (`soup_realtime` and the search
+  that rebuild an entity's whole property set (`soup_realtime_inbound` and the search
   properties indexer both do).
 
 Parent Task and Subtasks writes update reciprocal task relationships in the
@@ -148,7 +148,7 @@ property definition. A future definition-edit operation can add that event as a
 forward-compatible enum variant. TAG definition creation uses
 `property.created`; there is no separate `tag_set.created` event.
 
-The `soup_realtime` consumer subscribes to `macro.properties`. It maps entity
+The `soup_realtime_inbound` consumer subscribes to `macro.properties`. It maps entity
 property updates, deletions, and clears to updated Soup entities and fans them
 out to every current accessor. Task property entities map to their document
 representation. Definition and option lifecycle events remain ignored because

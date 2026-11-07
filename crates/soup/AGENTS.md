@@ -30,7 +30,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   logic, and the Postgres queries that back it.
 - Not here: how a specific entity type is created/edited (channels, documents,
   initiatives, ...); per-entity-type cache projection → `soup_filter_projection`;
-  realtime fan-out of Soup patches → `soup_realtime`.
+  realtime fan-out of Soup patches → `crates/search/soup_realtime_*`.
 
 ## Boundaries
 

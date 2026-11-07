@@ -36,7 +36,7 @@ soft delete/restore/purge, and bulk upload into a project tree.
 
 - Depends on: `entity_access`, `entity_access_management`, `entity_mutation`,
   `macro_event_broker`, `model_owner`, `models_permissions`.
-- Used by: `ai_tools` (project tools), `soup_realtime`,
+- Used by: `ai_tools` (project tools), `soup_realtime_inbound`,
   `services/deleted_item_poller`, `services/search_processing_service`.
 
 ## Recipes

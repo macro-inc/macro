@@ -316,7 +316,6 @@ paths = [
   "crates/skills",
   "crates/slack_integration",
   "crates/soup",
-  "crates/soup_realtime",
   "crates/static_file",
   "crates/sync_router",
   "crates/sync_service",

@@ -39,12 +39,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { workspace = true, features = ["ports"] }
 soup-filter-projection = { workspace = true, default-features = true }
-soup_realtime = { workspace = true, features = ["ports"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+soup_realtime_core = { workspace = true }
 
 [dev-dependencies]
 model_owner = { workspace = true }

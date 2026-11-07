@@ -1,6 +1,6 @@
-# soup_realtime
+# soup_realtime_core
 
-Hexagonal components for turning existing document, project, chat, email, channel, property, and imported-call Kafka events into recipient-targeted Soup patches.
+Realtime Soup fan-out, split across `soup_realtime_core` (this crate: models, ports, service), `soup_realtime_inbound` (the Kafka event consumer) and `soup_realtime_outbound` (Kafka, access and agent-session adapters). Together they turn existing document, project, chat, email, channel, property, and imported-call Kafka events into recipient-targeted Soup patches.
 
 The inbound consumer maps each source event to `Patch::Updated(Entity)` or `Patch::Deleted(Entity)`. Entity-property updates, deletions, and clears map to updated Soup entities; property task entities map to their document representation. Property definition and option lifecycle events are ignored because they do not identify every affected entity. The domain service expands current access and publishes one patch per recipient to `macro.soup`; it does not hydrate or serialize `SoupItem` values. Channel threads use their containing channel as the access source.
 

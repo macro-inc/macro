@@ -53,15 +53,13 @@ notification = { workspace = true, default-features = true }
 predicate-index = { workspace = true }
 soup = { workspace = true, features = ["ports"] }
 soup-filter-projection = { workspace = true }
-soup_realtime = { workspace = true, features = [
-  "ports",
-] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 saved_views = { workspace = true }
+soup_realtime_core = { workspace = true }
 
 [dev-dependencies]
 bot_id = { workspace = true }
