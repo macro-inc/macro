@@ -22,6 +22,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
 - View diffs and command dispatch remain later layers.
+- Reserved `foreign-nodes` exposes a development-only mode switch for the conformance facade; JS node hosting remains a later layer.
 
 ## Checks
 

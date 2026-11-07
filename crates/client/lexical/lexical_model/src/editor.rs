@@ -41,6 +41,13 @@ impl Editor {
     pub fn builder(mode: EditorMode) -> EditorBuilder {
         EditorBuilder::new(mode)
     }
+    /// Set the dev-only conformance host's current input mode.
+    /// A Tier C DOM bridge reconciles view caches only for view-derived inputs.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn set_conformance_mode(&mut self, mode: EditorMode) {
+        self.mode = mode;
+    }
+
     /// Current committed state.
     pub fn state(&self) -> &EditorState {
         &self.state

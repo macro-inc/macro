@@ -11743,6 +11743,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_conformance_wasm"
+version = "0.1.0"
+dependencies = [
+ "lexical_model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "lexical_mention_extractor"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,19 @@
+[package]
+name = "lexical_conformance_wasm"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["js-nodes"]
+js-nodes = ["lexical_model/foreign-nodes"]
+
+[dependencies]
+thiserror.workspace = true
+lexical_model.workspace = true
+wasm-bindgen.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
