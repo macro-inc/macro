@@ -43,6 +43,7 @@
     "@shikijs/langs": "4.0.2",
     "@shikijs/themes": "4.0.2",
     "eslint": "10.3.0",
-    "@jridgewell/trace-mapping": "0.3.31"
+    "@jridgewell/trace-mapping": "0.3.31",
+    "fast-check": "4.5.3"
   }
 }
