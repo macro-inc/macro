@@ -5,9 +5,9 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-filter_ast = { path = "../filter_ast" }
-item_filters = { path = "../item_filters", default-features = false }
-predicate-index = { path = "../predicate_index" }
+filter_ast = { workspace = true }
+item_filters = { workspace = true }
+predicate-index = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 
@@ -16,5 +16,5 @@ uuid = { workspace = true, features = ["js"] }
 
 [dev-dependencies]
 chrono = { workspace = true }
-document_sub_type = { path = "../document_sub_type", default-features = false }
-system_properties = { path = "../system_properties" }
+document_sub_type = { workspace = true }
+system_properties = { workspace = true }

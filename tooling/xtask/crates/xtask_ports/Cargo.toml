@@ -8,7 +8,7 @@ version = "0.1.0"
 [dependencies]
 # Signal 0 checks whether a registry entry's owner process is still alive.
 libc = { workspace = true }
-macro_env_var = { path = "../../../../crates/macro_env_var" }
+macro_env_var = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # EnumIter derives the port list, whose order is each port's offset.

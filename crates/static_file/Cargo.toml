@@ -15,13 +15,13 @@ mime = "0.3"
 tracing = { workspace = true }
 
 # Domain
-macro_user_id = { path = "../macro_user_id" }
+macro_user_id = { workspace = true }
 
 # Attachment
-attachment = { path = "../attachment", optional = true }
+attachment = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-model-entity = { path = "../model-entity", optional = true }
-non_empty = { path = "../non_empty" }
+model-entity = { workspace = true, optional = true }
+non_empty = { workspace = true }
 
 # Outbound
 reqwest = { workspace = true, optional = true }

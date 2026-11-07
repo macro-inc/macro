@@ -8,9 +8,9 @@ version = "0.1.0"
 schema = ["dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
 serde = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["serde"] }

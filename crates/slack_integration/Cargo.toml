@@ -24,18 +24,18 @@ aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-entity_access = { path = "../entity_access", optional = true, default-features = false }
+connection_gateway_client = { workspace = true, optional = true }
+entity_access = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
-import = { path = "../import", optional = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
-macro_aws_config = { path = "../macro_aws_config", optional = true }
-macro_queues = { path = "../macro_queues", optional = true }
-macro_user_id = { path = "../macro_user_id" }
-mention_utils = { path = "../mention_utils" }
+import = { workspace = true, optional = true }
+macro_authorization = { workspace = true, features = ["axum"], optional = true }
+macro_aws_config = { workspace = true, optional = true }
+macro_queues = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+mention_utils = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
-s3_key = { path = "../s3_key", optional = true }
+s3_key = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -50,7 +50,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-model_user = { path = "../model_user" }
+model_user = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 

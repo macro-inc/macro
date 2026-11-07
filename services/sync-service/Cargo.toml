@@ -45,7 +45,7 @@ tracing-web = "0.1"
 web-time.workspace = true
 time = { workspace = true, features = ['wasm-bindgen'] }
 bebop.workspace = true
-sync_service_bebop_schema = { path = "bebop-schema" }
+sync_service_bebop_schema = { workspace = true }
 serde_json.workspace = true
 sha2.workspace = true
 serde.workspace = true
@@ -53,8 +53,8 @@ getrandom = { workspace = true, features = ["wasm_js"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
 loro.workspace = true
-macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
-worker-rs-otel = { path = "../../crates/worker-rs-otel" }
+macro_sync_service_jwt = { workspace = true }
+worker-rs-otel = { workspace = true }
 subtle = { workspace = true }
 base64.workspace = true
 futures.workspace = true

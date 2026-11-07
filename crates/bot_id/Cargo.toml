@@ -10,7 +10,7 @@ sqlx = ["dep:sqlx"]
 test-utils = []
 
 [dependencies]
-cowlike = { path = "../cowlike" }
+cowlike = { workspace = true }
 nom = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

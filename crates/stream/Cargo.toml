@@ -23,7 +23,7 @@ redis = { workspace = true, features = [
 ] }
 async-trait = { workspace = true }
 async-stream = { workspace = true }
-model-entity = { path = "../model-entity" }
+model-entity = { workspace = true }
 anyhow = { workspace = true }
 dashmap = { workspace = true }
 sqlx = { workspace = true }

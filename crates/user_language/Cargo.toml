@@ -19,10 +19,10 @@ postgres = ["dep:sqlx", "model_user/sqlx", "outbound"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
-macro_user_id = { path = "../macro_user_id" }
-model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user" }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+model-error-response = { workspace = true, optional = true }
+model_user = { workspace = true }
 rootcause = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
@@ -31,5 +31,5 @@ utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

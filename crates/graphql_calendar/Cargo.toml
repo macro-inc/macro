@@ -6,12 +6,12 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true }
-calendar_events = { path = "../calendar_events" }
+calendar_events = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
-graphql_common = { path = "../graphql_common" }
-macro_user_id = { path = "../macro_user_id" }
-models_pagination = { path = "../models_pagination" }
+graphql_common = { workspace = true }
+macro_user_id = { workspace = true }
+models_pagination = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

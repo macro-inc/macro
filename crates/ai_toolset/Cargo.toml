@@ -12,9 +12,9 @@ schemars = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-bot_id = { path = "../bot_id" }
-macro_user_id = { path = "../macro_user_id" }
-genai_telemetry = { path = "../genai_telemetry" }
+bot_id = { workspace = true }
+macro_user_id = { workspace = true }
+genai_telemetry = { workspace = true }
 axum = { workspace = true }
 axum-macros = { workspace = true }
 tracing = { workspace = true }

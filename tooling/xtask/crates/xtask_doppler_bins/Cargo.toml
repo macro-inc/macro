@@ -14,4 +14,4 @@ anyhow = { workspace = true }
 guppy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-xtask_graph = { path = "../xtask_graph" }
+xtask_graph = { workspace = true }

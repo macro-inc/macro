@@ -5,19 +5,19 @@ edition = "2024"
 publish = false
 
 [dependencies]
-agent = { path = "../agent" }
-ai_billing = { path = "../ai_billing" }
-ai_usage = { path = "../ai_usage" }
+agent = { workspace = true }
+ai_billing = { workspace = true }
+ai_usage = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 futures = { workspace = true }
 schemars = { workspace = true }
-jev = { path = "../jev" }
-macro_authorization = { path = "../macro_authorization" }
-macro_env_var = { path = "../macro_env_var" }
-macro_tower_layers = { path = "../macro_tower_layers" }
-macro_user_id = { path = "../macro_user_id" }
+jev = { workspace = true }
+macro_authorization = { workspace = true, default-features = true }
+macro_env_var = { workspace = true }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
@@ -31,7 +31,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sha2 = { workspace = true }
 
 [dev-dependencies]
-model_user = { path = "../model_user" }
+model_user = { workspace = true }
 rootcause = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

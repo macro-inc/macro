@@ -16,7 +16,7 @@ serde_json = { workspace = true }
 gh-workflow = "0.8"
 indoc = { workspace = true }
 serde_yaml = { workspace = true }
-xtask_paths = { path = "../xtask_paths" }
+xtask_paths = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

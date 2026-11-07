@@ -6,14 +6,14 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true }
-contacts = { path = "../contacts", default-features = false, features = ["ports"] }
-macro_user_id = { path = "../macro_user_id" }
-models_pagination = { path = "../models_pagination" }
+contacts = { workspace = true, features = ["ports"] }
+macro_user_id = { workspace = true }
+models_pagination = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 serde_json = { workspace = true }
-graphql_common = { path = "../graphql_common" }
+graphql_common = { workspace = true }
 tokio = { workspace = true }

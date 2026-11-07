@@ -23,7 +23,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 syn = { workspace = true, features = ["visit"] }
 toml = { workspace = true }
-xtask_paths = { path = "../xtask_paths" }
+xtask_paths = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -6,8 +6,8 @@ version = "0.1.0"
 
 [dependencies]
 axum = { workspace = true }
-macro_env_var = { path = "../../crates/macro_env_var" }
-native_app_service = { path = "../../crates/native_app_service" }
+macro_env_var = { workspace = true }
+native_app_service = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

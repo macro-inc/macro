@@ -6,8 +6,8 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
-model_entity = { package = "model-entity", path = "../model-entity" }
-macro_uuid = { path = "../macro_uuid" }
+model_entity = { workspace = true }
+macro_uuid = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -20,4 +20,4 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }

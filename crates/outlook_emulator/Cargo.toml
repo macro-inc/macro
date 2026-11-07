@@ -13,8 +13,8 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 clap = { workspace = true }
 jsonwebtoken = { workspace = true }
-macro_entrypoint = { path = "../macro_entrypoint" }
-macro_env = { path = "../macro_env" }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
 mail-builder = { workspace = true }
 mailparse = { workspace = true }
 nom = { workspace = true }
@@ -35,8 +35,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-calendar_events = { path = "../calendar_events" }
-email_api_client = { path = "../email_api_client", features = ["outbound-outlook"] }
-fusionauth = { path = "../fusionauth" }
-macro_service_urls = { path = "../macro_service_urls" }
-models_email = { path = "../models_email" }
+calendar_events = { workspace = true }
+email_api_client = { workspace = true, features = ["outbound-outlook"] }
+fusionauth = { workspace = true }
+macro_service_urls = { workspace = true }
+models_email = { workspace = true }

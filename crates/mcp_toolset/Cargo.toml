@@ -5,10 +5,10 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset" }
+ai_toolset = { workspace = true }
 anyhow.workspace = true
 futures.workspace = true
-genai_telemetry = { path = "../genai_telemetry" }
+genai_telemetry = { workspace = true }
 rmcp = { workspace = true, features = ["client"] }
 schemars.workspace = true
 serde_json.workspace = true
@@ -18,7 +18,7 @@ tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_user_id = { path = "../macro_user_id" }
+macro_user_id = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 regex.workspace = true

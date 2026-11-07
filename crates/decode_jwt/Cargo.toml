@@ -10,10 +10,10 @@ local_auth = []
 [dependencies]
 axum = { workspace = true }
 axum-extra = { workspace = true }
-macro_auth = { path = "../macro_auth" }
-macro_user_id = { path = "../macro_user_id" }
-model-error-response = { path = "../model-error-response" }
-model_user = { path = "../model_user" }
+macro_auth = { workspace = true }
+macro_user_id = { workspace = true }
+model-error-response = { workspace = true }
+model_user = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -22,7 +22,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 cookie = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
-macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_auth = { workspace = true, features = ["testing"] }
 serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

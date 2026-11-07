@@ -5,35 +5,35 @@ edition = "2024"
 publish = false
 
 [dependencies]
-agent_correlation = { path = "../agent_correlation" }
-agent_session = { path = "../agent_session", default-features = false }
+agent_correlation = { workspace = true }
+agent_session = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
-channels = { path = "../channels", default-features = false, features = ["outbound"] }
+channels = { workspace = true, features = ["outbound"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-documents = { path = "../documents", default-features = false, features = ["outbound", "ports"] }
-email = { path = "../email", default-features = false, features = ["outbound"] }
-email_utils = { path = "../email_utils" }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
-entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"] }
-feature_flags = { path = "../feature_flags" }
+documents = { workspace = true, features = ["outbound", "ports"] }
+email = { workspace = true, features = ["outbound"] }
+email_utils = { workspace = true }
+entity_access = { workspace = true, features = ["ports"] }
+entity_registry = { workspace = true, features = ["axum"] }
+feature_flags = { workspace = true }
 futures = { workspace = true }
-kafka_util = { path = "../kafka_util" }
-macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
-macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-messages = { path = "../messages", features = ["broker", "outbound"] }
-model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner" }
-projects = { path = "../projects", default-features = false }
+kafka_util = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = ["postgres"] }
+macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+messages = { workspace = true, features = ["broker", "outbound"] }
+model-entity = { workspace = true }
+model_owner = { workspace = true }
+projects = { workspace = true }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-shown_text = { path = "../shown_text" }
-suggestions_db_utils = { path = "../suggestions_db_utils" }
+shown_text = { workspace = true }
+suggestions_db_utils = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
@@ -43,9 +43,9 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-bot_id = { path = "../bot_id" }
-macro_db_migrator = { path = "../macro_db_migrator" }
-model_user = { path = "../model_user" }
+bot_id = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 tokio-util = { workspace = true }
 tower = { workspace = true }

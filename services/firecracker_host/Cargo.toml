@@ -20,18 +20,18 @@ crash-points = []
 axum = { workspace = true, features = ["ws"] }
 chrono = { workspace = true }
 clap = { workspace = true }
-firecracker_host_api = { path = "../../crates/firecracker_host_api", features = ["client", "schema"] }
+firecracker_host_api = { workspace = true, features = ["client", "schema"] }
 futures = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["client", "http1"] }
 hyper-util = { workspace = true, features = ["http1", "http2", "server", "server-auto", "service", "tokio"] }
 memchr = { workspace = true }
-pinned_tls = { path = "../../crates/pinned_tls" }
+pinned_tls = { workspace = true }
 opentelemetry = { workspace = true, features = ["metrics", "trace"] }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_tower_layers = { path = "../../crates/macro_tower_layers" }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_tower_layers = { workspace = true }
 rootcause = { workspace = true }
 rustix = { workspace = true, features = ["event", "fs", "mount", "process"] }
 rustls = { workspace = true, features = ["std"] }
@@ -51,5 +51,5 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 tower = { workspace = true }
-firecracker_host_api = { path = "../../crates/firecracker_host_api", features = ["client", "schema", "test-support"] }
+firecracker_host_api = { workspace = true, features = ["client", "schema", "test-support"] }
 tempfile = { workspace = true }

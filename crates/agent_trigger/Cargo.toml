@@ -14,39 +14,39 @@ admission = ["dep:ai_billing"]
 outbound = ["admission", "dep:agent", "dep:ai_usage", "dep:call", "dep:document_storage_service_client", "dep:document_sub_type", "dep:jev", "dep:lexical_client", "dep:sqlx", "dep:static_file", "channels/ports"]
 
 [dependencies]
-ai_billing = { path = "../ai_billing", optional = true }
-agent = { path = "../agent", optional = true }
-agent_session = { path = "../agent_session", default-features = false }
-ai_usage = { path = "../ai_usage", optional = true }
+ai_billing = { workspace = true, optional = true }
+agent = { workspace = true, optional = true }
+agent_session = { workspace = true }
+ai_usage = { workspace = true, optional = true }
 anyhow = { workspace = true }
-bot_id = { path = "../bot_id" }
-document_storage_service_client = { path = "../document_storage_service_client", optional = true }
-document_sub_type = { path = "../document_sub_type", optional = true }
-jev = { path = "../jev", optional = true }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
-bots = { path = "../bots", default-features = false, features = ["ports"] }
-lexical_client = { path = "../lexical_client", optional = true }
-static_file = { path = "../static_file", optional = true, default-features = false }
+bot_id = { workspace = true }
+document_storage_service_client = { workspace = true, optional = true }
+document_sub_type = { workspace = true, default-features = true, optional = true }
+jev = { workspace = true, optional = true }
+entity_access = { workspace = true, features = ["ports"] }
+bots = { workspace = true, features = ["ports"] }
+lexical_client = { workspace = true, optional = true }
+static_file = { workspace = true, optional = true }
 chrono = { workspace = true }
-trigger_context = { path = "../trigger_context" }
+trigger_context = { workspace = true }
 # Only the domain vocabulary (`Event`, `MacroEvent`, `TopicEvent`). Asking for
 # `outbound` here would pull rdkafka — and so librdkafka and openssl — into
 # every consumer of this crate, including the self-hosted daemon, which
 # publishes nothing and has to link statically.
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
-channel_sender = { path = "../channel_sender" }
-macro_uuid = { path = "../macro_uuid" }
-messages = { path = "../messages", features = ["broker", "ports"] }
-properties = { path = "../properties", default-features = false }
-initiative = { path = "../initiative", default-features = false, features = ["ports"] }
-models_properties = { path = "../models_properties" }
-system_properties = { path = "../system_properties" }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+channel_sender = { workspace = true }
+macro_uuid = { workspace = true }
+messages = { workspace = true, features = ["broker", "ports"] }
+properties = { workspace = true }
+initiative = { workspace = true, features = ["ports"] }
+models_properties = { workspace = true }
+system_properties = { workspace = true }
 rootcause = { workspace = true }
 # Domain vocabulary: channel-parent trigger events keep the channel-only post
 # shape, and the channel topic's `message_posted` can still feed the trigger.
-channels = { path = "../channels", default-features = false, features = ["ports"] }
+channels = { workspace = true, features = ["ports"] }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
@@ -56,15 +56,15 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time"] }
 async-trait = { workspace = true }
-call = { path = "../call", default-features = false, features = ["ports"], optional = true }
+call = { workspace = true, features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
-messages = { path = "../messages", features = ["test-utils"] }
-agent_session = { path = "../agent_session", features = ["test-utils"] }
-bot_id = { path = "../bot_id", features = ["test-utils"] }
+macro_db_migrator = { workspace = true }
+messages = { workspace = true, features = ["test-utils"] }
+agent_session = { workspace = true, default-features = true, features = ["test-utils"] }
+bot_id = { workspace = true, features = ["test-utils"] }
 mime = "0.3"
 mockall = { workspace = true }
-model_owner = { path = "../model_owner" }
+model_owner = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

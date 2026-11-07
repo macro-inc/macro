@@ -16,10 +16,10 @@ redis = [
 ]
 
 [dependencies]
-agent_session = { path = "../agent_session", default-features = false }
-broadcast = { path = "../broadcast" }
+agent_session = { workspace = true }
+broadcast = { workspace = true }
 chrono = { workspace = true, optional = true }
-macro_uuid = { path = "../macro_uuid", optional = true }
+macro_uuid = { workspace = true, optional = true }
 redis = { workspace = true, optional = true, features = [
   "aio",
   "streams",
@@ -34,10 +34,10 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 agent-client-protocol = { workspace = true }
-agent_runtime_protocol = { path = "../agent_runtime_protocol" }
-agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
+agent_runtime_protocol = { workspace = true, default-features = true }
+agent_session = { workspace = true, features = ["test-utils"] }
 chrono = { workspace = true }
-macro_env_var = { path = "../macro_env_var" }
-macro_uuid = { path = "../macro_uuid" }
+macro_env_var = { workspace = true }
+macro_uuid = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }

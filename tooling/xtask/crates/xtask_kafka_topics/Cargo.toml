@@ -13,5 +13,5 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 # Source of truth for the declared topics.
-macro_event_topics = { path = "../../../../crates/macro_event_topics" }
-xtask_paths = { path = "../xtask_paths" }
+macro_event_topics = { workspace = true }
+xtask_paths = { workspace = true }

@@ -11,4 +11,4 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-xtask_paths = { path = "../xtask_paths" }
+xtask_paths = { workspace = true }
