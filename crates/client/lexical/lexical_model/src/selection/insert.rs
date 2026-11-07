@@ -150,6 +150,36 @@ impl Transaction<'_> {
                 original.style,
             );
         }
+        if !original.is_collapsed()
+            && let [key] = selected.as_slice()
+            && self.is_text(*key)
+        {
+            let data = self.view().text_data(*key)?.clone();
+            let (start, end) = if backward {
+                (original.focus, original.anchor)
+            } else {
+                (original.anchor, original.focus)
+            };
+            self.text(*key)?.splice_text(
+                Utf16Offset(start.offset())..Utf16Offset(end.offset()),
+                text,
+                false,
+            )?;
+            self.finish_text_insertion(
+                slot,
+                false,
+                Point::text(
+                    *key,
+                    Utf16Offset(start.offset()) + TextBuffer::new(text).utf16_len(),
+                ),
+                data.format,
+                data.style,
+            )?;
+            if self.text_content_size(*key) == Utf16Offset::ZERO {
+                self.remove(*key, true)?;
+            }
+            return Ok(());
+        }
         let first_format = selected
             .first()
             .and_then(|key| self.view().text(*key))
