@@ -265,7 +265,8 @@ deny = [
     "mcp_toolset",               # MCP trace-context propagation tests only (dev-dependency)
     "name_search",               # Search-term redaction span tests only (dev-dependency)
     "native_app_server",         # Dev tooling only
-    "notification",              # Call-push trace propagation and baggage-redaction tests only
+    "notification",              # Active-notification-id span tests only
+    "notification_outbound",     # Call-push trace propagation and baggage-redaction tests only
     "notification_sandbox",      # This is not production code its just tooling
     "opentelemetry-appender-tracing", # OpenTelemetry tracing-to-OTLP log bridge requires tracing-subscriber
     "passwords",                 # Provider credential-redaction tests only (dev-dependency)
