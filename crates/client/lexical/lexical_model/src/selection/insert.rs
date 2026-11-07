@@ -464,6 +464,14 @@ impl Transaction<'_> {
         if !self.range_at(slot)?.is_collapsed() {
             self.remove_text_at(slot)?;
         }
+        let slot = if self.anchor_at(slot)?.key() == NodeKey::ROOT {
+            // removeText can leave a root caret after the initial root shortcut.
+            // Upstream's splitNodeAtPoint fallback appends and selects a paragraph.
+            let p = self.create(Paragraph::default())?;
+            self.append(NodeKey::ROOT, &[p.key()])?;
+            self.select_start(p)?;
+            SelectionSlot::Active
+        } else { slot };
         let (block, index) = self.split_selection_boundary(slot)?;
         let tail = self
             .children(block)

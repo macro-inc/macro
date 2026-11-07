@@ -711,3 +711,21 @@ fn replacing_a_token_preserves_typing_format_independently_of_the_new_text() -> 
     })?;
     Ok(())
 }
+
+#[test]
+fn paragraph_insertion_after_root_caret_removal_uses_the_split_fallback() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(last, ChildIndex(0)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))?;
+        tx.insert_paragraph()?;
+        assert_eq!(tx.children_size(NodeKey::ROOT), 4);
+        assert_eq!(tx.anchor()?.key(), tx.last_child(NodeKey::ROOT).unwrap());
+        Ok(())
+    })?;
+    Ok(())
+}
