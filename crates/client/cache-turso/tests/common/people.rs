@@ -87,6 +87,22 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         identity: VIEWER.into(),
         storage_generation: engine.current_storage_generation().await.unwrap(),
     };
+    let mut references = PeopleReferenceRequest {
+        scope: scope.clone(),
+        labels: vec![
+            "Al".into(),
+            "winner@example.com".into(),
+            "ghost@example.com".into(),
+            "blocked@example.com".into(),
+        ],
+        matching: ReferenceMatchMode::PreferFullName,
+        exclude_secondary_inboxes: false,
+    };
+    assert!(
+        engine.resolve_people_references(&references).await.is_err(),
+        "a read cannot bind an unowned cache"
+    );
+    assert!(engine.current_identity().await.unwrap().is_none());
     let mut request = PeopleSearch {
         scope: scope.clone(),
         mode: PeopleMode::Command,
@@ -112,6 +128,21 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         })
         .await
         .unwrap();
+    let PeopleReferenceResult::Resolved { matches, .. } =
+        engine.resolve_people_references(&references).await.unwrap()
+    else {
+        panic!("bound references without inbox exclusions do not require ready context")
+    };
+    assert_eq!(matches[0].people[0].user_id.as_ref(), EXACT);
+    assert_eq!(matches[1].people[0].user_id.as_ref(), WINNER);
+    assert!(matches[2].people.is_empty());
+    assert_eq!(matches[3].people[0].user_id.as_ref(), BLOCKED);
+    assert!(matches.iter().all(|item| item.complete));
+    references.exclude_secondary_inboxes = true;
+    assert!(matches!(
+        engine.resolve_people_references(&references).await.unwrap(),
+        PeopleReferenceResult::ContextPending
+    ));
     let conversation = Uuid::now_v7();
     let patches = [WINNER, BLOCKED, GHOST, DUPLICATE]
         .into_iter()
@@ -163,6 +194,27 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         })
         .await
         .unwrap();
+    let PeopleReferenceResult::Resolved { matches, .. } =
+        engine.resolve_people_references(&references).await.unwrap()
+    else {
+        panic!("ready")
+    };
+    assert_eq!(matches[0].people[0].user_id.as_ref(), EXACT);
+    assert_eq!(matches[1].people[0].user_id.as_ref(), WINNER);
+    assert!(
+        matches[2].people.is_empty(),
+        "context-only stubs never resolve names"
+    );
+    assert!(
+        matches[3].people.is_empty(),
+        "secondary inbox exclusion precedes ambiguity checks"
+    );
+    let mut foreign = references.clone();
+    foreign.scope.identity = "macro|other@example.com".into();
+    assert!(engine.resolve_people_references(&foreign).await.is_err());
+    foreign.scope = scope.clone();
+    foreign.scope.storage_generation = Uuid::now_v7();
+    assert!(engine.resolve_people_references(&foreign).await.is_err());
     let PeopleSearchResult::Page {
         people,
         truncated,
@@ -397,5 +449,11 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
     reopened.clear().await.unwrap();
     assert!(reopened.update_people_context(&update).await.is_err());
     assert!(reopened.search_people(&request).await.is_err());
+    assert!(
+        reopened
+            .resolve_people_references(&references)
+            .await
+            .is_err()
+    );
     reopened.into_storage()
 }

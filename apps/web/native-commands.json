@@ -32,6 +32,7 @@
     "graphql_cache_inspect_query_variants",
     "graphql_cache_invalidate",
     "graphql_cache_people_context",
+    "graphql_cache_people_resolve_references",
     "graphql_cache_people_search",
     "graphql_cache_people_update",
     "graphql_cache_read",

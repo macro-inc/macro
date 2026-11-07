@@ -27,7 +27,10 @@ use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::{
     engine::HydrationScope,
-    people::{ContextState, ContextUpdate, PeopleSearch, PeopleSearchResult},
+    people::{
+        ContextState, ContextUpdate, PeopleReferenceRequest, PeopleReferenceResult, PeopleSearch,
+        PeopleSearchResult,
+    },
 };
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
@@ -264,6 +267,19 @@ pub async fn graphql_cache_people_search(
     traceparent: Option<String>,
 ) -> Result<PeopleSearchResult, String> {
     engine_handle(&state)?.people_search(request).await
+}
+
+/// Resolve scoped label evidence, never a complete in-memory people catalog.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref()), label_count = request.labels.len()), err)]
+pub async fn graphql_cache_people_resolve_references(
+    state: State<'_, CacheState>,
+    request: PeopleReferenceRequest,
+    traceparent: Option<String>,
+) -> Result<PeopleReferenceResult, String> {
+    engine_handle(&state)?
+        .people_resolve_references(request)
+        .await
 }
 
 /// Evaluates Soup filters over native projections, including cached Mail pages.

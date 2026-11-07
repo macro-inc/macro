@@ -50,6 +50,7 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
       data: { user: { id: viewer } },
     }),
     people: {
+      resolveReferences: vi.fn<PeopleCache['resolveReferences']>(),
       search,
       context: vi.fn<PeopleCache['context']>(),
       update: vi.fn<PeopleCache['update']>(),

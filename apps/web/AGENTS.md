@@ -48,7 +48,7 @@ window, never an authorization error or server continuation. Resolve self separa
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Ranked person
-cursors require coordinator protocol 14; native menu policy version 4 retains
+cursors use coordinator protocol 15; native menu policy version 4 retains
 mention scoring/property boosts and excludes automated recipient addresses before
 the limit unless their full address was typed. Generate the policy floor from Rust
 with the transport schema; older policy replies are not ranked
@@ -73,6 +73,19 @@ names to option/chip avatars instead of filling the global name store. The inter
 recipient and email app-browser fixtures cover desktop/touch.
 Universal task inference still uses the existing shared-recipient pool until its
 planner resolver migrates; never substitute a suggestion page for that catalog.
+`CacheHost.people.resolveReferences` exposes the core's bounded full-directory
+ambiguity evidence. It needs a bound viewer and ready context only for inbox
+exclusions; callers must also check directory completeness. Missing reference
+support must not disable existing search. The real wrapper/worker/OPFS regression
+is `worker/browser-test/people-references.browser.e2e.ts` under `lib/graphql-cache`.
+`ContactReferencePage` provides fetch-only server fallback stages with exact/first-name
+matching before the limit. Follow empty continuations and keep the existing search
+budget; never infer uniqueness from one incomplete suggestion page.
+`useContactReferences` resolves only the current inference/import labels, with
+per-label complete/ambiguous evidence and separate exact identity lookup. Its
+reader keeps one physical read plus one replaceable pending input, samples cache
+completeness before scanning, and wakes incomplete reads only on readiness
+transitions. Source data is scoped and immediately collected, not a people pool.
 
 ## Verifying a change in a real browser
 

@@ -43,7 +43,9 @@ impl ContactDirectory for Reader {
             .lock()
             .unwrap()
             .push(search.as_str().to_owned());
-        self.contact_page(viewer, after, limit).await
+        let mut page = self.contact_page(viewer, after, limit).await?;
+        page.contacts.retain(|contact| search.matches(contact));
+        Ok(page)
     }
     async fn lookup_contacts(
         &self,
@@ -157,6 +159,56 @@ async fn search_and_exact_lookups_are_validated_and_scoped_to_the_root_viewer() 
                     .variables(async_graphql::Variables::from_json(variables))
                     .data(viewer.clone()),
             )
+            .await;
+        assert_eq!(
+            response.errors[0].extensions.as_ref().unwrap().get("code"),
+            Some(&async_graphql::Value::from("BAD_USER_INPUT"))
+        );
+    }
+    assert_eq!(reader.requests.lock().unwrap().len(), before);
+}
+
+#[tokio::test]
+async fn reference_matching_is_additive_validated_and_delegated_to_the_domain() {
+    let reader = Arc::new(Reader::default());
+    let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+        .data(ContactsGraphqlContext::new(reader.clone()))
+        .finish();
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    let response = schema
+        .execute(
+            Request::new(
+                r#"{ user {
+        ordinary: contacts(search: "Per") { nodes { userId } }
+        exact: contacts(search: "Per", matching: EXACT) { nodes { userId } nextCursor }
+        first: contacts(search: "Person", matching: FIRST_NAME) { nodes { userId } }
+        notFirst: contacts(search: "person@example.com", matching: FIRST_NAME) { nodes { userId } }
+        address: contacts(search: "person@example.com", matching: EXACT) { nodes { userId } }
+        any: contacts(search: "Person", matching: ANY_NAME) { nodes { userId } }
+    } }"#,
+            )
+            .data(viewer.clone()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    for field in ["ordinary", "first", "address", "any"] {
+        assert_eq!(
+            data["user"][field]["nodes"][0]["userId"],
+            "macro|person@example.com"
+        );
+    }
+    for field in ["exact", "notFirst"] {
+        assert_eq!(data["user"][field]["nodes"], serde_json::json!([]));
+    }
+    assert!(data["user"]["exact"]["nextCursor"].is_string());
+    let before = reader.requests.lock().unwrap().len();
+    for query in [
+        "{user{contacts(matching: EXACT){nextCursor}}}",
+        "{user{contacts(search: \"\", matching: FIRST_NAME){nextCursor}}}",
+    ] {
+        let response = schema
+            .execute(Request::new(query).data(viewer.clone()))
             .await;
         assert_eq!(
             response.errors[0].extensions.as_ref().unwrap().get("code"),

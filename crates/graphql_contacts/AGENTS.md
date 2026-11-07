@@ -35,4 +35,5 @@ bounded, enriched pages under `GraphqlUser`; these are not CRM contacts.
   Viewer-specific names must not merge into public user profiles or `GraphqlUser`.
 - Only a null continuation proves exhaustion. Search budget exhaustion or invalid legacy IDs can leave empty pages. Reset cursors for a new query; server search returns ID-ordered pages, not ranked top-K results.
 - `contactsByUserIds` takes target user IDs, not viewer-scoped record IDs; `contactsByEmails` uses the same membership checks. Both cap raw input at 500, preserve first-requested order, and return nothing for empty input.
+- `contacts(matching: EXACT | FIRST_NAME | ANY_NAME)` selects a domain-owned reference predicate before limiting and requires nonempty `search`. Omission preserves subsequence search. These modes keep the four-batch work budget and may return empty continuation pages; ship the additive schema before clients select `matching`.
 - No query strings, cursor contents, names, or email-based user IDs belong in tracing fields.

@@ -1,7 +1,14 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { hydrateGraphqlContacts } from './graphql-contacts';
+import {
+  ContactReferencePageDocument,
+  type ContactReferencePageQueryVariables,
+} from './graphql/generated/graphql';
+import {
+  fetchContactReferencePage,
+  hydrateGraphqlContacts,
+} from './graphql-contacts';
 
 const network = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('./graphql-soup', () => ({
@@ -83,6 +90,30 @@ it('does not write a late network response after its caller is disposed', async 
   response.resolve({ data });
   await expect(result).rejects.toThrow();
   expect(hydrateQuery).not.toHaveBeenCalled();
+});
+
+it('keeps exact reference fallback fetch-only and cancels obsolete pages', async () => {
+  const response = Promise.withResolvers<{ data: typeof data }>();
+  network.query.mockReturnValue({ toPromise: () => response.promise });
+  const controller = new AbortController();
+  const variables: ContactReferencePageQueryVariables = {
+    limit: 500,
+    after: 'next',
+    search: 'Person',
+    matching: 'EXACT',
+  };
+  const page = fetchContactReferencePage(variables, controller.signal);
+  expect(network.query).toHaveBeenCalledWith(
+    ContactReferencePageDocument,
+    variables,
+    {
+      requestPolicy: 'network-only',
+      fetchOptions: { signal: controller.signal },
+    }
+  );
+  controller.abort();
+  response.resolve({ data });
+  await expect(page).rejects.toThrow();
 });
 
 it('does not turn a rejected cache admission into a successful checkpoint', async () => {

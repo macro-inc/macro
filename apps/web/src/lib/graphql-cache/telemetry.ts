@@ -515,6 +515,7 @@ export function operationCategoryForRequest(
       'read-records-by-keys',
       'search',
       'people-search',
+      'people-references',
       'people-context',
       'entity-filter',
       'calendar-range',

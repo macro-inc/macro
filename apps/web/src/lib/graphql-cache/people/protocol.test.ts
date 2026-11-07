@@ -93,6 +93,7 @@ describe('person transport admission', () => {
 
   it('validates before transport and rejects malformed or oversized replies without leaking them', async () => {
     const transport = {
+      resolveReferences: vi.fn(),
       context: vi
         .fn()
         .mockResolvedValue({ kind: 'ready', epoch: UPDATE.epoch }),

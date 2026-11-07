@@ -10,6 +10,7 @@ export type IdentityBindingWire = {
 import type { EntityResolverWire } from './exchange/entity-resolvers';
 import type {
   PeopleContextUpdate,
+  PeopleReferenceRequest,
   PeopleScope,
   PeopleSearch,
 } from './people/generated';
@@ -97,6 +98,11 @@ export function isStaleHydrationScopeError(error: unknown): boolean {
 }
 
 export type PeopleRequest =
+  | {
+      kind: 'people-references';
+      request: PeopleReferenceRequest;
+      traceparent?: string;
+    }
   | { kind: 'people-context'; scope: PeopleScope; traceparent?: string }
   | { kind: 'people-update'; update: PeopleContextUpdate; traceparent?: string }
   | { kind: 'people-search'; request: PeopleSearch; traceparent?: string };

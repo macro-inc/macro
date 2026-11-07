@@ -1,10 +1,15 @@
 import {
   MAX_PEOPLE_BATCH,
   MAX_PEOPLE_QUERY_BYTES,
+  MAX_REFERENCE_WITNESSES,
   type PeopleContextState,
   PeopleContextStateSchema,
   type PeopleContextUpdate,
   PeopleContextUpdateSchema,
+  type PeopleReferenceRequest,
+  PeopleReferenceRequestSchema,
+  type PeopleReferenceResult,
+  PeopleReferenceResultSchema,
   type PeopleScope,
   PeopleScopeSchema,
   type PeopleSearch,
@@ -16,6 +21,8 @@ import {
 export type {
   PeopleContextState,
   PeopleContextUpdate,
+  PeopleReferenceRequest,
+  PeopleReferenceResult,
   PeopleScope,
   PeopleSearch,
   PeopleSearchResult,
@@ -23,6 +30,54 @@ export type {
 
 export const PEOPLE_UNSUPPORTED = 'Contact search context is unsupported';
 const UTF8 = new TextEncoder();
+
+/** Bound label count/bytes before crossing the host boundary. */
+export function isPeopleReferenceRequest(
+  value: unknown
+): value is PeopleReferenceRequest {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('labels' in value) ||
+    !Array.isArray(value.labels) ||
+    value.labels.length > MAX_PEOPLE_BATCH
+  )
+    return false;
+  const result = PeopleReferenceRequestSchema.safeParse(value);
+  return (
+    result.success &&
+    isPeopleScope(result.data.scope) &&
+    result.data.labels.every(
+      (label) =>
+        label.trim().length > 0 &&
+        UTF8.encode(label).length <= MAX_PEOPLE_QUERY_BYTES
+    )
+  );
+}
+
+/** Each input may return only two ambiguity witnesses, never a directory. */
+export function parsePeopleReferenceResult(
+  value: unknown
+): PeopleReferenceResult {
+  if (value && typeof value === 'object' && 'matches' in value) {
+    if (
+      !Array.isArray(value.matches) ||
+      value.matches.length > MAX_PEOPLE_BATCH ||
+      value.matches.some(
+        (entry) =>
+          !entry ||
+          typeof entry !== 'object' ||
+          !('people' in entry) ||
+          !Array.isArray(entry.people) ||
+          entry.people.length > MAX_REFERENCE_WITNESSES
+      )
+    )
+      throw new Error('Invalid contact reference response');
+  }
+  const result = PeopleReferenceResultSchema.safeParse(value);
+  if (!result.success) throw new Error('Invalid contact reference response');
+  return result.data;
+}
 
 /** Bound arrays before schema traversal; never return validation input in errors. */
 export function isPeopleSearch(value: unknown): value is PeopleSearch {

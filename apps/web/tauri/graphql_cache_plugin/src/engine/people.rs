@@ -2,10 +2,27 @@
 use super::{EngineHandle, EngineState, WriteResultWire, wire_write_result};
 use cache_core::{
     engine::HydrationScope,
-    people::{ContextState, ContextUpdate, PeopleSearch, PeopleSearchResult},
+    people::{
+        ContextState, ContextUpdate, PeopleReferenceRequest, PeopleReferenceResult, PeopleSearch,
+        PeopleSearchResult,
+    },
 };
 
 impl EngineHandle {
+    /// Resolve full-directory label evidence while retaining only bounded witnesses.
+    pub async fn people_resolve_references(
+        &self,
+        request: PeopleReferenceRequest,
+    ) -> Result<PeopleReferenceResult, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .resolve_people_references(&request)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Inspect the local context publication state without materializing people.
     pub async fn people_context(&self, scope: HydrationScope) -> Result<ContextState, String> {
         self.inner

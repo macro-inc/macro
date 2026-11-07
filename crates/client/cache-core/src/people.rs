@@ -11,6 +11,8 @@ pub(crate) const CONTEXT_META: &str = "__meta:contact-search-context-v1";
 pub const MAX_PEOPLE_BATCH: usize = 500;
 /// Before-limit matching, exclusion and ranking contract advertised to clients.
 pub const PEOPLE_POLICY_VERSION: u32 = 4;
+/// Two distinct matches suffice to disprove unique reference resolution.
+pub const MAX_REFERENCE_WITNESSES: usize = 2;
 
 /// The one-to-one conversation a command result opens, with its visible name
 /// and viewed-first recency. Group DMs do not occupy this slot.
@@ -241,6 +243,11 @@ pub(crate) fn contact_key(viewer: &str, user: &str) -> EntityKey<'static> {
 
 mod cursor;
 pub(crate) mod ranking;
+pub(crate) mod references;
+pub use references::{
+    PeopleReferenceMatch, PeopleReferenceRequest, PeopleReferenceResult, PersonReference,
+    ReferenceMatchMode,
+};
 
 #[cfg(any(test, feature = "schema"))]
 pub mod schema;

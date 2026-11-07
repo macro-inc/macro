@@ -57,6 +57,7 @@ it('waits for all owned inputs, shares the supplied leader, publishes deltas and
     disabled: false,
     currentStorageGeneration: async () => storageGeneration,
     people: {
+      resolveReferences: async () => ({ kind: 'unsupported' as const }),
       context: vi.fn(async () => ({ kind: 'missing' as const })),
       update: vi.fn(async (update: PeopleContextUpdate) => {
         writes.push(update);
@@ -147,6 +148,7 @@ it('cannot relabel retained old-account rows and stops late work after ownership
     currentStorageGeneration: async () =>
       '00000000-0000-4000-8000-000000000001',
     people: {
+      resolveReferences: async () => ({ kind: 'unsupported' as const }),
       context: async () => ({ kind: 'missing' as const }),
       update: async (update: PeopleContextUpdate) => {
         writes.push(update);
@@ -201,6 +203,7 @@ it('releases its source and stays unsupported without retrying or writing', asyn
     currentStorageGeneration: async () =>
       '00000000-0000-4000-8000-000000000001',
     people: {
+      resolveReferences: async () => ({ kind: 'unsupported' as const }),
       context,
       update,
       search: async () => ({ kind: 'contextPending' as const }),
@@ -238,6 +241,7 @@ it('backs off transient failures with at most three automatic retries', async ()
     currentStorageGeneration: async () =>
       '00000000-0000-4000-8000-000000000001',
     people: {
+      resolveReferences: async () => ({ kind: 'unsupported' as const }),
       context,
       update,
       search: async () => ({ kind: 'contextPending' as const }),

@@ -91,6 +91,7 @@ import { PEOPLE_UNSUPPORTED } from '../people/protocol';
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
 const PEOPLE_CONTEXT_COMMAND = 'graphql_cache_people_context';
 const PEOPLE_SEARCH_COMMAND = 'graphql_cache_people_search';
+const PEOPLE_REFERENCES_COMMAND = 'graphql_cache_people_resolve_references';
 const PEOPLE_UPDATE_COMMAND = 'graphql_cache_people_update';
 
 export interface TauriHostOptions {
@@ -184,6 +185,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
   let peopleUnavailable = false;
+  let referencesUnavailable = false;
   let scopedHydrationSupported: Promise<boolean> | undefined;
   // Native binaries before the calendar range index answer `unsupported`, so
   // the calendar keeps reading from the network until the app updates.
@@ -438,6 +440,20 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     clientId,
     liveQueries: true,
     people: createPeopleCache({
+      async resolveReferences(args, traceparent) {
+        await ready;
+        if (referencesUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_REFERENCES_COMMAND, {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_REFERENCES_COMMAND)) throw error;
+          referencesUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
       async context(scope, traceparent) {
         await ready;
         if (peopleUnavailable) return { kind: 'unsupported' };

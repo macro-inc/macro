@@ -21,7 +21,7 @@ it('interrupts a read waiting for initialization without interrupting a write or
   await availability.waitUntilReady(() => initialized.promise, true);
 });
 
-it.each(['people-context', 'people-search'] as const)(
+it.each(['people-context', 'people-search', 'people-references'] as const)(
   'classifies %s as a read-only request',
   (kind) => {
     expect(isReadOnlyCacheRequest(kind)).toBe(true);

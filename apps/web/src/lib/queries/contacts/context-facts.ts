@@ -1,11 +1,11 @@
-import { emailToMacroId, macroIdToEmail, tryMacroId } from '@core/user/macroId';
+import { emailToMacroId } from '@core/user/macroId';
 import type { PeopleContextUpdate } from '@graphql-cache/people/generated';
 import type { Link } from '@service-email/generated/schemas';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ApiActivity } from '@service-storage/generated/schemas/apiActivity';
-import { validate as validEmail } from 'email-validator';
 import { validate as validUuid } from 'uuid';
 import type { CachedGraphqlChannel } from '../channel/graphql';
+import { canonicalContactUserId } from './contact-user-id';
 
 export type PersonFactPatch = Extract<
   PeopleContextUpdate['action'],
@@ -19,17 +19,6 @@ export const EMPTY_PERSON_FACTS: Readonly<PersonFacts> = {
 };
 const UTF8 = new TextEncoder();
 
-function validUser(value: string): string | undefined {
-  const id = tryMacroId(value.toLowerCase());
-  // The shared Rust MacroUserId parser does not accept '$' in local parts,
-  // although the email-input validator does. Do not poison a whole IPC batch.
-  return id &&
-    !id.includes('$') &&
-    UTF8.encode(id).length <= 1024 &&
-    validEmail(macroIdToEmail(id))
-    ? id
-    : undefined;
-}
 function timestamp(value: string | null | undefined): number | null {
   if (value == null) return null;
   const parsed = new Date(value).getTime();
@@ -64,11 +53,12 @@ function commandTarget(
   for (const participant of overlay?.participantIds ?? channel.participants) {
     const id =
       typeof participant === 'string' ? participant : participant.user_id;
-    if (validUser(id) === viewer) continue;
+    if (canonicalContactUserId(id) === viewer) continue;
     if (other !== undefined) return;
     other = id;
   }
-  const userId = other === undefined ? undefined : validUser(other);
+  const userId =
+    other === undefined ? undefined : canonicalContactUserId(other);
   if (!userId || !validUuid(channel.id)) return;
   const name = overlay?.name ?? channel.name ?? '';
   if (UTF8.encode(name).length > 4096) return;
@@ -92,7 +82,7 @@ export function buildContactContextFacts(input: {
   cachedChannels: readonly CachedGraphqlChannel[];
 }): ReadonlyMap<string, PersonFacts> {
   const result = new Map<string, PersonFacts>();
-  const viewer = validUser(input.viewer);
+  const viewer = canonicalContactUserId(input.viewer);
   const viewed = new Map(
     input.activity.map((row) => [row.channel_id, timestamp(row.viewed_at)])
   );
@@ -104,9 +94,9 @@ export function buildContactContextFacts(input: {
     // Preserve useDmActivityByUserId's source-order/first-other semantics,
     // including group-DM activity; only one-to-one DMs become command targets.
     const firstOther = channel.participants.find(
-      (person) => validUser(person.user_id) !== viewer
+      (person) => canonicalContactUserId(person.user_id) !== viewer
     );
-    const peer = firstOther && validUser(firstOther.user_id);
+    const peer = firstOther && canonicalContactUserId(firstOther.user_id);
     if (!peer) continue;
     const facts: PersonFacts = {
       ...(result.get(peer) ?? EMPTY_PERSON_FACTS),
@@ -137,7 +127,7 @@ export function buildContactContextFacts(input: {
   for (const link of input.links) {
     if (link.is_primary) continue;
     const id = emailToMacroId(link.email_address.toLowerCase());
-    const peer = id && validUser(id);
+    const peer = id && canonicalContactUserId(id);
     if (peer)
       result.set(peer, {
         ...(result.get(peer) ?? EMPTY_PERSON_FACTS),

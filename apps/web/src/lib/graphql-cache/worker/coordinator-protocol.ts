@@ -1,5 +1,6 @@
 import {
   isPeopleContextUpdate,
+  isPeopleReferenceRequest,
   isPeopleScope,
   isPeopleSearch,
 } from '../people/protocol';
@@ -38,7 +39,7 @@ function isPeopleTraceparent(value: unknown): boolean {
 }
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 14 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 15 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -746,6 +747,12 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         Array.isArray(value.keys) &&
         value.keys.length <= MAX_RECORD_SELECTION_PAGE_SIZE &&
         value.keys.every(isValidNormalizedRecordKey)
+      );
+    case 'people-references':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'request', 'traceparent']) &&
+        isPeopleReferenceRequest(value.request) &&
+        isPeopleTraceparent(value.traceparent)
       );
     case 'people-context':
       return (

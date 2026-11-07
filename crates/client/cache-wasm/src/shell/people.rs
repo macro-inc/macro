@@ -2,13 +2,30 @@
 use super::{CacheEngine, err_js, js_write_result, to_js};
 use cache_core::{
     engine::HydrationScope,
-    people::{ContextUpdate, PeopleSearch},
+    people::{ContextUpdate, PeopleReferenceRequest, PeopleSearch},
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
 #[wasm_bindgen]
 impl CacheEngine {
+    /// Resolve bounded label evidence without exposing the cached directory.
+    #[wasm_bindgen(js_name = peopleResolveReferences)]
+    pub fn people_resolve_references(&self, request: JsValue) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let request: PeopleReferenceRequest =
+                serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            let result = state
+                .engine_mut()?
+                .resolve_people_references(&request)
+                .await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
     /// Inspect publication without scanning contacts.
     #[wasm_bindgen(js_name = peopleContext)]
     pub fn people_context(&self, scope: JsValue) -> js_sys::Promise {

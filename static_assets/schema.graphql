@@ -3849,6 +3849,25 @@ type GraphqlContact {
 }
 
 """
+Optional exact matching stages for bounded reference-resolution fallback.
+Omission keeps ordinary subsequence search unchanged.
+"""
+enum GraphqlContactMatching {
+	"""
+	Whole name, address or user identity.
+	"""
+	EXACT
+	"""
+	First word of the resolved name (full address when no name exists).
+	"""
+	FIRST_NAME
+	"""
+	Whole and first names, addresses and identities at the same priority.
+	"""
+	ANY_NAME
+}
+
+"""
 A bounded contact-ID-ordered page; an empty page may still have a continuation.
 """
 type GraphqlContactPage {
@@ -10511,7 +10530,11 @@ type GraphqlUser {
 		"""
 		Optional name/email subsequence filter, at most 512 UTF-8 bytes. Results stay in source-ID order; a scan-budget-limited page may be empty with nextCursor.
 		"""
-		search: String
+		search: String,
+		"""
+		Optional exact reference-matching stage, applied before limiting. Requires a nonempty search; the same scan budget and continuation rules apply.
+		"""
+		matching: GraphqlContactMatching
 	): GraphqlContactPage!
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries

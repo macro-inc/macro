@@ -1,6 +1,7 @@
 {
   "maxBatch": 500,
   "maxQueryBytes": 512,
+  "maxReferenceWitnesses": 2,
   "policyVersion": 4,
   "schemas": {
     "PeopleContextState": {
@@ -253,6 +254,181 @@
       ],
       "title": "ContextUpdate",
       "type": "object"
+    },
+    "PeopleReferenceRequest": {
+      "$defs": {
+        "HydrationScope": {
+          "additionalProperties": false,
+          "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
+          "properties": {
+            "identity": {
+              "description": "Expected authenticated response identity, not a record identifier.",
+              "type": "string"
+            },
+            "storageGeneration": {
+              "description": "Durable data generation observed before the network request.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "storageGeneration",
+            "identity"
+          ],
+          "type": "object"
+        },
+        "ReferenceMatchMode": {
+          "description": "How a caller's inferred names resolve; these are not suggestion rankings.",
+          "oneOf": [
+            {
+              "const": "exact",
+              "description": "Match an entire name, address or identity only.",
+              "type": "string"
+            },
+            {
+              "const": "preferFullName",
+              "description": "Prefer whole names/addresses/identities, otherwise require a unique first name.",
+              "type": "string"
+            },
+            {
+              "const": "anyName",
+              "description": "Treat whole and first names equally, as inferred user property values do.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Resolve a bounded set of labels without materializing a personal directory.",
+      "properties": {
+        "excludeSecondaryInboxes": {
+          "description": "Recipient/planner pools can omit connected secondary inboxes, using ready local context.",
+          "type": "boolean"
+        },
+        "labels": {
+          "description": "Raw input count is capped before deduplication; each label is at most 512 UTF-8 bytes.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "type": "array"
+        },
+        "matching": {
+          "$ref": "#/$defs/ReferenceMatchMode",
+          "description": "Name matching owned by the requesting surface."
+        },
+        "scope": {
+          "$ref": "#/$defs/HydrationScope",
+          "description": "Account/storage admission fence."
+        }
+      },
+      "required": [
+        "scope",
+        "labels",
+        "matching",
+        "excludeSecondaryInboxes"
+      ],
+      "title": "PeopleReferenceRequest",
+      "type": "object"
+    },
+    "PeopleReferenceResult": {
+      "$defs": {
+        "PeopleReferenceMatch": {
+          "description": "Evidence for one input label, in the same order as the request.",
+          "properties": {
+            "complete": {
+              "description": "Malformed matching records cannot establish uniqueness. The caller must also\ncheck directory hydration completeness before relying on a single witness.",
+              "type": "boolean"
+            },
+            "people": {
+              "description": "At most two distinct witnesses. Two means ambiguous, not a complete candidate list.",
+              "items": {
+                "$ref": "#/$defs/PersonReference"
+              },
+              "maxItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "people",
+            "complete"
+          ],
+          "type": "object"
+        },
+        "PersonReference": {
+          "description": "One authorized cached contact used as matching evidence, not a suggestion catalog.",
+          "properties": {
+            "email": {
+              "description": "The contact's address.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The stored private name; absence must not invent a first-name match from an email local part.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "userId": {
+              "description": "Canonical target identity, never the viewer-scoped record id.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "userId",
+            "email"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Read-only reference resolution never publishes context or changes membership.",
+      "oneOf": [
+        {
+          "description": "Required secondary-inbox exclusions are not ready.",
+          "properties": {
+            "kind": {
+              "const": "contextPending",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A bounded result for every requested label.",
+          "properties": {
+            "kind": {
+              "const": "resolved",
+              "type": "string"
+            },
+            "matches": {
+              "description": "Same length/order as the raw input labels, including duplicates.",
+              "items": {
+                "$ref": "#/$defs/PeopleReferenceMatch"
+              },
+              "maxItems": 500,
+              "type": "array"
+            },
+            "policyVersion": {
+              "description": "Matching contract version, shared with person policy capability admission.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "policyVersion",
+            "matches"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PeopleReferenceResult"
     },
     "PeopleScope": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
