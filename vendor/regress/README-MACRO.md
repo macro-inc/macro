@@ -27,6 +27,9 @@ The consumer fixture records every BMP literal/class/negative-class equivalence
 set, including surrogates, plus Markdown patterns and case-folding probes.
 Singleton identity classes are implicit; negated sets are their complement.
 
+`Regex::is_unicode` exposes the compiled Unicode flag so UTF-16 consumers can
+select the code-point or code-unit input decoder without reparsing patterns.
+
 Upstream repository: https://github.com/ridiculousfish/regress.
 Upstream PR: not submitted (this work does not authorize external publication).
 Remove the patch after an upstream release passes the consumer fixture unchanged.
