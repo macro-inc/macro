@@ -388,9 +388,7 @@ fn export_external(
             let hostname = options
                 .app_hostname
                 .as_deref()
-                .ok_or(Error::InvalidArgument(
-                    "E_DOCUMENT_MENTION requires app_hostname",
-                ))?;
+                .ok_or_else(|| Error::Transformer(Box::new(crate::Error::MissingHostname)))?;
             let block = field("blockName");
             let path = if name == "E_DOCUMENT_MENTION" && matches!(block, "routine" | "automation")
             {

@@ -15,10 +15,10 @@ impl NodeType for DatabaseQueryNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let json = super::wire::own_json(Self::TYPE, json)?;
         Ok(serde_json::from_value(Value::Object(json))?)
     }
@@ -57,7 +57,7 @@ pub fn parse_database_query_json(json: &str) -> Option<DatabaseQueryData> {
     parse_database_query_data(&serde_json::from_str::<Value>(json).ok()?)
 }
 /// Validate and wrap a query payload, escaping tag-opening characters after stringify.
-pub fn database_query_markdown(data: &Value) -> crate::Result<String> {
+pub fn database_query_markdown(data: &Value) -> crate::ModelResult<String> {
     let data = parse_database_query_data(data).ok_or(Error::Invariant("Invalid database query"))?;
     let json = to_js_json_string(&serde_json::to_value(data)?).replace('<', "\\u003c");
     Ok(format!("<m-db-query>{json}</m-db-query>"))

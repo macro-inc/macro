@@ -5,7 +5,7 @@ use crate::policy::import_with_policy;
 pub(super) fn import_node<T: ImportPolicy>(
     tx: &mut Transaction<'_>,
     json: &SerializedNode,
-) -> crate::Result<NodeKey> {
+) -> crate::ModelResult<NodeKey> {
     let mut json = json.clone();
     match T::TYPE {
         "document-mention" if json.get("createdAt").is_none_or(Value::is_null) => {
@@ -73,7 +73,7 @@ fn falsy_default(json: &mut SerializedNode, name: &str, value: Value) {
     }
 }
 /// Normalize own fields as the TS constructor/updateFromJSON does, without retaining framework keys.
-pub(super) fn own_json(ty: &str, source: &SerializedNode) -> crate::Result<SerializedNode> {
+pub(super) fn own_json(ty: &str, source: &SerializedNode) -> crate::ModelResult<SerializedNode> {
     let mut json = source.clone();
     match ty {
         "agent-activity" => {

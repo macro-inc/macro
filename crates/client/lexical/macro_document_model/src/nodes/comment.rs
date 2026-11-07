@@ -20,10 +20,10 @@ impl NodeType for CommentNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         if !json.contains_key("ids") {
             return Err(Error::Invariant("Array.from requires an array-like object"));
         }
@@ -48,7 +48,7 @@ impl ElementNode for CommentNode {
         this: Id<Self>,
         _: SelectionSlot,
         restore_selection: bool,
-    ) -> crate::Result<Option<NodeKey>> {
+    ) -> crate::ModelResult<Option<NodeKey>> {
         let data = tx.get_or_err::<Self>(this)?.clone();
         let next = tx.create(data)?;
         tx.insert_after(this, next, restore_selection)?;

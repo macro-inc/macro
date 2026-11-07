@@ -32,7 +32,7 @@ pub fn set_decorator_block_format<T: DecoratorBlock>(
     tx: &mut Transaction<'_>,
     id: Id<T>,
     format: ElementFormat,
-) -> crate::Result<()> {
+) -> crate::ModelResult<()> {
     tx.get_mut::<T>(id)?.block_mut().format = format;
     Ok(())
 }

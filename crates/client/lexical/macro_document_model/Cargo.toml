@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+thiserror.workspace = true
 mention_date.workspace = true
 lexical_model = { workspace = true }
 lexical_markdown = { workspace = true }

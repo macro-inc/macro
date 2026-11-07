@@ -22,13 +22,13 @@ impl NodeType for AwaitNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn create_default(tx: &mut Transaction<'_>) -> crate::Result<NodeKey> {
+    fn create_default(tx: &mut Transaction<'_>) -> crate::ModelResult<NodeKey> {
         Ok(create_await_node(tx, None, None, true)?.key())
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let json = super::wire::own_json(Self::TYPE, json)?;
         Ok(serde_json::from_value(Value::Object(json))?)
     }
@@ -70,7 +70,7 @@ pub fn create_await_node(
     await_id: Option<String>,
     text: Option<String>,
     inline: bool,
-) -> crate::Result<Id<AwaitNode>> {
+) -> crate::ModelResult<Id<AwaitNode>> {
     let await_id = match await_id {
         Some(id) => id,
         None => crate::nanoid(tx, 21)?,

@@ -21,7 +21,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.
 - Keep source object order and regex metadata in transformers/catalog.json generated from TS.
 - Match transformer constructor arguments independently of static JSON import policy.
-- Supply external document-link hostnames through MacroMarkdownOptions.
+- Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.
 - Keep this client crate excluded from workspace-hack.
 
 ## Checks
