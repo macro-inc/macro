@@ -217,6 +217,10 @@ impl Transaction<'_> {
         let composition_changed = self.editor.composition_key != self.composition_key;
         self.editor.composition_key = self.composition_key;
         self.editor.extensions = self.extensions.clone();
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.editor.suspend_version = next_id;
+        }
         Ok(Commit {
             default_prevented: self.default_prevented,
             following: vec![],

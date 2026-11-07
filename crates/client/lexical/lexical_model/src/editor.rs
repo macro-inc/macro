@@ -13,6 +13,10 @@ pub enum EditorMode {
 }
 /// Owns the current immutable snapshot and a non-rollback key allocator.
 pub struct Editor {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) suspend_owner: Arc<()>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) suspend_version: CommitId,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) plugins: Vec<Arc<dyn Plugin>>,
     pub(crate) listeners: crate::plugin::Listeners,
@@ -34,6 +38,10 @@ impl Editor {
         view_host: ViewHost,
     ) -> Result<Self, Error> {
         Ok(Self {
+            #[cfg(feature = "foreign-nodes")]
+            suspend_owner: Arc::new(()),
+            #[cfg(feature = "foreign-nodes")]
+            suspend_version: CommitId(0),
             extensions: Default::default(),
             plugins: vec![],
             listeners: Default::default(),
