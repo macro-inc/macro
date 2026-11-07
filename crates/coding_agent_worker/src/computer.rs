@@ -50,6 +50,8 @@ pub struct Computer {
     screen: screen::ScreenDialer,
     #[cfg(unix)]
     sign_in: tokio::sync::Mutex<Option<claude_sign_in::SignIn>>,
+    #[cfg(unix)]
+    sign_in_cancel: RwLock<CancellationToken>,
     streams: TaskTracker,
     cancel: CancellationToken,
 }
@@ -84,6 +86,8 @@ impl Computer {
             screen: screen::ScreenDialer::new(macro_api, credentials),
             #[cfg(unix)]
             sign_in: tokio::sync::Mutex::new(None),
+            #[cfg(unix)]
+            sign_in_cancel: RwLock::new(CancellationToken::new()),
             streams: TaskTracker::new(),
             cancel,
         }))
@@ -98,6 +102,8 @@ impl Computer {
             ComputerCommand::ClaudeSignInStart => self.start_sign_in().await,
             #[cfg(unix)]
             ComputerCommand::ClaudeSignInComplete { code } => self.complete_sign_in(&code).await,
+            #[cfg(unix)]
+            ComputerCommand::ClaudeSignInCancel => self.cancel_sign_in().await,
             #[cfg(unix)]
             ComputerCommand::ClaudeSignOut => self.sign_out().await,
             #[cfg(not(unix))]
@@ -144,8 +150,17 @@ impl Computer {
         let mut slot = self.sign_in.lock().await;
         // A new start abandons whatever sign-in was waiting.
         slot.take();
+        let cancel = CancellationToken::new();
+        *self
+            .sign_in_cancel
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = cancel.clone();
         let mut sign_in = claude_sign_in::SignIn::spawn(&self.claude_program)?;
-        let url = sign_in.url().await?;
+        let url = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Ok(ComputerControlResult::SignInCancelled),
+            url = sign_in.url() => url?,
+        };
         *slot = Some(sign_in);
         Ok(ComputerControlResult::SignInStarted { url })
     }
@@ -162,11 +177,36 @@ impl Computer {
         {
             return Ok(ComputerControlResult::SignedIn);
         }
-        let sign_in = slot
-            .as_mut()
+        let mut sign_in = slot
+            .take()
             .ok_or_else(|| rootcause::report!("no Claude sign-in is waiting; start one first"))?;
-        let token = sign_in.complete(code).await?;
-        self.token_store.save(token.clone()).await?;
+        let cancel = self
+            .sign_in_cancel
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let completed = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Ok(ComputerControlResult::SignInCancelled),
+            completed = sign_in.complete(code) => completed,
+        };
+        let token = match completed {
+            Ok(token) => token,
+            Err(claude_sign_in::CompleteError::InvalidCode) => {
+                return Ok(ComputerControlResult::InvalidCode);
+            }
+            Err(error) => return Err(rootcause::report!("{error}")),
+        };
+        let previous = self
+            .oauth_token
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        let persisted =
+            persist_sign_in(&self.token_store, &cancel, &token, previous.as_deref()).await?;
+        if matches!(persisted, ComputerControlResult::SignInCancelled) {
+            return Ok(persisted);
+        }
         slot.take();
         *self
             .oauth_token
@@ -177,8 +217,19 @@ impl Computer {
     }
 
     #[cfg(unix)]
-    async fn sign_out(&self) -> rootcause::Result<ComputerControlResult> {
+    async fn cancel_sign_in(&self) -> rootcause::Result<ComputerControlResult> {
+        // Signal before locking: complete holds the slot while awaiting PTY output.
+        self.sign_in_cancel
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .cancel();
         self.sign_in.lock().await.take();
+        Ok(ComputerControlResult::SignInCancelled)
+    }
+
+    #[cfg(unix)]
+    async fn sign_out(&self) -> rootcause::Result<ComputerControlResult> {
+        self.cancel_sign_in().await?;
         self.token_store.delete().await?;
         *self
             .oauth_token
@@ -187,6 +238,37 @@ impl Computer {
         tracing::info!("Claude account signed out");
         Ok(ComputerControlResult::SignedOut)
     }
+}
+
+/// Persistence must finish or compensate before cancellation can be acknowledged.
+#[cfg(unix)]
+trait SignInTokenStore {
+    fn store(&self, token: Option<&str>) -> impl Future<Output = rootcause::Result<()>> + Send;
+}
+
+#[cfg(unix)]
+impl SignInTokenStore for token_store::TokenStore {
+    async fn store(&self, token: Option<&str>) -> rootcause::Result<()> {
+        match token {
+            Some(token) => self.save(token.to_owned()).await,
+            None => self.delete().await,
+        }
+    }
+}
+
+#[cfg(unix)]
+async fn persist_sign_in(
+    store: &impl SignInTokenStore,
+    cancel: &CancellationToken,
+    token: &str,
+    previous: Option<&str>,
+) -> rootcause::Result<ComputerControlResult> {
+    store.store(Some(token)).await?;
+    if cancel.is_cancelled() {
+        store.store(previous).await?;
+        return Ok(ComputerControlResult::SignInCancelled);
+    }
+    Ok(ComputerControlResult::SignedIn)
 }
 
 impl Drop for Computer {
@@ -200,6 +282,7 @@ fn command_name(command: &ComputerCommand) -> &'static str {
     match command {
         ComputerCommand::ClaudeSignInStart => "claude_sign_in_start",
         ComputerCommand::ClaudeSignInComplete { .. } => "claude_sign_in_complete",
+        ComputerCommand::ClaudeSignInCancel => "claude_sign_in_cancel",
         ComputerCommand::ClaudeSignOut => "claude_sign_out",
         ComputerCommand::ScreenOpen { .. } => "screen_open",
     }

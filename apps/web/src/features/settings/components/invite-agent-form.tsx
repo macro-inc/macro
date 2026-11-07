@@ -23,6 +23,7 @@ import { match } from 'ts-pattern';
 import { formatBillingAmount } from '../core/format-billing-amount';
 import { recommendedVoice, type VoicePickerSource } from '../core/voices';
 import { AgentPortrait, type AgentPortraitSource } from './agent-portrait';
+import { PriceBreakdown } from './price-breakdown';
 import { VoicePicker } from './voice-picker';
 
 export type AgentInviteSource = {
@@ -40,6 +41,7 @@ export type AgentInviteSource = {
 export function AgentFormSurface(props: {
   open: boolean;
   title: string;
+  compact?: boolean;
   closeLabel?: string;
   close(): void;
   actions: JSX.Element;
@@ -50,6 +52,7 @@ export function AgentFormSurface(props: {
   return (
     <Dialog
       open={props.open}
+      class={props.compact ? 'w-[min(480px,calc(100vw-16px))]' : undefined}
       onOpenChange={(open) => !open && props.close()}
       onCloseAutoFocus={(event) => {
         if (opener instanceof HTMLElement && opener.isConnected) {
@@ -60,7 +63,7 @@ export function AgentFormSurface(props: {
     >
       <Panel
         depth={2}
-        class="max-h-[min(75dvh,calc(100dvh-var(--virtual-keyboard-height,0px)-var(--safe-top,0px)-48px))] text-ink rounded-xl"
+        class="h-auto max-h-[min(75dvh,calc(100dvh-var(--virtual-keyboard-height,0px)-var(--safe-top,0px)-48px))] text-ink rounded-xl"
       >
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton
@@ -78,7 +81,7 @@ export function AgentFormSurface(props: {
         <Panel.Body scroll class="p-5">
           {props.children}
         </Panel.Body>
-        <Panel.Footer class="flex justify-end gap-2 px-5 py-3">
+        <Panel.Footer class="flex flex-wrap justify-end gap-2 px-5 py-3">
           {props.actions}
         </Panel.Footer>
       </Panel>
@@ -224,6 +227,19 @@ export function InviteAgentForm(props: {
         ? 'settingsBilling.month'
         : 'settingsBilling.year'
     );
+  const confirmLabel = () => {
+    if (busy()) return t('agentInvite.inviting');
+    const quote = reviewedQuote();
+    if (!quote || quote.included)
+      return t('settingsBilling.inviteIncluded', { name: name().trim() });
+    return t('settingsBilling.invitePriced', {
+      name: name().trim(),
+      price: t('agentInvite.pricePerInterval', {
+        amount: price(quote.total, quote),
+        interval: intervalLabel(quote),
+      }),
+    });
+  };
   function IdentityFields() {
     return (
       <div class="space-y-4">
@@ -256,6 +272,7 @@ export function InviteAgentForm(props: {
     <AgentFormSurface
       open={props.open}
       title={review() ? t('agentInvite.confirmTitle') : t('common.inviteAgent')}
+      compact={review()}
       close={close}
       actions={
         <>
@@ -307,9 +324,10 @@ export function InviteAgentForm(props: {
                 props.source.quoteLoading() ||
                 props.source.quoteError()
               }
+              class="min-w-0 max-w-full"
               onClick={confirm}
             >
-              {busy() ? t('agentInvite.inviting') : t('agentInvite.confirm')}
+              <span class="truncate">{confirmLabel()}</span>
             </Button>
           </Show>
         </>
@@ -350,32 +368,28 @@ export function InviteAgentForm(props: {
             </Show>
             <Show when={reviewedQuote()}>
               {(quote) => (
-                <Show
-                  when={!quote().included}
-                  fallback={
-                    <p class="font-semibold">{t('settingsBilling.included')}</p>
-                  }
-                >
-                  <dl class="grid grid-cols-2 gap-3">
-                    <dt>{t('agentInvite.agentSeat')}</dt>
-                    <dd class="text-right">{price(quote().seat, quote())}</dd>
-                    <dt>{t('settingsBilling.computer')}</dt>
-                    <dd class="text-right">
-                      {price(quote().computer, quote())}
-                    </dd>
-                    <dt class="font-semibold">
-                      {t('settingsBilling.total', {
-                        interval: intervalLabel(quote()),
-                      })}
-                    </dt>
-                    <dd class="text-right font-semibold">
-                      {price(quote().total, quote())}
-                    </dd>
-                  </dl>
-                  <p class="text-ink-muted">
-                    {t('agentInvite.subscriptionChange')}
-                  </p>
-                </Show>
+                <PriceBreakdown
+                  currency={quote().currency}
+                  interval={quote().interval}
+                  total={quote().total}
+                  included={quote().included}
+                  items={[
+                    {
+                      name: t('agentInvite.agentSeat'),
+                      description: name(),
+                      amount: quote().seat,
+                      included: quote().included,
+                    },
+                    {
+                      name: t('settingsBilling.sizedComputer', {
+                        size: sizeLabel(props.size),
+                      }),
+                      description: `${t('agentInvite.vcpus', { count: quote().vcpus })} · ${t('agentInvite.memory', { count: quote().memoryGb })} · ${t('agentInvite.disk', { count: quote().diskGb })}`,
+                      amount: quote().computer,
+                      included: quote().included,
+                    },
+                  ]}
+                />
               )}
             </Show>
             <Show when={createFailed()}>

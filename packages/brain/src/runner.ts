@@ -24,6 +24,8 @@ export type TurnRequest = Omit<Turn, 'maxBudgetUsd'> & {
 export type Turn = {
   id: string;
   tier: Tier;
+  /** Execution bounds, starting when the SDK run is admitted. */
+  timeout?: { wallClockMs: number; inactivityMs: number };
   /** Conversation lane, an opaque channel/thread key. */
   lane?: string;
   /** The first user message. */
@@ -60,6 +62,8 @@ export type Outcome = {
   /** The run's last result text (the agent's final message). */
   result: string;
   costUsd: number;
+  /** Current prompt ended without an SDK cost result; budget accounting must fail closed. */
+  costIncomplete?: true;
   sessionId: string | null;
 };
 export type RunHandle = {
@@ -74,7 +78,7 @@ export interface Runner {
 export type QueryFunction = (params: {
   prompt: AsyncIterable<SDKUserMessage>;
   options: Options;
-}) => AsyncIterable<SDKMessage>;
+}) => AsyncIterable<SDKMessage> & { close?(): void };
 export type AgentSdkRunnerOptions = {
   query: QueryFunction;
   tools?: Options['tools'];
@@ -102,30 +106,49 @@ export class AgentSdkRunner implements Runner {
     this.#options = options;
   }
   start(turn: Turn): RunHandle {
+    if (
+      turn.timeout &&
+      Object.values(turn.timeout).some(
+        (ms) => !Number.isSafeInteger(ms) || ms <= 0 || ms > 2_147_483_647
+      )
+    )
+      throw new Error(
+        'turn timeouts must be integer milliseconds between 1 and 2147483647'
+      );
     const span = startSpan('brain.turn', {
       'brain.tier': turn.tier,
       'gen_ai.request.model': turn.model,
       'turn.id': turn.id,
       ...(turn.lane ? { 'brain.lane': turn.lane } : {}),
+      ...(turn.timeout
+        ? {
+            'brain.timeout.wall_clock_ms': turn.timeout.wallClockMs,
+            'brain.timeout.inactivity_ms': turn.timeout.inactivityMs,
+          }
+        : {}),
     });
     const parent = trace.setSpan(context.active(), span);
     const headers = context.with(parent, traceHeaders);
     const input = new AsyncQueue<SDKUserMessage>();
     const events = new AsyncQueue<RunEvent>();
     const abortController = new AbortController();
-    let sent = 0;
-    let answered = 0;
+    const pending: string[] = [];
+    let busy = false;
     const send = (text: string) => {
       if (input.isClosed)
         throw new Error(
           `turn ${turn.id} has finished; it takes no more messages`
         );
-      sent++;
-      input.push(userMessage(text));
+      if (busy) pending.push(text);
+      else {
+        busy = true;
+        input.push(userMessage(text));
+      }
     };
     send(turn.prompt);
-    const query = (tools: BrainTool[] | undefined) =>
-      context.with(parent, () =>
+    let sdkMessages: ReturnType<QueryFunction> | undefined;
+    const query = (tools: BrainTool[] | undefined) => {
+      sdkMessages = context.with(parent, () =>
         this.#options.query({
           prompt: input,
           options: {
@@ -177,6 +200,8 @@ export class AgentSdkRunner implements Runner {
           },
         })
       );
+      return sdkMessages;
+    };
     let connection: CodeModeConnection | undefined;
     const connect = this.#options.macroTools;
     let messages: AsyncIterable<SDKMessage>;
@@ -185,15 +210,65 @@ export class AgentSdkRunner implements Runner {
         connect && turn.tier !== 'triage'
           ? (async function* () {
               connection = await connect(abortController.signal);
+              if (abortController.signal.aborted) {
+                await connection.close();
+                return;
+              }
               yield* query([...(turn.tools ?? []), ...connection.tools]);
             })()
           : query(turn.tools);
     } catch (error) {
+      input.close();
+      events.close();
       span.setStatus({ code: SpanStatusCode.ERROR });
       span.end();
       throw error;
     }
+    const cancelled = Promise.withResolvers<void>();
+    let stopReason = '';
+    let stopKind: 'inactivity' | 'wall_clock' | 'cancelled' = 'cancelled';
+    let wallTimer: ReturnType<typeof setTimeout> | undefined;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const stop = (reason: string, kind: typeof stopKind = 'cancelled') => {
+      if (abortController.signal.aborted) return;
+      stopReason = reason;
+      stopKind = kind;
+      input.close();
+      pending.length = 0;
+      // Settle independently of an SDK iterator that fails to honor abort.
+      cancelled.resolve();
+      abortController.abort();
+      try {
+        sdkMessages?.close?.();
+      } catch {
+        span.setAttribute('brain.query_close_failed', true);
+      }
+    };
+    const resetIdle = () => {
+      clearTimeout(idleTimer);
+      if (turn.timeout)
+        idleTimer = setTimeout(
+          () =>
+            stop(
+              `Work stopped after no SDK activity for ${turn.timeout?.inactivityMs} ms.`,
+              'inactivity'
+            ),
+          turn.timeout.inactivityMs
+        );
+    };
+    if (turn.timeout) {
+      wallTimer = setTimeout(
+        () =>
+          stop(
+            `Work stopped after reaching its ${turn.timeout?.wallClockMs} ms wall-clock limit.`,
+            'wall_clock'
+          ),
+        turn.timeout.wallClockMs
+      );
+      resetIdle();
+    }
     const done = context.with(parent, async (): Promise<Outcome> => {
+      let costComplete = false;
       let outcome: Outcome = {
         status: 'error',
         result: '',
@@ -201,9 +276,21 @@ export class AgentSdkRunner implements Runner {
         sessionId: null,
       };
       try {
-        for await (const message of messages) {
+        const iterator = messages[Symbol.asyncIterator]();
+        while (!abortController.signal.aborted) {
+          const next = await Promise.race([
+            iterator.next(),
+            cancelled.promise.then(() => ({
+              done: true as const,
+              value: undefined,
+            })),
+          ]);
+          if (next.done) break;
+          const message = next.value;
+          resetIdle();
           for (const event of toEvents(message)) events.push(event);
           if (message.type !== 'result') continue;
+          costComplete = true;
           span.setAttribute(
             'gen_ai.usage.input_tokens',
             message.usage.input_tokens
@@ -216,7 +303,6 @@ export class AgentSdkRunner implements Runner {
           span.setAttribute('brain.outcome', message.subtype);
           if (message.subtype !== 'success')
             span.setStatus({ code: SpanStatusCode.ERROR });
-          answered++;
           outcome = match(message)
             .returnType<Outcome>()
             .with({ subtype: 'success' }, (success) => ({
@@ -244,7 +330,13 @@ export class AgentSdkRunner implements Runner {
             )
             .exhaustive();
           events.push({ kind: 'result', outcome });
-          if (answered >= sent) input.close();
+          // Claude may absorb messages submitted mid-turn without a separate
+          // result. Keep exactly one input outstanding instead of counting them.
+          const followup = pending.shift();
+          if (followup !== undefined) {
+            costComplete = false;
+            input.push(userMessage(followup));
+          } else input.close();
         }
       } catch (error) {
         if (!abortController.signal.aborted) {
@@ -252,24 +344,36 @@ export class AgentSdkRunner implements Runner {
           outcome = { ...outcome, status: 'error', result: String(error) };
         }
       } finally {
+        clearTimeout(wallTimer);
+        clearTimeout(idleTimer);
         await connection?.close().catch(() => {
           span.setStatus({ code: SpanStatusCode.ERROR });
         });
         input.close();
+        pending.length = 0;
         events.close();
+        if (stopReason) {
+          span.setAttribute('brain.stop_reason', stopKind);
+          span.setStatus({ code: SpanStatusCode.ERROR });
+        }
+        span.setAttribute('brain.cost_incomplete', !costComplete);
         span.setAttribute('brain.aborted', abortController.signal.aborted);
         span.end();
       }
+      if (!costComplete) outcome = { ...outcome, costIncomplete: true };
       return abortController.signal.aborted
-        ? { ...outcome, status: 'aborted' }
+        ? {
+            ...outcome,
+            status: 'aborted',
+            result: stopReason || outcome.result,
+          }
         : outcome;
     });
     return {
       events,
       inject: send,
       abort: () => {
-        abortController.abort();
-        input.close();
+        stop('');
       },
       done,
     };

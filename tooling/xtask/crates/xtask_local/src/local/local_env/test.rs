@@ -271,6 +271,14 @@ fn emits_in_network_service_url_overrides() {
             "http://connection-gateway:8080",
         ),
         (
+            "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+            "ws://connection-gateway:8080",
+        ),
+        (
+            "OVERRIDE_MCP_SERVICE_URL",
+            "http://agent-harness-service:8080",
+        ),
+        (
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
             "http://document-storage-service:8080",
         ),

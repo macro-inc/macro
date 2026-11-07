@@ -133,6 +133,7 @@ impl Modify for SecurityAddon {
         app_connections::app_connected_handler,
         crate::computer_screen::claude_sign_in_handler,
         crate::computer_screen::claude_sign_in_complete_handler,
+        crate::computer_screen::claude_sign_in_cancel_handler,
         crate::computer_screen::claude_sign_out_handler,
         crate::computer_screen::claude_mode_handler,
     ),

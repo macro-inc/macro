@@ -715,7 +715,7 @@ async fn run() -> anyhow::Result<()> {
                     config.macro_api_token_issuer.as_ref(),
                     config.macro_api_token_private_secret_key.as_ref(),
                 ),
-                code_mode::sdk_hosts()?,
+                code_mode::sdk_endpoints()?,
                 Arc::clone(&recorder),
                 tool_context.cognition_tool_context.service.clone(),
                 Arc::new(routine_code::CalendarTimeZones(Arc::clone(
@@ -801,7 +801,7 @@ async fn run() -> anyhow::Result<()> {
                         config.macro_api_token_issuer.as_ref(),
                         config.macro_api_token_private_secret_key.as_ref(),
                     ),
-                    hosts: code_mode::sdk_hosts()?,
+                    endpoints: code_mode::sdk_endpoints()?,
                 }),
             )),
             selector: Arc::clone(selector),
@@ -878,7 +878,7 @@ async fn run() -> anyhow::Result<()> {
                     config.macro_api_token_private_secret_key.as_ref(),
                 ),
                 gate: owner_tool_gate.clone(),
-                hosts: code_mode::sdk_hosts()?,
+                endpoints: code_mode::sdk_endpoints()?,
             }),
             execution_store,
             execution_turns,
@@ -1814,6 +1814,10 @@ async fn run() -> anyhow::Result<()> {
         redis.clone(),
         harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone())),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        feature_flags
+            .clone()
+            .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+            .unwrap_or_default(),
         &computer_tasks,
         service_shutdown.clone(),
     );

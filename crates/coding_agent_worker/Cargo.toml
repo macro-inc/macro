@@ -97,6 +97,7 @@ windows-sys = { workspace = true, features = [
 zip = { workspace = true }
 
 [dev-dependencies]
+team_agents = { path = "../team_agents", default-features = false }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 channels = { path = "../channels", default-features = false }

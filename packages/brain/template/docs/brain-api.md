@@ -143,6 +143,25 @@ async onCall(call, brain) {
 `RouteItem` is a discriminated union: respond has lane/batch, heartbeat has reason,
 and work has task/conversation/description. `TurnRequest` has optional
 `maxBudgetUsd`, in-process `tools`, and Claude `builtinTools` (`[]` disables built-ins), and `strictMcpConfig` (ignores on-disk MCP servers); `afterTurn` receives the admitted `Turn`.
+`TurnRequest.timeout` optionally supplies integer millisecond `wallClockMs` and
+`inactivityMs` bounds (1 through 2147483647) to `AgentSdkRunner`. Default work hand-offs supply 30 minutes
+and five minutes respectively, including custom work tiers. SDK messages reset
+inactivity; conversation injections do not. Injected messages run after the
+current SDK result to avoid the CLI absorbing them without another result.
+Timeout closes the query and settles an aborted outcome, releasing the pool
+slot and attempting a report to the originating conversation. Custom runners
+must honor the supplied bounds and settle `done` on abort. Set
+`Outcome.costIncomplete: true` when the current prompt has no final cost result;
+the pool durably accounts the admitted cap rather than reusing unknown spend.
+Rejected `done` promises receive the same conservative accounting. The admitted
+cap is debited before SDK execution, so a host crash or forced stop retains it;
+final known cost refunds the unused portion once, only on the admission day.
+
+Supervisor shutdown gives the old host 30 seconds to drain, then force-stops
+only that host's isolated process group and awaits its actual exit before
+activating buffered replacement intake. Health probes use correlated child IPC;
+a prepared host is unhealthy until activated, and draining intake is disconnected.
+Telemetry export does not delay workspace ownership transfer.
 Suppressed posts return `{ suppressed: true, reason }` and do not update last-said
 memory. Middleware that calls `next` records the actual transformed text.
 

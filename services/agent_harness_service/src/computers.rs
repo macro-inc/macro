@@ -34,7 +34,6 @@ use hosted_runtimes::outbound::docker_fleet::{DockerFleet, DockerFleetConfig};
 use hosted_runtimes::outbound::incus_fleet::{IncusFleet, IncusFleetConfig};
 use hosted_runtimes::outbound::pg::PgComputerRepo;
 use incus_client::{ImageReference, ImageSource, IncusEndpoint, IncusTimeouts};
-use macro_user_id::user_id::MacroUserIdStr;
 use persona_credentials::AuthPersonaCredentials;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -121,10 +120,11 @@ impl Operator {
     }
 
     /// Notify gateway waiters after the existing worker finishes its pass.
-    pub async fn run_fleet_effects(
+    pub async fn run_fleet_effects_until(
         &self,
+        shutdown: impl Future<Output = ()> + Send,
     ) -> Result<usize, hosted_runtimes::domain::service::ComputerError> {
-        let result = self.inner.run_fleet_effects().await;
+        let result = self.inner.run_fleet_effects_until(shutdown).await;
         self.effects_completed.send_replace(());
         result
     }
@@ -300,14 +300,30 @@ async fn run_pass(
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
+            biased;
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
         }
         let outcome = match pass {
-            Pass::Effects => operator.run_fleet_effects().await.map(|_| ()),
-            Pass::Timers => operator.fire_timers().await.map(|_| ()),
-            Pass::Reconcile => operator.reconcile().await,
-            Pass::SleepIdle => operator.sleep_idle(&activity).await.map(|_| ()),
+            Pass::Effects => operator
+                .run_fleet_effects_until(shutdown.cancelled())
+                .await
+                .map(|_| ()),
+            Pass::Timers => shutdown
+                .run_until_cancelled(operator.fire_timers())
+                .await
+                .transpose()
+                .map(|_| ()),
+            Pass::Reconcile => shutdown
+                .run_until_cancelled(operator.reconcile())
+                .await
+                .transpose()
+                .map(|_| ()),
+            Pass::SleepIdle => shutdown
+                .run_until_cancelled(operator.sleep_idle(&activity))
+                .await
+                .transpose()
+                .map(|_| ()),
         };
         if let Err(error) = outcome {
             let name: &'static str = pass.into();
@@ -392,16 +408,12 @@ pub struct HostedHarnesses {
 pub enum HostedHarnessError {
     #[error(transparent)]
     Harness(#[from] HarnessError),
-    #[error("the computer's buyer is not a valid user id: {0}")]
-    InvalidBuyer(String),
 }
 
 impl Harnesses for HostedHarnesses {
     type Err = HostedHarnessError;
 
     async fn create_hosted_pairing(&self, computer: &Computer) -> Result<HostedPairing, Self::Err> {
-        let created_by = MacroUserIdStr::try_from(computer.created_by.clone())
-            .map_err(|_| HostedHarnessError::InvalidBuyer(computer.created_by.clone()))?;
         let pairing = self
             .service
             .create_hosted_pairing(CreateHostedPairing {
@@ -412,7 +424,7 @@ impl Harnesses for HostedHarnesses {
                     HarnessTeamAccess::User
                 },
                 name: computer.name.as_str().to_owned(),
-                created_by,
+                created_by: computer.created_by.clone(),
                 // The computer is the team's own isolated VM, run for agents.
                 allow_permission_bypass: true,
                 computer_id: computer.id,

@@ -61,8 +61,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   no persona token enters the reporter or its logs. Polls use independent
   timeouts, no redirects/proxies, bounded bodies and bounded diagnostics.
   Keep the typed health problem categories synchronized with the brain:
-  `budget`, `event stream disconnected`, `turn execution failed`, and
-  `event handling failed`. Unknown response text becomes a fixed diagnostic
+  `budget`, `event stream disconnected`, `turn execution failed`,
+  `event handling failed`, `brain is draining`, and `event intake not active`.
+  These fixed unhealthy categories preserve the reported `lastTurnAt` even on
+  HTTP 503; unknown response text becomes a fixed diagnostic
   and is never persisted.
   Reports carry healthy/unhealthy/missing, `checked_at`, last error when
   applicable, and `last_turn_at`; the previous turn survives unavailable probes.
@@ -80,7 +82,13 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   rustix): returns its OAuth URL, then types the pasted code or GETs a pasted
   `http://localhost:<port>/callback?code=` URL inside the box, and stores the
   `sk-ant-oat01-` token at `/var/lib/macrod/claude-token` (0600);
-  sign-out deletes it. `token_store.rs` keeps disk access in the root-only
+  sign-out deletes it. Match the pinned Claude Code setup-token rejection text
+  in `claude_sign_in.rs` and return typed `InvalidCode` immediately; silence
+  still times out after 60 seconds. `claude_sign_in_cancel` interrupts URL/token
+  waits before taking the sign-in mutex, then drops the PTY; completion owns
+  its process so all failures also kill it immediately. Cancellation during a
+  token-store save restores the prior token (or deletes the newly saved token
+  when previously using credits) before acknowledging cancellation. `token_store.rs` keeps disk access in the root-only
   `macrod-token-store.service`, installed by enrollment. Its Unix socket is
   0600, owned by the config's uid, verifies peer credentials in both directions,
   and accepts only bounded load/save/delete requests. macrod and Claude stay
@@ -168,7 +176,7 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 ## Enrollment identities
 
-- Retain typed computer/pairing IDs and persona user/unit names until the pairing HTTP or OS command boundary. Expose the device secret only for the pairing claim. Persona user validation accepts non-reserved Linux names, including legacy names without an agent prefix.
+- Retain typed computer/pairing IDs and persona user/unit names until the pairing HTTP or OS command boundary. Expose the device secret only for the pairing claim. Enrollment requires an `agent-` prefixed Linux name before any effects; legacy local personas must be re-invited.
 
 ## Checks
 
@@ -240,3 +248,13 @@ spans emit on state change and restart spans record attempt/backoff/outcome.
 Enrollment retains only W3C context in `/var/lib/macrod/provision.traceparent`;
 supervision joins it and records the marker's computer UUID plus a hashed persona ID.
 Steady unit-state polling emits no span. stdout remains the daemon protocol.
+
+## Enrollment configuration regression
+
+Keep `enroll/test/enrollment_urls.rs` exercising the actual team-agent issuer,
+transport decoder and worker persona-file installer for create and recreate.
+The test starts Node 24 with an empty environment and the real mode-0600 file,
+imports `packages/brain/src/config.ts`, and checks all seven canonical service
+URLs (including the MCP service base), current credentials and fresh repo URL.
+Do not replace this boundary proof with a hand-written config parser or a fixture
+under `/tmp`. The durable persona contains no URLs or credentials.

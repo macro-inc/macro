@@ -173,8 +173,6 @@ pub struct Config {
     pub environment: Environment,
     /// Enabled fleet; requires explicit billing prices and local computer-facing overrides.
     pub computers_fleet: Option<String>,
-    /// Computer-facing local service URLs, shared with macrod enrollment.
-    pub computers_service_url_overrides: Option<String>,
     /// The internal auth key used by other services
     pub service_internal_auth_key: ServiceInternalAuthKey,
     /// The github client id

@@ -15,8 +15,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     BillingInterval, BrainHealth, ComputerPayment, ComputerPurchase, ComputerQuote, ComputerSize,
-    ComputerSizeSpec, ComputerStatus, ComputerStatusKind, Persona, SetupProgress, SetupStep,
-    TeamAgentError,
+    ComputerSizeSpec, ComputerStatus, ComputerStatusKind, Persona, TeamAgentError,
 };
 use crate::domain::ports::Computers;
 
@@ -118,7 +117,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             .status(team_id, computer_id)
             .await
             .map_err(error)?;
-        let mut status = computer_status(status);
+        let mut status = computer_status(status)?;
         match self.brain_health(team_id, computer_id).await {
             Ok(brain) => status.brain = brain,
             Err(source) => {
@@ -141,8 +140,14 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             .get(computer_id)
             .await
             .map_err(TeamAgentError::internal)?
-            .filter(|computer| computer.team_id == team_id)
-            .ok_or(TeamAgentError::NotFound)?;
+            .filter(|computer| computer.team_id() == team_id)
+            .ok_or(TeamAgentError::NotFound)?
+            .into_healthy()
+            .map_err(|reason| {
+                TeamAgentError::ComputerUnavailable(format!(
+                    "the computer needs attention: {reason}"
+                ))
+            })?;
         Ok(computer.harness_id)
     }
 
@@ -157,8 +162,14 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             .get(computer_id)
             .await
             .map_err(TeamAgentError::internal)?
-            .filter(|computer| computer.team_id == team_id)
-            .ok_or(TeamAgentError::NotFound)?;
+            .filter(|computer| computer.team_id() == team_id)
+            .ok_or(TeamAgentError::NotFound)?
+            .into_healthy()
+            .map_err(|reason| {
+                TeamAgentError::ComputerUnavailable(format!(
+                    "the computer needs attention: {reason}"
+                ))
+            })?;
         let persona = computer.persona.ok_or_else(|| {
             TeamAgentError::RetryUnavailable("the computer has no saved persona".to_string())
         })?;
@@ -213,10 +224,13 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
             .get(computer_id)
             .await
             .map_err(TeamAgentError::internal)?
-            .filter(|computer| computer.team_id == team_id)
+            .filter(|computer| computer.team_id() == team_id)
         else {
             return Ok(None);
         };
+        let computer = computer.into_healthy().map_err(|reason| {
+            TeamAgentError::ComputerUnavailable(format!("the computer needs attention: {reason}"))
+        })?;
         let (Some(harness_id), Some(persona)) = (computer.harness_id, computer.persona) else {
             return Ok(None);
         };
@@ -258,9 +272,14 @@ impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
     }
 }
 
-fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
-    ComputerStatus {
-        payment: match status.payment {
+fn computer_status(status: models::ComputerStatus) -> Result<ComputerStatus, TeamAgentError> {
+    let payment = status.payment.ok_or_else(|| {
+        TeamAgentError::ComputerUnavailable(
+            "the computer needs attention: payment state is unavailable".to_owned(),
+        )
+    })?;
+    Ok(ComputerStatus {
+        payment: match payment {
             PaymentOutcome::Pending => ComputerPayment::Pending,
             PaymentOutcome::Paid => ComputerPayment::Paid,
             PaymentOutcome::Comped => ComputerPayment::Comped,
@@ -271,7 +290,14 @@ fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
             models::ComputerStatusKind::SettingUp => ComputerStatusKind::SettingUp,
             models::ComputerStatusKind::Ready => ComputerStatusKind::Ready,
             models::ComputerStatusKind::Asleep => ComputerStatusKind::Asleep,
-            models::ComputerStatusKind::Waking => ComputerStatusKind::Waking,
+            models::ComputerStatusKind::Waking | models::ComputerStatusKind::WaitingForCapacity => {
+                ComputerStatusKind::Waking
+            }
+            models::ComputerStatusKind::NeedsAttention => {
+                return Err(TeamAgentError::ComputerUnavailable(
+                    "the computer needs attention: saved data is invalid".to_owned(),
+                ));
+            }
             models::ComputerStatusKind::Stopping => ComputerStatusKind::Stopping,
             models::ComputerStatusKind::Stopped => ComputerStatusKind::Stopped,
             models::ComputerStatusKind::Failed | models::ComputerStatusKind::PaymentFailed => {
@@ -279,18 +305,8 @@ fn computer_status(status: models::ComputerStatus) -> ComputerStatus {
             }
             models::ComputerStatusKind::Released => ComputerStatusKind::Released,
         },
-        setup: status.setup.map(|setup| SetupProgress {
-            step: match setup.step {
-                models::SetupStep::Paying => SetupStep::Paying,
-                models::SetupStep::Creating => SetupStep::Creating,
-                models::SetupStep::Booting => SetupStep::Booting,
-                models::SetupStep::Connecting => SetupStep::Connecting,
-                models::SetupStep::Ready => SetupStep::Ready,
-            },
-            position: setup.position,
-            total: setup.total,
-        }),
-    }
+        setup: status.setup,
+    })
 }
 
 fn error(source: ComputerError) -> TeamAgentError {
@@ -300,6 +316,7 @@ fn error(source: ComputerError) -> TeamAgentError {
         ComputerError::NotFailed => TeamAgentError::RetryUnavailable(source.to_string()),
         ComputerError::Billing(BillingError::NoSubscription) => TeamAgentError::NoSubscription,
         ComputerError::SoldOut
+        | ComputerError::Billing(BillingError::NotAvailable)
         | ComputerError::Billing(BillingError::IntervalNotSold(_) | BillingError::PaymentFailed) => {
             TeamAgentError::ComputerUnavailable(source.to_string())
         }
@@ -330,7 +347,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
             .purchase(models::PurchaseRequest {
                 billing,
                 team_id: purchase.team_id,
-                created_by: purchase.created_by.as_ref().to_owned(),
+                created_by: purchase.created_by,
                 size: purchase.size,
                 name: purchase.name,
                 persona: purchase.persona,
@@ -353,6 +370,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
                 let computer_id = match self.repo.list_for_team(team_id).await {
                     Ok(computers) => computers
                         .into_iter()
+                        .filter_map(|record| record.into_healthy().ok())
                         .find(|computer| {
                             computer.team_id == team_id
                                 && agent_user_id.as_ref().is_some_and(|agent| {
@@ -408,6 +426,8 @@ impl<
             .get(computer)
             .await
             .map_err(|_| PersonaCredentialError::IssuanceFailed)?
-            .ok_or(PersonaCredentialError::NotFound)
+            .ok_or(PersonaCredentialError::NotFound)?
+            .into_healthy()
+            .map_err(|_| PersonaCredentialError::IssuanceFailed)
     }
 }

@@ -1,15 +1,31 @@
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import type { SubscriptionBilling } from '@service-auth/generated/schemas';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ConnectedTeamBillingBreakdown } from './team-billing-breakdown';
 
 const mocks = vi.hoisted(() => ({
   read: () => ({ enabled: false, loading: true }),
   enabled: (): boolean => false,
+  inventoryEnabled: (): boolean => false,
+  offersRequest: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => mocks.read(),
+  useFeatureFlag: (flag: unknown) =>
+    flag === enableMacroComputers ? macroFlag : () => mocks.read(),
+}));
+vi.mock('@queries/computers/computers', () => ({
+  useComputersQuery: (enabled: () => boolean) => {
+    mocks.inventoryEnabled = enabled;
+    return { isPending: false, data: [] };
+  },
+  useComputerOffersQuery: (enabled: () => boolean) => {
+    createEffect(() => {
+      if (enabled()) mocks.offersRequest();
+    });
+    return { isPending: false, data: [] };
+  },
 }));
 vi.mock('@queries/team-agents', () => ({
   useTeamAgentsQuery: (_id: unknown, enabled: () => boolean) => {
@@ -22,6 +38,10 @@ vi.mock('../computers/views/BillingComputers', () => ({
 }));
 
 const [flag, setFlag] = createSignal({ enabled: false, loading: true });
+const [macroFlag, setMacroFlag] = createSignal({
+  enabled: false,
+  loading: true,
+});
 const billing: SubscriptionBilling = {
   currency: 'usd',
   interval: 'month',
@@ -44,6 +64,8 @@ const billing: SubscriptionBilling = {
 beforeEach(() => {
   setFlag({ enabled: false, loading: true });
   mocks.read = flag;
+  setMacroFlag({ enabled: false, loading: true });
+  mocks.offersRequest.mockClear();
 });
 afterEach(cleanup);
 
@@ -72,3 +94,26 @@ it('waits for the rollout before choosing old or agent billing and disables rost
   expect(screen.queryByText('Assistant · Standard')).toBeNull();
   expect(mocks.enabled()).toBe(false);
 });
+
+it.each([
+  { enabled: false, loading: false },
+  { enabled: true, loading: true },
+])(
+  'does not request offers with team agents on and macro computers $enabled/loading=$loading',
+  (macro) => {
+    setFlag({ enabled: true, loading: false });
+    setMacroFlag(macro);
+    render(() => (
+      <ConnectedTeamBillingBreakdown teamId="team-1" billing={billing} />
+    ));
+    expect(mocks.offersRequest).not.toHaveBeenCalled();
+    expect(mocks.enabled()).toBe(true);
+    expect(mocks.inventoryEnabled()).toBe(true);
+    expect(screen.getByText('Agent seats')).toBeTruthy();
+
+    setMacroFlag({ enabled: true, loading: false });
+    expect(mocks.offersRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.enabled()).toBe(true);
+    expect(mocks.inventoryEnabled()).toBe(true);
+  }
+);

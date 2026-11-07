@@ -237,7 +237,10 @@ On the existing **Billing** page, billing admins with an active provider
 subscription see **Subscription breakdown** below their plan. It shows actual
 paid **Human seats** and **Agent seats**, each mapped computer's size, status,
 and current subscription price, and any other provider subscription items.
-Included computers say **Included for Macro**. Agent names and live health
+Each computer appears once, with recorded specifications when available; there is
+no duplicate Computers subtotal. Included rows say **Included**, with an
+**Included for Macro** note. If today’s catalog price differs from an existing
+charge, the row keeps the actual subscribed amount and explains the new-computer price. Agent names and live health
 come from the team agents query when available.
 
 **Total per month/year** uses the current subscription interval and currency.
@@ -280,7 +283,7 @@ shows **Included for Macro**, with no currency charge.
    vCPU, RAM, and disk specifications beside each size (available even without
    a paid plan). Specs wrap only between complete items on narrow phones, and
    computer prices align with the size titles. Specs come from the size catalog
-   (Standard: 4 vCPUs, 8 GB RAM, 100 GB disk).
+   (Standard: 4 vCPUs, 8 GiB RAM, 100 GiB disk).
    A fictional photographic portrait is generated only after choosing
    **Generate portrait**, using the current name, role, and personality.
    Typing or changing the profile never starts generation. The face sits beside
@@ -296,7 +299,11 @@ shows **Included for Macro**, with no currency charge.
    The suggested voice matches the persona’s descriptive tags; another choice
    stays selected through price review. Samples stop when the voice changes
    or the form closes.
-2. Choose **Review price**. Review the server's **Agent seat**, **Computer**,
+2. Choose **Review price**. The content-sized review uses the same breakdown as
+   computer purchases and Billing: names, specification sublines, right-aligned
+   amounts, a divider, total, and a short billing note. Included invitations keep
+   all rows with **Included** amounts and an **Included for Macro** note.
+   Review the server's **Agent seat**, **Computer**,
    and **Total per month/year**, in its quoted currency. **Back** preserves
    the draft. A loading or failed quote disables confirmation; **Try again**
    refreshes the quote. The quote shown in a review stays fixed across background
@@ -305,7 +312,8 @@ shows **Included for Macro**, with no currency charge.
    and asks you to review again. **Back** refreshes the quote and preserves the
    draft so you can review the new terms. Typing changes only the draft; it never refreshes quotes
    or catalog specifications. Computer prices load for all three sizes on opening.
-3. Choose **Confirm and invite** once. The controls stay disabled while the
+3. Choose **Invite <name> · <price>/month** (or the quoted year interval) once.
+   Included invitations say **Invite <name>**. The controls stay disabled while the
    request is pending. On success the dialog closes and the roster refreshes.
    If confirmation fails, check the roster before starting another invitation:
    the response may have been lost after the purchase completed. A repository
@@ -321,12 +329,12 @@ shows **Included for Macro**, with no currency charge.
    retried and **Remove agent**. The same actions stay reachable on mobile.
    The roster polls every three seconds while any agent is
    provisioning, then every thirty seconds while the page is visible and the
-   roster is nonempty. **Unhealthy** means a ready computer's agent is
+   roster is nonempty. **Alive** means the agent is running. **Dead** means a ready computer's agent is
    disconnected, missing, stale, or unhealthy; its reason is in the status tooltip and row menu without
    a provisioning Retry action. Before the first connection, setup stays
    as **Setting up…**, with **Creating**, **Booting**, or **Connecting** when
    the server supplies a step. No payment stage is displayed; absent or retired
-   steps leave the generic setup label. Running, unhealthy, and failed rows keep refreshing, so
+   steps leave the generic setup label. Alive, Dead, and failed rows keep refreshing, so
    transient health failures can recover without a manual refresh. Billing
    shows the same live agent health without changing the subscription amounts.
 5. **Retry** appears only for terminal `failed` status when `retryable=true`
@@ -724,8 +732,8 @@ trialing team, which ends the trial and bills Max for a new cycle today.
 Pro downgrades start at renewal.
 **Keep Max** appears only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (a `Team CRM` switch that admins use to enable or disable it;
-once enabled, a `Stages` section for the company Stage options that new pipelines
+scheduled plans show no retry notice). CRM (individual email contribution and team/personal domain exclusions;
+a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
 editable by the role set as `edit_stages_role`)
@@ -925,8 +933,13 @@ session were not exercised by that UI check.
 
 Macro computers are hosted machines a team buys for its agents, billed on
 the team subscription. They sit in `Runtimes`, behind the
-`enable-macro-computers` flag (on in dev), and need a team: without one the
-page shows nothing about them. Every team member sees the **Macro computers**
+`enable-macro-computers` flag for purchases and Claude account controls, and
+need a team: without one the page shows nothing about them. The flag follows
+PostHog in every environment unless explicitly overridden locally. With the
+flag off, existing computers stay listed in Runtimes and team Billing, and
+management actions including Cancel and Release stay available. Team purchase,
+quote and offers return 403 when the rollout is off, missing or unavailable.
+Every team member sees the **Macro computers**
 list; only team admins and owners see the buying card and the row controls.
 
 If the environment has no computer prices configured, offers, quotes, and
@@ -939,33 +952,51 @@ To buy one as a team admin:
 
 1. Open `/app/settings/runtimes` (mobile: Settings sheet → Runtimes).
 2. Under **Get a Macro computer**, pick a size radio (**Standard**, **Large**,
-   **XL**); each shows vCPU, memory, disk and its price per interval. A
+   **XL**); each shows vCPU, memory and disk in GiB, and its price per interval. A
    sold-out size is disabled and offers **Notify me**, which turns into
    "We'll let you know".
 3. Press **Continue**. The dialog (a drawer on phones) titled
-   **Buy a <size> Macro computer?** states the exact price and that it is
-   added to the team subscription today with a prorated charge. **Name
+   **Buy a <size> Macro computer?** sizes to its content and shows the shared
+   item/specifications/amount breakdown, total and proration note. **Name
    (optional)** names the computer.
-4. Press **Buy for <price>**. Failures stay in the dialog: sold out (409),
+4. Press **Buy · <price>/month** (or the quoted year interval). A zero-price
+   offer keeps the breakdown with Included amounts and a plain **Buy** action. Failures stay in the dialog: sold out (409),
    payment declined (402), or a subscription that can't add computers (422).
    On success the dialog closes with "Computer purchased. Setting it up now."
 
-The new row reads **Setting up** with its step (confirming payment, creating,
-starting up, connecting; "step N of 5") and the list polls every 3 seconds
-while any computer is setting up, waking or stopping. Once ready a row shows
+The new row reads **Setting up** with its step (creating, starting up,
+connecting, ready; "step N of 4"). Payment recovery also reports creating;
+no payment stage is shown. A computer blocked by awake host capacity instead
+shows **Waiting for space on the host**, with "Turn off or release another
+computer on this host to make room". It has no setup step; admins can turn it
+off or release it. This applies both before and after first enrollment, on
+desktop and mobile. The list polls every 3 seconds
+while any computer is setting up, waiting for capacity, waking or stopping. Once ready a row shows
 its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
 **Stopped**, **Failed**), its Claude access mode, and the runtime it
 registered as with a connection dot; that runtime's row under **Connected
 runtimes** carries a **Macro computer** badge and no Remove. Admin controls
 on each row:
 
-- **Power** switch: on/off, available when Ready, Asleep or Stopped.
+- **Power** switch: on/off, available when Ready, Asleep, Stopped or waiting for capacity.
 - **Cancel at period end**: billing stops at the period end, shown as
   "Cancels <date>"; **Keep computer** undoes it until then. After the period
   a canceled computer shows "Disk deleted <date>".
-- **Release now**: a dialog explains the computer and its disk are destroyed
+- **Release now**: a content-sized dialog explains the computer and its disk are destroyed
   now with no refund; **Release now** stays disabled until the computer's
   exact name is typed.
+
+**Sign in with Claude** opens Claude's OAuth page. Paste the code or localhost
+callback URL back into the form and press **Complete sign-in**. **Cancel**
+kills the pending sign-in on the computer and closes the paste form, including
+while a code is being submitted. **Sign in with Claude** stays disabled while
+starting, while the paste form is open, and while its result is pending. Leaving
+the controls aborts the request and cancels the pending sign-in. These controls
+behave the same way on desktop and mobile. A rejected code
+shows “That code didn't work — sign in again to get a new one”; start again to
+obtain a fresh code. A 409 shows “Another sign-in is in progress on this computer
+— try again shortly”. New sessions then use that Claude account. **Use Macro
+credits** signs out on the computer.
 
 Team **Billing** lists the same computers under **Macro computers** with size,
 status, cancel date and price per interval.
@@ -980,7 +1011,7 @@ sign-in** beside the field. Successful sign-in switches the label to your accoun
 failures appear inline. Members without management rights see the mode without
 account controls. This account is used by Claude on the shared computer.
 
-With **enable-team-agents** enabled, **View computer** in a member’s agent menu,
+With **enable-macro-computers** enabled, **View computer** in a member’s agent menu,
 an agent’s settings, or a screen-capable runtime opens the existing Screen pane
 as the main Settings content at every width. Runtime cards outside Settings
 open the Runtimes settings page with that pane. Settings stays mounted underneath;
@@ -992,6 +1023,13 @@ hovering or right-clicking on desktop, or tapping or long-pressing on a phone.
 **Show screen** opens the pane in watch mode. Desktop viewers with User or owner
 access also get **Take control**, which opens directly in control mode. Phone
 cards offer only **Show screen** and remain watch-only.
+
+In a direct message with an agent teammate, a small **View computer** icon
+beside **Call** opens the same pane in watch mode. It uses the ordinary header
+button styling and appears only with **enable-macro-computers**, a paired
+screen-capable computer and readable access. Human DMs and group conversations
+keep their existing header. Desktop editors can choose **Take control** in the
+pane; phones keep the full-screen watch view with no control action.
 
 The header names the computer and shows a small **Watching** or **In control**
 pill; the back icon closes the screen. **Show screen** starts in **Watching** mode. Read and Resident access stay watch-only;
@@ -1009,7 +1047,8 @@ admins can control the agent computer. Closing the pane leaves Settings mounted.
 
 Macro computer screens keep the selected Watch or Take control mode when the
 runtime list refreshes; changing the computer or losing edit permission returns
-the pane to Watch.
+the pane to Watch. Touch devices stay watch-only. Phones use a full-frame
+screen; tablets retain the side-by-side layout when the pane is wide enough.
 
 ### GitHub reconnect recovery
 

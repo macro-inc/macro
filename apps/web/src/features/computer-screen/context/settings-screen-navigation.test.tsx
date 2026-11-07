@@ -3,15 +3,20 @@ import { createSignal } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  agentsEnabled: false,
   read: (): { enabled: boolean; loading: boolean } => ({
     enabled: true,
     loading: false,
   }),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => mocks.read(),
+  useFeatureFlag: (flag: { key: string }) => () =>
+    flag.key === 'enable-macro-computers'
+      ? mocks.read()
+      : { enabled: mocks.agentsEnabled, loading: false },
 }));
 beforeEach(() => {
+  mocks.agentsEnabled = false;
   mocks.read = () => ({ enabled: true, loading: false });
 });
 
@@ -65,6 +70,7 @@ it.each([
 ])(
   'discards pending navigation when the rollout becomes unavailable: %j',
   (unavailable) => {
+    mocks.agentsEnabled = true;
     const [flag, setFlag] = createSignal({ enabled: true, loading: false });
     mocks.read = flag;
     render(() => (

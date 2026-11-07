@@ -202,3 +202,28 @@ test('revoking desktop control disconnects input and returns to watching', async
     'watch,control,watch'
   );
 });
+
+for (const state of ['computers-off', 'computers-loading']) {
+  test(`agent management cannot bypass ${state}`, async ({ page }) => {
+    await page.goto(`/?${state}`);
+    await expect(
+      page.getByRole('button', { name: 'Open agent computer' })
+    ).toBeDisabled();
+    await expect(page.getByLabel('Directory requests')).toHaveText('0');
+    await expect(page.getByLabel('Discovery requests')).toHaveText('0');
+  });
+}
+
+test('computer viewing works independently of agent management', async ({
+  page,
+}) => {
+  await page.goto('/?access=read&agents-off');
+  await page.getByRole('button', { name: 'Open agent computer' }).click();
+  await expect(
+    page.getByText('Simulated desktop · watch', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Take control', exact: true })
+  ).toHaveCount(0);
+  await expect(page.getByLabel('Discovery requests')).toHaveText('1');
+});

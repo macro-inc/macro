@@ -524,3 +524,50 @@ async fn sdk_reads_by_a_user_carry_no_actor() {
         .await
         .unwrap();
 }
+
+#[test]
+fn set_cells_carries_typed_values_to_the_worker_unchanged() {
+    let json = serde_json::json!({
+        "type": "set_cells", "sheetId": "sheet1",
+        "cells": [
+            {"address": "A1", "value": "Item"},
+            {"address": "B1", "value": 42},
+            {"address": "B2", "value": -0.25},
+            {"address": "C1", "value": true},
+            {"address": "D1", "value": "=SUM(B1:B2)"},
+            {"address": "E1", "value": null}
+        ]
+    });
+    let operation: SpreadsheetOperation = serde_json::from_value(json.clone()).unwrap();
+    let SpreadsheetOperation::SetCells { cells, .. } = &operation else {
+        panic!("expected set_cells");
+    };
+    assert!(matches!(&cells[0].value, SpreadsheetCellValue::Text(text) if text == "Item"));
+    assert!(
+        matches!(&cells[1].value, SpreadsheetCellValue::Number(number) if number.as_i64() == Some(42))
+    );
+    assert!(
+        matches!(&cells[2].value, SpreadsheetCellValue::Number(number) if number.as_f64() == Some(-0.25))
+    );
+    assert!(matches!(
+        cells[3].value,
+        SpreadsheetCellValue::Boolean(true)
+    ));
+    assert!(matches!(&cells[4].value, SpreadsheetCellValue::Text(text) if text == "=SUM(B1:B2)"));
+    assert!(matches!(cells[5].value, SpreadsheetCellValue::Empty));
+    assert_eq!(serde_json::to_value(&operation).unwrap(), json);
+
+    assert!(
+        serde_json::from_value::<SpreadsheetOperation>(serde_json::json!({
+            "type": "set_cells", "sheetId": "sheet1",
+            "cells": [{"address": "A1", "value": {"formula": "=1"}}]
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SpreadsheetOperation>(serde_json::json!({
+            "type": "set_cells", "sheetId": "sheet1", "cells": [{"address": "A1"}]
+        }))
+        .is_err()
+    );
+}

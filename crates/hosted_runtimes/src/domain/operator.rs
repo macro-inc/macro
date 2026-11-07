@@ -10,8 +10,10 @@ use chrono::{DateTime, Duration, Utc};
 
 use crate::domain::enrollment::{Enrollment, PersonaConfigKey};
 use crate::domain::ids::{ComputerId, PairingId};
-use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, Phase};
-use crate::domain::models::{Computer, EnrollmentDefaults};
+use crate::domain::lifecycle::{
+    Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind,
+};
+use crate::domain::models::{Computer, ComputerRecord, EnrollmentDefaults};
 use crate::domain::persona_credentials::{EnrollmentGeneration, PersonaCredentialError};
 use crate::domain::ports::{
     ComputerRepo, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses, InstanceStatus,
@@ -32,6 +34,12 @@ const EFFECT_BATCH: u32 = 16;
 const TIMER_BATCH: u32 = 64;
 /// How long a leased effect stays hidden from other workers.
 const EFFECT_LEASE: Duration = Duration::minutes(10);
+/// Includes lease acquisition, fleet I/O and persistence; less than the lease.
+const EFFECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(8 * 60);
+/// Bound composite fleet calls below both the batch deadline and the lease.
+const FLEET_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(7 * 60);
+/// Shutdown waits for the active effect before cancelling it and returning its lease.
+const EFFECT_DRAIN: std::time::Duration = std::time::Duration::from_secs(30);
 
 fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> ComputerError {
     ComputerError::Internal(rootcause::Report::new(error).into_dynamic())
@@ -39,6 +47,7 @@ fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> Compu
 
 /// Whether a harness's agent sessions are quiet.
 pub trait SessionActivity: Send + Sync + 'static {
+    /// Adapter failure type.
     type Err: std::error::Error + Send + Sync + 'static;
 
     /// True when no turn is running on the harness and nothing happened in
@@ -123,6 +132,10 @@ where
         .await;
         match registration {
             Ok(host) => {
+                self.repo
+                    .postpone_macrod_timers(host.id, self.clock.now() + MACROD_GRACE)
+                    .await
+                    .map_err(internal)?;
                 tracing::info!(host_id = %host.id, host = %host.name, healthy = true,
                     awake_units = host.awake_capacity_units, sold_units = host.sold_capacity_units,
                     "computer host registered");
@@ -143,22 +156,92 @@ where
 
     /// Carry out due fleet effects; returns how many ran.
     pub async fn run_fleet_effects(&self) -> Result<usize, ComputerError> {
-        self.host_id().await?;
+        self.run_fleet_effects_until(std::future::pending()).await
+    }
+
+    /// Stop leasing on shutdown, drain the active effect, then return unfinished leases.
+    /// Every effect in the batch shares a deadline measured before leasing, so
+    /// queued effects and slow composite fleet calls cannot outlive their lease.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn run_fleet_effects_until(
+        &self,
+        shutdown: impl Future<Output = ()> + Send,
+    ) -> Result<usize, ComputerError> {
+        let mut shutdown = std::pin::pin!(shutdown);
+        tokio::select! {
+            biased;
+            () = &mut shutdown => return Ok(0),
+            result = self.host_id() => { result?; }
+        }
+        let deadline = tokio::time::Instant::now() + EFFECT_DEADLINE;
         let now = self.clock.now();
+        let lease_until = now + EFFECT_LEASE;
+        // Never cancel a lease query: the database might commit it after its
+        // future is dropped, leaving an untracked lease until expiry.
         let effects = self
             .repo
-            .lease_effects(EffectWorker::Fleet, EFFECT_BATCH, now, now + EFFECT_LEASE)
+            .lease_effects(EffectWorker::Fleet, EFFECT_BATCH, now, lease_until)
             .await
             .map_err(internal)?;
-        let count = effects.len();
-
+        let ids: Vec<i64> = effects.iter().map(|effect| effect.id).collect();
+        let mut count = 0;
+        let mut outcome = Ok(());
         for pending in effects {
-            use tracing::Instrument;
-            let computer = self.computer(pending.computer_id).await?;
-            let span = tracing::info_span!("computer.fleet.work", computer_id = %pending.computer_id, team_id = %computer.team_id, size = computer.size.as_ref());
-            super::telemetry::attach(&span, computer.state.provision_traceparent.as_deref());
-            self.run_one(pending).instrument(span).await?;
+            tokio::select! {
+                biased;
+                () = &mut shutdown => break,
+                () = std::future::ready(()) => {}
+            }
+            if tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            let mut stopping = false;
+            let result = {
+                let work = async {
+                    use tracing::Instrument;
+                    let computer = self.computer(pending.computer_id).await?;
+                    let span = tracing::info_span!("computer.fleet.work", computer_id = %pending.computer_id, team_id = %computer.team_id, size = computer.size.as_ref());
+                    super::telemetry::attach(
+                        &span,
+                        computer.state.provision_traceparent.as_deref(),
+                    );
+                    self.run_one(pending).instrument(span).await
+                };
+                let mut running = std::pin::pin!(tokio::time::timeout_at(deadline, work));
+                tokio::select! {
+                    result = &mut running => Some(result),
+                    () = &mut shutdown => {
+                        stopping = true;
+                        tracing::info!("draining computer effect");
+                        tokio::time::timeout(EFFECT_DRAIN, &mut running).await.ok()
+                    }
+                }
+            }; // Drop the effect future before making its lease available again.
+            count += 1;
+            match result {
+                Some(Ok(Ok(()))) => {}
+                Some(Ok(Err(error))) => {
+                    outcome = Err(error);
+                    break;
+                }
+                Some(Err(error)) => {
+                    outcome = Err(internal(error));
+                    break;
+                }
+                None => {
+                    tracing::warn!("computer effect drain deadline reached; returning leases");
+                    break;
+                }
+            }
+            if stopping {
+                break;
+            }
         }
+        self.repo
+            .release_effects(&ids, lease_until, self.clock.now())
+            .await
+            .map_err(internal)?;
+        outcome?;
         Ok(count)
     }
 
@@ -178,18 +261,19 @@ where
             .and_then(serde_json::Value::as_str)
             .unwrap_or("unknown");
         tracing::Span::current().record("effect", phase);
-        match self.carry_out(pending.computer_id, &pending.effect).await {
+        let result = tokio::time::timeout(
+            FLEET_CALL_TIMEOUT,
+            self.carry_out(pending.computer_id, &pending.effect),
+        )
+        .await
+        .map_err(internal)
+        .and_then(std::convert::identity);
+        match result {
             Ok(follow_up) => {
                 self.repo
-                    .complete_effect(pending.id)
+                    .finish_effect(pending.id, follow_up, self.clock.now())
                     .await
                     .map_err(internal)?;
-                if let Some(event) = follow_up {
-                    self.repo
-                        .apply(pending.computer_id, event, self.clock.now())
-                        .await
-                        .map_err(internal)?;
-                }
             }
             Err(error) if pending.attempts + 1 < MAX_EFFECT_ATTEMPTS => {
                 super::telemetry::effect_failed(phase);
@@ -204,15 +288,11 @@ where
                 super::telemetry::effect_failed(phase);
                 tracing::error!(error = ?error, "computer effect failed for good");
                 self.repo
-                    .complete_effect(pending.id)
-                    .await
-                    .map_err(internal)?;
-                self.repo
-                    .apply(
-                        pending.computer_id,
-                        Event::EffectFailed {
+                    .finish_effect(
+                        pending.id,
+                        Some(Event::EffectFailed {
                             reason: error.to_string(),
-                        },
+                        }),
                         self.clock.now(),
                     )
                     .await
@@ -280,7 +360,22 @@ where
             }
             Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
             Effect::Resume { .. } => fleet_completion(self.fleet.resume(computer_id).await, None),
-            Effect::Restart { .. } => fleet_completion(self.fleet.restart(computer_id).await, None),
+            // Crash recovery must not reboot a guest whose start succeeded
+            // before the previous worker lost its completion write.
+            Effect::Restart { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
+            Effect::RestartMacrod { .. } => {
+                let computer = self.computer(computer_id).await?;
+                if computer.state.macrod_connected
+                    || computer.state.macrod_misses < crate::domain::lifecycle::MAX_MACROD_MISSES
+                    || !matches!(
+                        computer.state.phase,
+                        Phase::Booting { .. } | Phase::Running { .. }
+                    )
+                {
+                    return Ok(None);
+                }
+                fleet_completion(self.fleet.restart_macrod(computer_id).await, None)
+            }
             Effect::Freeze { .. } => fleet_completion(self.fleet.freeze(computer_id).await, None),
             Effect::Unfreeze { .. } => {
                 fleet_completion(self.fleet.unfreeze(computer_id).await, None)
@@ -298,6 +393,14 @@ where
                 Ok(None)
             }
             Effect::MakeRoom { host } => {
+                if !self
+                    .computer(computer_id)
+                    .await?
+                    .state
+                    .waiting_for_capacity()
+                {
+                    return Ok(None);
+                }
                 let coldest = self.repo.coldest_frozen(*host).await.map_err(internal)?;
                 match coldest {
                     Some(coldest) => {
@@ -307,7 +410,9 @@ where
                             .await
                             .map_err(internal)?;
                     }
-                    None => tracing::warn!(host_id = %host, "host is full and nothing is frozen"),
+                    None => {
+                        return Ok(Some(Event::RoomUnavailable));
+                    }
                 }
                 Ok(None)
             }
@@ -340,8 +445,22 @@ where
         let count = due.len();
         for timer in due {
             let computer_id = timer.computer_id;
+            let instance_status = if timer.kind == TimerKind::MacrodMissing {
+                self.fleet
+                    .instances()
+                    .await
+                    .map_err(internal)?
+                    .into_iter()
+                    .find(|instance| {
+                        instance.computer_id == computer_id
+                            && &instance.control_plane_id == self.fleet.control_plane_id()
+                    })
+                    .map(|instance| instance.status)
+            } else {
+                None
+            };
             self.repo
-                .fire_timer(timer, now)
+                .fire_timer(timer, instance_status, now)
                 .await
                 .inspect_err(|error| tracing::warn!(computer_id = %computer_id, error = ?error, "timer failed"))
                 .ok();
@@ -366,7 +485,10 @@ where
             .collect();
         let expected = self.repo.instances_expected(host).await.map_err(internal)?;
 
-        for computer in &expected {
+        for record in &expected {
+            let Some(computer) = record.healthy() else {
+                continue;
+            };
             let observed = instances.get(&computer.id).map(|instance| instance.status);
             if observed.is_some() {
                 match self.fleet.resources_match(computer).await {
@@ -415,7 +537,7 @@ where
             {
                 continue;
             }
-            let known = expected.iter().any(|computer| computer.id == *orphan);
+            let known = expected.iter().any(|computer| computer.id() == *orphan);
             if !known
                 && self
                     .repo
@@ -439,7 +561,10 @@ where
         self.host_id().await?;
         let since = self.clock.now() - IDLE_AFTER;
         let mut frozen = 0;
-        for computer in self.repo.running().await.map_err(internal)? {
+        for record in self.repo.running().await.map_err(internal)? {
+            let Some(computer) = record.healthy() else {
+                continue;
+            };
             if computer.persona.is_some() {
                 continue;
             }
@@ -507,6 +632,7 @@ where
         Ok(true)
     }
 
+    /// Record a lost macrod connection for the guest harness.
     #[tracing::instrument(skip(self), err)]
     pub async fn macrod_disconnected(&self, harness_id: HarnessId) -> Result<(), ComputerError> {
         if let Some(computer_id) = self.computer_of(harness_id).await? {
@@ -538,7 +664,11 @@ where
             .get(computer_id)
             .await
             .map_err(internal)?
-            .ok_or(ComputerError::NotFound)
+            .ok_or(ComputerError::NotFound)?
+            .into_healthy()
+            .map_err(|_| {
+                ComputerError::BadRequest("computer needs attention; contact support".to_owned())
+            })
     }
 }
 
@@ -556,8 +686,10 @@ fn fleet_completion(
     }
 }
 
-fn is_gone(computer: Computer) -> bool {
-    computer.state.phase == Phase::Destroyed
+fn is_gone(record: ComputerRecord) -> bool {
+    record
+        .healthy()
+        .is_some_and(|computer| computer.state.phase == Phase::Destroyed)
 }
 
 fn effect_host(effect: &Effect) -> Option<HostId> {
@@ -570,6 +702,7 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::Resume { host }
         | Effect::Stop { host }
         | Effect::Restart { host }
+        | Effect::RestartMacrod { host }
         | Effect::Destroy { host }
         | Effect::MakeRoom { host } => Some(*host),
         Effect::ConfirmPayment { .. }

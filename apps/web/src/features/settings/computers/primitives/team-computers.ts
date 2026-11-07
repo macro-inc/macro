@@ -7,13 +7,12 @@ import type { ComputerStatus } from '@service-auth/computers';
 
 /**
  * The current team's live (not released) Macro computers. Computers are
- * team-only: without a team, or with the flag off, nothing is fetched.
+ * team-only: existing computers remain manageable when rollout is off.
  */
 export function useTeamComputers() {
   const flag = useFeatureFlag(enableMacroComputers);
   const team = useCurrentTeamQuery();
-  const enabled = () =>
-    flag().enabled && queryReadyGate(team) && team.data !== null;
+  const enabled = () => queryReadyGate(team) && team.data !== null;
   const query = useComputersQuery(enabled);
 
   const computers = (): ComputerStatus[] =>
@@ -23,6 +22,7 @@ export function useTeamComputers() {
 
   return {
     enabled,
+    canPurchase: () => enabled() && flag().enabled,
     computers,
     failed: () => query.isError,
   };

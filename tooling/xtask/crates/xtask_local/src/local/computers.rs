@@ -65,6 +65,19 @@ const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
         Some(Port::DocStorage),
     ),
     ("OVERRIDE_AUTH_SERVICE_URL", Some(Port::Auth)),
+    (
+        "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+        Some(Port::AgentHarness),
+    ),
+    (
+        "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
+        Some(Port::AgentHarness),
+    ),
+    (
+        "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+        Some(Port::ConnGateway),
+    ),
+    ("OVERRIDE_MCP_SERVICE_URL", Some(Port::AgentHarness)),
     ("OVERRIDE_APP_SERVICE_URL", None),
 ];
 
@@ -148,7 +161,12 @@ impl Computers {
         MACROD_SERVICES
             .iter()
             .filter_map(|(_, port)| port.map(|port| self.instance.port(port)))
-            .collect()
+            .fold(Vec::new(), |mut ports, port| {
+                if !ports.contains(&port) {
+                    ports.push(port);
+                }
+                ports
+            })
     }
 
     /// Replace every `COMPUTERS_*` key with this fleet's. `env` must already
@@ -199,10 +217,6 @@ impl Computers {
                 self.enrollment_dir().display().to_string(),
             ),
         ]);
-        settings.insert(
-            "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
-            serde_json::to_string(&overrides)?,
-        );
         settings.extend(overrides);
         Ok(settings)
     }
@@ -218,8 +232,18 @@ impl Computers {
             .map(|(name, port)| {
                 let url = match port {
                     Some(port) => {
+                        let scheme = if *name == "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL" {
+                            "ws"
+                        } else {
+                            "http"
+                        };
+                        let path = match *name {
+                            "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL" => "/cognition",
+                            "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL" => "/scheduled-action",
+                            _ => "",
+                        };
                         format!(
-                            "http://{}:{}",
+                            "{scheme}://{}:{}{path}",
                             BOX_BRIDGE_ADDRESS,
                             self.instance.port(*port)
                         )
@@ -268,10 +292,6 @@ impl Computers {
                 credentials.server_cert.clone(),
             ),
         ]);
-        settings.insert(
-            "COMPUTERS_SERVICE_URL_OVERRIDES".into(),
-            serde_json::to_string(&overrides)?,
-        );
         settings.extend(overrides);
         Ok(settings)
     }

@@ -14,7 +14,7 @@ test('a returning user signs in with an emailed code', async ({ page }) => {
   await expectLanded(page, '/');
 });
 
-test('email verification can retry after login cleanup fails', async ({
+test('email verification retries cleanup without reusing a consumed code', async ({
   page,
 }) => {
   await openFixture(page, '/?page=login&cleanupFailure=once');
@@ -32,7 +32,30 @@ test('email verification can retry after login cleanup fails', async ({
   ).toBeVisible();
   expect(
     (await fakeCalls(page)).filter((call) => call.startsWith('verify:'))
-  ).toHaveLength(2);
+  ).toHaveLength(1);
+});
+
+test('changing the email after cleanup failure starts fresh verification', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=login&cleanupFailure=once');
+  await page.getByRole('button', { name: 'Continue with email' }).click();
+  await signInWithCode(page, 'first@example.com', '424242');
+  await expect(
+    page.getByRole('status', { name: 'Notifications' })
+  ).toContainText('Local cleanup failed');
+  await page.getByRole('button', { name: 'Change email', exact: true }).click();
+  await signInWithCode(page, 'second@example.com', '424242');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Create your workspace' })
+  ).toBeVisible();
+  expect(
+    (await fakeCalls(page)).filter((call) => call.startsWith('verify:'))
+  ).toEqual([
+    'verify:first@example.com:424242',
+    'verify:second@example.com:424242',
+  ]);
+  expect((await fakeAuth(page)).user?.email).toBe('second@example.com');
 });
 
 test('a wrong code can be corrected without starting over', async ({

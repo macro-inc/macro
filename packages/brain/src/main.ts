@@ -1,6 +1,7 @@
 // `brain`: the daemon (`brain run`), its health probe (`brain health`), and
 // the commands a turn uses to talk and remember through the running brain.
 import { match, P } from 'ts-pattern';
+import { loadConfig } from './config.ts';
 import { callBrain } from './control.ts';
 import { stdinText } from './subprocess.ts';
 
@@ -59,7 +60,7 @@ async function run(): Promise<void> {
   await supervise();
 }
 async function health(): Promise<number> {
-  const port = required(env('BRAIN_HEALTH_PORT'), 'BRAIN_HEALTH_PORT');
+  const { healthPort: port } = loadConfig(env);
   const response = await fetch(`http://127.0.0.1:${port}/health`);
   print(await response.json());
   return response.ok ? 0 : 1;

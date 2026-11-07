@@ -57,3 +57,11 @@ pub trait EnrollmentComputers: Send + Sync + 'static {
         Output = Result<hosted_runtimes::domain::models::Computer, PersonaCredentialError>,
     > + Send;
 }
+
+/// Resolves current computer-facing addresses without storing them on the persona.
+pub trait EnrollmentEnvironment: Send + Sync + 'static {
+    /// Build the non-secret environment for this enrollment attempt.
+    fn environment(
+        &self,
+    ) -> Result<hosted_runtimes::domain::persona_credentials::PersonaEnv, PersonaCredentialError>;
+}

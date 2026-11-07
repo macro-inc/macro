@@ -15,13 +15,17 @@ import type { SubscriptionItem } from './subscriptionItem';
  * Body of an internal purchase.
  */
 export interface InternalPurchaseBody {
+  /** Purchase funding or billing state. */
   billing: PurchaseBilling;
   /** The team admin or owner the caller authorized. */
   createdBy: string;
   /** Joined into the same subscription update, e.g. an agent seat. */
   extraItems?: SubscriptionItem[];
+  /** Display name. */
   name?: InternalPurchaseBodyName;
   persona?: InternalPurchaseBodyPersona;
+  /** Purchased catalog size. */
   size: ComputerSize;
+  /** Team that owns the computer. */
   teamId: string;
 }

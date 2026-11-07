@@ -6,5 +6,8 @@
  */
 
 export type InternalGetComputerParams = {
+  /**
+   * Team that owns the computer.
+   */
   teamId: string;
 };

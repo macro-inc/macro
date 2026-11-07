@@ -406,6 +406,88 @@
         "type": "object",
         "x-go-package": "github.com/lxc/incus/v7/shared/api"
       },
+      "InstanceExecPost": {
+        "properties": {
+          "command": {
+            "description": "Command and its arguments",
+            "example": [
+              "bash"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array",
+            "x-go-name": "Command"
+          },
+          "cwd": {
+            "description": "Current working directory for the command",
+            "example": "/home/foo/",
+            "type": "string",
+            "x-go-name": "Cwd"
+          },
+          "environment": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Additional environment to pass to the command",
+            "example": {
+              "FOO": "BAR"
+            },
+            "nullable": true,
+            "type": "object",
+            "x-go-name": "Environment"
+          },
+          "group": {
+            "description": "GID of the user to spawn the command as",
+            "example": 1000,
+            "format": "uint32",
+            "type": "integer",
+            "x-go-name": "Group"
+          },
+          "height": {
+            "description": "Terminal height in rows (for interactive)",
+            "example": 24,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Height"
+          },
+          "interactive": {
+            "description": "Whether the command is to be spawned in interactive mode (singled PTY instead of 3 PIPEs)",
+            "example": true,
+            "type": "boolean",
+            "x-go-name": "Interactive"
+          },
+          "record-output": {
+            "description": "Whether to capture the output for later download (requires non-interactive)",
+            "type": "boolean",
+            "x-go-name": "RecordOutput"
+          },
+          "user": {
+            "description": "UID of the user to spawn the command as",
+            "example": 1000,
+            "format": "uint32",
+            "type": "integer",
+            "x-go-name": "User"
+          },
+          "wait-for-websocket": {
+            "description": "Whether to wait for all websockets to be connected before spawning the command",
+            "example": true,
+            "type": "boolean",
+            "x-go-name": "WaitForWS"
+          },
+          "width": {
+            "description": "Terminal width in characters (for interactive)",
+            "example": 80,
+            "format": "int64",
+            "type": "integer",
+            "x-go-name": "Width"
+          }
+        },
+        "title": "InstanceExecPost represents an instance exec request.",
+        "type": "object",
+        "x-go-package": "github.com/lxc/incus/v7/shared/api"
+      },
       "InstancePut": {
         "properties": {
           "architecture": {
@@ -2257,6 +2339,79 @@
           }
         },
         "summary": "Update the instance",
+        "tags": [
+          "instances"
+        ]
+      }
+    },
+    "/1.0/instances/{name}/exec": {
+      "post": {
+        "description": "Executes a command inside an instance.\n\nThe returned operation metadata will contain either 2 or 4 websockets.\nIn non-interactive mode, you'll get one websocket for each of stdin, stdout and stderr.\nIn interactive mode, a single bi-directional websocket is used for stdin and stdout/stderr.\n\nAn additional \"control\" socket is always added on top which can be used for out of band communications.\nThis allows sending signals and window sizing information through.",
+        "operationId": "instance_exec_post",
+        "parameters": [
+          {
+            "description": "Instance name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Project name",
+            "example": "default",
+            "in": "query",
+            "name": "project",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstanceExecPost"
+              }
+            }
+          },
+          "description": "Exec request",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsyncResponse"
+                }
+              }
+            },
+            "description": "Operation"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Run a command",
         "tags": [
           "instances"
         ]

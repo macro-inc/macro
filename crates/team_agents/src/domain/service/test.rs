@@ -1,5 +1,5 @@
 use crate::domain::models::{
-    AgentApiKey, PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName,
+    AgentApiKey, AgentRepo, PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName,
 };
 use agent_credentials::RepoToken;
 use hosted_runtimes::domain::ids::ComputerId;
@@ -441,8 +441,8 @@ impl Computers for FakeComputers {
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Creating,
-                position: 2,
-                total: 5,
+                position: 1,
+                total: 4,
             }),
         })
     }
@@ -568,9 +568,9 @@ impl Default for Setup {
                 brain: None,
                 status: ComputerStatusKind::SettingUp,
                 setup: Some(SetupProgress {
-                    step: SetupStep::Paying,
+                    step: SetupStep::Creating,
                     position: 1,
-                    total: 5,
+                    total: 4,
                 }),
             },
         }
@@ -614,10 +614,9 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
             seeds: Mutex::new(vec![]),
         },
         setup.flags,
-        "https://dev-gateway.macro.com/".to_string(),
-        "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic".to_string(),
         "staff.example.com".to_string(),
-    );
+    )
+    .with_enrollment_environment(TestEnvironment);
 
     (service, journal)
 }
@@ -665,9 +664,9 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
             status: TeamAgentStatus::Provisioning,
             status_reason: None,
             setup: Some(SetupProgress {
-                step: SetupStep::Paying,
+                step: SetupStep::Creating,
                 position: 1,
-                total: 5
+                total: 4
             }),
             last_turn_at: None,
             retryable: false,
@@ -713,21 +712,8 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                 },
                 config: BTreeMap::from([
                     (
-                        PersonaConfigKey::parse("ANTHROPIC_BASE_URL").expect("config key"),
-                        "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic"
-                            .to_string()
-                    ),
-                    (
                         PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
                         "macro|sam@agents.example.com".to_string(),
-                    ),
-                    (
-                        PersonaConfigKey::parse("MACRO_GATEWAY").expect("config key"),
-                        "https://dev-gateway.macro.com".to_string(),
-                    ),
-                    (
-                        PersonaConfigKey::parse("MACRO_REPO_URL").expect("config key"),
-                        "https://git.example.com/sam".to_string(),
                     ),
                     (
                         PersonaConfigKey::parse("BRAIN_WORKSPACE").expect("config key"),
@@ -1004,8 +990,8 @@ async fn listing_shows_setup_progress_while_the_computer_comes_up() {
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Booting,
-                position: 3,
-                total: 5,
+                position: 2,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1022,8 +1008,8 @@ async fn listing_shows_setup_progress_while_the_computer_comes_up() {
         listed.agents[0].setup,
         Some(SetupProgress {
             step: SetupStep::Booting,
-            position: 3,
-            total: 5,
+            position: 2,
+            total: 4,
         })
     );
 }
@@ -1059,8 +1045,8 @@ async fn a_running_agent_reflects_a_later_computer_failure() {
             status: ComputerStatusKind::Ready,
             setup: Some(SetupProgress {
                 step: SetupStep::Ready,
-                position: 5,
-                total: 5,
+                position: 4,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1131,8 +1117,8 @@ async fn delete_releases_the_computer_and_removes_the_agent_last() {
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Creating,
-                position: 2,
-                total: 5,
+                position: 1,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1220,8 +1206,8 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
             // Failures must override stale setup progress.
             setup: Some(SetupProgress {
                 step: SetupStep::Booting,
-                position: 3,
-                total: 5,
+                position: 2,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1402,9 +1388,9 @@ async fn pending_payment_clears_legacy_failure_and_waits_without_another_purchas
             brain: None,
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
-                step: SetupStep::Paying,
+                step: SetupStep::Creating,
                 position: 1,
-                total: 5,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1423,7 +1409,7 @@ async fn pending_payment_clears_legacy_failure_and_waits_without_another_purchas
     let pending = &listed.agents[0];
     assert_eq!(pending.status, TeamAgentStatus::Provisioning);
     assert_eq!(pending.status_reason, None);
-    assert_eq!(pending.setup.as_ref().unwrap().step, SetupStep::Paying);
+    assert_eq!(pending.setup.as_ref().unwrap().step, SetupStep::Creating);
     assert!(!pending.retryable);
     let before = journal.steps();
     assert!(matches!(
@@ -1829,8 +1815,8 @@ async fn connecting_disconnect_then_ready_health_loss_and_reconnect_never_latch_
         status: ComputerStatusKind::Ready,
         setup: Some(SetupProgress {
             step: SetupStep::Connecting,
-            position: 4,
-            total: 5,
+            position: 3,
+            total: 4,
         }),
         brain: Some(disconnected.clone()),
     };
@@ -2101,9 +2087,109 @@ impl crate::domain::enrollment::EnrollmentComputers for FakeComputers {
             harness_id: None,
             persona: purchase.persona.clone(),
             enrollment_generation: EnrollmentGeneration::new(1),
-            created_by: purchase.created_by.as_ref().to_owned(),
+            created_by: purchase.created_by.clone(),
             created_at: now,
             enrolled_at: None,
         })
     }
+}
+
+struct TestEnvironment;
+impl crate::domain::enrollment::EnrollmentEnvironment for TestEnvironment {
+    fn environment(
+        &self,
+    ) -> Result<
+        hosted_runtimes::domain::persona_credentials::PersonaEnv,
+        hosted_runtimes::domain::persona_credentials::PersonaCredentialError,
+    > {
+        hosted_runtimes::domain::persona_credentials::PersonaEnv::new(
+            [
+                (
+                    "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+                    "https://storage.example.com",
+                ),
+                ("OVERRIDE_AUTH_SERVICE_URL", "https://auth.example.com"),
+                (
+                    "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+                    "https://cognition.example.com",
+                ),
+                (
+                    "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
+                    "https://harness.example.com",
+                ),
+                (
+                    "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
+                    "https://scheduled.example.com",
+                ),
+                (
+                    "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+                    "wss://connection.example.com/ws",
+                ),
+                ("OVERRIDE_MCP_SERVICE_URL", "https://mcp.example.com/base"),
+                ("MACRO_GATEWAY", "https://gateway.example.com"),
+                (
+                    "ANTHROPIC_BASE_URL",
+                    "https://egress.example.com/brain/anthropic",
+                ),
+            ]
+            .into_iter()
+            .map(|(key, value)| (PersonaConfigKey::parse(key).unwrap(), value.to_owned()))
+            .collect(),
+        )
+    }
+}
+
+#[tokio::test]
+async fn missing_enrollment_environment_does_not_rotate_credentials() {
+    use hosted_runtimes::domain::{
+        persona_credentials::{EnrollmentGeneration, PersonaCredentialError},
+        ports::PersonaCredentialSource,
+    };
+    let (mut service, journal) = build(Setup::default());
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    service.enrollment_environment = None;
+    journal.steps.lock().unwrap().clear();
+    assert!(matches!(
+        service
+            .issue(agent.computer_id.unwrap(), EnrollmentGeneration::new(1))
+            .await,
+        Err(PersonaCredentialError::Unavailable)
+    ));
+    assert!(journal.steps().is_empty());
+}
+
+mod health;
+
+struct InvalidGitEnvironment;
+impl crate::domain::enrollment::EnrollmentEnvironment for InvalidGitEnvironment {
+    fn environment(
+        &self,
+    ) -> Result<
+        hosted_runtimes::domain::persona_credentials::PersonaEnv,
+        hosted_runtimes::domain::persona_credentials::PersonaCredentialError,
+    > {
+        Err(hosted_runtimes::domain::persona_credentials::PersonaCredentialError::Unavailable)
+    }
+}
+
+#[tokio::test]
+async fn invalid_git_environment_preflight_touches_neither_credential_issuer() {
+    use hosted_runtimes::domain::{
+        persona_credentials::{EnrollmentGeneration, PersonaCredentialError},
+        ports::PersonaCredentialSource,
+    };
+    let (service, journal) = build(Setup::default());
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    let service = service.with_enrollment_environment(InvalidGitEnvironment);
+    journal.steps.lock().unwrap().clear();
+    assert!(matches!(
+        service
+            .issue(agent.computer_id.unwrap(), EnrollmentGeneration::new(1))
+            .await,
+        Err(PersonaCredentialError::Unavailable)
+    ));
+    assert!(
+        journal.steps().is_empty(),
+        "invalid preflight must not mint a key or create/reissue a repo"
+    );
 }

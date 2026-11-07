@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::enrollment::DeviceSecret;
 use crate::domain::models::ComputerName;
 use crate::domain::persona_credentials::{PersonaCredentials, PersonaEnrollment, PersonaEnv};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicU32, Ordering},
@@ -21,11 +22,16 @@ impl DockerCommand for FakeDocker {
                 .iter()
                 .any(|arg| arg.contains("fixture-bootstrap-value"))
         );
+        if command == "create" {
+            assert!(args.iter().any(|arg| arg == "--cpus=6"));
+            assert!(args.windows(2).any(|args| args == ["--memory", "12g"]));
+            assert!(!args.iter().any(|arg| arg.starts_with("--cpuset")));
+        }
         Ok(match command {
             "ps" if self.exists => "running".to_owned(),
             "ps" => String::new(),
             "inspect" => "test-a 1 00000000-0000-0000-0000-000000000001".to_owned(),
-            "create" | "start" | "restart" | "stop" => String::new(),
+            "create" | "start" | "restart" | "stop" | "exec" => String::new(),
             _ => panic!("unexpected Docker command"),
         })
     }
@@ -64,10 +70,10 @@ impl FleetEnrollment for TestEnrollment {
 }
 
 #[tokio::test]
-async fn docker_create_claim_gate_controls_issuance_rewrite_and_restart() {
+async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() {
     for (exists, claimed, expected_issue_calls, expected_commands) in [
         (false, false, 1, vec!["ps", "create", "ps", "start"]),
-        (true, false, 1, vec!["ps", "inspect", "ps", "restart"]),
+        (true, false, 1, vec!["ps", "inspect", "exec"]),
         (true, true, 0, vec!["ps", "inspect"]),
     ] {
         let root = tempfile::tempdir().unwrap();
@@ -105,8 +111,8 @@ async fn docker_create_claim_gate_controls_issuance_rewrite_and_restart() {
             name: ComputerName::try_new("Fixture computer").unwrap(),
             size: crate::domain::size::ComputerSize::Standard,
             resources: crate::domain::size::ComputerResources {
-                vcpus: crate::domain::size::Vcpus::new(4),
-                memory_gib: crate::domain::size::MemoryGib::new(8),
+                vcpus: crate::domain::size::Vcpus::new(6),
+                memory_gib: crate::domain::size::MemoryGib::new(12),
                 disk_gib: crate::domain::size::DiskGib::new(100),
             },
             catalog_entry: crate::domain::size::CatalogEntryId::try_new(
@@ -126,7 +132,7 @@ async fn docker_create_claim_gate_controls_issuance_rewrite_and_restart() {
             },
             harness_id: None,
             persona: None,
-            created_by: "fixture-owner".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             created_at: Utc::now(),
             enrolled_at: None,
             enrollment_generation: EnrollmentGeneration::new(if exists { 1 } else { 0 }),

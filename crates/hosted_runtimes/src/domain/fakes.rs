@@ -1,5 +1,7 @@
 //! In-memory fakes of the ports, for domain tests.
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use crate::domain::ids::ComputerId;
 use harness_id::HarnessId;
 
@@ -13,7 +15,10 @@ use uuid::Uuid;
 use crate::domain::lifecycle::{
     ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, transition,
 };
-use crate::domain::models::{Computer, Host, HostRegistration, NewComputer};
+use crate::domain::models::{
+    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostRegistration, NewComputer,
+    SanitizedReason,
+};
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerSize;
@@ -41,13 +46,34 @@ pub struct FakeError;
 #[derive(Default)]
 pub struct FakeRepo {
     pub sold_units: u32,
+    pub awake_units: Mutex<Option<u32>>,
+    pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
     pub enrollment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub payment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
     pub computers: Mutex<HashMap<ComputerId, Computer>>,
+    pub corrupt_ids: Mutex<Vec<ComputerId>>,
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
+}
+
+impl FakeRepo {
+    fn record(&self, computer: Computer) -> ComputerRecord {
+        if self.corrupt_ids.lock().unwrap().contains(&computer.id) {
+            ComputerRecord::NeedsAttention {
+                id: computer.id,
+                team_id: computer.team_id,
+                host_id: computer.state.host(),
+                display: ComputerDisplayMetadata::from(&computer),
+                reason: SanitizedReason::new(
+                    "persona.config keys must not be reserved credential keys",
+                ),
+            }
+        } else {
+            computer.into()
+        }
+    }
 }
 
 impl ComputerRepo for FakeRepo {
@@ -94,11 +120,20 @@ impl ComputerRepo for FakeRepo {
         if sold + computer.resources.units() > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
+        let reserved_awake: u32 = computers
+            .values()
+            .filter(|existing| existing.state.holds_units() && existing.persona.is_some())
+            .map(|existing| existing.resources.units())
+            .sum();
+        let awake = self.awake_units.lock().unwrap().unwrap_or(self.sold_units);
+        if computer.persona.is_some() && reserved_awake + computer.resources.units() > awake {
+            return Err(ReserveError::SoldOut);
+        }
         let mut state = ComputerState::reserved(HOST, now);
         if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
             state.comp_reason = Some(reason.clone());
         }
-        let reserved = Computer {
+        let mut reserved = Computer {
             id: computer.id,
             team_id: computer.team_id,
             name: computer.name,
@@ -114,20 +149,41 @@ impl ComputerRepo for FakeRepo {
             enrolled_at: None,
             enrollment_generation: Default::default(),
         };
-        let mut effects = self.effects.lock().unwrap();
-        let id = effects.iter().map(|effect| effect.id).max().unwrap_or(0) + 1;
-        effects.push(PendingEffect {
-            id,
-            computer_id: reserved.id,
-            effect: Effect::ConfirmPayment {
-                extra_items: computer.extra_items,
-            },
-            attempts: 0,
-        });
-        self.effect_run_after
-            .lock()
-            .unwrap()
-            .insert(id, now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY);
+        let (effects, run_after) = match computer.billing {
+            crate::domain::models::PurchaseBilling::Comped { reason } => {
+                let (state, effects) = transition(
+                    &reserved.state,
+                    &Event::Comped { reason },
+                    Context {
+                        now,
+                        host_has_room: true,
+                        enrollment_generation: reserved.enrollment_generation,
+                    },
+                );
+                reserved.state = state;
+                (effects, now)
+            }
+            crate::domain::models::PurchaseBilling::Stripe => (
+                vec![Effect::ConfirmPayment {
+                    extra_items: computer.extra_items,
+                }],
+                now + crate::domain::lifecycle::PAYMENT_CONFIRM_DELAY,
+            ),
+        };
+        let mut outbox = self.effects.lock().unwrap();
+        for effect in effects {
+            if let Effect::Create { generation, .. } = &effect {
+                reserved.enrollment_generation = *generation;
+            }
+            let id = outbox.iter().map(|effect| effect.id).max().unwrap_or(0) + 1;
+            outbox.push(PendingEffect {
+                id,
+                computer_id: reserved.id,
+                effect,
+                attempts: 0,
+            });
+            self.effect_run_after.lock().unwrap().insert(id, run_after);
+        }
         computers.insert(reserved.id, reserved.clone());
         Ok(reserved)
     }
@@ -160,6 +216,12 @@ impl ComputerRepo for FakeRepo {
         );
         computer.state = state;
         let mut outbox = self.effects.lock().unwrap();
+        if !matches!(computer.state.phase, Phase::PendingPayment { .. }) {
+            outbox.retain(|pending| {
+                pending.computer_id != computer_id
+                    || !matches!(pending.effect, Effect::ConfirmPayment { .. })
+            });
+        }
         for effect in effects {
             if let Effect::Create { generation, .. } = &effect {
                 computer.enrollment_generation = *generation;
@@ -171,26 +233,36 @@ impl ComputerRepo for FakeRepo {
                 effect,
                 attempts: 0,
             });
+            self.effect_run_after.lock().unwrap().insert(id, now);
         }
         Ok(Some(computer.clone()))
     }
 
-    async fn get(&self, computer_id: ComputerId) -> Result<Option<Computer>, FakeError> {
-        Ok(self.computers.lock().unwrap().get(&computer_id).cloned())
+    async fn get(&self, computer_id: ComputerId) -> Result<Option<ComputerRecord>, FakeError> {
+        Ok(self
+            .computers
+            .lock()
+            .unwrap()
+            .get(&computer_id)
+            .map(|computer| self.record(computer.clone())))
     }
 
-    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<Computer>, FakeError> {
+    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<ComputerRecord>, FakeError> {
         let mut computers: Vec<Computer> = self
             .computers
             .lock()
             .unwrap()
             .values()
-            .filter(|computer| computer.team_id == team_id)
-            .filter(|computer| computer.state.phase != Phase::Destroyed)
+            .filter(|computer| {
+                computer.team_id == team_id && computer.state.phase != Phase::Destroyed
+            })
             .cloned()
             .collect();
         computers.sort_by_key(|computer| computer.created_at);
-        Ok(computers)
+        Ok(computers
+            .into_iter()
+            .map(|computer| self.record(computer))
+            .collect())
     }
 
     async fn find_by_harness(&self, harness_id: HarnessId) -> Result<Option<Computer>, FakeError> {
@@ -222,7 +294,7 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn running(&self) -> Result<Vec<Computer>, FakeError> {
+    async fn running(&self) -> Result<Vec<ComputerRecord>, FakeError> {
         Ok(self
             .computers
             .lock()
@@ -230,6 +302,7 @@ impl ComputerRepo for FakeRepo {
             .values()
             .filter(|computer| matches!(computer.state.phase, Phase::Running { .. }))
             .cloned()
+            .map(|computer| self.record(computer))
             .collect())
     }
 
@@ -237,7 +310,7 @@ impl ComputerRepo for FakeRepo {
         Ok(None)
     }
 
-    async fn instances_expected(&self, host: HostId) -> Result<Vec<Computer>, FakeError> {
+    async fn instances_expected(&self, host: HostId) -> Result<Vec<ComputerRecord>, FakeError> {
         Ok(self
             .computers
             .lock()
@@ -246,6 +319,7 @@ impl ComputerRepo for FakeRepo {
             .filter(|computer| computer.state.host() == Some(host))
             .filter(|computer| !matches!(computer.state.phase, Phase::PendingPayment { .. }))
             .cloned()
+            .map(|computer| self.record(computer))
             .collect())
     }
 
@@ -254,24 +328,48 @@ impl ComputerRepo for FakeRepo {
         worker: EffectWorker,
         limit: u32,
         now: DateTime<Utc>,
-        _lease_until: DateTime<Utc>,
+        lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, FakeError> {
-        Ok(self
-            .effects
-            .lock()
-            .unwrap()
+        let effects = self.effects.lock().unwrap();
+        let mut due = self.effect_run_after.lock().unwrap();
+        let selected: Vec<PendingEffect> = effects
             .iter()
             .filter(|pending| pending.effect.worker() == worker)
+            .filter(|pending| due.get(&pending.id).is_none_or(|at| *at <= now))
             .filter(|pending| {
-                self.effect_run_after
-                    .lock()
-                    .unwrap()
-                    .get(&pending.id)
-                    .is_none_or(|at| *at <= now)
+                !effects.iter().any(|earlier| {
+                    earlier.id < pending.id
+                        && earlier.computer_id == pending.computer_id
+                        && earlier.effect.worker() == worker
+                })
             })
             .take(limit as usize)
             .cloned()
-            .collect())
+            .collect();
+        for pending in &selected {
+            due.insert(pending.id, lease_until);
+        }
+        Ok(selected)
+    }
+
+    async fn release_effects(
+        &self,
+        ids: &[i64],
+        lease_until: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        let effects = self.effects.lock().unwrap();
+        let mut due = self.effect_run_after.lock().unwrap();
+        for id in ids {
+            if effects
+                .iter()
+                .any(|pending| pending.id == *id && pending.effect.worker() == EffectWorker::Fleet)
+                && due.get(id) == Some(&lease_until)
+            {
+                due.insert(*id, now);
+            }
+        }
+        Ok(())
     }
 
     async fn complete_effect(&self, id: i64) -> Result<(), FakeError> {
@@ -281,6 +379,27 @@ impl ComputerRepo for FakeRepo {
             .unwrap()
             .retain(|pending| pending.id != id);
         Ok(())
+    }
+
+    async fn finish_effect(
+        &self,
+        id: i64,
+        completion: Option<Event>,
+        now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        let computer_id = self
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|pending| pending.id == id)
+            .map(|pending| pending.computer_id);
+        if let Some(computer_id) = computer_id
+            && let Some(event) = completion
+        {
+            self.apply(computer_id, event, now).await?;
+        }
+        self.complete_effect(id).await
     }
 
     async fn retry_effect(
@@ -298,23 +417,42 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn due_timers(
-        &self,
-        _now: DateTime<Utc>,
-        _limit: u32,
-    ) -> Result<Vec<DueTimer>, FakeError> {
-        Ok(vec![])
+    async fn due_timers(&self, now: DateTime<Utc>, limit: u32) -> Result<Vec<DueTimer>, FakeError> {
+        Ok(self
+            .timers
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|timer| timer.fire_at <= now)
+            .take(limit as usize)
+            .cloned()
+            .collect())
     }
 
     async fn fire_timer(
         &self,
-        _timer: DueTimer,
-        _now: DateTime<Utc>,
+        timer: DueTimer,
+        instance_status: Option<crate::domain::ports::InstanceStatus>,
+        now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
-        Ok(None)
+        self.timers
+            .lock()
+            .unwrap()
+            .retain(|pending| *pending != timer);
+        self.apply(timer.computer_id, timer.kind.event(instance_status), now)
+            .await
+    }
+
+    async fn postpone_macrod_timers(
+        &self,
+        _host: HostId,
+        _deadline: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        Ok(())
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, FakeError> {
+        *self.awake_units.lock().unwrap() = Some(registration.awake_capacity_units());
         Ok(Host {
             id: HOST,
             awake_capacity_units: registration.awake_capacity_units(),
@@ -325,15 +463,35 @@ impl ComputerRepo for FakeRepo {
 
     async fn sold_out_sizes(
         &self,
-        _catalog: &[crate::domain::size::CatalogEntry],
+        catalog: &[crate::domain::size::CatalogEntry],
+        always_on: bool,
     ) -> Result<Vec<ComputerSize>, FakeError> {
-        Ok(vec![])
+        let computers = self.computers.lock().unwrap();
+        let sold: u32 = computers
+            .values()
+            .filter(|c| c.state.holds_units())
+            .map(|c| c.resources.units())
+            .sum();
+        let reserved_awake: u32 = computers
+            .values()
+            .filter(|c| c.state.holds_units() && c.persona.is_some())
+            .map(|c| c.resources.units())
+            .sum();
+        let awake = self.awake_units.lock().unwrap().unwrap_or(self.sold_units);
+        Ok(catalog
+            .iter()
+            .filter(|entry| {
+                entry.resources.units() > self.sold_units.saturating_sub(sold)
+                    || (always_on && entry.resources.units() > awake.saturating_sub(reserved_awake))
+            })
+            .map(|entry| entry.size)
+            .collect())
     }
 
     async fn request_notify(
         &self,
         _team_id: Uuid,
-        _user_id: String,
+        _user_id: MacroUserIdStr<'static>,
         _size: ComputerSize,
     ) -> Result<(), FakeError> {
         Ok(())
@@ -342,7 +500,7 @@ impl ComputerRepo for FakeRepo {
     async fn notify_requests(
         &self,
         _team_id: Uuid,
-        _user_id: String,
+        _user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ComputerSize>, FakeError> {
         Ok(vec![])
     }

@@ -21,9 +21,15 @@ export default defineConfig({
     tailwind(),
   ],
   optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  build: { target: 'esnext' },
+  worker: { format: 'es' },
   resolve: {
     dedupe: ['solid-js'],
     alias: [
+      {
+        find: /^@core\/context\/(?:channels|user)$/,
+        replacement: `${directory}/scenario.tsx`,
+      },
       {
         find: '@app/lib/analytics/posthog',
         replacement: `${directory}/scenario.tsx`,
@@ -77,7 +83,7 @@ export default defineConfig({
         replacement: `${directory}/transport.ts`,
       },
       {
-        find: /^\.\/queries\/screen-url$/,
+        find: /^@app\/lib\/service-clients\/service-agent-harness\/screen-url$/,
         replacement: `${directory}/transport.ts`,
       },
     ],

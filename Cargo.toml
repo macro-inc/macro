@@ -127,6 +127,7 @@ members = [
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
+  "crates/natural_time",
   "crates/notification_inbox",
   "crates/notification_state",
   "crates/pipedream_mcp",
@@ -439,6 +440,7 @@ sqlx = { version = "0.8.6", features = [
 ] }
 sqlx-core = { version = "0.8.6" }
 sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
+strsim = "0.11"
 strum = { version = "0.27.1", features = ["derive"] }
 symphonia = { version = "0.6.1", default-features = false, features = [
   "isomp4",

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH locked AS (\n                SELECT id, sold_capacity_units, awake_capacity_units FROM hosted_runtime_host\n            )\n            SELECT locked.id\n            FROM locked\n            LEFT JOIN hosted_runtime computer\n                ON computer.host_id = locked.id AND computer.holds_units\n            GROUP BY locked.id, locked.sold_capacity_units, locked.awake_capacity_units\n            HAVING locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) >= $1::BIGINT\n               AND (NOT $2::BOOLEAN OR locked.awake_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.persona IS NOT NULL), 0) >= $1::BIGINT)\n            ORDER BY locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1fd0c4fea8376c78ba68732659f67178a76c76d3c3db0e040087d1d4dc1497cf"
+}

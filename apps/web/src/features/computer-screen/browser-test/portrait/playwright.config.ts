@@ -21,7 +21,7 @@ export default defineConfig({
     screenshot: 'off',
   },
   webServer: {
-    command: `bunx vite --config src/features/computer-screen/browser-test/portrait/vite.config.ts --port ${port}`,
+    command: `bunx vite build --config src/features/computer-screen/browser-test/portrait/vite.config.ts && bunx vite preview --config src/features/computer-screen/browser-test/portrait/vite.config.ts --host 127.0.0.1 --port ${port} --strictPort`,
     cwd: webDirectory,
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

@@ -14,8 +14,8 @@ export function AgentStatusPill(props: {
     props.agent.payment === 'pending' || props.agent.payment === 'unbilled'
       ? 'Setting up…'
       : match(props.agent.status)
-          .with('running', () => 'Running')
-          .with('unhealthy', () => 'Unhealthy')
+          .with('running', () => t('settingsBilling.alive'))
+          .with('unhealthy', () => t('settingsBilling.dead'))
           .with('provisioning', 'failed', () => 'Setting up…')
           .exhaustive(() => 'Setting up…');
   // Older servers may still send the retired payment step. It has no UI step.

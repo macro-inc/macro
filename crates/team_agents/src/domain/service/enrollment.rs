@@ -6,7 +6,6 @@ use hosted_runtimes::domain::{
     ids::ComputerId,
     persona_credentials::{
         EnrollmentGeneration, PersonaCredentialError, PersonaCredentials, PersonaEnrollment,
-        PersonaEnv,
     },
     ports::PersonaCredentialSource,
 };
@@ -79,6 +78,12 @@ where
         {
             return Err(PersonaCredentialError::NotFound);
         }
+        // Resolve before rotating credentials, so invalid deployment config has no effects.
+        let environment = self
+            .enrollment_environment
+            .as_ref()
+            .ok_or(PersonaCredentialError::Unavailable)?;
+        let mut env = environment.environment()?.as_map().clone();
         // Hold context.guard across BOTH providers. replace_key and create_repo
         // store only hashes and revoke the previous bootstrap credentials.
         let api_key = self
@@ -91,6 +96,11 @@ where
             .create(&agent.user_id, agent.team_id, &agent.seed)
             .await
             .map_err(|_| PersonaCredentialError::IssuanceFailed)?;
+        env.insert(
+            PersonaConfigKey::parse(config_keys::REPO_URL)?,
+            repo.url.clone(),
+        );
+        let env = hosted_runtimes::domain::persona_credentials::PersonaEnv::new(env)?;
         let secrets = PersonaCredentials::new(BTreeMap::from([
             (
                 PersonaConfigKey::parse(config_keys::API_KEY)?,
@@ -108,9 +118,6 @@ where
         self.repository
             .finish_enrollment(context.guard, computer, &agent.user_id)
             .await?;
-        Ok(PersonaEnrollment {
-            secrets,
-            env: PersonaEnv::default(),
-        })
+        Ok(PersonaEnrollment { secrets, env })
     }
 }

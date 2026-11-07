@@ -463,6 +463,33 @@ impl IncusClient {
         }
     }
 
+    /// Execute a non-interactive command as root and check its exit status.
+    #[tracing::instrument(skip(self, command), err)]
+    pub async fn exec(&self, name: &InstanceName, command: &[&str]) -> Result<(), IncusError> {
+        let body = types::InstanceExecPost {
+            command: Some(command.iter().map(|part| (*part).to_owned()).collect()),
+            interactive: Some(false),
+            wait_for_websocket: Some(false),
+            ..Default::default()
+        };
+        let started = self
+            .api
+            .instance_exec_post(name.as_str(), None, &body)
+            .await?
+            .into_inner();
+        let operation = self.run_operation(started).await?;
+        let exit_code = operation
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("return"))
+            .and_then(serde_json::Value::as_i64)
+            .ok_or_else(|| missing("exec return code"))?;
+        if exit_code != 0 {
+            return Err(IncusError::ExecFailed { exit_code });
+        }
+        Ok(())
+    }
+
     async fn change_state(
         &self,
         name: &InstanceName,

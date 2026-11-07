@@ -274,6 +274,10 @@ enum BrainProblem {
     TurnExecutionFailed,
     #[serde(rename = "event handling failed")]
     EventHandlingFailed,
+    #[serde(rename = "brain is draining")]
+    Draining,
+    #[serde(rename = "event intake not active")]
+    IntakeInactive,
 }
 
 impl BrainProblem {
@@ -283,6 +287,8 @@ impl BrainProblem {
             Self::Disconnected => "event stream disconnected",
             Self::TurnExecutionFailed => "turn execution failed",
             Self::EventHandlingFailed => "event handling failed",
+            Self::Draining => "brain is draining",
+            Self::IntakeInactive => "event intake not active",
         }
     }
 }

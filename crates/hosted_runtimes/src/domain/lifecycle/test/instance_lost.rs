@@ -37,6 +37,7 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
                         power,
                         billing,
                         macrod_connected: true,
+                        macrod_misses: 0,
                         wake_requested: true,
                         ..ComputerState::reserved(HOST, now())
                     };

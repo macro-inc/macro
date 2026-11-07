@@ -5,7 +5,7 @@ import * as nodePath from 'node:path';
 import { test } from 'node:test';
 import { Brain } from './brain.ts';
 import { AsyncQueue } from './channel.ts';
-import { gatewayHosts } from './config.ts';
+import { checkHosts } from './dry-run.ts';
 import { MacroHttp } from './macro.ts';
 import type { Outcome, RunEvent, RunHandle, Turn } from './runner.ts';
 import { runCommand } from './subprocess.ts';
@@ -49,52 +49,46 @@ test('a direct message wakes a respond turn that replies, shows typing, and comm
       sender: 'macro|bo@example.com',
     },
   });
-  const http = new MacroHttp(
-    gatewayHosts('https://gateway.example'),
-    'mak_agent',
-    async (url, init) => {
-      const path = new URL(url).pathname;
-      const method = init?.method ?? 'GET';
-      requests.push({
-        method,
-        path,
-        body: init?.body ? JSON.parse(String(init.body)) : null,
+  const http = new MacroHttp(checkHosts, 'mak_agent', async (url, init) => {
+    const path = new URL(url).pathname;
+    const method = init?.method ?? 'GET';
+    requests.push({
+      method,
+      path,
+      body: init?.body ? JSON.parse(String(init.body)) : null,
+    });
+    if (path === '/auth/user/me')
+      return Response.json({ user_id: 'macro|ada@example.com' });
+    if (path === '/dss/channels/dm-1')
+      return Response.json({
+        channel_id: 'dm-1',
+        channel_name: 'Bo Lee',
+        channel_type: 'direct_message',
       });
-      if (path === '/auth/user/me')
-        return Response.json({ user_id: 'macro|ada@example.com' });
-      if (path === '/dss/channels/dm-1')
-        return Response.json({
-          channel_id: 'dm-1',
-          channel_name: 'Bo Lee',
-          channel_type: 'direct_message',
-        });
-      if (path === '/dss/webhook/events/stream') {
-        const signal = init?.signal;
-        return new Response(
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              controller.enqueue(
-                new TextEncoder().encode(`data: ${event}\n\n`)
-              );
-              signal?.addEventListener('abort', () =>
-                controller.error(new Error('aborted'))
-              );
-            },
-          })
-        );
-      }
-      if (path === '/dss/messages/channel/dm-1' && method === 'POST')
-        return Response.json({ id: 'message-2' });
-      if (path === '/dss/messages/channel/dm-1/typing')
-        return new Response(null, { status: 204 });
-      return new Response(`unexpected ${method} ${path}`, { status: 500 });
+    if (path === '/dss/webhook/events/stream') {
+      const signal = init?.signal;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(`data: ${event}\n\n`));
+            signal?.addEventListener('abort', () =>
+              controller.error(new Error('aborted'))
+            );
+          },
+        })
+      );
     }
-  );
+    if (path === '/dss/messages/channel/dm-1' && method === 'POST')
+      return Response.json({ id: 'message-2' });
+    if (path === '/dss/messages/channel/dm-1/typing')
+      return new Response(null, { status: 204 });
+    return new Response(`unexpected ${method} ${path}`, { status: 500 });
+  });
   const turns: Turn[] = [];
   const brain: Brain = new Brain({
     config: {
       gateway: 'https://gateway.example',
-      hosts: gatewayHosts('https://gateway.example'),
+      hosts: checkHosts,
       workspace,
       healthPort: 0,
       anthropicBaseUrl: 'https://gateway.example/anthropic',

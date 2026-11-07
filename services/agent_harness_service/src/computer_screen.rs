@@ -60,8 +60,10 @@ const VIEWER_ACCESS_TIMEOUT: Duration = Duration::from_secs(3);
 /// State for the computer routes.
 pub struct ComputerScreenState<Harnesses, Auth> {
     harnesses: Arc<Harnesses>,
+    rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     control: ComputerControl,
     redis: redis::Client,
+    cleanup: TaskTracker,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
@@ -69,8 +71,10 @@ impl<Harnesses, Auth> Clone for ComputerScreenState<Harnesses, Auth> {
     fn clone(&self) -> Self {
         Self {
             harnesses: Arc::clone(&self.harnesses),
+            rollout: self.rollout.clone(),
             control: self.control.clone(),
             redis: self.redis.clone(),
+            cleanup: self.cleanup.clone(),
             authorization_state: self.authorization_state.clone(),
         }
     }
@@ -90,6 +94,7 @@ pub fn router<Harnesses, Auth>(
     redis: redis::Client,
     harnesses: Harnesses,
     authorization_state: MacroAuthorizationState<Auth>,
+    rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     tasks: &TaskTracker,
     shutdown: CancellationToken,
 ) -> Router
@@ -101,7 +106,9 @@ where
     let state = ComputerScreenState {
         harnesses: Arc::new(harnesses),
         control,
+        rollout,
         redis,
+        cleanup: tasks.clone(),
         authorization_state,
     };
     Router::new()
@@ -120,6 +127,10 @@ where
         .route(
             "/harnesses/{harness_id}/claude-sign-in/complete",
             post(claude_sign_in_complete_handler::<Harnesses, Auth>),
+        )
+        .route(
+            "/harnesses/{harness_id}/claude-sign-in/cancel",
+            post(claude_sign_in_cancel_handler::<Harnesses, Auth>),
         )
         .route(
             "/harnesses/{harness_id}/claude-sign-out",
@@ -208,7 +219,9 @@ where
     state
         .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
-    let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
+    let account_change = bus::AccountChange::claim(&state.redis, path.harness_id, &state.cleanup)
+        .await?
+        .cancel_on_drop(state.control.clone(), path.harness_id);
     let result = match state
         .control
         .send(path.harness_id, ComputerCommand::ClaudeSignInStart)
@@ -247,26 +260,44 @@ where
     state
         .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
-    let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
-    let result = match state
+    state.complete_sign_in(path.harness_id, body.code).await?;
+    Ok(Json(ClaudeSignedIn { signed_in: true }))
+}
+
+/// Cancel the pending setup-token process. Its terminal completion releases
+/// the original request's account lease, including on another replica.
+#[utoipa::path(
+    post,
+    tag = "computers",
+    operation_id = "cancel_claude_sign_in",
+    path = "/harnesses/{harness_id}/claude-sign-in/cancel",
+    params(("harness_id" = String, Path, description = "Harness ID")),
+    responses((status = 204), (status = 403), (status = 404), (status = 409), (status = 422), (status = 504))
+)]
+pub async fn claude_sign_in_cancel_handler<Harnesses, Auth>(
+    State(state): State<ComputerScreenState<Harnesses, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<HarnessPath>,
+) -> Result<StatusCode, ComputerRouteError>
+where
+    Harnesses: HarnessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
+        .await?;
+    let released = bus::AccountChangeRelease::watch(&state.redis, path.harness_id).await?;
+    match state
         .control
-        .send(
-            path.harness_id,
-            ComputerCommand::ClaudeSignInComplete { code: body.code },
-        )
+        .send(path.harness_id, ComputerCommand::ClaudeSignInCancel)
         .await?
     {
-        ComputerControlResult::SignedIn => {
-            state
-                .harnesses
-                .set_claude_mode(path.harness_id, ClaudeMode::OwnAccount)
-                .await?;
-            Ok(Json(ClaudeSignedIn { signed_in: true }))
+        ComputerControlResult::SignInCancelled => {
+            released.wait().await?;
+            Ok(StatusCode::NO_CONTENT)
         }
         other => Err(ComputerRouteError::from_result(other)),
-    };
-    account_change.release().await?;
-    result
+    }
 }
 
 /// Forget the computer's Claude account and return it to Macro credits.
@@ -293,7 +324,8 @@ where
     state
         .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
-    let account_change = bus::AccountChange::claim(&state.redis, path.harness_id).await?;
+    let account_change =
+        bus::AccountChange::claim(&state.redis, path.harness_id, &state.cleanup).await?;
     let result = match state
         .control
         .send(path.harness_id, ComputerCommand::ClaudeSignOut)
@@ -359,6 +391,9 @@ where
         HarnessPermission::View
     };
     let viewer = caller.authorization.user.macro_user_id;
+    if !state.rollout.enabled(&viewer).await {
+        return Err(ComputerRouteError::RolloutDisabled);
+    }
     let harness = state
         .harnesses
         .authorize_harness(viewer.clone(), path.harness_id, access)
@@ -403,7 +438,11 @@ where
     let reauthorize = move || {
         let harnesses = Arc::clone(&state.harnesses);
         let viewer = viewer.clone();
+        let rollout = state.rollout.clone();
         async move {
+            if !rollout.enabled(&viewer).await {
+                return Err(HarnessError::Unauthorized);
+            }
             harnesses
                 .authorize_harness(viewer, path.harness_id, access)
                 .await
@@ -584,6 +623,62 @@ impl<Harnesses, Auth> ComputerScreenState<Harnesses, Auth>
 where
     Harnesses: HarnessService,
 {
+    /// Finish runtime confirmation and its mode write even if the HTTP waiter
+    /// disappears after macrod commits. A dropped waiter asks macrod to cancel;
+    /// whichever terminal outcome won is still reconciled before lease release.
+    async fn complete_sign_in(
+        &self,
+        harness_id: HarnessId,
+        code: String,
+    ) -> Result<(), ComputerRouteError> {
+        let account_change = bus::AccountChange::claim(&self.redis, harness_id, &self.cleanup)
+            .await?
+            .cancel_on_drop(self.control.clone(), harness_id);
+        let cancellation = CancellationToken::new();
+        let waiter = cancellation.clone().drop_guard();
+        let control = self.control.clone();
+        let harnesses = Arc::clone(&self.harnesses);
+        let (reply, received) = tokio::sync::oneshot::channel();
+        self.cleanup.spawn(
+            async move {
+                let completion = async {
+                    let result = match control
+                        .send(harness_id, ComputerCommand::ClaudeSignInComplete { code })
+                        .await?
+                    {
+                        ComputerControlResult::SignedIn => {
+                            harnesses
+                                .set_claude_mode(harness_id, ClaudeMode::OwnAccount)
+                                .await?;
+                            Ok(())
+                        }
+                        other => Err(ComputerRouteError::from_result(other)),
+                    };
+                    account_change.release().await?;
+                    result
+                };
+                tokio::pin!(completion);
+                let result = tokio::select! {
+                    biased;
+                    () = cancellation.cancelled() => {
+                        if let Err(error) = control.send(harness_id, ComputerCommand::ClaudeSignInCancel).await {
+                            tracing::warn!(error = ?error, "could not cancel a dropped sign-in submission");
+                        }
+                        completion.await
+                    }
+                    result = &mut completion => result,
+                };
+                let _ = reply.send(result);
+            }
+            .instrument(tracing::Span::current()),
+        );
+        let result = received.await.map_err(|_| {
+            ComputerRouteError::Internal(rootcause::report!("sign-in completion worker stopped"))
+        })?;
+        waiter.disarm();
+        result
+    }
+
     /// The harness, when the caller has `access` and it is a Macro computer.
     async fn authorize_computer(
         &self,
@@ -591,6 +686,13 @@ where
         harness_id: HarnessId,
         access: HarnessPermission,
     ) -> Result<harnesses::domain::models::Harness, ComputerRouteError> {
+        if !self
+            .rollout
+            .enabled(&caller.authorization.user.macro_user_id)
+            .await
+        {
+            return Err(ComputerRouteError::RolloutDisabled);
+        }
         let harness = self
             .harnesses
             .authorize_harness(caller.authorization.user.macro_user_id, harness_id, access)
@@ -613,12 +715,21 @@ pub enum ComputerRouteError {
     /// The caller may not do this.
     #[error("you cannot do that on this computer")]
     Forbidden,
+    /// The per-user computer rollout is off or unavailable.
+    #[error("Macro computers are not enabled for this user")]
+    RolloutDisabled,
     /// No such harness.
     #[error("{0}")]
     NotFound(String),
     /// The computer is not in a state to do it (not connected, no display).
     #[error("{0}")]
     Conflict(String),
+    /// Another request cancelled this pending sign-in.
+    #[error("Claude sign-in was cancelled")]
+    SignInCancelled,
+    /// Claude rejected the code; the caller must start a new sign-in.
+    #[error("That code didn't work — sign in again to get a new one")]
+    InvalidCode,
     /// The computer tried and failed; the message is safe to show.
     #[error("{0}")]
     Failed(String),
@@ -633,6 +744,8 @@ pub enum ComputerRouteError {
 impl ComputerRouteError {
     fn from_result(result: ComputerControlResult) -> Self {
         match result {
+            ComputerControlResult::SignInCancelled => Self::SignInCancelled,
+            ComputerControlResult::InvalidCode => Self::InvalidCode,
             ComputerControlResult::Failed { message } => Self::Failed(message),
             other => Self::Internal(rootcause::report!(
                 "the computer answered an unexpected {other:?}"
@@ -658,20 +771,22 @@ impl IntoResponse for ComputerRouteError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::Forbidden | Self::RolloutDisabled => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::Failed(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::Failed(_) | Self::InvalidCode | Self::SignInCancelled => {
+                StatusCode::UNPROCESSABLE_ENTITY
+            }
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {
             tracing::error!(error = ?self, "computer route failed");
         }
-        (
-            status,
-            Json(serde_json::json!({ "message": self.to_string() })),
-        )
-            .into_response()
+        let mut body = serde_json::json!({ "message": self.to_string() });
+        if matches!(self, Self::InvalidCode) {
+            body["code"] = serde_json::json!("invalid_code");
+        }
+        (status, Json(body)).into_response()
     }
 }

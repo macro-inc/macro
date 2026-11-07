@@ -122,3 +122,100 @@ test('a hand-off becomes a task and a run in its own worktree; follow-ups are in
   const worktrees = await git(['worktree', 'list', '--porcelain']);
   assert.deepEqual(worktrees.stdout.includes('work/task-1'), false);
 });
+
+for (const failure of ['inactivity', 'rejected'] as const) {
+  test(`a work turn ending with ${failure} reports failure and releases its conversation and pool slot`, async (t) => {
+    const root = await nodeFs.mkdtemp(
+      nodePath.join(nodeOs.tmpdir(), 'brain-work-failure-')
+    );
+    t.after(() => nodeFs.rm(root, { recursive: true, force: true }));
+    const git = gitCli(root);
+    await git(['init', '-q', '-b', 'main']);
+    await git(['config', 'user.email', 'agent@example.com']);
+    await git(['config', 'user.name', 'Test Agent']);
+    await nodeFs.writeFile(`${root}/README.md`, 'fixture');
+    await git(['add', 'README.md']);
+    await git(['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'seed']);
+    const failed = Promise.withResolvers<Outcome>();
+    const { AgentSdkRunner } = await import('./runner.ts');
+    const sdkRunner = new AgentSdkRunner({
+      claudeExecutable: 'claude',
+      anthropicBaseUrl: 'https://gateway.example/anthropic',
+      anthropicAuthToken: 'fixture',
+      claudeConfigDir: `${root}/cache/claude`,
+      baseEnv: {},
+      query: () => ({
+        [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) }),
+      }),
+    });
+    const pool = new Pool({
+      runner:
+        failure === 'inactivity'
+          ? sdkRunner
+          : {
+              start: () => ({
+                events: new AsyncQueue<RunEvent>(),
+                inject() {},
+                abort() {},
+                done: failed.promise,
+              }),
+            },
+      limits: { work: 1 },
+      budget: async () => ({ perRunUsd: { work: 20 }, perDayUsd: 50 }),
+      ledger: new SpendLedger(`${root}/cache`),
+      log() {},
+    });
+    const reports: string[] = [];
+    const work = new Work({
+      pool,
+      limit: 1,
+      tasks: {
+        create: async () => ({
+          id: 'task-1',
+          url: 'https://example.com/task/1',
+        }),
+      },
+      git,
+      workDir: `${root}/work`,
+      turn: async () => ({
+        prompt: 'work',
+        system: '',
+        model: 'fixture',
+        env: {},
+      }),
+      report: async (_conversation, text) => {
+        reports.push(text);
+      },
+      commit: async () => {},
+      log() {},
+    });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    await work.start({ channel: 'channel-1', root: null }, 'task', 'do work');
+    assert.equal(pool.active().length, 1);
+    if (failure === 'inactivity') t.mock.timers.tick(5 * 60_000);
+    else failed.reject(new Error('runner failed'));
+    await work.settled();
+    assert.deepEqual(pool.active(), []);
+    assert.deepEqual(work.inFlight(), []);
+    assert.equal(reports.length, 1);
+    assert.match(
+      reports[0] ?? '',
+      failure === 'inactivity' ? /no SDK activity/ : /runner failed/
+    );
+    assert.equal(
+      (await git(['worktree', 'list', '--porcelain'])).stdout.includes(
+        'work/task-1'
+      ),
+      false
+    );
+    // A new task in the same conversation must acquire the same single slot.
+    await work.start(
+      { channel: 'channel-1', root: null },
+      'next task',
+      'continue'
+    );
+    await work.stopAll();
+    assert.deepEqual(pool.active(), []);
+    assert.deepEqual(work.inFlight(), []);
+  });
+}

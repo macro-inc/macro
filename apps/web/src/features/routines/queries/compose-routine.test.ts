@@ -1,3 +1,7 @@
+import type {
+  DraftedRoutine,
+  RoutineStep,
+} from '@service-scheduled-action/generated/schemas';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateSteps } from '../core/routine-steps';
@@ -28,7 +32,7 @@ const context = {
   codeSteps: true,
 };
 
-const labelStep = {
+const labelStep: RoutineStep = {
   type: 'code',
   id: 'label_by_topic',
   title: 'Label by topic',
@@ -36,8 +40,10 @@ const labelStep = {
   source: 'export async function main() {}',
 };
 
-const routine = (overrides: object = {}) => ({
-  outcome: 'routine' as const,
+const routine = (
+  overrides: Partial<DraftedRoutine> = {}
+): DraftedRoutine & { outcome: 'routine' } => ({
+  outcome: 'routine',
   name: 'Inbox triage',
   trigger: {
     type: 'events' as const,
@@ -162,7 +168,7 @@ describe('a drafted routine in the editor', () => {
   it('explains steps the editor can’t use', () => {
     expect(
       draftFromRoutine(
-        routine({ steps: [{ type: 'wait', seconds: 5 }] }),
+        routine({ steps: [{ type: 'agent', instructions: 'Go' }] }),
         'claude'
       )
     ).toMatch(/can’t run/);

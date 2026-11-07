@@ -2535,6 +2535,9 @@ export const internalPurchaseComputer = async (
   } as internalPurchaseComputerResponse;
 };
 
+/**
+ * @summary Quote a computer for an authenticated internal caller.
+ */
 export type internalQuoteComputerResponse200 = {
   data: Quote;
   status: 200;
@@ -2597,6 +2600,9 @@ export const internalQuoteComputer = async (
   } as internalQuoteComputerResponse;
 };
 
+/**
+ * @summary Read computer status for an authenticated internal caller.
+ */
 export type internalGetComputerResponse200 = {
   data: ComputerStatus;
   status: 200;
@@ -5539,15 +5545,10 @@ export const retryTeamComputer = async (
 };
 
 /**
- * @summary Enables or disables CRM for the team. On enable with `backfill`
-(the default), kicks off a best-effort backfill that enqueues a
-`PopulateCrmForUser` message per team member (no-op if CRM is
-already enabled); without `backfill` the CRM starts empty and fills
-from new activity only. On disable,
-flips the flag and purges the team's CRM data (cascading through
-`crm_companies` → `crm_domains` / `crm_contacts` /
-`crm_contact_sources`). Requires the caller to be an Admin or
-Owner of the team.
+ * @summary Legacy compatibility endpoint for team admins and owners. Enabling
+is a no-op; disabling is rejected. CRM records remain available.
+Each member manages mailbox contribution through `/crm/email-privacy`;
+this endpoint does not enroll mailboxes, backfill emails, or purge records.
  */
 export type patchTeamCrmSettingsResponse200 = {
   data: PatchTeamCrmSettingsResponse;

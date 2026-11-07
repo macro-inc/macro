@@ -9,6 +9,7 @@ import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { MacroComputers } from './MacroComputers';
 
 const mocks = vi.hoisted(() => ({
+  rollout: true,
   offers: [] as SizeOffer[],
   computers: [] as ComputerStatus[],
   release: vi.fn(),
@@ -48,9 +49,14 @@ vi.mock('@queries/computers/computers', () => ({
 vi.mock('../primitives/team-computers', () => ({
   useTeamComputers: () => ({
     enabled: () => true,
+    canPurchase: () => mocks.rollout,
     computers: () => mocks.computers,
     failed: () => false,
   }),
+}));
+
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.rollout, loading: false }),
 }));
 
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
@@ -70,6 +76,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.rollout = true;
   mocks.computers = [];
   mocks.offers = [
     {
@@ -84,6 +91,7 @@ beforeEach(() => {
         currency: 'usd',
         interval: 'month',
       },
+      alwaysOnSoldOut: false,
       soldOut: false,
       notifyRequested: false,
     },
@@ -99,6 +107,7 @@ beforeEach(() => {
         currency: 'usd',
         interval: 'month',
       },
+      alwaysOnSoldOut: false,
       soldOut: false,
       notifyRequested: false,
     },
@@ -114,6 +123,7 @@ beforeEach(() => {
         currency: 'usd',
         interval: 'month',
       },
+      alwaysOnSoldOut: false,
       soldOut: true,
       notifyRequested: false,
     },
@@ -147,7 +157,7 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   fireEvent.click(continueButton);
 
   await screen.findByText('Buy a Large Macro computer?');
-  const buyButton = screen.getByRole('button', { name: 'Buy for $80/month' });
+  const buyButton = screen.getByRole('button', { name: 'Buy · $80.00/month' });
 
   fireEvent.click(buyButton);
   expect((await screen.findByRole('alert')).textContent).toBe(
@@ -218,4 +228,47 @@ it('removes a failed payment with the stored confirmation name and allows retry 
     computerId: 'computer-1',
     confirmName: 'Build machine',
   });
+});
+
+it('keeps existing computers and release available with rollout off while hiding purchase', async () => {
+  mocks.rollout = false;
+  mocks.computers = [
+    {
+      id: 'computer-1',
+      name: 'Build machine',
+      size: 'standard',
+      vcpus: 4,
+      memoryGib: 8,
+      diskGib: 100,
+      catalogEntry: 'standard@2026-11',
+      status: 'ready',
+      payment: 'paid',
+      poweredOn: true,
+      createdAt: '2026-01-01T00:00:00Z',
+    },
+  ];
+  render(() => <MacroComputers harnesses={[]} />);
+  expect(screen.getByText('Build machine')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Cancel at period end' })
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Release now' }));
+  expect(await screen.findByLabelText(/Type/)).toBeTruthy();
+});
+
+it('keeps a zero-price offer included through review and purchase', async () => {
+  mocks.offers[0].quote.amount = 0;
+  render(() => <MacroComputers harnesses={[]} />);
+  fireEvent.click(screen.getByRole('radio', { name: 'Standard' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  expect(screen.getByText('Included for Macro')).toBeTruthy();
+  expect(screen.queryByText(/\$0\.00/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Buy' }));
+  await waitFor(() =>
+    expect(mocks.purchase).toHaveBeenCalledWith({
+      size: 'standard',
+      name: undefined,
+    })
+  );
 });

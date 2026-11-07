@@ -54,6 +54,9 @@ impl BrainGatewayComputers for GatewayComputers {
         else {
             return Ok(None);
         };
+        let computer = computer
+            .into_healthy()
+            .map_err(|_| BrainGatewayError::Unavailable)?;
         let mut computer = facts(computer);
         // PromptArrived optimistically writes Running before the outbox effect
         // unfreezes the machine. Every request checks the actual fleet, including
@@ -94,6 +97,9 @@ impl BrainGatewayComputers for GatewayComputers {
         else {
             return Ok(None);
         };
+        let computer = computer
+            .into_healthy()
+            .map_err(|_| BrainGatewayError::Unavailable)?;
         if !matches!(
             computer.state.phase,
             Phase::Frozen { .. } | Phase::Running { .. }

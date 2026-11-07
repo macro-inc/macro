@@ -2,8 +2,10 @@
 
 use agent_git::client::{AgentGitClient, AgentGitClientError};
 use agent_git::domain::template::PersonaSeed as RepoSeed;
+use macro_service_urls::AgentGitServiceUrl;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use agent_credentials::RepoToken;
@@ -11,18 +13,22 @@ use agent_credentials::RepoToken;
 use crate::domain::models::{AgentRepo, PersonaSeed, TeamAgentError};
 use crate::domain::ports::AgentRepos;
 
+type CloneBaseUrl = dyn Fn() -> Result<AgentGitServiceUrl, TeamAgentError> + Send + Sync;
+
 /// Creates and deletes agents' repos with the agent git client.
 pub struct AgentGitRepos {
     client: AgentGitClient,
-    clone_base_url: String,
+    clone_base_url: Arc<CloneBaseUrl>,
 }
 
 impl AgentGitRepos {
     /// Wraps the agent git client.
-    pub fn new(client: AgentGitClient, clone_base_url: String) -> Self {
+    pub fn new(client: AgentGitClient) -> Self {
         Self {
             client,
-            clone_base_url,
+            clone_base_url: Arc::new(|| {
+                AgentGitServiceUrl::new().map_err(TeamAgentError::internal)
+            }),
         }
     }
 }
@@ -63,8 +69,28 @@ impl AgentRepos for AgentGitRepos {
     ) -> Result<AgentRepo, TeamAgentError> {
         // The internal create endpoint's address need not be reachable from a
         // computer. Build its advertised remote before creating any resources.
-        let mut clone_url =
-            reqwest::Url::parse(&self.clone_base_url).map_err(TeamAgentError::internal)?;
+        let base = (self.clone_base_url)()?;
+        let mut clone_url = base.parse_url().map_err(TeamAgentError::internal)?;
+        let host = clone_url
+            .host_str()
+            .ok_or_else(|| TeamAgentError::internal_message("the computer git URL needs a host"))?;
+        let loopback = host.eq_ignore_ascii_case("localhost")
+            || host.ends_with(".localhost")
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified());
+        if !matches!(clone_url.scheme(), "http" | "https")
+            || loopback
+            || !clone_url.username().is_empty()
+            || clone_url.password().is_some()
+            || clone_url.query().is_some()
+            || clone_url.fragment().is_some()
+        {
+            return Err(TeamAgentError::internal_message(
+                "the computer git URL must be a reachable HTTP(S) base without credentials, query or fragment",
+            ));
+        }
         clone_url
             .path_segments_mut()
             .map_err(|_| {

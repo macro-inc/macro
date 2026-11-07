@@ -381,3 +381,145 @@ test('respond receives the full SDK tools through the brain without exposing its
     );
   }
 });
+
+test('an SDK that absorbs a follow-up cannot leave input open forever', async () => {
+  let promptIterator: AsyncIterator<SDKUserMessage>;
+  const ready = Promise.withResolvers<void>();
+  const inspect = Promise.withResolvers<void>();
+  let eager = false;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    query: ({ prompt }) =>
+      (async function* () {
+        promptIterator = prompt[Symbol.asyncIterator]();
+        await promptIterator.next();
+        ready.resolve();
+        await inspect.promise;
+        const next = promptIterator.next();
+        let received = false;
+        void next.then((item) => {
+          received = !item.done;
+        });
+        await Promise.resolve();
+        eager = received;
+        yield result('first done', 1);
+        const followup = await next;
+        if (!followup.done) yield result('follow-up done', 2);
+        await promptIterator.next();
+      })(),
+  });
+  const run = runner.start(TURN);
+  await ready.promise;
+  run.inject('follow-up while working');
+  inspect.resolve();
+  await run.done;
+  assert.equal(
+    eager,
+    false,
+    'input must not deliver a follow-up before the result'
+  );
+});
+
+test('inactivity timeout closes a stuck SDK even when it ignores abort', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let aborted = false;
+  let closed = 0;
+  let mcpClosed = 0;
+  const started = Promise.withResolvers<void>();
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    macroTools: async () => ({
+      tools: [],
+      close: async () => {
+        mcpClosed++;
+      },
+    }),
+    query: ({ options }) => {
+      started.resolve();
+      options.abortController?.signal.addEventListener('abort', () => {
+        aborted = true;
+      });
+      return {
+        close: () => {
+          closed++;
+        },
+        [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) }),
+      };
+    },
+  });
+  const run = runner.start({
+    ...TURN,
+    timeout: { wallClockMs: 1000, inactivityMs: 100 },
+  });
+  await started.promise;
+  t.mock.timers.tick(50);
+  run.inject('follow-up must not prolong inactivity');
+  t.mock.timers.tick(50);
+  const outcome = await run.done;
+  assert.equal(outcome.status, 'aborted');
+  assert.equal(
+    outcome.result,
+    'Work stopped after no SDK activity for 100 ms.'
+  );
+  assert.equal(outcome.costIncomplete, true);
+  assert.equal(aborted, true);
+  assert.equal(closed, 1);
+  assert.equal(mcpClosed, 1);
+  assert.deepEqual(await Array.fromAsync(run.events), []);
+  assert.throws(() => run.inject('too late'), /finished/);
+});
+
+test('wall-clock timeout bounds a run that keeps producing SDK activity', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const messages = new (await import('./channel.ts')).AsyncQueue<SDKMessage>();
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    query: () => messages,
+  });
+  const run = runner.start({
+    ...TURN,
+    timeout: { wallClockMs: 1000, inactivityMs: 600 },
+  });
+  t.mock.timers.tick(500);
+  messages.push({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'working' }] },
+  } as unknown as SDKMessage);
+  // Consume the event as a synchronization point after resetting inactivity.
+  await run.events[Symbol.asyncIterator]().next();
+  t.mock.timers.tick(500);
+  const outcome = await run.done;
+  assert.equal(outcome.status, 'aborted');
+  assert.match(outcome.result, /wall-clock limit/);
+});
+
+test('manual abort settles even when SDK iteration and close do not cooperate', async () => {
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    query: () => ({
+      close() {
+        throw new Error('close failed');
+      },
+      [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) }),
+    }),
+  });
+  const run = runner.start(TURN);
+  run.abort();
+  assert.equal((await run.done).status, 'aborted');
+});
+
+test('timeout bounds reject values that Node would silently clamp', () => {
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    query: () => {
+      throw new Error('must not start');
+    },
+  });
+  for (const wallClockMs of [0, -1, 1.5, 2147483648]) {
+    assert.throws(
+      () =>
+        runner.start({ ...TURN, timeout: { wallClockMs, inactivityMs: 100 } }),
+      /turn timeouts/
+    );
+  }
+});

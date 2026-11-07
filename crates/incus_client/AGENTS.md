@@ -18,7 +18,7 @@ and operation waiting.
 
 ## Start here
 
-- `src/client.rs`: every method the fleet adapter calls, and `run_operation`.
+- `src/client.rs`: every method the fleet adapter calls, including non-interactive root `exec` with checked exit status, and `run_operation`.
 - `src/error.rs`: `IncusError`; `NotFound` is how callers detect drift.
 - `spec/patch.py`: the endpoint allowlist and the reshaping progenitor needs.
 

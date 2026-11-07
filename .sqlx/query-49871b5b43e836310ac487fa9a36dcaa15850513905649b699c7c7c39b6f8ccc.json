@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime_timer t SET fire_at = $2 FROM hosted_runtime c WHERE t.computer_id = c.id AND c.host_id = $1 AND t.kind = 'macrod_missing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "49871b5b43e836310ac487fa9a36dcaa15850513905649b699c7c7c39b6f8ccc"
+}

@@ -19,6 +19,7 @@ KEPT_OPERATIONS = {
     ("/1.0/instances/{name}", "put"): "/1.0/instances/{name}",
     ("/1.0/instances/{name}", "patch"): "/1.0/instances/{name}",
     ("/1.0/instances/{name}", "delete"): "/1.0/instances/{name}",
+    ("/1.0/instances/{name}/exec", "post"): "/1.0/instances/{name}/exec",
     ("/1.0/instances/{name}/state", "get"): "/1.0/instances/{name}/state",
     ("/1.0/instances/{name}/state", "put"): "/1.0/instances/{name}/state",
     ("/1.0/operations/{id}", "get"): "/1.0/operations/{id}",

@@ -29,6 +29,7 @@ import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 export const agentHarnessExcluded = [
   // Batch form of agentSessionsForPullRequest that feeds the web Reviews list.
   'agentSessionsForPullRequests',
+  'cancelClaudeSignIn', // Computer account credentials are managed in the app.
   'classify', // Command K inference is app-internal.
   'claudeSignOut', // Computer account credentials are managed in the app.
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
@@ -449,8 +450,11 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // CRM privacy settings use the generated client.
+  'getCrmEmailPrivacy',
+  'updateCrmEmailPrivacy',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

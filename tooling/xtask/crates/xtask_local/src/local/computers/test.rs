@@ -48,6 +48,22 @@ fn docker_computers_dial_the_stack_in_network() {
         overrides,
         BTreeMap::from([
             (
+                "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL".into(),
+                "http://agent-harness-service:8080/cognition".into()
+            ),
+            (
+                "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
+                "http://agent-harness-service:8080/scheduled-action".into()
+            ),
+            (
+                "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL".into(),
+                "ws://connection-gateway:8080".into()
+            ),
+            (
+                "OVERRIDE_MCP_SERVICE_URL".into(),
+                "http://agent-harness-service:8080".into()
+            ),
+            (
                 "OVERRIDE_API_GATEWAY_URL".to_string(),
                 format!("http://proxy:{}", instance.port(Port::ComputerGateway))
             ),
@@ -142,6 +158,22 @@ fn incus_control_uses_tailnet_and_persona_bootstrap_uses_reverse_bridge() {
     );
     assert_eq!(overrides["OVERRIDE_AUTH_SERVICE_URL"], bridge(Port::Auth));
     assert_eq!(
+        overrides["OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL"],
+        format!("{}/cognition", bridge(Port::AgentHarness))
+    );
+    assert_eq!(
+        overrides["OVERRIDE_SCHEDULED_ACTION_SERVICE_URL"],
+        format!("{}/scheduled-action", bridge(Port::AgentHarness))
+    );
+    assert_eq!(
+        overrides["OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL"],
+        format!("ws://10.210.0.1:{}", instance.port(Port::ConnGateway))
+    );
+    assert_eq!(
+        overrides["OVERRIDE_MCP_SERVICE_URL"],
+        bridge(Port::AgentHarness)
+    );
+    assert_eq!(
         overrides["OVERRIDE_APP_SERVICE_URL"],
         base["OVERRIDE_APP_SERVICE_URL"]
     );
@@ -154,6 +186,7 @@ fn incus_control_uses_tailnet_and_persona_bootstrap_uses_reverse_bridge() {
             instance.port(Port::AgentHarness),
             instance.port(Port::DocStorage),
             instance.port(Port::Auth),
+            instance.port(Port::ConnGateway),
         ]
     );
 }

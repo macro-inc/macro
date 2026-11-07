@@ -7,30 +7,31 @@ import { ScreenToggle } from './views/screen-toggle';
 
 const mocks = vi.hoisted(() => ({
   enabled: true,
+  agentsEnabled: false,
   loading: false,
   role: 'read',
   directoryEnabled: false,
+  agentsQueryEnabled: false,
   connect: vi.fn(),
 }));
 let requests: SharingSource;
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({
-    enabled: mocks.enabled,
-    loading: mocks.loading,
-  }),
+  useFeatureFlag: (flag: { key: string }) => () =>
+    flag.key === 'enable-macro-computers'
+      ? { enabled: mocks.enabled, loading: mocks.loading }
+      : { enabled: mocks.agentsEnabled, loading: false },
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@queries/agents/agents', () => ({
-  useAgentsQuery: () => ({
-    isPending: false,
-    data: [{ bot: { id: 'bot' }, harness_id: 'runtime' }],
-  }),
+  useAgentsQuery: (enabled: () => boolean) => {
+    mocks.agentsQueryEnabled = enabled();
+    return {
+      isPending: false,
+      data: [{ bot: { id: 'bot' }, harness_id: 'runtime' }],
+    };
+  },
 }));
 vi.mock('@queries/harnesses/harnesses', () => ({
-  useHarnessesQuery: () => ({
-    isPending: false,
-    data: [{ id: 'runtime', access: 'owner', capabilities: { screen: true } }],
-  }),
   useHarnessDirectoryQuery: (enabled: () => boolean) => {
     mocks.directoryEnabled = enabled();
     return {
@@ -54,7 +55,7 @@ vi.mock('./pane-state', async () => {
   };
 });
 vi.mock('./queries/novnc', () => ({ connectScreen: mocks.connect }));
-vi.mock('./queries/screen-url', () => ({
+vi.mock('@app/lib/service-clients/service-agent-harness/screen-url', () => ({
   resolveScreenUrl: async () => 'wss://example.invalid/screen',
 }));
 
@@ -69,9 +70,11 @@ beforeEach(() => {
     }
   );
   mocks.enabled = true;
+  mocks.agentsEnabled = false;
   mocks.loading = false;
   mocks.role = 'read';
   mocks.directoryEnabled = false;
+  mocks.agentsQueryEnabled = false;
   mocks.connect.mockResolvedValue({ disconnect: vi.fn() });
   requests = fakeSharingSource({
     accessLevel: null,
@@ -108,20 +111,22 @@ it('opens access requests instead of an unauthorized VNC connection for None', a
   );
   expect(mocks.connect).not.toHaveBeenCalled();
 });
-it('preserves the legacy usable runtime and edit permission while the flag is off', async () => {
+it('hides the screen when computers are off even if agent management is on', () => {
   mocks.enabled = false;
-  render(() => <SessionScreen />);
-  fireEvent.click(screen.getByRole('button', { name: 'Screen' }));
-  expect(
-    await screen.findByRole('button', { name: 'Take control' })
-  ).toBeTruthy();
-  expect(mocks.directoryEnabled).toBe(false);
-});
-it('does not expose or query a screen while the rollout is loading', () => {
-  mocks.loading = true;
+  mocks.agentsEnabled = true;
   render(() => <SessionScreen />);
   expect(screen.queryByRole('button', { name: 'Screen' })).toBeNull();
   expect(mocks.directoryEnabled).toBe(false);
+  expect(mocks.agentsQueryEnabled).toBe(false);
+  expect(mocks.connect).not.toHaveBeenCalled();
+});
+it('does not expose or query a screen while the rollout is loading', () => {
+  mocks.loading = true;
+  mocks.agentsEnabled = true;
+  render(() => <SessionScreen />);
+  expect(screen.queryByRole('button', { name: 'Screen' })).toBeNull();
+  expect(mocks.directoryEnabled).toBe(false);
+  expect(mocks.agentsQueryEnabled).toBe(false);
   expect(mocks.connect).not.toHaveBeenCalled();
 });
 
@@ -139,15 +144,3 @@ it.each(['user', 'owner'])(
     );
   }
 );
-
-it('keeps the legacy session watch-only when editing is denied and the flag is off', async () => {
-  mocks.enabled = false;
-  render(() => (
-    <AgentComputerScreen sessionId="session" botId="bot" canEdit={false}>
-      <ScreenToggle />
-    </AgentComputerScreen>
-  ));
-  fireEvent.click(screen.getByRole('button', { name: 'Screen' }));
-  await waitFor(() => expect(mocks.connect).toHaveBeenCalled());
-  expect(screen.queryByRole('button', { name: 'Take control' })).toBeNull();
-});

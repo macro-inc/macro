@@ -18,10 +18,18 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
         }),
     );
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    let adapter = AgentGitRepos::new(
-        AgentGitClient::new(format!("http://{address}"), "internal-key".into()).unwrap(),
-        "http://10.210.0.1:22413/git/".into(),
-    );
+    let base = Arc::new(std::sync::Mutex::new(AgentGitServiceUrl::from_static(
+        "http://10.210.0.1:22413/git/",
+    )));
+    let current = base.clone();
+    let adapter = AgentGitRepos {
+        client: AgentGitClient::new(format!("http://{address}"), "internal-key".into()).unwrap(),
+        clone_base_url: Arc::new(move || {
+            Ok(AgentGitServiceUrl::from_owned(
+                current.lock().unwrap().as_str(),
+            ))
+        }),
+    };
     let repo = adapter
         .create(
             &MacroUserIdStr::parse_from_str("macro|brain@example.com").unwrap(),
@@ -54,6 +62,26 @@ async fn advertised_clone_url_uses_the_computer_base_and_preserves_the_repo_toke
             .expect("expected token")
             .hash()
     );
+    *base.lock().unwrap() =
+        AgentGitServiceUrl::from_static("https://changed-git.example.com/recreated/");
+    let recreated = adapter
+        .create(
+            &MacroUserIdStr::parse_from_str("macro|brain@example.com").unwrap(),
+            Uuid::from_u128(1),
+            &PersonaSeed {
+                voice: None,
+                creator_id: None,
+                name: "Brain".into(),
+                job_description: "Help".into(),
+                personality: "Careful".into(),
+            },
+        )
+        .await
+        .unwrap();
+    let recreated = reqwest::Url::parse(&recreated.url).unwrap();
+    assert_eq!(recreated.host_str(), Some("changed-git.example.com"));
+    assert!(recreated.path().starts_with("/recreated/"));
+    assert!(recreated.path().ends_with(".git"));
     server.abort();
 }
 
@@ -71,10 +99,10 @@ async fn missing_git_returns_a_safe_pre_purchase_failure_reason() {
         }),
     );
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    let adapter = AgentGitRepos::new(
-        AgentGitClient::new(format!("http://{address}"), "internal-key".into()).unwrap(),
-        "http://git.example.com".into(),
-    );
+    let adapter = AgentGitRepos {
+        client: AgentGitClient::new(format!("http://{address}"), "internal-key".into()).unwrap(),
+        clone_base_url: Arc::new(|| Ok(AgentGitServiceUrl::from_static("http://git.example.com"))),
+    };
     let error = adapter
         .create(
             &MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap(),

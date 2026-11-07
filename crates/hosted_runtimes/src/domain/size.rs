@@ -20,8 +20,11 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerSize {
+    /// Standard resource tier.
     Standard,
+    /// Large resource tier.
     Large,
+    /// Extra-large resource tier.
     Xl,
 }
 
@@ -29,12 +32,16 @@ pub enum ComputerSize {
 /// whichever requires more units, rounding each resource up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ComputerResources {
+    /// Virtual CPU count.
     pub vcpus: Vcpus,
+    /// Memory limit saved at purchase.
     pub memory_gib: MemoryGib,
+    /// Root disk limit saved at purchase.
     pub disk_gib: DiskGib,
 }
 
 impl ComputerResources {
+    /// Compute capacity units from CPU and memory requirements.
     pub fn units(self) -> u32 {
         self.memory_gib
             .get()
@@ -46,8 +53,11 @@ impl ComputerResources {
 /// A versioned purchase offer. Labels never determine a purchased VM's limits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogEntry {
+    /// Stable resource identity.
     pub id: CatalogEntryId,
+    /// Purchased catalog size.
     pub size: ComputerSize,
+    /// Resource limits saved at purchase.
     pub resources: ComputerResources,
 }
 
@@ -85,6 +95,7 @@ pub fn current_catalog() -> Vec<CatalogEntry> {
 }
 
 impl ComputerSize {
+    /// All supported computer sizes in catalog order.
     pub const ALL: [ComputerSize; 3] = [Self::Standard, Self::Large, Self::Xl];
 }
 
@@ -97,9 +108,11 @@ mod test;
 #[serde(transparent)]
 pub struct Vcpus(u32);
 impl Vcpus {
+    /// Wrap a resource count.
     pub const fn new(value: u32) -> Self {
         Self(value)
     }
+    /// Return the resource count.
     pub const fn get(self) -> u32 {
         self.0
     }
@@ -111,9 +124,11 @@ impl Vcpus {
 #[serde(transparent)]
 pub struct MemoryGib(u32);
 impl MemoryGib {
+    /// Wrap a resource count.
     pub const fn new(value: u32) -> Self {
         Self(value)
     }
+    /// Return the resource count.
     pub const fn get(self) -> u32 {
         self.0
     }
@@ -125,9 +140,11 @@ impl MemoryGib {
 #[serde(transparent)]
 pub struct DiskGib(u32);
 impl DiskGib {
+    /// Wrap a resource count.
     pub const fn new(value: u32) -> Self {
         Self(value)
     }
+    /// Return the resource count.
     pub const fn get(self) -> u32 {
         self.0
     }
@@ -139,6 +156,7 @@ impl DiskGib {
 #[serde(transparent)]
 pub struct CatalogEntryId(String);
 impl CatalogEntryId {
+    /// Validate a versioned catalog entry identity.
     pub fn try_new(value: String) -> Result<Self, InvalidCatalogEntryId> {
         let Some((label, version)) = value.split_once('@') else {
             return Err(InvalidCatalogEntryId);
@@ -156,6 +174,7 @@ impl CatalogEntryId {
         }
         Ok(Self(value))
     }
+    /// Borrow the validated catalog entry identity.
     pub fn as_str(&self) -> &str {
         &self.0
     }

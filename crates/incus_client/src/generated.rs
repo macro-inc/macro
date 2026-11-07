@@ -351,6 +351,48 @@ pub mod types {
         )]
         pub type_: ::std::option::Option<::std::string::String>,
     }
+    ///`InstanceExecPost`
+    #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
+    pub struct InstanceExecPost {
+        ///Command and its arguments
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub command: ::std::option::Option<::std::vec::Vec<::std::string::String>>,
+        ///Current working directory for the command
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub cwd: ::std::option::Option<::std::string::String>,
+        ///Additional environment to pass to the command
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub environment: ::std::option::Option<
+            ::std::collections::BTreeMap<::std::string::String, ::std::string::String>,
+        >,
+        ///GID of the user to spawn the command as
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub group: ::std::option::Option<u32>,
+        ///Terminal height in rows (for interactive)
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub height: ::std::option::Option<i64>,
+        ///Whether the command is to be spawned in interactive mode (singled PTY instead of 3 PIPEs)
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub interactive: ::std::option::Option<bool>,
+        ///Whether to capture the output for later download (requires non-interactive)
+        #[serde(
+            rename = "record-output",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub record_output: ::std::option::Option<bool>,
+        ///UID of the user to spawn the command as
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub user: ::std::option::Option<u32>,
+        ///Whether to wait for all websockets to be connected before spawning the command
+        #[serde(
+            rename = "wait-for-websocket",
+            skip_serializing_if = "::std::option::Option::is_none"
+        )]
+        pub wait_for_websocket: ::std::option::Option<bool>,
+        ///Terminal width in characters (for interactive)
+        #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+        pub width: ::std::option::Option<i64>,
+    }
     ///Sync response
     #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, Default)]
     pub struct InstanceGetResponse {
@@ -1719,6 +1761,69 @@ impl Client {
         let response = result?;
         match response.status().as_u16() {
             200u16 => ResponseValue::from_response(response).await,
+            400u16..=499u16 => Err(Error::ErrorResponse(
+                ResponseValue::from_response(response).await?,
+            )),
+            500u16..=599u16 => Err(Error::ErrorResponse(
+                ResponseValue::from_response(response).await?,
+            )),
+            _ => Err(Error::UnexpectedResponse(response)),
+        }
+    }
+    ///Run a command
+    ///
+    ///Executes a command inside an instance.
+    ///
+    ///The returned operation metadata will contain either 2 or 4 websockets.
+    ///In non-interactive mode, you'll get one websocket for each of stdin, stdout and stderr.
+    ///In interactive mode, a single bi-directional websocket is used for stdin and stdout/stderr.
+    ///
+    ///An additional "control" socket is always added on top which can be used for out of band communications.
+    ///This allows sending signals and window sizing information through.
+    ///
+    ///Sends a `POST` request to `/1.0/instances/{name}/exec`
+    ///
+    ///Arguments:
+    ///- `name`: Instance name
+    ///- `project`: Project name
+    ///- `body`: Exec request
+    pub async fn instance_exec_post<'a>(
+        &'a self,
+        name: &'a str,
+        project: Option<&'a str>,
+        body: &'a types::InstanceExecPost,
+    ) -> Result<ResponseValue<types::AsyncResponse>, Error<types::ErrorResponse>> {
+        let url = format!(
+            "{}/1.0/instances/{}/exec",
+            self.baseurl,
+            encode_path(&name.to_string()),
+        );
+        let mut header_map = ::reqwest::header::HeaderMap::with_capacity(1usize);
+        header_map.append(
+            ::reqwest::header::HeaderName::from_static("api-version"),
+            ::reqwest::header::HeaderValue::from_static(Self::api_version()),
+        );
+        #[allow(unused_mut)]
+        let mut request = self
+            .client
+            .post(url)
+            .header(
+                ::reqwest::header::ACCEPT,
+                ::reqwest::header::HeaderValue::from_static("application/json"),
+            )
+            .json(&body)
+            .query(&progenitor_client::QueryParam::new("project", &project))
+            .headers(header_map)
+            .build()?;
+        let info = OperationInfo {
+            operation_id: "instance_exec_post",
+        };
+        self.pre(&mut request, &info).await?;
+        let result = self.exec(request, &info).await;
+        self.post(&result, &info).await?;
+        let response = result?;
+        match response.status().as_u16() {
+            202u16 => ResponseValue::from_response(response).await,
             400u16..=499u16 => Err(Error::ErrorResponse(
                 ResponseValue::from_response(response).await?,
             )),

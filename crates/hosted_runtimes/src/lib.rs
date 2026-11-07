@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 //! Macro computers: team-owned hosted VMs that run macrod.
 //!
 //! The pure lifecycle in [`domain::lifecycle`] decides what a computer does

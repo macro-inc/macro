@@ -1,3 +1,4 @@
+import type { ComputerStatus } from '@service-auth/computers';
 import type {
   SubscriptionBilling,
   TeamAgent,
@@ -5,6 +6,7 @@ import type {
 import { createSignal, Show } from 'solid-js';
 import { TeamBillingBreakdown } from '../../components/team-billing-breakdown';
 import { SettingsPage, SettingsSheetContext } from '../../primitives';
+import { COMPUTER_OFFERS } from './computer-catalog';
 
 export const BILLING: SubscriptionBilling = {
   currency: 'usd',
@@ -55,8 +57,8 @@ export const BILLING: SubscriptionBilling = {
       kind: 'computer',
       plan: null,
       quantity: 1,
-      unitAmount: 3000,
-      amount: 3000,
+      unitAmount: 6000,
+      amount: 6000,
       computerId: 'computer-2',
       agentUserId: 'agent-2',
       name: 'Research agent',
@@ -91,8 +93,8 @@ export const BILLING: SubscriptionBilling = {
       included: false,
     },
   ],
-  subscriptionTotal: 19000,
-  nextInvoice: { date: '2026-12-05T12:00:00Z', amount: 22345 },
+  subscriptionTotal: 22000,
+  nextInvoice: { date: '2026-12-05T12:00:00Z', amount: 25345 },
 };
 
 export function BillingFixture() {
@@ -114,9 +116,33 @@ export function BillingFixture() {
           },
         ]
       : [];
+  const computers = (): ComputerStatus[] =>
+    COMPUTER_OFFERS.map((offer, index) => ({
+      id: `computer-${index + 1}`,
+      catalogEntry: `fixture-${offer.size}`,
+      size: offer.size,
+      name: offer.size,
+      vcpus: offer.vcpus,
+      memoryGib: offer.memoryGb,
+      diskGib: offer.diskGb,
+      createdAt: '2026-01-01',
+      payment: index === 2 ? 'comped' : 'paid',
+      status: 'ready',
+      poweredOn: true,
+    }));
   const billing = () => ({
     ...BILLING,
     interval: params.has('annual') ? ('year' as const) : ('month' as const),
+    ...(params.has('legacy')
+      ? {
+          subscriptionTotal: 19000,
+          lineItems: BILLING.lineItems.map((item) =>
+            item.computerId === 'computer-2'
+              ? { ...item, amount: 3000, unitAmount: 3000 }
+              : item
+          ),
+        }
+      : {}),
     currency: params.get('currency') ?? (params.has('eur') ? 'eur' : 'usd'),
   });
   return (
@@ -135,7 +161,12 @@ export function BillingFixture() {
           when={!params.has('no-plan')}
           fallback={<p>No active subscription</p>}
         >
-          <TeamBillingBreakdown billing={billing()} agents={agents()} />
+          <TeamBillingBreakdown
+            billing={billing()}
+            agents={agents()}
+            computers={computers()}
+            offers={COMPUTER_OFFERS}
+          />
         </Show>
       </SettingsPage>
     </SettingsSheetContext.Provider>

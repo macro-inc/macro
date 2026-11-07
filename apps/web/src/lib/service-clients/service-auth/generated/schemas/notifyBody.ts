@@ -10,5 +10,6 @@ import type { ComputerSize } from './computerSize';
  * Body of a notify-me request.
  */
 export interface NotifyBody {
+  /** Purchased catalog size. */
   size: ComputerSize;
 }

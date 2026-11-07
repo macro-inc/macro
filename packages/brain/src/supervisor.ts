@@ -3,7 +3,14 @@ import { spawn } from 'node:child_process';
 import * as nodeFs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { loadConfig, SERVICE_URL_ENV } from './config.ts';
 import { abortableSleep } from './events.ts';
+import {
+  hostHealthy,
+  killHostGroup,
+  stopHost,
+  trackHostExit,
+} from './host-lifecycle.ts';
 import { initTelemetry, shutdownTelemetry, withSpan } from './telemetry.ts';
 import { relayTelemetry } from './telemetry-relay.ts';
 import { type Git, gitCli } from './workspace.ts';
@@ -22,6 +29,7 @@ const ENV = [
   'LANG',
   'TZ',
   'MACRO_GATEWAY',
+  ...Object.values(SERVICE_URL_ENV),
   'BRAIN_WORKSPACE',
   'BRAIN_HEALTH_PORT',
   'ANTHROPIC_BASE_URL',
@@ -185,6 +193,7 @@ export async function checkWorkspace(
 }
 
 async function launch(snapshot: string, workspace: string): Promise<Running> {
+  loadConfig((name) => process.env[name]);
   const installed = await installation(snapshot);
   await configuration(snapshot, installed);
   const child = spawn(
@@ -197,6 +206,7 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
     ],
     {
       cwd: workspace,
+      detached: true,
       env: childEnvironment(workspace, false),
       stdio: ['pipe', 'pipe', 'inherit', 'ipc'],
     }
@@ -205,17 +215,8 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
   child.on('message', (message) => {
     if (message === 'ready') ready.resolve();
   });
-  let exited = false;
-  const status = new Promise<void>((resolve) => {
-    child.on('error', () => {
-      exited = true;
-      resolve();
-    });
-    child.on('close', () => {
-      exited = true;
-      resolve();
-    });
-  });
+  const lifecycle = trackHostExit(child);
+  const status = lifecycle.done;
   if (!child.stdin || !child.stdout) throw new Error('missing child pipes');
   child.stdin.on('error', () => {});
   child.stdin.end(
@@ -227,11 +228,11 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
       )
     )
   );
-  const relayed = relayTelemetry(
+  // Export buffered spans independently; collector delays must not block ownership transfer.
+  void relayTelemetry(
     child.stdout,
     process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
   ).catch(() => console.error(JSON.stringify({ telemetry: 'relay_failed' })));
-  const port = Number(process.env.BRAIN_HEALTH_PORT);
   try {
     await Promise.race([
       ready.promise,
@@ -253,7 +254,7 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
   } catch (error) {
     child.kill('SIGTERM');
     // A process stuck in preparation cannot drain a turn it has not started.
-    child.kill('SIGKILL');
+    killHostGroup(child.pid);
     await status;
     throw error;
   }
@@ -261,23 +262,20 @@ async function launch(snapshot: string, workspace: string): Promise<Running> {
     async activate() {
       child.send('activate');
     },
-    exited: () => exited,
+    exited: lifecycle.exited,
     async stop() {
-      if (!exited) child.kill('SIGTERM');
-      await status;
-      await relayed;
+      await stopHost({
+        terminate: () => {
+          if (!lifecycle.exited()) child.kill('SIGTERM');
+        },
+        forceStop: () => killHostGroup(child.pid),
+        exited: status,
+      });
+      // Do not leave old SDK/tools alive after the host relinquishes ownership.
+      killHostGroup(child.pid);
     },
-    async healthy() {
-      if (exited) return false;
-      try {
-        const response = await fetch(`http://127.0.0.1:${port}/health`, {
-          signal: AbortSignal.timeout(2000),
-        });
-        return response.ok && (await response.json()).status === 'ok';
-      } catch {
-        return false;
-      }
-    },
+    healthy: () =>
+      lifecycle.exited() ? Promise.resolve(false) : hostHealthy(child),
   };
 }
 export type Running = {

@@ -4,7 +4,7 @@ test('an unhealthy agent can recover without provisioning retry', async ({
   page,
 }) => {
   await page.goto('/?members&unhealthy');
-  await expect(page.getByText('Unhealthy', { exact: true })).toBeVisible();
+  await expect(page.getByText('Dead', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'More', exact: true }).first().click();
   await expect(page.getByRole('note')).toHaveText(
     'Brain connection unavailable'
@@ -19,11 +19,11 @@ test('an unhealthy agent can recover without provisioning retry', async ({
   await page
     .getByRole('button', { name: 'Restore agent health', exact: true })
     .click();
-  await expect(page.getByText('Unhealthy', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Dead', { exact: true })).toHaveCount(0);
   await expect(
     page.getByText('Brain connection unavailable', { exact: true })
   ).toHaveCount(0);
-  await expect(page.getByText('Running', { exact: true })).toBeVisible();
+  await expect(page.getByText('Alive', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('status').filter({ hasText: 'Invitation:' })
   ).toContainText('Retries: 0');

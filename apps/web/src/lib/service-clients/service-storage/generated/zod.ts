@@ -6142,9 +6142,8 @@ export const createCrmContactResponse = zod
   );
 
 /**
- * @summary Toggle `email_sync` on a CRM company. Purely a visibility flag —
-it gates whether team members can see each other's emails with
-this company. Existing CRM data is unaffected.
+ * @summary Toggle email contribution for a CRM company without archiving its records.
+Individual consent and all remaining exclusions still apply.
  */
 export const setEmailSyncParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
@@ -6155,7 +6154,7 @@ export const setEmailSyncBody = zod
     email_sync: zod
       .boolean()
       .describe(
-        "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility\/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
+        "Allow eligible email contributions for this company's domains.\nDisabling excludes new ingestion and CRM thread access while preserving\nrecords. Re-enabling requires an admin, removes exact team exclusions,\nand schedules backfill only for explicitly consenting primary mailboxes.\nPersonal and broader team exclusions continue to apply."
       ),
   })
   .describe(
@@ -6636,6 +6635,121 @@ export const setCrmContactNameBody = zod
       ),
   })
   .describe('Request body for `PUT \/contacts\/{contact_id}\/name`.');
+
+/**
+ * @summary Read the caller's mailbox consent and both exclusion lists.
+ */
+export const getCrmEmailPrivacyResponse = zod
+  .object({
+    can_remove_team_domains: zod
+      .boolean()
+      .describe('Whether the caller can remove a team exclusion.'),
+    enabled: zod
+      .boolean()
+      .describe(
+        'Whether this exact mailbox has explicit contribution consent.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe(
+        'The primary mailbox that would contribute; absent before email connection.'
+      ),
+    mailbox_link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact current primary connection; clients bind opt-in to this identifier.'
+      ),
+    personal_domains: zod
+      .array(zod.string())
+      .describe("Domains excluded only for the caller's contributions."),
+    team_domains: zod
+      .array(zod.string())
+      .describe(
+        'Domains excluded across the team, including legacy company exclusions.'
+      ),
+  })
+  .describe('Current consent and exclusions, readable by any team member.');
+
+/**
+ * @summary Apply one consent or domain-exclusion change as the authenticated member.
+ */
+export const updateCrmEmailPrivacyBody = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['set_consent']),
+        enabled: zod
+          .boolean()
+          .describe(
+            "False withdraws this mailbox's CRM contribution without deleting records."
+          ),
+        link_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Required when enabling; must match the displayed primary connection.'
+          ),
+      })
+      .describe(
+        'Consent covers all available past and future emails in the primary mailbox.'
+      ),
+    zod
+      .object({
+        action: zod.enum(['add_domain']),
+        domain: zod.string().describe('Bare company domain.'),
+        scope: zod
+          .enum(['team', 'personal'])
+          .describe('The audience affected by a domain exclusion.'),
+      })
+      .describe('Add a domain and its subdomains to an exclusion list.'),
+    zod
+      .object({
+        action: zod.enum(['remove_domain']),
+        domain: zod.string().describe('Bare company domain.'),
+        scope: zod
+          .enum(['team', 'personal'])
+          .describe('The audience affected by a domain exclusion.'),
+      })
+      .describe('Remove an exclusion; other exclusions still apply.'),
+  ])
+  .describe(
+    'One explicit privacy change, avoiding lost updates to whole blocklists.'
+  );
+
+export const updateCrmEmailPrivacyResponse = zod
+  .object({
+    can_remove_team_domains: zod
+      .boolean()
+      .describe('Whether the caller can remove a team exclusion.'),
+    enabled: zod
+      .boolean()
+      .describe(
+        'Whether this exact mailbox has explicit contribution consent.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe(
+        'The primary mailbox that would contribute; absent before email connection.'
+      ),
+    mailbox_link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact current primary connection; clients bind opt-in to this identifier.'
+      ),
+    personal_domains: zod
+      .array(zod.string())
+      .describe("Domains excluded only for the caller's contributions."),
+    team_domains: zod
+      .array(zod.string())
+      .describe(
+        'Domains excluded across the team, including legacy company exclusions.'
+      ),
+  })
+  .describe('Current consent and exclusions, readable by any team member.');
 
 /**
  * @summary List the caller's live pipelines in their CRM.
@@ -11889,7 +12003,7 @@ export const getCrmTeamSettingsResponse = zod
       ),
   })
   .describe(
-    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `\/crm\/email-privacy`."
   );
 
 /**
@@ -12005,7 +12119,7 @@ export const putCrmTeamSettingsResponse = zod
       ),
   })
   .describe(
-    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `\/crm\/email-privacy`."
   );
 
 /**
@@ -29994,6 +30108,9 @@ export const calculateSpreadsheetParams = zod.object({
   document_id: zod.string().describe('Document identity'),
 });
 
+export const calculateSpreadsheetBodyOverridesItemCellsItemValueDefaultFour =
+  null;
+
 export const calculateSpreadsheetBody = zod
   .object({
     formulas: zod
@@ -30023,9 +30140,26 @@ export const calculateSpreadsheetBody = zod
                       .string()
                       .describe('A1 address, from A1 through XFD100000.'),
                     value: zod
-                      .string()
+                      .union([
+                        zod.boolean().describe('TRUE or FALSE.'),
+                        zod
+                          .number()
+                          .describe(
+                            'A number, passed to the engine exactly as written.'
+                          ),
+                        zod
+                          .string()
+                          .describe(
+                            'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                          ),
+                        zod
+                          .null()
+                          .describe(
+                            "Empties the cell's input; formatting stays."
+                          ),
+                      ])
                       .describe(
-                        'Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                        "A cell's new input, typed as the caller has it."
                       ),
                   })
                   .describe(
@@ -30777,6 +30911,7 @@ export const editSpreadsheetParams = zod.object({
   document_id: zod.string().describe('Document identity'),
 });
 
+export const editSpreadsheetBodyOperationsItemCellsItemValueDefaultFour = null;
 export const editSpreadsheetBodyOperationsItemStyleFontSizeMin = 0;
 
 export const editSpreadsheetBodyOperationsItemStyleIndentMin = 0;
@@ -30806,9 +30941,26 @@ export const editSpreadsheetBody = zod
                           .string()
                           .describe('A1 address, from A1 through XFD100000.'),
                         value: zod
-                          .string()
+                          .union([
+                            zod.boolean().describe('TRUE or FALSE.'),
+                            zod
+                              .number()
+                              .describe(
+                                'A number, passed to the engine exactly as written.'
+                              ),
+                            zod
+                              .string()
+                              .describe(
+                                'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                              ),
+                            zod
+                              .null()
+                              .describe(
+                                "Empties the cell's input; formatting stays."
+                              ),
+                          ])
                           .describe(
-                            'Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                            "A cell's new input, typed as the caller has it."
                           ),
                       })
                       .describe(

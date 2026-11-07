@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
 
+test.beforeEach(({ page }) => {
+  page.on('pageerror', (error) => {
+    throw error;
+  });
+});
+
 test('reviews the price and confirms once with reachable actions', async ({
   page,
 }) => {
@@ -18,9 +24,9 @@ test('reviews the price and confirms once with reachable actions', async ({
     .toBeLessThanOrEqual(page.viewportSize()!.height);
   await review.click();
   await expect(page.getByText('Total per month')).toBeVisible();
-  await expect(page.getByText('$50.00')).toBeVisible();
+  await expect(page.getByText('$50.00', { exact: true })).toBeVisible();
   await expect(page.getByText('Purchases: 0')).toBeVisible();
-  const confirm = page.getByRole('button', { name: 'Confirm and invite' });
+  const confirm = page.getByRole('button', { name: /^Invite (?!agent$)/ });
   await expect(confirm).toBeInViewport();
   await confirm.click();
   await expect(page.getByText('Purchases: 1')).toBeVisible();
@@ -39,11 +45,11 @@ test('recovers a quote error without purchasing', async ({ page }) => {
   await page.getByLabel('Personality').fill('Concise');
   await page.getByRole('button', { name: 'Review price' }).click();
   await expect(
-    page.getByRole('button', { name: 'Confirm and invite' })
+    page.getByRole('button', { name: /^Invite (?!agent$)/ })
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(
-    page.getByRole('button', { name: 'Confirm and invite' })
+    page.getByRole('button', { name: /^Invite (?!agent$)/ })
   ).toBeEnabled();
   await expect(page.getByText('Purchases: 0')).toBeVisible();
 });
@@ -75,7 +81,7 @@ test('keeps phone actions above the keyboard while long fields scroll', async ({
     .toBeLessThan(page.viewportSize()!.height - 280);
   await review.click();
   await expect(
-    page.getByRole('button', { name: 'Confirm and invite' })
+    page.getByRole('button', { name: /^Invite (?!agent$)/ })
   ).toBeInViewport();
 });
 
@@ -126,7 +132,7 @@ test('shows catalog specs and billing action without an active plan', async ({
   await page.goto('/?no-subscription');
   await page.getByRole('button', { name: 'Invite agent', exact: true }).click();
   await expect(page.getByText('4 vCPUs', { exact: true })).toBeVisible();
-  await expect(page.getByText(/^(?:·\s*)?16 GB RAM$/)).toHaveCount(1);
+  await expect(page.getByText(/^(?:·\s*)?16 GiB RAM$/)).toHaveCount(1);
   await expect(page.getByText('Specifications unavailable')).toHaveCount(0);
   await expect(page.getByText(/Your team needs an active plan/)).toBeVisible();
   await expect(
@@ -191,13 +197,13 @@ test('reviews an included invitation and explains a pre-purchase repository fail
   await expect(
     page.getByText('Included for Macro', { exact: true })
   ).toBeVisible();
-  await expect(page.getByText('Total per month')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await expect(page.getByText('Total per month')).toHaveCount(1);
+  await page.getByRole('button', { name: /^Invite (?!agent$)/ }).click();
   await expect(page.getByRole('alert')).toHaveText(
     'The workspace repository could not be created. Nothing was charged.'
   );
   await expect(
-    page.getByRole('button', { name: 'Confirm and invite' })
+    page.getByRole('button', { name: /^Invite (?!agent$)/ })
   ).toBeDisabled();
   await expect(page.getByText('Purchases: 0')).toBeVisible();
 });
@@ -214,7 +220,7 @@ test('requires a fresh review before billing when included eligibility changes',
   await expect(
     page.getByText('Included for Macro', { exact: true })
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await page.getByRole('button', { name: /^Invite (?!agent$)/ }).click();
   await expect(page.getByRole('alert')).toHaveText(
     'The quote changed. Review the price again. Nothing was charged.'
   );
@@ -231,7 +237,7 @@ test('requires a fresh review before billing when included eligibility changes',
   await expect(
     page.getByText('Included for Macro', { exact: true })
   ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await page.getByRole('button', { name: /^Invite (?!agent$)/ }).click();
   await expect(page.getByText('Purchases: 1')).toBeVisible();
 });
 
@@ -275,7 +281,7 @@ test('generates portraits only on explicit request and saves uploads', async ({
     page.getByText('Photo uploads: 1', { exact: true })
   ).toBeVisible();
   await page.getByRole('button', { name: 'Review price' }).click();
-  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await page.getByRole('button', { name: /^Invite (?!agent$)/ }).click();
   await expect(
     page.getByText(
       'Saved avatar: https://fixture.invalid/uploaded-avatar.png',
@@ -293,14 +299,14 @@ for (const width of [390, 320]) {
       .click();
     for (const spec of [
       '4 vCPUs',
-      '8 GB RAM',
-      '100 GB disk',
+      '8 GiB RAM',
+      '100 GiB disk',
       '8 vCPUs',
-      '16 GB RAM',
-      '200 GB disk',
+      '16 GiB RAM',
+      '200 GiB disk',
       '16 vCPUs',
-      '32 GB RAM',
-      '400 GB disk',
+      '32 GiB RAM',
+      '400 GiB disk',
     ]) {
       const item = page.getByText(new RegExp(`^(?:·\\s*)?${spec}$`));
       await item.scrollIntoViewIfNeeded();
@@ -347,7 +353,7 @@ test('portrait failure offers an explicit retry without discarding profile field
     'Assistant'
   );
   await page.getByRole('button', { name: 'Review price' }).click();
-  await page.getByRole('button', { name: 'Confirm and invite' }).click();
+  await page.getByRole('button', { name: /^Invite (?!agent$)/ }).click();
   await expect(page.getByText('Purchases: 1', { exact: true })).toBeVisible();
 });
 

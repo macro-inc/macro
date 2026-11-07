@@ -1,12 +1,28 @@
 // @vitest-environment jsdom
+
+import { ThrownResultError } from '@core/util/result';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { ComputerClaudeAccess } from './computer-claude-access';
 
 const mocks = vi.hoisted(() => ({
+  enabled: true,
   start: vi.fn(async () => ({ url: 'https://claude.ai/oauth/authorize' })),
-  complete: vi.fn(async () => ({ signedIn: true })),
+  complete: vi.fn(
+    async (_vars: {
+      harnessId: string;
+      code: string;
+      signal: AbortSignal;
+    }) => ({ signedIn: true })
+  ),
   open: vi.fn(),
+  cancel: vi.fn(async (_harnessId: string) => undefined),
+  pendingStart: (): boolean => false,
+  pendingComplete: (): boolean => false,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.enabled, loading: false }),
 }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: mocks.open }));
 vi.mock('@queries/computers/claude', () => ({
@@ -17,14 +33,29 @@ vi.mock('@queries/computers/claude', () => ({
   }),
   useClaudeSignInMutation: () => ({
     mutateAsync: mocks.start,
-    isPending: false,
+    get isPending() {
+      return mocks.pendingStart();
+    },
   }),
   useClaudeCompleteMutation: () => ({
     mutateAsync: mocks.complete,
+    get isPending() {
+      return mocks.pendingComplete();
+    },
+  }),
+  useClaudeCancelMutation: () => ({
+    mutateAsync: mocks.cancel,
     isPending: false,
   }),
   useClaudeSignOutMutation: () => ({ isPending: false }),
 }));
+
+beforeEach(() => {
+  mocks.enabled = true;
+  vi.clearAllMocks();
+  mocks.pendingStart = () => false;
+  mocks.pendingComplete = () => false;
+});
 
 it('opens Claude and submits the trimmed code or callback URL', async () => {
   render(() => (
@@ -43,6 +74,7 @@ it('opens Claude and submits the trimmed code or callback URL', async () => {
     expect(mocks.complete).toHaveBeenCalledWith({
       harnessId: 'computer',
       code: 'http://localhost:1234/callback?code=example-code',
+      signal: expect.any(AbortSignal),
     })
   );
   await waitFor(() =>
@@ -50,4 +82,149 @@ it('opens Claude and submits the trimmed code or callback URL', async () => {
       screen.queryByLabelText('Paste the code or the URL you were sent to')
     ).toBeNull()
   );
+});
+
+it('hides Claude account controls with rollout off', () => {
+  mocks.enabled = false;
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  expect(
+    screen.queryByRole('button', { name: 'Sign in with Claude' })
+  ).toBeNull();
+});
+
+it('explains a rejected code and lets the user start again', async () => {
+  mocks.complete.mockRejectedValueOnce(
+    new ThrownResultError([
+      { code: 'CLAUDE_INVALID_CODE', message: 'rejected' },
+    ])
+  );
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
+  const input = await screen.findByLabelText(
+    'Paste the code or the URL you were sent to'
+  );
+  fireEvent.input(input, { target: { value: 'bad-code' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe(
+      "That code didn't work — sign in again to get a new one"
+    )
+  );
+  expect(
+    screen.queryByLabelText('Paste the code or the URL you were sent to')
+  ).toBeNull();
+});
+
+it('explains a conflicting sign-in instead of showing a generic failure', async () => {
+  mocks.start.mockRejectedValueOnce(
+    new ThrownResultError([{ code: 'CONFLICT', message: 'Resource conflict' }])
+  );
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Another sign-in is in progress on this computer — try again shortly'
+    )
+  );
+});
+
+it('disables starting another sign-in until the paste form is cancelled', async () => {
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  const start = screen.getByRole('button', { name: 'Sign in with Claude' });
+  fireEvent.click(start);
+  await screen.findByLabelText('Paste the code or the URL you were sent to');
+  expect(start).toHaveProperty('disabled', true);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
+  await waitFor(() => expect(start).not.toHaveProperty('disabled', true));
+  expect(
+    screen.queryByLabelText('Paste the code or the URL you were sent to')
+  ).toBeNull();
+});
+
+it('disables sign-in while start awaits its URL', async () => {
+  const [pending, setPending] = createSignal(false);
+  mocks.pendingStart = pending;
+  const started = Promise.withResolvers<{ url: string }>();
+  mocks.start.mockImplementationOnce(async () => {
+    setPending(true);
+    try {
+      return await started.promise;
+    } finally {
+      setPending(false);
+    }
+  });
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  const start = screen.getByRole('button', { name: 'Sign in with Claude' });
+  fireEvent.click(start);
+  expect(start).toHaveProperty('disabled', true);
+  started.resolve({ url: 'https://claude.ai/oauth/authorize' });
+  await screen.findByLabelText('Paste the code or the URL you were sent to');
+});
+
+it('can cancel a pending submit and ignores its late result', async () => {
+  const [pending, setPending] = createSignal(false);
+  mocks.pendingComplete = pending;
+  const completed = Promise.withResolvers<{ signedIn: boolean }>();
+  mocks.complete.mockImplementationOnce(async () => {
+    setPending(true);
+    try {
+      return await completed.promise;
+    } finally {
+      setPending(false);
+    }
+  });
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
+  const input = await screen.findByLabelText(
+    'Paste the code or the URL you were sent to'
+  );
+  fireEvent.input(input, { target: { value: 'test-code' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
+  expect(
+    screen.getByRole('button', { name: 'Sign in with Claude' })
+  ).toHaveProperty('disabled', true);
+  const cancel = screen.getByRole('button', { name: 'Cancel' });
+  expect(cancel).not.toHaveProperty('disabled', true);
+  fireEvent.click(cancel);
+  await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
+  completed.resolve({ signedIn: true });
+  await waitFor(() =>
+    expect(
+      screen.queryByLabelText('Paste the code or the URL you were sent to')
+    ).toBeNull()
+  );
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('aborts and cancels a submitted sign-in when its controls unmount', async () => {
+  const submitted = Promise.withResolvers<{ signedIn: boolean }>();
+  mocks.complete.mockImplementationOnce(() => submitted.promise);
+  const view = render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
+  const input = await screen.findByLabelText(
+    'Paste the code or the URL you were sent to'
+  );
+  fireEvent.input(input, { target: { value: 'test-code' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
+  const signal = mocks.complete.mock.lastCall?.[0].signal;
+  expect(signal?.aborted).toBe(false);
+  view.unmount();
+  expect(signal?.aborted).toBe(true);
+  expect(mocks.cancel).toHaveBeenCalledWith('computer');
+  submitted.resolve({ signedIn: true });
 });

@@ -1,14 +1,17 @@
 import { formatLocale, t } from '@app/lib/i18n';
+import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type {
   ComputerSize,
   SubscriptionBilling,
   SubscriptionBillingLineItem,
   TeamAgent,
 } from '@service-auth/generated/schemas';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { computerSpecs, formatQuote } from '../computers/core/computer-display';
 import { formatBillingAmount } from '../core/format-billing-amount';
 import { SettingsCard, SettingsRow, SettingsSection } from '../primitives';
+import { PriceBreakdown, type PriceBreakdownItem } from './price-breakdown';
 
 function sizeLabel(size: ComputerSize): string {
   return match(size)
@@ -20,10 +23,10 @@ function sizeLabel(size: ComputerSize): string {
 
 function computerStatus(status: string | null | undefined): string {
   return match(status)
-    .with('running', 'ready', () => t('settingsBilling.running'))
+    .with('running', 'ready', () => t('settingsBilling.alive'))
     .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
     .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
-    .with('unhealthy', () => t('settingsBilling.unhealthy'))
+    .with('unhealthy', () => t('settingsBilling.dead'))
     .with('asleep', () => t('settingsBilling.asleep'))
     .with('waking', () => t('settingsBilling.waking'))
     .with('stopping', () => t('settingsBilling.stopping'))
@@ -36,6 +39,8 @@ function computerStatus(status: string | null | undefined): string {
 export function TeamBillingBreakdown(props: {
   billing: SubscriptionBilling;
   agents: readonly TeamAgent[];
+  computers?: readonly ComputerStatus[];
+  offers?: readonly SizeOffer[];
 }) {
   const money = (amount: number) =>
     formatBillingAmount(amount, props.billing.currency, formatLocale());
@@ -57,8 +62,104 @@ export function TeamBillingBreakdown(props: {
     );
   const status = (line: SubscriptionBillingLineItem) =>
     agentForLine(line)?.status ?? line.status;
-  const lineAmount = (line: SubscriptionBillingLineItem) =>
-    line.included ? t('settingsBilling.included') : money(line.amount);
+  const allIncluded = () =>
+    props.billing.subscriptionTotal === 0 &&
+    props.billing.humanSeats.amount === 0 &&
+    props.billing.agentSeats.amount === 0 &&
+    props.billing.lineItems.length > 0 &&
+    props.billing.lineItems.every((line) => line.included);
+  const items = (): PriceBreakdownItem[] => [
+    {
+      name: t('settingsBilling.humanSeats'),
+      description: t('settingsBilling.paidSeats', {
+        count: props.billing.humanSeats.quantity,
+      }),
+      amount: props.billing.humanSeats.amount,
+      included: allIncluded(),
+    },
+    {
+      name: t('settingsBilling.agentSeats'),
+      description: t('settingsBilling.paidSeats', {
+        count: props.billing.agentSeats.quantity,
+      }),
+      amount: props.billing.agentSeats.amount,
+      included: allIncluded(),
+    },
+    ...computerLines().map((line) => {
+      const computer = props.computers?.find(
+        (item) => item.id === line.computerId
+      );
+      const offer = props.offers?.find((item) => item.size === line.size);
+      const catalogDiffers =
+        offer &&
+        !line.included &&
+        line.unitAmount != null &&
+        offer.quote.currency.toLowerCase() ===
+          props.billing.currency.toLowerCase() &&
+        offer.quote.interval === props.billing.interval &&
+        offer.quote.amount !== line.unitAmount;
+      return {
+        name: line.size
+          ? t('settingsBilling.computerName', {
+              name: agentForLine(line)?.name ?? line.name,
+              size: sizeLabel(line.size),
+            })
+          : (agentForLine(line)?.name ?? line.name),
+        description: (
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>
+              {computer
+                ? computerSpecs(computer)
+                : line.size
+                  ? t('settingsBilling.sizedComputer', {
+                      size: sizeLabel(line.size),
+                    })
+                  : t('settingsBilling.computer')}
+            </span>
+            <span
+              class="rounded-full bg-ink/6 px-2 py-1 text-xs"
+              classList={{
+                'text-failure': [
+                  'failed',
+                  'unhealthy',
+                  'payment_failed',
+                ].includes(status(line) ?? ''),
+                'text-success': ['ready', 'running'].includes(
+                  status(line) ?? ''
+                ),
+              }}
+            >
+              {computerStatus(status(line))}
+            </span>
+            <Show when={catalogDiffers && offer}>
+              {(current) => (
+                <span class="basis-full text-xs">
+                  {t('settingsBilling.catalogPrice', {
+                    price: formatQuote(current().quote),
+                  })}
+                </span>
+              )}
+            </Show>
+          </div>
+        ),
+        amount: line.amount,
+        included: line.included,
+      };
+    }),
+    ...otherLines().map((line) => ({
+      name: line.name,
+      description:
+        line.unitAmount != null
+          ? t('settingsBilling.unitPrice', {
+              count: line.quantity,
+              amount: money(line.unitAmount),
+              interval: interval(),
+            })
+          : t('settingsBilling.items', { count: line.quantity }),
+      amount: line.amount,
+      included: line.included,
+    })),
+  ];
   const invoiceDate = () => {
     const value = props.billing.nextInvoice?.date;
     if (!value) return undefined;
@@ -79,121 +180,17 @@ export function TeamBillingBreakdown(props: {
       })}
       target="subscription-breakdown"
     >
-      <SettingsCard>
-        {/* Billing keeps two columns even when sheet settings rows wrap controls. */}
+      <SettingsCard class="px-4">
+        <PriceBreakdown
+          items={items()}
+          currency={props.billing.currency}
+          interval={props.billing.interval}
+          total={props.billing.subscriptionTotal}
+          included={allIncluded()}
+          note={t('settingsBilling.invoiceNote')}
+        />
         <SettingsRow
-          class="grid! grid-cols-[minmax(0,1fr)_auto]"
-          label={t('settingsBilling.humanSeats')}
-          description={t('settingsBilling.paidSeats', {
-            count: props.billing.humanSeats.quantity,
-          })}
-        >
-          <span class="text-sm tabular-nums">
-            {money(props.billing.humanSeats.amount)}
-          </span>
-        </SettingsRow>
-        <SettingsRow
-          class="grid! grid-cols-[minmax(0,1fr)_auto]"
-          label={t('settingsBilling.agentSeats')}
-          description={t('settingsBilling.paidSeats', {
-            count: props.billing.agentSeats.quantity,
-          })}
-        >
-          <span class="text-sm tabular-nums">
-            {money(props.billing.agentSeats.amount)}
-          </span>
-        </SettingsRow>
-        <Show when={computerLines().length > 0}>
-          <SettingsRow
-            class="grid! grid-cols-[minmax(0,1fr)_auto]"
-            label={t('settingsBilling.computers')}
-            description={t('settingsBilling.computerCount', {
-              count: computerLines().reduce(
-                (quantity, line) => quantity + line.quantity,
-                0
-              ),
-            })}
-          >
-            <span class="text-sm tabular-nums">
-              {money(
-                computerLines().reduce(
-                  (amount, line) => amount + line.amount,
-                  0
-                )
-              )}
-            </span>
-          </SettingsRow>
-        </Show>
-        <For each={computerLines()}>
-          {(line) => (
-            <SettingsRow
-              class="grid! grid-cols-[minmax(0,1fr)_auto]"
-              label={
-                <span class="break-words">
-                  {line.size
-                    ? t('settingsBilling.computerName', {
-                        name: agentForLine(line)?.name ?? line.name,
-                        size: sizeLabel(line.size),
-                      })
-                    : (agentForLine(line)?.name ?? line.name)}
-                </span>
-              }
-              description={
-                line.size
-                  ? t('settingsBilling.sizedComputer', {
-                      size: sizeLabel(line.size),
-                    })
-                  : t('settingsBilling.computer')
-              }
-            >
-              <div class="flex max-w-48 flex-col items-end gap-1 text-right text-sm sm:flex-row sm:items-center sm:gap-2">
-                <span
-                  class="rounded-full bg-ink/6 px-2 py-1 text-xs"
-                  classList={{
-                    'text-failure':
-                      status(line) === 'failed' ||
-                      status(line) === 'unhealthy' ||
-                      status(line) === 'payment_failed',
-                    'text-success':
-                      status(line) === 'ready' || status(line) === 'running',
-                  }}
-                >
-                  {computerStatus(status(line))}
-                </span>
-                <span class="tabular-nums">{lineAmount(line)}</span>
-              </div>
-            </SettingsRow>
-          )}
-        </For>
-        <For each={otherLines()}>
-          {(line) => (
-            <SettingsRow
-              class="grid! grid-cols-[minmax(0,1fr)_auto]"
-              label={<span class="break-words">{line.name}</span>}
-              description={
-                line.unitAmount != null
-                  ? t('settingsBilling.unitPrice', {
-                      count: line.quantity,
-                      amount: money(line.unitAmount),
-                      interval: interval(),
-                    })
-                  : t('settingsBilling.items', { count: line.quantity })
-              }
-            >
-              <span class="text-sm tabular-nums">{lineAmount(line)}</span>
-            </SettingsRow>
-          )}
-        </For>
-        <SettingsRow
-          class="grid! grid-cols-[minmax(0,1fr)_auto]"
-          label={t('settingsBilling.total', { interval: interval() })}
-        >
-          <strong class="text-sm tabular-nums">
-            {money(props.billing.subscriptionTotal)}
-          </strong>
-        </SettingsRow>
-        <SettingsRow
-          class="grid! grid-cols-[minmax(0,1fr)_auto]"
+          class="grid! grid-cols-[minmax(0,1fr)_auto] px-0"
           label={t('settingsBilling.nextInvoice')}
           description={
             invoiceDate() ??

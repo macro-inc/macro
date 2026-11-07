@@ -1,16 +1,19 @@
+mod quarantine;
+
 use crate::domain::models::{PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName};
 use hosted_runtimes::domain::ids::ComputerId;
 use hosted_runtimes::domain::models::ComputerName;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 use chrono::{DateTime, TimeZone, Utc};
 use hosted_runtimes::domain::{
     lifecycle::{ComputerState, Context, EffectWorker, Event, HostId, Phase, transition},
     models::{
-        BillingInterval, Computer, Host, HostRegistration, NewComputer, Quote, SubscriptionItem,
+        BillingInterval, Computer, ComputerRecord, Host, HostRegistration, NewComputer, Quote,
+        SubscriptionItem,
     },
     ports::{Billing, BillingError, ComputerRepo, DueTimer, PendingEffect, ReserveError},
     service::{Clock, ComputerService},
@@ -83,7 +86,7 @@ impl ComputerRepo for FakeRepo {
         {
             state.comp_reason = Some(reason);
         }
-        let reserved = Computer {
+        let mut reserved = Computer {
             id: computer.id,
             team_id: computer.team_id,
             name: computer.name,
@@ -99,6 +102,33 @@ impl ComputerRepo for FakeRepo {
             created_at: now,
             enrolled_at: None,
         };
+        if let Some(reason) = reserved.state.comp_reason.clone() {
+            let (state, effects) = transition(
+                &reserved.state,
+                &Event::Comped { reason },
+                Context {
+                    now,
+                    host_has_room: true,
+                    enrollment_generation: reserved.enrollment_generation,
+                },
+            );
+            reserved.state = state;
+            let mut outbox = self.effects.lock().unwrap();
+            for effect in effects {
+                if let hosted_runtimes::domain::lifecycle::Effect::Create { generation, .. } =
+                    &effect
+                {
+                    reserved.enrollment_generation = *generation;
+                }
+                let id = outbox.len() as i64 + 1;
+                outbox.push(PendingEffect {
+                    id,
+                    computer_id: reserved.id,
+                    effect,
+                    attempts: 0,
+                });
+            }
+        }
         computers.insert(reserved.id, reserved.clone());
         Ok(reserved)
     }
@@ -146,11 +176,17 @@ impl ComputerRepo for FakeRepo {
         Ok(Some(computer.clone()))
     }
 
-    async fn get(&self, computer_id: ComputerId) -> Result<Option<Computer>, FakeError> {
-        Ok(self.computers.lock().unwrap().get(&computer_id).cloned())
+    async fn get(&self, computer_id: ComputerId) -> Result<Option<ComputerRecord>, FakeError> {
+        Ok(self
+            .computers
+            .lock()
+            .unwrap()
+            .get(&computer_id)
+            .cloned()
+            .map(Into::into))
     }
 
-    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<Computer>, FakeError> {
+    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<ComputerRecord>, FakeError> {
         let mut computers: Vec<Computer> = self
             .computers
             .lock()
@@ -161,7 +197,7 @@ impl ComputerRepo for FakeRepo {
             .cloned()
             .collect();
         computers.sort_by_key(|computer| computer.created_at);
-        Ok(computers)
+        Ok(computers.into_iter().map(Into::into).collect())
     }
 
     async fn find_by_harness(
@@ -187,7 +223,7 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn running(&self) -> Result<Vec<Computer>, FakeError> {
+    async fn running(&self) -> Result<Vec<ComputerRecord>, FakeError> {
         Ok(vec![])
     }
 
@@ -195,7 +231,7 @@ impl ComputerRepo for FakeRepo {
         Ok(None)
     }
 
-    async fn instances_expected(&self, _host: HostId) -> Result<Vec<Computer>, FakeError> {
+    async fn instances_expected(&self, _host: HostId) -> Result<Vec<ComputerRecord>, FakeError> {
         Ok(vec![])
     }
 
@@ -215,6 +251,35 @@ impl ComputerRepo for FakeRepo {
             .take(limit as usize)
             .cloned()
             .collect())
+    }
+
+    async fn release_effects(
+        &self,
+        _ids: &[i64],
+        _lease_until: DateTime<Utc>,
+        _now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        // This billing-only fake never hides leased effects.
+        Ok(())
+    }
+
+    async fn finish_effect(
+        &self,
+        id: i64,
+        completion: Option<Event>,
+        now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        let computer_id = self
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|effect| effect.id == id)
+            .map(|effect| effect.computer_id);
+        if let (Some(computer_id), Some(event)) = (computer_id, completion) {
+            self.apply(computer_id, event, now).await?;
+        }
+        self.complete_effect(id).await
     }
 
     async fn complete_effect(&self, id: i64) -> Result<(), FakeError> {
@@ -250,9 +315,19 @@ impl ComputerRepo for FakeRepo {
     async fn fire_timer(
         &self,
         _timer: DueTimer,
+        _instance_status: Option<hosted_runtimes::domain::ports::InstanceStatus>,
         _now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
         Ok(None)
+    }
+
+    async fn postpone_macrod_timers(
+        &self,
+        _host: HostId,
+        _deadline: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        // This fake has no timers; due_timers always returns an empty batch.
+        Ok(())
     }
 
     async fn register_host(&self, _registration: HostRegistration) -> Result<Host, FakeError> {
@@ -262,6 +337,7 @@ impl ComputerRepo for FakeRepo {
     async fn sold_out_sizes(
         &self,
         _catalog: &[CatalogEntry],
+        _always_on: bool,
     ) -> Result<Vec<ComputerSize>, FakeError> {
         Ok(vec![])
     }
@@ -269,7 +345,7 @@ impl ComputerRepo for FakeRepo {
     async fn request_notify(
         &self,
         _team_id: Uuid,
-        _user_id: String,
+        _user_id: MacroUserIdStr<'static>,
         _size: ComputerSize,
     ) -> Result<(), FakeError> {
         Ok(())
@@ -278,7 +354,7 @@ impl ComputerRepo for FakeRepo {
     async fn notify_requests(
         &self,
         _team_id: Uuid,
-        _user_id: String,
+        _user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ComputerSize>, FakeError> {
         Ok(vec![])
     }
@@ -645,7 +721,7 @@ async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
             .await;
         let id = result.expect("recover the durable purchase");
         assert_eq!(updates.lock().unwrap().len(), update_count);
-        let saved = repo.get(id).await.unwrap().unwrap();
+        let saved = repo.get(id).await.unwrap().unwrap().into_healthy().unwrap();
         assert_eq!(saved.team_id, TEAM);
         let status = computers.status(TEAM, id).await.unwrap();
         assert_eq!(status.status, expected);
@@ -662,14 +738,8 @@ async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
         } else {
             assert!(matches!(saved.state.phase, Phase::PendingPayment { .. }));
             assert_eq!(
-                computers
-                    .status(TEAM, id)
-                    .await
-                    .unwrap()
-                    .setup
-                    .unwrap()
-                    .step,
-                agent::SetupStep::Paying
+                status.setup.expect("pending purchase progress").step,
+                agent::SetupStep::Creating
             );
         }
         assert!(matches!(
@@ -743,7 +813,9 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                         resources: current_catalog()[0].resources,
                         catalog_entry: current_catalog()[0].id.clone(),
                         price_id: Some(StripePriceId::parse("price_standard").unwrap()),
-                        created_by: "macro|admin@example.com".to_string(),
+                        created_by: MacroUserIdStr::parse_from_str("macro|admin@example.com")
+                            .unwrap()
+                            .into_owned(),
                         persona: Some(enrollment::Persona {
                             name: "Agent".to_string(),
                             os_user: PersonaOsUser::parse("agent-slug").expect("OS user"),
@@ -912,7 +984,7 @@ async fn configured_catalog_drives_sizes_quotes_and_reserved_resources() {
         extra_items: vec![],
     };
     let id = adapter.purchase(purchase.clone()).await.unwrap();
-    let saved = repo.get(id).await.unwrap().unwrap();
+    let saved = repo.get(id).await.unwrap().unwrap().into_healthy().unwrap();
     assert_eq!(saved.resources, catalog[0].resources);
     assert_eq!(saved.catalog_entry, catalog[0].id);
     assert!(matches!(

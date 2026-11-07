@@ -15,7 +15,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
 - Keep literal purchase resources in the versioned `domain::size::current_catalog`.
 - Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
-  reserves sold units on a host; waking checks awake units (`Context::host_has_room`).
+  reserves sold units on a host; personas also reserve awake units. Waking checks
+  awake units (`Context::host_has_room`).
 
 ## Start here
 
@@ -29,6 +30,15 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   mounted by authentication_service.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
+
+## Rollout
+
+`domain::rollout::ComputerRollout` reads `enable-macro-computers` for the
+authenticated Macro user through `feature_flags`. Missing providers, missing
+flags and load errors refuse team purchase, quote and offers with 403.
+Composition roots inject it with `with_rollout`; `quote_for_team` takes the
+caller user id. Existing reads and management, internal purchase/quote, Stripe
+reconciliation and workers remain available when rollout is off.
 
 ## Explicit configuration
 
@@ -65,6 +75,31 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Purchaser deletion is RESTRICTed to retain enrollment/billing attribution until
   the computer or team is deleted; harness deletion clears its reference, and
   user deletion cascades waitlist requests.
+- **Control-plane redeploys**: A missing macrod never reboots a fleet-observed
+  Running guest. Persist consecutive misses; after three grace periods, page
+  the operator and restart only macrod once per outage. Reconnection resets the
+  counter; an obsolete daemon-restart effect is ignored. Stopped or missing
+  awake guests retain crash/reprovision recovery. Crash-recovery effects use
+  idempotent start, so replay after a lost completion cannot reboot a guest.
+  Booting and disconnected Running guests use persisted `MacrodMissing` timer
+  rows, never process uptime. On each successful operator registration, one SQL
+  update gives that host's pending macrod timers a fresh three-minute grace;
+  stale timer snapshots cannot consume the refreshed rows.
+- **Effect shutdown and leases**: Keep `FOR UPDATE SKIP LOCKED` and ten-minute
+  leases. Bound composite fleet calls to seven minutes and the entire leased
+  batch (including lease acquisition, queueing and completion writes) to eight
+  minutes; there is no lease heartbeat. Incus request/operation limits alone
+  do not bound a composite effect. On cancellation, stop leasing, drain the
+  current effect for up to thirty seconds, drop its future, then return only
+  this batch's unfinished leases with their original deadline to `run_after =
+  now`. Preserve recorded retry backoffs and replacement replicas' leases.
+  Persist fleet completion, its lifecycle event, effects and timers atomically;
+  preserve a macrod connection observed before creation completion.
+  SIGKILL cannot release leases; replacements recover them at lease expiry.
+  RPC cancellation does not cancel an Incus operation already accepted by the
+  host (or a Docker daemon operation). Fleet create/start idempotence and
+  idempotent crash recovery remain required; leases bound worker execution,
+  not exactly-once execution of remote commands.
 - **Fleet ownership**: Require explicit `COMPUTERS_CONTROL_PLANE_ID` whenever
   `COMPUTERS_FLEET` is `incus` or `docker`, shared across replicas but distinct per control plane.
   Stamp Incus `user.macro.control_plane` / Docker `macro.control_plane` at create;
@@ -72,14 +107,24 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   checks ownership and deletes orphans only after ten minutes. Creation timestamps
   are stamped once as `user.macro.created_at` / `macro.created_at`; missing or
   invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
+- **Capacity**: Every purchase holds oversold units until payment refusal or
+  destruction. Persona purchases additionally reserve awake units against other
+  capacity-holding personas on the same host, including powered-off personas.
+  Reserve both under the host lock. Ordinary computers may use oversold capacity.
+  `GET /team/computers/offers` reports `soldOut` for ordinary purchases and
+  `alwaysOnSoldOut` per size for persona purchases (including internal callers).
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, persona, extra_items, billing })`
   → `computer_id`. A Stripe purchase adds the computer's item plus
   every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: StripePriceId, quantity }`, quantity
   added to the item's current quantity), invoiced at once with proration. In-process
   in authentication_service, and on the internal route `POST /internal/computers`.
-  Persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect together
-  before billing. Serialize payment resolution through its lifecycle write with
-  the per-computer payment guard. Both the normal path and the two-minute safety net use
+  For Stripe, persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect
+  together before billing. Apply `PaymentConfirmed` in the purchase request as
+  soon as Stripe succeeds, atomically clearing the recovery effect. Only unknown
+  outcomes (provider errors or lost writes) wait for delayed confirmation;
+  confirmed computers make recovery a no-op. Serialize payment resolution through
+  its lifecycle write with the per-computer payment guard. Both the normal path
+  and the two-minute safety net use
   `computer-add:{computer_id}` and the same extra items. Unknown outcomes stay
   pending and retry indefinitely with capped backoff; definite refusals become
   `PaymentFailed`, visible without holding capacity and clearable by release.
@@ -101,10 +146,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `POST /internal/computers` requires explicit `billing: { "kind": "stripe" }`
   or `{ "kind": "comped", "reason": "..." }`; its quote route remains Stripe.
   Comped purchases reject nonempty `extraItems` and never call the Billing port.
-  Reservation persists `state.comp_reason` before the delayed confirmation effect;
-  normal purchase and crash recovery apply `Event::Comped { reason }` to begin
-  provisioning. `PaymentOutcome::Comped` serializes as `"comped"`, with the
-  reason exposed separately as `ComputerStatus.compReason: string | null`.
+  Reservation applies `Event::Comped { reason }` in the reservation transaction
+  to begin provisioning before commit; `PendingPayment` is never observable and
+  no `ConfirmPayment` effect is emitted. Legacy pending comps can still recover
+  through the billing worker. `PaymentOutcome::Comped` serializes as `"comped"`,
+  with the reason exposed separately as `ComputerStatus.compReason: string | null`.
   Payment and reason remain latched through release. The optional persisted reason
   is absent on legacy Stripe rows; no migration is required.
   Comped computers never carry a charged subscription item, emit
@@ -115,9 +161,26 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   calls. A comped quote reads the Stripe quote and sets amount to zero, preserving
   price id, currency and interval. Without a subscription the quote returns
   `NoSubscription`; billing errors propagate.
+- **Waiting for capacity**: Preserve stopped/suspended fleet state and project
+  `wake_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
+  (also provisioning with `start: false`). Suppress setup progress while waiting.
+  Persist `CapacityWait` after the first MakeRoom: check room after 20, 40, 80,
+  160, 320, then 600 seconds, capped thereafter. Prompts and stale timers do not
+  bypass the deadline or enqueue another MakeRoom. MakeRoom reports
+  `RoomUnavailable` when nothing is frozen; retain the latch until
+  `CapacityChanged`, even across worker restarts. Capped retries recheck room
+  without repeating MakeRoom. Log each new deadline once.
+  When a computer leaves awake, enqueue immediate `CapacityChanged` timers for
+  waiters on its host in the same transaction. Lock the host before computer
+  and timer rows, including timer delivery, to serialize wake reservations and
+  avoid lock inversion. Power-off, successful wake and release clear the wait.
+  Runtimes and Billing show "Waiting for space on the host" with a hint to turn
+  off or release another computer. Waiting computers remain power-manageable.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
-  `ComputerStatus` with `setup: Option<SetupProgress>` (Paying → Creating → Booting →
-  Connecting → Ready) until macrod first connects. Readable by any team member.
+  `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
+  Connecting → Ready, positions 1–4) until macrod first connects. Pending payment
+  reports Creating (1 of 4); setup never exposes a payment phase. Payment outcomes
+  remain in the billing fields `payment` and `compReason`. Readable by any team member.
 - **Retry/reprovision**: `ComputerService::retry(team_id, computer_id)` → `ComputerStatus`,
   exposed to team admins at `POST /team/computers/{computer_id}/retry`. Only
   `Failed` computers can be retried; other phases return `NotFailed` (409).
@@ -164,7 +227,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Fleet Create checks the persisted generation and pairing identity before
   polling `FleetEnrollment::issue`: an already-claimed guest completes without
   issuance or re-keying. An unclaimed guest receives a fresh enrollment and a
-  restart so its enroll oneshot applies the replacement values. Creation runs
+  restart of the enrollment and macrod units so its enroll oneshot applies the
+  replacement values without rebooting a running guest. A stopped guest starts
+  normally. Creation runs
   under the per-computer enrollment guard (`hosted-enrollment:<computer UUID>`
   advisory key), also taken by the harness claim transaction. Claims recheck the
   device-secret hash after acquiring it. This fences claims racing a retry,
@@ -195,7 +260,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Typed boundaries
 
-- Use `domain::ids::{ComputerId, PairingId, HostId}` and `harness_id::HarnessId`; keep team IDs as UUIDs until a shared team identity exists. Convert only at external/storage boundaries.
+- Keep `#![deny(missing_docs)]` enabled and document every public item tersely (CS-54).
+
+- Use shared `computer_id::ComputerId`, `pairing_id::PairingId` (re-exported by `domain::ids`), `domain::ids::HostId` and `harness_id::HarnessId`; keep team IDs as UUIDs until a shared team identity exists. Convert only at external/storage boundaries.
+- Pass `MacroUserIdStr<'static>` through domain models, ports and services; parse inbound strings and stored buyers at their adapter boundaries. Keep wire fields as strings.
 - Construct `ComputerName` to trim and validate display names. `DeviceSecret` redacts Debug/Display and zeroizes on drop; expose only for pairing or enrollment transport. It deliberately has no Serialize implementation.
 - Keep serde newtypes transparent and validate string deserialization through `TryFrom<String>`; serde does not allow `transparent` together with its `try_from` container attribute.
 
@@ -213,6 +281,17 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `cargo test -p hosted_runtimes listing_cannot_expose_another_fleets_containers_to_reconciliation -- --ignored`.
 
 ## Gotchas
+
+- Preserve undecodable rows as `ComputerRecord::NeedsAttention` with row id, team,
+  host and a static field-and-rule reason; never include parser errors or stored
+  values in quarantine logs. Keep their ids in expected instances and treat
+  quarantine as present in orphan checks. Only validated computers receive
+  lifecycle events or have effects/timers selected; repair resumes pending work.
+  Retain raw purchase metadata for display only; quarantine reports null payment.
+
+- DockerFleet enforces recorded vCPU and memory limits through cgroups without
+  CPU pinning; dev-only Docker guests still see host totals in `/proc` and
+  `nproc`. Do not add lxcfs; Incus VMs see their real CPU and memory limits.
 
 - Demo Incus access uses Wolf's personal Tailscale tailnet; production must use
   the company tailnet. Admin access is Tailscale SSH via `root@runtime-dev-1`

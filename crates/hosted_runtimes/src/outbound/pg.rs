@@ -1,22 +1,24 @@
 //! Postgres adapter for [`ComputerRepo`].
 
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::enrollment::Persona;
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{
     ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, TimerKind, transition,
 };
-use crate::domain::models::StripePriceId;
-use crate::domain::models::{Computer, ComputerName, Host, HostRegistration, NewComputer};
-use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
-use crate::domain::size::{
-    CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
+use crate::domain::models::{
+    Computer, ComputerRecord, Host, HostRegistration, NewComputer, SanitizedReason,
 };
+use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
+use crate::domain::size::{ComputerResources, ComputerSize};
+
+mod row;
+use row::ComputerRow;
 
 #[cfg(test)]
 mod test;
@@ -29,10 +31,15 @@ const COMPUTER_GUARD_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::fr
 /// Errors from the Postgres adapter.
 #[derive(Debug, thiserror::Error)]
 pub enum PgComputerError {
+    /// A database operation failed.
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+    /// Stored computer data violates a domain contract.
     #[error("stored computer data is invalid: {0}")]
     Corrupt(String),
+    /// A row violates a field rule; this diagnostic cannot contain stored values.
+    #[error("{0}")]
+    InvalidRow(#[from] SanitizedReason),
 }
 
 impl From<std::num::TryFromIntError> for PgComputerError {
@@ -47,6 +54,7 @@ impl From<serde_json::Error> for PgComputerError {
     }
 }
 
+/// Postgres storage for computers, capacity and lifecycle work.
 #[derive(Clone)]
 pub struct PgComputerRepo {
     pool: PgPool,
@@ -54,6 +62,7 @@ pub struct PgComputerRepo {
 }
 
 impl PgComputerRepo {
+    /// Build a repository with a separate pool for long-lived guards.
     pub fn new(pool: PgPool) -> Self {
         // Guards outlive provider calls; keep their waiters off the
         // pool used to persist the outcome while the guard is held.
@@ -69,76 +78,23 @@ impl PgComputerRepo {
     }
 }
 
-struct ComputerRow {
-    id: Uuid,
-    team_id: Uuid,
-    name: String,
-    size: String,
-    vcpus: i32,
-    memory_gib: i32,
-    disk_gib: i32,
-    catalog_entry: String,
-    price_id: Option<String>,
-    state: serde_json::Value,
-    harness_id: Option<Uuid>,
-    persona: Option<serde_json::Value>,
-    created_by: String,
-    created_at: DateTime<Utc>,
-    enrolled_at: Option<DateTime<Utc>>,
-    enrollment_generation: i64,
-}
-
-impl TryFrom<ComputerRow> for Computer {
-    type Error = PgComputerError;
-
-    fn try_from(row: ComputerRow) -> Result<Self, Self::Error> {
-        let size = row
-            .size
-            .parse::<ComputerSize>()
-            .map_err(|_| PgComputerError::Corrupt(format!("unknown size {:?}", row.size)))?;
-        let persona = row
-            .persona
-            .map(serde_json::from_value::<Persona>)
-            .transpose()?;
-
-        Ok(Computer {
-            id: ComputerId::new_from_uuid(row.id),
-            team_id: row.team_id,
-            name: ComputerName::try_new(&row.name)
-                .map_err(|error| PgComputerError::Corrupt(error.to_string()))?,
-            size,
-            resources: ComputerResources {
-                vcpus: Vcpus::new(u32::try_from(row.vcpus)?),
-                memory_gib: MemoryGib::new(u32::try_from(row.memory_gib)?),
-                disk_gib: DiskGib::new(u32::try_from(row.disk_gib)?),
-            },
-            catalog_entry: CatalogEntryId::try_new(row.catalog_entry)
-                .map_err(|error| PgComputerError::Corrupt(error.to_string()))?,
-            price_id: row
-                .price_id
-                .map(|id| {
-                    StripePriceId::parse(&id)
-                        .map_err(|error| PgComputerError::Corrupt(error.to_string()))
-                })
-                .transpose()?,
-            state: serde_json::from_value(row.state)?,
-            harness_id: row.harness_id.map(HarnessId::new_from_uuid),
-            persona,
-            created_by: row.created_by,
-            created_at: row.created_at,
-            enrolled_at: row.enrolled_at,
-            enrollment_generation: crate::domain::persona_credentials::EnrollmentGeneration::new(
-                u32::try_from(row.enrollment_generation)?,
-            ),
-        })
-    }
-}
-
 fn units(resources: ComputerResources) -> Result<i32, PgComputerError> {
     Ok(i32::try_from(resources.units())?)
 }
 
 impl PgComputerRepo {
+    /// Serialize host transitions before locking computer or timer rows.
+    async fn lock_host(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        computer_id: ComputerId,
+    ) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "SELECT host.id FROM hosted_runtime_host host JOIN hosted_runtime computer ON computer.host_id = host.id WHERE computer.id = $1 FOR UPDATE OF host",
+            computer_id.as_uuid(),
+        ).fetch_optional(&mut **tx).await?;
+        Ok(())
+    }
+
     /// Run the transition for a computer already locked in `tx`, and store
     /// its state, effects and timers.
     #[tracing::instrument(name = "computer.lifecycle.event", skip_all, fields(%computer_id, event, phase, team_id, size, billing_kind, otel.status_code), err)]
@@ -148,10 +104,11 @@ impl PgComputerRepo {
         event: &Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
+        Self::lock_host(tx, computer_id).await?;
         let row = sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
+            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE id = $1
@@ -242,6 +199,15 @@ impl PgComputerRepo {
         {
             span.record("phase", tag);
         }
+        if !matches!(state.phase, Phase::PendingPayment { .. }) {
+            sqlx::query!(
+                "DELETE FROM hosted_runtime_effect WHERE computer_id = $1 AND worker = 'billing' AND effect->>'effect' = 'confirm_payment'",
+                computer_id.as_uuid(),
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
+
         let destroyed = state.phase == Phase::Destroyed;
         if destroyed {
             sqlx::query!(
@@ -269,6 +235,36 @@ impl PgComputerRepo {
         .execute(&mut **tx)
         .await?;
 
+        if computer.state.is_awake()
+            && !state.is_awake()
+            && let Some(host) = computer.state.host()
+        {
+            // A timer avoids locking another computer while applying this one.
+            sqlx::query!(
+                    r#"
+                    INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at)
+                    SELECT id, 'capacity_changed', $2 FROM hosted_runtime
+                    WHERE host_id = $1 AND id <> $3
+                        AND state->>'power' = 'on' AND state->>'wake_requested' = 'true'
+                        AND state->'phase'->>'phase' IN ('stopped', 'suspended', 'provisioning')
+                    ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = LEAST(hosted_runtime_timer.fire_at, EXCLUDED.fire_at)
+                    "#,
+                    host.into_inner(), now, computer_id.as_uuid(),
+                ).execute(&mut **tx).await?;
+        }
+        if state.capacity_wait.as_ref().map(|wait| wait.retry_at)
+            != computer
+                .state
+                .capacity_wait
+                .as_ref()
+                .map(|wait| wait.retry_at)
+            && let Some(wait) = &state.capacity_wait
+            && wait.retry_at > now
+        {
+            tracing::info!(computer_id = %computer_id, host_id = ?state.host(),
+                backoff_step = wait.backoff_step, retry_at = %wait.retry_at,
+                room_unavailable = wait.room_unavailable, "computer waiting for host capacity");
+        }
         computer.state = state;
         Ok(Some(computer))
     }
@@ -304,8 +300,54 @@ impl PgComputerRepo {
         Ok(others + units(computer.resources)? <= capacity)
     }
 
-    async fn fetch_many(&self, rows: Vec<ComputerRow>) -> Result<Vec<Computer>, PgComputerError> {
-        rows.into_iter().map(Computer::try_from).collect()
+    async fn fetch_many(
+        &self,
+        rows: Vec<ComputerRow>,
+    ) -> Result<Vec<ComputerRecord>, PgComputerError> {
+        Ok(rows.into_iter().map(Self::decode_row).collect())
+    }
+
+    /// Validate work owners before applying a batch limit, so corrupt owners cannot starve it.
+    async fn host_records(&self, host: HostId) -> Result<Vec<ComputerRecord>, PgComputerError> {
+        let rows = sqlx::query_as!(
+            ComputerRow,
+            r#"
+            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
+                   created_at, enrolled_at, enrollment_generation
+            FROM hosted_runtime
+            WHERE host_id = $1
+            "#,
+            host.into_inner(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        self.fetch_many(rows).await
+    }
+
+    async fn healthy_work_ids(
+        &self,
+        worker: Option<EffectWorker>,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<Uuid>, PgComputerError> {
+        let worker = worker.map(|worker| worker.as_ref().to_owned());
+        let rows = sqlx::query_as!(ComputerRow,
+            "SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by, created_at, enrolled_at, enrollment_generation FROM hosted_runtime
+             WHERE id IN (
+                 SELECT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2
+                 UNION
+                 SELECT computer_id FROM hosted_runtime_timer WHERE $1::text IS NULL AND fire_at <= $2
+             )",
+            worker, now,
+        ).fetch_all(&self.pool).await?;
+        Ok(self
+            .fetch_many(rows)
+            .await?
+            .into_iter()
+            .filter_map(|record| match record {
+                ComputerRecord::Healthy(computer) => Some(computer.id.as_uuid()),
+                ComputerRecord::NeedsAttention { .. } => None,
+            })
+            .collect())
     }
 }
 
@@ -352,21 +394,28 @@ impl ComputerRepo for PgComputerRepo {
 
         // Lock every host: purchases are rare and hosts few, and this keeps
         // two purchases from both taking the last units.
+        sqlx::query!("SELECT id FROM hosted_runtime_host ORDER BY id FOR UPDATE")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(storage)?;
+        // Read reservations in a new statement after any host-lock wait.
         let host = sqlx::query_scalar!(
             r#"
             WITH locked AS (
-                SELECT id, sold_capacity_units FROM hosted_runtime_host ORDER BY id FOR UPDATE
+                SELECT id, sold_capacity_units, awake_capacity_units FROM hosted_runtime_host
             )
             SELECT locked.id
             FROM locked
             LEFT JOIN hosted_runtime computer
                 ON computer.host_id = locked.id AND computer.holds_units
-            GROUP BY locked.id, locked.sold_capacity_units
+            GROUP BY locked.id, locked.sold_capacity_units, locked.awake_capacity_units
             HAVING locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) >= $1::BIGINT
+               AND (NOT $2::BOOLEAN OR locked.awake_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.persona IS NOT NULL), 0) >= $1::BIGINT)
             ORDER BY locked.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) DESC
             LIMIT 1
             "#,
             i64::from(computer_units),
+            computer.persona.is_some(),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -402,7 +451,7 @@ impl ComputerRepo for PgComputerRepo {
             host,
             state_json,
             persona_json,
-            computer.created_by,
+            computer.created_by.as_ref(),
             now,
             i32::try_from(computer.resources.vcpus.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
             i32::try_from(computer.resources.memory_gib.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
@@ -413,6 +462,25 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&mut *tx)
         .await
         .map_err(storage)?;
+        if let crate::domain::models::PurchaseBilling::Comped { reason } = &computer.billing {
+            let comped = Self::apply_locked(
+                &mut tx,
+                computer.id,
+                &Event::Comped {
+                    reason: reason.clone(),
+                },
+                now,
+            )
+            .await
+            .map_err(ReserveError::Storage)?
+            .ok_or_else(|| {
+                ReserveError::Storage(PgComputerError::Corrupt(
+                    "reserved computer disappeared".to_owned(),
+                ))
+            })?;
+            tx.commit().await.map_err(storage)?;
+            return Ok(comped);
+        }
         let effect_json = serde_json::to_value(Effect::ConfirmPayment {
             extra_items: computer.extra_items,
         })
@@ -460,11 +528,14 @@ impl ComputerRepo for PgComputerRepo {
         Ok(computer)
     }
 
-    async fn get(&self, computer_id: ComputerId) -> Result<Option<Computer>, PgComputerError> {
-        sqlx::query_as!(
+    async fn get(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<ComputerRecord>, PgComputerError> {
+        Ok(sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
+            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE id = $1
@@ -473,25 +544,34 @@ impl ComputerRepo for PgComputerRepo {
         )
         .fetch_optional(&self.pool)
         .await?
-        .map(Computer::try_from)
-        .transpose()
+        .map(Self::decode_row)
+        )
     }
 
-    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<Computer>, PgComputerError> {
+    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<ComputerRecord>, PgComputerError> {
         let rows = sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
+            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
-            WHERE team_id = $1 AND state->'phase'->>'phase' <> 'destroyed'
+            WHERE team_id = $1
             ORDER BY created_at
             "#,
             team_id,
         )
         .fetch_all(&self.pool)
         .await?;
-        self.fetch_many(rows).await
+        Ok(self
+            .fetch_many(rows)
+            .await?
+            .into_iter()
+            .filter(|record| {
+                record
+                    .healthy()
+                    .is_none_or(|computer| computer.state.phase != Phase::Destroyed)
+            })
+            .collect())
     }
 
     async fn find_by_harness(
@@ -501,7 +581,7 @@ impl ComputerRepo for PgComputerRepo {
         sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
+            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
             WHERE harness_id = $1
@@ -512,6 +592,7 @@ impl ComputerRepo for PgComputerRepo {
         .await?
         .map(Computer::try_from)
         .transpose()
+        .map_err(PgComputerError::from)
     }
 
     async fn set_harness(
@@ -544,50 +625,60 @@ impl ComputerRepo for PgComputerRepo {
         Ok(())
     }
 
-    async fn running(&self) -> Result<Vec<Computer>, PgComputerError> {
+    async fn running(&self) -> Result<Vec<ComputerRecord>, PgComputerError> {
         let rows = sqlx::query_as!(
             ComputerRow,
             r#"
-            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
+            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
                    created_at, enrolled_at, enrollment_generation
             FROM hosted_runtime
-            WHERE awake AND state->'phase'->>'phase' = 'running'
+            WHERE awake
             "#,
         )
         .fetch_all(&self.pool)
         .await?;
-        self.fetch_many(rows).await
+        Ok(self
+            .fetch_many(rows)
+            .await?
+            .into_iter()
+            .filter(|record| {
+                record
+                    .healthy()
+                    .is_none_or(|computer| matches!(computer.state.phase, Phase::Running { .. }))
+            })
+            .collect())
     }
 
     async fn coldest_frozen(&self, host: HostId) -> Result<Option<ComputerId>, PgComputerError> {
-        Ok(sqlx::query_scalar!(
-            r#"
-            SELECT id FROM hosted_runtime
+        let rows = sqlx::query_as!(ComputerRow,
+            r#"SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by, created_at, enrolled_at, enrollment_generation
+            FROM hosted_runtime
             WHERE host_id = $1 AND awake AND state->'phase'->>'phase' = 'frozen'
-            ORDER BY updated_at
-            LIMIT 1
-            "#,
+            ORDER BY updated_at"#,
             host.into_inner(),
-        )
-        .fetch_optional(&self.pool)
-        .await?
-        .map(ComputerId::new_from_uuid))
+        ).fetch_all(&self.pool).await?;
+        Ok(self
+            .fetch_many(rows)
+            .await?
+            .iter()
+            .find_map(|record| record.healthy().map(|computer| computer.id)))
     }
 
-    async fn instances_expected(&self, host: HostId) -> Result<Vec<Computer>, PgComputerError> {
-        let rows = sqlx::query_as!(
-            ComputerRow,
-            r#"
-            SELECT id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, persona, created_by,
-                   created_at, enrolled_at, enrollment_generation
-            FROM hosted_runtime
-            WHERE host_id = $1 AND holds_units AND state->'phase'->>'phase' <> 'pending_payment'
-            "#,
-            host.into_inner(),
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        self.fetch_many(rows).await
+    async fn instances_expected(
+        &self,
+        host: HostId,
+    ) -> Result<Vec<ComputerRecord>, PgComputerError> {
+        Ok(self
+            .host_records(host)
+            .await?
+            .into_iter()
+            .filter(|record| {
+                record.healthy().is_none_or(|computer| {
+                    computer.state.holds_units()
+                        && !matches!(computer.state.phase, Phase::PendingPayment { .. })
+                })
+            })
+            .collect())
     }
 
     async fn lease_effects(
@@ -597,6 +688,7 @@ impl ComputerRepo for PgComputerRepo {
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, PgComputerError> {
+        let healthy_ids = self.healthy_work_ids(Some(worker), now).await?;
         // Only each computer's oldest pending effect is due: a computer's
         // effects run in the order its transitions produced them.
         let rows = sqlx::query!(
@@ -606,7 +698,7 @@ impl ComputerRepo for PgComputerRepo {
             WHERE id IN (
                 SELECT effect.id
                 FROM hosted_runtime_effect effect
-                WHERE effect.worker = $1
+                WHERE effect.worker = $1 AND effect.computer_id = ANY($5)
                   AND effect.run_after <= $3
                   AND effect.id = (
                       SELECT MIN(earlier.id) FROM hosted_runtime_effect earlier
@@ -623,6 +715,7 @@ impl ComputerRepo for PgComputerRepo {
             i64::from(limit),
             now,
             lease_until,
+            &healthy_ids,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -639,10 +732,53 @@ impl ComputerRepo for PgComputerRepo {
             .collect()
     }
 
+    #[tracing::instrument(skip(self, ids), fields(count = ids.len() as i64), err)]
+    async fn release_effects(
+        &self,
+        ids: &[i64],
+        lease_until: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime_effect SET run_after = $3 WHERE id = ANY($1) AND worker = 'fleet' AND run_after = $2",
+            ids,
+            lease_until,
+            now,
+        ).execute(&self.pool).await?;
+        Ok(())
+    }
+
     async fn complete_effect(&self, id: i64) -> Result<(), PgComputerError> {
         sqlx::query!("DELETE FROM hosted_runtime_effect WHERE id = $1", id)
             .execute(&self.pool)
             .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn finish_effect(
+        &self,
+        id: i64,
+        completion: Option<Event>,
+        now: DateTime<Utc>,
+    ) -> Result<(), PgComputerError> {
+        let mut tx = self.pool.begin().await?;
+        let deleted = sqlx::query!(
+            "DELETE FROM hosted_runtime_effect WHERE id = $1 AND worker = 'fleet' RETURNING computer_id",
+            id,
+        ).fetch_optional(&mut *tx).await?;
+        if let Some(deleted) = deleted
+            && let Some(event) = completion
+        {
+            Self::apply_locked(
+                &mut tx,
+                ComputerId::new_from_uuid(deleted.computer_id),
+                &event,
+                now,
+            )
+            .await?;
+        }
+        tx.commit().await?;
         Ok(())
     }
 
@@ -672,15 +808,17 @@ impl ComputerRepo for PgComputerRepo {
         now: DateTime<Utc>,
         limit: u32,
     ) -> Result<Vec<DueTimer>, PgComputerError> {
+        let healthy_ids = self.healthy_work_ids(None, now).await?;
         let rows = sqlx::query!(
             r#"
             SELECT computer_id, kind, fire_at FROM hosted_runtime_timer
-            WHERE fire_at <= $1
+            WHERE fire_at <= $1 AND computer_id = ANY($3)
             ORDER BY fire_at
             LIMIT $2
             "#,
             now,
             i64::from(limit),
+            &healthy_ids,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -703,9 +841,11 @@ impl ComputerRepo for PgComputerRepo {
     async fn fire_timer(
         &self,
         timer: DueTimer,
+        instance_status: Option<crate::domain::ports::InstanceStatus>,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, PgComputerError> {
         let mut tx = self.pool.begin().await?;
+        Self::lock_host(&mut tx, timer.computer_id).await?;
         let deleted = sqlx::query!(
             r#"
             DELETE FROM hosted_runtime_timer
@@ -720,10 +860,36 @@ impl ComputerRepo for PgComputerRepo {
         if deleted.rows_affected() == 0 {
             return Ok(None);
         }
-        let computer =
-            Self::apply_locked(&mut tx, timer.computer_id, &timer.kind.event(), now).await?;
+        let computer = Self::apply_locked(
+            &mut tx,
+            timer.computer_id,
+            &timer.kind.event(instance_status),
+            now,
+        )
+        .await?;
         tx.commit().await?;
         Ok(computer)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn postpone_macrod_timers(
+        &self,
+        host: HostId,
+        deadline: DateTime<Utc>,
+    ) -> Result<(), PgComputerError> {
+        let healthy_ids: Vec<Uuid> = self
+            .host_records(host)
+            .await?
+            .into_iter()
+            .filter_map(|record| record.healthy().map(|computer| computer.id.as_uuid()))
+            .collect();
+        sqlx::query!(
+            "UPDATE hosted_runtime_timer t SET fire_at = $2 FROM hosted_runtime c WHERE t.computer_id = c.id AND c.host_id = $1 AND t.kind = 'macrod_missing' AND t.computer_id = ANY($3)",
+            host.into_inner(),
+            deadline,
+            &healthy_ids,
+        ).execute(&self.pool).await?;
+        Ok(())
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, PgComputerError> {
@@ -758,18 +924,23 @@ impl ComputerRepo for PgComputerRepo {
     async fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
+        always_on: bool,
     ) -> Result<Vec<ComputerSize>, PgComputerError> {
         let free = sqlx::query_scalar!(
             r#"
             SELECT COALESCE(MAX(free), 0)::INTEGER AS "free!"
             FROM (
-                SELECT host.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0) AS free
+                SELECT LEAST(
+                    host.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0),
+                    CASE WHEN $1::BOOLEAN THEN host.awake_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.persona IS NOT NULL), 0) ELSE host.sold_capacity_units END
+                ) AS free
                 FROM hosted_runtime_host host
                 LEFT JOIN hosted_runtime computer
                     ON computer.host_id = host.id AND computer.holds_units
-                GROUP BY host.id, host.sold_capacity_units
+                GROUP BY host.id, host.sold_capacity_units, host.awake_capacity_units
             ) hosts
             "#,
+            always_on,
         )
         .fetch_one(&self.pool)
         .await?;
@@ -784,7 +955,7 @@ impl ComputerRepo for PgComputerRepo {
     async fn request_notify(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
         size: ComputerSize,
     ) -> Result<(), PgComputerError> {
         sqlx::query!(
@@ -794,7 +965,7 @@ impl ComputerRepo for PgComputerRepo {
             ON CONFLICT DO NOTHING
             "#,
             team_id,
-            user_id,
+            user_id.as_ref(),
             size.as_ref(),
         )
         .execute(&self.pool)
@@ -805,12 +976,12 @@ impl ComputerRepo for PgComputerRepo {
     async fn notify_requests(
         &self,
         team_id: Uuid,
-        user_id: String,
+        user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ComputerSize>, PgComputerError> {
         let sizes = sqlx::query_scalar!(
             "SELECT size FROM hosted_runtime_waitlist WHERE team_id = $1 AND user_id = $2",
             team_id,
-            user_id,
+            user_id.as_ref(),
         )
         .fetch_all(&self.pool)
         .await?;

@@ -9,6 +9,7 @@
  * A Stripe price and how many of it to add to the team subscription.
  */
 export interface SubscriptionItem {
+  /** Stripe price saved for billing replay. */
   priceId: string;
   /**
    * Added to the item's current quantity.

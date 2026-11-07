@@ -238,12 +238,15 @@ impl<Teams: TeamRepository, Computers: ComputerRepo, Agents: TeamAgentRepository
                     .await
                     .map_err(anyhow::Error::from)?;
                 let mut computers = Vec::new();
-                for computer in self
+                for record in self
                     .computers
                     .list_for_team(team_id)
                     .await
                     .map_err(anyhow::Error::from)?
                 {
+                    let Ok(computer) = record.into_healthy() else {
+                        continue;
+                    };
                     if computer.state.phase == Phase::Destroyed
                         || (computer.state.payment == PaymentOutcome::Paid
                             && matches!(

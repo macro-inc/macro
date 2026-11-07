@@ -22,7 +22,11 @@ update. Failures known to precede billing undo the repo, membership, account
 and mailbox. Repository creation failures return a safe server reason explaining
 that nothing was charged; detailed provider errors stay in server logs. Purchase errors recover the durable computer ID from the team's
 saved agent persona. Its payment outbox resolves unknown outcomes idempotently;
-the agent remains `provisioning` at setup step `paying` ("Confirming payment").
+the agent remains `provisioning` with pending payment and forwards the computer
+service’s creation progress.
+Reuse `hosted_runtimes::domain::models::{SetupStep, SetupProgress}` for setup
+responses: `creating`, `booting`, `connecting`, `ready`, numbered 1–4. The auth
+OpenAPI registers these canonical types once for both computer and agent responses.
 A definite `payment_failed` computer retains its agent as `failed` with reason
 `payment failed`. The response exposes durable `payment` (`pending`, `paid`,
 `unbilled`, `comped`), or null when its computer cannot be read. The agent exists and its
@@ -33,7 +37,11 @@ computer on `GET /team_agents` and `GET /team_agents/me`.
 report. Reports are live only while the harness is connected and `checked_at`
 is no more than two minutes old (future observations are rejected). A Ready
 computer with unhealthy, missing, disconnected, stale or unavailable health is
-`unhealthy` with `statusReason: "unhealthy: <diagnostic>"`. Before the first
+`unhealthy` with `statusReason: "unhealthy: <diagnostic>"`. Until two minutes from
+creation, a still-provisioning agent with no first health report or an unavailable
+health endpoint stays `provisioning` at canonical `connecting` (3/4). Reported
+problems and health loss after Running never receive this grace. The injected
+clock controls both this deadline and observation freshness. Before the first
 connection, setup progress takes precedence: a disconnected harness stays
 `provisioning` at `connecting` ("Connecting agent"). Other non-failed computer
 states remain `provisioning`; sleeping/stopped computers are not running agents.
@@ -68,6 +76,10 @@ team computer purchases through `MacroStaffCompPolicy`.
 
 The `enable-team-agents` rollout gates management operations: roster, voice
 discovery/samples/settings, sizes, quote, create, retry and remove. Load one snapshot for the authenticated user and read it synchronously.
+Computer discovery uses the canonical `ComputerRollout` instead: it loads one
+snapshot of `enable-macro-computers` and never checks `enable-team-agents`.
+Missing computer-rollout configuration or evaluation failure denies discovery;
+management retains its separate gate.
 Missing configuration, a missing key, off or load failure denies with HTTP 403.
 Team authorization remains independent. Agent self profile/mail, brain gateway
 and git access never consult this rollout policy.
@@ -80,7 +92,8 @@ and git access never consult this rollout policy.
 
 ## Scope
 
-- `GET /team_agents/{agent_user_id}/computer` permits rollout-enabled teammates
+- `GET /team_agents/{agent_user_id}/computer` uses the independent
+  `enable-macro-computers` rollout and permits enabled teammates
   to discover only their team's bound computer and nullable harness ID, with
   `isAgentComputer: true`. It returns no profile, billing or bootstrap details
   and grants no runtime access. The roster stays administrator-only.
@@ -139,12 +152,13 @@ and git access never consult this rollout policy.
   construction; email-provider IDs remain strings in JSON.
 - Without `DEAD_SIMPLE_MAIL_API_KEY` agents get an `@agents.macro.invalid`
   placeholder address and the email routes answer 503.
-- The brain reaches Macro through the typed public gateway and git URLs in
-  deployed environments. Local bootstrap uses `COMPUTERS_SERVICE_URL_OVERRIDES`:
-  Docker uses the proxy's internal HTTP listener and service-network git/egress;
-  Incus uses bridge addresses through reverse tunnels. Keep internal repo API
-  calls separate from the computer-facing clone URL. Local guests need no host
-  DNS entries, local CA import or TLS bypass.
+- Resolve deployment addresses through typed `macro_service_urls` values on each
+  enrollment issuance. `EnrollmentEnvironment` supplies transient `PersonaEnv`;
+  absent or invalid composition fails before credentials rotate. Persist only
+  persona identity, workspace and health-port config, never service or repo URLs.
+  Docker uses service-network addresses and the proxy's internal HTTP listener;
+  Incus uses bridge listeners. Keep internal repo API calls separate from the
+  computer-facing clone URL. Guests require no TLS bypass or local CA import.
 
 ## Related
 
@@ -214,3 +228,21 @@ commits only `config/voice.json`; no settings database column is needed.
 The harness owns the provider catalog and fixed-line sample cache. Discovery
 requires team administration and the enabled management rollout; changing an
 agent's voice also checks that it belongs to the receipt team.
+
+## Transient service addresses
+
+Every create and recreate issuance resolves these exact typed override keys into
+`PersonaEnrollment.env`, never `Persona.config` or another durable row:
+`OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL`, `OVERRIDE_AUTH_SERVICE_URL`,
+`OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL`, `OVERRIDE_AGENT_HARNESS_SERVICE_URL`,
+`OVERRIDE_SCHEDULED_ACTION_SERVICE_URL`, `OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL`,
+and `OVERRIDE_MCP_SERVICE_URL`. MCP is the service base; its consumer appends
+`/mcp`. The gateway, Anthropic base and freshly issued repo clone URL travel in
+the same transient environment. Bootstrap secrets remain only in the separate
+redacting, zeroizing credentials field. There is no JSON override bridge or
+service URL derived from the gateway.
+
+The owning repository adapter resolves and validates `AgentGitServiceUrl::new()`
+on every create/reissue before contacting the git service. Never retain its
+advertised clone base from service startup: a recreate must receive the current
+base, while the internal API address remains the git client's own concern.

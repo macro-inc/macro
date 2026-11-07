@@ -1194,7 +1194,10 @@ through the SDK, including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
 `render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image),
+`RenderCanvas` stays direct so the model can see the image; a program's
+render or generated image shows in the reply through the image's
+`toMarkdown()` `<m-image>` line, since a document mention of a static file id
+reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
 native spreadsheets (`macro.documents.spreadsheet(document)` reads, calculates
 and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
 `EditSpreadsheet` are hidden in code mode), and
@@ -1299,7 +1302,8 @@ that creates a saved review immediately emits a separate completed **PresentRevi
 ACP call.
 Its card can appear before the program finishes and stays editable afterwards.
 Presentation means “Presented to the user,” not approved or sent. After
-presenting, the agent asks “Should I kick it off?”; when the person whose
+presenting, the agent asks “Should I kick it off?”, unless the user said not
+to send it yet; when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
 request”. SDK operation
@@ -1893,14 +1897,17 @@ Existing announcement chips remain locked to the turn they announced.
 
 ### Watching a computer screen
 
-A session whose registered harness reports the `screen` capability offers
+With `enable-macro-computers` enabled, a session whose registered harness
+reports the `screen` capability offers
 **Screen** beside **Changes**. It opens a resizable pane beside the transcript;
 on phones and narrow panes it fills the pane. **Close screen** returns to the
 transcript. Watching is the default: pointer and keyboard events are disabled.
 On desktop, session editors can press **Take control**, which reconnects with
 control enabled. **Stop controlling** reconnects in watch mode. Losing edit
 access also returns to watch mode; touch devices always remain watch-only.
-The service separately enforces harness permissions. A failed connection shows
+The service separately enforces harness permissions and the same rollout;
+missing flags or evaluation failures return 403 for viewer connections. The
+macrod side of the screen stream stays available. A failed connection shows
 an inline error and **Retry**. Closing the pane disconnects the screen stream.
 The pane connects to `GET /harnesses/{harness_id}/screen` on the agent harness
 service, adding `?control=true` only for control.

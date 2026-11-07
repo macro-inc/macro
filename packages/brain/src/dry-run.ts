@@ -1,11 +1,22 @@
 // A real boot through the event stream and a fake turn. No network or model calls.
 import type { BrainDeps } from './brain.ts';
-import { gatewayHosts } from './config.ts';
+import type { Hosts } from './config.ts';
 import { fixtures } from './learning.ts';
 import { MacroHttp } from './macro.ts';
 import type { BrainRuntime, Composition } from './mod.ts';
 import type { Outcome, Turn } from './runner.ts';
 import { gitCli } from './workspace.ts';
+/** Explicit fake service endpoints for offline conformance and integration tests. */
+export const checkHosts: Hosts = {
+  storage: 'https://gateway.invalid/dss',
+  auth: 'https://gateway.invalid/auth',
+  cognition: 'https://gateway.invalid/cognition',
+  agentHarness: 'https://gateway.invalid/agent-harness',
+  scheduledAction: 'https://gateway.invalid/scheduled-action',
+  mcp: 'https://mcp.invalid',
+  connection: 'wss://gateway.invalid/connection-gateway/',
+};
+
 export async function dryRun(
   compose: Composition,
   workspace: string,
@@ -31,67 +42,63 @@ export async function dryRun(
     id: string;
     name: string;
   }[] = [];
-  const http = new MacroHttp(
-    gatewayHosts('https://gateway.invalid'),
-    'fake',
-    async (url, init) => {
-      const path = new URL(url).pathname;
-      if (path === '/auth/user/me')
-        return Response.json({ user_id: 'brain-check' });
-      if (path === '/dss/channels/check')
-        return Response.json({
-          channel_id: 'check',
-          channel_name: 'check',
-          channel_type: 'direct_message',
-        });
-      if (path === '/dss/webhook/events/stream') {
-        received = true;
-        return new Response(
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              for (const event of before)
-                controller.enqueue(
-                  new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
-                );
+  const http = new MacroHttp(checkHosts, 'fake', async (url, init) => {
+    const path = new URL(url).pathname;
+    if (path === '/auth/user/me')
+      return Response.json({ user_id: 'brain-check' });
+    if (path === '/dss/channels/check')
+      return Response.json({
+        channel_id: 'check',
+        channel_name: 'check',
+        channel_type: 'direct_message',
+      });
+    if (path === '/dss/webhook/events/stream') {
+      received = true;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (const event of before)
               controller.enqueue(
-                new TextEncoder().encode(
-                  `data: ${JSON.stringify({
-                    event_id: fakeId,
-                    event_type: 'message.posted',
-                    metadata: {
-                      message_id: fakeId,
-                      content: 'brain check',
-                      created_at: new Date().toISOString(),
-                      parent: { type: 'channel', id: 'check' },
-                      root_id: fakeId,
-                      sender: 'check-sender',
-                    },
-                  })}\n\n`
-                )
+                new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
               );
-              init?.signal?.addEventListener(
-                'abort',
-                () => controller.error(new Error('check complete')),
-                { once: true }
-              );
-            },
-          })
-        );
-      }
-      if (path === '/dss/messages/channel/check') {
-        posts++;
-        return Response.json({ id: 'check-post' });
-      }
-      if (path.endsWith('/typing')) return new Response(null, { status: 204 });
-      throw new Error(`dry boot made an unexpected request: ${path}`);
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify({
+                  event_id: fakeId,
+                  event_type: 'message.posted',
+                  metadata: {
+                    message_id: fakeId,
+                    content: 'brain check',
+                    created_at: new Date().toISOString(),
+                    parent: { type: 'channel', id: 'check' },
+                    root_id: fakeId,
+                    sender: 'check-sender',
+                  },
+                })}\n\n`
+              )
+            );
+            init?.signal?.addEventListener(
+              'abort',
+              () => controller.error(new Error('check complete')),
+              { once: true }
+            );
+          },
+        })
+      );
     }
-  );
+    if (path === '/dss/messages/channel/check') {
+      posts++;
+      return Response.json({ id: 'check-post' });
+    }
+    if (path.endsWith('/typing')) return new Response(null, { status: 204 });
+    throw new Error(`dry boot made an unexpected request: ${path}`);
+  });
   const deps: BrainDeps = {
     config: {
       workspace,
       healthPort: 0,
       gateway: 'https://gateway.invalid',
-      hosts: gatewayHosts('https://gateway.invalid'),
+      hosts: checkHosts,
       anthropicBaseUrl: 'https://gateway.invalid/anthropic',
     },
     http,

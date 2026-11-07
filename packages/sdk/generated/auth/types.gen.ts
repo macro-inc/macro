@@ -131,11 +131,6 @@ export type AutoReloadSnapshot = {
 export type BillingInterval = 'month' | 'year';
 
 /**
- * The versioned identity recorded at purchase.
- */
-export type CatalogEntryId = string;
-
-/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -336,34 +331,70 @@ export type ComputerStatus = {
      * When billing stops, for a computer canceled at period end.
      */
     cancelsAt?: string | null;
-    catalogEntry: CatalogEntryId;
+    /**
+     * Versioned catalog entry saved at purchase.
+     */
+    catalogEntry: string;
     /**
      * Present for a comped purchase, including after release.
      */
     compReason?: string | null;
+    /**
+     * Time the computer was reserved.
+     */
     createdAt: string;
-    diskGib: DiskGib;
+    /**
+     * Root disk limit saved at purchase.
+     */
+    diskGib: number;
+    /**
+     * Harness claimed by this guest.
+     */
     harnessId?: string | null;
+    /**
+     * Stable resource identity.
+     */
     id: string;
-    memoryGib: MemoryGib;
+    /**
+     * Memory limit saved at purchase.
+     */
+    memoryGib: number;
+    /**
+     * Display name.
+     */
     name: string;
-    payment: PaymentOutcome;
+    payment?: null | PaymentOutcome;
+    /**
+     * Display name of the installed persona.
+     */
     personaName?: string | null;
+    /**
+     * Whether validated state requests power on; false for quarantined records.
+     */
     poweredOn: boolean;
     /**
      * When the disk is destroyed, for a canceled computer.
      */
     retainedUntil?: string | null;
     setup?: null | SetupProgress;
-    size: ComputerSize;
+    /**
+     * Purchased catalog size.
+     */
+    size: string;
+    /**
+     * Observed guest status.
+     */
     status: ComputerStatusKind;
-    vcpus: Vcpus;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
 };
 
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'ready' | 'asleep' | 'waking' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'asleep' | 'waking' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
 
 export type CreateAccountMergeRequest = {
     /**
@@ -671,11 +702,6 @@ export type CursorModelsResponse = {
  * Why a request was refused.
  */
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
-
-/**
- * A recorded resource quantity.
- */
-export type DiskGib = number;
 
 /**
  * What the provider selector offers the requesting user.
@@ -1410,6 +1436,9 @@ export type InitOutlookLinkResponse = {
  * Body of an internal purchase.
  */
 export type InternalPurchaseBody = {
+    /**
+     * Purchase funding or billing state.
+     */
     billing: PurchaseBilling;
     /**
      * The team admin or owner the caller authorized.
@@ -1419,9 +1448,18 @@ export type InternalPurchaseBody = {
      * Joined into the same subscription update, e.g. an agent seat.
      */
     extraItems?: Array<SubscriptionItem>;
+    /**
+     * Display name.
+     */
     name?: string | null;
     persona?: null | Persona;
+    /**
+     * Purchased catalog size.
+     */
     size: ComputerSize;
+    /**
+     * Team that owns the computer.
+     */
     teamId: string;
 };
 
@@ -1493,11 +1531,6 @@ export type MacroApiTokenResponse = {
 };
 
 /**
- * A recorded resource quantity.
- */
-export type MemoryGib = number;
-
-/**
  * A request to merge one pull request on the user's behalf.
  */
 export type MergeGithubPullRequestRequest = {
@@ -1535,6 +1568,9 @@ export type MergeGithubPullRequestResponse = {
  * Body of a notify-me request.
  */
 export type NotifyBody = {
+    /**
+     * Purchased catalog size.
+     */
     size: ComputerSize;
 };
 
@@ -1580,40 +1616,35 @@ export type PasswordlessStartedResponse = {
  */
 export type PatchTeamCrmSettingsRequest = {
     /**
-     * On a disabled → enabled transition, whether to backfill the CRM
-     * from members' existing email history. Ignored when disabling.
+     * Retained for compatibility and ignored. Email backfill requires
+     * each member's explicit consent through CRM email privacy settings.
      */
     backfill?: boolean;
     /**
-     * The desired CRM state for the team.
+     * Legacy compatibility flag. True is a no-op; false is rejected.
      */
     enabled: boolean;
 };
 
 /**
- * Response for `PATCH /team/crm`. Reports both the resulting state
- * and whether this call changed it; for the enable-flip case it also
- * reports the backfill fan-out tallies.
+ * Compatibility response for `PATCH /team/crm`. CRM records are always
+ * available; this endpoint does not enroll mailboxes or backfill emails.
  */
 export type PatchTeamCrmSettingsResponse = {
     /**
-     * Number of members for whom a `PopulateCrmForUser` message was
-     * enqueued. Non-zero only on a disabled → enabled transition;
-     * per-user enqueue failures are logged and swallowed.
+     * Always zero: mailbox contributions require individual consent.
      */
     backfill_enqueued: number;
     /**
-     * Number of members whose enqueue failed (and was swallowed).
-     * Non-zero only on a disabled → enabled transition.
+     * Always zero: this endpoint does not enqueue backfills.
      */
     backfill_failed: number;
     /**
-     * True if this call flipped the value (false → true or true →
-     * false). False if the team was already at the requested state.
+     * Always false: the legacy command does not change availability.
      */
     changed: boolean;
     /**
-     * The resulting `crm_enabled` value after the call.
+     * Always true: CRM records are available to team members.
      */
     enabled: boolean;
 };
@@ -1723,7 +1754,13 @@ export type Persona = {
     config: {
         [key: string]: string;
     };
+    /**
+     * Service installed for the persona.
+     */
     extra_service: PersonaService;
+    /**
+     * Display name.
+     */
     name: string;
     /**
      * Linux user created for the persona; its service runs as this user.
@@ -1824,6 +1861,9 @@ export type PostGetNamesRequestBody = {
  * Body of a power change.
  */
 export type PowerBody = {
+    /**
+     * Requested power state.
+     */
     on: boolean;
 };
 
@@ -1874,6 +1914,9 @@ export type PurchaseBilling = {
     kind: 'stripe';
 } | {
     kind: 'comped';
+    /**
+     * Reason for this decision or failure.
+     */
     reason: string;
 };
 
@@ -1881,7 +1924,13 @@ export type PurchaseBilling = {
  * Body of a team purchase.
  */
 export type PurchaseBody = {
+    /**
+     * Display name.
+     */
     name?: string | null;
+    /**
+     * Purchased catalog size.
+     */
     size: ComputerSize;
 };
 
@@ -1889,6 +1938,9 @@ export type PurchaseBody = {
  * Answer of a purchase.
  */
 export type Purchased = {
+    /**
+     * Computer this operation addresses.
+     */
     computerId: string;
 };
 
@@ -1955,9 +2007,21 @@ export type Quote = {
      * In the currency's smallest unit.
      */
     amount: number;
+    /**
+     * Billing currency code.
+     */
     currency: string;
+    /**
+     * Subscription billing interval.
+     */
     interval: BillingInterval;
+    /**
+     * Stripe price saved for billing replay.
+     */
     priceId: string;
+    /**
+     * Purchased catalog size.
+     */
     size: ComputerSize;
 };
 
@@ -2157,8 +2221,7 @@ export type SetGithubPullRequestStateResponse = {
 };
 
 /**
- * Setup progress, for the invite flow to show
- * (`hosted_runtimes::SetupProgress`).
+ * Setup progress, for invite and purchase flows to show.
  */
 export type SetupProgress = {
     /**
@@ -2166,33 +2229,55 @@ export type SetupProgress = {
      */
     position: number;
     /**
-     * The current step.
+     * Current setup stage.
      */
     step: SetupStep;
     /**
-     * Number of steps.
+     * Number of setup stages.
      */
     total: number;
 };
 
 /**
- * Steps a new computer goes through, in order (`hosted_runtimes::SetupStep`).
+ * Steps a new computer goes through, in order.
  */
-export type SetupStep = 'paying' | 'creating' | 'booting' | 'connecting' | 'ready';
+export type SetupStep = 'creating' | 'booting' | 'connecting' | 'ready';
 
 /**
  * A size with its resources, price and whether it can be bought now.
  */
 export type SizeOffer = {
+    /**
+     * Whether no host has both sold units and awake reservations for a persona.
+     */
+    alwaysOnSoldOut: boolean;
+    /**
+     * Root disk size in GiB.
+     */
     diskGb: number;
+    /**
+     * Memory in GiB.
+     */
     memoryGb: number;
     /**
      * The caller asked to hear when this size is back.
      */
     notifyRequested: boolean;
+    /**
+     * Price for one computer.
+     */
     quote: Quote;
+    /**
+     * Purchased catalog size.
+     */
     size: ComputerSize;
+    /**
+     * Whether no host can currently sell this size.
+     */
     soldOut: boolean;
+    /**
+     * Virtual CPU count.
+     */
     vcpus: number;
 };
 
@@ -2315,6 +2400,9 @@ export type SubscriptionBillingLineKind = 'human_seat' | 'agent_seat' | 'compute
  * A Stripe price and how many of it to add to the team subscription.
  */
 export type SubscriptionItem = {
+    /**
+     * Stripe price saved for billing replay.
+     */
     priceId: string;
     /**
      * Added to the item's current quantity.
@@ -2406,8 +2494,8 @@ export type Team = {
      */
     auto_join_domain?: string | null;
     /**
-     * Whether the CRM is enabled for this team (from `team_crm_settings`;
-     * `false` when no row exists).
+     * CRM record availability, always true for teams. This compatibility
+     * field does not indicate whether any mailbox contributes emails.
      */
     crm_enabled: boolean;
     default_link_share?: null | LinkShare;
@@ -3004,11 +3092,6 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
-
-/**
- * A recorded resource quantity.
- */
-export type Vcpus = number;
 
 export type DeleteAgentApiKeyData = {
     body?: never;
@@ -3922,7 +4005,13 @@ export type InternalQuoteComputerData = {
     body?: never;
     path?: never;
     query: {
+        /**
+         * Team that owns the computer.
+         */
         teamId: string;
+        /**
+         * Purchased catalog size.
+         */
         size: ComputerSize;
     };
     url: '/internal/computers/quote';
@@ -3946,6 +4035,9 @@ export type InternalGetComputerData = {
         computer_id: string;
     };
     query: {
+        /**
+         * Team that owns the computer.
+         */
         teamId: string;
     };
     url: '/internal/computers/{computer_id}';
@@ -4865,6 +4957,9 @@ export type QuoteTeamComputerData = {
     body?: never;
     path?: never;
     query: {
+        /**
+         * Purchased catalog size.
+         */
         size: ComputerSize;
     };
     url: '/team/computers/quote';

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { ComputerSize, SizeOffer } from '@service-auth/computers';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
@@ -30,8 +31,10 @@ export function ComputerSizePicker(props: {
               <Show
                 when={offer.soldOut}
                 fallback={
-                  <span class="text-sm font-medium text-ink">
-                    {formatQuote(offer.quote)}
+                  <span class="whitespace-nowrap text-sm font-medium tabular-nums text-ink">
+                    {offer.quote.amount === 0
+                      ? t('agentInvite.included')
+                      : formatQuote(offer.quote)}
                   </span>
                 }
               >

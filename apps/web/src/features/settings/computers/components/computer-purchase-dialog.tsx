@@ -1,8 +1,9 @@
+import { t } from '@app/lib/i18n';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Button, Dialog, Input } from '@ui';
 import { createSignal, createUniqueId, Show } from 'solid-js';
-import { match } from 'ts-pattern';
+import { PriceBreakdown } from '../../components/price-breakdown';
 import { formatQuote, offerSpecs, sizeLabel } from '../core/computer-display';
 
 /** Confirms the exact price before a computer is added to the subscription. */
@@ -16,11 +17,7 @@ export function ComputerPurchaseDialog(props: {
   const nameId = createUniqueId();
   const [name, setName] = createSignal('');
   const price = () => formatQuote(props.offer.quote);
-  const renewal = () =>
-    match(props.offer.quote.interval)
-      .with('month', () => 'each month')
-      .with('year', () => 'each year')
-      .exhaustive((unknown) => `each ${unknown}`);
+  const included = () => props.offer.quote.amount === 0;
 
   const confirm = () => {
     if (props.pending) return;
@@ -36,33 +33,46 @@ export function ComputerPurchaseDialog(props: {
       visibleScrim
       class="w-[min(440px,calc(100vw-16px))]"
     >
-      <ActionDialogShell>
+      <ActionDialogShell class="h-auto">
         <ActionDialogShell.Body>
           <ActionDialogShell.Header>
             <ActionDialogShell.Title>
-              Buy a {sizeLabel(props.offer.size)} Macro computer?
+              {t('computers.purchaseTitle', {
+                size: sizeLabel(props.offer.size),
+              })}
             </ActionDialogShell.Title>
-            <ActionDialogShell.Description as="div" class="space-y-2">
-              <p>{offerSpecs(props.offer)}.</p>
-              <p>
-                <span class="font-medium text-ink">{price()}</span>, added to
-                your team's subscription today. You're charged a prorated amount
-                now for the rest of this billing period, then {price()}{' '}
-                {renewal()} with your subscription.
-              </p>
+            <ActionDialogShell.Description>
+              {t('settingsBilling.purchaseDescription')}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
 
+          <PriceBreakdown
+            currency={props.offer.quote.currency}
+            interval={props.offer.quote.interval}
+            total={props.offer.quote.amount}
+            included={included()}
+            items={[
+              {
+                name: t('settingsBilling.sizedComputer', {
+                  size: sizeLabel(props.offer.size),
+                }),
+                description: offerSpecs(props.offer),
+                amount: props.offer.quote.amount,
+                included: included(),
+              },
+            ]}
+          />
+
           <div class="flex flex-col gap-2">
             <label for={nameId} class="text-sm leading-5 text-ink-muted">
-              Name (optional)
+              {t('computers.nameOptional')}
             </label>
             <Input
               id={nameId}
               type="text"
               value={name()}
               maxLength={64}
-              placeholder="Build machine"
+              placeholder={t('computers.namePlaceholder')}
               disabled={props.pending}
               onInput={(event) => setName(event.currentTarget.value)}
               onKeyDown={(event) => {
@@ -87,7 +97,7 @@ export function ComputerPurchaseDialog(props: {
             disabled={props.pending}
             onClick={props.onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             type="button"
@@ -95,9 +105,16 @@ export function ComputerPurchaseDialog(props: {
             disabled={props.pending}
             onClick={confirm}
           >
-            <Show when={props.pending} fallback={`Buy for ${price()}`}>
+            <Show
+              when={props.pending}
+              fallback={
+                included()
+                  ? t('settingsBilling.buyIncluded')
+                  : t('settingsBilling.buyPriced', { price: price() })
+              }
+            >
               <SpinnerIcon class="size-4 animate-spin" />
-              <span class="sr-only">Buying</span>
+              <span class="sr-only">{t('computers.buying')}</span>
             </Show>
           </Button>
         </ActionDialogShell.Footer>

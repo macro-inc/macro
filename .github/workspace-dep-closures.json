@@ -9707,6 +9707,7 @@
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/entity_access",
+      "crates/feature_flags",
       "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
@@ -11668,6 +11669,9 @@
       "crates/macro_env_var",
       "crates/native_app_service",
       "crates/workspace-hack"
+    ],
+    "natural_time": [
+      "crates/natural_time"
     ],
     "non_empty": [
       "crates/non_empty"

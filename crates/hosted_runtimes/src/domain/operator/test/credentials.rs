@@ -23,6 +23,8 @@ async fn create_rotates_only_for_a_new_or_unclaimed_guest() {
                 .await
                 .unwrap()
                 .unwrap()
+                .into_healthy()
+                .unwrap()
                 .enrollment_generation,
             EnrollmentGeneration::new(1)
         );
@@ -64,6 +66,8 @@ async fn create_rotates_only_for_a_new_or_unclaimed_guest() {
                 .get(id)
                 .await
                 .unwrap()
+                .unwrap()
+                .into_healthy()
                 .unwrap()
                 .enrollment_generation,
             EnrollmentGeneration::new(1)
@@ -146,6 +150,8 @@ async fn instance_loss_advances_generation_and_revokes_the_previous_credentials(
             .await
             .unwrap()
             .unwrap()
+            .into_healthy()
+            .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(2)
     );
@@ -170,6 +176,8 @@ async fn instance_loss_advances_generation_and_revokes_the_previous_credentials(
             .get(id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(2)
@@ -212,6 +220,8 @@ async fn failed_fleet_creation_keeps_the_reserved_generation() {
             .await
             .unwrap()
             .unwrap()
+            .into_healthy()
+            .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(1)
     );
@@ -233,6 +243,8 @@ async fn failed_fleet_creation_keeps_the_reserved_generation() {
             .get(id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(1)
@@ -263,6 +275,8 @@ async fn a_lost_issuance_response_is_not_replayed_and_keeps_the_reserved_generat
             .get(id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(1)
@@ -297,7 +311,14 @@ async fn guest_loss_during_create_reserves_a_new_generation() {
         .lose_during_create
         .store(true, Ordering::SeqCst);
     operator.run_fleet_effects().await.unwrap();
-    let computer = operator.repo.get(id).await.unwrap().unwrap();
+    let computer = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(computer.enrollment_generation, EnrollmentGeneration::new(2));
     assert!(matches!(computer.state.phase, Phase::Provisioning { .. }));
     {
@@ -324,6 +345,8 @@ async fn guest_loss_during_create_reserves_a_new_generation() {
             .await
             .unwrap()
             .unwrap()
+            .into_healthy()
+            .unwrap()
             .enrollment_generation,
         EnrollmentGeneration::new(2)
     );
@@ -341,7 +364,7 @@ proptest::proptest! {
             let mut effects: Vec<Effect> = Vec::new();
             let mut claimed_generations = std::collections::BTreeSet::new();
             for step in steps {
-                let computer = operator.repo.get(id).await.unwrap().unwrap();
+                let computer = operator.repo.get(id).await.unwrap().unwrap().into_healthy().unwrap();
                 match step {
                     0 => {
                         // A claim belongs to the current extant guest, not a future recreate.

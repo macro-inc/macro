@@ -25,11 +25,12 @@ async fn personal_sync_preserves_the_manually_selected_company(pool: PgPool) -> 
     seed_team(&pool, team, OWNER).await?;
     enable_crm_for_team(&pool, team).await?;
     let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team, link).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let_personal_emails_in(&repo, team).await;
     let email = personal("contact");
-    populate(&service, team, link, &email, true).await;
+    populate(&pool, &service, team, link, &email, true).await;
     let contact = repo
         .get_contact_by_email_for_team(&team, &email, true)
         .await?
@@ -43,7 +44,7 @@ async fn personal_sync_preserves_the_manually_selected_company(pool: PgPool) -> 
     )
     .await?;
     for sent in [true, false] {
-        populate(&service, team, link, &email, sent).await;
+        populate(&pool, &service, team, link, &email, sent).await;
         let count = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM crm_contacts WHERE team_id = $1 AND LOWER(email) = $2",
             team,
@@ -100,6 +101,7 @@ async fn let_personal_emails_in(repo: &CompaniesRepositoryImpl, team_id: Uuid) {
 }
 
 async fn populate(
+    pool: &PgPool,
     service: &CrmServiceImpl<CompaniesRepositoryImpl, NoOpCompanyMetadataResolver>,
     team_id: Uuid,
     link_id: Uuid,
@@ -107,11 +109,14 @@ async fn populate(
     is_sent: bool,
 ) {
     let now = Utc::now();
+    insert_interaction(pool, link_id, &email.to_ascii_lowercase(), now, is_sent)
+        .await
+        .unwrap();
     service
         .populate_contact(
             &team_id,
             &link_id,
-            "user@macro.com",
+            "owner@example.com",
             email,
             Some("Jane"),
             now - Duration::days(1),
@@ -127,7 +132,8 @@ async fn personal_emails_stay_out_by_default(pool: PgPool) -> anyhow::Result<()>
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, OWNER).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, OWNER, "user@macro.com").await?;
+    let link_id = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team_id, link_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
 
@@ -136,7 +142,7 @@ async fn personal_emails_stay_out_by_default(pool: PgPool) -> anyhow::Result<()>
             .await?
             .exclude_personal_emails
     );
-    populate(&service, team_id, link_id, &personal("jane"), true).await;
+    populate(&pool, &service, team_id, link_id, &personal("jane"), true).await;
 
     assert!(unfiled_contacts(&pool, team_id).await?.is_empty());
     assert_eq!(
@@ -151,15 +157,17 @@ async fn personal_emails_file_without_a_company_when_let_in(pool: PgPool) -> any
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, OWNER).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, OWNER, "user@macro.com").await?;
+    let link_id = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team_id, link_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let_personal_emails_in(&repo, team_id).await;
 
     // Received mail never creates a contact; sent mail does, once.
-    populate(&service, team_id, link_id, &personal("jane"), false).await;
+    populate(&pool, &service, team_id, link_id, &personal("jane"), false).await;
     assert!(unfiled_contacts(&pool, team_id).await?.is_empty());
     populate(
+        &pool,
         &service,
         team_id,
         link_id,
@@ -167,10 +175,18 @@ async fn personal_emails_file_without_a_company_when_let_in(pool: PgPool) -> any
         true,
     )
     .await;
-    populate(&service, team_id, link_id, &personal("jane"), true).await;
-    populate(&service, team_id, link_id, &personal("jane"), false).await;
+    populate(&pool, &service, team_id, link_id, &personal("jane"), true).await;
+    populate(&pool, &service, team_id, link_id, &personal("jane"), false).await;
     // Vendor domains stay out even when personal emails are let in.
-    populate(&service, team_id, link_id, "billing@vendor.example", true).await;
+    populate(
+        &pool,
+        &service,
+        team_id,
+        link_id,
+        "billing@vendor.example",
+        true,
+    )
+    .await;
 
     assert_eq!(
         unfiled_contacts(&pool, team_id).await?,
@@ -200,11 +216,12 @@ async fn link_teardown_removes_synced_unfiled_contacts(pool: PgPool) -> anyhow::
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, OWNER).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, OWNER, "user@macro.com").await?;
+    let link_id = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team_id, link_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let_personal_emails_in(&repo, team_id).await;
-    populate(&service, team_id, link_id, &personal("jane"), true).await;
+    populate(&pool, &service, team_id, link_id, &personal("jane"), true).await;
     repo.create_contact_for_team(
         &team_id,
         Some(personal("john").as_str()),
@@ -229,13 +246,6 @@ async fn create_contact_for_team_without_company(pool: PgPool) -> anyhow::Result
     seed_team(&pool, team_id, OWNER).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
 
-    let err = repo
-        .create_contact_for_team(&team_id, None, "Jane", Utc::now())
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CrmError::CrmDisabledForTeam));
-
-    enable_crm_for_team(&pool, team_id).await?;
     for name in ["Jane", "John"] {
         let contact = repo
             .create_contact_for_team(&team_id, None, name, Utc::now())
@@ -279,15 +289,19 @@ async fn create_contact_for_team_without_company(pool: PgPool) -> anyhow::Result
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_shared_personal_provider_is_not_the_users_company(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, OWNER).await?;
-    enable_crm_for_team(&pool, team_id).await?;
     let mailbox = personal("me");
-    let link_id = insert_email_link(&pool, OWNER, &mailbox).await?;
+    let owner = format!("macro|{mailbox}");
+    let owner = owner.as_str();
+    seed_team(&pool, team_id, owner).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner, &mailbox).await?;
+    consent_to_mailbox(&pool, team_id, link_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let_personal_emails_in(&repo, team_id).await;
 
     let now = Utc::now();
+    insert_interaction(&pool, link_id, &personal("jane"), now, true).await?;
     service
         .populate_contact(
             &team_id,
@@ -344,6 +358,7 @@ async fn assigned_personal_sync_keeps_admission_archive_and_team_boundaries(
     seed_team(&pool, team, OWNER).await?;
     enable_crm_for_team(&pool, team).await?;
     let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team, link).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let_personal_emails_in(&repo, team).await;
@@ -359,7 +374,15 @@ async fn assigned_personal_sync_keeps_admission_archive_and_team_boundaries(
     let foreign_contact = repo
         .create_contact_for_team(&foreign, Some(&email), "Other", Utc::now())
         .await?;
-    for company in [first, second] {
+    for (index, company) in [first, second].into_iter().enumerate() {
+        let before = repo
+            .get_contact_for_team(&team, &contact.id, true)
+            .await?
+            .unwrap();
+        let past = contact.first_interaction - Duration::days(10 + index as i64);
+        let future = contact.last_interaction + Duration::days(10 + index as i64);
+        insert_interaction(&pool, link, &email, past, true).await?;
+        insert_interaction(&pool, link, &email, future, false).await?;
         repo.update_contact(
             &team,
             &contact.id,
@@ -388,18 +411,26 @@ async fn assigned_personal_sync_keeps_admission_archive_and_team_boundaries(
             assert_eq!(current.name.as_deref(), Some("Manual name"));
             assert_eq!(
                 current.last_interaction,
-                contact.last_interaction + Duration::days(10)
+                if company == first {
+                    future
+                } else {
+                    before.last_interaction
+                }
             );
             if sent {
                 assert_eq!(
                     current.first_interaction,
-                    contact.first_interaction - Duration::days(10)
+                    if company == first {
+                        past
+                    } else {
+                        before.first_interaction
+                    }
                 );
             }
         }
     }
     repo.set_company_hidden(&team, &second, true).await?;
-    populate(&service, team, link, &email, true).await;
+    populate(&pool, &service, team, link, &email, true).await;
     assert!(
         repo.get_contact_for_team(&team, &contact.id, true)
             .await?
@@ -418,7 +449,7 @@ async fn assigned_personal_sync_keeps_admission_archive_and_team_boundaries(
         .get_contact_for_team(&team, &contact.id, true)
         .await?
         .unwrap();
-    for gate in ["personal", "blocked", "disabled"] {
+    for gate in ["personal", "blocked", "withdrawn"] {
         match gate {
             "personal" => {
                 repo.update_team_settings(
@@ -436,11 +467,15 @@ async fn assigned_personal_sync_keeps_admission_archive_and_team_boundaries(
             }
             _ => {
                 repo.unblock_domain(&team, PERSONAL_DOMAIN).await?;
-                sqlx::query!(
-                    "UPDATE team_crm_settings SET crm_enabled = FALSE WHERE team_id = $1",
-                    team
+                use crate::domain::email_privacy::{EmailPrivacyChange, EmailPrivacyRepository};
+                repo.change_email_privacy(
+                    team,
+                    OWNER,
+                    EmailPrivacyChange::SetConsent {
+                        enabled: false,
+                        link_id: Some(link),
+                    },
                 )
-                .execute(&pool)
                 .await?;
             }
         }
@@ -496,6 +531,7 @@ async fn ambiguous_personal_matches_are_never_selected_by_sync_or_cleanup(
     seed_team(&pool, team, OWNER).await?;
     enable_crm_for_team(&pool, team).await?;
     let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team, link).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let_personal_emails_in(&repo, team).await;
@@ -507,7 +543,7 @@ async fn ambiguous_personal_matches_are_never_selected_by_sync_or_cleanup(
     let assigned = insert_contact_with_source(&pool, company, &email, link).await?;
     repo.set_contact_hidden(&team, &assigned, true).await?;
     for sent in [false, true] {
-        populate(&service, team, link, &email, sent).await;
+        populate(&pool, &service, team, link, &email, sent).await;
     }
     assert_eq!(
         repo.get_contact_for_team(&team, &standalone.id, true)
@@ -554,6 +590,7 @@ async fn assigned_personal_population_locks_parent_before_bulk_cleanup(
     seed_team(&pool, team, OWNER).await?;
     enable_crm_for_team(&pool, team).await?;
     let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team, link).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let_personal_emails_in(&repo, team).await;
     let email = personal("contact");
@@ -572,6 +609,7 @@ async fn assigned_personal_population_locks_parent_before_bulk_cleanup(
     let mut gated = repo.clone();
     gated.after_personal_company = Some(gate.clone());
     let service = CrmServiceImpl::new(gated, NoOpCompanyMetadataResolver);
+    insert_interaction(&pool, link, &email, Utc::now(), true).await?;
     let sync = tokio::spawn(async move {
         service
             .populate_contact(
@@ -639,6 +677,7 @@ async fn personal_switch_survives_cleanup_after_admission_is_disabled(
     seed_team(&pool, team, OWNER).await?;
     enable_crm_for_team(&pool, team).await?;
     let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team, link).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let_personal_emails_in(&repo, team).await;
     let email = personal("contact");
@@ -655,7 +694,7 @@ async fn personal_switch_survives_cleanup_after_admission_is_disabled(
     )
     .await?;
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
-    populate(&service, team, link, &email, true).await;
+    populate(&pool, &service, team, link, &email, true).await;
     repo.update_team_settings(
         &team,
         &CrmTeamSettingsPatch {

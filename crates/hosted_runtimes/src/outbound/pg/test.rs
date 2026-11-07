@@ -1,7 +1,17 @@
+mod quarantine;
+mod redeploy;
+
+mod boot;
+
 use chrono::{Duration, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+use crate::domain::models::ComputerName;
+use crate::domain::size::{DiskGib, MemoryGib, Vcpus};
+
+mod purchase;
 
 const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00aa);
 
@@ -54,7 +64,7 @@ fn standard(id: u128) -> NewComputer {
             .unwrap(),
         price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
         persona: None,
-        created_by: "macro|owner@example.com".to_owned(),
+        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
     }
 }
 
@@ -84,7 +94,7 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
 
     assert!(matches!(tenth, Err(ReserveError::SoldOut)));
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+        repo.sold_out_sizes(&crate::domain::size::current_catalog(), false)
             .await
             .unwrap(),
         vec![
@@ -258,17 +268,17 @@ async fn a_replaced_timer_does_not_fire(pool: PgPool) {
 
     let mut stale = due[0].clone();
     stale.fire_at -= Duration::seconds(1);
-    assert_eq!(repo.fire_timer(stale, now()).await.unwrap(), None);
+    assert_eq!(repo.fire_timer(stale, None, now()).await.unwrap(), None);
 
     let crashed = repo
-        .fire_timer(due[0].clone(), now() + Duration::hours(1))
+        .fire_timer(due[0].clone(), None, now() + Duration::hours(1))
         .await
         .unwrap()
         .unwrap();
     assert!(matches!(crashed.state.phase, Phase::Restarting { .. }));
     assert_eq!(repo.list_for_team(TEAM).await.unwrap().len(), 1);
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+        repo.sold_out_sizes(&crate::domain::size::current_catalog(), false)
             .await
             .unwrap(),
         vec![]
@@ -302,7 +312,7 @@ async fn lifecycle_selectors_read_the_nested_phase_tag(pool: PgPool) {
             .await
             .unwrap()
             .iter()
-            .map(|c| c.id)
+            .map(|c| c.id())
             .collect::<Vec<_>>(),
         vec![id]
     );
@@ -530,14 +540,16 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
             .get(ComputerId::new_from_uuid(Uuid::from_u128(id)))
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap();
         assert_eq!(computer.state.payment, expected);
-        assert_eq!(computer.status().payment, expected);
+        assert_eq!(computer.status().payment.unwrap(), expected);
     }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
+async fn comped_reservation_commits_provisioning_without_payment_recovery(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool);
     repo.register_host(HostRegistration {
@@ -554,24 +566,33 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
         reason: "internal team".to_owned(),
     };
     let reserved = repo.reserve(request, now()).await.unwrap();
-    let pending = repo.get(reserved.id).await.unwrap().unwrap();
-    assert_eq!(
-        pending.state.payment,
-        crate::domain::lifecycle::PaymentOutcome::Pending
-    );
-    assert_eq!(pending.state.comp_reason.as_deref(), Some("internal team"));
-    assert_eq!(pending.price_id, None);
+    assert!(matches!(reserved.state.phase, Phase::Provisioning { .. }));
+    assert_eq!(reserved.price_id, None);
     let comped = repo
-        .apply(
-            reserved.id,
-            Event::Comped {
-                reason: "internal team".to_owned(),
-            },
-            now(),
+        .get(reserved.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert!(matches!(comped.state.phase, Phase::Provisioning { .. }));
+    assert!(
+        repo.lease_effects(
+            EffectWorker::Billing,
+            10,
+            now() + Duration::days(1),
+            now() + Duration::days(2),
         )
         .await
         .unwrap()
+        .is_empty()
+    );
+    let effects = repo
+        .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
+        .await
         .unwrap();
+    assert_eq!(effects.len(), 1);
+    assert!(matches!(effects[0].effect, Effect::Create { .. }));
     assert_eq!(
         comped.state.payment,
         crate::domain::lifecycle::PaymentOutcome::Comped
@@ -580,6 +601,8 @@ async fn comped_intent_survives_reservation_and_payment_recovery(pool: PgPool) {
         repo.get(reserved.id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .status()
             .comp_reason
@@ -611,6 +634,8 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
         .get(ComputerId::new_from_uuid(Uuid::from_u128(50)))
         .await
         .unwrap()
+        .unwrap()
+        .into_healthy()
         .unwrap();
     assert_eq!(stored.size, ComputerSize::Standard);
     assert_eq!(
@@ -624,7 +649,7 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
     assert_eq!(stored.catalog_entry.as_str(), "standard@2026-11");
     assert_eq!(stored.price_id.unwrap().as_str(), "price_standard");
     assert_eq!(
-        repo.sold_out_sizes(&crate::domain::size::current_catalog())
+        repo.sold_out_sizes(&crate::domain::size::current_catalog(), false)
             .await
             .unwrap(),
         vec![ComputerSize::Large, ComputerSize::Xl]
@@ -649,7 +674,7 @@ async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
     .await
     .unwrap();
     let mut request = standard(70);
-    request.created_by = "macro|missing@example.com".to_owned();
+    request.created_by = MacroUserIdStr::try_from("macro|missing@example.com".to_owned()).unwrap();
     let error = repo.reserve(request, now()).await.unwrap_err();
     let ReserveError::Storage(PgComputerError::Sqlx(sqlx::Error::Database(error))) = error else {
         panic!("expected a database foreign key error, got {error:?}");
@@ -659,3 +684,6 @@ async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
 }
 
 mod credentials;
+
+mod capacity;
+mod waiting;

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { For, Show } from 'solid-js';
 import { SettingsCard } from '../../primitives';
 import {
@@ -19,7 +20,7 @@ export function BillingComputers() {
         tabIndex={-1}
         class="flex scroll-mt-4 flex-col gap-4 outline-none"
       >
-        <h2 class="text-base font-medium text-ink">Macro computers</h2>
+        <h2 class="text-base font-medium text-ink">{t('computers.title')}</h2>
         <SettingsCard>
           <For each={computers()}>
             {(computer) => (
@@ -34,7 +35,15 @@ export function BillingComputers() {
                     {' · '}
                     {computerSpecs(computer)}
                     <Show when={computer.cancelsAt}>
-                      {(at) => <> · Cancels {formatComputerDate(at())}</>}
+                      {(at) => (
+                        <>
+                          {' '}
+                          ·{' '}
+                          {t('computers.cancels', {
+                            date: formatComputerDate(at()),
+                          })}
+                        </>
+                      )}
                     </Show>
                   </p>
                 </div>
@@ -43,13 +52,12 @@ export function BillingComputers() {
           </For>
           <Show when={failed()}>
             <p class="px-4 py-3 text-xs text-negative">
-              Could not load your team's computers. Try refreshing this page.
+              {t('computers.loadFailed')}
             </p>
           </Show>
         </SettingsCard>
         <p class="px-4 text-xs text-ink-extra-muted">
-          Computers are billed on your team subscription. Manage them in
-          Settings → Runtimes.
+          {t('computers.billingHint')}
         </p>
       </section>
     </Show>

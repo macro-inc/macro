@@ -7990,7 +7990,7 @@
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
-        "summary": "Toggle `email_sync` on a CRM company. Purely a visibility flag —\nit gates whether team members can see each other's emails with\nthis company. Existing CRM data is unaffected.",
+        "summary": "Toggle email contribution for a CRM company without archiving its records.\nIndividual consent and all remaining exclusions still apply.",
         "operationId": "set_email_sync",
         "parameters": [
           {
@@ -8791,6 +8791,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/email-privacy": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::email_privacy"],
+        "summary": "Read the caller's mailbox consent and both exclusion lists.",
+        "operationId": "get_crm_email_privacy",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPrivacySettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::axum_router::email_privacy"],
+        "summary": "Apply one consent or domain-exclusion change as the authenticated member.",
+        "operationId": "update_crm_email_privacy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailPrivacyChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPrivacySettings"
                 }
               }
             }
@@ -32835,7 +32881,7 @@
       },
       "CrmTeamSettingsResponse": {
         "type": "object",
-        "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH /team/crm` on the auth service).",
+        "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `/crm/email-privacy`.",
         "required": [
           "edit_stages_role",
           "move_closed_deals_role",
@@ -37581,6 +37627,11 @@
         ],
         "description": "One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options."
       },
+      "EmailBlockScope": {
+        "type": "string",
+        "description": "The audience affected by a domain exclusion.",
+        "enum": ["team", "personal"]
+      },
       "EmailFilters": {
         "type": "object",
         "description": "The email filters used to filter down what emails you search over.",
@@ -37806,6 +37857,112 @@
                 "description": "Most recent specialized follow-up, if any."
               }
             ]
+          }
+        }
+      },
+      "EmailPrivacyChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Consent covers all available past and future emails in the primary mailbox.",
+            "required": ["enabled", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["set_consent"]
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "False withdraws this mailbox's CRM contribution without deleting records."
+              },
+              "link_id": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Required when enabling; must match the displayed primary connection."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Add a domain and its subdomains to an exclusion list.",
+            "required": ["scope", "domain", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["add_domain"]
+              },
+              "domain": {
+                "type": "string",
+                "description": "Bare company domain."
+              },
+              "scope": {
+                "$ref": "#/components/schemas/EmailBlockScope",
+                "description": "Which contributions the exclusion affects."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Remove an exclusion; other exclusions still apply.",
+            "required": ["scope", "domain", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["remove_domain"]
+              },
+              "domain": {
+                "type": "string",
+                "description": "Bare company domain."
+              },
+              "scope": {
+                "$ref": "#/components/schemas/EmailBlockScope",
+                "description": "Which list to edit."
+              }
+            }
+          }
+        ],
+        "description": "One explicit privacy change, avoiding lost updates to whole blocklists."
+      },
+      "EmailPrivacySettings": {
+        "type": "object",
+        "description": "Current consent and exclusions, readable by any team member.",
+        "required": [
+          "enabled",
+          "team_domains",
+          "personal_domains",
+          "can_remove_team_domains"
+        ],
+        "properties": {
+          "can_remove_team_domains": {
+            "type": "boolean",
+            "description": "Whether the caller can remove a team exclusion."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this exact mailbox has explicit contribution consent."
+          },
+          "mailbox_email": {
+            "type": ["string", "null"],
+            "description": "The primary mailbox that would contribute; absent before email connection."
+          },
+          "mailbox_link_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exact current primary connection; clients bind opt-in to this identifier."
+          },
+          "personal_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Domains excluded only for the caller's contributions."
+          },
+          "team_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Domains excluded across the team, including legacy company exclusions."
           }
         }
       },
@@ -50031,7 +50188,7 @@
         "properties": {
           "email_sync": {
             "type": "boolean",
-            "description": "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
+            "description": "Allow eligible email contributions for this company's domains.\nDisabling excludes new ingestion and CRM thread access while preserving\nrecords. Re-enabling requires an admin, removes exact team exclusions,\nand schedules backfill only for explicitly consenting primary mailboxes.\nPersonal and broader team exclusions continue to apply."
           }
         }
       },
@@ -52900,11 +53057,34 @@
             "description": "A1 address, from A1 through XFD100000."
           },
           "value": {
-            "type": "string",
-            "description": "Raw text or formula, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}</m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}</m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}</m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal."
+            "$ref": "#/components/schemas/SpreadsheetCellValue",
+            "description": "The new input: text or a formula, a number, true/false, or null to empty the cell."
           }
         },
         "additionalProperties": false
+      },
+      "SpreadsheetCellValue": {
+        "oneOf": [
+          {
+            "type": "boolean",
+            "description": "TRUE or FALSE."
+          },
+          {
+            "type": "number",
+            "format": "double",
+            "description": "A number, passed to the engine exactly as written."
+          },
+          {
+            "type": "string",
+            "description": "Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}</m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}</m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}</m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal."
+          },
+          {
+            "type": "null",
+            "description": "Empties the cell's input; formatting stays.",
+            "default": null
+          }
+        ],
+        "description": "A cell's new input, typed as the caller has it."
       },
       "SpreadsheetChange": {
         "type": "object",

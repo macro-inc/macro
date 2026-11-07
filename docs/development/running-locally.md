@@ -487,11 +487,14 @@ Brains use a separate local-only HTTP listener on the same Caddy proxy:
 `http://proxy:<ComputerGateway port>` inside Docker. Only host loopback publishes
 this port, for Incus reverse tunnels; the browser keeps its HTTPS origin. This
 avoids guest host-DNS entries, importing the local TLS CA, or bypassing TLS.
-`COMPUTERS_SERVICE_URL_OVERRIDES` carries the computer-facing API gateway, git
-and Anthropic egress URLs as well as macrod's service URLs. Authentication reads
-the same map for persona bootstrap and advertises a computer-reachable git remote
-instead of its internal create/delete API address. Regenerate the instance env
-and Compose config after changing fleets or updating these URL mappings.
+The launcher emits canonical `OVERRIDE_*` values for the computer-facing API,
+git, Anthropic egress and all seven brain service endpoints. Authentication
+resolves typed values on every enrollment and delivers them transiently, rather
+than persisting addresses on the persona or parsing a second JSON URL map.
+`OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL` uses `ws(s)`;
+`OVERRIDE_MCP_SERVICE_URL` is a service base (the consumer appends `/mcp`).
+Regenerate the instance env and Compose config after changing fleets or URL
+mappings. A recreate consumes the current deployment addresses and fresh credentials.
 
 ### Incus on runtime-dev-1
 
