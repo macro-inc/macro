@@ -76,6 +76,7 @@ function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
     .with('CALL_RECORD', () => 'Calls')
     .with('CHANNEL', () => 'Channels')
     .with('GITHUB', () => 'GitHub')
+    .with('WEBHOOK', () => 'Webhooks')
     .exhaustive();
 }
 
@@ -102,6 +103,7 @@ function scopeFieldLabel(trigger: EventTriggerDraft) {
     .with('CHANNEL', () => 'Which channels')
     .with('CALL_RECORD', () => 'Which calls')
     .with('GITHUB', () => 'Repositories')
+    .with('WEBHOOK', () => 'URL')
     .exhaustive();
 }
 

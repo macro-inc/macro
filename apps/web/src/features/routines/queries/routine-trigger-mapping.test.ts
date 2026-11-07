@@ -430,3 +430,39 @@ describe('task property selectors', () => {
     expect(taskTriggerProperty(trigger)).toBeUndefined();
   });
 });
+
+describe('webhook triggers', () => {
+  it('sends a webhook trigger with its JSON body tests and reads it back', () => {
+    const trigger = {
+      id: 'w',
+      kind: 'event' as const,
+      events: ['webhook' as const],
+      match: [{ path: 'status', op: 'equals' as const, value: 'failed' }],
+      condition: 'Is this alert about production?',
+    };
+
+    const serialized = serializeTriggers([trigger]);
+
+    expect(serialized).toEqual({
+      type: 'events',
+      filters: [
+        {
+          events: ['webhook'],
+          match: [{ path: ['status'], equals: 'failed' }],
+          condition: 'Is this alert about production?',
+        },
+      ],
+    });
+    expect(parseRoutineTriggers(serialized)).toEqual([
+      {
+        ...trigger,
+        id: expect.any(String),
+        ids: undefined,
+        github: undefined,
+        property: undefined,
+      },
+    ]);
+    expect(eventTriggerLabel(trigger)).toBe('Webhook received');
+    expect(validateTriggers([trigger], true)).toBeNull();
+  });
+});

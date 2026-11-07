@@ -54,6 +54,7 @@ export function routineSections(props: {
           layout="rows"
           triggers={triggers()}
           onChange={setTriggers}
+          routineId={props.draft()?.id}
         />
       </Show>
     ),
@@ -63,6 +64,7 @@ export function routineSections(props: {
           layout="add"
           triggers={triggers()}
           onChange={setTriggers}
+          routineId={props.draft()?.id}
         />
       </Show>
     ),

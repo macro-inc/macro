@@ -575,6 +575,18 @@ describe('promptOrigin', () => {
       tail: '· GitHub workflow_run completed in macro-inc/macro',
       destination: { kind: 'routine', routineId: 'r-2' },
     });
+
+    expect(
+      routine({
+        type: 'event',
+        event: { event: 'webhook', request: { body: 'Deploy failed' } },
+      })
+    ).toEqual({
+      lead: 'via routine',
+      place: 'Watcher',
+      tail: '· webhook',
+      destination: { kind: 'routine', routineId: 'r-2' },
+    });
   });
 
   it('is undefined when the context names no trigger', () => {

@@ -23,6 +23,8 @@ export type RoutineEditorSlots = {
   Triggers: Component<{
     triggers: RoutineTriggerDraft[];
     onChange(triggers: RoutineTriggerDraft[]): void;
+    /** The saved routine's id; absent while it is a new routine's draft. */
+    routineId?: string;
     /** `rows` for the routine page's When card; inline tokens otherwise. */
     layout?: 'rows' | 'add';
   }>;

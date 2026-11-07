@@ -4,6 +4,7 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FileIcon from '@icon/system/regular/file-text.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
+import LinkIcon from '@icon/system/regular/link-simple.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import type { Component } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -21,6 +22,7 @@ export const TRIGGER_GROUP_ICONS: Record<
   Documents: FileIcon,
   Calls: PhoneIcon,
   GitHub: GithubIcon,
+  Webhooks: LinkIcon,
 };
 
 /** The icon for a routine's first trigger, as the routines list shows it. */
@@ -36,6 +38,7 @@ export function triggerKindIcon(
       .with('channel', () => 'Channels')
       .with('call', () => 'Calls')
       .with('github', () => 'GitHub')
+      .with('webhook', () => 'Webhooks')
       .with('schedule', undefined, () => 'Schedule')
       .exhaustive()
   ];
