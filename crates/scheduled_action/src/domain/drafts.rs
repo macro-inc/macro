@@ -839,7 +839,7 @@ You are setting up this routine for {owner}, with their access; they review the 
 
 3. Never do the routine's own work now. It does its work each time it runs. \"Every Monday make a task\" makes no task today; \"when an email arrives, reply\" sends nothing; \"post the weekly summary\" posts nothing. Don't run, test or create the routine itself.
 
-4. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}` for events, where `entities` holds the watched items as references such as `{{type: 'channel', entity: channel}}` (a handle, not an id; read `RoutineEventFilter`), `{{type: 'cron', schedule, timezone: '{timezone}'}}` for a repeating schedule (six fields: second minute hour day month weekday), `{{type: 'once', at}}` for a single run. {conditions} Events:
+4. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}` for events, where `entities` holds the watched items as references such as `{{type: 'channel', entity: channel}}` (a handle, not an id; read `RoutineEventFilter`), `{{type: 'cron', schedule, timezone: '{timezone}'}}` for a repeating schedule (six fields: second minute hour day month weekday; name weekdays MON-SUN, since weekday numbers start at 1 = Sunday), `{{type: 'once', at}}` for a single run. {conditions} Events:
 {events}
 
 {steps}

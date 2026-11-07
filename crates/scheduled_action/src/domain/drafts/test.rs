@@ -908,6 +908,8 @@ async fn a_weekly_task_draft_creates_no_task() {
         &rows,
         Box::new(|prompt| {
             assert!(prompt.contains("makes no task today"), "{prompt}");
+            // Weekday numbers start at 1 = Sunday; names can't be misread.
+            assert!(prompt.contains("name weekdays MON-SUN"), "{prompt}");
             vec![plain(configuration(
                 "Monday task",
                 json!({ "type": "cron", "schedule": "0 0 9 * * MON", "timezone": "America/New_York" }),
