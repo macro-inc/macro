@@ -22,6 +22,7 @@ fn falsy_string_as_none<'de, D: serde::Deserializer<'de>>(
     Ok(Option::<String>::deserialize(deserializer)?.filter(|value| !value.is_empty()))
 }
 
+pub mod indent;
 pub mod language;
 pub mod line;
 pub mod plain;
