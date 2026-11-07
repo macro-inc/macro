@@ -1,0 +1,61 @@
+[package]
+edition = "2024"
+name = "notification_outbound"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["kafka"]
+# The Kafka publishers and consumer.
+kafka = ["dep:kafka_util", "dep:rdkafka", "macro_event_broker/outbound"]
+redis-tests = []
+
+[dependencies]
+notification = { workspace = true }
+aws-sdk-sesv2 = { workspace = true }
+aws-sdk-sns = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+chrono = { workspace = true }
+cowlike = { workspace = true }
+futures = { workspace = true }
+hmac = { workspace = true }
+kafka_util = { workspace = true, optional = true }
+last_online_tracker = { workspace = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+model_entity = { workspace = true }
+models_pagination = { workspace = true }
+notification_state = { workspace = true, features = ["postgres"] }
+opentelemetry = { workspace = true, features = ["trace"] }
+rate_limit = { workspace = true }
+rdkafka = { workspace = true, optional = true }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-comp",
+  "tokio-rustls-comp",
+] }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+notification_inbound = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+tracing-subscriber = { workspace = true }
+macro_db_migrator = { workspace = true }
+rate_limit = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+wiremock = { workspace = true }

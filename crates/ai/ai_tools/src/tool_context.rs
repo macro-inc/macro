@@ -67,7 +67,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
-use notification::inbound::ai_tool::NotificationToolContext;
+use notification_inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
 use properties_inbound::toolset::PropertiesToolContext;
 use skills::inbound::toolset::SkillToolContext;
@@ -353,9 +353,9 @@ pub fn build_message_service_with_side_effects(
 
 fn notification_ingress(
     clients: &ChannelSideEffectClients,
-) -> Arc<SqsNotificationIngress<notification::outbound::queue::SqsQueue>> {
+) -> Arc<SqsNotificationIngress<notification_outbound::queue::SqsQueue>> {
     Arc::new(SqsNotificationIngress {
-        queue: notification::outbound::queue::SqsQueue::new(
+        queue: notification_outbound::queue::SqsQueue::new(
             clients.sqs.clone(),
             macro_queues::NotificationIngressQueue::new().to_string(),
         ),
@@ -1146,7 +1146,7 @@ impl notification::domain::ports::SnsEndpointManager for NoOpSnsEndpointManager 
 /// skips push-clearing delivery messages.
 #[derive(Clone)]
 pub enum ToolNotificationQueue {
-    Sqs(notification::outbound::queue::SqsQueue),
+    Sqs(notification_outbound::queue::SqsQueue),
     NoOp,
 }
 
@@ -1385,7 +1385,7 @@ pub type ToolCallToolContext = CallToolContext<ToolCallService, ToolEntityAccess
 
 /// Type alias for the notification reader service used by AI tools.
 pub type ToolNotificationService = notification::domain::service::NotificationReaderService<
-    notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+    notification_outbound::repository::DbNotificationRepository<sqlx::PgPool>,
     ToolNotificationQueue,
     NoOpSnsEndpointManager,
 >;
@@ -1395,16 +1395,16 @@ pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationS
 
 /// Type alias for the user's per-item notification mute and snooze tool context.
 pub type ToolItemNotificationPreferenceToolContext =
-    notification::inbound::ai_tool::ItemNotificationPreferenceToolContext<
-        notification::outbound::item_preferences::PgItemNotificationPreferenceRepository,
+    notification_inbound::ai_tool::ItemNotificationPreferenceToolContext<
+        notification_outbound::item_preferences::PgItemNotificationPreferenceRepository,
     >;
 
 /// Build the per-item notification preference tool context.
 pub fn build_item_notification_preference_tool_context(
     pool: sqlx::PgPool,
 ) -> ToolItemNotificationPreferenceToolContext {
-    notification::inbound::ai_tool::ItemNotificationPreferenceToolContext::new(
-        notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(pool),
+    notification_inbound::ai_tool::ItemNotificationPreferenceToolContext::new(
+        notification_outbound::item_preferences::PgItemNotificationPreferenceRepository(pool),
     )
 }
 

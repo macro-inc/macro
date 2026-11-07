@@ -50,8 +50,8 @@ use lexical_service_url::LexicalServiceUrl;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
-use notification::outbound::queue::SqsQueue;
-use notification::outbound::repository::DbNotificationRepository;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::repository::DbNotificationRepository;
 use readonly_pool::ReadOnlyPool;
 use rootcause::compat::anyhow1::IntoAnyhow;
 use search_service_client::SearchServiceClient;
@@ -495,7 +495,7 @@ pub async fn build_tool_service_context_from_env(
         realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
     };
     let notification_tool_context =
-        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+        notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar);
     let chat_service = chat::domain::service::ChatServiceImpl::new(

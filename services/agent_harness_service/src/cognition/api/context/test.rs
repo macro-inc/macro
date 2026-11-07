@@ -205,8 +205,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use notification::domain::service::{
         NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     };
-    use notification::outbound::queue::SqsQueue;
-    use notification::outbound::repository::DbNotificationRepository;
+    use notification_outbound::queue::SqsQueue;
+    use notification_outbound::repository::DbNotificationRepository;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
     use soup::outbound::pg_soup_repo::PgSoupRepo;
@@ -304,7 +304,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
     };
     let notification_tool_context =
-        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+        notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     // Build document tool context for AI tools
     let s3_config = aws_sdk_s3::Config::builder()
@@ -766,7 +766,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
         connection_gateway_client: Arc::new(
-            notification::outbound::websocket::ConnectionGatewayClient::new(
+            notification_outbound::websocket::ConnectionGatewayClient::new(
                 "testing".to_string(),
                 "http://localhost".to_string(),
             ),

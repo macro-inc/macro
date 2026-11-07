@@ -53,7 +53,7 @@ use import::inbound::toolset::import_toolset;
 use initiative::inbound::toolset::initiative_toolset;
 use mcp_client::inbound::toolset::mcp_server_toolset;
 use messages::inbound::toolset::message_toolset;
-use notification::inbound::ai_tool::{item_notification_preference_toolset, notification_toolset};
+use notification_inbound::ai_tool::{item_notification_preference_toolset, notification_toolset};
 use projects::inbound::toolset::project_toolset;
 use properties_inbound::toolset::properties_toolset;
 use schemas::read;

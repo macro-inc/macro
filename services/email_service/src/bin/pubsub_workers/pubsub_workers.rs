@@ -15,7 +15,7 @@ use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use notification_outbound::queue::SqsQueue;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;

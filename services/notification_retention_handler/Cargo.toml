@@ -9,6 +9,7 @@ lambda_runtime = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
 notification = { workspace = true, default-features = true }
+notification_outbound = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

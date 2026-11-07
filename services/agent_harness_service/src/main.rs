@@ -340,7 +340,7 @@ async fn run() -> anyhow::Result<()> {
         ));
     let work_registration_tasks = tokio_util::task::TaskTracker::new();
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
-        queue: notification::outbound::queue::SqsQueue::new(
+        queue: notification_outbound::queue::SqsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
             macro_queues::NotificationIngressQueue::new().to_string(),
         ),

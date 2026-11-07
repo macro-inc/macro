@@ -135,7 +135,7 @@ use macro_sha_count_client::Redis;
 use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use notification_outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
 use projects_hex::{
     domain::service::ProjectServiceImpl,
@@ -246,7 +246,7 @@ pub(crate) type DssSoupRealtimeService = SoupRealtimeConsumerService<SoupTopicCo
 /// Realtime notification consumer service used by GraphQL subscriptions.
 pub(crate) type DssNotificationRealtimeService =
     notification::domain::service::WebSocketNotificationConsumerService<
-        notification::outbound::notification_consumer::NotificationTopicConsumer<
+        notification_outbound::notification_consumer::NotificationTopicConsumer<
             model_notifications::NotifEvent,
         >,
         model_notifications::NotifEvent,
@@ -505,7 +505,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
                 NotificationIngressType,
                 NotificationReaderCompletion<
                     ai_tools::ToolNotificationService,
-                    notification::outbound::withdrawal::PgNotificationWithdrawal,
+                    notification_outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
@@ -571,8 +571,8 @@ pub(crate) type CallConnectionService =
 /// Type alias for the VoIP push sender (optional at runtime via `Option`).
 pub(crate) type DssVoipPushSender = Option<
     notification::domain::service::VoipPushServiceImpl<
-        notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
-        notification::outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
+        notification_outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+        notification_outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
     >,
 >;
 

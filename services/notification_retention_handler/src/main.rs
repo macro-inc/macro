@@ -8,10 +8,8 @@ use std::{str::FromStr, sync::Arc, time::Duration};
 use lambda_runtime::{Error, run, service_fn};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use notification::{
-    domain::retention::NotificationRetentionService,
-    outbound::retention::PgNotificationRetentionRepository,
-};
+use notification::domain::retention::NotificationRetentionService;
+use notification_outbound::retention::PgNotificationRetentionRepository;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 env_vars! {

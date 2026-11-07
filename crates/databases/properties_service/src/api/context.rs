@@ -2,7 +2,7 @@ use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use macro_authorization::{MacroAuthJwtValidator, MacroAuthorizationServiceImpl};
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use notification_outbound::queue::SqsQueue;
 
 use properties::PropertiesServiceImpl;
 use properties_inbound::axum_router::PropertiesRouterState;

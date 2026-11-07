@@ -143,6 +143,8 @@ models_dcs = { workspace = true }
 models_permissions = { workspace = true }
 non_empty = { workspace = true }
 notification = { workspace = true, default-features = true, features = ["ai_tool"] }
+notification_inbound = { workspace = true, features = ["ai_tool"] }
+notification_outbound = { workspace = true }
 onboarding = { workspace = true }
 pipedream_mcp = { workspace = true }
 prompt = { workspace = true }

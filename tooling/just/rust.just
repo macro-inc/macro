@@ -72,7 +72,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_sfs_delete_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/agents/scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notifications/notification_db_client/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notifications/notification/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notifications/notification_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_refresh_handler/.env

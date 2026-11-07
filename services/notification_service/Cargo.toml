@@ -60,7 +60,9 @@ model_notifications = { workspace = true }
 models_pagination = { workspace = true, features = [
   "axum",
 ] }
-notification = { workspace = true, default-features = true, features = ["axum"] }
+notification = { workspace = true }
+notification_inbound = { workspace = true, features = ["axum"] }
+notification_outbound = { workspace = true }
 notification_db_client = { workspace = true }
 rate_limit = { workspace = true }
 redis = { workspace = true }

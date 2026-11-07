@@ -146,7 +146,7 @@ use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     WebSocketNotificationConsumerService,
 };
-use notification::outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
+use notification_outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
 use projects_hex::{
     domain::service::ProjectServiceImpl,
@@ -480,7 +480,7 @@ async fn run_server() -> anyhow::Result<()> {
     });
     let graphql_notification_reader: Arc<ai_tools::ToolNotificationService> =
         Arc::new(NotificationReaderService {
-            repository: notification::outbound::repository::DbNotificationRepository::new(
+            repository: notification_outbound::repository::DbNotificationRepository::new(
                 db.clone(),
             ),
             queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
@@ -583,9 +583,9 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn(access_requests::inbound::dispatch::run(
         access_requests_repo,
         crate::outbound::access_requests::AccessRequestDelivery {
-            withdrawal: Arc::new(
-                notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone()),
-            ),
+            withdrawal: Arc::new(notification_outbound::withdrawal::PgNotificationWithdrawal(
+                db.clone(),
+            )),
             ingress: notification_ingress_service.clone(),
             reader: graphql_notification_reader.clone(),
             connection: connection_gateway.clone(),
@@ -863,8 +863,8 @@ async fn run_server() -> anyhow::Result<()> {
             None
         } else {
             let voip_repo =
-                notification::outbound::repository::DbNotificationRepository::new(db.clone());
-            let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
+                notification_outbound::repository::DbNotificationRepository::new(db.clone());
+            let voip_mobile = notification_outbound::mobile::MobilePushAdapter {
                 push_service: aws_sdk_sns::Client::new(&aws_config),
                 apns_bundle_id: bundle_id.to_string(),
                 voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
@@ -1261,7 +1261,9 @@ async fn run_server() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()).with_completion(
             NotificationReaderCompletion::new(
                 graphql_notification_reader.clone(),
-                Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
+                Arc::new(notification_outbound::withdrawal::PgNotificationWithdrawal(
+                    db.clone(),
+                )),
             ),
         ),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
