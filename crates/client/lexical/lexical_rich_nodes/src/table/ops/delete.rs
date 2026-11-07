@@ -9,7 +9,8 @@ pub fn delete_table_row_at_selection(tx: &mut Transaction<'_>) -> Result<()> {
     }
     let (map, av, fv) = map::checked_in(tx, table, a, f)?;
     let top = av.start_row;
-    let bottom = fv.end_row(tx.view());
+    let bottom =
+        u32::try_from(fv.end_row(tx.view())).map_err(|_| Error::Invariant("Invalid table span"))?;
     if bottom < top {
         return Err(Error::Invariant("Invalid table selection"));
     }
@@ -25,8 +26,8 @@ pub fn delete_table_row_at_selection(tx: &mut Transaction<'_>) -> Result<()> {
             if v.start_column != column {
                 continue;
             }
-            if v.start_row < top || v.end_row(tx.view()) > bottom {
-                let overlap = (i64::from(v.end_row(tx.view()).min(bottom))
+            if v.start_row < top || v.end_row(tx.view()) > i64::from(bottom) {
+                let overlap = (v.end_row(tx.view()).min(i64::from(bottom))
                     - i64::from(v.start_row.max(top))
                     + 1)
                 .max(0) as u32;
@@ -38,7 +39,7 @@ pub fn delete_table_row_at_selection(tx: &mut Transaction<'_>) -> Result<()> {
             }
             // Read after trimming: live map values see the changed span; frozen
             // ones retain it. Do not hoist this condition above the write.
-            if v.start_row >= top && v.end_row(tx.view()) > bottom && row == bottom {
+            if v.start_row >= top && v.end_row(tx.view()) > i64::from(bottom) && row == bottom {
                 let next = *row_nodes
                     .get((bottom + 1) as usize)
                     .ok_or(Error::Invariant("Expected TableRowNode"))?;
@@ -80,7 +81,8 @@ pub fn delete_table_column_at_selection(tx: &mut Transaction<'_>) -> Result<()> 
     let (a, f, table) = selection_cells(tx)?;
     let (map, av, fv) = map::checked_in(tx, table, a, f)?;
     let start = av.start_column.min(fv.start_column);
-    let end = av.end_column(tx.view()).max(fv.end_column(tx.view()));
+    let end = u32::try_from(av.end_column(tx.view()).max(fv.end_column(tx.view())))
+        .map_err(|_| Error::Invariant("Invalid table span"))?;
     let count = end - start + 1;
     if map.column_count() == count {
         tx.select_previous(table, None, None)?;
@@ -100,7 +102,7 @@ pub fn delete_table_column_at_selection(tx: &mut Transaction<'_>) -> Result<()> 
                     );
                     tx.get_mut::<TableCellNode>(v.cell)?.col_span = span - overlap;
                 }
-            } else if v.end_column(tx.view()) > end {
+            } else if v.end_column(tx.view()) > i64::from(end) {
                 if column == end {
                     let span = v
                         .col_span(tx.view())

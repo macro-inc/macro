@@ -48,12 +48,12 @@ impl TableMapValue {
         }
     }
     /// Inclusive final spanned row.
-    pub fn end_row(&self, view: StateRef<'_>) -> u32 {
-        self.start_row + self.row_span(view).saturating_sub(1)
+    pub fn end_row(&self, view: StateRef<'_>) -> i64 {
+        i64::from(self.start_row) + i64::from(self.row_span(view)) - 1
     }
     /// Inclusive final spanned column.
-    pub fn end_column(&self, view: StateRef<'_>) -> u32 {
-        self.start_column + self.col_span(view).saturating_sub(1)
+    pub fn end_column(&self, view: StateRef<'_>) -> i64 {
+        i64::from(self.start_column) + i64::from(self.col_span(view)) - 1
     }
 }
 /// Span-expanded rows. Ragged rows and unoccupied slots remain observable.
@@ -242,17 +242,17 @@ pub fn compute_table_cell_rect_boundary(
     let mut rect = TableCellRectBoundary {
         min_column: a.start_column.min(b.start_column),
         min_row: a.start_row.min(b.start_row),
-        max_column: (a.start_column + a.col_span.saturating_sub(1))
-            .max(b.start_column + b.col_span.saturating_sub(1)),
-        max_row: (a.start_row + a.row_span.saturating_sub(1))
-            .max(b.start_row + b.row_span.saturating_sub(1)),
+        max_column: (a.start_column.saturating_add(a.col_span).saturating_sub(1))
+            .max(b.start_column.saturating_add(b.col_span).saturating_sub(1)),
+        max_row: (a.start_row.saturating_add(a.row_span).saturating_sub(1))
+            .max(b.start_row.saturating_add(b.row_span).saturating_sub(1)),
     };
     loop {
         let previous = rect;
         for row in &map.rows {
             for v in row.iter().take(map.column_count() as usize).flatten() {
-                let end_row = v.start_row + v.row_span.saturating_sub(1);
-                let end_column = v.start_column + v.col_span.saturating_sub(1);
+                let end_row = v.start_row.saturating_add(v.row_span).saturating_sub(1);
+                let end_column = v.start_column.saturating_add(v.col_span).saturating_sub(1);
                 if v.start_column <= rect.max_column
                     && end_column >= rect.min_column
                     && v.start_row <= rect.max_row
@@ -441,7 +441,13 @@ pub fn is_full_table_selection(
     let Some(Selection::Table(selection)) = selection else {
         return Ok(false);
     };
-    let (map, _, _) = compute_table_map_skip_cell_check(view, table, None, None)?;
+    let a = view
+        .cast::<TableCellNode>(selection.anchor.key())
+        .ok_or(Error::Invariant("Anchor not found in Table"))?;
+    let f = view
+        .cast::<TableCellNode>(selection.focus.key())
+        .ok_or(Error::Invariant("Focus not found in Table"))?;
+    let (map, _, _) = compute_table_map(view, table, a, f)?;
     let first = map.get(0, 0);
     let last = map
         .rows

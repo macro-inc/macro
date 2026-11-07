@@ -312,3 +312,61 @@ fn malformed_children_and_missing_ancestors_return_upstream_diagnostics() -> Res
     assert_eq!(TableMap::default().column_count(), 0);
     Ok(())
 }
+
+#[test]
+fn zero_span_endpoints_keep_signed_upstream_arithmetic_and_full_selection_checks_membership()
+-> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<TableNode>()
+        .node::<TableRowNode>()
+        .node::<TableCellNode>()
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    let a = tx.create(TableCellNode::default())?;
+    let value = TableMapValue {
+        cell: a,
+        start_row: 5,
+        start_column: 6,
+        row_span: 0,
+        col_span: 0,
+        header_state: TableCellHeaderState::NO_STATUS,
+        live: false,
+    };
+    assert_eq!(value.end_row(tx.view()), 4);
+    assert_eq!(value.end_column(tx.view()), 5);
+    let origin = TableMapValue {
+        start_row: 0,
+        start_column: 0,
+        ..value
+    };
+    assert_eq!(origin.end_row(tx.view()), -1);
+    assert_eq!(origin.end_column(tx.view()), -1);
+    tx.get_mut::<TableCellNode>(a)?.row_span = 0;
+    tx.get_mut::<TableCellNode>(a)?.col_span = 0;
+    let live = TableMapValue {
+        row_span: 1,
+        col_span: 1,
+        live: true,
+        ..value
+    };
+    assert_eq!(live.end_row(tx.view()), 4);
+    assert_eq!(live.end_column(tx.view()), 5);
+    let table = tx.create(TableNode::default())?;
+    let row = tx.create(TableRowNode::default())?;
+    let inside = tx.create(TableCellNode::default())?;
+    tx.append(row, &[inside.key()])?;
+    tx.append(table, &[row.key()])?;
+    tx.append(NodeKey::ROOT, &[table.key()])?;
+    let anchor_outside = Selection::Table(TableSelection::new(table.key(), a.key(), inside.key()));
+    let focus_outside = Selection::Table(TableSelection::new(table.key(), inside.key(), a.key()));
+    assert!(matches!(
+        is_full_table_selection(tx.view(), Some(&anchor_outside), table),
+        Err(Error::Invariant("Anchor not found in Table"))
+    ));
+    assert!(matches!(
+        is_full_table_selection(tx.view(), Some(&focus_outside), table),
+        Err(Error::Invariant("Focus not found in Table"))
+    ));
+    Ok(())
+}

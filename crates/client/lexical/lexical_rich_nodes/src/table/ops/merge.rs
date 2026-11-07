@@ -20,8 +20,14 @@ pub fn merge_cells(
             if cells.contains(&value.cell) && visited.insert(value.cell.key()) {
                 min_row = min_row.min(value.start_row);
                 min_column = min_column.min(value.start_column);
-                max_row = max_row.max(value.end_row(tx.view()));
-                max_column = max_column.max(value.end_column(tx.view()));
+                max_row = max_row.max(
+                    u32::try_from(value.end_row(tx.view()))
+                        .map_err(|_| Error::Invariant("Invalid table span"))?,
+                );
+                max_column = max_column.max(
+                    u32::try_from(value.end_column(tx.view()))
+                        .map_err(|_| Error::Invariant("Invalid table span"))?,
+                );
             }
         }
     }
