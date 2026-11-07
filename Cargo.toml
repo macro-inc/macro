@@ -218,7 +218,7 @@ members = [
 # WP-00 reserves these dependencies for the following Lexical work packages.
 # Remove each exception when its first consumer lands (model, replay, XML, HTML).
 [workspace.metadata.cargo-shear]
-ignored = [ "quick-xml", "rand_chacha", "smallvec"]
+ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
 lexical_model = { path = "crates/client/lexical/lexical_model" }
