@@ -53,7 +53,16 @@ each run.
   failed rewrite pauses the routine. `sweep` does the same for every
   enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
-  `github` selector and the exact payload `match` GitHub filters take.
+  `github` selector and the exact payload `match` GitHub and webhook filters
+  take.
+- `src/domain/webhooks.rs` + `src/inbound/webhook_router.rs`: a routine's
+  secret webhook URL. `POST /scheduled-actions/{id}/webhook` (owner) makes a
+  `mrw_` token, shown once and kept as a SHA-256 in `scheduled_action_webhook`
+  (one per routine; a new one replaces it); `GET`/`DELETE` read its prefix or
+  turn it off. `POST /scheduled-actions/webhooks/{token}`, unauthenticated,
+  takes up to 64 KiB of UTF-8 text and admits it as a `webhook` event to that
+  routine alone (`EventAdmissionService::admit_webhook`), answering `202` with
+  the event id; the event worker runs it like any event.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
   property change filters take, matched on the values a change adds.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
@@ -125,14 +134,24 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 - Macro events store only ids, plus the GitHub pull request and account behind
   a task status change (`change_source`), and are read again, as the owner, at
   dispatch.
-  GitHub deliveries can't be read again, so their event runs keep the bounded
-  payload in `event_context`; access for them is the owner's installation
-  claim, which needs a linked GitHub account and, for a personal installation,
-  that the linked account installed it.
+  GitHub and webhook deliveries can't be read again, so their event runs keep
+  the bounded payload or body in `event_context`. Access for a GitHub delivery
+  is the owner's installation claim, which needs a linked GitHub account and,
+  for a personal installation, that the linked account installed it; a webhook
+  delivery is its owner's, who gave out the URL.
 - A `property` filter needs the event's `property_change` (the property and the
   option or entity ids it gained), so runs of routines with one keep it in
   `event_context`; other runs drop it (`EventFilters::run_event`). Free text and
   dates are never kept, so those properties only support any-change filters.
+- A `webhook` event filter stands alone like `github`, takes no ids or
+  selector, and its `match` tests the body read as JSON (text passes none).
+  A delivery names its routine (`WebhookDelivery::routine_id`), so
+  `EventReference::addressed_to` keeps it out of every other routine's queue;
+  it is never fanned out through `candidate_actions`. Its run keeps the body
+  in `event_context` until it finishes, like a GitHub payload. A routine that
+  is paused or has no webhook filter refuses deliveries with `409`, and one
+  with `MAX_QUEUED_DELIVERIES` pending webhook runs with `429`. With event
+  routines off, no URL is made and none is taken.
 - Enabling a GitHub trigger needs the owner's GitHub link
   (`with_github_links`); without it the service returns `GithubNotLinked`.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,

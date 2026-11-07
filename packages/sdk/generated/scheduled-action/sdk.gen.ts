@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RoutineCodeStartersData, RoutineCodeStartersErrors, RoutineCodeStartersResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateRoutineWebhookData, CreateRoutineWebhookErrors, CreateRoutineWebhookResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteRoutineWebhookData, DeleteRoutineWebhookErrors, DeleteRoutineWebhookResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DeliverRoutineWebhookData, DeliverRoutineWebhookErrors, DeliverRoutineWebhookResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetRoutineWebhookData, GetRoutineWebhookErrors, GetRoutineWebhookResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RoutineCodeStartersData, RoutineCodeStartersErrors, RoutineCodeStartersResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -91,6 +91,18 @@ export class Sdk extends HeyApiClient {
         });
     }
 
+    public deliverRoutineWebhook<ThrowOnError extends boolean = false>(options: Options<DeliverRoutineWebhookData, ThrowOnError>): RequestResult<DeliverRoutineWebhookResponses, DeliverRoutineWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DeliverRoutineWebhookResponses, DeliverRoutineWebhookErrors, ThrowOnError>({
+            bodySerializer: null,
+            url: '/scheduled-actions/webhooks/{token}',
+            ...options,
+            headers: {
+                'Content-Type': 'text/plain',
+                ...options.headers
+            }
+        });
+    }
+
     public deleteScheduledAction<ThrowOnError extends boolean = false>(options: Options<DeleteScheduledActionData, ThrowOnError>): RequestResult<DeleteScheduledActionResponses, DeleteScheduledActionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteScheduledActionResponses, DeleteScheduledActionErrors, ThrowOnError>({ url: '/scheduled-actions/{id}', ...options });
     }
@@ -161,5 +173,17 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    public deleteRoutineWebhook<ThrowOnError extends boolean = false>(options: Options<DeleteRoutineWebhookData, ThrowOnError>): RequestResult<DeleteRoutineWebhookResponses, DeleteRoutineWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteRoutineWebhookResponses, DeleteRoutineWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
+    }
+
+    public getRoutineWebhook<ThrowOnError extends boolean = false>(options: Options<GetRoutineWebhookData, ThrowOnError>): RequestResult<GetRoutineWebhookResponses, GetRoutineWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetRoutineWebhookResponses, GetRoutineWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
+    }
+
+    public createRoutineWebhook<ThrowOnError extends boolean = false>(options: Options<CreateRoutineWebhookData, ThrowOnError>): RequestResult<CreateRoutineWebhookResponses, CreateRoutineWebhookErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateRoutineWebhookResponses, CreateRoutineWebhookErrors, ThrowOnError>({ url: '/scheduled-actions/{id}/webhook', ...options });
     }
 }

@@ -420,7 +420,7 @@ fn multiple_triggers_preserve_event_filters_and_choose_the_next_schedule() {
 }
 
 #[test]
-fn event_groups_must_be_combined_and_external_webhooks_are_rejected() {
+fn event_groups_must_be_combined_and_webhooks_are_events_not_trigger_types() {
     let events = serde_json::json!({"type":"events", "filters":[{"events":["document.created"]}]});
     assert!(
         serde_json::from_value::<ActionTrigger>(
@@ -756,7 +756,7 @@ fn email_receipts_keep_only_ids_and_exclude_spam_and_backfills() {
 }
 
 #[test]
-fn github_stands_alone_and_only_it_takes_a_payload_match() {
+fn external_events_stand_alone_and_only_they_take_a_payload_match() {
     let parse = |filter: serde_json::Value| serde_json::from_value::<EventFilter>(filter);
 
     assert!(parse(json!({ "events": ["github"], "github": {} })).is_ok());
@@ -768,8 +768,21 @@ fn github_stands_alone_and_only_it_takes_a_payload_match() {
         }))
         .is_ok()
     );
-    // Generic webhooks are not a trigger.
+    // A webhook is the `webhook` event.
     assert!(parse(json!({ "events": ["webhook.received"] })).is_err());
+    assert!(parse(json!({ "events": ["webhook"] })).is_ok());
+    assert!(
+        parse(json!({
+            "events": ["webhook"],
+            "match": [{ "path": ["status"], "equals": "failed" }],
+        }))
+        .is_ok()
+    );
+    // It names no Macro items or GitHub deliveries, and stands alone.
+    assert!(parse(json!({ "events": ["webhook"], "ids": [] })).is_err());
+    assert!(parse(json!({ "events": ["webhook"], "github": {} })).is_err());
+    assert!(parse(json!({ "events": ["webhook", "github"], "github": {} })).is_err());
+    assert!(parse(json!({ "events": ["webhook", "document.created"] })).is_err());
     // A github filter names which deliveries; nothing else takes a selector.
     assert!(parse(json!({ "events": ["github"] })).is_err());
     // GitHub does not combine with Macro events or entity ids.
@@ -813,6 +826,51 @@ fn github_deliveries_normalize_with_their_payload_and_reject_odd_names() {
         incoming("Not-An-Event").normalize(),
         Err(EventRejection::UnsupportedEvent)
     );
+}
+
+#[test]
+fn a_webhook_delivery_round_trips_and_matches_its_json_body() {
+    let routine = macro_uuid::generate_uuid_v7();
+    let delivery = |body: &str| {
+        EventReference::webhook(WebhookDelivery::new(routine, body.as_bytes(), None).unwrap())
+    };
+    let event = delivery(r#"{"status":"failed","run":{"attempt":2}}"#);
+
+    assert_eq!(event.event_name(), EventName::Webhook);
+    assert_eq!(event.entity_type(), EventEntityType::Webhook);
+    assert_eq!(event.entity_id(), None);
+    assert!(event.addressed_to(routine));
+    assert!(!event.addressed_to(macro_uuid::generate_uuid_v7()));
+    let stored = serde_json::to_value(&event).unwrap();
+    assert_eq!(stored["webhook"]["routine_id"], json!(routine));
+    assert_eq!(
+        serde_json::from_value::<EventReference>(stored).unwrap(),
+        event
+    );
+    // A webhook context never reads as any other event.
+    assert!(
+        serde_json::from_value::<EventReference>(json!({
+            "event_id": macro_uuid::generate_uuid_v7(),
+            "event_name": "github",
+            "webhook": { "routine_id": routine, "body": "hi" },
+        }))
+        .is_err()
+    );
+
+    let filters: EventFilters = serde_json::from_value(json!([{
+        "events": ["webhook"],
+        "match": [
+            { "path": ["status"], "equals": "failed" },
+            { "path": ["run", "attempt"], "in": [2, 3] },
+        ],
+    }]))
+    .unwrap();
+    let activated = event.published_at();
+    assert!(filters.matches(&event, activated));
+    assert!(!filters.matches(&delivery(r#"{"status":"passed"}"#), activated));
+    assert!(!filters.matches(&delivery("status: failed"), activated));
+    assert!(filters.watches_webhook());
+    assert!(!filters.watches_github());
 }
 
 #[test]

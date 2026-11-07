@@ -135,6 +135,26 @@ describe('routine triggers on the routine page', () => {
     ]);
   });
 
+  it('adds a webhook trigger, which watches no items', () => {
+    const { triggers } = renderRows([]);
+    openAddTrigger();
+    press(item('Webhooks'), 'ArrowRight');
+    press(item(/^Webhook received/), 'Enter');
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    expect(
+      within(panel).getByText(/POSTs text to this routine’s secret URL/)
+    ).toBeTruthy();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
+    expect(triggers()).toEqual([
+      expect.objectContaining({ kind: 'event', events: ['webhook'] }),
+    ]);
+    expect(triggers()[0]).toMatchObject({ ids: undefined });
+    expect(
+      screen.getByRole('button', { name: 'Change Webhook received trigger' })
+    ).toBeTruthy();
+    expect(screen.queryByText('in')).toBeNull();
+  });
+
   it('switches a trigger’s event from its token, keeping its AI check', () => {
     const { triggers } = renderRows([email]);
     press(

@@ -924,7 +924,7 @@ async fn database_rejects_invalid_trigger_shapes(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn database_rejects_external_webhooks_and_unknown_mixed_trigger_kinds(pool: PgPool) {
+async fn database_rejects_unknown_trigger_kinds(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     for config in [
         json!({ "type": "webhook" }),

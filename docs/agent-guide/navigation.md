@@ -1218,7 +1218,7 @@ focus on the moved card), **Duplicate** and **Delete step**.
 
 **Add trigger** opens a menu with **Search triggers** and one row per kind:
 **Schedule** (**On a schedule**, **Once**), **Email**, **Tasks**, **Channels**,
-**Documents**, **Calls** and **GitHub**. Each row opens a submenu of its events, each with a
+**Documents**, **Calls**, **GitHub** and **Webhooks**. Each row opens a submenu of its events, each with a
 one-line description of what makes it fire. Typing flattens the list: a typed
 schedule such as **every weekday at 9am** becomes the top row with its time
 zone, and matching events show their group at the right. Arrow keys, Enter and
@@ -1256,6 +1256,7 @@ The event menu groups Macro activity triggers by surface:
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
+- **Webhooks:** **Webhook received**, when someone POSTs text to the routine's secret URL.
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
 same panel to choose any accessible item or specific channels/documents/tasks. Creation
@@ -1284,11 +1285,23 @@ of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
 pass before the run is queued. Steps that act on the triggering item can't run
 on GitHub triggers, which have no Macro item.
 
+A webhook trigger has no item picker. Its panel shows **Webhook URL**: before
+the routine is saved, **Save the routine to get its URL**; then **Create URL**,
+which shows the full URL (`…/scheduled-action/scheduled-actions/webhooks/mrw_…`)
+with **Copy** and a `curl` example, once. Afterwards the panel shows the URL's
+prefix and date with **New URL** (the old one stops working) and **Delete URL**.
+`POST` UTF-8 text, at most 64 KiB, to the URL: it answers `202` with the run's
+`eventId`; `404` for an unknown URL, `409` when the routine is paused or has no
+webhook trigger, `413` past 64 KiB, `429` while 20 deliveries wait. The panel's
+**Only when the JSON body…** rows test a JSON body like GitHub payload tests;
+text never passes them. Code steps read the text as
+`trigger.item.webhook.body`; the agent sees it as the routine's event.
+
 When `enable-routine-conditions` is on, every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
 yes** in the trigger panel). Before a run starts, the event's content (the email,
-channel message, document, task, call, or GitHub delivery, read as the routine
+channel message, document, task, call, GitHub delivery, or webhook body, read as the routine
 owner) is checked against it, and events answered no are skipped. Saving a
 condition fails with "trigger conditions are not enabled" while the
 scheduled-action service has no

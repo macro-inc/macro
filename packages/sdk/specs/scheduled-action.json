@@ -266,6 +266,106 @@
         }
       }
     },
+    "/scheduled-actions/webhooks/{token}": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "deliver_routine_webhook",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The secret the routine's webhook URL carries",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Any UTF-8 text, at most 64 KiB; a JSON body can be matched on",
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The routine will run with the body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineWebhookDeliveryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not UTF-8 text",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No routine has this URL",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The routine is paused or doesn't run on webhooks",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is larger than 64 KiB",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many deliveries are waiting to run",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1048,6 +1148,182 @@
           }
         }
       }
+    },
+    "/scheduled-actions/{id}/webhook": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "get_routine_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineWebhook"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such routine, or it has no URL",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "create_routine_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The routine's new URL token, shown only here; any old one stops working",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedRoutineWebhook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["scheduled actions"],
+        "operationId": "delete_routine_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The URL no longer works"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1480,6 +1756,20 @@
         ],
         "description": "Why an event-triggered run was skipped before it started."
       },
+      "CreatedRoutineWebhook": {
+        "type": "object",
+        "description": "A new URL, with the token it carries, shown only here.",
+        "required": ["webhook", "token"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The secret: `POST /scheduled-actions/webhooks/{token}` starts the routine."
+          },
+          "webhook": {
+            "$ref": "#/components/schemas/RoutineWebhook"
+          }
+        }
+      },
       "Draft": {
         "oneOf": [
           {
@@ -1708,7 +1998,7 @@
       },
       "EventFilter": {
         "type": "object",
-        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` comes from outside Macro and carries its payload: it stands\nalone in its filter, takes no ids, and may require\nexact payload values with `match`. A `github` filter narrows deliveries\nwith its `github` selector.",
+        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` and `webhook` come from outside Macro and carry their payload:\neach stands alone in its filter, takes no ids, and may require exact\npayload values with `match` (a webhook's when its body is JSON). A\n`github` filter narrows deliveries with its `github` selector.",
         "required": ["events"],
         "properties": {
           "condition": {
@@ -1785,7 +2075,8 @@
           "channel.message_attachment_created",
           "call.started",
           "call.ended",
-          "github"
+          "github",
+          "webhook"
         ]
       },
       "ExecutionResource": {
@@ -2393,6 +2684,37 @@
           "$ref": "#/components/schemas/RoutineTrigger"
         },
         "description": "Bounded schedules and one combined set of event filters."
+      },
+      "RoutineWebhook": {
+        "type": "object",
+        "description": "The URL a routine has. Its token is never shown again after it is made.",
+        "required": ["routineId", "tokenPrefix", "createdAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "routineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tokenPrefix": {
+            "type": "string",
+            "description": "The token's first characters, to tell URLs apart."
+          }
+        }
+      },
+      "RoutineWebhookDeliveryResponse": {
+        "type": "object",
+        "description": "The run a delivery queued.",
+        "required": ["eventId"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The delivery's event; the run it starts shows in the routine's history."
+          }
+        }
       },
       "RunInfo": {
         "type": "object",

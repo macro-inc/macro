@@ -488,8 +488,8 @@ pub enum RoutineTrigger {
         /// Which GitHub deliveries, for the `github` event.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         github: Option<GithubWatch>,
-        /// Exact payload tests a GitHub delivery must pass, as a
-        /// reader would state them.
+        /// Exact payload tests a GitHub delivery or JSON webhook body must
+        /// pass, as a reader would state them.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         payload_match: Vec<String>,
         /// A yes/no question the event's content must answer yes to.
@@ -647,6 +647,21 @@ pub enum RoutineEvent {
         /// The delivery.
         delivery: GithubDelivery,
     },
+    /// Someone POSTed to the routine's webhook URL.
+    Webhook {
+        /// What they sent.
+        request: WebhookRequest,
+    },
+}
+
+/// A POST to a routine's webhook URL, from anyone who holds the URL.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebhookRequest {
+    /// The body as sent, at most 64 KiB of text. Untrusted.
+    pub body: String,
+    /// Its `Content-Type`, when the sender gave one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
 }
 
 /// A delivery from Macro's GitHub App.

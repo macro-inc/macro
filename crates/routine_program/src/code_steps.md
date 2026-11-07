@@ -9,7 +9,7 @@ Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code
 - `source`: a module exporting `async function main({ macro, run, routine, trigger, steps, knobs }: StepContext)`. Take only what you use.
   - `run.at` is when the run counts as happening (ISO 8601) and `run.timezone` the zone to read it in. Use them for "today", "this week" or a cutoff; never `new Date()` or `Date.now()`, so a dry run that replays an earlier trigger gives the same answer.
   - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
-  - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }` with the item as JSON (`item.entity_id`, `item.email?.subject`, …), or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
+  - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }` with the item as JSON (`item.entity_id`, `item.email?.subject`, `item.webhook?.body` for the text POSTed to a webhook trigger's URL, …), or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
   - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
   - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options.
