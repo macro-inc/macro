@@ -380,9 +380,19 @@ impl TextMut<'_, '_> {
         let parent = self.tx.parent(original);
         let insertion_index = self.tx.index_within_parent(original);
         let original_selection = self.tx.pending.selection.clone();
-        let backward = original_selection.as_ref().and_then(Selection::as_range)
-            .map(|range| range.is_backward(self.tx.view())).transpose()?.unwrap_or(false);
-        for sibling in [self.tx.prev_sibling(original), self.tx.next_sibling(original)].into_iter().flatten() {
+        let backward = original_selection
+            .as_ref()
+            .and_then(Selection::as_range)
+            .map(|range| range.is_backward(self.tx.view()))
+            .transpose()?
+            .unwrap_or(false);
+        for sibling in [
+            self.tx.prev_sibling(original),
+            self.tx.next_sibling(original),
+        ]
+        .into_iter()
+        .flatten()
+        {
             self.tx.writable(sibling)?;
         }
         let state = self
@@ -430,39 +440,84 @@ impl TextMut<'_, '_> {
             (&original_selection, self.tx.pending.selection.clone())
         {
             let (start, end, old_start, old_end) = if backward {
-                (&mut range.focus, &mut range.anchor, previous.focus, previous.anchor)
+                (
+                    &mut range.focus,
+                    &mut range.anchor,
+                    previous.focus,
+                    previous.anchor,
+                )
             } else {
-                (&mut range.anchor, &mut range.focus, previous.anchor, previous.focus)
+                (
+                    &mut range.anchor,
+                    &mut range.focus,
+                    previous.anchor,
+                    previous.focus,
+                )
             };
-            let mut start_pending = old_start.point_type() == PointType::Text && old_start.key() == original;
+            let mut start_pending =
+                old_start.point_type() == PointType::Text && old_start.key() == original;
             let end_pending = old_end.point_type() == PointType::Text && old_end.key() == original;
-            for (i, window) in bounds.windows(2).enumerate() {
-                if start_pending && old_start.offset() >= window[0].get() && old_start.offset() <= window[1].get() {
-                    *start = Point::text(parts[i], Utf16Offset(old_start.offset() - window[0].get()));
-                    if old_start.offset() < window[1].get() { start_pending = false; }
+            for ((from, to), part) in bounds.iter().zip(bounds.iter().skip(1)).zip(&parts) {
+                if start_pending
+                    && old_start.offset() >= from.get()
+                    && old_start.offset() <= to.get()
+                {
+                    *start = Point::text(*part, Utf16Offset(old_start.offset() - from.get()));
+                    if old_start.offset() < to.get() {
+                        start_pending = false;
+                    }
                 }
-                if end_pending && old_end.offset() >= window[0].get() && old_end.offset() <= window[1].get() {
-                    *end = Point::text(parts[i], Utf16Offset(old_end.offset() - window[0].get()));
+                if end_pending && old_end.offset() >= from.get() && old_end.offset() <= to.get() {
+                    *end = Point::text(*part, Utf16Offset(old_end.offset() - from.get()));
                     break;
                 }
             }
             self.tx.pending.selection = Some(Selection::Range(range));
         }
-        if let (Some(parent), Some(index), Some(Selection::Range(previous)), Some(Selection::Range(mut range))) =
-            (parent, insertion_index, original_selection, self.tx.pending.selection.clone())
-        {
-            for (point, old) in [(&mut range.anchor, previous.anchor), (&mut range.focus, previous.focus)] {
-                if let Point::Element { key, offset } = old {
-                    if key == parent {
-                        let offset = offset.0 + if offset.0 >= index.0 { parts.len() as u32 - 1 } else { 0 };
-                        let children = self.tx.children_keys(parent)?;
-                        let at_end = offset as usize >= children.len();
-                        let child = if at_end { children.last() } else { children.get(offset as usize) };
-                        *point = match child.copied().filter(|key| self.tx.is_text(*key)) {
-                            Some(key) => Point::text(key, if at_end { self.tx.text_content_size(key) } else { Utf16Offset::ZERO }),
-                            None => Point::element(parent, ChildIndex(offset)),
-                        };
-                    }
+        if let (
+            Some(parent),
+            Some(index),
+            Some(Selection::Range(previous)),
+            Some(Selection::Range(mut range)),
+        ) = (
+            parent,
+            insertion_index,
+            original_selection,
+            self.tx.pending.selection.clone(),
+        ) {
+            for (point, old) in [
+                (&mut range.anchor, previous.anchor),
+                (&mut range.focus, previous.focus),
+            ] {
+                if let Point::Element { key, offset } = old
+                    && key == parent
+                {
+                    let added = u32::try_from(parts.len())
+                        .ok()
+                        .and_then(|len| len.checked_sub(1))
+                        .ok_or(Error::Invariant("split part count exceeds child offsets"))?;
+                    let offset = offset
+                        .0
+                        .checked_add(if offset.0 >= index.0 { added } else { 0 })
+                        .ok_or(Error::SpliceOutOfRange)?;
+                    let children = self.tx.children_keys(parent)?;
+                    let at_end = offset as usize >= children.len();
+                    let child = if at_end {
+                        children.last()
+                    } else {
+                        children.get(offset as usize)
+                    };
+                    *point = match child.copied().filter(|key| self.tx.is_text(*key)) {
+                        Some(key) => Point::text(
+                            key,
+                            if at_end {
+                                self.tx.text_content_size(key)
+                            } else {
+                                Utf16Offset::ZERO
+                            },
+                        ),
+                        None => Point::element(parent, ChildIndex(offset)),
+                    };
                 }
             }
             self.tx.pending.selection = Some(Selection::Range(range));

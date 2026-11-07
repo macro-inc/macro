@@ -626,10 +626,14 @@ fn formatting_inherits_unselected_end_node_flags() -> Result<(), Error> {
         tx.append(p, &[first.key(), last.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(first, Utf16Offset(1)), Point::text(last, Utf16Offset(0)),
+            Point::text(first, Utf16Offset(1)),
+            Point::text(last, Utf16Offset(0)),
         ))))?;
         tx.format_text(TextFormatType::Underline, None)?;
-        assert_eq!(tx.range_selection()?.format, TextFormat::BOLD | TextFormat::ITALIC | TextFormat::UNDERLINE);
+        assert_eq!(
+            tx.range_selection()?.format,
+            TextFormat::BOLD | TextFormat::ITALIC | TextFormat::UNDERLINE
+        );
         assert_eq!(tx.view().text_data(last)?.format, TextFormat::ITALIC);
         Ok(())
     })?;
@@ -645,7 +649,8 @@ fn formatting_resolves_an_element_start_mutated_by_text_split() -> Result<(), Er
         tx.append(p, &[text.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(p, ChildIndex(0)), Point::text(text, Utf16Offset(2)),
+            Point::element(p, ChildIndex(0)),
+            Point::text(text, Utf16Offset(2)),
         ))))?;
         tx.format_text(TextFormatType::Bold, None)?;
         assert_eq!(tx.anchor()?, Point::text(text, Utf16Offset(0)));
@@ -662,10 +667,14 @@ fn a_single_text_replacement_stops_at_the_selected_root_child() -> Result<(), Er
         let last = tx.create(Paragraph::default())?;
         tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(NodeKey::ROOT, ChildIndex(0)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
         ))))?;
         tx.insert_text("x")?;
-        assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![first.key(), last.key()]);
+        assert_eq!(
+            tx.children_keys(NodeKey::ROOT)?,
+            vec![first.key(), last.key()]
+        );
         assert_eq!(tx.text_content(first), "x");
         Ok(())
     })?;
@@ -681,7 +690,8 @@ fn formatting_a_structural_range_without_characters_preserves_typing_flags() -> 
         tx.append(p, &[text.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(p, ChildIndex(0)), Point::text(text, Utf16Offset(0)),
+            Point::element(p, ChildIndex(0)),
+            Point::text(text, Utf16Offset(0)),
         ))))?;
         tx.format_text(TextFormatType::Lowercase, None)?;
         assert_eq!(tx.range_selection()?.format, TextFormat::empty());
@@ -696,17 +706,25 @@ fn replacing_a_token_preserves_typing_format_independently_of_the_new_text() -> 
     editor.update(|tx| {
         let p = tx.create(Paragraph::default())?;
         let token = tx.create_text("x")?;
-        tx.text(token)?.set_mode(TextMode::Token)?.set_format(TextFormat::BOLD)?;
+        tx.text(token)?
+            .set_mode(TextMode::Token)?
+            .set_format(TextFormat::BOLD)?;
         let tail = tx.create_text("tail")?;
         tx.append(p, &[token.key(), tail.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
-        let mut range = RangeSelection::new(Point::text(token, Utf16Offset(0)), Point::text(tail, Utf16Offset(1)));
+        let mut range = RangeSelection::new(
+            Point::text(token, Utf16Offset(0)),
+            Point::text(tail, Utf16Offset(1)),
+        );
         range.format = TextFormat::ITALIC;
         tx.set_selection(Some(Selection::Range(range)))?;
         tx.insert_text("new")?;
         assert_eq!(tx.range_selection()?.format, TextFormat::ITALIC);
         let replacement = tx.first_child(p).unwrap();
-        assert_eq!(tx.view().text_data(replacement)?.format, TextFormat::empty());
+        assert_eq!(
+            tx.view().text_data(replacement)?.format,
+            TextFormat::empty()
+        );
         Ok(())
     })?;
     Ok(())
@@ -720,7 +738,8 @@ fn paragraph_insertion_after_root_caret_removal_uses_the_split_fallback() -> Res
         let last = tx.create(Paragraph::default())?;
         tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(last, ChildIndex(0)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::element(last, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
         ))))?;
         tx.insert_paragraph()?;
         assert_eq!(tx.children_size(NodeKey::ROOT), 4);
@@ -741,7 +760,8 @@ fn text_insertion_keeps_endpoint_roles_chosen_before_element_transfer() -> Resul
         tx.append(p, &[text.key(), line.key(), tab.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(p, ChildIndex(1)), Point::text(text, Utf16Offset(3)),
+            Point::element(p, ChildIndex(1)),
+            Point::text(text, Utf16Offset(3)),
         ))))?;
         tx.insert_text("new")?;
         assert_eq!(tx.text_content(p), "new\n\t");
