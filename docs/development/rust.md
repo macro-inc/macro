@@ -17,6 +17,10 @@ Return to the [repository guide](../../AGENTS.md) for other task guides.
 
 ## Crates and dependencies
 
+- `crates/` is grouped one level deep by feature (`crates/<group>/<crate>`);
+  [`crates/AGENTS.md`](../../crates/AGENTS.md) lists the groups and the
+  crates that stay at the top level. Put a new crate in its feature's group,
+  with directory, package and lib name all the same snake_case name.
 - Add a new crate to the root `Cargo.toml` `members` list (one per line, sorted),
   then run `just hakari` (`cargo x deps`). It gives every crate another member
   depends on a root `[workspace.dependencies]` entry at its current path, drops
