@@ -7,7 +7,7 @@ use worker::Env;
 use super::{SyncSession, bump_alarm, surface_api::session_kind_from_storage_key, take_editors};
 use crate::{
     domain::document::{DocumentAttribution, DocumentError, DocumentUpdateEffects},
-    dss_internal::{DssInternal, DssInternalClient, InteractionReason},
+    dss_internal::InteractionReason,
     state::DocumentState,
 };
 
@@ -23,31 +23,20 @@ pub(super) async fn report_new_doc_state(
     if session_kind_from_storage_key(session_key) != SessionKind::Document {
         return;
     }
-    if let Err(error) = DssInternalClient::new(env)
-        .publish_shallow_snapshot(session_key, snapshot)
-        .await
-    {
-        warn!(error = ?error, "failed to push snapshot to DSS");
-    }
-    #[cfg(feature = "search-service")]
-    if let Err(error) = DssInternalClient::new(env)
-        .publish_sync_content_updated(session_key, editors)
-        .await
-    {
-        warn!(error = ?error, "failed to publish document content change");
-    }
+    crate::outbound::document_publication::report_new_doc_state(
+        session_key,
+        snapshot,
+        env,
+        editors,
+    )
+    .await;
 }
 
 pub(super) async fn report_interaction(session_key: &str, env: &Env, reason: InteractionReason) {
     if session_kind_from_storage_key(session_key) != SessionKind::Document {
         return;
     }
-    if let Err(error) = DssInternalClient::new(env)
-        .publish_interaction(session_key, reason)
-        .await
-    {
-        warn!(error = ?error, "failed to push interaction to DSS");
-    }
+    crate::outbound::document_publication::report_interaction(session_key, env, reason).await;
 }
 
 pub(super) struct WorkerDocumentEffects<'a> {

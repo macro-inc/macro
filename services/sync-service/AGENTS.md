@@ -16,8 +16,10 @@ updates over WebSocket.
   Object — WebSocket handling, loro document state, alarm-driven snapshotting.
 - `src/inbound/durable_object/surface_api.rs`, `surface_migration.rs`: non-document
   surfaces (spreadsheets, forms, etc.) hosted the same way.
-- `src/outbound/storage/` + `src/outbound/storage/backends/`: snapshot/op-log persistence,
-  pluggable across D1/KV/R2/combined backends (see the Cargo feature flags).
+- `src/outbound/room_ports.rs`: Worker implementations of the core room ports.
+- `src/outbound/storage/` + `src/outbound/storage/backends/`: snapshot/op-log transport,
+  pluggable across D1/KV/R2/combined backends (see the Cargo feature flags);
+  write ordering and replay policy live in `sync_server_core::domain::operation_log`.
 - `src/inbound/auth.rs` + `src/inbound/credentials.rs`: route-specific access
   extractors and JWT verification against tokens minted by
   `document_storage_service`.

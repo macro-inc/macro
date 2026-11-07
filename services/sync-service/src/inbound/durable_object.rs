@@ -1,4 +1,5 @@
 use super::cors::{cors, is_origin_allowed};
+use crate::outbound::room_ports::WorkerPorts;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -6,6 +7,7 @@ use std::{
     sync::Arc,
 };
 use sync_protocol::InitializeFromSnapshotRequest;
+use sync_server_core::domain::ports::RoomPorts;
 
 use bebop::Record;
 use loro::{ExportMode, awareness::EphemeralStore};
@@ -28,10 +30,7 @@ use crate::{
     mutex::Mutex,
     socket::{InboundBuffers, Socket, protocol},
     state::DocumentState,
-    storage::{
-        SessionStorage, backends::durable_kv::DurableKVStorage, get_snapshot_storage,
-        snapshot::SnapshotStorage,
-    },
+    storage::{SessionStorage, get_snapshot_storage, snapshot::SnapshotStorage},
     tags::{get_ws_id_from_tags, new_ws_id},
     timeit,
 };
@@ -86,8 +85,9 @@ pub use sync_server_core::domain::connection::ConnectionMetadata as WebSocketMet
 pub type WsMetaMap = BTreeMap<String, WebSocketMetadata>;
 
 pub struct SyncSession {
-    state: State,
+    state: Rc<State>,
     env: Env,
+    ports: WorkerPorts,
     /// id of the document, comes from URL path
     document_id: Mutex<Option<Arc<String>>>,
     /// Current document state
@@ -401,11 +401,13 @@ impl SyncSession {
                 .storage()
                 .put(DOCUMENT_ID_KEY, document_id.to_string())
                 .await?;
-            let dkv_storage = DurableKVStorage::new(self.state.storage());
+            let dkv_storage = self.ports.storage().clone();
             let session_storage = Rc::new(SessionStorage::new(
                 storage,
                 dkv_storage,
                 SessionKind::Document,
+                document_id.to_string(),
+                self.state.clone(),
             ));
             *self
                 .session_storage
@@ -735,11 +737,13 @@ impl SyncSession {
         if snapshot_storage.has_snapshot().await? {
             self.maybe_set_document_id(document_id).await?;
             // set up session storage
-            let dkv_storage = DurableKVStorage::new(self.state.storage());
+            let dkv_storage = self.ports.storage().clone();
             let session_storage = Rc::new(SessionStorage::new(
                 snapshot_storage,
                 dkv_storage,
                 session_kind_from_storage_key(document_id),
+                document_id.to_string(),
+                self.state.clone(),
             ));
             *self
                 .session_storage
@@ -805,11 +809,13 @@ impl SyncSession {
         } else {
             let id = self.document_id().await?.to_string();
             let snapshot_storage = get_snapshot_storage(&self.env, &self.state, id.clone())?;
-            let dkv_storage = DurableKVStorage::new(self.state.storage());
+            let dkv_storage = self.ports.storage().clone();
             let ss = Rc::new(SessionStorage::new(
                 snapshot_storage,
                 dkv_storage,
                 session_kind_from_storage_key(&id),
+                id.clone(),
+                self.state.clone(),
             ));
             *self
                 .session_storage

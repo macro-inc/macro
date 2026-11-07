@@ -1,5 +1,4 @@
 use super::*;
-use crate::auth::AccessLevel;
 use std::cell::{Cell, RefCell};
 
 #[derive(Default)]

@@ -4,9 +4,12 @@ impl SyncSession {
     pub(super) fn new(state: State, env: Env) -> Self {
         #[cfg(feature = "transcript")]
         let (state, env) = crate::transcript::observe(state, env);
+        let state = Rc::new(state);
+        let ports = WorkerPorts::new(state.clone(), env.clone());
         Self {
             state,
             env,
+            ports,
             document_id: Mutex::new(None),
             document_state: Mutex::new(None),
             session_storage: Mutex::new(None),
@@ -63,7 +66,7 @@ impl SyncSession {
         // if a later request on the same isolate happens to flush it.
         let res = worker_rs_otel::scope(
             &self.env,
-            &self.state,
+            self.state.as_ref(),
             async {
                 self.inner_fetch(req)
                     .await
@@ -95,7 +98,7 @@ impl SyncSession {
                 if message == PING {
                     ws.send_with_str(PONG).ok();
                 } else {
-                    return worker_rs_otel::scope(&self.env, &self.state, async {
+                    return worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
                         warn!("Received unknown 'String' message: {message:?}");
                         Ok(())
                     })
@@ -110,7 +113,7 @@ impl SyncSession {
         let Some(binary_message) = socket.receive(&ws_id, &binary_message)? else {
             return Ok(());
         };
-        worker_rs_otel::scope(&self.env, &self.state, async {
+        worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
             let mut telemetry = protocol::InboundMessageTelemetry::new(binary_message.len());
 
             let res: Result<()> = async {
@@ -173,7 +176,7 @@ impl SyncSession {
         }
         self.validate_surface_sockets(None).await?;
         let span = tracing::info_span!("do.alarm");
-        worker_rs_otel::scope(&self.env, &self.state, async {
+        worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
             let state = match self
             .document_state()
             .await
@@ -258,7 +261,7 @@ impl SyncSession {
             self.forget_websocket_metadata(&ws).await;
             return Ok(());
         }
-        worker_rs_otel::scope(&self.env, &self.state, async {
+        worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
             // Sockets closed by `delete_handler` report back after the session is gone.
             if self.try_document_id().await?.is_none() {
                 self.forget_websocket_metadata(&ws).await;
@@ -294,7 +297,7 @@ impl SyncSession {
     }
 
     pub(super) async fn websocket_error(&self, ws: WebSocket, error: Error) -> Result<()> {
-        worker_rs_otel::scope(&self.env, &self.state, async {
+        worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
             let ws_id = get_ws_id(&self.state, &ws)?;
             error!(ws_id = ws_id, error = ?error, "websocket error");
             // TODO update awareness stuff

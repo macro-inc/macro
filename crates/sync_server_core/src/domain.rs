@@ -19,3 +19,11 @@ pub mod socket;
 pub mod state;
 /// Errors returned by imported document state.
 pub mod state_error;
+
+/// Runtime capability boundaries for a room.
+pub mod ports;
+/// Session identities and port data.
+pub mod types;
+
+/// Operation-log durability and replay policy.
+pub mod operation_log;

@@ -5,17 +5,7 @@ use worker::{Env, Fetch, Method, Request, RequestInit};
 use crate::constants::header_names::MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY;
 use crate::domain::document::DocumentAttribution;
 
-/// Why a document interaction was reported to DSS.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum InteractionReason {
-    /// A periodic save of pending content changes.
-    Edited,
-    /// The first peer joined the document session.
-    FirstJoin,
-    /// The last connected peer left the document session.
-    LastLeave,
-}
+pub use sync_server_core::domain::types::InteractionReason;
 
 #[derive(Serialize)]
 struct InteractionRequest {

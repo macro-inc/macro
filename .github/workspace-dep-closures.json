@@ -14158,6 +14158,7 @@
     ],
     "sync_server_core": [
       "crates/macro_sync_service_jwt",
+      "crates/sync_protocol",
       "crates/sync_server_core"
     ],
     "sync_service": [

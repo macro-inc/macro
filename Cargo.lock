@@ -19804,6 +19804,7 @@ dependencies = [
  "macro_sync_service_jwt",
  "serde",
  "serde_json",
+ "sync_protocol",
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
