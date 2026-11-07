@@ -99,6 +99,7 @@ urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 subtle = { workspace = true }
+models_soup = { workspace = true }
 
 [dev-dependencies]
 base64 = { workspace = true }

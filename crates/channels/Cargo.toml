@@ -42,6 +42,7 @@ kafka_consumer = [
 ]
 list = [
   "dep:filter_ast",
+  "dep:models_soup",
   "dep:frecency",
   "dep:model-entity",
   "dep:recursion",
@@ -155,6 +156,7 @@ ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+models_soup = { workspace = true, optional = true }
 
 [dev-dependencies]
 bot_id = { workspace = true, features = ["test-utils"] }
