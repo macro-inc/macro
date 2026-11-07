@@ -51,6 +51,15 @@ service's build recipe, e.g. `just services/document_text_extractor/build`.
 Use `just --show <recipe>` to check prerequisites; do not assume all Lambdas
 have the same build requirements.
 
+The dev profile builds workspace crates incrementally with line-table debuginfo
+and dependencies without debuginfo, which keeps edit-to-binary rebuilds short.
+Backtraces keep file and line for workspace code. For a debugger, pass
+`--config 'profile.dev.debug="full"' --config 'profile.dev.package."*".debug="full"'`.
+Gate wasm-only features such as `uuid/js` on
+`[target.'cfg(target_arch = "wasm32")'.dependencies]`: enabled natively, they
+change the feature set of a shared dependency and rebuild everything above it
+whenever you switch between services.
+
 Command definitions live in [rust.just](../../tooling/just/rust.just) and
 [check.just](../../tooling/just/check.just).
 

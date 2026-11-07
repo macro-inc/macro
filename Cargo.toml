@@ -535,6 +535,17 @@ tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a183
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
 utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
 
+# Full debuginfo made the agent_harness_service debug binary 2.9 GB and most
+# of each edit's rebuild was writing and linking it. Line tables keep file and
+# line in backtraces and panics for workspace code; dependencies get none.
+# Tests inherit this. For a debugger, pass
+# `--config 'profile.dev.debug="full"' --config 'profile.dev.package."*".debug="full"'`.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests
 # in the Rust suite (34 s for the crate); at opt-level 2 the crate's tests take
