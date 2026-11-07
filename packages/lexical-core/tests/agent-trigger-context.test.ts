@@ -98,6 +98,57 @@ describe('composeAgentContextPrompt with an external routine event', () => {
       '<note>The payload was too large to carry; read the details from GitHub.</note>'
     );
   });
+
+  it('renders a webhook delivery with its body and the tests that let it through', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Handle it.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-11',
+        name: 'Deploys',
+        owner: { id: 'macro|julia@example.com', name: 'Julia' },
+        instructions: 'Post failed deploys.',
+        triggers: [
+          {
+            type: 'events',
+            events: ['webhook'],
+            payload_match: ['status = "failed"'],
+          },
+        ],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'webhook',
+            request: {
+              body: '{"status":"failed"}',
+              content_type: 'application/json',
+            },
+          },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="routine">',
+        '  <note>The routine Deploys, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
+        '  <routine id="r-11" name="Deploys" owner="Julia" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Post failed deploys.</instructions>',
+        '  <triggers>',
+        '    <events names="webhook">',
+        '      <match>status = &quot;failed&quot;</match>',
+        '    </events>',
+        '  </triggers>',
+        '  <event type="webhook">',
+        '    <webhook content_type="application/json">',
+        '      <note>Sent to the webhook URL of the routine by whoever holds it.</note>',
+        '      <body>{&quot;status&quot;:&quot;failed&quot;}</body>',
+        '    </webhook>',
+        '  </event>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
 });
 
 describe('composeAgentContextPrompt with a trigger', () => {
