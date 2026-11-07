@@ -38,7 +38,7 @@ startup loudly.
   (`app_service_url`), not the `macro_service_urls` re-export, and call
   `XServiceUrl::new()`. Never declare a `FOO_SERVICE_URL` env var or match on
   `Environment` to build a URL. Queue names follow the same pattern in
-  `crates/macro_queues`.
+  `crates/platform/macro_queues`.
 - Third-party hosts our code calls are typed the same way when a test double
   exists for them (`GmailApiUrl`, `GoogleCalendarApiUrl`, `GooglePeopleApiUrl`,
   `GoogleOauthCertsUrl`, `GoogleOauthAuthorizationUrl`, `GoogleOauthTokenUrl`,

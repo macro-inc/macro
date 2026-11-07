@@ -2,7 +2,7 @@
  * The MCP server for ChatGPT: SDK-generated tools over Streamable HTTP, an
  * OAuth resource server whose tokens come from the harness's MCP broker.
  *
- * URLs mirror crates/macro_service_urls: RESOURCE_URL is
+ * URLs mirror crates/platform/macro_service_urls: RESOURCE_URL is
  * McpChatgptServiceUrl + "/mcp", AUTHORIZATION_SERVER_URL is McpPublicUrl.
  * Service hosts come from the SDK for MACRO_ENV.
  *

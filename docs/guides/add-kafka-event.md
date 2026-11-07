@@ -14,13 +14,13 @@ section below is one place, in order; past misses are called out inline.
 
 | Adding | Copy | Why |
 | --- | --- | --- |
-| A topic | The `macro.messages` registration: `crates/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
+| A topic | The `macro.messages` registration: `crates/platform/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
 | Events on a topic | `crates/github_pull_requests/src/broker.rs` (one variant), `crates/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
 | A durable consumer | `crates/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
 | An at-least-once consumer that must not skip | `crates/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
 | A per-process fan-out (GraphQL subscription, SSE) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
 
-Background: `crates/macro_event_broker/AGENTS.md` maps the broker crate;
+Background: `crates/platform/macro_event_broker/AGENTS.md` maps the broker crate;
 `crates/properties/README.md` ("Delivery semantics and compatibility") states the
 delivery contract every producer has.
 
@@ -30,7 +30,7 @@ Add a variant to an existing topic when the event is about the same entity as
 the topic's other events; add a topic only for a new entity stream.
 
 - Add `MacroXTopic => "macro.<snake_plural>"` with a doc comment to `topics!` in
-  `crates/macro_event_topics/src/lib.rs`, and an assertion to
+  `crates/platform/macro_event_topics/src/lib.rs`, and an assertion to
   `all_topic_names_includes_declared_topics` in `src/test.rs`.
 - Run `cargo x kafka-topics` and commit `.github/kafka-cluster-topics.json`. Never
   hand-edit it. CI (`check_generated`) fails when it is stale, and the

@@ -211,7 +211,7 @@ Postgres repo.
 
 Required for anything people act on; Recent is built from activity.
 
-- **Topic:** add it to `topics!` in `crates/macro_event_topics/src/lib.rs` (and its
+- **Topic:** add it to `topics!` in `crates/platform/macro_event_topics/src/lib.rs` (and its
   test), then `cargo x kafka-topics`. Never hand-edit
   `.github/kafka-cluster-topics.json`. The topic must exist before the producer
   deploys, or events are lost.

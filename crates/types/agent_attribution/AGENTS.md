@@ -17,7 +17,7 @@ context and re-exports these modules under their old paths.
   message. `may_share` says whether the request may change who can see an
   item; `refuse_sharing` is the body check for sharing that isn't a grant.
 - `src/scope.rs`: session scopes and the requests each allows (see
-  `crates/agent_correlation/AGENTS.md` for the lists and the tests that
+  `crates/platform/agent_correlation/AGENTS.md` for the lists and the tests that
   hold them).
 - `src/verb.rs`: closed SDK display-verb vocabulary.
 
