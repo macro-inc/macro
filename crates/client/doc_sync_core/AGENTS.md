@@ -67,3 +67,8 @@ timestamps plus controlled storage and socket completions. Tests named
 
 Consume due own/assist retry timers once; reconnect or authorization inputs drive
 blocked pushes. Never return an already-consumed retry as the next wake.
+
+Only arm a due rebase wake while Running, synchronized and without an own push;
+blocked work resumes on the next eligible input. Replay acknowledged rows already
+covered by a shallow snapshot as no-ops after checksum/VV verification, so collected
+history cannot cause repeated rebases. Never skip an unacknowledged row this way.
