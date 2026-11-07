@@ -47,3 +47,6 @@ visibility before emitting updates or retaining their model bindings.
 
 Remote Create JSON retains an empty children marker for native elements so
 opt-in unknown types keep their structural kind through EditorCore.
+
+Snapshot ownership of affected child lists before initializing new subtrees;
+rebinding a moved descendant must not turn its old container into a foreign child.
