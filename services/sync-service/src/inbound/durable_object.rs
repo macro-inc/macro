@@ -15,7 +15,7 @@ use sync_server_core::domain::{
 use bebop::Record;
 use loro::ExportMode;
 use macro_sync_service_jwt::session::SessionKind;
-use tracing::{Instrument, debug, error, info, instrument, trace, warn};
+use tracing::{Instrument, debug, error, instrument, trace, warn};
 use worker::{
     DurableObject, Env, Error, Method, Request, Response, ResponseBody, ResponseBuilder, Result,
     State, WebSocket, WebSocketIncomingMessage, durable_object,
@@ -26,7 +26,6 @@ use crate::{
     constants::{SYSTEM_AUTHOR_ID, USER_PEER_D1_BINDING},
     d1::{get_user_id_from_peer_id, insert_missing_user_mappings},
     domain::document::{DocumentAttribution, writing_peers},
-    dss_internal::InteractionReason,
     error::ResultExt,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
     socket::{Socket, protocol},
@@ -57,7 +56,7 @@ mod document_effects;
 mod surface_api;
 pub(crate) mod surface_migration;
 
-use document_effects::{report_interaction, report_new_doc_state};
+use document_effects::report_new_doc_state;
 use surface_api::session_kind_from_storage_key;
 
 pub fn response(status_code: u16) -> Response {
@@ -153,21 +152,6 @@ impl SyncSession<'_> {
         }
     }
 
-    /// Drain the pending blame buffer and write all events via a single D1
-    /// batch in the background. Returns immediately; the actual write runs
-    /// inside `wait_until` so the alarm handler doesn't block on D1.
-    fn flush_pending_blame(&mut self) {
-        let pending: Vec<crate::d1::BlameEvent> = std::mem::take(&mut self.pending_blame);
-        if pending.is_empty() {
-            return;
-        }
-        let env = self.env.clone();
-        self.state.wait_until(crate::background(async move {
-            if let Err(e) = crate::d1::insert_blame_many(&env, &pending).await {
-                warn!(error = ?e, "failed to flush pending blame");
-            }
-        }));
-    }
     pub(super) async fn debug_get(&mut self, key: &str) -> Result<Response> {
         Response::from_json(&self.session_storage().await?.debug_do_kv_get(key).await?)
     }

@@ -244,6 +244,27 @@ impl SimPorts {
     pub fn runtime_closes(&self, socket: &WebSocketId) {
         self.0.borrow_mut().sockets.retain(|item| item != socket);
     }
+    /// The runtime consumes the current alarm before invoking its callback.
+    pub fn fire_alarm(&self) {
+        let mut s = self.0.borrow_mut();
+        s.data.alarm = None;
+        s.durable.alarm = None;
+    }
+    /// Inspect the durable wakeup deadline without a port call.
+    pub fn alarm_dump(&self) -> Option<i64> {
+        self.0.borrow().data.alarm.map(|time| time.0)
+    }
+    /// Inspect attribution tables without emitting query effects.
+    pub fn directory_dump(&self) -> Value {
+        let s = self.0.borrow();
+        json!({
+            "peer_user_map": s.data.peers.iter().map(|((document, peer), (user, actor))| json!({"document_id":document,"peer_id":peer,"user_id":user,"actor":actor})).collect::<Vec<_>>(),
+            "blame": s.data.blame.iter().map(|((document,node),(peer,time))|json!({"document_id":document,"node_id":node,"peer_id":peer.to_string(),"timestamp_ms":time})).collect::<Vec<_>>()
+        })
+    }
+    pub(crate) fn transport_effect(&self, effect: Effect) {
+        self.0.borrow_mut().effects.push(effect);
+    }
     /// Drain the ordered port log.
     pub fn take_effects(&self) -> Vec<Effect> {
         std::mem::take(&mut self.0.borrow_mut().effects)
@@ -650,12 +671,13 @@ impl AlarmScheduler for SimPorts {
         Ok(self.0.borrow().data.alarm)
     }
     async fn schedule_in(&self, delay: Duration) -> Result<(), SimError> {
+        let now = self.clock("alarm_set_ms", |s| {
+            (s.now.unix_ms + s.busy_for.as_millis() as i64) as u128
+        }) as i64;
         self.enter("alarm.set", json!({"delay_ms":delay.as_millis()}))
             .await?;
         let mut s = self.0.borrow_mut();
-        s.data.alarm = Some(UnixMillis(
-            s.now.unix_ms + (s.busy_for + delay).as_millis() as i64,
-        ));
+        s.data.alarm = Some(UnixMillis(now + delay.as_millis() as i64));
         s.write();
         Ok(())
     }

@@ -121,3 +121,6 @@ mod test;
 
 mod frame;
 pub use frame::InboundFrame;
+
+mod alarm;
+pub use alarm::AlarmOutcome;

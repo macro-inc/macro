@@ -1,5 +1,5 @@
 //! Read-only Loro views for the Worker adapter; mutable state belongs to Room.
-use loro::{ExportMode, Frontiers, LoroDoc};
+use loro::{ExportMode, LoroDoc};
 use std::cell::Cell;
 use std::time::Duration;
 use sync_server_core::domain::{
@@ -52,14 +52,9 @@ impl DocumentState {
     pub fn try_from_snapshot(snapshot: &[u8]) -> Result<Self> {
         into_worker(CoreDocumentState::try_from_snapshot(snapshot)).map(Self::from_core)
     }
-    pub fn frontiers(&self) -> (Frontiers, Frontiers) {
-        self.inner.frontiers()
-    }
+
     pub fn get_json(&self) -> String {
         self.inner.get_json()
-    }
-    pub fn should_save(&self) -> bool {
-        self.inner.should_save()
     }
 
     pub fn export_snapshot(&self, mode: Option<ExportMode>) -> Result<Vec<u8>> {

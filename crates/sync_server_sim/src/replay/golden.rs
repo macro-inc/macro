@@ -66,11 +66,83 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
     let mut result = Vec::new();
     for (index, record) in records.iter().enumerate() {
         let args = &record["args"];
-        if let Some(port) = record["port"].as_str() {
+        if let Some(kind) = record["clock"].as_str() {
+            let kind = match kind {
+                "state_instant" => "monotonic",
+                "op_id_nanos" => "unix_nanos",
+                other => other,
+            };
+            result.push(effect(
+                "clock",
+                json!({"kind":kind,"value":record["value"]}),
+            ));
+        } else if let Some(port) = record["port"].as_str() {
             let next = match port {
                 "storage.get" => effect("storage.get", args[0].clone()),
                 "storage.put" => effect("storage.put", json!({"key":args[0],"value":args[1]})),
+                "storage.delete" if args[0].is_array() => {
+                    effect("storage.delete_multiple", args[0].clone())
+                }
                 "storage.delete" => effect("storage.delete", args[0].clone()),
+                "storage.getAlarm" => effect("alarm.get", Value::Null),
+                "storage.setAlarm" => {
+                    let clock = records[..index]
+                        .iter()
+                        .rev()
+                        .find(|r| r["clock"] == "alarm_set_ms")
+                        .ok_or_else(|| invalid("missing alarm scheduling clock"))?;
+                    let now = clock["value"]
+                        .as_str()
+                        .ok_or_else(|| invalid("missing alarm wall clock"))?
+                        .parse::<i64>()
+                        .map_err(|e| invalid(e.to_string()))?;
+                    let deadline = args[0]["date_ms"]
+                        .as_i64()
+                        .ok_or_else(|| invalid("missing alarm deadline"))?;
+                    let delay = deadline
+                        .checked_sub(now)
+                        .filter(|delay| *delay >= 0)
+                        .ok_or_else(|| invalid("invalid alarm delay"))?;
+                    effect("alarm.set", json!({"delay_ms":delay}))
+                }
+                "d1.run"
+                    if record["sql"]
+                        == "INSERT INTO peer_user_map (document_id, peer_id, user_id, actor) VALUES (?, ?, ?, ?) ON CONFLICT(document_id, peer_id) DO UPDATE SET user_id = excluded.user_id, actor = excluded.actor WHERE peer_user_map.user_id = ?;" =>
+                {
+                    let params = &record["params"];
+                    if params[4] != "system" {
+                        return Err(invalid("unexpected claim policy"));
+                    }
+                    effect(
+                        "peers.claim",
+                        json!({"document":params[0],"peer":params[1],"user":params[2],"actor":params[3]}),
+                    )
+                }
+                "d1.batch" => {
+                    let statements = record["statements"]
+                        .as_array()
+                        .ok_or_else(|| invalid("missing D1 batch"))?;
+                    let first = statements
+                        .first()
+                        .ok_or_else(|| invalid("empty D1 batch"))?;
+                    let sql = "INSERT OR IGNORE INTO peer_user_map (document_id, peer_id, user_id, actor) VALUES (?, ?, ?, ?);";
+                    let params = &first["params"];
+                    let mut peers = Vec::new();
+                    for statement in statements {
+                        if statement["sql"] != sql
+                            || statement["params"][0] != params[0]
+                            || statement["params"][2] != params[2]
+                            || statement["params"][3] != params[3]
+                        {
+                            return Err(ReplayError::Unsupported("D1 batch policy".into()));
+                        }
+                        peers.push(statement["params"][1].clone());
+                    }
+                    effect(
+                        "peers.map_unowned",
+                        json!({"document":params[0],"peers":peers,"user":params[2],"actor":params[3]}),
+                    )
+                }
                 "storage.list" if args[0] == json!({"prefix":"o/"}) => {
                     effect("storage.list", json!("o/"))
                 }
@@ -104,6 +176,16 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                             "snapshot.put",
                             json!({"key":args[1],"bytes":decode(&insert["args"][3]["bytes_b64"])?}),
                         )
+                    } else if sql == "SELECT chunk, data FROM kv_store WHERE id = ?1 ORDER BY chunk"
+                    {
+                        // The preceding existence query is the snapshot.get boundary.
+                        if !records[..index].iter().any(|r| {
+                            r["args"][0] == "SELECT 1 FROM kv_store WHERE id = ?1 LIMIT 1"
+                                && r["args"][1] == args[1]
+                        }) {
+                            return Err(invalid("orphan snapshot chunk read"));
+                        }
+                        continue;
                     } else if sql == "INSERT INTO kv_store (id, chunk, data) VALUES (?1, ?2, ?3)" {
                         let previous = records
                             .get(index.wrapping_sub(1))
@@ -154,6 +236,10 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                     result.push(effect("connections.send_text", value.clone()));
                     result.push(effect("send_text", value));
                 }
+                "alarm" => result.push(effect(
+                    "alarm.response",
+                    json!({"status":record["status"],"body":decode(&record["body_b64"])?}),
+                )),
                 "response" | "dump" => {}
                 other => return Err(ReplayError::Unsupported(format!("raw output {other}"))),
             }
@@ -185,6 +271,28 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
             .filter(|r| r["room"] == recorded.room && r["callback"] == callback)
             .collect();
         let ports = room.room.ports().clone();
+        ports.seed_clocks(
+            records
+                .iter()
+                .filter_map(|r| {
+                    r["clock"].as_str().map(|kind| {
+                        let kind = match kind {
+                            "state_instant" => "monotonic",
+                            "op_id_nanos" => "unix_nanos",
+                            other => other,
+                        };
+                        Ok::<_, ReplayError>((
+                            kind.to_owned(),
+                            r["value"]
+                                .as_str()
+                                .ok_or_else(|| invalid("missing clock value"))?
+                                .parse::<u128>()
+                                .map_err(|e| invalid(e.to_string()))?,
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        );
         ports.seed_entropy(records.iter().filter(|r| r["out"] == "accept").map(|r| {
             r["ws_id"].as_str().expect("accepted socket")[5..]
                 .parse()
@@ -200,6 +308,14 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 .map(|k| k.as_str().to_owned())
                 .unwrap_or_default(),
         };
+        let baseline = room
+            .room
+            .memory_view()
+            .document
+            .as_ref()
+            .map(|document| document.export_snapshot(None))
+            .transpose()
+            .map_err(|e| invalid(e.to_string()))?;
         let result = match recorded.input {
             ServerInput::Http(req) if req.method == "GET" && req.path.ends_with("/connect") => {
                 ports.set_now(recorded.now);
@@ -241,9 +357,13 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 StepResult::Crashed(_) => return Err(invalid("golden callback crashed")),
             },
         };
+        if ports.remaining_clocks() != 0 {
+            return Err(ReplayError::Mismatch("unconsumed clock reads".into()));
+        }
         let expected = projected(&records, &key)?;
         let actual: Vec<_> = result
             .iter()
+            .filter(|e| e.operation != "background.keep_alive")
             .map(|e| {
                 if e.operation == "background.publish" {
                     effect("background.schedule", Value::Null)
@@ -252,7 +372,7 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 }
             })
             .collect();
-        compare_effects(&expected, &actual).map_err(|error| {
+        compare_effects_in_context(&expected, &actual, baseline.as_deref()).map_err(|error| {
             ReplayError::Mismatch(format!(
                 "{} callback {callback}: {error}; expected {expected:?}; actual {actual:?}",
                 transcript.name
@@ -291,9 +411,9 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                     return Err(ReplayError::Mismatch("final snapshot differs".into()));
                 }
             }
-            if dump["d1"] != json!({"peer_user_map":[],"blame":[]})
+            if dump["d1"] != ports.directory_dump()
                 || dump["snapshots"] != json!([])
-                || !dump["alarm"].is_null()
+                || dump["alarm"] != json!(ports.alarm_dump())
             {
                 return Err(ReplayError::Unsupported(
                     "nonempty external store in C8 fixture".into(),

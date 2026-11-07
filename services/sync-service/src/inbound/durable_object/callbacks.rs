@@ -22,89 +22,22 @@ impl SyncSession<'_> {
         }
     }
 
-    /// Save document if needed
+    /// Map the core alarm outcome without changing durable retry behavior.
     pub(super) async fn alarm(&mut self) -> Result<Response> {
-        if self.source_blocked().await? {
-            return Response::empty();
-        }
-        self.validate_surface_sockets(None).await?;
-        let span = tracing::info_span!("do.alarm");
-        let env = self.env.clone();
-        let runtime = self.state.clone();
-        worker_rs_otel::scope(&env, runtime.as_ref(), async {
-            let state = match self
-            .document_state()
-            .await
-            .context("failed to get document_state")
-        {
-            Ok(x) => x,
-            Err(_e) => {
-                // This is likely due to a programming issue. We don't return `Err`
-                // because it wuld cause this alarm to retry, then fail again.
-                return Response::empty();
-            }
-        };
-
-        if state.should_save() {
-            let seshs = self
-                .session_storage()
-                .await
-                .context("failed to get session storage")?;
-
-            // Keeps the worker alive for DEFAULT_TIME_TO_LIVE
-            keepalive(DEFAULT_TIME_TO_LIVE);
-
-            let doc_state = self.document_state().await?;
-            let (sf, of) = doc_state.frontiers();
-            seshs
-                .store_snapshot(self.operation_log.as_ref().expect("log initialized"), self.document.as_ref().expect("document loaded"))
-                .await
-                .context("failed to store snapshot")?;
-
-            debug!(state_frontiers =? sf, oplog_frontiers =? of, "Stored new DocumentState");
-            seshs
-                .clear_applied_ops(self.operation_log.as_mut().expect("log initialized"))
-                .await
-                .context("failed deleting applied ops")?;
-
-            self.document.as_mut().expect("document loaded").mark_exported(crate::state::monotonic());
-
-            // The old wait_until future captured these on its first poll, at
-            // the next yield or return, before any callback could acquire the
-            // barrier. Capturing now under the same room guard yields the same
-            // snapshot and editor set, without sharing mutable room state.
-            let publication = self.document_id().await.ok().and_then(|document_id| {
-                doc_state.export_shallow_snapshot().ok().map(|snapshot| (document_id, snapshot))
-            }).map(|(document_id, snapshot)| (document_id, snapshot, take_editors(&mut self.pending_editors)));
-            let env = self.env.clone();
-            // Preserve the scheduling effect even if exporting failed.
-            self.state.wait_until(crate::background(async move {
-                if let Some((document_id, snapshot, editors)) = publication {
-                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
-                    report_interaction(&document_id, &env, InteractionReason::Edited).await;
-                }
-            }));
-        }
-
-        self.flush_pending_blame();
-
-        // Re-arm the alarm while clients are connected so the in-memory state
-        // stays warm and pending updates keep getting persisted. Updates reach
-        // peers when they happen (PeerUpdate broadcast); pushing a full
-        // snapshot to every client on every alarm tick only burned bandwidth
-        // and stalled clients on large documents.
-        if !self.state.get_websockets().is_empty() {
-            self.room.bump_alarm()
-                .await
-                .context("failed to keep document alive")?;
-        } else {
-            info!("durable object has reached 0 connections")
-        }
-
-            Response::ok("ok")
-        }
-        .instrument(span))
+        use sync_server_core::domain::room::AlarmOutcome;
+        let outcome = worker_rs_otel::scope(
+            &self.env,
+            self.state.as_ref(),
+            self.room
+                .on_alarm()
+                .instrument(tracing::info_span!("do.alarm")),
+        )
         .await
+        .map_err(room_error)?;
+        match outcome {
+            AlarmOutcome::Skipped => Response::empty(),
+            AlarmOutcome::Completed => Response::ok("ok"),
+        }
     }
 
     pub(super) async fn websocket_close(

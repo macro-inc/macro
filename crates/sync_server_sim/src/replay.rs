@@ -5,7 +5,7 @@ use crate::{
 };
 use futures::FutureExt;
 use sync_protocol::time::WallDuration;
-use sync_server_core::domain::room::{InboundFrame, Room, RoomConfig};
+use sync_server_core::domain::room::{AlarmOutcome, InboundFrame, Room, RoomConfig};
 mod golden;
 
 /// Golden fixtures with every callback implemented by the native room.
@@ -14,6 +14,7 @@ pub const ENABLED: &[&str] = &[
     "document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl",
     "document_sync.test/document_sync_tests_should_be_able_to_load_initial_sync_into_loro.jsonl",
     "websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl",
+    "transcript_boundaries.test/M12_echoes_the_exact_request_version_vector.jsonl",
 ];
 
 /// Parsing, unsupported-callback and parity failures stay distinguishable.
@@ -78,6 +79,7 @@ impl SimRoom {
             | ServerInput::AdvanceClock(_)
             | ServerInput::RuntimeCloses(_)
             | ServerInput::Connect { .. }
+            | ServerInput::AlarmFired
             | ServerInput::Close(_)
             | ServerInput::Text { .. }
             | ServerInput::Binary { .. } => {}
@@ -99,6 +101,17 @@ impl SimRoom {
                         ServerInput::Connect { grant, key } => {
                             self.room.connect(grant, key).await?;
                         }
+                        ServerInput::AlarmFired => {
+                            self.room.ports().fire_alarm();
+                            let body = match self.room.on_alarm().await? {
+                                AlarmOutcome::Skipped => vec![],
+                                AlarmOutcome::Completed => b"ok".to_vec(),
+                            };
+                            self.room.ports().transport_effect(Effect {
+                                operation: "alarm.response".into(),
+                                value: serde_json::json!({"status":200,"body":body}),
+                            });
+                        }
                         ServerInput::Close(socket) => self.room.on_close(&socket).await?,
                         ServerInput::Text { socket, text } => {
                             self.room
@@ -116,6 +129,7 @@ impl SimRoom {
                 };
                 match future.now_or_never() {
                     Some(Ok(())) => {}
+                    Some(Err(_)) if self.room.ports().crashed() => {}
                     Some(Err(error)) => return Err(ReplayError::Callback(error.to_string())),
                     None if self.room.ports().crashed() => {}
                     None => {
