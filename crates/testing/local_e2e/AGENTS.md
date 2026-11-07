@@ -1,4 +1,4 @@
-# local_e2e (crates/integration_tests/local_e2e)
+# local_e2e (crates/testing/local_e2e)
 
 ## What it is
 

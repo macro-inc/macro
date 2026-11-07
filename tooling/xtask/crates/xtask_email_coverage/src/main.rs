@@ -1,6 +1,6 @@
 //! `cargo x email-coverage <command>`
 //!
-//! - `list` writes `crates/email_e2e/coverage/entrypoints.tsv` from the code.
+//! - `list` writes `crates/testing/email_e2e/coverage/entrypoints.tsv` from the code.
 //! - `list --check` fails when the checked-in file differs from the code.
 //! - `report` joins what the scenarios recorded with the ledger.
 

@@ -1,5 +1,5 @@
 // The email stack a test runs against, over the HTTP routes of
-// `email_e2e_stacks` (crates/email_e2e/src/stack_server.rs).
+// `email_e2e_stacks` (crates/testing/email_e2e/src/stack_server.rs).
 
 import type { SignedInUser } from './front';
 

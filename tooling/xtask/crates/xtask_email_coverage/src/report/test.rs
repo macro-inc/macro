@@ -1085,8 +1085,8 @@ owner = "calendar"
         "`http GET /email/drafts/{id}/operation` is both owned by calendar and deferred on outlook",
         "`http GET /email/drafts/scheduled` is both owned by calendar and waived on gmail",
         "`http GET /email/drafts/scheduled` is owned by calendar in \
-         crates/email_e2e/coverage/waivers.toml and mapped in \
-         crates/email_e2e/coverage/functions.toml",
+         crates/testing/email_e2e/coverage/waivers.toml and mapped in \
+         crates/testing/email_e2e/coverage/functions.toml",
         "`provider gmail:messages.modify` is owned by calendar in",
         "[[owned]] names the provider `yahoo`",
     ] {

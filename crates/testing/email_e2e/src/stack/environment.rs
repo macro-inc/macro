@@ -21,12 +21,12 @@ pub(crate) const UPLOADS_BUCKET: &str = "uploads";
 /// The local stack's public key for Macro API tokens. The services only
 /// parse it when such a token arrives.
 const MACRO_API_TOKEN_PUBLIC_KEY: &str = include_str!(
-    "../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
+    "../../../../../tooling/xtask/crates/xtask_local/src/local/identity/macro-api-token.local.public.pem"
 );
 /// An RSA key for signing attachment links, which the CDN stand-in does not
 /// check. A test fixture, not a secret.
 const CDN_SIGNING_KEY: &str =
-    include_str!("../../../comms/call/src/outbound/s3_recording_storage/test_private_key.pem");
+    include_str!("../../../../comms/call/src/outbound/s3_recording_storage/test_private_key.pem");
 
 /// The suite's own names for the shared servers. Each falls back to the name
 /// the rest of the workspace's tests use, which the development shell sets.
@@ -84,7 +84,7 @@ fn required(names: &[&str], what: &str) -> Result<String, Report> {
         }
     }
     bail!(
-        "{} is not set: the suite needs {what}. See crates/email_e2e/AGENTS.md",
+        "{} is not set: the suite needs {what}. See crates/testing/email_e2e/AGENTS.md",
         names.join(" or ")
     )
 }

@@ -1,5 +1,5 @@
 //! The evidence files the harness writes: one per scenario that finished
-//! healthy, in its log directory (`crates/email_e2e/src/evidence.rs`).
+//! healthy, in its log directory (`crates/testing/email_e2e/src/evidence.rs`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

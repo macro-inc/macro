@@ -1,4 +1,4 @@
-//! The Outlook emulator (`crates/outlook_emulator`) as part of a local stack.
+//! The Outlook emulator (`crates/testing/outlook_emulator`) as part of a local stack.
 //!
 //! A stack with no real Microsoft OAuth client cannot reach Microsoft: Sign
 //! in with Microsoft and Outlook linking have no application to consent to.
@@ -23,7 +23,7 @@ const CONTAINER_PORT: u16 = 8080;
 /// The seed inside the container.
 const SEED_MOUNT: &str = "/etc/outlook-emulator/seed.yaml";
 /// The users and mailboxes a stack starts with.
-const SEED_FILE: &str = "crates/outlook_emulator/seed.example.yaml";
+const SEED_FILE: &str = "crates/testing/outlook_emulator/seed.example.yaml";
 /// The development certificate authority inside the container: the stack's
 /// proxy is signed by it, and change notifications are posted to the proxy.
 const AUTHORITY_MOUNT: &str = "/etc/outlook-emulator/ca.pem";

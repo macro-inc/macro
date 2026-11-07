@@ -1,4 +1,4 @@
-//! The model emulator (`crates/model_emulator`) as part of a local stack.
+//! The model emulator (`crates/testing/model_emulator`) as part of a local stack.
 //!
 //! A stack with no real Gemini key cannot reach the model a new account's
 //! assistant runs on: every conversation would fail on its first request.

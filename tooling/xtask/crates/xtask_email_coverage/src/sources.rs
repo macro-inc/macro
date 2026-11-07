@@ -1,4 +1,4 @@
-//! `crates/email_e2e/coverage/sources.toml`: where the generator looks for
+//! `crates/testing/email_e2e/coverage/sources.toml`: where the generator looks for
 //! entry points, and the few facts it cannot read from the code.
 
 use std::path::Path;
@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::row::{Kind, Providers};
 
 /// Repository-relative path of the hand-maintained configuration.
-pub const SOURCES_PATH: &str = "crates/email_e2e/coverage/sources.toml";
+pub const SOURCES_PATH: &str = "crates/testing/email_e2e/coverage/sources.toml";
 
 /// An item of a source file, written `path/to/file.rs::Ident`.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]

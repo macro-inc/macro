@@ -14,7 +14,7 @@
 //! as easily as email code can, and in the daily sweep ([`SWEEP`]), which
 //! also runs the scenarios kept for known bugs, as a run by hand with
 //! `known_bugs` does. It is not part of `PR CI`: a pull request branch is run
-//! by hand (`workflow_dispatch`, `crates/email_e2e/AGENTS.md`).
+//! by hand (`workflow_dispatch`, `crates/testing/email_e2e/AGENTS.md`).
 //! A failure on `main` is a red run on the commit it tested; nothing is
 //! reverted or blocked by it. Its last job tells the Macro Alerts channel
 //! when the pushes or the sweep turn red, and when they pass again

@@ -73,7 +73,7 @@ export async function holdRequests(
   };
 }
 
-/** A fault of the provider's emulator (`crates/gmail_emulator/src/fault.rs`). */
+/** A fault of the provider's emulator (`crates/testing/gmail_emulator/src/fault.rs`). */
 export type ProviderFault = {
   /** `threads.get`, `threads.list`, ...; every route when absent. */
   route?: string;

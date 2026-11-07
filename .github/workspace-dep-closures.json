@@ -6303,7 +6303,6 @@
       "crates/email/email_validator",
       "crates/email/google_token",
       "crates/email/invite_email",
-      "crates/email_e2e",
       "crates/entities/entity_access",
       "crates/entities/entity_access_db_utils",
       "crates/entities/entity_access_management",
@@ -6313,14 +6312,12 @@
       "crates/entities/frecency_inbound",
       "crates/entities/frecency_outbound",
       "crates/entities/share_permission_db_utils",
-      "crates/gmail_emulator",
       "crates/integrations/unfurl",
       "crates/macro_db_migrator",
       "crates/model_entity",
       "crates/model_error_response",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
-      "crates/outlook_emulator",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -6350,6 +6347,9 @@
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
+      "crates/testing/email_e2e",
+      "crates/testing/gmail_emulator",
+      "crates/testing/outlook_emulator",
       "crates/types/agent_attribution",
       "crates/types/agent_session_id",
       "crates/types/bearer_token",
@@ -7760,10 +7760,10 @@
       "crates/workspace-hack"
     ],
     "gmail_emulator": [
-      "crates/gmail_emulator",
       "crates/platform/macro_entrypoint",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
+      "crates/testing/gmail_emulator",
       "crates/workspace-hack"
     ],
     "google_calendar_api_url": [
@@ -10508,16 +10508,16 @@
       "services/agent_harness_service/load-test"
     ],
     "local_e2e": [
-      "crates/integration_tests/local_e2e",
+      "crates/testing/local_e2e",
       "crates/workspace-hack"
     ],
     "local_e2e_test_support": [
-      "crates/local_e2e_test_support",
       "crates/model_error_response",
       "crates/platform/macro_auth",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
       "crates/platform/remote_env_var",
+      "crates/testing/local_e2e_test_support",
       "crates/types/cowlike",
       "crates/types/macro_user_id",
       "crates/workspace-hack"
@@ -11100,10 +11100,10 @@
       "crates/workspace-hack"
     ],
     "model_emulator": [
-      "crates/model_emulator",
       "crates/platform/macro_entrypoint",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
+      "crates/testing/model_emulator",
       "crates/workspace-hack"
     ],
     "model_entity": [
@@ -11842,10 +11842,10 @@
       "services/organization_retention_trigger"
     ],
     "outlook_emulator": [
-      "crates/outlook_emulator",
       "crates/platform/macro_entrypoint",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
+      "crates/testing/outlook_emulator",
       "crates/workspace-hack"
     ],
     "pairing_id": [

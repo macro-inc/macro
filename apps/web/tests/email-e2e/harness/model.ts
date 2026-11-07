@@ -1,4 +1,4 @@
-// The local stack's stand-in for the model (`crates/model_emulator`): a test
+// The local stack's stand-in for the model (`crates/testing/model_emulator`): a test
 // says ahead of time what the model answers, and no model is ever called.
 //
 // A script answers the conversation whose message names it with

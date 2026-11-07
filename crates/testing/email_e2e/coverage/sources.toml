@@ -54,7 +54,7 @@ graphql = "GraphqlSoupEmailThread"
 file = "services/email_service/src/bin/pubsub_workers/pubsub_workers.rs"
 
 # `name` and `aliases` are the harness's names for the queue (`QueueSpec` in
-# crates/email_e2e/src/infra/sqs.rs); an alias carries the same messages.
+# crates/testing/email_e2e/src/infra/sqs.rs); an alias carries the same messages.
 # `type` is the enum whose variants are the message types, or the message
 # struct. `envelope` is the struct that wraps the enum on the wire; without
 # one, `at` is the enum's JSON pointer in the body ("" for the body itself).
@@ -142,11 +142,11 @@ glob = "services/user_link_cleanup_handler"
 # name their request logs print.
 [[provider]]
 prefix = "gmail"
-type = "crates/gmail_emulator/src/fault.rs::Route"
+type = "crates/testing/gmail_emulator/src/fault.rs::Route"
 
 [[provider]]
 prefix = "outlook"
-type = "crates/outlook_emulator/src/fault.rs::Route"
+type = "crates/testing/outlook_emulator/src/fault.rs::Route"
 
 # kind `loop`: background loops, the `pub` and `pub(crate)` `run*` functions
 # of these files. Listed for the report, not counted.

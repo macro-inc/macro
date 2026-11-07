@@ -12,14 +12,14 @@ contacts, watch) behind a single public facade; most modules are
 - `src/lib.rs`: `GmailClient`, its constructors (`new` and `without_watch`
   read Google's hosts from the typed `GmailApiUrl`, `GooglePeopleApiUrl` and
   `GoogleOauthCertsUrl`, so `OVERRIDE_*` can point a service at
-  `crates/gmail_emulator`; `new_with_urls` takes them directly, for tests), and
+  `crates/testing/gmail_emulator`; `new_with_urls` takes them directly, for tests), and
   `sanitize_error_body` — every error body is redacted (emails) and
   length-capped before it can reach logs.
 - `src/auth.rs`: Google JWT verification for push notifications.
 - `src/watch.rs`: Gmail push notification (`users.watch`) setup.
 - `src/test.rs` + each module's own `test.rs`: `wiremock`-backed HTTP tests,
   one server per test via `new_with_urls`. Tests of behaviour over time (sync,
-  history, push) belong in `crates/gmail_emulator`, which runs this client
+  history, push) belong in `crates/testing/gmail_emulator`, which runs this client
   against a stateful fake.
 
 ## Scope

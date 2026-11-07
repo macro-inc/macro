@@ -19,7 +19,7 @@ fn providers_come_from_the_key_before_the_path() {
         Providers::Gmail
     );
     assert_eq!(
-        default_providers("Route", "crates/outlook_emulator/src/fault.rs"),
+        default_providers("Route", "crates/testing/outlook_emulator/src/fault.rs"),
         Providers::Outlook
     );
     assert_eq!(
