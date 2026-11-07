@@ -1,18 +1,18 @@
 //! EditTag tool for renaming or recoloring an existing tag.
 
-use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::api::UpdatePropertyOptionRequest;
 use models_properties::service::property_option::PropertyOptionValue;
+use properties::domain::service::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{PropertiesToolContext, caller_team_receipt_opt};
-use crate::TagColor;
+use properties::TagColor;
 
 /// Rename or recolor an existing tag.
 #[derive(Debug, Deserialize, JsonSchema)]

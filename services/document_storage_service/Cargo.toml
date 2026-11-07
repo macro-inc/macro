@@ -328,6 +328,7 @@ connection_gateway_url = { workspace = true }
 lexical_service_url = { workspace = true }
 static_file_service_url = { workspace = true }
 sync_service_url = { workspace = true }
+properties_inbound = { workspace = true, default-features = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

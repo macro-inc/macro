@@ -33,7 +33,7 @@ use super::model::{
 ///
 /// This trait abstracts the database layer, allowing for different implementations
 /// (e.g., PostgreSQL, mock for testing).
-#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock(type Err = anyhow::Error;))]
 pub trait PropertiesRepo: Send + Sync + 'static {
     type Err;
 
@@ -464,7 +464,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
 /// properties-specific access rules (Task shares Document permissions, the
 /// thread-ownership fallback, and deleted entities being visible only to
 /// their owner).
-#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock(type Err = anyhow::Error;))]
 pub trait PermissionService: Send + Sync + 'static {
     type Err;
 
@@ -506,7 +506,7 @@ pub trait PermissionService: Send + Sync + 'static {
 /// (e.g., notification-service-backed, mock for testing). Adapters are expected to
 /// enrich the domain-level notification (task name, sender profile picture) and fan
 /// out delivery per recipient on a best-effort basis.
-#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+#[cfg_attr(any(test, feature = "mock"), mockall::automock(type Err = anyhow::Error;))]
 pub trait NotificationService: Send + Sync + 'static {
     type Err;
 

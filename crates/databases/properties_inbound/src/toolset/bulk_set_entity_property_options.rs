@@ -1,13 +1,13 @@
 //! BulkSetEntityPropertyOptions tool: apply one option delta (e.g. a tag) to
 //! many entities in a single call.
 
-use crate::domain::model::{EditReceipt, EntityOptionUpdateOutcome};
-use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
+use properties::domain::model::{EditReceipt, EntityOptionUpdateOutcome};
+use properties::domain::service::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

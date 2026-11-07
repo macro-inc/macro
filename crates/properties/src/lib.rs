@@ -9,10 +9,10 @@
 //! - `domain::service` - Service trait
 //! - `domain::service_impl` - Service implementation
 //! - `outbound` - Outbound adapters (e.g., PostgreSQL implementation)
+//!
+//! The HTTP routes and AI toolset are `properties_inbound`.
 
 pub mod domain;
-#[cfg(any(feature = "ai_tools", feature = "inbound"))]
-pub mod inbound;
 #[cfg(feature = "outbound")]
 pub mod outbound;
 pub mod tag_color;

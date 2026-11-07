@@ -18,8 +18,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
-use crate::domain::error::PropertiesErr;
-use crate::domain::service::PropertiesService;
+use properties::domain::error::PropertiesErr;
+use properties::domain::service::PropertiesService;
 
 #[derive(Debug, Error)]
 pub enum ListPropertiesErr {
