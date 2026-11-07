@@ -1,0 +1,45 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-session-mention.test.ts",
+    "test": [
+      "AgentSessionMentionNode",
+      "renders readable plain text and embedding references"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\"}</m-agent-session-mention>"
+      ],
+      "ret": "Fix the menu"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToEmbeddingText",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\"}</m-agent-session-mention>"
+      ],
+      "ret": "[Fix the menu](agent_session:session-1)"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

@@ -1,0 +1,37 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/cursor-system-notification.test.ts",
+    "test": [
+      "system notification",
+      "reads as its summary in plain text"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "Heads up:\n<system_notification source=\"github\" repo=\"github.com/macro-inc/macro\" commit=\"ca515d369476de0a33eef36b21724175e2f6bed3\" branch=\"cursor/settings-menu-search-1f17\" conclusion=\"success\" checks=\"27\" subscriptionId=\"sub_7a13eaab-eee7-4339-a8d3-31c3182150b2\" subscriptionType=\"github:ci:branch\">\nAll 27 CI checks completed without failures.\n</system_notification>"
+      ],
+      "ret": "Heads up:\nAll 27 CI checks completed without failures."
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

@@ -1,0 +1,4580 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+    "test": [
+      "LexicalCaret",
+      "Ordering",
+      "$comparePointCaretNext",
+      "trivial caret checks"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "namespaceGenerated": false,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/rich-text.HeadingNode"
+      },
+      "list": {
+        "$fn": "@lexical/list.ListNode"
+      },
+      "listitem": {
+        "$fn": "@lexical/list.ListItemNode"
+      },
+      "quote": {
+        "$fn": "@lexical/rich-text.QuoteNode"
+      },
+      "code": {
+        "$fn": "@lexical/code.CodeNode"
+      },
+      "table": {
+        "$fn": "@lexical/table.TableNode"
+      },
+      "tablecell": {
+        "$fn": "@lexical/table.TableCellNode"
+      },
+      "tablerow": {
+        "$fn": "@lexical/table.TableRowNode"
+      },
+      "hashtag": {
+        "$fn": "@lexical/hashtag.HashtagNode"
+      },
+      "code-highlight": {
+        "$fn": "@lexical/code.CodeHighlightNode"
+      },
+      "autolink": {
+        "$fn": "@lexical/link.AutoLinkNode"
+      },
+      "link": {
+        "$fn": "@lexical/link.LinkNode"
+      },
+      "overflow": {
+        "$fn": "@lexical/overflow.OverflowNode"
+      },
+      "mark": {
+        "$fn": "@lexical/mark.MarkNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "headless": false,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "namespaceGenerated": false,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/rich-text.HeadingNode"
+          },
+          "list": {
+            "$fn": "@lexical/list.ListNode"
+          },
+          "listitem": {
+            "$fn": "@lexical/list.ListItemNode"
+          },
+          "quote": {
+            "$fn": "@lexical/rich-text.QuoteNode"
+          },
+          "code": {
+            "$fn": "@lexical/code.CodeNode"
+          },
+          "table": {
+            "$fn": "@lexical/table.TableNode"
+          },
+          "tablecell": {
+            "$fn": "@lexical/table.TableCellNode"
+          },
+          "tablerow": {
+            "$fn": "@lexical/table.TableRowNode"
+          },
+          "hashtag": {
+            "$fn": "@lexical/hashtag.HashtagNode"
+          },
+          "code-highlight": {
+            "$fn": "@lexical/code.CodeHighlightNode"
+          },
+          "autolink": {
+            "$fn": "@lexical/link.AutoLinkNode"
+          },
+          "link": {
+            "$fn": "@lexical/link.LinkNode"
+          },
+          "overflow": {
+            "$fn": "@lexical/overflow.OverflowNode"
+          },
+          "mark": {
+            "$fn": "@lexical/mark.MarkNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "headless": false,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "paragraph text"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "link text"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$createLinkNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "3",
+            "type": "link",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 5,
+            "key": "4",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "item 1"
+          ],
+          "ret": {
+            "$h": 6,
+            "key": "5",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "item 2"
+          ],
+          "ret": {
+            "$h": 7,
+            "key": "6",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 8,
+            "key": "7",
+            "type": "listitem",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 9,
+            "key": "8",
+            "type": "listitem",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListNode",
+          "args": [
+            "bullet"
+          ],
+          "ret": {
+            "$h": 10,
+            "key": "9",
+            "type": "list",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 11,
+            "key": "10",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 12,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.append",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 8
+          },
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 7
+            }
+          ],
+          "this": {
+            "$h": 9
+          },
+          "ret": {
+            "$h": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListNode.append",
+          "args": [
+            {
+              "$h": 8
+            },
+            {
+              "$h": 9
+            }
+          ],
+          "this": {
+            "$h": 10
+          },
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 10
+            },
+            {
+              "$h": 11
+            }
+          ],
+          "this": {
+            "$h": 12
+          },
+          "ret": {
+            "$h": 12
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "paragraph text",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "link text",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": null,
+                    "url": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "item 1",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "item 2",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 2
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "list",
+                "version": 1,
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "paragraph textlink text\n\nitem 1\n\nitem 2\n\n",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            2,
+            3,
+            6,
+            7
+          ],
+          "elements": [
+            [
+              4,
+              true
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              8,
+              true
+            ],
+            [
+              9,
+              true
+            ],
+            [
+              10,
+              false
+            ],
+            [
+              11,
+              true
+            ],
+            [
+              12,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getChildCaret",
+          "args": [
+            {
+              "$h": 12
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 13,
+            "type": "child",
+            "origin": {
+              "$h": 12
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 12
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 14,
+            "type": "sibling",
+            "origin": {
+              "$h": 12
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCaretRange",
+          "args": [
+            {
+              "$caret": 13
+            },
+            {
+              "$caret": 14
+            }
+          ],
+          "ret": {
+            "$sel": 15,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 13
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 14
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 13
+            },
+            {
+              "$caret": 14
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 13
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 13
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 13
+            },
+            {
+              "$caret": 13
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 14
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 14
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 14
+            },
+            {
+              "$caret": 14
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 14
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 15
+          },
+          "args": [],
+          "ret": {
+            "$caret": 13
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 14
+            },
+            {
+              "$caret": 13
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getChildCaret",
+          "args": [
+            {
+              "$h": 12
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 16,
+            "type": "child",
+            "origin": {
+              "$h": 12
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 12
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 17,
+            "type": "sibling",
+            "origin": {
+              "$h": 12
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCaretRange",
+          "args": [
+            {
+              "$caret": 16
+            },
+            {
+              "$caret": 17
+            }
+          ],
+          "ret": {
+            "$sel": 18,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$sel": 18
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 19,
+              "type": "child",
+              "origin": {
+                "$h": 5
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 20,
+              "type": "sibling",
+              "origin": {
+                "$h": 2
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 21,
+              "type": "child",
+              "origin": {
+                "$h": 4
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 22,
+              "type": "sibling",
+              "origin": {
+                "$h": 3
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 23,
+              "type": "sibling",
+              "origin": {
+                "$h": 4
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 24,
+              "type": "sibling",
+              "origin": {
+                "$h": 5
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 25,
+              "type": "child",
+              "origin": {
+                "$h": 10
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 26,
+              "type": "child",
+              "origin": {
+                "$h": 8
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 27,
+              "type": "sibling",
+              "origin": {
+                "$h": 6
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 28,
+              "type": "sibling",
+              "origin": {
+                "$h": 8
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 29,
+              "type": "child",
+              "origin": {
+                "$h": 9
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 30,
+              "type": "sibling",
+              "origin": {
+                "$h": 7
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 31,
+              "type": "sibling",
+              "origin": {
+                "$h": 9
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 32,
+              "type": "sibling",
+              "origin": {
+                "$h": 10
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 33,
+              "type": "child",
+              "origin": {
+                "$h": 11
+              },
+              "direction": "next"
+            },
+            {
+              "$caret": 34,
+              "type": "sibling",
+              "origin": {
+                "$h": 11
+              },
+              "direction": "next"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 19
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 19
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 20
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 20
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 21
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 21
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 22
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 22
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 23
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 23
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 24
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 24
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 25
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 25
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 26
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 26
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 27
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 27
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 28
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 28
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 29
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 29
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 30
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 30
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 31
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 31
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 32
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 32
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 34
+            },
+            {
+              "$caret": 33
+            }
+          ],
+          "ret": 1
+        },
+        {
+          "op": "call",
+          "fn": "lexical/caret/LexicalCaret.$comparePointCaretNext",
+          "args": [
+            {
+              "$caret": 33
+            },
+            {
+              "$caret": 34
+            }
+          ],
+          "ret": -1
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "paragraph text",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "link text",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": null,
+                "url": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "item 1",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "item 2",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "paragraph textlink text\n\nitem 1\n\nitem 2\n\n",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+    ]
+  }
+}
