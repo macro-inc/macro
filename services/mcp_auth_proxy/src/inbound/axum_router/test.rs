@@ -1472,7 +1472,9 @@ impl macro_authorization::UserApiKeyAuthorizationRepo for KeyOwners {
         &self,
         key: &str,
     ) -> Result<Option<macro_authorization::ResolvedApiKeyUser>, Self::Err> {
-        if key != "fixture-user-key" || !self.0.load(std::sync::atomic::Ordering::SeqCst) {
+        if !["fixture-user-key", "fixture-manager-key"].contains(&key)
+            || !self.0.load(std::sync::atomic::Ordering::SeqCst)
+        {
             return Ok(None);
         }
         Ok(Some(macro_authorization::ResolvedApiKeyUser {
@@ -1482,7 +1484,15 @@ impl macro_authorization::UserApiKeyAuthorizationRepo for KeyOwners {
             .unwrap(),
             fusion_user_id: "agent-fusion".into(),
             organization_id: None,
-            account_manager: None,
+            account_manager: (key == "fixture-manager-key").then(|| {
+                macro_authorization::AccountManagerCredential {
+                    grant_id: uuid::Uuid::nil(),
+                    manager_user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                        "macro|manager@example.com",
+                    )
+                    .unwrap(),
+                }
+            }),
         }))
     }
     async fn mark_account_manager_grant_used(&self, _: uuid::Uuid) -> Result<(), Self::Err> {
@@ -1491,7 +1501,7 @@ impl macro_authorization::UserApiKeyAuthorizationRepo for KeyOwners {
 }
 
 #[tokio::test]
-async fn user_key_authenticates_only_its_owner_and_revocation_is_immediate() {
+async fn user_key_authenticates_its_owner_rejects_managed_keys_and_honors_revocation() {
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -1533,6 +1543,18 @@ async fn user_key_authenticates_only_its_owner_and_revocation_is_immediate() {
             .unwrap(),
         "macro|agent@example.com"
     );
+    let managed = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/mcp/mcp")
+                .header("x-macro-user-api-key", "fixture-manager-key")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(managed.status(), StatusCode::UNAUTHORIZED);
     active.store(false, Ordering::SeqCst);
     let response = app
         .oneshot(

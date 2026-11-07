@@ -244,3 +244,6 @@ scope checks as other user-key routes; revoked or expired keys cannot authentica
 A valid bearer still works when no valid key is present. Account/agent claims
 in request headers or tool arguments never select the authenticated identity.
 The API-key secret is not included in request extensions or tool context.
+
+MCP accepts only a user's own API key. Delegated account-manager keys are
+rejected because execution tokens do not preserve their grant restrictions.

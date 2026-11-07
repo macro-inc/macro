@@ -18,6 +18,11 @@ impl<A: UserApiKeyAuthorizer> McpUserApiKeys for A {
     ) -> Pin<Box<dyn Future<Output = Option<MacroUserIdStr<'static>>> + Send + 'a>> {
         Box::pin(async move {
             let authorized = self.authorize_user_api_key(key).await.ok()?;
+            // MCP execution tokens cannot carry delegated grant restrictions.
+            // Accept only the user's own credential, never widen a managed key.
+            if authorized.account_manager.is_some() {
+                return None;
+            }
             MacroUserIdStr::try_from(authorized.user_context.user_id).ok()
         })
     }
