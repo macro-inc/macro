@@ -621,6 +621,41 @@ pub async fn release_upload_claim(db: &Pool<Postgres>, attachment_id: Uuid) -> a
     Ok(())
 }
 
+/// An attachment whose upload is claimed but has no document or SFS file yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PendingUploadClaim {
+    pub attachment_id: Uuid,
+    pub claim_age_seconds: i64,
+}
+
+/// The message's oldest upload claim that hasn't stored its attachment yet.
+#[tracing::instrument(skip(db), err)]
+pub async fn oldest_pending_upload_claim(
+    db: &Pool<Postgres>,
+    message_id: Uuid,
+) -> anyhow::Result<Option<PendingUploadClaim>> {
+    let claim = sqlx::query_as!(
+        PendingUploadClaim,
+        r#"
+        SELECT
+            a.id AS attachment_id,
+            EXTRACT(EPOCH FROM now() - a.upload_claimed_at)::bigint AS "claim_age_seconds!"
+        FROM email_attachments a
+        WHERE a.message_id = $1
+            AND a.upload_claimed_at IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)
+            AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)
+        ORDER BY a.upload_claimed_at, a.id
+        LIMIT 1
+        "#,
+        message_id
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(claim)
+}
+
 pub async fn fetch_attachment_upload_metadata_by_id(
     db: &Pool<Postgres>,
     attachment_id: Uuid,
