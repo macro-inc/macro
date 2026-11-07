@@ -103,3 +103,11 @@ pub fn agent_session_mention_transform(
     }
     Ok(())
 }
+
+/// Wrap caller-ordered session info, escaping tag-opening characters after stringify.
+pub fn build_agent_session_mention_markdown(info: &Value) -> String {
+    format!(
+        "<m-agent-session-mention>{}</m-agent-session-mention>",
+        to_js_json_string(info).replace('<', "\\u003c")
+    )
+}
