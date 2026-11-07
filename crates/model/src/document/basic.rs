@@ -1,11 +1,3 @@
-use std::str::FromStr;
-
-use super::file_type::FileType;
-use crate::document::FileTypeExt;
-use document_sub_type::DocumentSubType;
-use model_owner::Owner;
-use utoipa::ToSchema;
-
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct Document {
@@ -90,28 +82,7 @@ pub struct VersionIDWithTimeStamps {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Returns basic information of a document used for some db queries
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct DocumentBasic {
-    pub document_id: String,
-    pub document_name: String,
-    #[schema(value_type = String)]
-    pub owner: Owner,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sub_type: Option<DocumentSubType>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub branched_from_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub branched_from_version_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub document_family_id: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
-    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-}
+pub use entity_basic_types::DocumentBasic;
 
 /// Returns basic information of a document used for document context
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -120,21 +91,4 @@ pub struct DocumentInfo {
     pub document_id: String,
     pub document_owner: String,
     pub file_type: String,
-}
-
-impl DocumentBasic {
-    pub fn is_text_content(&self) -> bool {
-        self.file_type
-            .as_deref()
-            .map(FileType::from_str)
-            .and_then(Result::ok)
-            .map(|ft| ft.is_text_content())
-            .unwrap_or(false)
-    }
-    pub fn try_file_type(&self) -> Option<FileType> {
-        self.file_type
-            .as_deref()
-            .map(FileType::from_str)
-            .and_then(Result::ok)
-    }
 }

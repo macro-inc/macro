@@ -7,13 +7,13 @@ use axum::{
     http::{Request, StatusCode, header},
     response::IntoResponse,
 };
+use entity_basic_types::BasicProject;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
-use model::project::BasicProject;
 use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;
