@@ -20,7 +20,7 @@ status/line counts whichever produced the patch.
 
 - Owns: diff parsing and budgeting, and the changeset summary wire types.
 - Not here: where the diff comes from (git CLI, GitHub API) or what stores it
-  → `crates/integrations/github_pull_requests`, `crates/agent_changes`.
+  → `crates/integrations/github_pull_requests`, `crates/agents/agent_changes`.
 
 ## Boundaries
 

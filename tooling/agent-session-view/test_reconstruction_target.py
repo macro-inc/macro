@@ -22,7 +22,7 @@ class TargetCheckout(unittest.TestCase):
 
     def test_layouts_bind_target_library_and_cargo_package(self):
         for tools, prompt in [
-            ('crates/ai_tools', 'crates/prompt'),
+            ('crates/ai_tools', 'crates/agents/prompt'),
             ('crates/ai/ai_tools', 'crates/ai/prompt'),
             ('crates/ai/agent_tools', 'crates/agents/agent_prompts'),
         ]:
@@ -52,8 +52,8 @@ class TargetCheckout(unittest.TestCase):
         for explicit in (None, 'prompt_api'):
             with self.subTest(explicit=explicit), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                self.workspace(root, 'crates/ai_tools', 'crates/prompt', library='tools_api')
-                manifest = root/'crates/prompt/Cargo.toml'
+                self.workspace(root, 'crates/ai_tools', 'crates/agents/prompt', library='tools_api')
+                manifest = root/'crates/agents/prompt/Cargo.toml'
                 text = manifest.read_text()
                 # Package selection is prompt; its default library may be overridden.
                 if explicit:
@@ -66,7 +66,7 @@ class TargetCheckout(unittest.TestCase):
     def test_missing_and_ambiguous_members_fail_before_example_write(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.workspace(root, 'crates/ai_tools', 'crates/prompt')
+            self.workspace(root, 'crates/ai_tools', 'crates/agents/prompt')
             (root/'crates/ai_tools/Cargo.toml').write_text('[package]\nname = "other"\n')
             with self.assertRaisesRegex(reconstruct.ReconstructionFailed, 'exactly one tools.*found 0'):
                 reconstruct.reconstruction_packages(root)
@@ -84,7 +84,7 @@ class TargetCheckout(unittest.TestCase):
             cache = Path(directory)
             root = cache/'src/old-commit'
             root.mkdir(parents=True)
-            self.workspace(root, 'crates/ai_tools', 'crates/prompt')
+            self.workspace(root, 'crates/ai_tools', 'crates/agents/prompt')
             with mock.patch.object(reconstruct, 'CACHE', cache), mock.patch.object(reconstruct.subprocess, 'run', side_effect=AssertionError('offline checkout must not fetch/build')):
                 self.assertEqual(reconstruct.checkout('old-commit'), root)
             self.assertTrue((root/'crates/ai_tools/examples/asv_reconstruct.rs').is_file())
@@ -94,7 +94,7 @@ class TargetCheckout(unittest.TestCase):
     def test_excluded_and_nonmember_packages_cannot_make_a_target_ambiguous(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.workspace(root, 'crates/ai_tools', 'crates/prompt')
+            self.workspace(root, 'crates/ai_tools', 'crates/agents/prompt')
             extra = root/'crates/agent_tools'
             extra.mkdir()
             (extra/'Cargo.toml').write_text('[package]\nname = "agent_tools"\n')
@@ -105,8 +105,8 @@ class TargetCheckout(unittest.TestCase):
     def test_missing_prompt_and_invalid_declared_library_fail_explicitly(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.workspace(root, 'crates/ai_tools', 'crates/prompt')
-            manifest = root/'crates/prompt/Cargo.toml'
+            self.workspace(root, 'crates/ai_tools', 'crates/agents/prompt')
+            manifest = root/'crates/agents/prompt/Cargo.toml'
             text = manifest.read_text()
             manifest.write_text(text.replace('name = "prompt"', 'name = "unrelated"'))
             with self.assertRaisesRegex(reconstruct.ReconstructionFailed, 'exactly one prompt.*found 0'):
@@ -118,7 +118,7 @@ class TargetCheckout(unittest.TestCase):
     def test_implicit_members_follow_inherited_aliases_targets_and_cycles(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.workspace(root, 'crates/ai_tools', 'crates/prompt', library='tools_api')
+            self.workspace(root, 'crates/ai_tools', 'crates/agents/prompt', library='tools_api')
             (root/'driver').mkdir()
             (root/'driver/Cargo.toml').write_text('[package]\nname = "driver"\n[target.\"cfg(unix)\".dependencies]\nold_alias = { workspace = true }\n')
             (root/'Cargo.toml').write_text('[workspace]\nmembers = ["driver"]\n[workspace.dependencies]\nold_alias = { package = "ai_tools", path = "crates/ai_tools" }\n')
@@ -135,7 +135,7 @@ class TargetCheckout(unittest.TestCase):
     def test_malformed_and_missing_path_manifests_fail_explicitly(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.workspace(root, 'crates/ai_tools', 'crates/prompt')
+            self.workspace(root, 'crates/ai_tools', 'crates/agents/prompt')
             manifest = root/'crates/ai_tools/Cargo.toml'
             text = manifest.read_text()
             manifest.write_text(text+'[dependencies]\nmissing = { path = "../missing" }\n')

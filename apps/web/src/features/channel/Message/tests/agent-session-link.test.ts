@@ -3,7 +3,7 @@ import { splitLeadingAgentSessionLink } from '../agent-session-link';
 
 const SESSION = '00000000-0000-0000-0000-00000000000a';
 // What the agent harness emits: see `session_link` in
-// crates/agent_harness/src/outbound/channel_announcer.rs.
+// crates/agents/agent_harness/src/outbound/channel_announcer.rs.
 const link = `<m-agent-session-mention>{"id":"${SESSION}","label":"Agent session"}</m-agent-session-mention>`;
 
 describe('splitLeadingAgentSessionLink', () => {

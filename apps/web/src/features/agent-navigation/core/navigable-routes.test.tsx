@@ -20,7 +20,7 @@ const DEBUG_ROUTES = new Set<string>(debugRoutes.map(({ route }) => route.id));
 
 const SERVER_TABLE = resolve(
   __dirname,
-  '../../../../../../crates/agent_code_mode/src/domain/ui_commands/navigable_routes.json'
+  '../../../../../../crates/agents/agent_code_mode/src/domain/ui_commands/navigable_routes.json'
 );
 
 const appManifest = appRoutesManifest;

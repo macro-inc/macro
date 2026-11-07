@@ -648,7 +648,7 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
     .await
     .unwrap();
     sqlx::raw_sql(include_str!(
-        "../../../../crates/agent_code_mode/src/outbound/postgres/test/sessions.sql"
+        "../../../../crates/agents/agent_code_mode/src/outbound/postgres/test/sessions.sql"
     ))
     .execute(&pool)
     .await

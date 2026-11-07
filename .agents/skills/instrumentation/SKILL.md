@@ -239,7 +239,7 @@ an instrumented method. The worker
 with outcome fields (`edit.mode`, `edit.ops_total`, `edit.blocked`,
 `edit.aborted`), then a child per phase: `edit.sync_init`, `edit.hydrate`,
 `edit.interpret`, `edit.supervise.turn`, `edit.dispatch`, `edit.run_code`,
-`edit.flush`. On the agent side, `crates/agent_session/src/domain/session/telemetry.rs`
+`edit.flush`. On the agent side, `crates/agents/agent_session/src/domain/session/telemetry.rs`
 emits `invoke_agent` and `execute_tool` and propagates into the ACP agent.
 
 **GraphQL mutation queue (web → DSS `graphql.execute` → resolver).**

@@ -3,7 +3,7 @@
 Runbook for the monitor in
 [`monitors/agent-sessions.ts`](../../infra/stacks/monitoring/monitors/agent-sessions.ts)
 and the Agent sessions dashboard it graphs on. Span fields are described in
-[`crates/agent_session/README.md`](../../crates/agent_session/README.md).
+[`crates/agents/agent_session/README.md`](../../crates/agents/agent_session/README.md).
 
 ## Tool failures
 

@@ -20,7 +20,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 # every request.
 EAGER_SOURCES = [
     ("crates/ai/ai_tools/src/lib.rs", "EAGER_TOOLS"),
-    ("crates/agent_inmem/src/rig_engine.rs", "EAGER_INTERNAL_MCP_TOOLS"),
+    ("crates/agents/agent_inmem/src/rig_engine.rs", "EAGER_INTERNAL_MCP_TOOLS"),
 ]
 INTERNAL_PREFIX = "mcp__macro_internal__"
 DESCRIBE_TOOLS = "DescribeCodeTools"

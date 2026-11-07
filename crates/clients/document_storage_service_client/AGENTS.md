@@ -25,7 +25,7 @@ documents, projects, threads, notifications, and uploads.
 
 - Depends on: `model`, `model_owner`, `models_bulk_upload`,
   `models_permissions`, `shared_entity_registry`.
-- Used by: `crates/agent_trigger` and most services that call DSS directly
+- Used by: `crates/agents/agent_trigger` and most services that call DSS directly
   (`document_cognition_service`, `authentication_service`,
   `agent_trigger_service`, `search_upload_handler`,
   `upload_extractor_lambda_handler`, `agent_harness_service`,

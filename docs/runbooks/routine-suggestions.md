@@ -6,7 +6,7 @@ Its alert links the **Routine suggestions** dashboard.
 
 When a person's inbox connects (onboarding), each night in their time zone,
 and when they ask for fresh suggestions (manual), agent-harness-service runs
-a generation (`crates/suggestion_generation`):
+a generation (`crates/agents/suggestion_generation`):
 a suggestions session and routines sessions of the in-process Macro agent (three
 at onboarding, each suggesting for some of the nine surfaces, and otherwise
 one for all of them, once a week; nightly runs are for people on a paid plan) through

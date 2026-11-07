@@ -23,8 +23,8 @@ mod test;
 /// Local Docker tag `just run_local` loads.
 pub const DEFAULT_LOCAL_TAG: &str = "macro-agent-harness:latest";
 
-/// Build context matching `just -f crates/agent_harness/justfile build-local`.
-pub const CONTEXT_REL: &str = "crates/agent_harness/container";
+/// Build context matching `just -f crates/agents/agent_harness/justfile build-local`.
+pub const CONTEXT_REL: &str = "crates/agents/agent_harness/container";
 
 /// What [`ensure`] will do for a resolved env, before talking to Docker.
 #[derive(Debug, Clone, PartialEq, Eq)]

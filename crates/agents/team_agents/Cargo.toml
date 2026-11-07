@@ -1,0 +1,71 @@
+[package]
+edition = "2024"
+name = "team_agents"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "hosted_runtimes/schema",
+  "entity_access/axum",
+  "entity_access/inbound",
+]
+outbound = [
+  "agent_git/client",
+  "dep:agent_git_service_url",
+  "dep:model_entity",
+  "dep:model_notifications",
+  "dep:notification",
+  "dep:sqlx",
+  "dep:teams",
+  "dep:user_api_key",
+]
+
+[dependencies]
+agent_credentials = { workspace = true }
+agent_git = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+entity_access = { workspace = true, features = ["ports"] }
+feature_flags = { workspace = true }
+harness_id = { workspace = true }
+hosted_runtimes = { workspace = true, features = ["ports"] }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+agent_git_service_url = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+model_notifications = { workspace = true, optional = true }
+notification = { workspace = true, optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+teams = { workspace = true, optional = true, features = ["ports"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+user_api_key = { workspace = true, optional = true, features = ["ports"] }
+utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+model_user = { workspace = true }
+bot_id = { workspace = true }
+team_agents = { workspace = true, features = ["inbound"] }
+tower = { workspace = true }
+axum = { workspace = true }
+harness_id = { workspace = true, features = ["test-utils"] }
+macro_db_migrator = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+user_api_key = { workspace = true, features = ["postgres"] }
+
+# The crate depends on itself in tests to turn on `inbound`, which shear reads as unused.
+[package.metadata.cargo-shear]
+ignored = ["team_agents"]

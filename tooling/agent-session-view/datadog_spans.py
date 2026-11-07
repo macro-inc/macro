@@ -4,7 +4,7 @@ The log has every frame but only coarse times, and nothing about each model
 call. The harness's spans have both: one `execute_tool` span per tool call,
 carrying the session id as `gen_ai.conversation.id` and the call's id, and one
 `chat_streaming` span per model call in the same traces. Field names are in
-crates/agent_session/README.md.
+crates/agents/agent_session/README.md.
 
 Needs DD_API_KEY and DD_APP_KEY in the environment; DD_SITE defaults to
 us5.datadoghq.com.

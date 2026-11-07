@@ -1,0 +1,44 @@
+[package]
+name = "suggestion_generation"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+agent_runtime_protocol = { workspace = true }
+agent_session = { workspace = true, features = ["admission"] }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+bot_id = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+feature_flags = { workspace = true }
+futures = { workspace = true }
+suggestions = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = ["postgres"] }
+macro_user_id = { workspace = true }
+macro_tower_layers = { workspace = true }
+macro_uuid = { workspace = true }
+rootcause = { workspace = true }
+routine_program = { workspace = true }
+scheduled_action = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+trigger_context = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+tower = { workspace = true }
+model_owner = { workspace = true }
+bot_id = { workspace = true, features = ["test-utils"] }
+macro_db_migrator = { workspace = true }
+uuid = { workspace = true }

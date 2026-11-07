@@ -29,7 +29,7 @@ chat message.
 - Owns: provisioning sandboxes, relaying ACP frames, and the chat trigger that
   starts a session.
 - Not here: the ACP protocol/session semantics themselves → `agent_proxy`; the
-  Rust-side agent runtime protocol types → `crates/agent_runtime_protocol`
+  Rust-side agent runtime protocol types → `crates/agents/agent_runtime_protocol`
   (regenerate `src/protocol/generated.ts` from there, don't hand-edit it).
 
 ## Recipes

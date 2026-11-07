@@ -5,7 +5,7 @@
 Macro computers on Firecracker: the agent on each Firecracker host. It
 restores computers from golden snapshots into jailed Firecracker processes
 and serves `crates/clients/firecracker_host_api` over mTLS to the control plane's
-`FirecrackerFleet` (`crates/hosted_runtimes`). Incus hosts don't run it.
+`FirecrackerFleet` (`crates/agents/hosted_runtimes`). Incus hosts don't run it.
 
 ## How it works
 
@@ -42,7 +42,7 @@ mesh: pre-copy while it runs, then a final round after `release`), then
   squeeze of computers quiet 30 min while host memory in use is inside the
   host limits' squeeze window (one `memory.reclaim` at a time). "Idle" for
   the squeeze is the agent's, from guest CPU; "idle" for hibernation relief
-  is the control plane's (`crates/hosted_runtimes` overcommit), from
+  is the control plane's (`crates/agents/hosted_runtimes` overcommit), from
   sessions and activity it sees. The control plane sets the window. The
   only swap is zram (the NixOS module's `zramSwap`): any swap that can reach
   a disk (a non-zram device, zram with a writeback device, or an unreadable

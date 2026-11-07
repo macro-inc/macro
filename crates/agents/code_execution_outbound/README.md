@@ -53,7 +53,7 @@ A host can run a program with nobody watching (a routine step) by setting
 - it runs with the token's permissions, the owner's. A dry run (`dry_run`)
   answers each SDK write with an empty result and reports it as `skipped`;
   writes are the catalog's non-read operations (`operations.json` from
-  `crates/code_mode_assets`, with each operation's method, path and `write`), and an operation
+  `crates/agents/code_mode_assets`, with each operation's method, path and `write`), and an operation
   missing from it counts as one. A dry run also refuses authenticated non-GET
   requests at `fetch` unless a read matches;
 - it has no workers: `Worker` is undefined and worker modules throw.
@@ -65,7 +65,7 @@ agent harness signs a routine dry run's token with the `dry_run` scope
 dry run is refused by every SDK host.
 
 `DenoChecker` (`src/deno/check.rs`) type-checks a TypeScript program
-against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
+against the SDK's generated declarations (`sdk-types.json` from `crates/agents/code_mode_assets`)
 without running it, plus a module of `declare global` types the host supplies
 (the type of `main`'s argument). It skips checking declaration files
 (`skipLibCheck`), which took about 40% of every check; a test checks the SDK's

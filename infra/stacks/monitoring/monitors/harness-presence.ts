@@ -24,7 +24,7 @@ for (const environment of ['dev', 'prod'] as const) {
       query: `logs("@telemetry_event:harness_presence_disagreement ${env}").index("*").rollup("count").by("@harness").last("15m") > 5`,
       message: `Macrod for harness {{harness.name}} has held a runtime connection for at least five minutes while the service reports it offline, so the app marks its agents unavailable.
 
-Search @harness:{{harness.name}} @telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR harness_runtime_lease_restored). A live connection with no row, or a lease that stopped renewing, is on the replica named in those events. See crates/agent_harness/AGENTS.md.
+Search @harness:{{harness.name}} @telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR harness_runtime_lease_restored). A live connection with no row, or a lease that stopped renewing, is on the replica named in those events. See crates/agents/agent_harness/AGENTS.md.
 
 ${notify({ pages: false, environment })}`,
       monitorThresholds: { critical: '5' },

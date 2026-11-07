@@ -1,0 +1,51 @@
+[package]
+name = "suggestions"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+agent_correlation = { workspace = true }
+agent_session = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+channels = { workspace = true, features = ["outbound"] }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+documents = { workspace = true, features = ["outbound", "ports"] }
+email = { workspace = true, features = ["outbound"] }
+email_utils = { workspace = true }
+entity_access = { workspace = true, features = ["ports"] }
+entity_registry = { workspace = true, features = ["axum"] }
+feature_flags = { workspace = true }
+futures = { workspace = true }
+kafka_util = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = ["postgres"] }
+macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+messages = { workspace = true, features = ["broker", "outbound"] }
+model_entity = { workspace = true }
+model_owner = { workspace = true }
+projects = { workspace = true }
+rdkafka = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shown_text = { workspace = true }
+suggestions_db_utils = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+bot_id = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+tokio-util = { workspace = true }
+tower = { workspace = true }

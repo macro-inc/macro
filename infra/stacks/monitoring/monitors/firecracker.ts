@@ -1,4 +1,4 @@
-// Contract with services/firecracker_host and crates/hosted_runtimes.
+// Contract with services/firecracker_host and crates/agents/hosted_runtimes.
 // Host metrics use macro_entrypoint's OTLP exporter to the local Datadog agent;
 // its hostname must equal the fleet's host name. All queries group by that host,
 // never computer/user/image IDs. Counters count attempts, including retries.

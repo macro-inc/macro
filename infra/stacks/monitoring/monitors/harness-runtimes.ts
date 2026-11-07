@@ -6,7 +6,7 @@
 // one silently empties a metric and turns its monitor into missing data:
 //
 // - The `agent.runtime.reattach` span (`reattach_live_sessions` in
-//   `crates/agent_harness/src/domain/service/reattach.rs`), one per dial of a
+//   `crates/agents/agent_harness/src/domain/service/reattach.rs`), one per dial of a
 //   runtime that lists live sessions: `harness` (opaque harness uuid) and
 //   `agent.runtime.reattach_sessions` (sessions bound to it, not counting
 //   dormant ones), `.reattach_eager`, `.reattach_lazy`, `.reattach_skipped`

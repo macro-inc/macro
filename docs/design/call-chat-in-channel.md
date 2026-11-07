@@ -323,7 +323,7 @@ that reads `discussion` has reached people.
 - `crates/comms/channels`: channel members connected to the call get all three effects like followers,
   connected guests outside the channel get none, and normal thread rules apply to everyone else; the caller is not a follower for starting the call; a call root does not suppress
   first-message invites; normal channel mentions during a call still notify.
-- `crates/agent_trigger`, `crates/scheduled_action`: a root triggers nothing, and a reply triggers
+- `crates/agents/agent_trigger`, `crates/agents/scheduled_action`: a root triggers nothing, and a reply triggers
   normally.
 - `apps/web`: the reply table through real interactions; no path posts top-level from the panel; popup
   count rules; the record section with and without channel access.

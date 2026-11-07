@@ -3,7 +3,7 @@
 //
 // New monitors, not adopted. They read two gauges agent_harness_service's
 // computer operator records every reconcile pass
-// (crates/hosted_runtimes/src/domain/telemetry.rs), so these are their contract:
+// (crates/agents/hosted_runtimes/src/domain/telemetry.rs), so these are their contract:
 //
 // - `computer.capacity.allocated`: what reservations and computers hold until
 //   a refused charge or release, stopped computers included.

@@ -170,7 +170,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
 - The operator's `SetupNotices` port is `IngressSetupNotices` in
-  `crates/team_agents` (`outbound/setup_notices.rs`), shared with the auth
+  `crates/agents/team_agents` (`outbound/setup_notices.rs`), shared with the auth
   service's agent ready notice; see that crate's `AGENTS.md`.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
@@ -225,7 +225,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   It also mounts the internal `/universal_input/thread-due-date` route, which reads
   a thread's due date for `email_focus_worker` and meters it as `EmailFocus`.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
-  domain/adapters live in `crates/scheduled_action`. Its run observers send
+  domain/adapters live in `crates/agents/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`), which names a
@@ -276,7 +276,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route and the person's connected
-  Pipedream apps. Generations (`crates/suggestion_generation`) run their
+  Pipedream apps. Generations (`crates/agents/suggestion_generation`) run their
   suggestions and routines sessions hidden on the free tier's model, each kind
   gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
   `scheduling.rs` sweeps generation sessions a stopped process left open
@@ -287,11 +287,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   every page of a session's activity for what it created, each item once). Runs
   move from their sessions' lifecycle events and a reconcile sweep every five
   minutes. Reply suggestions read who they wait on from their email thread or
-  channel message through `ItemReplyWaits` (`crates/suggestions`), built over
+  channel message through `ItemReplyWaits` (`crates/agents/suggestions`), built over
   the email repository and the shared pool. The suggestions routes are served
   here too, and `scheduling.rs` runs
   suggestions' resolution consumer (group `suggestions-resolution`) and runs
-  consumer (group `suggestions-runs`, both `crates/suggestions`) beside the
+  consumer (group `suggestions-runs`, both `crates/agents/suggestions`) beside the
   event intake, under the same readiness gate and shutdown.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
@@ -301,10 +301,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   a step that never gets one fails with "Macro was busy running other
   routines".
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
-  lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
+  lease/ticket and authorization logic lives in `crates/agents/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
   heartbeats register this process's private HTTP address for direct forwarding.
-- `src/agent_git.rs`: agent teammates' workspace repos (`crates/agent_git`)
+- `src/agent_git.rs`: agent teammates' workspace repos (`crates/agents/agent_git`)
   under `/agent-git` (smart HTTP plus the internal create/ensure/delete API;
   `AgentGitServiceUrl` points here), merged outside the gzip layer. Storage
   is EFS at `REPO_STORAGE_ROOT` (`/data/agent-git`, the
@@ -324,11 +324,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 ## Scope
 
 - Owns: the deployed process wiring every agent-session domain crate
-  together — not the domain logic itself, which lives in `crates/agent_harness`,
-  `crates/agent_session`, `crates/agent_changes`, `crates/agent_egress`,
-  `crates/folds/agent_fold`, `crates/agent_inmem`, `crates/agent_trigger`.
+  together — not the domain logic itself, which lives in `crates/agents/agent_harness`,
+  `crates/agents/agent_session`, `crates/agents/agent_changes`, `crates/agents/agent_egress`,
+  `crates/agents/agent_fold`, `crates/agents/agent_inmem`, `crates/agents/agent_trigger`.
 - Not here: coding-agent business logic for a specific runtime (e.g. Cursor
-  API calls) → `crates/codex_connection`, `crates/codex_cloud_agents`.
+  API calls) → `crates/agents/codex_connection`, `crates/agents/codex_cloud_agents`.
 
 ## Recipes
 

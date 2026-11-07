@@ -72,7 +72,7 @@ until the backend is complete.
 - Regenerate every client that embeds `EntityType` (storage, cognition,
   connection, notification, properties, search): `cd apps/web && bun run gen-api`,
   then `cd packages/sdk && just update-generated`. If views should show the
-  kind, add it to `EntityType` in `crates/dynamic_ui/src/view.rs` and run
+  kind, add it to `EntityType` in `crates/agents/dynamic_ui/src/view.rs` and run
   `cd apps/web && just gen-dynamic-ui-types`.
 
 ## 2. Schema and migrations
@@ -346,8 +346,8 @@ Four vocabularies must agree:
    `crates/comms/channels/src/outbound/pg_channel_reference_share_permissions.rs`, or it
    falls through to legacy share permissions and fails at runtime.
 
-- **Agent prompt:** add the kind to `crates/prompt/src/mentions.rs` and, if it has
-  URLs, `crates/prompt/src/mcp_item_links.rs`. Without it agents linked forms as
+- **Agent prompt:** add the kind to `crates/agents/prompt/src/mentions.rs` and, if it has
+  URLs, `crates/agents/prompt/src/mcp_item_links.rs`. Without it agents linked forms as
   plain URLs.
 - **Deploy skew:** lexical-service and the web app deploy separately, so either
   can run against the other's previous release. New node data must parse in the

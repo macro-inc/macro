@@ -2,7 +2,7 @@
 
 How Macro computers work: hosted VMs a team buys, each running macrod so it
 shows up in Settings → Runtimes like a paired machine. The code lives in
-`crates/hosted_runtimes` (see its `AGENTS.md` for navigation), with the control
+`crates/agents/hosted_runtimes` (see its `AGENTS.md` for navigation), with the control
 plane wired in `services/agent_harness_service/src/computers.rs` and the routes
 mounted by authentication_service.
 Their isolation and threat model is in
@@ -461,7 +461,7 @@ attempt, so a busy database never fails a computer or abandons a removal.
   to the agent's inviter by the agent's name, but only when it failed: macrod
   connecting doesn't start the agent, so "<name> is ready" is sent by the auth
   service when the agent first reports online (`POST /team_agents/me/online`,
-  `crates/team_agents/AGENTS.md`), under the same notification id.
+  `crates/agents/team_agents/AGENTS.md`), under the same notification id.
 - **Failed first start**: the first start lasts until setup completes and,
   for an agent teammate's computer, until the agent reports online
   (`awaiting_agent`; the report applies `AgentOnline`, and an
