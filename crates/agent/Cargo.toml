@@ -34,7 +34,6 @@ genai_telemetry = { workspace = true }
 macro_env_var = { workspace = true }
 macro_service_urls = { workspace = true }
 macro_user_id = { workspace = true }
-prompt = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio-util.workspace = true
 

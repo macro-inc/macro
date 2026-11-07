@@ -409,9 +409,9 @@ impl AgentLoop {
             ),
         );
         // Tell the model which connected integrations it can reach via tool
-        // search. The prompt text lives in the `prompt` crate; the toolset names
-        // are the dynamic data injected here. Omitted when nothing is connected.
-        if let Some(section) = prompt::connected_toolsets::render(&searchable_toolset_names) {
+        // search. The toolset names are the dynamic data injected here; the
+        // section is omitted when nothing is connected.
+        if let Some(section) = crate::connected_toolsets::render(&searchable_toolset_names) {
             system_prompt.push(
                 PromptSection::ConnectedIntegrations,
                 &format!("\n\n{section}"),
