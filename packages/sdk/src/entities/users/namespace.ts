@@ -13,7 +13,11 @@ export class UserNamespace {
     return User.byId(this.client, id);
   }
 
-  /** The current authenticated user. */
+  /**
+   * The current authenticated user.
+   *
+   * @readonly
+   */
   me(): Promise<User> {
     return User.me(this.client);
   }
@@ -22,6 +26,8 @@ export class UserNamespace {
    * Find people in your existing Macro contacts by name or email, as in the
    * mention picker. This is not a global directory. Returns every matching
    * contact so callers can disambiguate; it never chooses a person for you.
+   *
+   * @readonly
    */
   async search(query: string): Promise<User[]> {
     const term = query.trim().toLocaleLowerCase();

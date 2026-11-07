@@ -119,7 +119,11 @@ export abstract class FavoritableEntity<Detail>
   /** How the entity-addressed APIs (favorites) identify this entity's type. */
   abstract readonly entityType: MacroEntityType;
 
-  /** Read the caller's effective permission on this entity. */
+  /**
+   * Read the caller's effective permission on this entity.
+   *
+   * @readonly
+   */
   async permission() {
     return unwrap(
       await this.client.storage.getEntityPermission({
@@ -132,6 +136,9 @@ export abstract class FavoritableEntity<Detail>
    * Add this entity to the user's favorites. Returns this handle for chaining.
    * Plain unwrap: favoriting alters the user's favorites collection, not this
    * entity's own detail, so there's nothing cached to invalidate.
+   *
+   * @write
+   * @idempotent
    */
   async favorite(): Promise<this> {
     unwrap(
@@ -142,7 +149,12 @@ export abstract class FavoritableEntity<Detail>
     return this;
   }
 
-  /** Remove this entity from the user's favorites. Returns this handle for chaining. */
+  /**
+   * Remove this entity from the user's favorites. Returns this handle for chaining.
+   *
+   * @write
+   * @idempotent
+   */
   async unfavorite(): Promise<this> {
     unwrap(
       await this.client.storage.removeFavoriteByEntity({
@@ -167,12 +179,20 @@ export abstract class PropertiedEntity<Detail>
    */
   protected abstract readonly propertyEntityType: PropertyEntityType;
 
-  /** This entity's reference for bulk property operations. */
+  /**
+   * This entity's reference for bulk property operations.
+   *
+   * @readonly
+   */
   propertyReference(): PropertyTargetReference {
     return { entity_type: this.propertyEntityType, entity_id: this.id };
   }
 
-  /** The properties set on this entity, each with its definition, value, and options. */
+  /**
+   * The properties set on this entity, each with its definition, value, and options.
+   *
+   * @readonly
+   */
   async properties(opts?: {
     includeMetadata?: boolean;
   }): Promise<EntityPropertyWithDefinition[]> {
@@ -194,6 +214,9 @@ export abstract class PropertiedEntity<Detail>
   /**
    * Set a property value on this entity, or attach the property without a
    * value when `value` is omitted.
+   *
+   * @write
+   * @idempotent
    */
   async setProperty(
     property: PropertyDefinition,
@@ -210,7 +233,13 @@ export abstract class PropertiedEntity<Detail>
     );
   }
 
-  /** Apply multi-select option deltas atomically across this entity's properties. */
+  /**
+   * Apply multi-select option deltas atomically across this entity's properties.
+   *
+   * @write
+   * @idempotent
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async updatePropertyOptions(
     changes: PropertyOptionDelta[],
   ): Promise<BulkUpdateEntityPropertyOptionsResponse> {
@@ -232,7 +261,12 @@ export abstract class PropertiedEntity<Detail>
     );
   }
 
-  /** Remove a property from this entity, given its {@link properties} entry. */
+  /**
+   * Remove a property from this entity, given its {@link properties} entry.
+   *
+   * @destructive
+   * @idempotent
+   */
   async deleteProperty(
     assignment: EntityPropertyWithDefinition,
   ): Promise<void> {

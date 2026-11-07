@@ -23,14 +23,22 @@ export class InitiativeNamespace {
     return Initiative.byId(this.client, id);
   }
 
-  /** List accessible initiatives as handles; use `summaries()` for their names. */
+  /**
+   * List accessible initiatives as handles; use `summaries()` for their names.
+   *
+   * @readonly
+   */
   async list(): Promise<Initiative[]> {
     return unwrap(await this.client.storage.listInitiatives()).initiatives.map(
       (i) => Initiative.byId(this.client, i.id),
     );
   }
 
-  /** Every accessible initiative with its name, in one request. */
+  /**
+   * Every accessible initiative with its name, in one request.
+   *
+   * @readonly
+   */
   async summaries(): Promise<InitiativeSummary[]> {
     return unwrap(await this.client.storage.listInitiatives()).initiatives.map(
       (i) => ({
@@ -41,7 +49,11 @@ export class InitiativeNamespace {
     );
   }
 
-  /** Create an initiative. */
+  /**
+   * Create an initiative.
+   *
+   * @write
+   */
   async create(options: InitiativeOptions): Promise<Initiative> {
     return Initiative.from(
       this.client,

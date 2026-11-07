@@ -132,6 +132,12 @@ the existing gateway prefixes.
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
   generation otherwise restores dependencies from the old SDK snapshot.
+- Every public method carries one MCP hint tag (`@readonly`, `@write` or
+  `@destructive`, plus `@openworld`/`@idempotent` when true) or
+  `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
+  by them and fails on an untagged method. A new or changed public method
+  signature or hint tag updates that package's tool snapshots (`bunx vitest
+  run -u` there); doc text alone does not.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public

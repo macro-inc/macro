@@ -32,7 +32,11 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'initiative', this);
 
-  /** The initiative's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The initiative's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/initiative/${this.id}`;
   }
@@ -87,7 +91,12 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /** Sharing configuration. */
   readonly sharePermissions = this.field('sharePermission');
 
-  /** Update the name, membership or sharing configuration. */
+  /**
+   * Update the name, membership or sharing configuration.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: {
     name?: string;
     members?: User[];
@@ -107,7 +116,12 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     );
   }
 
-  /** Delete this initiative. */
+  /**
+   * Delete this initiative.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteInitiative({ path: { initiative_id: this.id } }),
