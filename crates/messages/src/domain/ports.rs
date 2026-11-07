@@ -693,6 +693,32 @@ pub fn timeline_parent(activity: &activity::Activity) -> Option<MessageParent> {
         .then_some(parent)
 }
 
+/// Identity of an initiative (a project in the app) that hosts a discussion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InitiativeParentFacts {
+    /// Display name.
+    pub name: String,
+    /// The initiative's owner.
+    pub owner_id: String,
+}
+
+/// Read-only initiative identity, implemented by the initiative domain.
+/// Returned facts grant nothing: callers verify capabilities before exposing them.
+pub trait InitiativeParentReader: Send + Sync + 'static {
+    /// The facts for a live initiative, or `None` once it has been deleted.
+    fn read_initiative_parent(
+        &self,
+        id: Uuid,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<Option<InitiativeParentFacts>, rootcause::Report>,
+                > + Send
+                + '_,
+        >,
+    >;
+}
+
 /// Identity of a CRM company or contact that hosts a discussion.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmParentFacts {

@@ -16,7 +16,7 @@ mod test;
 #[derive(Clone)]
 pub struct PgMessageRepository {
     pool: PgPool,
-    initiatives: Option<std::sync::Arc<dyn initiative::domain::lookup::InitiativeReader>>,
+    initiatives: Option<std::sync::Arc<dyn crate::domain::ports::InitiativeParentReader>>,
     crm: Option<std::sync::Arc<dyn CrmParentReader>>,
 }
 
@@ -85,7 +85,7 @@ impl PgMessageRepository {
     /// Unconfigured compositions reject initiative operations.
     pub fn with_initiatives(
         mut self,
-        initiatives: impl initiative::domain::lookup::InitiativeReader,
+        initiatives: impl crate::domain::ports::InitiativeParentReader,
     ) -> Self {
         self.initiatives = Some(std::sync::Arc::new(initiatives));
         self
@@ -622,9 +622,9 @@ impl MessageRepository for PgMessageRepository {
         let exists = match parent {
             MessageParent::Initiative(id) => {
                 let Some(initiatives) = &self.initiatives else { return Ok(false); };
-                return initiatives.read_basic(initiative::domain::models::InitiativeId::from_uuid(*id))
+                return initiatives.read_initiative_parent(*id)
                     .await.map(|value| value.is_some())
-                    .map_err(|error| MessageError::Repository(rootcause::report!(error).into()));
+                    .map_err(MessageError::Repository);
             }
             MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
                 return self.crm_parent_exists(parent).await;

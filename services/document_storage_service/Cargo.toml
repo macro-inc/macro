@@ -179,7 +179,7 @@ http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 import = { path = "../../crates/import" }
-initiative = { path = "../../crates/initiative", features = ["inbound", "postgres", "resources"] }
+initiative = { path = "../../crates/initiative", features = ["inbound", "messages", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }

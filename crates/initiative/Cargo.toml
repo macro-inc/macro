@@ -15,6 +15,9 @@ inbound = [
   "entity_access/inbound",
   "ports",
 ]
+# Serves the messages domain's initiative-parent port from `InitiativeLookup`,
+# for compositions that host initiative discussions.
+messages = ["dep:messages", "outbound"]
 outbound = ["ports"]
 resources = ["outbound", "dep:properties", "dep:system_properties"]
 ports = ["dep:entity_access", "dep:tracing"]
@@ -48,6 +51,7 @@ model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }
+messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
