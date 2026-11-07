@@ -557,7 +557,7 @@ async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
 }
 
 /// The free model now and then keeps going after a clean check; the draft
-/// doesn't wait for it.
+/// waits a little for its turn to end, then takes the check.
 #[tokio::test(start_paused = true)]
 async fn a_draft_stops_waiting_once_a_check_passes() {
     let rows = Arc::new(Rows::default());
@@ -579,7 +579,7 @@ async fn a_draft_stops_waiting_once_a_check_passes() {
 
     assert_eq!(drafted.name, "Bug tasks");
     assert!(
-        started.elapsed() < Duration::from_secs(5),
+        started.elapsed() >= CHECKED_GRACE && started.elapsed() < CHECKED_GRACE * 2,
         "{:?}",
         started.elapsed()
     );

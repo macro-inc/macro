@@ -46,6 +46,9 @@ const SWEEP_BATCH: u16 = 64;
 /// How soon, then at most how often, the drafter reads the session's turn.
 const FIRST_POLL: Duration = Duration::from_millis(500);
 const MAX_POLL: Duration = Duration::from_secs(2);
+/// How long a session that has checked a passing routine gets to finish its
+/// turn before it is stopped and its last check taken.
+const CHECKED_GRACE: Duration = Duration::from_secs(15);
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
 
@@ -272,8 +275,8 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
 enum Ending {
     /// Its turn ended, well or not.
     Finished,
-    /// It handed back a routine that passes its check; whatever it does
-    /// next can't make the draft better, so it is stopped.
+    /// It handed back a routine that passes its check and then kept going
+    /// past [`CHECKED_GRACE`], so it is stopped and its last check taken.
     Checked,
     /// It ran past [`DRAFT_TIMEOUT`].
     TimedOut,
@@ -403,8 +406,8 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         })
     }
 
-    /// Open the hidden session, prompt it once and wait for its turn to end
-    /// or for a check that passes, whichever comes first.
+    /// Open the hidden session, prompt it once and wait for its turn to end,
+    /// or for [`CHECKED_GRACE`] after a check that passes.
     async fn run(
         &self,
         action: &RoutineSessionAction,
@@ -439,6 +442,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         let mut delay = FIRST_POLL;
         let mut failures = 0;
         let mut reads = 0_u32;
+        let mut clean_since: Option<tokio::time::Instant> = None;
         loop {
             tokio::time::sleep(delay).await;
             delay = (delay * 2).min(MAX_POLL);
@@ -451,9 +455,17 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 }
                 Ok(RoutineActionStatus::Pending(_)) => {
                     failures = 0;
-                    if self.checked_clean(action).await {
-                        span.record("routine.draft.ended", "checked");
-                        return Ok(Ending::Checked);
+                    match clean_since {
+                        Some(since) if since.elapsed() >= CHECKED_GRACE => {
+                            span.record("routine.draft.ended", "checked");
+                            return Ok(Ending::Checked);
+                        }
+                        Some(_) => {}
+                        None => {
+                            if self.checked_clean(action).await {
+                                clean_since = Some(tokio::time::Instant::now());
+                            }
+                        }
                     }
                 }
                 Err(error) => {
@@ -659,7 +671,7 @@ You are setting up this routine for {owner}, with their access; they review the 
 
 {steps}
 
-5. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created in step 2 (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Fix what it reports and check again until `ok` is true. Your last check is the routine you hand back, so check the finished routine last, with everything you created. Then stop with one short line."
+5. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created in step 2 (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
 }
 
