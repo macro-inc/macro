@@ -104,6 +104,7 @@ export class Brain implements Control {
   private draining = false;
   private me = '';
   private connected = false;
+  private intakeActive = false;
   private lastEventAt: string | null = null;
   private heartbeatRunning = false;
   private pool!: Pool;
@@ -135,6 +136,10 @@ export class Brain implements Control {
     signal.throwIfAborted();
     const persona = await this.workspace.persona();
     const ready = Promise.withResolvers<void>();
+    const disconnected = () => {
+      this.connected = false;
+    };
+    signal.addEventListener('abort', disconnected, { once: true });
     const aborted = () =>
       ready.reject(new Error('intake aborted before readiness'));
     signal.addEventListener('abort', aborted, { once: true });
@@ -362,6 +367,7 @@ export class Brain implements Control {
       );
     const stream = this.intake;
     if (!stream) throw new Error('intake was not prepared');
+    this.intakeActive = true;
     try {
       for await (const item of stream) {
         if (item.kind === 'reconnected') {
@@ -436,11 +442,13 @@ export class Brain implements Control {
         }
       }
     } finally {
+      this.draining = true;
+      this.intakeActive = false;
+      this.connected = false;
       clearInterval(heartbeat);
       offline();
       callStop.abort();
       await calls;
-      this.draining = true;
       await this.lanes.shutdown();
       await this.work.drain();
       await Promise.all(heartbeats);
@@ -991,6 +999,8 @@ export class Brain implements Control {
   // Control: what turns and macrod call.
   async health(): Promise<Health> {
     const problems = [...this.problems];
+    if (this.draining) problems.push('brain is draining');
+    else if (!this.intakeActive) problems.push('event intake not active');
     if (!this.connected) problems.push('event stream disconnected');
     const state = problems.length === 0 ? 'ok' : 'degraded';
     const persona = await this.workspace.persona();

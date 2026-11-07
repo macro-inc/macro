@@ -16,6 +16,7 @@ inbound = [
   "entity_access/inbound",
 ]
 outbound = [
+  "dep:macro_service_urls",
   "dep:macro_authorization",
   "dep:agent_git",
   "hosted_runtimes/ports",
@@ -27,6 +28,7 @@ outbound = [
 ]
 
 [dependencies]
+macro_service_urls = { path = "../macro_service_urls", optional = true }
 stripe_price_id = { path = "../stripe_price_id" }
 agent_credentials = { path = "../agent_credentials" }
 agent_git = { path = "../agent_git", optional = true, default-features = false, features = ["client"] }

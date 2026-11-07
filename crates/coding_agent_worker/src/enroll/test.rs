@@ -1,3 +1,5 @@
+mod enrollment_urls;
+
 use std::cell::RefCell;
 
 use hosted_runtimes::domain::enrollment::{PersonaConfigKey, PersonaService};

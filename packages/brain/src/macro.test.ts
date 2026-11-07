@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gatewayHosts } from './config.ts';
+import { checkHosts } from './dry-run.ts';
 import { MacroHttp } from './macro.ts';
 
 test('scoped HTTP adapters do not serialize their credential into agent code', () => {
   const http = new MacroHttp(
-    gatewayHosts('https://gateway.example'),
+    checkHosts,
     'private-agent-key',
     async () => new Response()
   );

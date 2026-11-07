@@ -7,6 +7,8 @@ export type Hosts = {
   cognition: string;
   agentHarness: string;
   scheduledAction: string;
+  /** MCP service base; the bridge appends /mcp. */
+  mcp: string;
   /** The connection gateway websocket (presence). */
   connection: string;
 };
@@ -20,19 +22,16 @@ export type Config = {
   anthropicBaseUrl: string;
   anthropicAuthToken: string;
 };
-/** Every service under a gateway origin, at the gateway's path prefixes. */
-export function gatewayHosts(gateway: string): Hosts {
-  const base = gateway.replace(/\/+$/, '');
-  const socket = base.replace(/^http/, 'ws');
-  return {
-    storage: `${base}/dss`,
-    auth: `${base}/auth`,
-    cognition: `${base}/cognition`,
-    agentHarness: `${base}/agent-harness`,
-    scheduledAction: `${base}/scheduled-action`,
-    connection: `${socket}/connection-gateway/`,
-  };
-}
+/** Canonical override names exported by macro_service_urls ServiceUrl types. */
+export const SERVICE_URL_ENV = {
+  storage: 'OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL',
+  auth: 'OVERRIDE_AUTH_SERVICE_URL',
+  cognition: 'OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL',
+  agentHarness: 'OVERRIDE_AGENT_HARNESS_SERVICE_URL',
+  scheduledAction: 'OVERRIDE_SCHEDULED_ACTION_SERVICE_URL',
+  mcp: 'OVERRIDE_MCP_SERVICE_URL',
+  connection: 'OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL',
+} as const;
 export class ConfigError extends Error {}
 /** Read the configuration from `env`. Throws a `ConfigError` naming every missing variable. */
 export function loadConfig(env: (name: string) => string | undefined): Config {
@@ -44,6 +43,29 @@ export function loadConfig(env: (name: string) => string | undefined): Config {
       return '';
     }
     return value;
+  };
+  const serviceUrl = (name: string, websocket = false): string => {
+    const value = required(name);
+    if (!value) return value;
+    try {
+      const protocol = new URL(value).protocol;
+      const allowed = websocket ? ['ws:', 'wss:'] : ['http:', 'https:'];
+      if (!allowed.includes(protocol)) throw new Error('invalid protocol');
+    } catch {
+      throw new ConfigError(
+        `${name} must be an ${websocket ? 'ws(s)' : 'http(s)'} URL`
+      );
+    }
+    return websocket ? value : value.replace(/\/+$/, '');
+  };
+  const hosts: Hosts = {
+    storage: serviceUrl(SERVICE_URL_ENV.storage),
+    auth: serviceUrl(SERVICE_URL_ENV.auth),
+    cognition: serviceUrl(SERVICE_URL_ENV.cognition),
+    agentHarness: serviceUrl(SERVICE_URL_ENV.agentHarness),
+    scheduledAction: serviceUrl(SERVICE_URL_ENV.scheduledAction),
+    mcp: serviceUrl(SERVICE_URL_ENV.mcp),
+    connection: serviceUrl(SERVICE_URL_ENV.connection, true),
   };
   const macroApiKey = required('MACRO_API_KEY');
   const gateway = required('MACRO_GATEWAY');
@@ -69,7 +91,7 @@ export function loadConfig(env: (name: string) => string | undefined): Config {
   return {
     macroApiKey,
     gateway,
-    hosts: gatewayHosts(gateway),
+    hosts,
     workspace,
     healthPort,
     executable,

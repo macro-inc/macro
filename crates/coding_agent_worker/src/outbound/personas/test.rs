@@ -89,11 +89,16 @@ async fn a_real_health_endpoint_reports_degradation_and_preserves_turns_when_it_
 }
 
 #[tokio::test]
-async fn execution_failure_health_preserves_the_reported_last_turn() {
+async fn fixed_problem_health_preserves_the_reported_last_turn() {
     let server = MockServer::start().await;
     let checked_at = Utc::now();
     let last_turn_at = checked_at - chrono::Duration::seconds(30);
-    for problem in ["turn execution failed", "event handling failed"] {
+    for problem in [
+        "turn execution failed",
+        "event handling failed",
+        "brain is draining",
+        "event intake not active",
+    ] {
         Mock::given(method("GET"))
             .and(path("/health"))
             .respond_with(ResponseTemplate::new(503).set_body_json(serde_json::json!({

@@ -731,11 +731,10 @@ async fn run_server() -> anyhow::Result<()> {
         )
         .with_rollout(computer_rollout.clone()),
     );
-    let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(
-        config.environment,
-        matches!(config.computers_fleet.as_deref(), Some("incus" | "docker")),
-        config.computers_service_url_overrides.as_deref(),
-    )?;
+    let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(matches!(
+        config.computers_fleet.as_deref(),
+        Some("incus" | "docker")
+    ))?;
     let team_agents_service = Arc::new(
         team_agents::domain::service::TeamAgentServiceImpl::new(
             team_agents_repository.clone(),
@@ -765,18 +764,14 @@ async fn run_server() -> anyhow::Result<()> {
                     internal_key.clone(),
                 )
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-                computer_urls.git,
             ),
             // Gates every administrator operation per user (`enable-team-agents`).
             // Missing PostHog configuration closes administrator operations.
             feature_flags.clone(),
-            // The brain runs on its own computer, so it reaches Macro through the
-            // computer-facing gateway, never this container's in-network addresses.
-            computer_urls.gateway,
-            format!("{}/brain/anthropic", computer_urls.egress),
             config.team_agents_included_email_domain.clone(),
         )
-        .with_computer_rollout(computer_rollout),
+        .with_computer_rollout(computer_rollout)
+        .with_enrollment_environment(computer_urls),
     );
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(

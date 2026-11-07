@@ -183,6 +183,13 @@ test('real Node reload drains an in-flight turn while its control server stays a
     BRAIN_EXECUTABLE: '/opt/macro/brain',
     BRAIN_HEALTH_PORT: String(healthPort),
     MACRO_GATEWAY: `http://127.0.0.1:${httpPort(server)}`,
+    OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL: `http://127.0.0.1:${httpPort(server)}/dss`,
+    OVERRIDE_AUTH_SERVICE_URL: `http://127.0.0.1:${httpPort(server)}/auth`,
+    OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL: `http://127.0.0.1:${httpPort(server)}/cognition`,
+    OVERRIDE_AGENT_HARNESS_SERVICE_URL: `http://127.0.0.1:${httpPort(server)}/agent-harness`,
+    OVERRIDE_SCHEDULED_ACTION_SERVICE_URL: `http://127.0.0.1:${httpPort(server)}/scheduled-action`,
+    OVERRIDE_MCP_SERVICE_URL: `http://127.0.0.1:${httpPort(server)}/tools`,
+    OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL: `ws://127.0.0.1:${httpPort(server)}/connection-gateway`,
     MACRO_API_KEY: 'fake',
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${httpPort(server)}/anthropic`,
     ANTHROPIC_AUTH_TOKEN: 'fake',
@@ -261,8 +268,10 @@ export default compose;
       )
     );
     const health = await fetch(`http://127.0.0.1:${healthPort}/health`);
-    assert.deepEqual(health.ok, true);
-    assert.deepEqual((await health.json()).turns.length, 1);
+    assert.deepEqual(health.status, 503);
+    const drainingHealth = await health.json();
+    assert.deepEqual(drainingHealth.connected, false);
+    assert.deepEqual(drainingHealth.turns.length, 1);
     finishTurn();
     await reload;
     await restarted.promise;

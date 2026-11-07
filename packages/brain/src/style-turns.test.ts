@@ -5,7 +5,7 @@ import * as nodePath from 'node:path';
 import { test } from 'node:test';
 import { Brain } from './brain.ts';
 import { AsyncQueue } from './channel.ts';
-import { gatewayHosts } from './config.ts';
+import { checkHosts } from './dry-run.ts';
 import { MacroHttp } from './macro.ts';
 import type { RunEvent, Turn } from './runner.ts';
 import { readStyle } from './style.ts';
@@ -42,55 +42,51 @@ test('respond, heartbeat and work turns receive every style guide, including edi
     await git(['push', '-q', '-u', 'origin', 'main']);
     const responded = Promise.withResolvers<Turn>();
     const turns: Turn[] = [];
-    const http = new MacroHttp(
-      gatewayHosts('https://gateway.example'),
-      'test-key',
-      async (url, init) => {
-        const path = new URL(url).pathname;
-        if (path === '/auth/user/me')
-          return Response.json({ user_id: 'macro|agent@example.com' });
-        if (path === '/dss/channels/dm-1')
-          return Response.json({
-            channel_id: 'dm-1',
-            channel_type: 'direct_message',
-          });
-        if (path === '/dss/webhook/events/stream') {
-          return new Response(
-            new ReadableStream<Uint8Array>({
-              start(controller) {
-                const event = {
-                  event_id: 'event-style',
-                  event_type: 'message.posted',
-                  metadata: {
-                    message_id: 'message-style',
-                    content: 'Is the draft ready?',
-                    created_at: '2026-11-05T10:00:00Z',
-                    parent: { type: 'channel', id: 'dm-1' },
-                    root_id: 'message-style',
-                    sender: 'macro|colleague@example.com',
-                  },
-                };
-                controller.enqueue(
-                  new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
-                );
-                init?.signal?.addEventListener('abort', () =>
-                  controller.error(new Error('aborted'))
-                );
-              },
-            })
-          );
-        }
-        if (path === '/dss/messages/channel/dm-1/typing')
-          return new Response(null, { status: 204 });
-        if (path === '/dss/messages/channel/dm-1')
-          return Response.json({ id: 'report-style' });
-        throw new Error(`unexpected test request: ${path}`);
+    const http = new MacroHttp(checkHosts, 'test-key', async (url, init) => {
+      const path = new URL(url).pathname;
+      if (path === '/auth/user/me')
+        return Response.json({ user_id: 'macro|agent@example.com' });
+      if (path === '/dss/channels/dm-1')
+        return Response.json({
+          channel_id: 'dm-1',
+          channel_type: 'direct_message',
+        });
+      if (path === '/dss/webhook/events/stream') {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              const event = {
+                event_id: 'event-style',
+                event_type: 'message.posted',
+                metadata: {
+                  message_id: 'message-style',
+                  content: 'Is the draft ready?',
+                  created_at: '2026-11-05T10:00:00Z',
+                  parent: { type: 'channel', id: 'dm-1' },
+                  root_id: 'message-style',
+                  sender: 'macro|colleague@example.com',
+                },
+              };
+              controller.enqueue(
+                new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
+              );
+              init?.signal?.addEventListener('abort', () =>
+                controller.error(new Error('aborted'))
+              );
+            },
+          })
+        );
       }
-    );
+      if (path === '/dss/messages/channel/dm-1/typing')
+        return new Response(null, { status: 204 });
+      if (path === '/dss/messages/channel/dm-1')
+        return Response.json({ id: 'report-style' });
+      throw new Error(`unexpected test request: ${path}`);
+    });
     const brain = new Brain({
       config: {
         gateway: 'https://gateway.example',
-        hosts: gatewayHosts('https://gateway.example'),
+        hosts: checkHosts,
         workspace,
         healthPort: 0,
         anthropicBaseUrl: 'https://gateway.example/anthropic',

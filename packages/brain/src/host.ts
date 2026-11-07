@@ -3,6 +3,7 @@
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { dryRun } from './dry-run.ts';
+import { hostHealthReply } from './host-lifecycle.ts';
 import type { Composition } from './mod.ts';
 import { runtimeDeps } from './runtime.ts';
 import { stdinText } from './subprocess.ts';
@@ -46,8 +47,20 @@ if (mode === 'check') {
     await brain.prepare(stop.signal);
     if (process.send) {
       const activated = Promise.withResolvers<void>();
+      let active = false;
       process.on('message', (message) => {
-        if (message === 'activate') activated.resolve();
+        if (message === 'activate') {
+          active = true;
+          activated.resolve();
+          return;
+        }
+        hostHealthReply(message, active && !stop.signal.aborted, () =>
+          brain.health()
+        )
+          .then((reply) => {
+            if (reply && process.connected) process.send?.(reply, () => {});
+          })
+          .catch(() => {});
       });
       stop.signal.addEventListener('abort', () => activated.resolve(), {
         once: true,

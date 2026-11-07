@@ -284,6 +284,10 @@ impl InfraEnv {
             "OVERRIDE_CONNECTION_GATEWAY_URL".into(),
             "http://connection-gateway:8080".into(),
         );
+        env.insert(
+            "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL".into(),
+            "ws://connection-gateway:8080".into(),
+        );
         // Same trap for document storage: the Environment::Local default is
         // http://localhost:8086, the *host* port mapping, which resolves to
         // the calling container. Callers like the authentication service's

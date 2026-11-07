@@ -63,11 +63,14 @@ export class SpendLedger {
     return join(this.dir, 'spend.json');
   }
   async spentToday(): Promise<number> {
+    return this.spentOn(this.today());
+  }
+  private async spentOn(day: string): Promise<number> {
     try {
       const ledger = JSON.parse(
         await nodeFs.readFile(this.file, 'utf8')
       ) as LedgerFile;
-      return ledger.day === this.today() ? ledger.spentUsd : 0;
+      return ledger.day === day ? ledger.spentUsd : 0;
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
         return 0;
@@ -75,15 +78,68 @@ export class SpendLedger {
     }
   }
   record(usd: number): Promise<number> {
+    return this.adjust(usd).then((ledger) => ledger.spentUsd);
+  }
+  /** Debit before starting execution; a crash leaves its admitted cap charged. */
+  async reserve(
+    usd: number,
+    dailyLimitUsd: number
+  ): Promise<{
+    capUsd: number;
+    settle(
+      actualUsd: number
+    ): Promise<{ spentTodayUsd: number; accountedUsd: number }>;
+  }> {
+    if (!Number.isFinite(usd) || usd <= 0)
+      throw new BudgetError('invalid admission cap');
+    if (!Number.isFinite(dailyLimitUsd) || dailyLimitUsd <= 0)
+      throw new BudgetError('invalid daily limit');
+    let capUsd = 0;
+    const admission = await this.adjust((current) => {
+      const remaining = dailyLimitUsd - current;
+      if (remaining <= 0)
+        throw new BudgetError(`daily budget of $${dailyLimitUsd} is spent`);
+      capUsd = Math.min(usd, remaining);
+      return capUsd;
+    });
+    let settled:
+      | Promise<{ spentTodayUsd: number; accountedUsd: number }>
+      | undefined;
+    return {
+      capUsd,
+      settle: (actualUsd) => {
+        if (!Number.isFinite(actualUsd) || actualUsd < 0)
+          return Promise.reject(new BudgetError('invalid final cost'));
+        // Memoize even a rejected refund: never retry a potentially applied credit.
+        settled ??= this.adjust(actualUsd - capUsd, admission.day).then(
+          (ledger) => ({
+            spentTodayUsd: ledger.spentUsd,
+            accountedUsd: ledger.day === admission.day ? actualUsd : capUsd,
+          })
+        );
+        return settled;
+      },
+    };
+  }
+  private adjust(
+    usd: number | ((current: number) => number),
+    admissionDay?: string
+  ): Promise<LedgerFile> {
     const next = this.writing.then(async () => {
-      const spentUsd = (await this.spentToday()) + usd;
+      const day = this.today();
+      const current = await this.spentOn(day);
+      // A completed old-day turn can never credit a later day's budget.
+      if (admissionDay !== undefined && admissionDay !== day)
+        return { day, spentUsd: current };
+      const spentUsd =
+        current + (typeof usd === 'function' ? usd(current) : usd);
       await nodeFs.mkdir(this.dir, { recursive: true });
-      const ledger: LedgerFile = { day: this.today(), spentUsd };
+      const ledger: LedgerFile = { day, spentUsd };
       await nodeFs.writeFile(`${this.file}.tmp`, JSON.stringify(ledger));
       await nodeFs.rename(`${this.file}.tmp`, this.file);
-      return spentUsd;
+      return ledger;
     });
-    this.writing = next.catch(() => 0);
+    this.writing = next.then((ledger) => ledger.spentUsd).catch(() => 0);
     return next;
   }
 }

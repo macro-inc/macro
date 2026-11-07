@@ -14,7 +14,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AgentRepo, ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind,
+    ComputerPayment, ComputerPurchase, ComputerSize, ComputerStatus, ComputerStatusKind,
     CreateTeamAgent, EmailMessage, EmailMessages, MAX_NAME_CHARS, MAX_PROFILE_CHARS,
     NewAgentAccount, Persona, PersonaConfigKey, PersonaOsUser, PersonaSeed, PersonaService,
     SendEmail, SentEmail, SystemdUnitName, TeamAgent, TeamAgentComputer, TeamAgentError,
@@ -42,6 +42,9 @@ const BRAIN_EXEC: &str = "/opt/macro/brain run";
 
 /// Loopback health endpoint, shared with the macrod persona supervisor.
 const BRAIN_HEALTH_PORT: &str = "7801";
+
+/// Bound first-report startup grace without hiding later health losses.
+const BRAIN_STARTUP_GRACE: chrono::Duration = chrono::Duration::minutes(2);
 
 const COMPUTER_LINK_FAILED_REASON: &str =
     "computer identity is unavailable; the agent link must be recovered before retrying";
@@ -80,9 +83,9 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Inboxes, Comput
     rollout: TeamAgentRollout<Flags>,
     /// Independent rollout for teammate computer discovery.
     computer_rollout: ComputerRollout,
-    /// Public API gateway origin the brain reaches Macro through.
-    gateway_url: String,
-    anthropic_base_url: String,
+    /// Fresh transient addresses; absent composition fails issuance closed.
+    enrollment_environment: Option<std::sync::Arc<dyn super::enrollment::EnrollmentEnvironment>>,
+    clock: std::sync::Arc<dyn hosted_runtimes::domain::service::Clock>,
     included_email_domain: String,
 }
 
@@ -99,8 +102,6 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
         computers: Computer,
         repos: Repos,
         flags: Option<Flags>,
-        gateway_url: String,
-        anthropic_base_url: String,
         included_email_domain: String,
     ) -> Self {
         Self {
@@ -112,11 +113,26 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
             repos,
             rollout: TeamAgentRollout::new(flags),
             computer_rollout: ComputerRollout::default(),
-            gateway_url,
-            anthropic_base_url,
+            enrollment_environment: None,
+            clock: std::sync::Arc::new(hosted_runtimes::domain::service::SystemClock),
             included_email_domain,
         }
     }
+    /// Resolve service addresses afresh for each enrollment or recreation.
+    pub fn with_enrollment_environment(
+        mut self,
+        environment: impl super::enrollment::EnrollmentEnvironment,
+    ) -> Self {
+        self.enrollment_environment = Some(std::sync::Arc::new(environment));
+        self
+    }
+
+    /// Supply the shared clock for health freshness and initial startup grace.
+    pub fn with_clock(mut self, clock: impl hosted_runtimes::domain::service::Clock) -> Self {
+        self.clock = std::sync::Arc::new(clock);
+        self
+    }
+
     /// Enable teammate computer discovery through the canonical computer rollout.
     /// Without this composition step, discovery stays closed.
     pub fn with_computer_rollout(mut self, rollout: ComputerRollout) -> Self {
@@ -203,22 +219,11 @@ fn persona(
     name: &str,
     os_user: &PersonaOsUser,
     agent_user_id: &MacroUserIdStr<'_>,
-    gateway_url: &str,
-    anthropic_base_url: &str,
-    repo: &AgentRepo,
 ) -> Result<Persona, TeamAgentError> {
     let config = BTreeMap::from([
         (
-            config_keys::ANTHROPIC_BASE_URL.to_string(),
-            anthropic_base_url.trim_end_matches('/').to_string(),
-        ),
-        (
             config_keys::AGENT_USER_ID.to_string(),
             agent_user_id.as_ref().to_string(),
-        ),
-        (
-            config_keys::GATEWAY_URL.to_string(),
-            gateway_url.trim_end_matches('/').to_string(),
         ),
         (
             config_keys::WORKSPACE.to_string(),
@@ -228,7 +233,6 @@ fn persona(
             config_keys::HEALTH_PORT.to_string(),
             BRAIN_HEALTH_PORT.to_string(),
         ),
-        (config_keys::REPO_URL.to_string(), repo.url.clone()),
     ])
     .into_iter()
     .map(|(key, value)| {
@@ -411,7 +415,7 @@ where
             .await?;
         undo.joined_team = true;
 
-        let repo = self.repos.create(&user_id, team_id, &seed).await?;
+        self.repos.create(&user_id, team_id, &seed).await?;
         undo.repo = true;
 
         let purchase = ComputerPurchase {
@@ -419,14 +423,7 @@ where
             created_by: created_by.clone(),
             size: request.size,
             name: Some(request.name.clone()),
-            persona: Some(persona(
-                &request.name,
-                &os_user,
-                &user_id,
-                &self.gateway_url,
-                &self.anthropic_base_url,
-                &repo,
-            )?),
+            persona: Some(persona(&request.name, &os_user, &user_id)?),
             extra_items: seat.into_iter().collect(),
         };
         let computer_id = if included {
@@ -471,6 +468,21 @@ where
         agent: TeamAgent,
         computer: ComputerStatus,
     ) -> Result<TeamAgent, TeamAgentError> {
+        let age = self.clock.now() - agent.created_at;
+        let waiting_for_first_health = computer.status == ComputerStatusKind::Ready
+            && matches!(
+                computer.payment,
+                ComputerPayment::Paid | ComputerPayment::Comped
+            )
+            && agent.status == TeamAgentStatus::Provisioning
+            && age >= chrono::Duration::zero()
+            && age < BRAIN_STARTUP_GRACE
+            && computer.brain.as_ref().is_none_or(|brain| {
+                !brain.healthy
+                    && brain.last_turn_at.is_none()
+                    && brain.last_error.as_deref() == Some("brain health endpoint is unavailable")
+            });
+
         let (status, reason) = if computer.payment == ComputerPayment::Pending {
             (TeamAgentStatus::Provisioning, None)
         } else if computer.payment == ComputerPayment::Unbilled {
@@ -495,6 +507,9 @@ where
                     TeamAgentStatus::Failed,
                     Some("the computer was released".to_string()),
                 ),
+                ComputerStatusKind::Ready if waiting_for_first_health => {
+                    (TeamAgentStatus::Provisioning, None)
+                }
                 ComputerStatusKind::Ready => {
                     let unhealthy = match computer.brain.as_ref() {
                         None => Some("brain health has not been reported".to_string()),
@@ -503,7 +518,7 @@ where
                         }
                         Some(brain)
                             if {
-                                let age = chrono::Utc::now() - brain.checked_at;
+                                let age = self.clock.now() - brain.checked_at;
                                 age < chrono::Duration::zero() || age > chrono::Duration::minutes(2)
                             } =>
                         {
@@ -554,7 +569,15 @@ where
                 ComputerPayment::Paid | ComputerPayment::Comped
             ) && computer.status == ComputerStatusKind::Failed,
             payment: Some(computer.payment),
-            setup: computer.setup,
+            setup: if waiting_for_first_health {
+                Some(super::models::SetupProgress {
+                    step: super::models::SetupStep::Connecting,
+                    position: 3,
+                    total: 4,
+                })
+            } else {
+                computer.setup
+            },
             last_turn_at: computer.brain.and_then(|brain| brain.last_turn_at),
             ..agent
         })

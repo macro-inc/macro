@@ -95,8 +95,6 @@ async fn each_admin_operation_loads_once_and_self_operations_load_no_flags() {
         Some(CountingFlags {
             calls: calls.clone(),
         }),
-        base.gateway_url,
-        base.anthropic_base_url,
         base.included_email_domain,
     )
     .with_computer_rollout(ComputerRollout::new(CountingFlags {

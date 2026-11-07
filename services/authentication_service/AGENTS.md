@@ -256,11 +256,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   time. The fleet issues new credentials through the InternalOnly enrollment route;
   repo recovery reissues its token while preserving repository contents.
 
-- `src/outbound/computer_urls.rs` resolves bootstrap addresses separately from
-  browser and service-internal URLs. Enabled local fleets require complete
-  `COMPUTERS_SERVICE_URL_OVERRIDES` entries for the SDK gateway, harness egress
-  and git; deployed environments use typed public URLs. The git adapter advertises
-  the computer-facing remote while retaining the internal API address for create.
+- `src/outbound/computer_urls.rs` implements the domain `EnrollmentEnvironment`
+  port using canonical typed service URLs resolved on every issuance. It supplies
+  all seven canonical service overrides, gateway and Anthropic base transiently;
+  MCP stays a service base. Computer-facing URLs reject loopback, invalid protocols,
+  credentials, query strings and fragments. The git adapter advertises the guest
+  remote separately from its internal API address. No JSON override bridge remains.
   Brain Anthropic credentials reuse that agent's revocable Macro API key on the
   dedicated `/brain/anthropic` gateway path.
 
@@ -280,3 +281,10 @@ have no fallback. See [required computer config](../../docs/development/running-
 the generation, team, agent account and persona identity, locks the agent row,
 replaces its Brain API key and reissues the repo token. No bootstrap plaintext is
 persisted. A failed issuance may be repeated to revoke the incomplete attempt.
+
+The enrollment environment includes the typed storage, auth, cognition, harness,
+scheduled-action, websocket-connection and MCP service URLs. Resolve them afresh
+for each create or recreate; retain neither URLs nor bootstrap credentials in
+`hosted_runtime.persona`. Missing environment composition fails closed before
+credential replacement. The worker merges this transient environment with the
+one-time secret payload into its owner-only mode-0600 persona file.

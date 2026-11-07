@@ -2,7 +2,7 @@
 // time (respond and heartbeat talk; work stays quiet until its report), and
 // the spend caps. A turn waits for its slots, runs with the smaller of its
 // tier's per-run cap and what is left of the day, and records its cost.
-import type { Budget, SpendLedger } from './budget.ts';
+import { type Budget, BudgetError, type SpendLedger } from './budget.ts';
 import type {
   Outcome,
   RunHandle,
@@ -56,7 +56,6 @@ export class Pool {
   private readonly tiers: Record<Tier, Semaphore>;
   private readonly speaking = new Semaphore(1);
   private readonly admission = new Semaphore(1);
-  private reservedUsd = 0;
   private accountingFailed = false;
   private lastCompletedAt: string | null = null;
   private readonly running = new Map<
@@ -112,7 +111,7 @@ export class Pool {
       this.running.delete(turn.id);
     };
     const unlockAdmission = await this.admission.acquire();
-    let reservation = 0;
+    let reservation: Awaited<ReturnType<SpendLedger['reserve']>>;
     let handle: RunHandle;
     let admitted: Turn;
     try {
@@ -121,15 +120,6 @@ export class Pool {
           'budget accounting unavailable; refusing further spend'
         );
       const budget = await this.deps.budget();
-      const remaining =
-        budget.perDayUsd -
-        (await this.deps.ledger.spentToday()) -
-        this.reservedUsd;
-      if (remaining <= 0) {
-        throw new BudgetExceeded(
-          `daily budget of $${budget.perDayUsd} is spent`
-        );
-      }
       const cap = budget.perRunUsd[turn.tier];
       if (!cap || cap <= 0)
         throw new Error(`missing budget for tier: ${turn.tier}`);
@@ -138,11 +128,20 @@ export class Pool {
         (!Number.isFinite(turn.maxBudgetUsd) || turn.maxBudgetUsd <= 0)
       )
         throw new Error('turn budget must be positive and finite');
-      const maxBudgetUsd = Math.min(cap, remaining, turn.maxBudgetUsd ?? cap);
-      admitted = { ...turn, maxBudgetUsd };
+      const requestedCap = Math.min(cap, turn.maxBudgetUsd ?? cap);
+      try {
+        reservation = await this.deps.ledger.reserve(
+          requestedCap,
+          budget.perDayUsd
+        );
+      } catch (error) {
+        if (error instanceof BudgetError)
+          throw new BudgetExceeded(error.message);
+        this.accountingFailed = true;
+        throw error;
+      }
+      admitted = { ...turn, maxBudgetUsd: reservation.capUsd };
       handle = this.deps.runner.start(admitted);
-      reservation = maxBudgetUsd;
-      this.reservedUsd += reservation;
     } catch (error) {
       release();
       throw error;
@@ -156,9 +155,7 @@ export class Pool {
     const recordCost = async (costUsd: number) => {
       const unlock = await this.admission.acquire();
       try {
-        const spent = await this.deps.ledger.record(costUsd);
-        this.reservedUsd -= reservation;
-        reservation = 0;
+        const spent = await reservation.settle(costUsd);
         return spent;
       } catch (error) {
         this.accountingFailed = true;
@@ -175,36 +172,34 @@ export class Pool {
           const accounted = outcome.costIncomplete
             ? Math.max(admitted.maxBudgetUsd, outcome.costUsd)
             : outcome.costUsd;
-          const spent = await recordCost(accounted);
+          const settled = await recordCost(accounted);
           this.deps.log({
             turn: turn.id,
             tier: turn.tier,
             status: outcome.status,
             cost_usd: outcome.costUsd,
-            accounted_cost_usd: accounted,
+            accounted_cost_usd: settled.accountedUsd,
             cost_incomplete: outcome.costIncomplete ?? false,
-            spent_today_usd: spent,
+            spent_today_usd: settled.spentTodayUsd,
           });
           await this.deps.afterTurn?.(admitted, outcome);
           return outcome;
         } finally {
-          this.reservedUsd -= reservation;
-          reservation = 0;
           this.lastCompletedAt = new Date().toISOString();
           release();
         }
       },
       async (error) => {
         try {
-          const spent = await recordCost(admitted.maxBudgetUsd);
+          const settled = await recordCost(admitted.maxBudgetUsd);
           this.deps.log({
             turn: turn.id,
             tier: turn.tier,
             status: 'error',
             cost_usd: 0,
-            accounted_cost_usd: admitted.maxBudgetUsd,
+            accounted_cost_usd: settled.accountedUsd,
             cost_incomplete: true,
-            spent_today_usd: spent,
+            spent_today_usd: settled.spentTodayUsd,
           });
           await this.deps.afterTurn?.(admitted, {
             status: 'error',
@@ -214,8 +209,6 @@ export class Pool {
             sessionId: null,
           });
         } finally {
-          this.reservedUsd -= reservation;
-          reservation = 0;
           this.lastCompletedAt = new Date().toISOString();
           release();
         }

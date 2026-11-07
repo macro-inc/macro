@@ -15,10 +15,29 @@ BRAIN_WORKSPACE=/home/ada/workspace BRAIN_HEALTH_PORT=7801 \
 BRAIN_HEALTH_MINUTES=5 BRAIN_EXECUTABLE=/opt/macro/brain \
 ANTHROPIC_BASE_URL=... ANTHROPIC_AUTH_TOKEN=... \
   brain run
-brain health                     # what macrod polls, as JSON; exit 1 unless ok
+brain health                     # persona environment; JSON, exit 1 unless ok
 ```
 
-Every variable is required; a missing one fails startup with its name. The
+The persona environment also supplies each service URL explicitly under its
+canonical `macro_service_urls` override name:
+
+- `OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL`
+- `OVERRIDE_AUTH_SERVICE_URL`
+- `OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL`
+- `OVERRIDE_AGENT_HARNESS_SERVICE_URL`
+- `OVERRIDE_SCHEDULED_ACTION_SERVICE_URL`
+- `OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL`
+- `OVERRIDE_MCP_SERVICE_URL`
+
+These URLs are required and supplied by the persona enrollment env. The brain
+never derives service paths from `MACRO_GATEWAY`.
+`config.hosts.mcp` holds the MCP service base; the full-SDK bridge appends `/mcp`.
+Service URLs stay in the brain process and are never forwarded to Claude turn
+environments.
+
+Every variable is required; a missing one fails startup with its name. Run
+`brain health` in the same persona environment: it loads the same configuration
+and validates `BRAIN_HEALTH_PORT` before making a loopback request. The
 packaged CLI explicitly supplies its executable path, health interval and
 versioned library root; direct Node invocations must supply all three.
 `brain check` also requires `BRAIN_LIBRARY_ROOT`, containing a directory for
@@ -49,7 +68,7 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 | `jev.ts`, `learning.ts` | Explicit all-event start, deterministic/Jev filtering, decision and feedback history, must-wake regressions and tune tasks. |
 | `lanes.ts` | Durable JSONL queue per conversation; bursts batch, crashes replay, failures go to `failed/`. |
 | `pool.ts` | Per-tier concurrency, one speaking turn at a time, per-run and per-day spend caps. |
-| `runner.ts` | `start(turn) → { events, inject, abort, done }` over the Claude Agent SDK with streaming input. |
+| `runner.ts` | `start(turn) → { events, inject, abort, done }` over the Claude Agent SDK; follow-ups wait for the preceding result so mid-turn absorption cannot strand a run. |
 | `work.ts` | Hand-offs: a Macro task, a git worktree, follow-ups injected, the final message posted as the report. |
 | `schedules.ts` | Macro routines the agent creates for itself; their runs arrive as `agent_session.opened`. |
 | `memory.ts` | `memory/notes/<topic>.md` and `memory/self.json` (focus, commitments, last things said). |
@@ -66,6 +85,20 @@ Turns never get the Macro key. They call the `brain` binary (`post`, `reply`,
 running brain over its control endpoint with the per-start token in
 `BRAIN_CONTROL_TOKEN`. So memory writes stay on the single writer, a post stops
 that turn's typing.
+
+Work runs have a 30-minute wall-clock limit and a five-minute SDK inactivity
+limit, including work routed to a custom tier. Only received SDK messages reset
+inactivity; incoming conversation follow-ups do not extend either deadline.
+Timeout aborts and closes the SDK query, settles the turn, releases its pool
+slot and reports failure to the originating conversation. Uncommitted work remains in its worktree; clean unmerged work stays on its
+branch. A rejected runner also clears the
+conversation's running-work entry and attempts a failure report. If the SDK has
+not returned a final cost for the current prompt, the local daily ledger
+conservatively accounts its admitted cap, while `costUsd` retains only known
+spend. This prevents retries or restarts from recycling unknown charges. The cap is
+debited before SDK execution and refunded once after a known final cost, only
+on its admission day; a crash or force-stop retains the cap. Cap selection,
+debits, direct usage records and refunds share the ledger's serialized writer.
 
 ## The workspace
 
@@ -146,7 +179,8 @@ An unset endpoint disables telemetry with one startup log; an empty or malformed
 endpoint or provisioning parent fails startup. Collector failures log a fixed
 `telemetry: export_failed` diagnostic without provider payloads.
 
-`brain.turn` records tier, opaque lane, model, tokens, cost and outcome;
+`brain.turn` records tier, opaque lane, model, tokens, cost and outcome, plus
+configured deadlines and a categorical `brain.stop_reason` on timeout;
 `brain.jev.decide` records relevance, decision category and maximum score;
 `brain.events.connect`/`brain.events.gap` measure reconnects and missing-stream
 time. `brain.git.commit_push` covers the serialized commit and push, and
@@ -172,7 +206,14 @@ five methods so supervisor-owned regression replay remains available. `prepare` 
 mutating workspace queues. The supervisor starts replacement intake alongside
 the old process, then stops old intake and drains its turns before activating
 replacement queue processing. Receipt IDs persist across the handoff to avoid
-duplicate delivery. Every activation independently verifies a fake DM answer,
+duplicate delivery. Each host owns a separate POSIX process group. Shutdown
+allows 30 seconds for graceful drain, then force-stops only the old host group
+and awaits its actual process exit before activating buffered intake. Output
+pipe closure and collector completion do not control this handoff. Pending durable
+lane batches remain available for replay. Telemetry export cannot delay this
+transfer. Health is correlated over the exact child IPC channel with a two-second
+timeout; prepared hosts are unhealthy until activation, and stopped intake is
+disconnected while draining. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
 

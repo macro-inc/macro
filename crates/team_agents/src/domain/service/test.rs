@@ -1,5 +1,5 @@
 use crate::domain::models::{
-    AgentApiKey, PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName,
+    AgentApiKey, AgentRepo, PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName,
 };
 use agent_credentials::RepoToken;
 use hosted_runtimes::domain::ids::ComputerId;
@@ -614,10 +614,9 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
             seeds: Mutex::new(vec![]),
         },
         setup.flags,
-        "https://dev-gateway.macro.com/".to_string(),
-        "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic".to_string(),
         "staff.example.com".to_string(),
-    );
+    )
+    .with_enrollment_environment(TestEnvironment);
 
     (service, journal)
 }
@@ -713,21 +712,8 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
                 },
                 config: BTreeMap::from([
                     (
-                        PersonaConfigKey::parse("ANTHROPIC_BASE_URL").expect("config key"),
-                        "https://dev-gateway.macro.com/agent-harness-egress/brain/anthropic"
-                            .to_string()
-                    ),
-                    (
                         PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
                         "macro|sam@agents.example.com".to_string(),
-                    ),
-                    (
-                        PersonaConfigKey::parse("MACRO_GATEWAY").expect("config key"),
-                        "https://dev-gateway.macro.com".to_string(),
-                    ),
-                    (
-                        PersonaConfigKey::parse("MACRO_REPO_URL").expect("config key"),
-                        "https://git.example.com/sam".to_string(),
                     ),
                     (
                         PersonaConfigKey::parse("BRAIN_WORKSPACE").expect("config key"),
@@ -2106,4 +2092,104 @@ impl crate::domain::enrollment::EnrollmentComputers for FakeComputers {
             enrolled_at: None,
         })
     }
+}
+
+struct TestEnvironment;
+impl crate::domain::enrollment::EnrollmentEnvironment for TestEnvironment {
+    fn environment(
+        &self,
+    ) -> Result<
+        hosted_runtimes::domain::persona_credentials::PersonaEnv,
+        hosted_runtimes::domain::persona_credentials::PersonaCredentialError,
+    > {
+        hosted_runtimes::domain::persona_credentials::PersonaEnv::new(
+            [
+                (
+                    "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+                    "https://storage.example.com",
+                ),
+                ("OVERRIDE_AUTH_SERVICE_URL", "https://auth.example.com"),
+                (
+                    "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+                    "https://cognition.example.com",
+                ),
+                (
+                    "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
+                    "https://harness.example.com",
+                ),
+                (
+                    "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
+                    "https://scheduled.example.com",
+                ),
+                (
+                    "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+                    "wss://connection.example.com/ws",
+                ),
+                ("OVERRIDE_MCP_SERVICE_URL", "https://mcp.example.com/base"),
+                ("MACRO_GATEWAY", "https://gateway.example.com"),
+                (
+                    "ANTHROPIC_BASE_URL",
+                    "https://egress.example.com/brain/anthropic",
+                ),
+            ]
+            .into_iter()
+            .map(|(key, value)| (PersonaConfigKey::parse(key).unwrap(), value.to_owned()))
+            .collect(),
+        )
+    }
+}
+
+#[tokio::test]
+async fn missing_enrollment_environment_does_not_rotate_credentials() {
+    use hosted_runtimes::domain::{
+        persona_credentials::{EnrollmentGeneration, PersonaCredentialError},
+        ports::PersonaCredentialSource,
+    };
+    let (mut service, journal) = build(Setup::default());
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    service.enrollment_environment = None;
+    journal.steps.lock().unwrap().clear();
+    assert!(matches!(
+        service
+            .issue(agent.computer_id.unwrap(), EnrollmentGeneration::new(1))
+            .await,
+        Err(PersonaCredentialError::Unavailable)
+    ));
+    assert!(journal.steps().is_empty());
+}
+
+mod health;
+
+struct InvalidGitEnvironment;
+impl crate::domain::enrollment::EnrollmentEnvironment for InvalidGitEnvironment {
+    fn environment(
+        &self,
+    ) -> Result<
+        hosted_runtimes::domain::persona_credentials::PersonaEnv,
+        hosted_runtimes::domain::persona_credentials::PersonaCredentialError,
+    > {
+        Err(hosted_runtimes::domain::persona_credentials::PersonaCredentialError::Unavailable)
+    }
+}
+
+#[tokio::test]
+async fn invalid_git_environment_preflight_touches_neither_credential_issuer() {
+    use hosted_runtimes::domain::{
+        persona_credentials::{EnrollmentGeneration, PersonaCredentialError},
+        ports::PersonaCredentialSource,
+    };
+    let (service, journal) = build(Setup::default());
+    let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+    let service = service.with_enrollment_environment(InvalidGitEnvironment);
+    journal.steps.lock().unwrap().clear();
+    assert!(matches!(
+        service
+            .issue(agent.computer_id.unwrap(), EnrollmentGeneration::new(1))
+            .await,
+        Err(PersonaCredentialError::Unavailable)
+    ));
+    assert!(
+        journal.steps().is_empty(),
+        "invalid preflight must not mint a key or create/reissue a repo"
+    );
 }

@@ -72,7 +72,8 @@ test('one speaking turn at a time: a second reply waits, work does not', async (
     runner.started.map((started) => started.id),
     ['respond-1', 'work-1', 'respond-2']
   );
-  assert.deepEqual(await ledger.spentToday(), 1.25);
+  // Active runs remain conservatively debited until their actual cost is known.
+  assert.deepEqual(await ledger.spentToday(), 10);
 });
 test('a turn gets the smaller of its per-run cap and what is left of the day', async () => {
   const runner = new HeldRunner();
@@ -158,11 +159,7 @@ test('failed durable cost accounting refuses further spend instead of releasing 
     nodePath.join(nodeOs.tmpdir(), 'brain-budget-accounting-')
   );
   try {
-    const ledger = new (class extends SpendLedger {
-      override async record(_usd: number): Promise<number> {
-        throw new Error('disk unavailable');
-      }
-    })(directory);
+    const ledger = new SpendLedger(directory);
     const runner = new HeldRunner();
     const pool = new Pool({
       runner,
@@ -172,13 +169,14 @@ test('failed durable cost accounting refuses further spend instead of releasing 
       log: () => {},
     });
     const first = await pool.start(turn('first', 'work'));
+    await nodeFs.mkdir(nodePath.join(directory, 'spend.json.tmp'));
     runner.finish.get('first')?.({
       status: 'success',
       result: '',
       costUsd: 2,
       sessionId: null,
     });
-    await assert.rejects(() => first.done, /disk unavailable/);
+    await assert.rejects(() => first.done, /EISDIR/);
     await assert.rejects(
       () => pool.start(turn('second', 'work')),
       /accounting unavailable/
@@ -243,4 +241,127 @@ test('a rejected runner retains unknown spend across a new ledger instance', asy
   assert.deepEqual(pool.active(), []);
   assert.equal(await new SpendLedger(directory).spentToday(), 10);
   await assert.rejects(() => pool.start(turn('retry', 'work')), BudgetExceeded);
+});
+
+test('a force-stop before done cannot erase the admitted cap on restart', async (t) => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-crash-spend-')
+  );
+  t.after(() => nodeFs.rm(directory, { recursive: true, force: true }));
+  const runner = new HeldRunner();
+  const pool = new Pool({
+    runner,
+    limits: { work: 1 },
+    budget: async () => BUDGET,
+    ledger: new SpendLedger(directory),
+    log() {},
+  });
+  await pool.start(turn('unfinished', 'work'));
+  // No outcome or shutdown hook runs: the next process only has the ledger.
+  const restarted = new Pool({
+    runner: new HeldRunner(),
+    limits: { work: 1 },
+    budget: async () => BUDGET,
+    ledger: new SpendLedger(directory),
+    log() {},
+  });
+  assert.equal(await new SpendLedger(directory).spentToday(), 10);
+  await assert.rejects(
+    () => restarted.start(turn('new-generation', 'work')),
+    BudgetExceeded
+  );
+});
+
+test('concurrent admission and settlement serialize durable debits and refunds', async (t) => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-admit-settle-')
+  );
+  t.after(() => nodeFs.rm(directory, { recursive: true, force: true }));
+  const runner = new HeldRunner();
+  const ledger = new SpendLedger(directory);
+  const pool = new Pool({
+    runner,
+    limits: { work: 2 },
+    budget: async () => BUDGET,
+    ledger,
+    log() {},
+  });
+  const first = await pool.start({ ...turn('first', 'work'), maxBudgetUsd: 6 });
+  runner.finish.get('first')?.({
+    status: 'success',
+    result: 'done',
+    costUsd: 2,
+    sessionId: null,
+  });
+  const [outcome, second] = await Promise.all([
+    first.done,
+    pool.start({ ...turn('second', 'work'), maxBudgetUsd: 6 }),
+  ]);
+  assert.equal(outcome.costUsd, 2);
+  const secondCap = runner.started[1]?.maxBudgetUsd ?? 0;
+  assert.ok(secondCap > 0 && secondCap <= 6);
+  assert.equal(await ledger.spentToday(), 2 + secondCap);
+  assert.ok((await ledger.spentToday()) <= 10);
+  runner.finish.get('second')?.({
+    status: 'success',
+    result: 'done',
+    costUsd: 3,
+    sessionId: null,
+  });
+  await second.done;
+  assert.equal(await new SpendLedger(directory).spentToday(), 5);
+});
+
+test('a queued direct usage record is counted before selecting an admitted cap', async (t) => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-record-admit-')
+  );
+  t.after(() => nodeFs.rm(directory, { recursive: true, force: true }));
+  const ledger = new SpendLedger(directory);
+  const runner = new HeldRunner();
+  const pool = new Pool({
+    runner,
+    limits: { work: 1 },
+    budget: async () => BUDGET,
+    ledger,
+    log() {},
+  });
+  const [, admitted] = await Promise.allSettled([
+    ledger.record(10),
+    pool.start(turn('new', 'work')),
+  ]);
+  assert.equal(admitted?.status, 'rejected');
+  assert.equal(await ledger.spentToday(), 10);
+  assert.equal(runner.started.length, 0);
+  assert.deepEqual(pool.active(), []);
+});
+
+test('atomic admission uses the remaining budget after a queued direct record', async (t) => {
+  const directory = await nodeFs.mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), 'brain-record-remaining-')
+  );
+  t.after(() => nodeFs.rm(directory, { recursive: true, force: true }));
+  const ledger = new SpendLedger(directory);
+  const runner = new HeldRunner();
+  const pool = new Pool({
+    runner,
+    limits: { work: 1 },
+    budget: async () => BUDGET,
+    ledger,
+    log() {},
+  });
+  const [, run] = await Promise.all([
+    ledger.record(6),
+    pool.start(turn('new', 'work')),
+  ]);
+  assert.equal(runner.started[0]?.maxBudgetUsd, 4);
+  assert.equal(await ledger.spentToday(), 10);
+  runner.finish.get('new')?.({
+    status: 'success',
+    result: '',
+    costUsd: 2,
+    sessionId: null,
+  });
+  await run.done;
+  assert.equal(await ledger.spentToday(), 8);
 });

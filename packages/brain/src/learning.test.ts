@@ -227,7 +227,7 @@ test('heartbeat reaction polling records new human reactions once and protects t
   const root = await fs.mkdtemp(join(tmpdir(), 'brain-reaction-feedback-'));
   try {
     const { MacroHttp } = await import('./macro.ts');
-    const { gatewayHosts } = await import('./config.ts');
+    const { checkHosts } = await import('./dry-run.ts');
     const workspace = new Workspace(root);
     const writer = new GitWriter(workspace, async () => ({
       code: 0,
@@ -241,13 +241,10 @@ test('heartbeat reaction polling records new human reactions once and protects t
       probabilities: {},
     });
     await learning.posted('own-message', [candidate.messageId], 'operations');
-    const http = new MacroHttp(
-      gatewayHosts('https://gateway.invalid'),
-      'fake',
-      async () =>
-        Response.json({
-          reactions: [{ emoji: '👍', users: ['human', 'self'] }],
-        })
+    const http = new MacroHttp(checkHosts, 'fake', async () =>
+      Response.json({
+        reactions: [{ emoji: '👍', users: ['human', 'self'] }],
+      })
     );
     await learning.pollReactions(http, 'self');
     await learning.pollReactions(http, 'self');

@@ -39,6 +39,12 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 - Require explicit workspace, executable, versioned library root and positive
   health interval settings; the Nix runner supplies its own executable path,
   `BRAIN_LIBRARY_ROOT` and interval. Tests install their library explicitly.
+- Parse the health probe port through `loadConfig` in CLI and supervisor paths;
+  reject missing, noninteger or out-of-range ports before making requests.
+- Read service URLs only from the seven canonical `OVERRIDE_*` names emitted by
+  persona enrollment; never derive deployment routes from `MACRO_GATEWAY`.
+  `OVERRIDE_MCP_SERVICE_URL` becomes `config.hosts.mcp`, a service base; the
+  full-SDK bridge appends `/mcp`. Never forward service URLs to turn environments.
 - Pin direct Claude turns to gateway request IDs: shipped triage uses
   `claude-haiku-4-5-20251001`. Keep `scheduleModel` in Macro's separate
   provider/model namespace (`anthropic/claude-haiku-4-5`). Exercise the actual
@@ -90,3 +96,17 @@ replace these conformance checks.
 - Keep learning text in workspace files; telemetry receives only categories,
   counts and rates. Reactions are polled on owned messages until the broker
   exposes reaction facts.
+
+Run work follow-ups only after the preceding SDK result: Claude can absorb
+mid-turn input without emitting another result. Keep work bounded by its
+30-minute wall clock and five-minute SDK inactivity deadline; incoming follow-ups
+do not reset those deadlines. Timeout must close the SDK query, release the
+pool slot and attempt a report to the originating conversation.
+Account the admitted cap durably when a timed-out or rejected runner has no
+final cost; releasing an execution slot must not recycle unknown spend.
+
+Bound supervisor drain to 30 seconds, force-stop only the old host's isolated
+process group and await actual exit before activating buffered replacement intake.
+Probe health through correlated child IPC, clear requests on exit or timeout,
+and keep prepared/draining hosts unhealthy. Debit admitted caps before SDK start;
+refund once only on the admission day and retain charges after unknown outcomes.
