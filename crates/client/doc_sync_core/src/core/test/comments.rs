@@ -253,3 +253,18 @@ fn reset_and_stop_cancel_staging_exactly_once() {
         }
     )));
 }
+
+#[test]
+fn successful_projection_resyncs_charge_the_shared_budget_without_network_fetch() {
+    let mut h = Harness::running(TransportKind::None, Persistence::Memory);
+    for _ in 0..3 {
+        h.send(SyncInput::ProjectionResynced);
+        assert_eq!(h.core.phase(), Phase::Running);
+        assert!(!h.out.io.iter().any(|io| matches!(
+            io,
+            IoEffect::SocketSend { .. } | IoEffect::SocketConnect { .. }
+        )));
+    }
+    h.send(SyncInput::ProjectionResynced);
+    assert_eq!(h.core.phase(), Phase::Stopped);
+}
