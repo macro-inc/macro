@@ -62,3 +62,6 @@ mod extension;
 pub use extension::*;
 mod plugin;
 pub use plugin::*;
+
+mod history;
+pub use history::*;
