@@ -53,6 +53,8 @@ export function FeaturePageSection(props: {
   id: string;
   title: string | readonly string[];
   description: string;
+  /** Under the description: the section's Watch demo. */
+  action?: JSX.Element;
   children: JSX.Element;
 }) {
   return (
@@ -69,7 +71,12 @@ export function FeaturePageSection(props: {
             {(line) => <span>{line}</span>}
           </For>
         </h2>
-        <p>{props.description}</p>
+        <Show when={props.action} fallback={<p>{props.description}</p>}>
+          <div class="product-feature-intro-copy">
+            <p>{props.description}</p>
+            {props.action}
+          </div>
+        </Show>
       </header>
       {props.children}
     </section>

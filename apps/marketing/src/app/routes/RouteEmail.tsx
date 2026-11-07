@@ -155,6 +155,7 @@ export function RouteEmail() {
         id="auto-tags"
         title={['Keep all your inboxes', 'organized.']}
         description="Connect your personal and work inboxes across Gmail, Outlook, and more. Organize them with tags for customers, projects, and follow-ups."
+        action={<TutorialVideoDialog tutorial="ai-tagging" />}
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
