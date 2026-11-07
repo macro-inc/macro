@@ -14,9 +14,17 @@ use crate::inbound::axum_router::test::{FakeAuth, FakeEntityAccessService};
 const EVENT: &str = "0195c0de-0000-7000-8000-00000000e7e1";
 const ROUTINE: &str = "0195c0de-0000-7000-8000-000000000001";
 
+/// What a delivery passed to the service.
+#[derive(Debug, PartialEq)]
+struct Delivered {
+    token: String,
+    body: Vec<u8>,
+    content_type: Option<String>,
+}
+
 /// Records what it is asked; a delivery fails with `deliver_error` when set.
 struct Webhooks {
-    deliveries: Mutex<Vec<(String, Vec<u8>, Option<String>)>>,
+    deliveries: Mutex<Vec<Delivered>>,
     created_for: Mutex<Vec<String>>,
     deliver_error: Mutex<Option<RoutineWebhookError>>,
 }
@@ -74,11 +82,11 @@ impl RoutineWebhooks for Webhooks {
         body: &[u8],
         content_type: Option<&str>,
     ) -> Result<EventId, RoutineWebhookError> {
-        self.deliveries.lock().unwrap().push((
-            token.to_owned(),
-            body.to_vec(),
-            content_type.map(str::to_owned),
-        ));
+        self.deliveries.lock().unwrap().push(Delivered {
+            token: token.to_owned(),
+            body: body.to_vec(),
+            content_type: content_type.map(str::to_owned),
+        });
         match self.deliver_error.lock().unwrap().take() {
             Some(error) => Err(error),
             None => Ok(EventId::try_from(Uuid::parse_str(EVENT).unwrap()).unwrap()),
@@ -123,11 +131,11 @@ async fn a_delivery_needs_no_credentials_and_passes_on_what_was_sent() {
     assert_eq!(body, json!({ "eventId": EVENT }));
     assert_eq!(
         *webhooks.deliveries.lock().unwrap(),
-        vec![(
-            "mrw_token".to_owned(),
-            b"Deploy finished".to_vec(),
-            Some("text/plain".to_owned())
-        )]
+        vec![Delivered {
+            token: "mrw_token".to_owned(),
+            body: b"Deploy finished".to_vec(),
+            content_type: Some("text/plain".to_owned()),
+        }]
     );
 }
 
