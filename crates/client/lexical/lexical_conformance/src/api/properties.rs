@@ -15,7 +15,7 @@ pub(crate) fn get(
             tx.focus_at(slot)?
         };
         return match name {
-            "key" => Ok(json!({"$nodeKey":p.key().index()})),
+            "key" => Ok(json!({"$nodeKey":key_wire(p.key())})),
             "type" => Ok(json!(p.point_type().to_string())),
             "offset" => Ok(json!(p.offset())),
             _ => Err(fail(format!("unmapped point property {name}"))),
@@ -38,9 +38,13 @@ pub(crate) fn get(
         let state = r.saved_states[integer(&receiver["$snapshot"])? as usize].clone();
         let mut pairs = Vec::new();
         for key in crate::snapshot::keys(&state) {
-            pairs.push(json!([key.to_string(), r.node(state.view(), key)?]));
+            pairs.push(json!([{"$nodeKey":key_wire(key)}, r.node(state.view(), key)?]));
         }
         return Ok(json!({"$map":pairs}));
+    }
+    if name == "then" && (receiver.get("$editor").is_some() || receiver.get("$snapshot").is_some())
+    {
+        return Ok(undefined());
     }
     if name == "length" {
         if let Some(array) = receiver.as_array() {
@@ -60,7 +64,7 @@ pub(crate) fn get(
     }
     if receiver.get("$node").is_some() {
         let key = node_key(receiver)?;
-        let state = r.states.get(&integer(&receiver["ver"])?).cloned();
+        let state = r.captured_state(receiver);
         let view = state
             .as_ref()
             .filter(|s| s.view().contains(key))
@@ -68,7 +72,26 @@ pub(crate) fn get(
             .unwrap_or(tx.view());
         let node = view.node_or_err(key)?;
         return match name {
-            "__key" => Ok(json!({"$nodeKey":key.index()})),
+            "__key" => Ok(json!({"$nodeKey":key_wire(key)})),
+            "__tag" => Ok(json!(if let Some(heading) =
+                view.get::<lexical_rich_nodes::heading::HeadingNode>(key)
+            {
+                serde_json::to_value(heading.tag)?
+            } else {
+                view.export_json(key)?
+                    .get("tag")
+                    .cloned()
+                    .unwrap_or_else(undefined)
+            })),
+            "__classes" => Ok(serde_json::to_value(
+                &view
+                    .get_or_err::<macro_document_model::nodes::ClassedBlockNode>(key)?
+                    .classes,
+            )?),
+            "__headerState" => Ok(serde_json::to_value(
+                view.get_or_err::<lexical_rich_nodes::table::TableCellNode>(key)?
+                    .header_state,
+            )?),
             "__url" => Ok(json!(
                 view.get::<lexical_rich_nodes::link::LinkNode>(key)
                     .ok_or_else(|| fail("link"))?
@@ -84,10 +107,14 @@ pub(crate) fn get(
     if let Some(array) = receiver.as_array()
         && let Ok(index) = name.parse::<usize>()
     {
-        return array.get(index).cloned().ok_or_else(|| fail("array index"));
+        return Ok(array.get(index).cloned().unwrap_or_else(undefined));
     }
-    receiver
-        .get(name)
-        .cloned()
-        .ok_or_else(|| fail(format!("unmapped property {name}")))
+    if receiver
+        .as_object()
+        .is_some_and(|object| object.keys().all(|key| key == "$" || !key.starts_with('$')))
+        || receiver.is_array()
+    {
+        return Ok(receiver.get(name).cloned().unwrap_or_else(undefined));
+    }
+    Err(fail(format!("unmapped property {name}")))
 }

@@ -42,7 +42,7 @@ pub(crate) fn selection(state: &EditorState) -> Result<Value> {
         }
     })
 }
-fn expected_key(replay: &Replayer, value: &Value) -> Result<String> {
+fn expected_key(replay: &mut Replayer, value: &Value) -> Result<String> {
     if value.is_number() {
         let handle = replay
             .handles
@@ -55,13 +55,26 @@ fn expected_key(replay: &Replayer, value: &Value) -> Result<String> {
     } else {
         string(value)?
     };
-    replay
-        .keys
-        .get(raw)
-        .map(ToString::to_string)
-        .ok_or_else(|| fail(format!("unknown snapshot key {raw}")))
+    if let Some(key) = replay.keys.get(raw) {
+        return Ok(key.to_string());
+    }
+    // Removed temporary nodes have no public handle or node-map entry. Their
+    // numeric identity remains observable in dirty sets. Resolve only an actual
+    // allocation in the fixture's shared namespace, preserving the bijection.
+    if let (Ok(index), Some(last)) = (raw.parse::<u32>(), replay.key_counter.last_allocated())
+        && index > 0
+        && index <= last.index()
+    {
+        let key = NodeKey::from_parts(KeyParts {
+            generation: last.generation(),
+            index,
+        });
+        replay.bind_key(raw, key)?;
+        return Ok(key.to_string());
+    }
+    Err(fail(format!("unknown snapshot key {raw}")))
 }
-fn canonical_selection(replay: &Replayer, value: &mut Value) -> Result<()> {
+fn canonical_selection(replay: &mut Replayer, value: &mut Value) -> Result<()> {
     if let Some(object) = value.as_object_mut() {
         for (key, child) in object {
             if ["key", "tableKey", "anchorCellKey", "focusCellKey"].contains(&key.as_str()) {
@@ -237,7 +250,11 @@ pub(crate) fn compare(
         actual_elements.sort();
         replay
             .compare(&json!(elements), &json!(actual_elements))
-            .map_err(|e| fail(format!("dirty elements: {e}")))?;
+            .map_err(|e| {
+                fail(format!(
+                    "dirty elements: {e}; expected {elements:?}, actual {actual_elements:?}"
+                ))
+            })?;
     }
     for extra in ["markdown", "history"] {
         if expected.get(extra).is_some() {

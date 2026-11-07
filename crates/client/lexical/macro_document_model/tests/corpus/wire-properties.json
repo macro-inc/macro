@@ -1,0 +1,270 @@
+{
+  "classTypes": {
+    "ParagraphNode": "paragraph",
+    "TextNode": "text",
+    "CodeNode": "code",
+    "CustomCodeNode": "custom-code",
+    "DatabaseQueryNode": "database-query",
+    "HeadingNode": "heading",
+    "LinkNode": "link",
+    "AutoLinkNode": "autolink",
+    "ListNode": "list",
+    "TaskListNode": "task-list",
+    "ListItemNode": "listitem",
+    "QuoteNode": "quote",
+    "LineBreakNode": "linebreak",
+    "DocumentMentionNode": "document-mention",
+    "DocumentCardNode": "document-card",
+    "PasteNode": "paste",
+    "UserMentionNode": "user-mention",
+    "ContactMentionNode": "contact-mention",
+    "DateMentionNode": "date-mention",
+    "PullRequestMentionNode": "pr-mention",
+    "BookingLinkMentionNode": "booking-link-mention",
+    "AgentSessionMentionNode": "agent-session-mention",
+    "ReplyTargetNode": "reply-target",
+    "GroupMentionNode": "group-mention",
+    "InlineSearchNode": "inline-search",
+    "UnlinkedTextNode": "unlinked-text",
+    "CodeHighlightNode": "code-highlight",
+    "TabNode": "tab",
+    "ImageNode": "image",
+    "VideoNode": "video",
+    "TableNode": "table",
+    "TableCellNode": "tablecell",
+    "TableRowNode": "tablerow",
+    "CompletionNode": "completion",
+    "MarkNode": "mark",
+    "CommentNode": "comment-mark",
+    "SearchMatchNode": "search-match",
+    "EquationNode": "equation",
+    "SnapshotNode": "snapshot",
+    "HorizontalRuleNode": "horizontalrule",
+    "DiffNode": "diff",
+    "DiffInsertNode": "diff-insert",
+    "DiffDeleteNode": "diff-delete",
+    "DiffTextNode": "diff-text",
+    "HtmlRenderNode": "html-render",
+    "ClassedBlockNode": "classed-block",
+    "WatermarkNode": "watermark",
+    "ThemeMentionNode": "theme-mention",
+    "TagMentionNode": "tag-mention",
+    "ConnectAppNode": "connect-app",
+    "AccountManagerRequestNode": "account-manager-request",
+    "UnknownMentionNode": "unknown-mention",
+    "AwaitNode": "await",
+    "MagicChipNode": "magic-chip",
+    "AgentActivityNode": "agent-activity",
+    "AgentContextNode": "agent-context",
+    "CursorSystemNotificationNode": "system-notification"
+  },
+  "ownUndefined": {
+    "root": [],
+    "paragraph": [],
+    "text": [],
+    "code": [
+      "language",
+      "theme"
+    ],
+    "custom-code": [
+      "language",
+      "theme"
+    ],
+    "database-query": [
+      "queryId",
+      "prompt",
+      "displayMode"
+    ],
+    "unknown-mention": [
+      "name"
+    ],
+    "heading": [],
+    "link": [],
+    "autolink": [],
+    "list": [],
+    "listitem": [
+      "checked"
+    ],
+    "task-list": [
+      "listType",
+      "start"
+    ],
+    "quote": [],
+    "linebreak": [],
+    "document-mention": [
+      "documentId",
+      "documentName",
+      "blockName",
+      "mentionUuid",
+      "channelType",
+      "createdAt"
+    ],
+    "document-card": [
+      "documentId",
+      "documentName",
+      "blockName",
+      "previewData",
+      "mentionUuid"
+    ],
+    "paste": [
+      "content"
+    ],
+    "user-mention": [
+      "userId",
+      "email",
+      "mentionUuid"
+    ],
+    "contact-mention": [
+      "contactId",
+      "name",
+      "emailOrDomain",
+      "isCompany",
+      "mentionUuid"
+    ],
+    "date-mention": [
+      "date",
+      "displayFormat",
+      "mentionUuid"
+    ],
+    "pr-mention": [
+      "id",
+      "label",
+      "mentionUuid",
+      "url"
+    ],
+    "booking-link-mention": [
+      "profileId",
+      "slug",
+      "label"
+    ],
+    "agent-session-mention": [
+      "id",
+      "label",
+      "mentionUuid"
+    ],
+    "reply-target": [
+      "targetMessageId",
+      "targetThreadId",
+      "displayText",
+      "senderId"
+    ],
+    "group-mention": [
+      "groupAlias"
+    ],
+    "inline-search": [],
+    "unlinked-text": [],
+    "code-highlight": [
+      "highlightType"
+    ],
+    "image": [
+      "srcType",
+      "id",
+      "url",
+      "width",
+      "height",
+      "constrainedWidth",
+      "constrainedHeight",
+      "alt"
+    ],
+    "video": [
+      "constrainedWidth",
+      "constrainedHeight",
+      "srcType",
+      "id",
+      "url",
+      "width",
+      "height",
+      "controls"
+    ],
+    "table": [
+      "frozenColumnCount",
+      "frozenRowCount",
+      "colWidths",
+      "rowStriping"
+    ],
+    "tablerow": [],
+    "tablecell": [
+      "width"
+    ],
+    "completion": [],
+    "mark": [],
+    "comment-mark": [
+      "threadId"
+    ],
+    "search-match": [],
+    "equation": [
+      "equation"
+    ],
+    "snapshot": [
+      "documentId",
+      "documentName",
+      "blockName",
+      "content",
+      "mentionUuid"
+    ],
+    "horizontalrule": [],
+    "diff": [
+      "userId"
+    ],
+    "diff-insert": [
+      "markdown"
+    ],
+    "diff-delete": [],
+    "diff-text": [
+      "diffStatus",
+      "author"
+    ],
+    "html-render": [
+      "html",
+      "adaptColors"
+    ],
+    "classed-block": [
+      "attributes",
+      "classes"
+    ],
+    "watermark": [
+      "content"
+    ],
+    "theme-mention": [
+      "name",
+      "data"
+    ],
+    "tag-mention": [
+      "optionId",
+      "propertyDefinitionId",
+      "scope",
+      "name",
+      "color"
+    ],
+    "connect-app": [
+      "appSlug",
+      "name"
+    ],
+    "account-manager-request": [
+      "grantId"
+    ],
+    "await": [
+      "text"
+    ],
+    "magic-chip": [
+      "agentSessionId",
+      "promptedMessage",
+      "status"
+    ],
+    "agent-activity": [
+      "agentSessionId",
+      "turn",
+      "segment",
+      "rows",
+      "sealed"
+    ],
+    "agent-context": [
+      "text"
+    ],
+    "system-notification": [
+      "source",
+      "text"
+    ],
+    "tab": []
+  }
+}

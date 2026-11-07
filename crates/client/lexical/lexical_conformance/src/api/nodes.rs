@@ -12,7 +12,11 @@ pub(crate) fn call(
     let key = node_key(receiver)?;
     // These public accessors call getLatest() in upstream. Raw get:__fields
     // resolve the receiver's captured version in properties.rs instead.
-    let snapshot = r.read_state.clone();
+    let snapshot = r.read_state.clone().or_else(|| {
+        (!r.in_callback || !tx.view().contains(key))
+            .then(|| r.captured_state(receiver))
+            .flatten()
+    });
     let view = snapshot
         .as_ref()
         .map(EditorState::view)
@@ -71,7 +75,7 @@ pub(crate) fn call(
             )?);
         }
         "getType" => return Ok(json!(view.type_name(key)?)),
-        "getKey" => return Ok(json!({"$nodeKey":key.index()})),
+        "getKey" => return Ok(json!({"$nodeKey":key_wire(key)})),
         "getTextContent" => return Ok(json!(view.text_content(key))),
         "getTextContentSize" => return Ok(json!(view.text_content_size(key).get())),
         "isAttached" => return Ok(json!(view.is_attached(key))),
@@ -134,7 +138,7 @@ pub(crate) fn call(
                     }
                 }
             }
-            return Ok(Value::Object(json));
+            return Ok(super::wire::exported_object(Value::Object(json)));
         }
         "hasFormat" => {
             return Ok(json!(

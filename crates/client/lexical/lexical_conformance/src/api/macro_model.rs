@@ -22,6 +22,12 @@ pub(crate) fn call(
             .as_str()
             .ok_or_else(|| fail("Macro helper requires text"))
     };
+    if let Some(class) = name.rsplit('.').next().and_then(|name| name.strip_prefix("$is"))
+        && let Some(ty) = super::wire::class_type(class)
+    {
+        let first = args.first().unwrap_or(&Value::Null);
+        return Ok(json!(first.get("$node").is_some() && first["type"] == ty));
+    }
     match name.rsplit('.').next().unwrap_or(name) {
         "isGithubPullRequestUrl" => Ok(json!(
             first.as_str().is_some_and(is_github_pull_request_url)

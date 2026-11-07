@@ -23,6 +23,9 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; Macro fixtures use the source-ordered Macro transformer lists and list indent 2.
 - Table node fixtures and the core table-caret case use concrete table payloads; keep their grid and selection observations strict.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
+- Route multiple editors by recorded identity, keeping commit indices and selection slots per editor.
+- Preserve shared allocation generations, internal dirty keys and captured node record identities.
+- Marshal own undefined properties separately from JSON snapshots; keep every comparison strict.
 - Register Macro classes through the shared source catalog; honor recorded mode, named replacements, namespace entropy and update callbacks.
 - Dispatch adapters contain no node or transformer policy.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.

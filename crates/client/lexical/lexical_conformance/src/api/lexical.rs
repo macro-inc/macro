@@ -51,6 +51,25 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     if name.starts_with("@macro-inc/lexical-core/") {
         return super::macro_model::call(r, tx, name, a);
     }
+    if matches!(
+        name,
+        "@lexical/table.$isTableNode"
+            | "@lexical/list.$isListNode"
+            | "@lexical/list.$isListItemNode"
+    ) {
+        let key = a
+            .first()
+            .filter(|value| value.get("$node").is_some())
+            .map(node_key)
+            .transpose()?;
+        return Ok(json!(key.is_some_and(|key| if short == "$isListNode" {
+            view.is::<lexical_rich_nodes::list::ListNode>(key)
+        } else if short == "$isListItemNode" {
+            view.is::<lexical_rich_nodes::list::ListItemNode>(key)
+        } else {
+            view.is::<lexical_rich_nodes::table::TableNode>(key)
+        })));
+    }
     match name {
         "@lexical/utils.$insertNodeIntoLeaf" => {
             lexical_rich_nodes::utils::insert_node_into_leaf(
@@ -397,26 +416,25 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         )),
         "LexicalEditor.getEditorState" => {
             let state = tx.committed_state();
-            let id = if let Some(id) = r
-                .saved_states
-                .iter()
-                .position(|s| s.same_snapshot(state) && s.selection() == state.selection())
-            {
-                id
+            let version = (r.editor_id, r.version);
+            let id = if let Some(id) = r.saved_editor_states.get(&version) {
+                *id
             } else {
                 r.saved_states.push(state.clone());
-                r.saved_states.len() - 1
+                let id = r.saved_states.len() - 1;
+                r.saved_editor_states.insert(version, id);
+                id
             };
             Ok(json!({"$snapshot":id}))
         }
         "EditorState.toJSON" => {
             let id = integer(&receiver["$snapshot"])? as usize;
-            Ok(serde_json::to_value(
+            Ok(super::wire::exported_object(serde_json::to_value(
                 r.saved_states
                     .get(id)
                     .ok_or_else(|| fail("state handle"))?
                     .to_json()?,
-            )?)
+            )?))
         }
         "iter" => {
             if receiver.is_array() {
