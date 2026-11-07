@@ -240,6 +240,13 @@
      }
 --- a/packages/lexical/src/LexicalUtils.ts
 +++ b/packages/lexical/src/LexicalUtils.ts
+@@ -117,1 +117,6 @@
+ let keyCounter = 1;
++
++export function getRecorderKeyCounter(): number {
++  return keyCounter;
++}
++export function setRecorderKeyCounter(next: number): void { keyCounter = next; }
 @@ -151,7 +151,7 @@
  export const isArray = Array.isArray;
  

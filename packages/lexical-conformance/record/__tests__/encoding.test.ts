@@ -39,11 +39,13 @@ describe('recorder membrane', () => {
         id: 0,
         config: {
           namespace: 'test',
+          namespaceGenerated: true,
           nodes: [],
           replacements: [],
           plugins: [],
           theme: {},
           editable: true,
+          headless: false,
           rootElement: false,
         },
         ret: { $ed: 0 },

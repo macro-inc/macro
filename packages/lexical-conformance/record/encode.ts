@@ -11,6 +11,12 @@ export class Encoder {
   readonly keys = new Map<string, number>();
   readonly functions = namedFunctions;
   version = 0;
+  reset(): void {
+    this.handles = new WeakMap();
+    this.next = 0;
+    this.keys.clear();
+    this.version = 0;
+  }
 
   encode(value: unknown): Value {
     if (value === undefined) return { $undef: true };
@@ -29,7 +35,10 @@ export class Encoder {
         return { $klass: value.getType() };
       }
       const name = this.functions.get(value);
-      if (name) return { $fn: name };
+      if (name)
+        return name.startsWith('tape:')
+          ? { $tape: Number(name.slice(5)) }
+          : { $fn: name };
       throw new Error('unsupported-function-value');
     }
     if (typeof value !== 'object')
@@ -79,7 +88,12 @@ export class Encoder {
       };
     if (value instanceof Set)
       return { $set: [...value].map((item) => this.encode(item)) };
-    if (value instanceof RegExp) throw new Error('unsupported-regexp-value');
+    if (value instanceof RegExp)
+      return {
+        $regexp: value.source,
+        flags: value.flags,
+        lastIndex: value.lastIndex,
+      };
     if (
       Object.getPrototypeOf(value) !== Object.prototype &&
       Object.getPrototypeOf(value) !== null
