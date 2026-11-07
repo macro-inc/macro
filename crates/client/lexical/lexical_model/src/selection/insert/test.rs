@@ -970,3 +970,26 @@ fn typing_at_segmented_start_keeps_the_segmented_node() -> Result<(), Error> {
     assert_eq!(tx.text_content(segmented), "abc");
     Ok(())
 }
+
+#[test]
+fn clearing_one_formatted_text_does_not_reformat_its_neighbor() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let selected = tx.create_text("a")?;
+    let next = tx.create_text("a")?;
+    tx.text(selected)?.set_format(TextFormat::BOLD)?;
+    tx.append(paragraph, &[selected.key(), next.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::text(selected, Utf16Offset(0)),
+        Point::text(selected, Utf16Offset(1)),
+    ))))?;
+    tx.insert_text("")?;
+    assert_eq!(tx.children_keys(paragraph)?, vec![next.key()]);
+    assert_eq!(tx.view().text_data(next)?.format, TextFormat::empty());
+    assert_eq!(tx.text_content(next), "a");
+    Ok(())
+}
