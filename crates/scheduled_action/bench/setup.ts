@@ -120,7 +120,7 @@ export async function index(at: Stack, force = false) {
   console.log(`indexed the seeded workspace for search on ${at.instance}`);
 }
 
-// Property ids of the system task properties (crates/system_properties).
+// Property ids of the system task properties (crates/databases/system_properties).
 const STATUS = '00000001-0000-0000-0000-000000000002';
 const DUE = '00000001-0000-0000-0000-000000000004';
 

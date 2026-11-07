@@ -1,7 +1,7 @@
 /**
  * A form's layout as a Loro document, so several editors can change it at
  * once and merge without losing each other's edits. The Rust codec in
- * `crates/forms/src/domain/collaboration.rs` reads and writes the same
+ * `crates/databases/forms/src/domain/collaboration.rs` reads and writes the same
  * schema; production documents are seeded there.
  *
  * Order lists hold position only: membership in the `sections` and

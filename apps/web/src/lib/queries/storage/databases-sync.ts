@@ -13,7 +13,7 @@ import { type Accessor, createEffect, on, onCleanup, untrack } from 'solid-js';
 import { z } from 'zod';
 import { invalidateDatabase } from './databases';
 
-/** Gateway message type published by `crates/databases` on every write. */
+/** Gateway message type published by `crates/databases/databases` on every write. */
 const TABLE_CHANGED_MESSAGE_TYPE = 'database_table_changed';
 const DATABASE_CHANGED_MESSAGE_TYPE = 'database_changed';
 /** Gateway message type relaying one viewer's awareness to the others. */

@@ -1,5 +1,5 @@
 // Shared fixed palette for tag options and entity appearance.
-// The tag AI tools mirror these values in crates/properties/src/tag_color.rs.
+// The tag AI tools mirror these values in crates/databases/properties/src/tag_color.rs.
 export const COLOR_PALETTE = [
   { key: 'red', name: 'Red', color: '#E5484D' },
   { key: 'tomato', name: 'Tomato', color: '#E54D2E' },

@@ -1,7 +1,7 @@
 /**
  * Tool renderers for the Macro Databases toolsets: QueryDatabase and
- * SaveDatabaseQuery from `crates/databases_sql/src/toolset`, the rest from
- * `crates/databases/src/inbound/toolset`.
+ * SaveDatabaseQuery from `crates/databases/databases_sql/src/toolset`, the rest from
+ * `crates/databases/databases/src/inbound/toolset`.
  */
 
 import { AppAnswerDisplay } from '@app/features/database-query/answer-display';

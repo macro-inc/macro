@@ -28,7 +28,7 @@ const ADDRESS_COLUMN = '0199a000-0000-7000-8000-000000000024';
 
 const FIXTURES = join(
   dirname(fileURLToPath(import.meta.url)),
-  '../../../../../../crates/forms/fixtures/collaboration'
+  '../../../../../../crates/databases/forms/fixtures/collaboration'
 );
 
 /** The layout both cross-language fixtures hold. */

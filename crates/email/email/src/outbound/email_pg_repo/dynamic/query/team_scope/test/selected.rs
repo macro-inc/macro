@@ -62,7 +62,7 @@ async fn parity(pool: &sqlx::PgPool, expected: bool) -> anyhow::Result<()> {
     );
 
     let interactions = sqlx::query_file!(
-        "../../crm/src/outbound/companies_repo/email_privacy/interactions.sql",
+        "../../databases/crm/src/outbound/companies_repo/email_privacy/interactions.sql",
         S_TEAM,
         S_LINK,
         "other@peer.example"
