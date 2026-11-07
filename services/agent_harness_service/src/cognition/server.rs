@@ -1090,7 +1090,7 @@ pub async fn build(
                 .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
             })
             .transpose()?;
-        memory::schedule::start(
+        super::memory_schedule::start(
             memory_service.clone(),
             memory_flags,
             &event_broker_tracker,
