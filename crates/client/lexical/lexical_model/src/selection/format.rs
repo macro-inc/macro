@@ -107,8 +107,12 @@ impl Transaction<'_> {
             })
             .map(|(_, data)| data.format.toggled(format, align_with));
         let alignment = first_flags.or(align_with);
-        let mut last_flags = None;
         let last_text = nodes.iter().rev().copied().find(|key| self.is_text(*key));
+        let last_flags = last_text.and_then(|key| self.view().text(key))
+            .map(|data| data.format.toggled(format, alignment));
+        let tail_partial = last_text.is_some_and(|key| {
+            end.key() == key && end.offset() < self.text_content_size(key).get()
+        });
         let mut first_target = None;
         for node in &nodes {
             if self.is_element(*node) {
@@ -155,7 +159,6 @@ impl Transaction<'_> {
                 .ok_or(Error::NotAText(target))?
                 .format
                 .toggled(format, alignment);
-            last_flags = Some(flags);
             self.text(target)?.set_format(flags)?;
             // Detached endpoints are not moved by split_text's active-selection adjustment.
             if node == start.key() && !unsplit {
@@ -182,8 +185,22 @@ impl Transaction<'_> {
             }
         }
         if let Some(first) = first_target {
-            if start.point_type() == PointType::Text && first != start.key() && Some(first) != last_text {
-                self.set_point_at(slot, if backward { PointRole::Focus } else { PointRole::Anchor }, Point::text(first, Utf16Offset::ZERO))?;
+            let current = self.range_at(slot)?;
+            let current_start = if backward { current.focus } else { current.anchor };
+            let converted = start.point_type() == PointType::Element && current_start.point_type() == PointType::Text;
+            if converted || start.point_type() == PointType::Text
+                && first != start.key()
+                && (Some(first) != last_text || tail_partial)
+            {
+                self.set_point_at(
+                    slot,
+                    if backward {
+                        PointRole::Focus
+                    } else {
+                        PointRole::Anchor
+                    },
+                    Point::text(first, Utf16Offset::ZERO),
+                )?;
             }
         }
         if let Some(flags) = first_flags
