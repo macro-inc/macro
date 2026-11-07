@@ -11,6 +11,7 @@ import type {
 import { createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { match } from 'ts-pattern';
+import type { AnthropicAccess, AnthropicLease } from './anthropic-relay.ts';
 import { AsyncQueue } from './channel.ts';
 import type { CodeModeConnection } from './code-mode.ts';
 import { startSpan, traceHeaders } from './telemetry.ts';
@@ -86,9 +87,8 @@ export type AgentSdkRunnerOptions = {
   macroTools?: (signal: AbortSignal) => Promise<CodeModeConnection>;
   /** The `claude` executable the SDK drives. */
   claudeExecutable: string;
-  /** Claude access through Macro's gateway; never a personal login. */
-  anthropicBaseUrl: string;
-  anthropicAuthToken: string;
+  /** Query-scoped loopback capability; the real key never enters the SDK. */
+  anthropic: AnthropicAccess;
   /** Claude Code's config dir, so the run never reads `~/.claude`. */
   claudeConfigDir: string;
   /** Inherited environment for the subprocess (PATH, HOME). */
@@ -146,6 +146,14 @@ export class AgentSdkRunner implements Runner {
       }
     };
     send(turn.prompt);
+    let anthropic: AnthropicLease;
+    try {
+      anthropic = this.#options.anthropic(abortController.signal);
+    } catch (error) {
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      span.end();
+      throw error;
+    }
     let sdkMessages: ReturnType<QueryFunction> | undefined;
     const query = (tools: BrainTool[] | undefined) => {
       sdkMessages = context.with(parent, () =>
@@ -182,13 +190,16 @@ export class AgentSdkRunner implements Runner {
                   ...turn.env,
                 }).filter(
                   ([name]) =>
-                    !['MACRO_API_KEY', 'OVERRIDE_MCP_SERVICE_URL'].includes(
-                      name
-                    )
+                    !name.startsWith('OVERRIDE_') &&
+                    ![
+                      'MACRO_API_KEY',
+                      'ANTHROPIC_API_KEY',
+                      'ANTHROPIC_AUTH_TOKEN',
+                    ].includes(name)
                 )
               ),
-              ANTHROPIC_BASE_URL: this.#options.anthropicBaseUrl,
-              ANTHROPIC_AUTH_TOKEN: this.#options.anthropicAuthToken,
+              ANTHROPIC_BASE_URL: anthropic.baseUrl,
+              ANTHROPIC_AUTH_TOKEN: anthropic.token,
               CLAUDE_CONFIG_DIR: this.#options.claudeConfigDir,
               ...(headers.traceparent
                 ? {
@@ -219,6 +230,7 @@ export class AgentSdkRunner implements Runner {
             })()
           : query(turn.tools);
     } catch (error) {
+      anthropic.revoke();
       input.close();
       events.close();
       span.setStatus({ code: SpanStatusCode.ERROR });
@@ -345,6 +357,7 @@ export class AgentSdkRunner implements Runner {
           outcome = { ...outcome, status: 'error', result: String(error) };
         }
       } finally {
+        anthropic.revoke();
         clearTimeout(wallTimer);
         clearTimeout(idleTimer);
         await connection?.close().catch(() => {

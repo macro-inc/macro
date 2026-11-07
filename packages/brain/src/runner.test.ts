@@ -28,8 +28,11 @@ const result = (text: string, cost: number) =>
   }) as SDKMessage;
 const RUNNER_OPTIONS = {
   claudeExecutable: 'claude',
-  anthropicBaseUrl: 'https://gateway.example/anthropic',
-  anthropicAuthToken: 'gateway-token',
+  anthropic: () => ({
+    baseUrl: 'https://gateway.example/anthropic',
+    token: 'gateway-token',
+    revoke() {},
+  }),
   claudeConfigDir: '/home/ada/workspace/cache/claude',
   baseEnv: { PATH: '/usr/bin', HOME: '/home/ada' },
 };
@@ -551,4 +554,153 @@ test('abort racing MCP discovery closes the late connection exactly once without
   await closed.promise;
   assert.equal(queries, 0);
   assert.equal(closes, 1);
+});
+
+test('an enrolled same-key credential never reaches a turn under either name', async (t) => {
+  const { anthropicRelay } = await import('./anthropic-relay.ts');
+  const relay = await anthropicRelay(
+    'http://127.0.0.1:1/anthropic',
+    'same-enrollment-key'
+  );
+  t.after(() => relay.close());
+  let child: Options | undefined;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    anthropic: relay.access,
+    baseEnv: { MACRO_API_KEY: 'same-enrollment-key' },
+    query(params) {
+      child = params.options;
+      return (async function* () {
+        yield result('done', 0);
+      })();
+    },
+  });
+  await runner.start(TURN).done;
+  assert.equal(JSON.stringify(child).includes('same-enrollment-key'), false);
+});
+
+test('every SDK query gets a distinct capability, revoked on completion and startup failure', async (t) => {
+  const { anthropicRelay } = await import('./anthropic-relay.ts');
+  const relay = await anthropicRelay(
+    'http://127.0.0.1:1/anthropic',
+    'fixture-real-key'
+  );
+  t.after(() => relay.close());
+  const children: Options[] = [];
+  let fail = false;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    anthropic: relay.access,
+    query(params) {
+      children.push(params.options);
+      if (fail) throw new Error('fixture startup failure');
+      return (async function* () {
+        yield result('done', 0.125);
+      })();
+    },
+  });
+  assert.equal((await runner.start(TURN).done).costUsd, 0.125);
+  assert.equal((await runner.start(TURN).done).costUsd, 0.125);
+  fail = true;
+  assert.throws(() => runner.start(TURN), /fixture startup failure/);
+  assert.equal(
+    new Set(children.map((child) => child.env?.ANTHROPIC_AUTH_TOKEN)).size,
+    3
+  );
+  for (const child of children) {
+    const response = await fetch(
+      `${child.env?.ANTHROPIC_BASE_URL}/v1/messages`,
+      {
+        method: 'POST',
+        headers: { authorization: `Bearer ${child.env?.ANTHROPIC_AUTH_TOKEN}` },
+      }
+    );
+    assert.equal(response.status, 401);
+  }
+});
+
+test('aborting a stuck SDK query immediately revokes its relay capability', async (t) => {
+  const { anthropicRelay } = await import('./anthropic-relay.ts');
+  const relay = await anthropicRelay(
+    'http://127.0.0.1:1/anthropic',
+    'fixture-real-key'
+  );
+  t.after(() => relay.close());
+  let child: Options | undefined;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    anthropic: relay.access,
+    query(params) {
+      child = params.options;
+      return {
+        [Symbol.asyncIterator]() {
+          return { next: () => new Promise(() => {}) };
+        },
+      };
+    },
+  });
+  const run = runner.start(TURN);
+  run.abort();
+  assert.equal((await run.done).status, 'aborted');
+  assert(child?.env?.ANTHROPIC_BASE_URL);
+  assert.equal(
+    (
+      await fetch(`${child.env.ANTHROPIC_BASE_URL}/v1/messages`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${child.env.ANTHROPIC_AUTH_TOKEN}` },
+      })
+    ).status,
+    401
+  );
+});
+
+test('the actual SDK spawn receives only the relay token when enrollment keys are identical', async (t) => {
+  const { query } = await import('@anthropic-ai/claude-agent-sdk');
+  const { anthropicRelay } = await import('./anthropic-relay.ts');
+  const relay = await anthropicRelay(
+    'http://127.0.0.1:1/anthropic',
+    'same-enrollment-key'
+  );
+  t.after(() => relay.close());
+  let child: import('@anthropic-ai/claude-agent-sdk').SpawnOptions | undefined;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    baseEnv: {
+      PATH: process.env.PATH ?? '',
+      MACRO_API_KEY: 'same-enrollment-key',
+      ANTHROPIC_AUTH_TOKEN: 'same-enrollment-key',
+    },
+    anthropic: relay.access,
+    query(params) {
+      return query({
+        ...params,
+        options: {
+          ...params.options,
+          spawnClaudeCodeProcess(options) {
+            child = options;
+            throw new Error('fixture prevents child execution');
+          },
+        },
+      });
+    },
+  });
+  assert.throws(
+    () => runner.start({ ...TURN, tier: 'respond' }),
+    /fixture prevents child execution/
+  );
+  assert(child);
+  assert.equal(
+    JSON.stringify(child.env).includes('same-enrollment-key'),
+    false
+  );
+  assert.equal(
+    JSON.stringify(child.args).includes('same-enrollment-key'),
+    false
+  );
+  assert.equal(child.env.MACRO_API_KEY, undefined);
+  assert.match(child.env.ANTHROPIC_AUTH_TOKEN ?? '', /^[a-f0-9]{64}$/);
+  assert.equal(
+    new URL(child.env.ANTHROPIC_BASE_URL ?? '').hostname,
+    '127.0.0.1'
+  );
 });

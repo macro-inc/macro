@@ -171,8 +171,11 @@ test('a synchronous SDK startup failure closes its span without error text', () 
       throw new Error('private startup details');
     },
     claudeExecutable: 'claude',
-    anthropicBaseUrl: 'http://127.0.0.1',
-    anthropicAuthToken: 'test-token',
+    anthropic: () => ({
+      baseUrl: 'http://127.0.0.1',
+      token: 'test-token',
+      revoke() {},
+    }),
     claudeConfigDir: '/tmp/brain-test',
     baseEnv: {},
   });

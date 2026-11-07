@@ -16,6 +16,11 @@ LiveKit runs natively on Node 24; the image ships the platform addon offline.
 Keep call transports behind `Brain`, `Speaker`, `SttFactory`, `TtsFactory` and
 `CallApi`. Send speech through the computer gateway with agent-key auth.
 Use the brain's memory/writer and work tier for summaries and hand-offs.
+Keep the single long SDK query and its cumulative cost accounting. Acquire one
+loopback Anthropic capability at warmup for that query (the whole call), revoke
+on close, failure or abort, and never pass the real gateway or Macro key into
+the voice child's environment, arguments or files. Barge-in interrupts the
+query without replacing its capability.
 Local diagnostics contain speech and audio: keep them under ignored `log/`,
 private, bounded and pruned. Export categories/counts only to telemetry.
 

@@ -69,6 +69,7 @@ every turn ─▶ commit `turn <id>: <summary>` ─▶ pull --rebase ─▶ push
 | `lanes.ts` | Durable JSONL queue per conversation; bursts batch, crashes replay, failures go to `failed/`. |
 | `pool.ts` | Per-tier concurrency, one speaking turn at a time, per-run and per-day spend caps. |
 | `code-mode.ts` | Credential-private MCP client; discovers and forwards the three public SDK tools and server documentation. |
+| `anthropic-relay.ts` | Loopback streaming Anthropic transport with path-bound, per-SDK-query capabilities; retains the real gateway credential in the brain. |
 | `runner.ts` | `start(turn) → { events, inject, abort, done }` over the Claude Agent SDK; follow-ups wait for the preceding result so mid-turn absorption cannot strand a run. |
 | `work.ts` | Hand-offs: a Macro task, a git worktree, follow-ups injected, the final message posted as the report. |
 | `schedules.ts` | Macro routines the agent creates for itself; their runs arrive as `agent_session.opened`. |
@@ -97,6 +98,20 @@ adapters retain the key; the model, subprocess environment and tool schemas do
 not receive it. Backend `ai-code-mode` explicitly includes team-agent accounts
 resolved by the server; ordinary users keep their existing rollout policy.
 Permissions, budget admission and the persona's charter still apply.
+
+The gateway credential may be the same value as the Macro user API key.
+Neither value enters Claude turn or voice child environments, arguments or
+files. The brain owns a listener bound only to `127.0.0.1` on a random port;
+each SDK query receives its own random URL path and bearer token. Only POST
+`/v1/messages` and `/v1/messages/count_tokens` reach the fixed configured
+upstream, with the brain injecting the real credential. Missing, revoked and
+other-query tokens are rejected. SSE bytes stream through without buffering
+or changing usage events; downstream disconnect and query abort close upstream
+requests. Tokens last **per SDK query (a voice call holds one for the whole
+call)**, not per spoken ask. End, failure or abort revokes the token. The host
+closes the listener after draining, including failed composition startup.
+Existing SDK budget limits and cumulative voice usage accounting remain in
+place.
 
 Turns never get the Macro key. They call the `brain` binary (`post`, `reply`,
 `context`, `handoff`, `remember`, `recall`, `forget`, `focus`, `promise`,
