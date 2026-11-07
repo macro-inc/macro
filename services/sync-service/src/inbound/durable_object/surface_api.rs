@@ -3,9 +3,9 @@
 use bebop::Record;
 use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use sync_protocol::InitializeFromSnapshotRequest;
-use worker::{Date, Method, Request, Response, Result, WebSocket};
+use worker::{Method, Request, Response, Result, WebSocket};
 
-use super::{SyncSession, Wsm, response, status_codes};
+use super::{SyncSession, response, status_codes};
 use crate::{
     error::ResultExt,
     state::DocumentState,
@@ -44,28 +44,12 @@ async fn prepare_surface_snapshot(storage: &impl SnapshotStorage, snapshot: &[u8
     Ok(true)
 }
 
-pub(super) fn now_seconds() -> u64 {
-    let now = Date::now().as_millis();
-    #[cfg(feature = "transcript")]
-    crate::transcript::clock("surface_expiry_ms", now);
-    // Preserve the adapter's original target-width conversion before widening.
-    ((now / 1000) as usize) as u64
-}
-
 impl SyncSession<'_> {
     pub(super) async fn surface_lifecycle(&mut self) -> Result<SurfaceLifecycle> {
-        if let Some(value) = self.surface_lifecycle {
-            return Ok(value);
-        }
-        let value = self
-            .state
-            .storage()
-            .get(LIFECYCLE_KEY)
-            .await?
-            .unwrap_or_default();
-        let cached = &mut self.surface_lifecycle;
-        // Do not overwrite a transition made while the storage read was pending.
-        Ok(*cached.get_or_insert(value))
+        self.room
+            .surface_lifecycle()
+            .await
+            .map_err(super::room_error)
     }
 
     pub(in crate::inbound) async fn surface_handler(
@@ -221,53 +205,13 @@ impl SyncSession<'_> {
         &mut self,
         sender: Option<&WebSocket>,
     ) -> Result<bool> {
-        let key = self.document_id().await?;
-        if session_kind_from_storage_key(&key) == SessionKind::Document {
-            return Ok(true);
-        }
-        let ready = self.surface_lifecycle().await? == SurfaceLifecycle::Ready;
-        let now = now_seconds();
-        for socket in self.state.get_websockets() {
-            let mut wsm = Wsm::new(self, &socket);
-            wsm.maybe_update_ws_meta_map().await?;
-            let ws_id = wsm.get_ws_id()?.to_owned();
-            let active = ready
-                && self
-                    .connections
-                    .get(&ws_id)
-                    .is_some_and(|meta| meta.grant_active(SessionKind::Surface, now));
-            if !active {
-                socket.close(Some(1008), Some("surface grant expired or revoked"))?;
-            }
-        }
-        // Metadata restoration can yield. Use current lifecycle and time, not
-        // the values observed before those reads, when authorizing the sender.
-        Ok(self.surface_lifecycle().await? == SurfaceLifecycle::Ready
-            && sender.is_none_or(|sender| self.active_websockets().contains(sender)))
+        self.room
+            .validate_surface_sockets(sender)
+            .await
+            .map_err(super::room_error)
     }
 
     pub(super) fn active_websockets(&self) -> Vec<WebSocket> {
-        let key = &self.session_key;
-        let Some(key) = key.as_ref() else {
-            return Vec::new();
-        };
-        if session_kind_from_storage_key(key) == SessionKind::Document {
-            return self.state.get_websockets();
-        }
-        if self.surface_lifecycle != Some(SurfaceLifecycle::Ready) {
-            return Vec::new();
-        }
-        let metas = &self.connections;
-        let now = now_seconds();
-        self.state
-            .get_websockets()
-            .into_iter()
-            .filter(|socket| {
-                super::get_ws_id(&self.state, socket)
-                    .ok()
-                    .and_then(|id| metas.get(&id))
-                    .is_some_and(|meta| meta.grant_active(SessionKind::Surface, now))
-            })
-            .collect()
+        self.room.active_sockets()
     }
 }

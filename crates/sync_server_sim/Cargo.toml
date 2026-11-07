@@ -15,6 +15,5 @@ sync_server_core.workspace = true
 thiserror.workspace = true
 uuid-types.workspace = true
 
-[dev-dependencies]
 futures.workspace = true
 macro_sync_service_jwt.workspace = true

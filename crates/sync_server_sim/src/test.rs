@@ -221,8 +221,7 @@ fn actual_operation_log_uses_the_memory_ports_in_order() {
     assert!(block_on(ports.has(&key())).unwrap());
 }
 #[test]
-fn all_golden_fixtures_load_but_none_claim_native_callback_parity_yet() {
-    assert!(ENABLED.is_empty());
+fn all_golden_fixtures_load_and_enabled_callbacks_replay() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/transcripts");
     let paths = fixtures(&root).unwrap();
     assert_eq!(paths.len(), 155);
@@ -230,10 +229,14 @@ fn all_golden_fixtures_load_but_none_claim_native_callback_parity_yet() {
         let name = path.strip_prefix(&root).unwrap().to_str().unwrap();
         let transcript = Transcript::load(&path, name).unwrap();
         assert!(!transcript.inputs().unwrap().is_empty(), "{name}");
-        assert!(matches!(
-            replay(&transcript),
-            Err(ReplayError::NotEnabled(_))
-        ));
+        if ENABLED.contains(&name) {
+            replay(&transcript).unwrap();
+        } else {
+            assert!(matches!(
+                replay(&transcript),
+                Err(ReplayError::NotEnabled(_))
+            ));
+        }
     }
 }
 #[test]
@@ -443,4 +446,31 @@ fn closing_socket_rejects_sends_while_it_is_still_listed() {
     );
     ports.runtime_closes(&socket());
     assert!(ports.send_text(&socket(), "after removal").is_err());
+}
+
+#[test]
+fn golden_replay_rejects_reordered_writes_and_changed_final_storage() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/transcripts");
+    let original = Transcript::load(&root.join(ENABLED[0]), ENABLED[0]).unwrap();
+    let mut reordered = Transcript {
+        name: original.name.clone(),
+        records: original.records.clone(),
+    };
+    let puts: Vec<_> = reordered
+        .records
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r["port"] == "storage.put")
+        .map(|(i, _)| i)
+        .collect();
+    reordered.records.swap(puts[0], puts[1]);
+    assert!(matches!(replay(&reordered), Err(ReplayError::Mismatch(_))));
+    let mut changed = original;
+    let dump = changed
+        .records
+        .iter_mut()
+        .find(|r| r["out"] == "dump")
+        .unwrap();
+    dump["kv"][0][1] = serde_json::json!("another-document");
+    assert!(matches!(replay(&changed), Err(ReplayError::Mismatch(_))));
 }

@@ -256,6 +256,10 @@ impl SimPorts {
     pub fn storage_dump(&self) -> BTreeMap<String, Value> {
         self.0.borrow().data.values.clone()
     }
+    /// Inspect logical snapshot bytes without emitting a simulated port call.
+    pub fn snapshot_dump(&self) -> BTreeMap<String, Vec<u8>> {
+        self.0.borrow().data.snapshots.clone()
+    }
     async fn enter(&self, operation: &str, value: Value) -> Result<(), SimError> {
         let result = self.0.borrow_mut().call(operation, value);
         match result {
@@ -311,6 +315,11 @@ impl Clock for SimPorts {
             (s.now.unix_ms
                 + i64::try_from(s.busy_for.as_millis()).expect("simulation latency fits"))
                 as u128
+        }) as i64)
+    }
+    fn unix_time_for(&self, purpose: WallClock) -> UnixMillis {
+        UnixMillis(self.clock(purpose.tag(), |s| {
+            (s.now.unix_ms + s.busy_for.as_millis() as i64) as u128
         }) as i64)
     }
     fn unix_nanos(&self) -> u128 {
@@ -800,6 +809,7 @@ impl BackgroundEffects for SimPorts {
             return;
         }
         let value = match publication {
+            DocumentPublication::Noop => json!({"noop":true}),
             DocumentPublication::Snapshot {
                 document,
                 snapshot,

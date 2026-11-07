@@ -21,9 +21,9 @@ enum Scope {
     Dynamic { env: Env, state: Rc<State> },
 }
 impl WorkerSnapshots {
-    pub fn fixed(backend: backends::Storage, state: Rc<State>) -> Self {
+    pub fn fixed(backend: Rc<backends::Storage>, state: Rc<State>) -> Self {
         Self {
-            scope: Scope::Fixed(Rc::new(backend)),
+            scope: Scope::Fixed(backend),
             state,
             cached: RefCell::new(None),
         }
@@ -35,7 +35,7 @@ impl WorkerSnapshots {
             cached: RefCell::new(None),
         }
     }
-    fn backend(&self, key: &SessionKey) -> worker::Result<Rc<backends::Storage>> {
+    pub(crate) fn backend(&self, key: &SessionKey) -> worker::Result<Rc<backends::Storage>> {
         match &self.scope {
             Scope::Fixed(backend) => Ok(backend.clone()),
             Scope::Dynamic { env, state } => {
@@ -49,6 +49,12 @@ impl WorkerSnapshots {
                 Ok(backend)
             }
         }
+    }
+    pub(crate) fn forget(&self) {
+        *self.cached.borrow_mut() = None;
+    }
+    pub(crate) fn adopt(&self, key: SessionKey, backend: Rc<backends::Storage>) {
+        *self.cached.borrow_mut() = Some((key, backend));
     }
     fn export_backend(
         &self,

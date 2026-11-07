@@ -1,6 +1,7 @@
 //! Permanent erasure of a document session. Internal-only: the document storage
 //! service calls this after it has deleted the document and its files.
 
+use sync_server_core::domain::ports::RoomPorts;
 use tracing::warn;
 use worker::{Response, Result};
 
@@ -43,6 +44,7 @@ impl SyncSession<'_> {
         self.document = None;
         self.operation_log = None;
         self.room.ports_mut().session_storage = None;
+        self.room.ports().snapshots().forget();
         self.surface_lifecycle = None;
         self.source_migration = None;
         self.connections.clear();

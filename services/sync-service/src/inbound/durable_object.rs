@@ -18,8 +18,7 @@ use macro_sync_service_jwt::session::SessionKind;
 use tracing::{Instrument, debug, error, info, instrument, trace, warn};
 use worker::{
     Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody, ResponseBuilder,
-    Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage, WebSocketPair,
-    durable_object,
+    Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage, durable_object,
 };
 
 use crate::{
@@ -33,9 +32,12 @@ use crate::{
     socket::{Socket, protocol},
     state::DocumentState,
     storage::{SessionStorage, get_snapshot_storage, snapshot::SnapshotStorage},
-    tags::{get_ws_id_from_tags, new_ws_id},
-    timeit,
+    tags::get_ws_id_from_tags,
 };
+
+fn room_error(error: sync_server_core::domain::room::RoomError) -> Error {
+    Error::from(error.to_string())
+}
 
 pub const NO_SUCH_VALUE_ERR_STR: &str = "No such value in storage.";
 
@@ -82,8 +84,6 @@ macro_rules! maybe_404 {
     };
 }
 
-pub use sync_server_core::domain::connection::ConnectionMetadata as WebSocketMetadata;
-
 /// A callback-local adapter borrowing the single locked room.
 pub struct SyncSession<'room> {
     room: &'room mut Room<WorkerPorts>,
@@ -129,56 +129,39 @@ impl<'a, 'room> Wsm<'a, 'room> {
         Ok(self.ws_id.as_ref().unwrap())
     }
     async fn maybe_update_ws_meta_map(&mut self) -> Result<()> {
-        let ws_id = self.get_ws_id()?.to_string();
-        if !self.dss.connections.contains_key(&ws_id) {
-            let wsm: WebSocketMetadata = self
-                .dss
-                .state
-                .storage()
-                .get(&ws_id)
-                .await?
-                .ok_or(Error::from("WebSocketMetadata not found in storage"))?;
-            self.dss.connections.insert(
-                sync_server_core::domain::socket::WebSocketId::from_tags(&[ws_id])
-                    .map_err(|error| Error::from(error.to_string()))?,
-                wsm,
-            );
-        }
+        let id = sync_server_core::domain::socket::WebSocketId::from_tags(&[self
+            .get_ws_id()?
+            .to_owned()])
+        .map_err(|e| Error::from(e.to_string()))?;
+        self.dss
+            .room
+            .connection_metadata_by_id(&id)
+            .await
+            .map_err(room_error)?;
         Ok(())
     }
     pub async fn get_peer_ids(&mut self, include_ai: bool) -> Result<Vec<u64>> {
-        self.maybe_update_ws_meta_map().await?;
-        let ws_id = self.get_ws_id()?.to_string();
-        Ok(self
-            .dss
-            .connections
-            .get(&ws_id)
-            .ok_or(Error::from("missing ws metadata"))?
-            .active_peer_ids(include_ai))
+        self.dss
+            .room
+            .connection_peers(self.ws, include_ai)
+            .await
+            .map_err(room_error)
     }
 
     pub async fn edit_attribution(&mut self) -> Result<Option<DocumentAttribution>> {
-        self.maybe_update_ws_meta_map().await?;
-        let ws_id = self.get_ws_id()?.to_string();
-        let map = &self.dss.connections;
-        let meta = map.get(&ws_id).context("missing ws metadata")?;
-        DocumentAttribution::from_session_claims(
-            meta.actor.clone(),
-            meta.user_id.clone(),
-            meta.agent_correlation_id,
-        )
-        .context("invalid signed websocket attribution")
+        self.dss
+            .room
+            .connection_attribution(self.ws)
+            .await
+            .map_err(room_error)
     }
 
     pub async fn write_access(&mut self) -> Result<WriteAccess> {
-        self.maybe_update_ws_meta_map().await?;
-        let ws_id = self.get_ws_id()?.to_string();
-        Ok(self
-            .dss
-            .connections
-            .get(&ws_id)
-            .ok_or(Error::from("missing ws metadata"))?
-            .write_access(surface_api::now_seconds()))
+        self.dss
+            .room
+            .connection_write_access(self.ws)
+            .await
+            .map_err(room_error)
     }
 
     pub async fn add_new_peerid(&mut self, peerid: u64, document_id: &str) -> Result<()> {
@@ -276,17 +259,6 @@ impl SyncSession<'_> {
     pub(crate) fn record_editor(&mut self, attribution: Option<&DocumentAttribution>) {
         if let Some(attribution) = attribution {
             self.pending_editors.insert(attribution.clone());
-        }
-    }
-
-    async fn forget_websocket_metadata(&mut self, ws: &WebSocket) {
-        let Ok(ws_id) = get_ws_id(&self.state, ws) else {
-            return;
-        };
-        self.inbound.remove(&ws_id);
-        self.connections.remove(&ws_id);
-        if let Err(err) = self.state.storage().delete(&ws_id).await {
-            warn!(error=?err, ws_id, "failed to delete websocket metadata");
         }
     }
 
@@ -580,115 +552,30 @@ impl SyncSession<'_> {
         claims: AuthToken,
         document_id: &str,
     ) -> Result<Response> {
-        let (res, elap) = timeit!({
-            if self.maybe_set_document_id(document_id).await? {
-                trace!("init document_id={document_id}");
-            } else {
-                trace!("document_id={document_id} already set");
-            }
-
-            //  Below is websocket stuff only i.e connect
-            let pair = WebSocketPair::new().context("failed to create websocket pair")?;
-
-            // Whether this peer is the first to join the session (used to
-            // decide whether to report a `FirstJoin` interaction below).
-            let is_first_join = self.state.get_websockets().is_empty();
-
-            // create tag for ws and store it
-            let ws_id = new_ws_id();
-            trace!(ws_id = ws_id, "websocket connect");
-
-            self.state
-                .accept_websocket_with_tags(&pair.server, &[&ws_id]);
-
-            let ws_meta = WebSocketMetadata {
-                agent_correlation_id: claims.agent_correlation_id,
-                user_id: claims.user_id,
-                access_level: claims.access_level,
-                actor: claims.actor,
-                peer_ids: Default::default(),
-                session_kind: claims.session_kind,
-                expires_at: claims.expires_at,
-            };
-
-            self.state.storage().put(&ws_id, &ws_meta).await?;
-            self.connections.insert(
-                sync_server_core::domain::socket::WebSocketId::from_tags(&[ws_id])
-                    .map_err(|error| Error::from(error.to_string()))?,
-                ws_meta,
-            );
-
-            // A surface may have been revoked while socket metadata was being
-            // persisted. Recheck before sending any initial content.
-            if claims.session_kind == SessionKind::Surface
-                && !self.validate_surface_sockets(Some(&pair.server)).await?
-            {
-                return Ok(response(status_codes::FORBIDDEN));
-            }
-
-            // If the snapshot is already in storage, send the initial sync now.
-            // Otherwise accept the WS without sending — initialize_handler will
-            // broadcast initial sync to this socket once /initialize lands.
-            let snapshot = self
-                .document_state()
-                .await
-                .and_then(|state| state.export_shallow_snapshot());
-
-            if let Ok(snapshot) = snapshot {
-                // Size of the initial sync this connect sent — the server end
-                // of the client's `doc.sync.initial-sync` span.
-                tracing::Span::current().record("snapshot.bytes", snapshot.len());
-                protocol::send_initial_sync(
-                    &self.socket_for(&pair.server),
-                    snapshot.as_slice(),
-                    self.awareness.encode_all().as_slice(),
-                )
-                .context("failed to send initial sync message")?;
-            } else {
-                debug!(
-                    document_id = document_id,
-                    "snapshot not yet available; deferring initial sync until /initialize"
-                );
-            }
-
-            // This is the single source of truth for `FirstJoin`: whenever
-            // the peer count genuinely transitions 0 -> 1, regardless of
-            // whether the document already has content.
-            if is_first_join {
-                let document_id_owned = document_id.to_string();
-                let env = self.env.clone();
-                self.state.wait_until(crate::background(async move {
-                    report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin)
-                        .await;
-                }));
-            }
-
-            if claims.session_kind == SessionKind::Surface {
-                bump_alarm(&self.state).await?;
-            }
-            Response::from_websocket(pair.client).context("failed to create websocket response")?
-        });
-
-        trace!(
-            document_id = document_id,
-            duration_ms = elap.as_millis(),
-            "DO::connect"
-        );
-        Ok(res)
+        use sync_server_core::domain::room::ConnectOutcome;
+        match self
+            .room
+            .connect(claims, SessionKey::new(document_id.to_owned()))
+            .await
+            .map_err(room_error)?
+        {
+            ConnectOutcome::Forbidden => Ok(response(status_codes::FORBIDDEN)),
+            ConnectOutcome::Accepted { .. } => Response::from_websocket(
+                self.room
+                    .ports()
+                    .connections()
+                    .take_accepted_client()
+                    .context("missing accepted websocket")?,
+            )
+            .context("failed to create websocket response"),
+        }
     }
 
     async fn maybe_set_document_id(&mut self, document_id: &str) -> Result<bool> {
-        if !self.document_id_is_some() {
-            debug!("Setting DO::kv({DOCUMENT_ID_KEY}, {document_id})");
-            self.state
-                .storage()
-                .put(DOCUMENT_ID_KEY, document_id)
-                .await?;
-            self.session_key = Some(SessionKey::new(document_id.to_string()));
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        self.room
+            .maybe_set_session_key(&SessionKey::new(document_id.to_owned()))
+            .await
+            .map_err(room_error)
     }
 
     /// A connected room identity does not imply initialized collaborative content.
@@ -709,10 +596,6 @@ impl SyncSession<'_> {
         Ok(false)
     }
 
-    fn document_id_is_some(&self) -> bool {
-        self.session_key.is_some()
-    }
-
     #[instrument(skip_all, err)]
     /// Get the `document_id`. First try checking self.session_key, if not there get from DOKV.
     async fn document_id(&mut self) -> Result<String> {
@@ -724,26 +607,11 @@ impl SyncSession<'_> {
     /// Like [`Self::document_id`], but `None` instead of an error when this
     /// object holds no session.
     async fn try_document_id(&mut self) -> Result<Option<String>> {
-        if let Some(id) = self.session_key.as_ref().cloned() {
-            return Ok(Some(id.to_string()));
-        }
-        let Some(id) = self
-            .state
-            .storage()
-            .get::<String>(DOCUMENT_ID_KEY)
+        self.room
+            .try_session_key()
             .await
-            .with_context(|| {
-                format!(
-                    "Could not get document_id via DOCUMENT_ID_KEY = [{}] from DO storage",
-                    DOCUMENT_ID_KEY
-                )
-            })?
-        else {
-            return Ok(None);
-        };
-        let key = SessionKey::new(id.clone());
-        self.session_key = Some(key);
-        Ok(Some(id))
+            .map(|key| key.map(|key| key.as_str().to_owned()))
+            .map_err(room_error)
     }
 
     fn reset_session_storage(
@@ -752,6 +620,11 @@ impl SyncSession<'_> {
         id: &str,
         kind: SessionKind,
     ) {
+        let snapshot = Rc::new(snapshot);
+        self.room
+            .ports()
+            .snapshots()
+            .adopt(SessionKey::new(id.to_owned()), snapshot.clone());
         let storage = SessionStorage::new(
             snapshot,
             self.room.ports().storage().clone(),
@@ -766,26 +639,24 @@ impl SyncSession<'_> {
             return Ok(storage.clone());
         }
         let id = self.document_id().await?;
-        let snapshot = get_snapshot_storage(&self.env, &self.state, id.clone())?;
-        self.reset_session_storage(snapshot, &id, session_kind_from_storage_key(&id));
-        Ok(self
-            .room
-            .ports()
-            .session_storage
-            .as_ref()
-            .expect("storage initialized")
-            .clone())
+        let key = SessionKey::new(id.clone());
+        let snapshot = self.room.ports().snapshots().backend(&key)?;
+        let storage = Rc::new(SessionStorage::new(
+            snapshot,
+            self.room.ports().storage().clone(),
+            id,
+            self.state.clone(),
+        ));
+        self.room.ports_mut().session_storage = Some(storage.clone());
+        if self.operation_log.is_none() {
+            self.operation_log = Some(OperationLog::new(key.clone(), key.kind()));
+        }
+        Ok(storage)
     }
 
     /// Read-only handle; mutations target the owned Room document below.
     async fn document_state(&mut self) -> Result<DocumentState> {
-        if self.document.is_none() {
-            let storage = self.session_storage().await?;
-            let document = storage
-                .load_document_state(self.operation_log.as_mut().expect("log initialized"))
-                .await?;
-            self.document = Some(document);
-        }
+        self.room.load_document().await.map_err(room_error)?;
         Ok(DocumentState::view(
             self.document.as_ref().expect("document loaded"),
         ))

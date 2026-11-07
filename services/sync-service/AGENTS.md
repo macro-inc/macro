@@ -31,6 +31,7 @@ updates over WebSocket.
 - `../../crates/sync_server_core/src/domain/`: shared session permission policy,
   atomic update use cases, connection metadata and migration state.
 - `src/domain.rs`: compatibility re-exports of the shared core.
+- `../../crates/sync_server_core/src/domain/room/connection.rs`: connect/close, metadata restore and surface-grant validation policy.
 - `src/state.rs`: read-only Loro views for adapter exports; mutable state lives in the core Room.
 
 ## Scope

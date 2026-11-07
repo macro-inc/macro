@@ -12,6 +12,14 @@ impl Clock for WorkerClock {
     fn unix_time(&self) -> UnixMillis {
         UnixMillis(worker::Date::now().as_millis() as i64)
     }
+    fn unix_time_for(&self, purpose: sync_server_core::domain::ports::WallClock) -> UnixMillis {
+        let now = worker::Date::now().as_millis();
+        #[cfg(feature = "transcript")]
+        crate::transcript::clock(purpose.tag(), now);
+        #[cfg(not(feature = "transcript"))]
+        let _ = purpose;
+        UnixMillis(now as i64)
+    }
     fn unix_nanos(&self) -> u128 {
         let nanos = web_time::SystemTime::now()
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -51,7 +59,6 @@ pub struct WorkerConnections {
     accepted_client: RefCell<Option<WebSocket>>,
 }
 impl WorkerConnections {
-    #[expect(dead_code, reason = "used when connect moves into Room in C8")]
     pub fn take_accepted_client(&self) -> Option<WebSocket> {
         self.accepted_client.borrow_mut().take()
     }
@@ -212,6 +219,7 @@ impl BackgroundEffects for WorkerBackground {
         let env = self.env.clone();
         self.state.wait_until(crate::background(async move {
             match publication {
+                DocumentPublication::Noop => {}
                 DocumentPublication::Snapshot {
                     document,
                     snapshot,
