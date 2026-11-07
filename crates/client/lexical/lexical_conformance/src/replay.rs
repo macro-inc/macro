@@ -210,6 +210,7 @@ impl Replayer {
                     self.version += 1;
                     let mut tx = ed.transaction();
                     self.begin_slots(&mut tx, true);
+                    self.pending_writes = false;
                     if kind == "commit" && self.version == 1 && self.attached {
                         tx.mark_dirty(NodeKey::ROOT)?;
                         tx.add_tag(UpdateTag::HistoryMerge);
@@ -436,10 +437,10 @@ impl Replayer {
                 let result = crate::api::lexical::call(self, tx, op);
                 if replacements != tx.selection_replacements()
                     && let Some(id) = self.active_selection.take()
-                        && let Some(selection) = selection
-                    {
-                        self.selections[id] = tx.detach_selection(selection);
-                    }
+                    && let Some(selection) = selection
+                {
+                    self.selections[id] = tx.detach_selection(selection);
+                }
                 if let Some(expected) = op.get("throws") {
                     match result {
                         Ok(value) => {

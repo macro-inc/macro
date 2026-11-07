@@ -42,6 +42,14 @@ pub(crate) fn get(
         }
         return Ok(json!({"$map":pairs}));
     }
+    if name == "length" {
+        if let Some(array) = receiver.as_array() {
+            return Ok(json!(array.len()));
+        }
+        if let Some(text) = receiver.as_str() {
+            return Ok(json!(text.encode_utf16().count()));
+        }
+    }
     if name == "size" {
         if let Some(map) = receiver.get("$map").and_then(Value::as_array) {
             return Ok(json!(map.len()));
@@ -61,6 +69,11 @@ pub(crate) fn get(
         let node = view.node_or_err(key)?;
         return match name {
             "__key" => Ok(json!({"$nodeKey":key.index()})),
+            "__url" => Ok(json!(
+                view.get::<lexical_rich_nodes::link::LinkNode>(key)
+                    .ok_or_else(|| fail("link"))?
+                    .url
+            )),
             "__type" => Ok(json!(node.type_name())),
             "__text" => Ok(json!(view.text_data(key)?.text.as_str())),
             "__format" => Ok(json!(view.text_data(key)?.format.bits())),

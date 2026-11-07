@@ -17,6 +17,10 @@ pub(crate) fn call(
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
+    if view.is::<lexical_rich_nodes::link::LinkNode>(key)
+        && let Some(result) = super::rich::link_method(view, key, method, a)? {
+            return Ok(result);
+        }
     match method {
         "getFirstDescendant" => {
             return view
@@ -101,6 +105,22 @@ pub(crate) fn call(
         _ => {}
     }
     match method {
+        "setURL" => {
+            tx.get_mut::<lexical_rich_nodes::link::LinkNode>(key)?.url = str_arg(a, 0)?.into();
+        }
+        "setRel" | "setTarget" | "setTitle" => {
+            let value = if a.first().is_none_or(Value::is_null) {
+                None
+            } else {
+                Some(str_arg(a, 0)?.into())
+            };
+            let mut link = tx.get_mut::<lexical_rich_nodes::link::LinkNode>(key)?;
+            match method {
+                "setRel" => link.rel = value,
+                "setTarget" => link.target = value,
+                _ => link.title = value,
+            };
+        }
         "setTag" => {
             let tag = serde_json::from_value(a.first().cloned().ok_or_else(|| fail("tag"))?)?;
             lexical_rich_nodes::heading::set_tag(
