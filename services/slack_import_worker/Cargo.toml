@@ -8,7 +8,8 @@ version = "0.1.0"
 aws-sdk-sqs = { workspace = true }
 bot_id = { workspace = true }
 channel_sender = { workspace = true }
-channels = { workspace = true, features = ["outbound"] }
+channels = { workspace = true }
+channels_outbound = { workspace = true }
 chrono = { workspace = true }
 database_env_vars = { workspace = true }
 entity_access = { workspace = true, features = ["outbound"] }

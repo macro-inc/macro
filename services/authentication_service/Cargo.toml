@@ -68,9 +68,8 @@ axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
 bot_id = { workspace = true }
 bots = { workspace = true, features = ["outbound"] }
-channels = { workspace = true, features = [
-  "outbound",
-] }
+channels = { workspace = true }
+channels_outbound = { workspace = true }
 chrono = { workspace = true }
 comms_db_client = { workspace = true }
 connection_gateway_client = { workspace = true }

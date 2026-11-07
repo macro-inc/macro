@@ -18,7 +18,7 @@ agent_session = { workspace = true, features = ["admission"] }
 bot_id = { workspace = true }
 call = { workspace = true, features = ["outbound"] }
 channel_sender = { workspace = true }
-channels = { workspace = true, features = ["outbound"] }
+channels = { workspace = true, features = ["sqlx"] }
 documents = { workspace = true, features = ["outbound", "ports"] }
 document_sub_type = { workspace = true, default-features = true }
 email = { workspace = true, features = ["outbound"] }

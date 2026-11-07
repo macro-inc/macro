@@ -41,7 +41,7 @@ async fn quota_denial_finishes_queued_conversation_turns_without_stopping_the_ru
         Some(journal.clone()),
     );
     let mut command = direct_command();
-    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+    let channel = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
         .ensure(mention_origin(&command).sender.clone(), command.bot_id)
         .await
         .unwrap()
@@ -122,7 +122,7 @@ async fn a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_red
         Arc::new(crate::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()));
     let policy = Arc::new(
         crate::domain::conversations::AgentConversationsService::new(
-            channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone()),
+            channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone()),
             bots::domain::service::BotServiceImpl::new(
                 bots::outbound::pg_bots_repo::PgBotsRepo::new(pool.clone()),
                 macro_event_broker::NoopMacroEventBroker,
@@ -145,7 +145,7 @@ async fn a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_red
     );
     let mut command = direct_command();
     let owner = mention_origin(&command).sender.clone();
-    let channels = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone());
+    let channels = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone());
     let channel = channels
         .ensure(owner.clone(), command.bot_id)
         .await
@@ -426,7 +426,7 @@ async fn a_completed_conversation_message_never_runs_again_when_the_broker_repla
         Some(journal.clone()),
     );
     let mut command = direct_command();
-    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+    let channel = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
         .ensure(mention_origin(&command).sender.clone(), command.bot_id)
         .await
         .unwrap()
@@ -478,7 +478,7 @@ async fn recovered_messages_dispatch_in_durable_order_even_when_delivered_in_rev
         Some(journal.clone()),
     );
     let mut first = direct_command();
-    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+    let channel = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
         .ensure(mention_origin(&first).sender.clone(), first.bot_id)
         .await
         .unwrap()
@@ -563,7 +563,7 @@ async fn journaled_conversation(
         Some(journal),
     );
     let mut command = direct_command();
-    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+    let channel = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
         .ensure(mention_origin(&command).sender.clone(), command.bot_id)
         .await
         .unwrap()
@@ -957,7 +957,7 @@ async fn two_queued_behind_a_running_turn(
         Some(journal),
     );
     let mut command = direct_command();
-    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+    let channel = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
         .ensure(mention_origin(&command).sender.clone(), command.bot_id)
         .await
         .unwrap()

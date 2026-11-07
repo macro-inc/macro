@@ -83,13 +83,9 @@ call = { workspace = true, default-features = true }
 feature_flags = { workspace = true }
 channel_bots = { workspace = true }
 messages = { workspace = true, features = ["annotations", "broker", "delivery", "inbound"] }
-channels = { workspace = true, features = [
-  "entity_mutation",
-  "inbound",
-  "kafka_consumer",
-  "list",
-  "outbound",
-] }
+channels = { workspace = true, features = ["entity_mutation", "list"] }
+channels_inbound = { workspace = true, features = ["axum", "kafka_consumer", "list"] }
+channels_outbound = { workspace = true }
 chat = { workspace = true, features = [
   "outbound",
 ] }

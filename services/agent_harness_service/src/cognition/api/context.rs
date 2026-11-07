@@ -8,8 +8,8 @@ use ai_tools::{
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::inbound::attachment::ChannelAttachmentService;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels_inbound::attachment::ChannelAttachmentService;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use chat::domain::service::MessageServiceImpl;
 use chat::inbound::attachment::ChatAttachmentService;
 use chat::outbound::postgres::PgChatRepo;

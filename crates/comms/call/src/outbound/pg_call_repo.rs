@@ -13,7 +13,7 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 
-use channels::outbound::channel_name::{
+use channels_outbound::channel_name::{
     batch_resolve_channel_names, resolve_channel_name_for_viewers,
 };
 use chrono::{DateTime, SubsecRound, Utc};

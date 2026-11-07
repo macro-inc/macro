@@ -183,9 +183,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
     let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
     use aws_sdk_sqs;
-    use channels::{
-        domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
-    };
+    use channels::domain::list_service::ChannelListServiceImpl;
+    use channels_outbound::pg_channels_repo::PgChannelsRepo;
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
@@ -808,7 +807,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                         )),
                         entity_access_service.clone(),
                     ),
-                    channel: channels::inbound::attachment::ChannelAttachmentService::new(
+                    channel: channels_inbound::attachment::ChannelAttachmentService::new(
                         Arc::new(PgChannelsRepo::new(pool.clone())),
                         entity_access_service.clone(),
                     ),

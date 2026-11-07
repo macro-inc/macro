@@ -19,7 +19,8 @@ anyhow = { workspace = true }
 axum = { workspace = true }
 calendar_events = { workspace = true }
 chrono = { workspace = true }
-channels = { workspace = true, features = ["outbound"] }
+channels = { workspace = true }
+channels_outbound = { workspace = true }
 comms_db_client = { workspace = true }
 crm = { workspace = true, features = ["search"] }
 document_sub_type = { workspace = true, default-features = true }

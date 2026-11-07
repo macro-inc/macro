@@ -5,7 +5,7 @@ use item_filters::ast::{
     LiteralTree,
     channel::{ChannelLiteral, ChannelThreadLiteral},
 };
-#[cfg(any(feature = "list", feature = "outbound"))]
+#[cfg(feature = "list")]
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
@@ -31,7 +31,7 @@ pub struct BotSenderProfile {
 
 /// Filter for the type of channel attachments to return.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ChannelAttachmentType {
     /// Static file attachments (images, videos).
@@ -228,9 +228,9 @@ impl SortOn<CreatedAt> for ChannelAttachment {
 /// Role of a channel participant.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
 #[cfg_attr(
-    feature = "outbound",
+    feature = "sqlx",
     sqlx(type_name = "comms_participant_role", rename_all = "lowercase")
 )]
 pub enum ParticipantRole {
@@ -402,9 +402,9 @@ pub struct ThreadReplyRow {
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
 )]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
 #[cfg_attr(
-    feature = "outbound",
+    feature = "sqlx",
     sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
 )]
 #[serde(rename_all = "snake_case")]
@@ -422,7 +422,7 @@ pub enum ChannelType {
 
 /// Request to add a user to all organization channels.
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct AddUserToOrgChannelsRequest {
     /// User to add.
     pub user_id: String,
@@ -432,7 +432,7 @@ pub struct AddUserToOrgChannelsRequest {
 
 /// Request to remove a user from all organization channels.
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct RemoveUserFromOrgChannelsRequest {
     /// User to remove.
     pub user_id: String,
@@ -557,7 +557,7 @@ pub struct Activity {
 
 /// The kind of activity a user performs in a channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum ActivityType {
     /// The user viewed the channel.
@@ -568,7 +568,7 @@ pub enum ActivityType {
 
 /// Result of a get-or-create channel operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum GetOrCreateAction {
     /// An existing channel was returned.
@@ -579,7 +579,7 @@ pub enum GetOrCreateAction {
 
 /// Request to create a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct CreateChannelRequest {
     /// Optional channel name.
     pub name: Option<String>,
@@ -589,10 +589,10 @@ pub struct CreateChannelRequest {
     pub team_id: Option<Uuid>,
     /// Whether team members automatically join this channel. Defaults to false.
     #[serde(default)]
-    #[cfg_attr(feature = "inbound", schema(default = false))]
+    #[cfg_attr(feature = "schema", schema(default = false))]
     pub auto_join_team: bool,
     /// Participants to add, excluding the owner.
-    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
+    #[cfg_attr(feature = "schema", schema(value_type = HashSet<String>))]
     pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
@@ -607,7 +607,7 @@ pub struct CreatedChannel {
 
 /// Response containing a channel's reusable join code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelJoinCodeResponse {
     /// Reusable code for joining the channel.
     pub join_code: Uuid,
@@ -615,7 +615,7 @@ pub struct ChannelJoinCodeResponse {
 
 /// Response returned after creating a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct CreateChannelResponse {
     /// Created channel id.
     pub id: String,
@@ -623,25 +623,25 @@ pub struct CreateChannelResponse {
 
 /// Request to get or create a direct message channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct GetOrCreateDmRequest {
     /// Recipient user id (`macro|...`) or agent persona id (`bot|...`).
-    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub recipient_id: Sender,
 }
 
 /// Request to get or create a private channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct GetOrCreatePrivateRequest {
     /// Recipient user ids.
-    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
+    #[cfg_attr(feature = "schema", schema(value_type = HashSet<String>))]
     pub recipients: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Response for get-or-create channel operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct GetOrCreateChannelResponse {
     /// Channel id.
     pub channel_id: String,
@@ -651,7 +651,7 @@ pub struct GetOrCreateChannelResponse {
 
 /// Request to patch a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct PatchChannelRequest {
     /// New channel name.
     pub channel_name: Option<String>,
@@ -866,16 +866,16 @@ pub struct ShareWithChannelRequest {
 
 /// Request to add participants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct AddParticipantsRequest {
     /// User ids to add.
-    #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
+    #[cfg_attr(feature = "schema", schema(value_type = HashSet<String>))]
     pub participants: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Request to remove participants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct RemoveParticipantsRequest {
     /// User ids to remove.
     pub participants: Vec<String>,
@@ -934,7 +934,7 @@ pub struct ChannelInfo {
 
 /// Request for a batched channel preview lookup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct GetBatchChannelPreviewRequest {
     /// Channel ids to look up.
     pub channel_ids: Vec<String>,
@@ -942,7 +942,7 @@ pub struct GetBatchChannelPreviewRequest {
 
 /// Response for a batched channel preview lookup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct GetBatchChannelPreviewResponse {
     /// Resolved channel previews, one per requested channel id.
     pub previews: Vec<ChannelPreview>,
@@ -950,7 +950,7 @@ pub struct GetBatchChannelPreviewResponse {
 
 /// Preview entry for a single channel id.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChannelPreview {
     /// Viewer can access the channel.
@@ -963,7 +963,7 @@ pub enum ChannelPreview {
 
 /// Preview payload returned for accessible channels.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelPreviewData {
     /// Static image file used as the channel's profile picture, when accessible.
     pub profile_picture_id: Option<Uuid>,
@@ -977,7 +977,7 @@ pub struct ChannelPreviewData {
 
 /// Preview payload returned for channels with only id information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct WithChannelId {
     /// Channel id.
     pub channel_id: String,
@@ -1013,12 +1013,12 @@ impl UserName {
 }
 
 /// Lookup from Macro user id to display name.
-#[cfg(any(feature = "list", feature = "outbound"))]
-pub(crate) type NameLookup = HashMap<MacroUserIdStr<'static>, String>;
+#[cfg(feature = "list")]
+pub type NameLookup = HashMap<MacroUserIdStr<'static>, String>;
 
 /// Produce the human-readable fallback for a Macro user id.
-#[cfg(any(feature = "list", feature = "outbound"))]
-pub(crate) fn fallback_user_name(user_id: &MacroUserIdStr<'_>) -> String {
+#[cfg(feature = "list")]
+pub fn fallback_user_name(user_id: &MacroUserIdStr<'_>) -> String {
     user_id.email_part().local_part().to_string()
 }
 
@@ -1312,7 +1312,7 @@ pub struct ChannelPreviewRow {
 
 /// Persisted entity-to-entity mention.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EntityMention {
     /// Mention id.
     pub id: Uuid,
@@ -1347,7 +1347,7 @@ pub struct CreateEntityMentionOptions {
 
 /// Request body for `POST /channels/mentions`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct CreateEntityMentionRequest {
     /// Type of the entity that owns the mention.
     pub source_entity_type: String,
@@ -1361,7 +1361,7 @@ pub struct CreateEntityMentionRequest {
 
 /// Response body for `POST /channels/mentions`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct CreateEntityMentionResponse {
     /// Mention id.
     pub id: String,
@@ -1381,7 +1381,7 @@ pub struct CreateEntityMentionResponse {
 
 /// Response body for `DELETE /channels/mentions/{mention_id}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DeleteEntityMentionResponse {
     /// Whether the mention was deleted.
     pub deleted: bool,

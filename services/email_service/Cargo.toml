@@ -140,7 +140,8 @@ notification = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 mime_guess = "2.0.5"
-channels = { workspace = true, features = ["outbound"] }
+channels = { workspace = true }
+channels_outbound = { workspace = true }
 contacts = { workspace = true, default-features = true }
 generic_email_domains = { workspace = true }
 model = { workspace = true }

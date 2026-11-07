@@ -40,7 +40,7 @@ use calendar_scheduling::inbound::toolset::{
     booking_link_toolset, booking_management_toolset, mcp_toolset as booking_link_mcp_toolset,
 };
 use call::inbound::toolset::call_toolset;
-use channels::inbound::toolset::channel_toolset;
+use channels_inbound::toolset::channel_toolset;
 use cognition::inbound::toolset::cognition_toolset;
 use crm::inbound::toolset::{crm_toolset, pipelines::pipeline_toolset};
 use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
@@ -344,7 +344,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     // hosts have no network-capable shell, so only MCP clients get it.
     let toolset = match host {
         AiHost::Mcp => toolset.add_tool::<
-            channels::inbound::toolset::CreateChannelMediaUpload,
+            channels_inbound::toolset::CreateChannelMediaUpload,
             ToolChannelMediaUploadToolContext,
         >(),
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset,

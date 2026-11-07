@@ -15,12 +15,10 @@ DMs, and the shared message store other domains discuss things on.
   record) into a channel.
 - `src/domain/access_requests.rs`, `src/domain/service/access_requests.rs`:
   requests to join a private or team channel, answered by any participant.
-- `src/inbound/attachment.rs`: the `AttachmentService` impl for channel messages.
-- `src/inbound/toolset.rs`: AI tools over channels (feature `ai_tools`).
-- `src/outbound/pg_channels_repo.rs`, `src/outbound/connection_gateway_realtime.rs`:
-  storage and realtime delivery adapters.
-- `src/outbound/channel_name.rs`: the viewer-dependent channel naming rule —
-  batch name resolution and the SQL name search behind `name_search`.
+- The HTTP routes, AI toolset, attachment adapter and teammate-DM consumer are
+  `crates/comms/channels_inbound`; the Postgres, gateway, notification and
+  static-file adapters are `crates/comms/channels_outbound`. This crate is the
+  domain only, so an adapter edit does not rebuild its dependents.
 
 ## Scope
 
@@ -31,8 +29,9 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Boundaries
 
-- Depends on: `entity_access`, `macro_authorization`, `attachment` (feature
-  `attachment`), `model_entity`.
+- Depends on: `entity_access` (ports), `messages`, `model_entity`. Features
+  `schema`, `sqlx` and `ai_tools` add the utoipa, sqlx and JsonSchema derives
+  the adapter crates need.
 - Used by: widely — `bots`, `call`, `teams`, `webhook`, `soup`/`soup_realtime_inbound`,
   `agent_harness`, `agent_trigger`, `coding_agent_worker`, `comms_db_client`,
   `graphql_channel`, `search_service`, `name_search`, `ai_tools`, `memory`.
@@ -41,10 +40,12 @@ DMs, and the shared message store other domains discuss things on.
 ## Recipes
 
 - Add a message field or mutation: `src/domain/models.rs` → `src/domain/service.rs`
-  → `src/outbound/pg_channels_repo.rs` → `src/inbound/axum_router.rs`.
+  → `channels_outbound`'s `src/pg_channels_repo.rs` → `channels_inbound`'s
+  `src/axum_router.rs`.
 - Change realtime delivery: `src/domain/message_delivery.rs` →
-  `src/outbound/connection_gateway_realtime.rs`.
-- Add a channel-message AI tool: `src/inbound/toolset.rs` (feature `ai_tools`).
+  `channels_outbound`'s `src/connection_gateway_realtime.rs`.
+- Add a channel-message AI tool: `channels_inbound`'s `src/toolset.rs` (feature
+  `ai_tools`).
 
 ## Tool contracts
 
@@ -54,8 +55,9 @@ DMs, and the shared message store other domains discuss things on.
 
 ## Checks
 
-- `cargo test -p channels --all-features` (`SQLX_OFFLINE` unset); the
-  repository tests are feature-gated and skipped without it.
+- `cargo test -p channels --all-features`; the repository tests are in
+  `channels_outbound` (`SQLX_OFFLINE` unset). The SQL fixtures stay in this
+  crate's `fixtures/`, which other crates' tests share.
 
 ## Gotchas
 

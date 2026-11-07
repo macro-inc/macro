@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 cached = { workspace = true }
-channels = { workspace = true, features = ["inbound", "outbound"] }
+channels = { workspace = true, features = ["list", "schema", "sqlx"] }
 chrono = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
