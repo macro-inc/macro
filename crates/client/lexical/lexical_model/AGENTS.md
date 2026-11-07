@@ -20,6 +20,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
+- Direct splice/append moves preserve source element offsets for explicit package remapping; insert-before/after and replace adjust source offsets.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
