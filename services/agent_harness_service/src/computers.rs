@@ -83,7 +83,7 @@ pub fn harness_service(pool: &PgPool) -> PgHarnessService {
 
 /// The notification ingress the operator's setup notices go through.
 pub type SetupNotifications =
-    notification::domain::service::SqsNotificationIngress<notification::outbound::queue::SqsQueue>;
+    notification::domain::service::SqsNotificationIngress<notification_outbound::queue::SqsQueue>;
 
 pub type Operator = ComputerOperator<
     PgComputerRepo,

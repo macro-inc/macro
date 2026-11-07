@@ -5,7 +5,7 @@ use crm::outbound::companies_repo::CompaniesRepositoryImpl;
 use crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use notification_outbound::queue::SqsQueue;
 use tokio_util::task::TaskTracker;
 
 /// The event broker used by pubsub workers, with publish tasks tracked for graceful shutdown.

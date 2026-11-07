@@ -3,9 +3,6 @@
 //! Delivers iOS PushKit and Android FCM call pushes directly, without queueing
 //! or DB persistence. Native clients own incoming-call presentation.
 
-#[cfg(test)]
-mod test;
-
 use futures::future;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;

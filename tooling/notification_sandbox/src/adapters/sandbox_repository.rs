@@ -8,7 +8,7 @@ use notification::domain::models::{
     UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;
-use notification::outbound::repository::DbNotificationRepository;
+use notification_outbound::repository::DbNotificationRepository;
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;

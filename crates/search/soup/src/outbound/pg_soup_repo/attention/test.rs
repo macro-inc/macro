@@ -656,7 +656,7 @@ async fn team_notifications_are_candidates_only_for_members(
 // A bulk clear marks a team request done and owns it through `done_by`; its
 // undo reopens it, but a state change made in between takes ownership back, so
 // the undo leaves that notification alone. The UPDATEs mirror the clear and
-// undo statements in `notification::outbound::bulk_action`.
+// undo statements in `notification_outbound::bulk_action`.
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("work_feed", "attention_teams")),
     migrator = "MACRO_DB_MIGRATIONS"

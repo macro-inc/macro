@@ -144,7 +144,7 @@ use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     WebSocketNotificationConsumerService,
 };
-use notification::outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
+use notification_outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
 use projects_hex::{
     domain::service::ProjectServiceImpl,
@@ -515,7 +515,7 @@ async fn run_server() -> anyhow::Result<()> {
     });
     let graphql_notification_reader: Arc<ai_tools::ToolNotificationService> =
         Arc::new(NotificationReaderService {
-            repository: notification::outbound::repository::DbNotificationRepository::new(
+            repository: notification_outbound::repository::DbNotificationRepository::new(
                 db.clone(),
             ),
             queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
@@ -531,7 +531,7 @@ async fn run_server() -> anyhow::Result<()> {
     // the viewer's hears them.
     let graphql_notification_writer: Arc<crate::api::context::GraphqlNotificationWriter> =
         Arc::new(NotificationReaderService {
-            repository: notification::outbound::repository::DbNotificationRepository::new(
+            repository: notification_outbound::repository::DbNotificationRepository::new(
                 db.clone(),
             ),
             queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
@@ -541,7 +541,7 @@ async fn run_server() -> anyhow::Result<()> {
                 fcm_platform_arn: String::new(),
                 apns_voip_platform_arn: String::new(),
             },
-            realtime: notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher::new(
+            realtime: notification_outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher::new(
                 macro_event_broker.clone(),
             ),
         });
@@ -636,9 +636,9 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn(access_requests::inbound::dispatch::run(
         access_requests_repo,
         crate::outbound::access_requests::AccessRequestDelivery {
-            withdrawal: Arc::new(
-                notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone()),
-            ),
+            withdrawal: Arc::new(notification_outbound::withdrawal::PgNotificationWithdrawal(
+                db.clone(),
+            )),
             ingress: notification_ingress_service.clone(),
             reader: graphql_notification_reader.clone(),
             connection: connection_gateway.clone(),
@@ -916,8 +916,8 @@ async fn run_server() -> anyhow::Result<()> {
             None
         } else {
             let voip_repo =
-                notification::outbound::repository::DbNotificationRepository::new(db.clone());
-            let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
+                notification_outbound::repository::DbNotificationRepository::new(db.clone());
+            let voip_mobile = notification_outbound::mobile::MobilePushAdapter {
                 push_service: aws_sdk_sns::Client::new(&aws_config),
                 apns_bundle_id: bundle_id.to_string(),
                 voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
@@ -1441,7 +1441,9 @@ async fn run_server() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()).with_completion(
             NotificationReaderCompletion::new(
                 graphql_notification_reader.clone(),
-                Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
+                Arc::new(notification_outbound::withdrawal::PgNotificationWithdrawal(
+                    db.clone(),
+                )),
             ),
         ),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
@@ -2571,7 +2573,7 @@ async fn run_server() -> anyhow::Result<()> {
             ),
             // Clears are stored on the primary, with the notification state
             // they change.
-            notification::outbound::bulk_action::PgBulkActions::new(db.clone()),
+            notification_outbound::bulk_action::PgBulkActions::new(db.clone()),
             notification_inbox::outbound::gateway_clear_updates::GatewayClearUpdates::new(
                 conn_gateway_client.clone(),
             ),
@@ -2772,7 +2774,7 @@ async fn run_server() -> anyhow::Result<()> {
         graphql_active_notification_ids_context:
             complete_graph::ActiveNotificationIdsGraphqlContext::new(
                 notification::domain::active_notification_ids::ActiveNotificationIdService::new(
-                    notification::outbound::active_notification_ids::PgActiveNotificationIdRepository(
+                    notification_outbound::active_notification_ids::PgActiveNotificationIdRepository(
                         readonly_db.clone(),
                     ),
                     model_notifications::NotifEvent::EVENT_TYPES,

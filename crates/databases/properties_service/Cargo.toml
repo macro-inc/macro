@@ -19,6 +19,7 @@ entity_access_outbound = { workspace = true }
 macro_authorization = { workspace = true, default-features = true }
 models_properties = { workspace = true }
 notification = { workspace = true, default-features = true }
+notification_outbound = { workspace = true }
 properties = { workspace = true, default-features = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }

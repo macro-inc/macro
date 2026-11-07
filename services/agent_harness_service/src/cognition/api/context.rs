@@ -25,8 +25,8 @@ use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
-use notification::outbound::websocket::ConnectionGatewayClient;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::websocket::ConnectionGatewayClient;
 use search_service_client::SearchServiceClient;
 use sqlx::PgPool;
 use static_file::inbound::attachment::StaticFileAttachmentService;

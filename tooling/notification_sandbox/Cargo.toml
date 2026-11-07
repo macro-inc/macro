@@ -17,6 +17,7 @@ model_entity = { workspace = true }
 model_notifications = { workspace = true }
 models_pagination = { workspace = true }
 notification = { workspace = true, default-features = true }
+notification_outbound = { workspace = true }
 rate_limit = { workspace = true, features = ["testing"] }
 redis = { workspace = true, features = [
   "aio",
