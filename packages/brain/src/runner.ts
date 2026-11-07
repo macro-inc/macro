@@ -209,11 +209,12 @@ export class AgentSdkRunner implements Runner {
       messages =
         connect && turn.tier !== 'triage'
           ? (async function* () {
-              connection = await connect(abortController.signal);
+              const opened = await connect(abortController.signal);
               if (abortController.signal.aborted) {
-                await connection.close();
+                await opened.close();
                 return;
               }
+              connection = opened;
               yield* query([...(turn.tools ?? []), ...connection.tools]);
             })()
           : query(turn.tools);

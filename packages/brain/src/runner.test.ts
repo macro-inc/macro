@@ -523,3 +523,32 @@ test('timeout bounds reject values that Node would silently clamp', () => {
     );
   }
 });
+
+test('abort racing MCP discovery closes the late connection exactly once without starting Claude', async () => {
+  const discovery =
+    Promise.withResolvers<import('./code-mode.ts').CodeModeConnection>();
+  const closed = Promise.withResolvers<void>();
+  let closes = 0;
+  let queries = 0;
+  const runner = new AgentSdkRunner({
+    ...RUNNER_OPTIONS,
+    macroTools: () => discovery.promise,
+    query: () => {
+      queries++;
+      throw new Error('aborted discovery must not start Claude');
+    },
+  });
+  const run = runner.start(TURN);
+  run.abort();
+  discovery.resolve({
+    tools: [],
+    close: async () => {
+      closes++;
+      closed.resolve();
+    },
+  });
+  assert.equal((await run.done).status, 'aborted');
+  await closed.promise;
+  assert.equal(queries, 0);
+  assert.equal(closes, 1);
+});
