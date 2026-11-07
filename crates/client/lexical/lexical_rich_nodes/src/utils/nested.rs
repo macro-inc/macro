@@ -49,3 +49,5 @@ pub fn resolve_nested_element<N: NestedElementResolver>(
     }
     Ok(())
 }
+#[cfg(test)]
+mod test;
