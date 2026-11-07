@@ -8,3 +8,5 @@ pub(crate) mod caret;
 pub(crate) mod rich;
 
 pub(crate) mod markdown;
+
+pub(crate) mod macro_model;

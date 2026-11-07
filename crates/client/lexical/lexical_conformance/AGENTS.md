@@ -18,11 +18,13 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Read fixtures from `packages/lexical-conformance`; merge recorder updates rather than editing its files here.
 - Replay code and mark factories, mark wrapping and tree traversal through their package APIs; direct `exportJSON` returns retain undefined fields while document snapshots omit them.
 - Route rich-node constructors and handlers through `lexical_rich_nodes`; replay editor-level command transactions at the recorded enqueue/commit boundary.
-- Fix model divergences in `lexical_model` or `lexical_rich_nodes`; never change expected values or skip observable comparisons to turn a failure green.
+- Fix divergences in the owning model crate; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
-- Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; all 18 markdown fixtures pass without ledger entries.
-- Table node fixtures and the core table-caret case use concrete table payloads; all currently recorded table cases replay without ledger entries.
+- Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; Macro fixtures use the source-ordered Macro transformer lists and list indent 2.
+- Table node fixtures and the core table-caret case use concrete table payloads; keep their grid and selection observations strict.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
+- Register Macro classes through the shared source catalog; honor recorded mode, named replacements, namespace entropy and update callbacks.
+- Dispatch adapters contain no node or transformer policy.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
 - Native loading lives in `source.rs`; the interpreter itself has no filesystem dependency.
 

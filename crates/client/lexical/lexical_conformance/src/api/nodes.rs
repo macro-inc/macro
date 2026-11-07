@@ -22,6 +22,9 @@ pub(crate) fn call(
     {
         return Ok(result);
     }
+    if let Some(value) = super::macro_model::node_method(view, key, method)? {
+        return Ok(value);
+    }
     match method {
         "getLanguage" => {
             return Ok(view
