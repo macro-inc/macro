@@ -22,8 +22,11 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Fix model divergences in `lexical_model` or `lexical_rich_nodes`; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
 - Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; the expanded corpus reports unsupported or divergent markdown cases explicitly.
+- Apply declared D6 projection only to code child JSON and code-range positions; retain exact allocation, alias, dirty, normalized, commit and non-code comparisons. Never create syntax-highlight nodes or fabricate plugin behavior.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
+- Partial recordings restore and validate the complete initial JSON, selection, key layout and next allocation counter before replay; no import transforms or synthetic commits run.
+- Generated namespace metadata consumes two host draws; explicit namespaces consume one. Macro recordings pass their declared list indentation to markdown conversions.
 - Native loading lives in `source.rs`; the interpreter itself has no filesystem dependency.
 
 ## Checks
