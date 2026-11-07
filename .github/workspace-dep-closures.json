@@ -953,6 +953,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/universal_input",
       "crates/upstream_error",
@@ -1146,6 +1147,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -1945,6 +1947,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2129,6 +2132,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2402,6 +2406,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -3368,6 +3373,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -4302,6 +4308,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -5179,6 +5186,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/deleted_item_poller"
@@ -5430,6 +5438,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -7883,6 +7892,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8138,6 +8148,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8292,6 +8303,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8446,6 +8458,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8646,6 +8659,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8896,6 +8910,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9188,6 +9203,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9370,6 +9386,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",
@@ -11561,6 +11578,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -11878,6 +11896,9 @@
     "predicate-index": [
       "crates/predicate_index"
     ],
+    "project_id": [
+      "crates/types/project_id"
+    ],
     "projects": [
       "crates/activity",
       "crates/agent",
@@ -11993,6 +12014,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -12725,6 +12747,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -14038,6 +14061,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -15250,6 +15274,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/project_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",

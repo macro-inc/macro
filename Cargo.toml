@@ -132,6 +132,7 @@ members = [
   "crates/psd_engine",
   "crates/predicate_index",
   "crates/prompt",
+  "crates/types/project_id",
   "crates/properties_service",
   "crates/reminders",
   "crates/search_service",

@@ -90,6 +90,8 @@ workspace-members = [
     # filter model chain (item_filters -> item-filter-index ->
     # soup-filter-cache-adapter -> cache-wasm) and must stay wasm-safe.
     "model_owner",
+    # project_id: a leaf id type; it needs nothing from the workspace union.
+    "project_id",
     "bot_id",
     "macro_uuid",
     "non_empty",
