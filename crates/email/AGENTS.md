@@ -178,6 +178,13 @@ tools — hexagonal, heavily feature-gated.
   through `record_done`/`record_deferred`/`record_failed`. The mailbox loops
   log their own deferrals with `link_id` (gate refusals at DEBUG), so the
   worker must not log them again. Add a new defer reason in `defer_reason`.
+  Notification lag rides the same rows: a Graph change notification stamps
+  the folder streams' `notified_at`, the first stream claim after it carries
+  it onto the reconciliation rows its page queues (newest notification wins),
+  and enumerate and reconcile spans record `outlook.notification_wait_ms` and
+  `outlook.notification_lag_ms`. Subscription upkeep and webhook deliveries
+  open `outlook.subscription.maintain` and `outlook.subscription.notify`;
+  each lifecycle event logs "outlook subscription lifecycle event".
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded.

@@ -39,6 +39,7 @@ impl AddressBookRepository for PgMailboxSync {
                     initial_complete: row.initial_complete,
                     lease_id,
                     fence: row.fence,
+                    notified_at: None,
                 },
             })
         })

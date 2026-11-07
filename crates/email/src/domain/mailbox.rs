@@ -96,6 +96,9 @@ pub struct StreamLease {
     pub initial_complete: bool,
     pub lease_id: Uuid,
     pub fence: i64,
+    /// When the change notification this claim serves arrived: the stream's
+    /// newest notification, if it came after the previous claim started.
+    pub notified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug)]
@@ -106,6 +109,8 @@ pub struct MessageLease {
     pub lease_id: Uuid,
     pub is_import: bool,
     pub attempts: i32,
+    /// When the newest change notification that queued this message arrived.
+    pub notified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug)]
@@ -336,6 +341,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.delta_advanced = false,
             outlook.folder_initial_complete = lease.initial_complete,
             outlook.cursor_reset = false,
+            outlook.notification_wait_ms = lease.notified_at.map(telemetry::since_ms),
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -424,6 +430,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.graph_calls = tracing::field::Empty,
             outlook.attachments = tracing::field::Empty,
             outlook.db_write_ms = tracing::field::Empty,
+            outlook.notification_lag_ms = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -466,6 +473,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let error = match result {
             Ok((outcome, import_completed)) => {
                 record_done(&span, outcome);
+                if let Some(notified_at) = lease.notified_at {
+                    span.record(
+                        "outlook.notification_lag_ms",
+                        telemetry::since_ms(notified_at),
+                    );
+                }
                 if outcome == "imported" {
                     self.imports
                         .record(lease.mailbox.link_id, chrono::Utc::now());

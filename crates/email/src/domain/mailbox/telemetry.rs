@@ -94,6 +94,12 @@ pub(super) fn claim_failed(unit: &'static str, error: MailboxError) -> MailboxEr
     error
 }
 
+/// Milliseconds from a stored timestamp, such as a notification's arrival,
+/// to now; zero if the clocks disagree.
+pub(super) fn since_ms(at: chrono::DateTime<chrono::Utc>) -> i64 {
+    (chrono::Utc::now() - at).num_milliseconds().max(0)
+}
+
 pub(super) fn elapsed_ms(started: std::time::Instant) -> i64 {
     span_int(started.elapsed().as_millis())
 }

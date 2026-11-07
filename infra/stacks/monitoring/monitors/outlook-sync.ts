@@ -13,7 +13,10 @@
 //   `duration_seconds`, `messages`, `folders`, `graph_calls`.
 // - Spans: `outlook.sync.{discover,enumerate,reconcile,project}` (internal, so
 //   Datadog keeps the name as `resource_name`) with `outlook.outcome` and
-//   `outlook.defer_reason`; the Graph request span with `outlook.throttle_origin`
+//   `outlook.defer_reason`; `outlook.notification_lag_ms` on reconcile spans
+//   (Graph change notification received to message imported); the
+//   `outlook.subscription.{maintain,notify}` spans with `outlook.outcome`;
+//   the Graph request span with `outlook.throttle_origin`
 //   and `http.response.status_code`; the token lookup span with
 //   `outlook.token_cache`, `outlook.outcome` (`ok` | `auth_required` |
 //   `unavailable`) and `http.response.status_code`. Datadog stores
@@ -73,6 +76,7 @@ const STATUS = spanTag('http.status_code');
 const SYNC = 'resource_name:outlook.sync.*';
 const GRAPH = '@outlook.throttle_origin:*';
 const TOKEN = '@outlook.token_cache:*';
+const SUBSCRIPTION = 'resource_name:outlook.subscription.*';
 
 new datadog.SpansMetric('outlook-sync', {
   name: 'macro.outlook.sync',
@@ -84,6 +88,22 @@ new datadog.SpansMetric('outlook-sync', {
     spanTag('outlook.outcome'),
     spanTag('outlook.defer_reason'),
   ],
+});
+
+// How long a change Graph announced took to import, including retries.
+// Messages queued by polling or an initial import carry no lag.
+new datadog.SpansMetric('outlook-notification-lag', {
+  name: 'macro.outlook.notification_lag',
+  filter: {
+    query:
+      'resource_name:outlook.sync.reconcile @outlook.notification_lag_ms:*',
+  },
+  compute: {
+    aggregationType: 'distribution',
+    path: '@outlook.notification_lag_ms',
+    includePercentiles: true,
+  },
+  groupBies: [ENV, spanTag('outlook.outcome')],
 });
 
 // Counts come from `count:`; latency includes any wait for the mailbox gate.
@@ -117,7 +137,7 @@ new datadog.ApmRetentionFilter('outlook-sync-traces', {
   enabled: true,
   filterType: 'spans-sampling-processor',
   filter: {
-    query: `(${SYNC} OR ${GRAPH} OR ${TOKEN}) (status:error OR @duration:>5s OR @outlook.outcome:(deferred OR failed OR auth_required OR unavailable) OR @outlook.throttle_origin:(gate OR graph))`,
+    query: `(${SYNC} OR ${SUBSCRIPTION} OR ${GRAPH} OR ${TOKEN}) (status:error OR @duration:>5s OR @outlook.outcome:(deferred OR failed OR auth_required OR unavailable) OR @outlook.throttle_origin:(gate OR graph))`,
   },
   rate: '1.0',
   traceRate: '1.0',

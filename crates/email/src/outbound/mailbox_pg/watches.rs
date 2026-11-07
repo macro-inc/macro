@@ -123,12 +123,12 @@ impl MailboxWatchRepository for PgMailboxSync {
         expected: &WatchAttempt,
         subscription: &str,
         hint: &WatchHint,
-    ) -> Result<(), MailboxError> {
+    ) -> Result<Option<Uuid>, MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         let Some(binding)=sqlx::query!(r#"SELECT s.link_id,l.sync_generation FROM email_provider_subscriptions s JOIN email_links l ON l.id=s.link_id
             WHERE s.id=$1 AND s.generation=$2 AND s.client_state_hash=$3 AND l.is_sync_active AND l.sync_generation=s.generation
             AND (s.provider_id IS NULL OR s.provider_id=$4) FOR UPDATE OF l,s"#,id,expected.generation,&expected.verifier,subscription)
-            .fetch_optional(&mut *tx).await.map_err(db_error)? else {return Ok(());};
+            .fetch_optional(&mut *tx).await.map_err(db_error)? else {return Ok(None);};
         sqlx::query!("UPDATE email_provider_subscriptions SET provider_id=$2 WHERE id=$1 AND provider_id IS NULL",id,subscription)
             .execute(&mut *tx).await.map_err(db_error)?;
         sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),next_run_at=now() WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder')",binding.link_id,binding.sync_generation)
@@ -137,6 +137,7 @@ impl MailboxWatchRepository for PgMailboxSync {
             sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",binding.link_id)
                 .execute(&mut *tx).await.map_err(db_error)?;
         }
-        tx.commit().await.map_err(db_error)
+        tx.commit().await.map_err(db_error)?;
+        Ok(Some(binding.link_id))
     }
 }
