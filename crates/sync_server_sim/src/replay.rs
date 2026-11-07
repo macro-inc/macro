@@ -21,7 +21,7 @@ pub const ENABLED: &[&str] = &[
     "hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl",
     "hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl",
     "hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl",
-    "transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl",
+    "transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl",
     "document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl",
     "document_sync.test/document_sync_tests_should_be_able_to_load_initial_sync_into_loro.jsonl",
     "websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl",

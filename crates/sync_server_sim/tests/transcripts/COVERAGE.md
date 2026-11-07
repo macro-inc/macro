@@ -57,7 +57,7 @@ Raw JSONL preserves clock values, socket UUIDs, frame bytes and structured-clone
 | A1 | [hibernation.test/H2_lazily_restores_stored_websocket_metadata.jsonl](hibernation.test/H2_lazily_restores_stored_websocket_metadata.jsonl) |
 | A2 | [surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl](surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl) |
 | A3 | [transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl](transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl) |
-| A4 | [transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl](transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl) |
+| A4 | [transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl](transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl) |
 | A5 | [transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl](transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl) |
 | A6 | [document_sync.test/document_sync_tests_document_state_persists_after_15_second_timeout.jsonl](document_sync.test/document_sync_tests_document_state_persists_after_15_second_timeout.jsonl) |
 | A7 | [document_api.test/document_api_tests_should_properly_initialize_the_document.jsonl](document_api.test/document_api_tests_should_properly_initialize_the_document.jsonl) |
@@ -96,7 +96,7 @@ Q1–Q12 name the rows of S6 section 5.2 in order; that section does not assign 
 | Q8 | monotonic save comparisons, including equal readings when observed | [document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl](document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl) |
 | Q9 | snapshot loader frontiers logging is ignored by comparison | [hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl](hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl) |
 | Q10 | ping requires restored document identity | [transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl](transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl) |
-| Q11 | pending imports disappear at compaction | [transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl](transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl) |
+| Q11 | Fixed by WP-44: pending imports survive compaction until dependencies resolve | [transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl](transcript_boundaries.test/A4_compaction_retains_acknowledged_pending_imports_until_dependencies_arrive.jsonl) |
 | Q12 | eviction loses pending blame | [transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl](transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl) |
 
 The corpus lives in `sync_server_sim`; record it from `services/sync-service` with
@@ -139,7 +139,7 @@ Replay consumes the recorded clock kinds/values in order, compares D1 claim and
 insert-missing effects, and checks the final attribution tables and alarm. The
 opaque isolate keepalive timer has no captured Worker port boundary; its native
 effect is checked by the core alarm tests and the real Worker recording.
-Alarm invariants, including `pending_import_not_compacted_quirk`, live in
+Alarm invariants, including `pending_import_survives_compaction`, live in
 `sync_server_core::domain::room::test::alarm`. The room test modules now split
 connection, frame and alarm cases while sharing hand-written fake capabilities.
 

@@ -65,7 +65,7 @@ fn blame_is_flushed_on_every_tick_even_without_a_snapshot_save() {
     });
 }
 #[test]
-fn pending_import_not_compacted_quirk() {
+fn pending_import_survives_compaction() {
     block_on(async {
         let mut room = room();
         connect_access(&mut room, AccessLevel::Edit).await;
@@ -99,13 +99,61 @@ fn pending_import_not_compacted_quirk() {
         .unwrap();
         assert_eq!(room.ports.store.pending.borrow().len(), 2);
         room.on_alarm().await.unwrap();
-        // Preserve A4: the unresolved import's o/ key was marked applied and deleted.
-        assert!(room.ports.store.pending.borrow().is_empty());
-        let reload = crate::domain::state::DocumentState::try_from_snapshot(
-            room.ports.snapshots.bytes.borrow().as_ref().unwrap(),
-        )
-        .unwrap();
-        reload.loro_doc.import(&base).unwrap();
-        assert_eq!(reload.loro_doc.get_text("content").to_string(), "base");
+        // An unrelated import must not make the unresolved key compactable.
+        assert_eq!(room.ports.store.pending.borrow().len(), 1);
+        let mut cold = Room::new(room.ports, config());
+        cold.load_document().await.unwrap();
+        cold.apply_update(&base, None).await.unwrap();
+        assert_eq!(
+            cold.memory
+                .document
+                .as_ref()
+                .unwrap()
+                .loro_doc
+                .get_text("content")
+                .to_string(),
+            "base pending"
+        );
+        // The dependency write must not overwrite the pending tail even if the
+        // restored allocator sees the identical wall timestamp.
+        let mut cold_again = Room::new(cold.ports, config());
+        cold_again.load_document().await.unwrap();
+        assert_eq!(
+            cold_again
+                .memory
+                .document
+                .as_ref()
+                .unwrap()
+                .loro_doc
+                .get_text("content")
+                .to_string(),
+            "base pending"
+        );
+        trigger
+            .get_text("other")
+            .push_str(" after recovery")
+            .unwrap();
+        cold_again
+            .apply_update(
+                &trigger.export(loro::ExportMode::all_updates()).unwrap(),
+                None,
+            )
+            .await
+            .unwrap();
+        cold_again.on_alarm().await.unwrap();
+        assert!(cold_again.ports.store.pending.borrow().is_empty());
+        let mut compacted = Room::new(cold_again.ports, config());
+        compacted.load_document().await.unwrap();
+        assert_eq!(
+            compacted
+                .memory
+                .document
+                .as_ref()
+                .unwrap()
+                .loro_doc
+                .get_text("content")
+                .to_string(),
+            "base pending"
+        );
     });
 }
