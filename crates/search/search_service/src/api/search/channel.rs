@@ -346,7 +346,7 @@ pub async fn name_handler(
         .map(|cursor| SearchCursorOption::NotDone(Some(cursor)))
         .unwrap_or_default();
     let (hits, next_cursor) = simple_channel::search_names(
-        &ctx.db,
+        &*ctx.channel_names,
         &user_id,
         &filters,
         query.to_string(),

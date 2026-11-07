@@ -1,4 +1,3 @@
-use channels_outbound::channel_name::batch_resolve_channel_names;
 use indexmap::IndexMap;
 use item_filters::CallStatus;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -52,10 +51,11 @@ pub(in crate::api::search) async fn enrich_call_records(
             .filter(|id| seen.insert(*id))
             .collect()
     };
-    let channel_names_by_id =
-        batch_resolve_channel_names(&ctx.db, &unique_channel_ids, viewer_user_id.clone())
-            .await
-            .map_err(|e| SearchError::InternalError(e.into()))?;
+    let channel_names_by_id = ctx
+        .channel_names
+        .batch_resolve_channel_names(&unique_channel_ids, viewer_user_id.clone())
+        .await
+        .map_err(|e| SearchError::InternalError(e.into()))?;
 
     let mut custom_name_by_id: std::collections::HashMap<Uuid, Option<String>> =
         std::collections::HashMap::new();

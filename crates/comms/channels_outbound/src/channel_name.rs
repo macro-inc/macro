@@ -11,13 +11,15 @@
 use std::collections::{HashMap, HashSet};
 
 use bot_id::BotId;
-use chrono::{DateTime, Utc};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::pg_channels_repo::{
     load_bot_display_names, load_user_display_names, principal_display_name,
+};
+use channels::domain::channel_names::{
+    ChannelNameMatch, ChannelNameSearch, ChannelNames, ChannelNamesFuture,
 };
 use channels::domain::models::{ChannelType, NameLookup};
 
@@ -88,37 +90,6 @@ pub async fn resolve_channel_name_for_viewers<'a>(
             (viewer.clone().into_owned(), resolved_name)
         })
         .collect())
-}
-
-/// A channel whose viewer-facing name matched a [`ChannelNameSearch`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChannelNameMatch {
-    /// The matched channel.
-    pub channel_id: Uuid,
-    /// The channel's `updated_at`, which orders the matches.
-    pub updated_at: DateTime<Utc>,
-}
-
-/// A name search over the channels a viewer actively participates in.
-#[derive(Debug)]
-pub struct ChannelNameSearch<'a> {
-    /// Whose channels to search, and whose view of each name to match.
-    pub viewer_user_id: MacroUserIdStr<'a>,
-    /// One pattern per search term. A channel matches when every pattern
-    /// matches its stored name or the display name of some participant other
-    /// than the viewer.
-    pub patterns: &'a [String],
-    /// Patterns are case-insensitive POSIX regexes when set, `ILIKE` patterns
-    /// otherwise.
-    pub regex_patterns: bool,
-    /// Only these channels; empty means every channel.
-    pub channel_ids: &'a [Uuid],
-    /// Only these channel types; empty means every type.
-    pub channel_types: &'a [ChannelType],
-    /// Keyset cursor: only channels ordered strictly after `(updated_at, id)`.
-    pub after: Option<(DateTime<Utc>, Uuid)>,
-    /// Maximum number of channels to return.
-    pub limit: i64,
 }
 
 /// Channels, newest `updated_at` first, whose name as the viewer sees it
@@ -409,3 +380,51 @@ fn resolve_channel_name(
 
 #[cfg(test)]
 mod test;
+
+/// [`ChannelNames`] over Postgres: the three queries above, run on one pool.
+#[derive(Clone)]
+pub struct PgChannelNames {
+    pool: PgPool,
+}
+
+impl PgChannelNames {
+    /// Resolve names with the given connection pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl ChannelNames for PgChannelNames {
+    type Err = sqlx::Error;
+
+    fn batch_resolve_channel_names<'a>(
+        &'a self,
+        channel_ids: &'a [Uuid],
+        viewer_user_id: MacroUserIdStr<'a>,
+    ) -> ChannelNamesFuture<'a, HashMap<Uuid, String>, Self::Err> {
+        Box::pin(batch_resolve_channel_names(
+            &self.pool,
+            channel_ids,
+            viewer_user_id,
+        ))
+    }
+
+    fn resolve_channel_name_for_viewers<'a>(
+        &'a self,
+        channel_id: Uuid,
+        viewer_user_ids: &'a [MacroUserIdStr<'a>],
+    ) -> ChannelNamesFuture<'a, HashMap<MacroUserIdStr<'static>, String>, Self::Err> {
+        Box::pin(resolve_channel_name_for_viewers(
+            &self.pool,
+            channel_id,
+            viewer_user_ids,
+        ))
+    }
+
+    fn match_channel_names<'a>(
+        &'a self,
+        search: ChannelNameSearch<'a>,
+    ) -> ChannelNamesFuture<'a, Vec<ChannelNameMatch>, Self::Err> {
+        Box::pin(match_channel_names(&self.pool, search))
+    }
+}

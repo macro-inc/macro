@@ -413,7 +413,12 @@ fn event_content(
             None::<NoTaskNotifications>,
         ),
         call::domain::service::CallRecordQueryServiceImpl::new(
-            call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+            call::outbound::pg_call_repo::PgCallRepo::new(
+                db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    db.clone(),
+                )),
+            ),
         ),
         lexical_client::LexicalClient::new(
             config.internal_api_key.to_string(),
