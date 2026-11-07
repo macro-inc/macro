@@ -234,6 +234,7 @@ ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
 mention_date = { path = "crates/client/mention_date" }
+macro_config = { path = "crates/macro_config" }
 macro_document_model = { path = "crates/client/lexical/macro_document_model" }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_html = { path = "crates/client/lexical/lexical_html" }
