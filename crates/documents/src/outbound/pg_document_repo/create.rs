@@ -354,6 +354,21 @@ pub async fn link_document_email(
     Ok(())
 }
 
+/// Maps a failed [`link_document_email`]. An attachment row deleted before the
+/// link commits, e.g. by its message's delete cascade, is not found rather
+/// than an internal error.
+pub fn email_link_error(error: sqlx::Error) -> DocumentError {
+    match &error {
+        sqlx::Error::Database(db_err)
+            if db_err.is_foreign_key_violation()
+                && db_err.constraint() == Some("document_email_email_attachment_id_fkey") =>
+        {
+            DocumentError::EmailAttachmentNotFound
+        }
+        _ => error.into(),
+    }
+}
+
 /// Serializes first-time creates of the same `(owner, sha)` email document.
 ///
 /// Callers should try unlocked reuse first. This lock is only needed when a
