@@ -128,6 +128,17 @@ test('nested inline transformer hooks and headless selection replay without orig
   expect(recorder.reasons.size).toBe(0);
   await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
 });
+test('configured classes retain their source export without a direct API call', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  lexical.createEditor({ nodes: [code.CodeHighlightNode] });
+  const result = fixture(recorder, source);
+  expect(result.config.nodeClasses).toEqual({
+    'code-highlight': { $fn: '@lexical/code.CodeHighlightNode' },
+  });
+  await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
+});
+
 test('HTML-seeded markdown export restores a partial JSON state and key layout', async () => {
   const recorder = new Recorder(true);
   activate(recorder);
