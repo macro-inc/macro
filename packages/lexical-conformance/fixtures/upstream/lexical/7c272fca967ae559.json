@@ -1,0 +1,713 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/__tests__/unit/LexicalNodeState.test.ts",
+    "test": [
+      "Element-anchored selection on old parent (#6031)",
+      "cross-parent move",
+      "'insertBefore' does not shift offset at removed index (boundary)"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 2,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/__tests__/utils.$createTestElementNode",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "1",
+            "type": "test_block",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/__tests__/utils.$createTestElementNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "2",
+            "type": "test_block",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/nodes/LexicalParagraphNode.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 5,
+            "key": "3",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/nodes/LexicalParagraphNode.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 6,
+            "key": "4",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/nodes/LexicalParagraphNode.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 7,
+            "key": "5",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/nodes/LexicalParagraphNode.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 8,
+            "key": "6",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.append",
+          "args": [
+            {
+              "$h": 5
+            },
+            {
+              "$h": 6
+            },
+            {
+              "$h": 7
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.append",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 3
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:__key",
+          "this": {
+            "$h": 3
+          },
+          "args": [],
+          "ret": {
+            "$key": 3,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.select",
+          "args": [
+            0,
+            0
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$sel": 9,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.insertBefore",
+          "args": [
+            {
+              "$h": 5
+            }
+          ],
+          "this": {
+            "$h": 8
+          },
+          "ret": {
+            "$h": 5
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "clock",
+      "src": "perf",
+      "t": 0
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  },
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "test_block",
+                "version": 1
+              },
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  },
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "paragraph",
+                    "version": 1,
+                    "textFormat": 0,
+                    "textStyle": ""
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "test_block",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 3,
+              "raw": "1"
+            },
+            "path": [
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "focus": {
+            "key": {
+              "$key": 3,
+              "raw": "1"
+            },
+            "path": [
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "\n\n\n\n\n\n",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              3,
+              true
+            ],
+            [
+              4,
+              true
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              6,
+              true
+            ],
+            [
+              7,
+              true
+            ],
+            [
+              8,
+              true
+            ],
+            [
+              2,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isRangeSelection",
+          "args": [
+            {
+              "$sel": 9
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/internal/invariant.default",
+          "args": [
+            true
+          ],
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 9
+          },
+          "args": [],
+          "ret": {
+            "$pt": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:key",
+          "this": {
+            "$pt": 10
+          },
+          "args": [],
+          "ret": {
+            "$key": 3,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 9
+          },
+          "args": [],
+          "ret": {
+            "$pt": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:offset",
+          "this": {
+            "$pt": 10
+          },
+          "args": [],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 9
+          },
+          "args": [],
+          "ret": {
+            "$pt": 11
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:offset",
+          "this": {
+            "$pt": 11
+          },
+          "args": [],
+          "ret": 0
+        }
+      ]
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "test_block",
+            "version": 1
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "test_block",
+            "version": 1
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": {
+          "$key": 3,
+          "raw": "1"
+        },
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "focus": {
+        "key": {
+          "$key": 3,
+          "raw": "1"
+        },
+        "path": [
+          0
+        ],
+        "offset": 0,
+        "type": "element"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "\n\n\n\n\n\n",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+    ]
+  }
+}

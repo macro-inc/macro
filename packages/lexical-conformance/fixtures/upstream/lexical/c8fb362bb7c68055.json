@@ -1,0 +1,71 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+    "test": [
+      "declarePeerDependency",
+      "validates the type argument"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical.defineExtension",
+      "args": [
+        {
+          "config": {
+            "other": true
+          },
+          "name": "other"
+        }
+      ],
+      "ret": {
+        "config": {
+          "other": true
+        },
+        "name": "other"
+      }
+    },
+    {
+      "op": "call",
+      "fn": "lexical.declarePeerDependency",
+      "args": [
+        "other"
+      ],
+      "ret": [
+        "other",
+        {
+          "$undef": true
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "lexical.declarePeerDependency",
+      "args": [
+        "wrong"
+      ],
+      "ret": [
+        "wrong",
+        {
+          "$undef": true
+        }
+      ]
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

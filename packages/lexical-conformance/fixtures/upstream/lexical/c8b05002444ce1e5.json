@@ -1,0 +1,860 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/caret/__tests__/unit/docs-traversals.test.ts",
+    "test": [
+      "traversals.md",
+      "Traversal Strategies",
+      "Adjacent Caret Traversals",
+      "root has paragraph children"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Text A1"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "2",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$createLinkNode",
+          "args": [
+            "https://lexical.dev/docs/concepts/traversals"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "3",
+            "type": "link",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Text A3"
+          ],
+          "ret": {
+            "$h": 4,
+            "key": "4",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Text A4"
+          ],
+          "ret": {
+            "$h": 5,
+            "key": "5",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 6,
+            "key": "6",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Text B1"
+          ],
+          "ret": {
+            "$h": 7,
+            "key": "7",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 8,
+            "key": "8",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 9,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 9
+          },
+          "ret": {
+            "$h": 10,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.append",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 7
+            }
+          ],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 1
+            },
+            {
+              "$h": 6
+            },
+            {
+              "$h": 8
+            }
+          ],
+          "this": {
+            "$h": 10
+          },
+          "ret": {
+            "$h": 10
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Text A1",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Text A3",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": null,
+                    "url": "https://lexical.dev/docs/concepts/traversals"
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Text A4",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Text B1",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "Text A1Text A3Text A4\n\nText B1\n\n",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            2,
+            4,
+            5,
+            7
+          ],
+          "elements": [
+            [
+              1,
+              true
+            ],
+            [
+              3,
+              true
+            ],
+            [
+              6,
+              true
+            ],
+            [
+              8,
+              true
+            ],
+            [
+              10,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getChildCaret",
+          "args": [
+            {
+              "$h": 10
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 11,
+            "origin": {
+              "$h": 10
+            },
+            "direction": "next",
+            "type": "child"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$caret": 11
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 12,
+              "origin": {
+                "$h": 1
+              },
+              "direction": "next",
+              "type": "sibling"
+            },
+            {
+              "$caret": 13,
+              "origin": {
+                "$h": 6
+              },
+              "direction": "next",
+              "type": "sibling"
+            },
+            {
+              "$caret": 14,
+              "origin": {
+                "$h": 8
+              },
+              "direction": "next",
+              "type": "sibling"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 1
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 15,
+            "origin": {
+              "$h": 1
+            },
+            "direction": "next",
+            "type": "sibling"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 6
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 16,
+            "origin": {
+              "$h": 6
+            },
+            "direction": "next",
+            "type": "sibling"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 8
+            },
+            "next"
+          ],
+          "ret": {
+            "$caret": 17,
+            "origin": {
+              "$h": 8
+            },
+            "direction": "next",
+            "type": "sibling"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getChildCaret",
+          "args": [
+            {
+              "$h": 10
+            },
+            "previous"
+          ],
+          "ret": {
+            "$caret": 18,
+            "origin": {
+              "$h": 10
+            },
+            "direction": "previous",
+            "type": "child"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$caret": 18
+          },
+          "args": [],
+          "ret": [
+            {
+              "$caret": 19,
+              "origin": {
+                "$h": 8
+              },
+              "direction": "previous",
+              "type": "sibling"
+            },
+            {
+              "$caret": 20,
+              "origin": {
+                "$h": 6
+              },
+              "direction": "previous",
+              "type": "sibling"
+            },
+            {
+              "$caret": 21,
+              "origin": {
+                "$h": 1
+              },
+              "direction": "previous",
+              "type": "sibling"
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 8
+            },
+            "previous"
+          ],
+          "ret": {
+            "$caret": 22,
+            "origin": {
+              "$h": 8
+            },
+            "direction": "previous",
+            "type": "sibling"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 6
+            },
+            "previous"
+          ],
+          "ret": {
+            "$caret": 23,
+            "origin": {
+              "$h": 6
+            },
+            "direction": "previous",
+            "type": "sibling"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 1
+            },
+            "previous"
+          ],
+          "ret": {
+            "$caret": 24,
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous",
+            "type": "sibling"
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Text A1",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Text A3",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": null,
+                "url": "https://lexical.dev/docs/concepts/traversals"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Text A4",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Text B1",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "Text A1Text A3Text A4\n\nText B1\n\n",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ]
+  }
+}

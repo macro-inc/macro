@@ -1,0 +1,39 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/__tests__/unit/setDOMStyle.test.ts",
+    "test": [
+      "setDOMStyle",
+      "parses CSS text into a style object"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical.getStyleObjectFromCSS",
+      "args": [
+        "color: red; margin: 0 !important; --custom: example;"
+      ],
+      "ret": {
+        "color": "red",
+        "margin": "0 !important",
+        "--custom": "example"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}
