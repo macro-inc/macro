@@ -120,13 +120,16 @@ export function GanttLabel(
   );
 }
 
-/** Each child supplies its own surface; the header only arranges the controls. */
+/**
+ * Each child supplies its own surface; the header only arranges the controls.
+ * Header dates fade out under them rather than running into them.
+ */
 export function GanttControls(props: ParentProps) {
   return (
     <div
       role="group"
       aria-label="Timeline controls"
-      class="absolute right-3 top-2 z-40 flex items-center gap-2"
+      class="absolute right-0 top-2 z-40 flex items-center gap-2 bg-panel pr-3 pl-2 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-8 before:bg-gradient-to-l before:from-panel before:to-transparent"
     >
       {props.children}
     </div>

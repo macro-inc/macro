@@ -1,5 +1,13 @@
 import { cn, Layer } from '@ui';
-import { createMemo, type JSX, Show, splitProps } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+  splitProps,
+} from 'solid-js';
 import type { GanttCreation } from './create-gantt-creation';
 import { createGanttReschedule } from './create-gantt-reschedule';
 import { GanttCalendarClip } from './gantt-clip';
@@ -20,6 +28,16 @@ import {
   ganttTimedBarGeometry,
   toGanttInstant,
 } from './gantt-time';
+
+/** How far past a bar's end its title may run when the bar is too short for it. */
+const BESIDE_TITLE_ROOM = 328;
+
+/** Whether any of the label's text is cut off, by its own width or a truncating child's. */
+function labelCut(label: HTMLElement) {
+  return [label, ...label.querySelectorAll('*')].some(
+    (element) => element.scrollWidth > element.clientWidth + 1
+  );
+}
 
 export function GanttBar(
   props: Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, 'style'> & {
@@ -178,6 +196,18 @@ export function GanttBar(
         const begin = (event: PointerEvent, edge: GanttRescheduleEdge) => {
           if (reschedulable()) reschedule.begin(event, edge);
         };
+        // A bar too short for its label shows its title beside it instead.
+        let label!: HTMLSpanElement;
+        const [cramped, setCramped] = createSignal(false);
+        onMount(() => {
+          const observer = new ResizeObserver(() =>
+            setCramped(labelCut(label))
+          );
+          observer.observe(label);
+          onCleanup(() => observer.disconnect());
+        });
+        const besideTitle = () =>
+          cramped() && !local.editor ? local.title : undefined;
         return (
           <div
             data-gantt-bar=""
@@ -192,7 +222,9 @@ export function GanttBar(
             )}
             style={position()}
           >
-            <GanttCalendarClip width={bar().width}>
+            <GanttCalendarClip
+              width={bar().width + (besideTitle() ? BESIDE_TITLE_ROOM : 0)}
+            >
               <Layer depth={2}>
                 <div
                   ref={body}
@@ -223,7 +255,7 @@ export function GanttBar(
                     class="pointer-events-none absolute inset-0 rounded-[inherit] shadow-sm [--gantt-bar-bg:var(--color-surface)] bg-[color:var(--gantt-bar-bg)] [background-image:var(--gantt-bar-gradient,none)] group-hover/bar:[background-image:linear-gradient(var(--color-hover),var(--color-hover)),var(--gantt-bar-gradient,none)] light-mode:[--gantt-bar-bg:color-mix(in_oklch,var(--color-surface)_92%,var(--color-ink))]"
                     style={{
                       '--gantt-bar-bg': local.tint
-                        ? `color-mix(in oklch, ${local.tint} 18%, var(--color-surface))`
+                        ? `color-mix(in oklab, ${local.tint} 18%, var(--color-surface))`
                         : undefined,
                       '--gantt-bar-gradient':
                         deadlineUrgency() > 0
@@ -257,8 +289,12 @@ export function GanttBar(
                     )}
                   >
                     <span
+                      ref={label}
                       data-gantt-bar-label=""
-                      class="sticky flex h-full w-max max-w-full items-center overflow-hidden px-2"
+                      class={cn(
+                        'sticky flex h-full w-max max-w-full items-center overflow-hidden px-2',
+                        cramped() && 'invisible'
+                      )}
                       style={{
                         left: `${gantt.labelWidth() + drawerInset()}px`,
                       }}
@@ -272,6 +308,17 @@ export function GanttBar(
                     <span class="relative flex max-w-[50%] shrink-0 items-center overflow-hidden">
                       {local.trailing}
                     </span>
+                  </Show>
+                  <Show when={besideTitle()}>
+                    {(title) => (
+                      <span
+                        aria-hidden="true"
+                        data-gantt-bar-beside=""
+                        class="pointer-events-none absolute top-0 left-full ml-1.5 flex h-full max-w-80 items-center text-xs text-ink-muted"
+                      >
+                        <span class="truncate">{title()}</span>
+                      </span>
+                    )}
                   </Show>
                   <Show when={reschedulable()}>
                     <ResizeHandle
