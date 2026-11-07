@@ -175,7 +175,9 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> EditorBuil
             "overflow" => builder
                 .node::<OverflowNode>()
                 .transform::<OverflowNode>(remove_empty_overflow),
-            // Rich-node APIs remain unmapped, so no placeholder class is registered.
+            "heading" => builder.node::<lexical_rich_nodes::heading::HeadingNode>(),
+            "quote" => builder.node::<lexical_rich_nodes::quote::QuoteNode>(),
+            "hashtag" => builder.node::<lexical_rich_nodes::hashtag::HashtagNode>(),
             _ => builder,
         };
     }

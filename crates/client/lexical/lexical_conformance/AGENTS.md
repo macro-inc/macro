@@ -15,7 +15,8 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Boundaries
 
 - Read fixtures from `packages/lexical-conformance`; merge recorder updates rather than editing its files here.
-- Fix model divergences in `lexical_model`; never change expected values or skip observable comparisons to turn a failure green.
+- Route rich-node constructors and handlers through `lexical_rich_nodes`; replay editor-level command transactions at the recorded enqueue/commit boundary.
+- Fix model divergences in `lexical_model` or `lexical_rich_nodes`; never change expected values or skip observable comparisons to turn a failure green.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
 - Native loading lives in `source.rs`; the interpreter itself has no filesystem dependency.
 
