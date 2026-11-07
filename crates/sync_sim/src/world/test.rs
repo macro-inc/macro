@@ -337,3 +337,34 @@ fn other_user_expiry_uses_the_requesting_clients_positive_or_negative_skew() {
         assert_eq!(dropped, offset > 0, "offset={offset}");
     }
 }
+
+#[test]
+fn queued_non_periodic_input_is_reported_when_the_settlement_budget_expires() {
+    let mut config = SimConfig::calm(263);
+    config.budgets.settle = Millis(20_000);
+    config.budgets.quiet = Millis(0);
+    config.seeds.insert(
+        DocIx(0),
+        SeedDocument::Cached {
+            server: vec![(1, 42)],
+            s3: Some((vec![(1, 17)], Millis(40_000))),
+            local: None,
+        },
+    );
+    let outcome = Sim::new(config).run(&[Step::Open(OpenSpec::form("a", "one")), Step::Settle]);
+    assert!(outcome.events.iter().any(|event| matches!(
+        event.fact,
+        Fact::SettleTimedOut {
+            queued_non_periodic: true,
+            ..
+        }
+    )));
+    let failure = invariants::settled(&outcome).unwrap_err();
+    assert!(failure.detail.contains("queued_non_periodic=true"));
+    assert!(
+        !outcome
+            .events
+            .iter()
+            .any(|event| matches!(event.fact, Fact::Settled))
+    );
+}

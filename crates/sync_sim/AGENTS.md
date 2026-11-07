@@ -55,6 +55,9 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   and256KiB (one oversized row is sent alone). Prefix checks include Some-to-None
   regressions and absent owners; exempt only completed prune/adoption or actually
   rolled-back delivery rows, never an entire power-loss profile.
+- Settlement waits for queued non-periodic inputs, network frames and controls before
+  its heartbeat hold; only periodic awareness, ping/pong, wake and alarm work is ignored.
+  Core idleness and durable callback counters still cover outstanding operations.
 - Settlement reopens gracefully stopped clients to drain retained WAL; Stop itself
   still waits only for durable local writes. Crashed clients require explicit reopen.
 - Settlement thaws injected source freezes through the real migration operation and

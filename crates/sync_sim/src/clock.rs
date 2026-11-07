@@ -79,6 +79,27 @@ impl SimClock {
     pub(crate) fn next_at(&self) -> Option<u64> {
         self.queue.first_key_value().map(|((at, _, _), _)| *at)
     }
+    /// Work that must drain before settlement, excluding explicitly periodic traffic.
+    /// Wake/alarm callbacks check state deadlines; core idleness and pending durable
+    /// counters independently cover their outstanding non-periodic operations.
+    pub(crate) fn has_non_periodic(&self) -> bool {
+        self.queue.values().any(|event| match event {
+            Pending::Wake(..) | Pending::RouterWake(..) | Pending::Alarm(..)
+                | Pending::ServerDurable(..) => false,
+            Pending::Up(_, _, _, delivery) | Pending::Down(_, _, _, delivery) => {
+                delivery.corrupted || !matches!(delivery.kind,
+                    crate::FrameKind::Awareness | crate::FrameKind::Ping | crate::FrameKind::Pong)
+            }
+            Pending::Input(_, _, input) => !matches!(input,
+                SyncInput::Tick | SyncInput::SetPresence(_) |
+                SyncInput::Chatter(doc_sync_core::ChatterMessage::Awareness(_))) &&
+                !matches!(input, SyncInput::Socket { event: doc_sync_core::SocketEvent::Text(text), .. } if text == "pong"),
+            Pending::Storage(..) | Pending::Connect(..) | Pending::Close(..)
+                | Pending::ServerReady(..) | Pending::HealDirectory(..)
+                | Pending::RouterConnect(..) | Pending::RouterClose(..)
+                | Pending::RouterToken(..) | Pending::RouteConnect(..) => true,
+        })
+    }
     pub(crate) fn clear_client_wakes(&mut self, client: &ClientName) {
         self.queue
             .retain(|_, event| !matches!(event, Pending::Wake(name, _, _) if name == client));

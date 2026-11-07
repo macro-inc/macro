@@ -749,17 +749,18 @@ impl Sim {
         let mut held_since = None;
         let mut settled_clients = BTreeSet::new();
         while self.clock.now <= deadline && !self.budget_hit {
-            let idle = self
-                .clients
-                .values()
-                .filter(|client| {
-                    client.alive
-                        && !matches!(
-                            client.core.status().connection,
-                            doc_sync_core::ConnectionStatus::Closed(_)
-                        )
-                })
-                .all(|client| client.core.is_idle())
+            let idle = !self.clock.has_non_periodic()
+                && self
+                    .clients
+                    .values()
+                    .filter(|client| {
+                        client.alive
+                            && !matches!(
+                                client.core.status().connection,
+                                doc_sync_core::ConnectionStatus::Closed(_)
+                            )
+                    })
+                    .all(|client| client.core.is_idle())
                 && self.profiles.values().all(|store| store.pending.is_empty())
                 && self.servers.values().all(|server| {
                     server.pending_durable == 0
@@ -812,7 +813,10 @@ impl Sim {
             .filter(|(_, client)| client.alive && !client.core.is_idle())
             .map(|(name, client)| (name.clone(), format!("{:?}", client.core.busy())))
             .collect();
-        self.emit(Fact::SettleTimedOut { busy });
+        self.emit(Fact::SettleTimedOut {
+            busy,
+            queued_non_periodic: self.clock.has_non_periodic(),
+        });
         Ok(())
     }
 }
