@@ -14,7 +14,7 @@ const setup = (overrides: Partial<NotificationStackItemProps> = {}) => {
   render(() => (
     <NotificationStackItem
       id="item"
-      icon={<span />}
+      icon={<span data-avatar="" />}
       by="Sam"
       text="Can we move the date?"
       time="2m"
@@ -44,7 +44,7 @@ describe('NotificationStackItem', () => {
 
   it('separates itself from the next notification from its own text', () => {
     setup();
-    expect(separator()?.className).toContain('left-[76px]');
+    expect(separator()?.className).toContain('left-[84px]');
     expect(hide()).toBeNull();
   });
 
@@ -57,7 +57,7 @@ describe('NotificationStackItem', () => {
 
     expect(onToggleStack).toHaveBeenCalledOnce();
     expect(onClick).not.toHaveBeenCalled();
-    expect(separator()?.className).toContain('left-[52px]');
+    expect(separator()?.className).toContain('left-[60px]');
   });
 
   it('leaves Hide to the caret on a phone', () => {
@@ -69,5 +69,20 @@ describe('NotificationStackItem', () => {
   it('has no separator when its stack ends the section', () => {
     setup({ last: true, endsSection: true });
     expect(separator()).toBeNull();
+  });
+
+  it('puts an unread notification\'s dot just left of its own avatar', () => {
+    setup();
+    const gutter = screen.getByLabelText('Unread').parentElement;
+    const avatar = document.querySelector('[data-avatar]');
+    expect(gutter?.nextElementSibling?.contains(avatar)).toBe(true);
+    // Ends where the indent does, at the avatar.
+    expect(gutter?.className).toContain('left-12');
+    expect(gutter?.className).toContain('w-3');
+  });
+
+  it('has no dot once its stack is read', () => {
+    setup({ unseen: false });
+    expect(screen.queryByLabelText('Unread')).toBeNull();
   });
 });

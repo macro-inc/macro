@@ -14,7 +14,7 @@ export function InboxDateHeader(props: {
       <div
         role="gridcell"
         class={cn(
-          'truncate px-4 pt-1 pb-1.5 text-xs font-semibold tracking-tight text-ink-extra-muted/80',
+          'truncate pt-1 pr-4 pb-1.5 pl-6 mobile:pl-7 text-xs font-semibold tracking-tight text-ink-extra-muted/80',
           !props.isFirst && 'pt-4'
         )}
       >

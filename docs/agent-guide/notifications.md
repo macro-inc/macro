@@ -24,11 +24,14 @@ the entity it is on, as on that entity's icon elsewhere (Channel,
 Message, Mention, Reply, Reaction, Email, Comment, Invite, Access, Agent, Task, Pull
 request, Event or Reminder; a stack's newest notification decides, except that a
 mention stays one). It is as tall as it has something to say: who did it (for example
-**&lt;first name&gt; assigned you a task**), with an unread dot; what it is about;
+**&lt;first name&gt; assigned you a task**); what it is about;
 and up to two lines of what was said. An email has all three (sender, subject,
 snippet), a message in a channel has no middle line, and a task has no last one.
 Rows sit flat on the panel, each with a hairline below it that starts where its
-text does (none above a date divider). Several notifications on a row make a
+text does (none above a date divider). An unread row has a dot in the gutter
+left of its avatar, centered on it, as in Messages; a read row leaves the gutter
+empty, so avatars stay in line. An unfolded notification of an unread stack has
+its dot just left of its own smaller avatar. Several notifications on a row make a
 stack: it names who, what they share (the top-level message when a notification carries it, the
 channel, session, document or thread), and the newest line, with its sender when
 there are several people.
@@ -40,7 +43,7 @@ text, and every other row dims until you close it. Hovering or moving to a dimme
 row brings it back. Each unfolded notification opens that notification:
 its message or reply, its comment, or an agent's turn. A channel invite and an
 email have no message of their own, so they open the channel or the thread.
-A stack stays open as new notifications land. The time always shows. With a pointer, the first line ends time, Mark done, unread dot: Mark done shows on hover in a slot that stays empty otherwise, and a read row keeps the dot's room, so Mark done sits at the same spot on every row, stacked or not, read or not, and nothing moves. Touch has no Mark done button and no empty slots. The author is
+A stack stays open as new notifications land. The time always shows. With a pointer, the first line ends with the time and Mark done: Mark done shows on hover in a slot that stays empty otherwise, so it sits at the same spot on every row, stacked or not, read or not, and nothing moves. Touch has no Mark done button and no empty slot. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
 **Macro**; a row from outside Macro names its email sender, and GitHub rows
 keep the GitHub login. A row type, author kind, or button this build doesn't

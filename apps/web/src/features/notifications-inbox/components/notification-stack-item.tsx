@@ -5,7 +5,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
-import { RowSeparator, StackFoldButton } from './notification-row';
+import {
+  RowSeparator,
+  StackFoldButton,
+  UnreadGutter,
+} from './notification-row';
 
 export type NotificationStackItemProps = {
   /** The item's element id, for `aria-activedescendant`. */
@@ -39,8 +43,9 @@ export type NotificationStackItemProps = {
 
 /**
  * One notification of an open stack, listed under its row and indented to the
- * row's text, looking as read or unread as the row it came from. Choosing it
- * opens that notification. A hairline from its own text separates it from the
+ * row's text, looking as read or unread as the row it came from; unread, its
+ * dot sits just left of its avatar, as the row's does. Choosing it opens that
+ * notification. A hairline from its own text separates it from the
  * next; the last one's starts at the row's text, ending the stack, and away from
  * a phone the stack's caret sits above it as Hide. With a pointer, Mark done
  * takes the time's place on hover, as on the row; touch marks it done by
@@ -65,8 +70,9 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
     >
       <div
         role="gridcell"
-        class="flex gap-2 py-2 pr-4 pl-[52px] touch:min-h-[44px] mobile:gap-2.5 mobile:py-2.5 mobile:pl-[68px]"
+        class="relative flex gap-2 py-2 pr-4 pl-[60px] touch:min-h-[44px] mobile:gap-2.5 mobile:py-2.5 mobile:pl-20"
       >
+        <UnreadGutter unseen={props.unseen} nested />
         <span class={cn('shrink-0', !props.unseen && 'mobile:opacity-60')}>
           {props.icon}
         </span>
@@ -129,7 +135,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       <Show when={props.last && !isMobile()}>
         {/* Not the notification: only the button answers here. */}
         <div
-          class="-mt-1 pr-4 pb-3 pl-[52px]"
+          class="-mt-1 pr-4 pb-3 pl-[60px]"
           onClick={(event) => event.stopPropagation()}
         >
           <StackFoldButton

@@ -48,8 +48,10 @@ export type NotificationRowProps = {
  * stack: a phone unfolds it from a caret on the first line, and elsewhere a
  * caret with how many more there are sits at the bottom of the row. Unfolded,
  * its notifications list below it, indented to its text.
- * With a pointer, Mark done shows on hover in its own slot just before the
- * unread dot, held empty otherwise, so it sits in the same spot on every row
+ * An unread row has a dot in the gutter left of its avatar, as in Messages; a
+ * read row leaves the gutter empty, so avatars stay in line.
+ * With a pointer, Mark done shows on hover in its own slot at the end of the
+ * first line, held empty otherwise, so it sits in the same spot on every row
  * and nothing moves. Touch marks done by swiping the row. A phone shows larger
  * text, and a read row fades its avatar, so unread ones stand out at a glance.
  */
@@ -86,7 +88,11 @@ export function NotificationRow(props: NotificationRowProps) {
       onMouseMove={() => props.onHover()}
       onClick={(event) => props.onClick(event)}
     >
-      <div role="gridcell" class="flex gap-3 px-4 py-3 touch:min-h-[44px]">
+      <div
+        role="gridcell"
+        class="relative flex gap-3 py-3 pr-4 pl-6 touch:min-h-[44px] mobile:pl-7"
+      >
+        <UnreadGutter unseen={props.unseen} />
         <span
           class={cn('shrink-0', !props.unseen && 'mobile:opacity-60')}
           data-card-avatar=""
@@ -166,22 +172,6 @@ export function NotificationRow(props: NotificationRowProps) {
                 </Button>
               </span>
             </span>
-            {/* A read row keeps the dot's room, so Mark done doesn't move. */}
-            <Show
-              when={props.unseen}
-              fallback={
-                <span
-                  aria-hidden="true"
-                  class="hidden size-1.5 shrink-0 not-touch:block"
-                />
-              }
-            >
-              <span
-                aria-label={t('notificationsInbox.unread')}
-                data-unread-dot=""
-                class="size-1.5 shrink-0 rounded-full bg-accent mobile:size-2"
-              />
-            </Show>
           </div>
           <Show when={props.what}>
             {(what) => (
@@ -260,10 +250,36 @@ export function RowSeparator(props: { nested?: boolean }) {
       class={cn(
         'pointer-events-none absolute right-0 bottom-0 h-px bg-edge',
         props.nested
-          ? 'left-[76px] mobile:left-[102px]'
-          : 'left-[52px] mobile:left-[68px]'
+          ? 'left-[84px] mobile:left-[114px]'
+          : 'left-[60px] mobile:left-[80px]'
       )}
     />
+  );
+}
+
+/**
+ * The gutter left of a row's avatar, as tall as the avatar, with the unread
+ * dot centered in it. `nested` puts it just left of an unfolded notification's
+ * smaller avatar, in the room its indent leaves.
+ */
+export function UnreadGutter(props: { unseen: boolean; nested?: boolean }) {
+  return (
+    <Show when={props.unseen}>
+      <span
+        class={cn(
+          'pointer-events-none absolute flex items-center justify-center',
+          props.nested
+            ? 'top-2 left-12 h-4 w-3 mobile:top-2.5 mobile:left-[66px] mobile:h-6 mobile:w-3.5'
+            : 'top-3 left-0 h-6 w-6 mobile:h-10 mobile:w-7'
+        )}
+      >
+        <span
+          aria-label={t('notificationsInbox.unread')}
+          data-unread-dot=""
+          class="size-1.5 rounded-full bg-accent mobile:size-2"
+        />
+      </span>
+    </Show>
   );
 }
 

@@ -35,6 +35,8 @@ const setup = (overrides: Partial<NotificationRowProps> = {}) => {
 const toggle = () => screen.getByRole('button', { name: /3 notifications/ });
 
 const separator = () => document.querySelector('[data-row-separator]');
+const dot = () => screen.queryByLabelText('Unread');
+const avatar = () => document.querySelector('[data-card-avatar]');
 
 describe('NotificationRow', () => {
   afterEach(() => {
@@ -142,5 +144,21 @@ describe('NotificationRow', () => {
     const time = screen.getByText('2m');
     expect(time.nextElementSibling).toBe(toggle());
     expect(toggle().textContent).toBe('');
+  });
+
+  it('marks an unread row with a dot in the gutter left of its avatar', () => {
+    setup({ count: 1 });
+    const gutter = dot()?.parentElement;
+    expect(gutter?.nextElementSibling).toBe(avatar());
+    expect(gutter?.className).toContain('absolute');
+  });
+
+  it('leaves a read row\'s gutter empty, with its avatar where an unread one has it', () => {
+    setup({ count: 1 });
+    const unreadCell = avatar()?.parentElement?.className;
+    document.body.innerHTML = '';
+    setup({ count: 1, unseen: false });
+    expect(dot()).toBeNull();
+    expect(avatar()?.parentElement?.className).toBe(unreadCell);
   });
 });
