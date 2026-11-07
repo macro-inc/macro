@@ -374,38 +374,39 @@ impl Transaction<'_> {
                 }
             }
         }
-        if restore_selection && affected.is_some_and(|flags| flags.into_iter().all(|v| !v)) {
-            if let Some(Selection::Range(mut range)) = self.pending.selection.clone() {
-                let mut changed = false;
-                for point in [&mut range.anchor, &mut range.focus] {
-                    if let Point::Element { key, offset } = *point
-                        && key == parent
-                    {
-                        let children = self.children_keys(parent)?;
-                        let at_end = offset.0 as usize >= children.len();
-                        let child = if at_end {
-                            children.last()
-                        } else {
-                            children.get(offset.0 as usize)
-                        };
-                        if let Some(child) = child.copied().filter(|key| self.is_text(*key)) {
-                            *point = Point::text(
-                                child,
-                                if at_end {
-                                    self.text_content_size(child)
-                                } else {
-                                    Utf16Offset::ZERO
-                                },
-                            );
-                            changed = true;
-                        }
+        if restore_selection
+            && affected.is_some_and(|flags| flags.into_iter().all(|v| !v))
+            && let Some(Selection::Range(mut range)) = self.pending.selection.clone()
+        {
+            let mut changed = false;
+            for point in [&mut range.anchor, &mut range.focus] {
+                if let Point::Element { key, offset } = *point
+                    && key == parent
+                {
+                    let children = self.children_keys(parent)?;
+                    let at_end = offset.0 as usize >= children.len();
+                    let child = if at_end {
+                        children.last()
+                    } else {
+                        children.get(offset.0 as usize)
+                    };
+                    if let Some(child) = child.copied().filter(|key| self.is_text(*key)) {
+                        *point = Point::text(
+                            child,
+                            if at_end {
+                                self.text_content_size(child)
+                            } else {
+                                Utf16Offset::ZERO
+                            },
+                        );
+                        changed = true;
                     }
                 }
-                if changed {
-                    range.dirty = true;
-                    self.pending.selection = Some(Selection::Range(range));
-                    self.selection_dirty = true;
-                }
+            }
+            if changed {
+                range.dirty = true;
+                self.pending.selection = Some(Selection::Range(range));
+                self.selection_dirty = true;
             }
         }
         if !preserve_empty_parent

@@ -221,18 +221,19 @@ impl Transaction<'_> {
         } else {
             current.focus
         };
-        if end.point_type() == PointType::Element && current_end.point_type() == PointType::Text {
-            if let Some((last, offset)) = last_target {
-                self.set_point_at(
-                    slot,
-                    if backward {
-                        PointRole::Anchor
-                    } else {
-                        PointRole::Focus
-                    },
-                    Point::text(last, offset),
-                )?;
-            }
+        if end.point_type() == PointType::Element
+            && current_end.point_type() == PointType::Text
+            && let Some((last, offset)) = last_target
+        {
+            self.set_point_at(
+                slot,
+                if backward {
+                    PointRole::Anchor
+                } else {
+                    PointRole::Focus
+                },
+                Point::text(last, offset),
+            )?;
         }
         if let Some(flags) = first_flags
             .filter(|_| first_target.is_some())
