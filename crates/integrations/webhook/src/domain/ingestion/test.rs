@@ -1415,11 +1415,13 @@ async fn malformed_document_id_is_permanent_and_skips_access_resolution() {
 
 #[test]
 fn classifies_adapter_and_contract_errors() {
-    let transient_db_error =
-        WebhookEventIngestionError::EntityAccess(AccessError::from(sqlx::Error::PoolTimedOut));
+    let transient_db_error = WebhookEventIngestionError::EntityAccess(AccessError::Unavailable(
+        rootcause::report!("pool timed out").into_dynamic(),
+    ));
     assert!(transient_db_error.is_transient());
-    let permanent_db_error =
-        WebhookEventIngestionError::EntityAccess(AccessError::from(sqlx::Error::RowNotFound));
+    let permanent_db_error = WebhookEventIngestionError::EntityAccess(AccessError::Internal(
+        rootcause::report!("row not found").into_dynamic(),
+    ));
     assert!(!permanent_db_error.is_transient());
     assert!(!WebhookEventIngestionError::EntityAccess(AccessError::internal("bug")).is_transient());
     assert!(!WebhookEventIngestionError::EntityAccess(AccessError::Unauthorized).is_transient());

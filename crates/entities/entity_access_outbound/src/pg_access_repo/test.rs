@@ -1398,3 +1398,15 @@ async fn direct_recipients_exclude_inherited_grants(pool: PgPool) -> anyhow::Res
     assert_eq!(users[0].as_ref(), "macro|direct@example.com");
     Ok(())
 }
+
+#[test]
+fn access_error_marks_connection_failures_transient_and_the_rest_internal() {
+    assert!(matches!(
+        super::access_error(sqlx::Error::PoolTimedOut),
+        AccessError::Unavailable(_)
+    ));
+    assert!(matches!(
+        super::access_error(sqlx::Error::RowNotFound),
+        AccessError::Internal(_)
+    ));
+}
