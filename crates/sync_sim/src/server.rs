@@ -29,6 +29,7 @@ pub(crate) enum Input {
     },
     Exists,
     FreezeSource(Vec<u8>),
+    ThawSource,
     SurfaceRevoke,
     HttpFormUpdate {
         peer: u64,
@@ -318,6 +319,14 @@ impl SimServer {
                         )
                         .now_or_never(),
                 )
+            }
+            Input::ThawSource => {
+                self.ports.set_now(now);
+                let result = self.thaw_source().now_or_never();
+                if let Some(Err(failure)) = &result {
+                    harness_error = Some(failure.clone());
+                }
+                finish_direct(&self.ports, result)
             }
             Input::HttpFormUpdate {
                 peer,
@@ -612,3 +621,5 @@ fn finish_direct<T, E: std::fmt::Display>(
         None => Err(ReplayError::Mismatch("server callback stalled".into())),
     }
 }
+
+mod migration;
