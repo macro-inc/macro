@@ -43,52 +43,52 @@ ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 
 [dependencies]
-agent_changes = { path = "../agent_changes", default-features = false }
-activity = { path = "../activity", default-features = false }
-ai_toolset = { path = "../ai_toolset", optional = true }
+agent_changes = { workspace = true }
+activity = { workspace = true }
+ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
-call = { path = "../call", default-features = false, features = ["ports"] }
-channels = { path = "../channels", default-features = false, features = [
+call = { workspace = true, features = ["ports"] }
+channels = { workspace = true, features = [
   "list",
 ] }
 chrono = { workspace = true }
-cowlike = { path = "../cowlike" }
-crm = { path = "../crm", default-features = false }
-document_sub_type = { path = "../document_sub_type" }
+cowlike = { workspace = true }
+crm = { workspace = true }
+document_sub_type = { workspace = true, default-features = true }
 either = { workspace = true }
-email = { path = "../email", features = ["ports"] }
-entity_access = { path = "../entity_access", default-features = false }
-favorites = { path = "../favorites", features = ["ports"] }
-filter_ast = { path = "../filter_ast" }
-foreign_entity = { path = "../foreign_entity", default-features = false, features = [
+email = { workspace = true, features = ["ports"] }
+entity_access = { workspace = true }
+favorites = { workspace = true, features = ["ports"] }
+filter_ast = { workspace = true }
+foreign_entity = { workspace = true, features = [
   "ports",
 ] }
-frecency = { path = "../frecency" }
-github_pull_requests = { path = "../github_pull_requests", default-features = false, features = ["ports"] }
+frecency = { workspace = true }
+github_pull_requests = { workspace = true, features = ["ports"] }
 indexmap = { workspace = true }
-item_filters = { path = "../item_filters" }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response", optional = true }
-model_owner = { path = "../model_owner" }
-models_grouping = { path = "../models_grouping" }
-models_pagination = { path = "../models_pagination" }
-models_properties = { path = "../models_properties" }
-models_soup = { path = "../models_soup" }
-non_empty = { path = "../non_empty" }
-properties = { path = "../properties", default-features = false }
-readonly_pool = { path = "../readonly_pool", optional = true }
+item_filters = { workspace = true, default-features = true }
+macro_authorization = { workspace = true, features = ["axum"], optional = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+model-error-response = { workspace = true, optional = true }
+model_owner = { workspace = true }
+models_grouping = { workspace = true }
+models_pagination = { workspace = true }
+models_properties = { workspace = true }
+models_soup = { workspace = true }
+non_empty = { workspace = true }
+properties = { workspace = true }
+readonly_pool = { workspace = true, optional = true }
 recursion = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
-system_properties = { path = "../system_properties" }
+system_properties = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
@@ -97,14 +97,14 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-ai_toolset = { path = "../ai_toolset" }
+ai_toolset = { workspace = true }
 cool_asserts = "2"
-filter_ast = { path = "../filter_ast" }
-frecency = { path = "../frecency", features = ["mock", "outbound"] }
+filter_ast = { workspace = true }
+frecency = { workspace = true, features = ["mock", "outbound"] }
 http-body-util = { workspace = true }
-item_filters = { path = "../item_filters", features = ["mock"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
-model_user = { path = "../model_user" }
+item_filters = { workspace = true, default-features = true, features = ["mock"] }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
 mockall = { workspace = true }
 ordered-float = { workspace = true }
 rootcause = { workspace = true }

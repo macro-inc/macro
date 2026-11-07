@@ -5,17 +5,17 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset" }
+ai_toolset = { workspace = true }
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 cron.workspace = true
-macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
-macro_tower_layers = { path = "../macro_tower_layers" }
-macro_user_id = { path = "../macro_user_id" }
+macro_authorization = { workspace = true, features = ["axum"] }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
 reqwest.workspace = true
-routine_program = { path = "../routine_program" }
+routine_program = { workspace = true }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -5,17 +5,17 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-agent_session = { path = "../agent_session", default-features = false }
+agent_session = { workspace = true }
 async-graphql = { workspace = true }
 async-stream = { workspace = true }
-attention_feed = { path = "../attention_feed" }
+attention_feed = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
-graphql_common = { path = "../graphql_common" }
-graphql_soup = { path = "../graphql_soup" }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
+graphql_common = { workspace = true }
+graphql_soup = { workspace = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+soup_realtime = { workspace = true, features = ["ports"] }
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
 tracing = { workspace = true }
 uuid = { workspace = true }

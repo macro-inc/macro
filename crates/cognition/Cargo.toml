@@ -5,12 +5,12 @@ edition = "2024"
 publish = false
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset" }
+ai_toolset = { workspace = true }
 async-trait = { workspace = true }
-jev = { path = "../jev", features = ["batches"] }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
-macro_tower_layers = { path = "../macro_tower_layers" }
-macro_user_id = { path = "../macro_user_id" }
+jev = { workspace = true, features = ["batches"] }
+macro_authorization = { workspace = true, features = ["axum"] }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true }

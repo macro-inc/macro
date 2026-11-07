@@ -5,20 +5,20 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-agent = { path = "../agent" }
+agent = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-document_sub_type = { path = "../document_sub_type" }
-macro_user_id = { path = "../macro_user_id", features = ["schema"] }
-model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response" }
-model_owner = { path = "../model_owner" }
-model_file_type = { path = "../model_file_type", features = ["utoipa"] }
-model_user = { path = "../model_user" }
-models_bulk_upload = { path = "../models_bulk_upload" }
-models_pagination = { path = "../models_pagination" }
-models_permissions = { path = "../models_permissions" }
+document_sub_type = { workspace = true, default-features = true }
+macro_user_id = { workspace = true, features = ["schema"] }
+model-entity = { workspace = true }
+model-error-response = { workspace = true }
+model_owner = { workspace = true }
+model_file_type = { workspace = true, features = ["utoipa"] }
+model_user = { workspace = true }
+models_bulk_upload = { workspace = true }
+models_pagination = { workspace = true }
+models_permissions = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }

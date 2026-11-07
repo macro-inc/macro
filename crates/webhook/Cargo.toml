@@ -67,40 +67,40 @@ stream = [
 worker = ["dep:tokio", "ports"]
 
 [dependencies]
-messages = { path = "../messages", features = ["broker"] }
+messages = { workspace = true, features = ["broker"] }
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
-agent_session = { path = "../agent_session", default-features = false, optional = true }
-agent_trigger = { path = "../agent_trigger", optional = true }
-call = { path = "../call", default-features = false, optional = true }
-channels = { path = "../channels", default-features = false, optional = true }
+agent_session = { workspace = true, optional = true }
+agent_trigger = { workspace = true, optional = true }
+call = { workspace = true, optional = true }
+channels = { workspace = true, optional = true }
 chrono = { workspace = true }
-documents = { path = "../documents", default-features = false, optional = true }
-model_owner = { path = "../model_owner" }
-entity_access = { path = "../entity_access", default-features = false, features = [
+documents = { workspace = true, optional = true }
+model_owner = { workspace = true }
+entity_access = { workspace = true, features = [
   "ports",
 ], optional = true }
 futures = { workspace = true, optional = true }
-kafka_util = { path = "../kafka_util", optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+kafka_util = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid", optional = true }
-model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true }
-rate_limit = { path = "../rate_limit", optional = true, default-features = false }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true, optional = true }
+model-error-response = { workspace = true, optional = true }
+model_user = { workspace = true, optional = true }
+rate_limit = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-webhook_signature = { path = "../webhook_signature", optional = true }
+webhook_signature = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
-sqs_client = { path = "../sqs_client", default-features = false, optional = true }
+sqs_client = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
@@ -112,17 +112,17 @@ uuid = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-agent_fold = { path = "../folds/agent_fold" }
-agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
-agent_session = { path = "../agent_session", default-features = false, features = [
+agent_fold = { workspace = true, default-features = true }
+agent_runtime_protocol = { workspace = true }
+agent_session = { workspace = true, features = [
   "test-utils",
 ] }
-bot_id = { path = "../bot_id", features = ["test-utils"] }
-channel_sender = { path = "../channel_sender" }
-trigger_context = { path = "../trigger_context" }
-macro_db_migrator = { path = "../macro_db_migrator" }
-messages = { path = "../messages" }
-rate_limit = { path = "../rate_limit", default-features = false, features = [
+bot_id = { workspace = true, features = ["test-utils"] }
+channel_sender = { workspace = true }
+trigger_context = { workspace = true }
+macro_db_migrator = { workspace = true }
+messages = { workspace = true }
+rate_limit = { workspace = true, features = [
   "axum",
   "testing",
 ] }

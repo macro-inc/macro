@@ -33,18 +33,18 @@ outbound = [
 [dependencies]
 anyhow = { workspace = true }
 askama = { workspace = true, optional = true }
-ai_toolset = { path = "../../crates/ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 axum = { workspace = true, features = ["tower-log"], optional = true }
 axum-extra = { workspace = true, features = ["cookie"], optional = true }
 base64 = { workspace = true }
-bot_id = { path = "../../crates/bot_id", optional = true }
+bot_id = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
-cursor_api_key = { path = "../../crates/cursor_api_key", optional = true }
-fusionauth = { path = "../../crates/fusionauth", optional = true }
-macro_auth = { path = "../../crates/macro_auth", optional = true }
-macro_tower_layers = { path = "../../crates/macro_tower_layers", optional = true }
-macro_user_id = { path = "../../crates/macro_user_id", optional = true }
-model = { path = "../../crates/model", optional = true }
+cursor_api_key = { workspace = true, optional = true }
+fusionauth = { workspace = true, optional = true }
+macro_auth = { workspace = true, optional = true }
+macro_tower_layers = { workspace = true, optional = true }
+macro_user_id = { workspace = true, optional = true }
+model = { workspace = true, optional = true }
 rand = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest = { workspace = true, optional = true }
@@ -58,7 +58,7 @@ thiserror = { workspace = true }
 tower = { workspace = true, features = ["util"], optional = true }
 tower-http = { workspace = true, optional = true }
 tracing = { workspace = true }
-upstream_error = { path = "../../crates/upstream_error", default-features = false, optional = true }
+upstream_error = { workspace = true, optional = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }
@@ -67,7 +67,7 @@ zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
-macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+macro_auth = { workspace = true, features = ["testing"] }
+macro_db_migrator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 wiremock = { workspace = true }

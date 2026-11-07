@@ -15,11 +15,11 @@ calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id", "dep:reqwes
 
 [dependencies]
 reqwest = { workspace = true, optional = true }
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
-email_validator = { path = "../email_validator" }
+email_validator = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -32,13 +32,13 @@ tracing = { workspace = true }
 axum = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
-calendar_events = { path = "../calendar_events", optional = true }
-teams = { path = "../teams", default-features = false, features = ["ports"], optional = true }
-macro_user_id = { path = "../macro_user_id", optional = true }
+macro_authorization = { workspace = true, features = ["axum"], optional = true }
+calendar_events = { workspace = true, optional = true }
+teams = { workspace = true, features = ["ports"], optional = true }
+macro_user_id = { workspace = true, optional = true }
 
 [dev-dependencies]
-model_user = { path = "../model_user" }
+model_user = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 wiremock = { workspace = true }

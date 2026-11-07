@@ -21,25 +21,25 @@ outbound = [
 test-utils = []
 
 [dependencies]
-activity = { path = "../activity", default-features = false, features = ["realtime"], optional = true }
+activity = { workspace = true, features = ["realtime"], optional = true }
 async-stream = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-cowlike = { path = "../cowlike", optional = true }
-email = { path = "../email", default-features = false, features = ["ports"], optional = true }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+cowlike = { workspace = true, optional = true }
+email = { workspace = true, features = ["ports"], optional = true }
+entity_access = { workspace = true, features = ["ports"] }
 futures = { workspace = true }
-item_filters = { path = "../item_filters" }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-model_notifications = { path = "../model_notifications" }
-models_soup = { path = "../models_soup", optional = true }
-notification = { path = "../notification" }
+item_filters = { workspace = true, default-features = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+model_notifications = { workspace = true }
+models_soup = { workspace = true, optional = true }
+notification = { workspace = true, default-features = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-soup = { path = "../soup", default-features = false, features = ["ports"], optional = true }
-soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"], optional = true }
+soup = { workspace = true, features = ["ports"], optional = true }
+soup_realtime = { workspace = true, features = ["ports"], optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time", "macros", "rt"] }
 tracing = { workspace = true }

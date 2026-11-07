@@ -7,12 +7,12 @@ publish = false
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
-email = { path = "../email", default-features = false, features = ["ports"] }
-email_utils = { path = "../email_utils" }
-entity_access = { path = "../entity_access", default-features = false }
+email = { workspace = true, features = ["ports"] }
+email_utils = { workspace = true }
+entity_access = { workspace = true }
 futures = { workspace = true }
-graphql_common = { path = "../graphql_common" }
-macro_user_id = { path = "../macro_user_id" }
+graphql_common = { workspace = true }
+macro_user_id = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

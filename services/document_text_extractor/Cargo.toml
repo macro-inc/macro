@@ -12,18 +12,18 @@ macos = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_aws_config = { workspace = true, features = ["s3"] }
 aws_lambda_events = { workspace = true, features = [
   "eventbridge",
   "s3",
   "sqs",
 ] }
 lambda_runtime = { workspace = true }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env_var = { path = "../../crates/macro_env_var" }
+macro_entrypoint = { workspace = true }
+macro_env_var = { workspace = true }
 mockall = { workspace = true }
-model = { path = "../../crates/model" }
-s3_key = { path = "../../crates/s3_key" }
+model = { workspace = true }
+s3_key = { workspace = true }
 pdfium-render = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -35,4 +35,4 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+macro_db_migrator = { workspace = true }

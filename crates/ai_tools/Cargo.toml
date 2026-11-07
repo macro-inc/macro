@@ -8,125 +8,125 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
-feature_flags = { path = "../feature_flags" }
-import_linear = { path = "../import_linear" }
-import_jira = { path = "../import_jira" }
+feature_flags = { workspace = true }
+import_linear = { workspace = true }
+import_jira = { workspace = true }
 
-macro_entrypoint = { path = "../macro_entrypoint" }
-memory = { path = "../memory" }
+macro_entrypoint = { workspace = true }
+memory = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-favorites = { path = "../favorites", features = ["ai_tools", "postgres"] }
-forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling", "static_files"] }
-routines = { path = "../routines" }
-macro_auth = { path = "../macro_auth" }
-agent_code_mode = { path = "../agent_code_mode" }
-dynamic_ui = { path = "../dynamic_ui" }
-ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
-collab_surface = { path = "../collab_surface", features = ["postgres"] }
-initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
-initiative_description = { path = "../initiative_description" }
-activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
-agent = { path = "../agent" }
-agent_session = { path = "../agent_session", features = ["ai_tools"] }
-ai_usage = { path = "../ai_usage" }
-anthropic = { path = "../anthropic", features = ["toolset"] }
-static_file = { path = "../static_file", features = ["attachment"] }
-ai_toolset = { path = "../ai_toolset" }
+favorites = { workspace = true, features = ["ai_tools", "postgres"] }
+forms = { workspace = true, features = ["ai_tools", "gateway", "postgres", "scheduling", "static_files"] }
+routines = { workspace = true }
+macro_auth = { workspace = true }
+agent_code_mode = { workspace = true }
+dynamic_ui = { workspace = true }
+ai_billing = { workspace = true, features = ["pg-admission"] }
+collab_surface = { workspace = true, features = ["postgres"] }
+initiative = { workspace = true, features = ["postgres", "resources", "toolset"] }
+initiative_description = { workspace = true }
+activity = { workspace = true, features = ["ai_tools", "outbound"] }
+agent = { workspace = true }
+agent_session = { workspace = true, default-features = true, features = ["ai_tools"] }
+ai_usage = { workspace = true }
+anthropic = { workspace = true, features = ["toolset"] }
+static_file = { workspace = true, default-features = true, features = ["attachment"] }
+ai_toolset = { workspace = true }
 anyhow.workspace = true
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
-bots = { path = "../bots", default-features = false, features = ["ai_tools", "outbound"] }
-calendar_scheduling = { path = "../calendar_scheduling", features = ["ai_tools", "postgres", "calendar", "client"] }
-calendar_events = { path = "../calendar_events", features = ["ai_tools", "call-meetings", "mutation-client", "postgres"] }
-call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
-chat = { path = "../chat", features = ["ai_tools", "outbound"] }
-channels = { path = "../channels", features = ["ai_tools", "outbound"] }
-cognition = { path = "../cognition" }
+bots = { workspace = true, features = ["ai_tools", "outbound"] }
+calendar_scheduling = { workspace = true, features = ["ai_tools", "postgres", "calendar", "client"] }
+calendar_events = { workspace = true, features = ["ai_tools", "call-meetings", "mutation-client", "postgres"] }
+call = { workspace = true, features = ["ai_tools", "outbound", "ports"] }
+chat = { workspace = true, default-features = true, features = ["ai_tools", "outbound"] }
+channels = { workspace = true, features = ["ai_tools", "outbound"] }
+cognition = { workspace = true }
 chrono.workspace = true
 dateparser.workspace = true
-connection = { path = "../connection", default-features = false, features = [
+connection = { workspace = true, features = [
   "ports",
 ] }
-connection_gateway_client = { path = "../connection_gateway_client" }
-contacts = { path = "../contacts", default-features = false, features = [
+connection_gateway_client = { workspace = true }
+contacts = { workspace = true, features = [
   "outbound",
 ] }
-crm = { path = "../crm" }
-databases = { path = "../databases", default-features = false, features = ["ai_tools", "entity_mutation", "gateway", "postgres"] }
-databases_sql = { path = "../databases_sql", features = ["ai_tools"] }
-documents = { path = "../documents", features = ["ai_tools", "attachment", "purge"] }
-email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound", "s3", "sqs"] }
-email_service_client = { path = "../email_service_client" }
-entity_access = { path = "../entity_access" }
-entity_access_management = { path = "../entity_access_management" }
-entity_registry = { path = "../entity_registry/entity_registry" }
-entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
-foreign_entity = { path = "../foreign_entity" }
-github_pull_requests = { path = "../github_pull_requests" }
-frecency = { path = "../frecency", features = ["outbound", "postgres"] }
-image_generation = { path = "../image_generation" }
-import = { path = "../import" }
-import_notion = { path = "../import_notion" }
-item_filters = { path = "../item_filters" }
-lexical_client = { path = "../lexical_client" }
-lexical_mention_extractor = { path = "../lexical_mention_extractor" }
-macro_aws_config = { path = "../macro_aws_config" }
-macro_env_var = { path = "../macro_env_var" }
-macro_event_broker = { path = "../macro_event_broker" }
-messages = { path = "../messages", features = ["ai_tools", "broker", "delivery"] }
-macro_queues = { path = "../macro_queues" }
-macro_user_id = { path = "../macro_user_id" }
-mcp_client = { path = "../mcp_client" }
-mcp_select = { path = "../mcp_select" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+crm = { workspace = true, default-features = true }
+databases = { workspace = true, features = ["ai_tools", "entity_mutation", "gateway", "postgres"] }
+databases_sql = { workspace = true, features = ["ai_tools"] }
+documents = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "purge"] }
+email = { workspace = true, features = ["ai_schema", "ai_tools", "axum", "outbound", "s3", "sqs"] }
+email_service_client = { workspace = true }
+entity_access = { workspace = true, default-features = true }
+entity_access_management = { workspace = true, default-features = true }
+entity_registry = { workspace = true }
+entity_registry_db_utils = { workspace = true }
+foreign_entity = { workspace = true, default-features = true }
+github_pull_requests = { workspace = true, default-features = true }
+frecency = { workspace = true, features = ["outbound", "postgres"] }
+image_generation = { workspace = true }
+import = { workspace = true }
+import_notion = { workspace = true }
+item_filters = { workspace = true, default-features = true }
+lexical_client = { workspace = true }
+lexical_mention_extractor = { workspace = true }
+macro_aws_config = { workspace = true }
+macro_env_var = { workspace = true }
+macro_event_broker = { workspace = true, default-features = true }
+messages = { workspace = true, features = ["ai_tools", "broker", "delivery"] }
+macro_queues = { workspace = true }
+macro_user_id = { workspace = true }
+mcp_client = { workspace = true }
+mcp_select = { workspace = true }
+pipedream_mcp = { workspace = true }
 url = { workspace = true }
-model = { path = "../model" }
-model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner" }
-models_databases = { path = "../models_databases" }
-models_pagination = { path = "../models_pagination" }
-models_permissions = { path = "../models_permissions" }
-notification = { path = "../notification", features = ["ai_tool"] }
-prompt = { path = "../prompt" }
-models_properties = { path = "../models_properties" }
-models_search = { path = "../models_search" }
-models_soup = { path = "../models_soup" }
+model = { workspace = true }
+model-entity = { workspace = true }
+model_owner = { workspace = true }
+models_databases = { workspace = true }
+models_pagination = { workspace = true }
+models_permissions = { workspace = true }
+notification = { workspace = true, default-features = true, features = ["ai_tool"] }
+prompt = { workspace = true }
+models_properties = { workspace = true }
+models_search = { workspace = true }
+models_soup = { workspace = true }
 reqwest.workspace = true
-readonly_pool = { path = "../readonly_pool" }
+readonly_pool = { workspace = true }
 rootcause = { workspace = true }
 schemars.workspace = true
-search_service_client = { path = "../search_service_client" }
+search_service_client = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
-projects = { path = "../projects", default-features = false, features = ["ai_tools", "outbound", "service"] }
-skills = { path = "../skills", default-features = false, features = ["ai_tools", "outbound"] }
-properties = { path = "../properties", features = ["ai_tools"] }
-soup = { path = "../soup", features = ["ai_tools", "outbound"] }
-sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
-teams = { path = "../teams", default-features = false, features = ["ai_tools", "outbound"] }
+projects = { workspace = true, features = ["ai_tools", "outbound", "service"] }
+skills = { workspace = true, features = ["ai_tools", "outbound"] }
+properties = { workspace = true, default-features = true, features = ["ai_tools"] }
+soup = { workspace = true, features = ["ai_tools", "outbound"] }
+sqs_client = { workspace = true, features = ["email", "gmail"] }
+teams = { workspace = true, features = ["ai_tools", "outbound"] }
 sqlx.workspace = true
 strum.workspace = true
-static_file_service_client = { path = "../static_file_service_client" }
-sync_service_client = { path = "../sync_service_client" }
-system_properties = { path = "../system_properties" }
+static_file_service_client = { workspace = true }
+sync_service_client = { workspace = true }
+system_properties = { workspace = true }
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 unicode-segmentation.workspace = true
 uuid.workspace = true
-web_search = { path = "../web_search" }
-macro_env = { path = "../macro_env" }
-secretsmanager_client = { path = "../secretsmanager_client" }
+web_search = { workspace = true }
+macro_env = { workspace = true }
+secretsmanager_client = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 
-macro_service_urls = { path = "../macro_service_urls" }
+macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
-calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }
-macro_authorization = { path = "../macro_authorization", features = ["axum"] }
-model_user = { path = "../model_user" }
+macro_db_migrator = { workspace = true }
+calendar_scheduling = { workspace = true, features = ["inbound"] }
+macro_authorization = { workspace = true, default-features = true, features = ["axum"] }
+model_user = { workspace = true }

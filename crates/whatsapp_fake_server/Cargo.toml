@@ -25,8 +25,8 @@ tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
 tokio-tungstenite = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
-whatsmeow = { path = "../whatsmeow", features = ["testing"] }
-whatsmeow_signal = { path = "../whatsmeow_signal" }
+whatsmeow = { workspace = true, features = ["testing"] }
+whatsmeow_signal = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

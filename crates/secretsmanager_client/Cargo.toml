@@ -10,7 +10,7 @@ local = []
 [dependencies]
 aws-sdk-secretsmanager = { workspace = true }
 mockall = { workspace = true }
-remote_env_var = { path = "../remote_env_var" }
+remote_env_var = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

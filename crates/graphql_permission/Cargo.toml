@@ -6,12 +6,12 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader"] }
-entity_access = { path = "../entity_access", default-features = false, features = [
+entity_access = { workspace = true, features = [
   "ports",
 ] }
 futures = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -6,6 +6,6 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-models_search = { path = "../models_search" }
+models_search = { workspace = true }
 reqwest = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

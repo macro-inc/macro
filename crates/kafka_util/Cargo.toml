@@ -8,8 +8,8 @@ version = "0.1.0"
 aws-msk-iam-sasl-signer = { workspace = true }
 aws-types = { workspace = true }
 either = { workspace = true }
-macro_env = { path = "../macro_env" }
-macro_env_var = { path = "../macro_env_var" }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 rdkafka = { workspace = true }
 thiserror = { workspace = true }

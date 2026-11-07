@@ -10,8 +10,8 @@ futures = { workspace = true }
 http = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy-regex = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-pipedream_mcp = { path = "../pipedream_mcp" }
+macro_user_id = { workspace = true }
+pipedream_mcp = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

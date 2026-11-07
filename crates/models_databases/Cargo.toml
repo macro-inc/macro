@@ -14,8 +14,8 @@ schema = ["dep:schemars"]
 [dependencies]
 chrono = { workspace = true }
 fractional_index = { workspace = true }
-macro_user_id = { path = "../macro_user_id", features = ["schema"] }
-macro_uuid = { path = "../macro_uuid" }
+macro_user_id = { workspace = true, features = ["schema"] }
+macro_uuid = { workspace = true }
 nom = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

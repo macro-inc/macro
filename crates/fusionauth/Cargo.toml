@@ -15,7 +15,7 @@ serde_urlencoded = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-upstream_error = { path = "../upstream_error", default-features = false, features = [
+upstream_error = { workspace = true, features = [
   "reqwest",
 ] }
 urlencoding = { workspace = true }

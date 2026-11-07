@@ -9,15 +9,15 @@ async-graphql = { workspace = true, features = ["dataloader"] }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 chrono = { workspace = true }
-filter_ast = { path = "../filter_ast" }
-item_filters = { path = "../item_filters" }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+filter_ast = { workspace = true }
+item_filters = { workspace = true, default-features = true }
+macro_authorization = { workspace = true, features = [
   "axum",
 ] }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner" }
-models_properties = { path = "../models_properties" }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+model_owner = { workspace = true }
+models_properties = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
@@ -26,5 +26,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-model_user = { path = "../model_user" }
+model_user = { workspace = true }
 rootcause = { workspace = true }

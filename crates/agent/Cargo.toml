@@ -26,20 +26,20 @@ thiserror = { workspace = true }
 utoipa = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-ai_usage = { path = "../ai_usage" }
-ai_toolset = { path = "../ai_toolset" }
-attachment = { path = "../attachment" }
-genai_telemetry = { path = "../genai_telemetry" }
-macro_env_var = { path = "../macro_env_var" }
-macro_user_id = { path = "../macro_user_id" }
-prompt = { path = "../prompt" }
+ai_usage = { workspace = true }
+ai_toolset = { workspace = true }
+attachment = { workspace = true }
+genai_telemetry = { workspace = true }
+macro_env_var = { workspace = true }
+macro_user_id = { workspace = true }
+prompt = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio-util.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
-model-entity = { path = "../model-entity" }
-non_empty = { path = "../non_empty" }
+model-entity = { workspace = true }
+non_empty = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }

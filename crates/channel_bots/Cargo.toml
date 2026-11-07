@@ -5,24 +5,24 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-ai_billing = { path = "../ai_billing" }
-agent = { path = "../agent" }
-ai_usage = { path = "../ai_usage" }
-ai_tools = { path = "../ai_tools" }
-ai_toolset = { path = "../ai_toolset" }
+ai_billing = { workspace = true }
+agent = { workspace = true }
+ai_usage = { workspace = true }
+ai_tools = { workspace = true }
+ai_toolset = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bot_id = { path = "../bot_id" }
-calendar_events = { path = "../calendar_events" }
-channel_sender = { path = "../channel_sender" }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+bot_id = { workspace = true }
+calendar_events = { workspace = true }
+channel_sender = { workspace = true }
+entity_access = { workspace = true, features = ["ports"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 futures = { workspace = true }
-lexical_client = { path = "../lexical_client" }
-macro_user_id = { path = "../macro_user_id" }
-messages = { path = "../messages", features = ["ports"] }
-prompt = { path = "../prompt" }
+lexical_client = { workspace = true }
+macro_user_id = { workspace = true }
+messages = { workspace = true, features = ["ports"] }
+prompt = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,4 +32,4 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-messages = { path = "../messages", features = ["test-utils"] }
+messages = { workspace = true, features = ["test-utils"] }

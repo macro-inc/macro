@@ -5,49 +5,49 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-agent_code_mode = { path = "../agent_code_mode" }
-ai_billing = { path = "../ai_billing" }
-agent = { path = "../agent" }
-agent_api_keys = { path = "../agent_api_keys" }
+agent_code_mode = { workspace = true }
+ai_billing = { workspace = true }
+agent = { workspace = true }
+agent_api_keys = { workspace = true }
 # The egress proxy's domain service, driven in-process: the same verification,
 # resolution and stamping a sandbox reaches over the wire, minus the wire.
-agent_egress = { path = "../agent_egress" }
+agent_egress = { workspace = true }
 agent-client-protocol = { workspace = true }
-agent_runtime_protocol = { path = "../agent_runtime_protocol" }
-agent_session = { path = "../agent_session" }
+agent_runtime_protocol = { workspace = true, default-features = true }
+agent_session = { workspace = true, default-features = true }
 anyhow = { workspace = true }
-ai_tools = { path = "../ai_tools" }
-attachment = { path = "../attachment" }
-ai_toolset = { path = "../ai_toolset" }
-ai_usage = { path = "../ai_usage" }
+ai_tools = { workspace = true }
+attachment = { workspace = true }
+ai_toolset = { workspace = true }
+ai_usage = { workspace = true }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
-bot_id = { path = "../bot_id" }
-chat = { path = "../chat", default-features = false }
-cognition = { path = "../cognition" }
+bot_id = { workspace = true }
+chat = { workspace = true }
+cognition = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
-feature_flags = { path = "../feature_flags" }
-genai_telemetry = { path = "../genai_telemetry" }
-macro_user_id = { path = "../macro_user_id" }
-model_owner = { path = "../model_owner" }
-roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = ["ports"] }
+feature_flags = { workspace = true }
+genai_telemetry = { workspace = true }
+macro_user_id = { workspace = true }
+model_owner = { workspace = true }
+roles_and_permissions = { workspace = true, features = ["ports"] }
 http = { workspace = true }
 http-body-util = { workspace = true }
-macro_uuid = { path = "../macro_uuid" }
-mcp_select = { path = "../mcp_select" }
-mcp_toolset = { path = "../mcp_toolset" }
-memory = { path = "../memory" }
-model-entity = { path = "../model-entity" }
-non_empty = { path = "../non_empty" }
+macro_uuid = { workspace = true }
+mcp_select = { workspace = true }
+mcp_toolset = { workspace = true }
+memory = { workspace = true }
+model-entity = { workspace = true }
+non_empty = { workspace = true }
 nom = { workspace = true }
-prompt = { path = "../prompt" }
+prompt = { workspace = true }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-skills = { path = "../skills" }
+skills = { workspace = true, default-features = true }
 sqlx = { workspace = true }
 sse-stream = { workspace = true }
 thiserror = { workspace = true }
@@ -59,11 +59,11 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-jev = { path = "../jev", features = ["outbound"] }
+jev = { workspace = true, features = ["outbound"] }
 rootcause = { workspace = true }
-agent_fold = { path = "../folds/agent_fold" }
-agent_session = { path = "../agent_session", features = ["test-utils"] }
-bot_id = { path = "../bot_id", features = ["test-utils"] }
+agent_fold = { workspace = true, default-features = true }
+agent_session = { workspace = true, default-features = true, features = ["test-utils"] }
+bot_id = { workspace = true, features = ["test-utils"] }
 futures = { workspace = true }
 rig-agent = "0.41.0"
 opentelemetry = { workspace = true, features = ["trace"] }
@@ -71,4 +71,4 @@ opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }
-trigger_context = { path = "../trigger_context" }
+trigger_context = { workspace = true }

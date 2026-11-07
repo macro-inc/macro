@@ -28,21 +28,21 @@ realtime = [
 ]
 
 [dependencies]
-agent_correlation = { path = "../agent_correlation" }
+agent_correlation = { workspace = true }
 utoipa = { workspace = true, optional = true }
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
-broadcast = { path = "../broadcast", optional = true }
-channel_sender = { path = "../channel_sender" }
+broadcast = { workspace = true, optional = true }
+channel_sender = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 futures = { workspace = true, optional = true }
-kafka_util = { path = "../kafka_util", optional = true }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner" }
+kafka_util = { workspace = true, optional = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+model_owner = { workspace = true }
 rdkafka = { workspace = true, optional = true }
 readonly = { workspace = true }
 rootcause = { workspace = true, optional = true }
@@ -59,6 +59,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-bot_id = { path = "../bot_id" }
-macro_db_migrator = { path = "../macro_db_migrator" }
+bot_id = { workspace = true }
+macro_db_migrator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

@@ -7,15 +7,15 @@ publish = false
 [dependencies]
 async-graphql = { workspace = true, features = ["dataloader", "chrono"] }
 chrono = { workspace = true }
-databases = { path = "../databases", features = ["ports", "view_rows"] }
-databases_sql = { path = "../databases_sql" }
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+databases = { workspace = true, features = ["ports", "view_rows"] }
+databases_sql = { workspace = true }
+entity_access = { workspace = true, features = ["ports"] }
 futures = { workspace = true }
-graphql_common = { path = "../graphql_common" }
-graphql_soup = { path = "../graphql_soup" }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-models_databases = { path = "../models_databases" }
+graphql_common = { workspace = true }
+graphql_soup = { workspace = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+models_databases = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

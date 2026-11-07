@@ -8,26 +8,26 @@ version = "0.1.0"
 uuid = { workspace = true }
 # `AgentSessionId` only. `default-features = false` drops the crate's CLI
 # binaries (clap, tokio), which the vocabulary does not need.
-agent_fold = { path = "../folds/agent_fold", default-features = false }
-ai_toolset = { path = "../ai_toolset" }
+agent_fold = { workspace = true }
+ai_toolset = { workspace = true }
 async-trait = { workspace = true }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
-agent_runtime_protocol = { path = "../agent_runtime_protocol" }
-agent_session = { path = "../agent_session" }
+agent_runtime_protocol = { workspace = true, default-features = true }
+agent_session = { workspace = true, default-features = true }
 axum = { workspace = true }
 # `headers`' typed `Authorization`, which owns the Bearer/Basic parsing the
 # session-token extraction would otherwise hand-roll.
 axum-extra = { workspace = true, features = ["typed-header"] }
 base64 = { workspace = true }
 # The session's agent, signed into Macro's own MCP credential.
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 bytes = { workspace = true }
 # Holding a tool call for the owner: the stream it answers with.
 futures = { workspace = true }
 chrono = { workspace = true }
 # The installation records that say whose installation an installation is, and
 # the team memberships that decide whether the session's owner is one of them.
-github = { path = "../github", default-features = false, features = [
+github = { workspace = true, features = [
   "outbound",
   "ports",
   "sync",
@@ -39,20 +39,20 @@ http-body-util = { workspace = true }
 lru = { workspace = true }
 # Signing Macro API tokens, with the same shared vocabulary
 # `authentication_service` mints through.
-macro_auth = { path = "../macro_auth" }
+macro_auth = { workspace = true }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
-macro_db_client = { path = "../macro_db_client" }
-macro_tower_layers = { path = "../macro_tower_layers" }
-macro_user_id = { path = "../macro_user_id" }
+macro_db_client = { workspace = true, default-features = true }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
 # The rows holding the owner's custom (URL-added) MCP servers and their
 # encrypted grants, and the refresh that keeps a grant live. Port and domain
 # service only; the Postgres adapter is the composition root's to build.
-mcp_client = { path = "../mcp_client" }
-macro_uuid = { path = "../macro_uuid" }
-model_owner = { path = "../model_owner" }
+mcp_client = { workspace = true }
+macro_uuid = { workspace = true }
+model_owner = { workspace = true }
 # The rows saying which apps an owner connected, and the client that turns one
 # into Pipedream's MCP endpoint plus the headers scoping a call to it.
-pipedream_mcp = { path = "../pipedream_mcp" }
+pipedream_mcp = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
@@ -70,7 +70,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-bot_id = { path = "../bot_id", features = ["test-utils"] }
+bot_id = { workspace = true, features = ["test-utils"] }
 futures = { workspace = true }
 # Building the stored OAuth grants the custom-server resolver reads.
 rmcp = { workspace = true, features = ["auth"] }

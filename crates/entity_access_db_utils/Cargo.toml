@@ -7,18 +7,18 @@ version = "0.1.0"
 [dependencies]
 # Core
 anyhow = { workspace = true }
-macro_uuid = { path = "../macro_uuid" }
+macro_uuid = { workspace = true }
 sqlx = { workspace = true }
 tracing = { workspace = true }
 
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner" }
-models_entity_access_management = { path = "../models_entity_access_management", features = [
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+model_owner = { workspace = true }
+models_entity_access_management = { workspace = true, default-features = true, features = [
   "db",
 ] }
-models_permissions = { path = "../models_permissions" }
+models_permissions = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }

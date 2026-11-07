@@ -6,11 +6,11 @@ version = "0.1.0"
 
 [dependencies]
 cached = { workspace = true }
-channels = { path = "../channels", default-features = false, features = ["outbound"] }
+channels = { workspace = true, features = ["outbound"] }
 chrono = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-models_opensearch = { path = "../models_opensearch" }
-models_search_cursor = { path = "../models_search_cursor" }
+macro_user_id = { workspace = true }
+models_opensearch = { workspace = true }
+models_search_cursor = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
@@ -21,4 +21,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }

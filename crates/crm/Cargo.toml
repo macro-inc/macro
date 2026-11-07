@@ -61,65 +61,65 @@ ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_da
 search = ["dep:sqlx", "ports"]
 
 [dependencies]
-bot_id = { path = "../bot_id", optional = true }
-databases = { path = "../databases", default-features = false, features = ["ports"], optional = true }
-models_databases = { path = "../models_databases", optional = true }
-models_permissions = { path = "../models_permissions", optional = true }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+bot_id = { workspace = true, optional = true }
+databases = { workspace = true, features = ["ports"], optional = true }
+models_databases = { workspace = true, optional = true }
+models_permissions = { workspace = true, optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
 anyhow = { workspace = true }
 csv = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 chrono = { workspace = true }
-filter_ast = { path = "../filter_ast" }
-item_filters = { path = "../item_filters", default-features = false }
+filter_ast = { workspace = true }
+item_filters = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-call = { path = "../call", default-features = false, features = ["ports"], optional = true }
-entity_access = { path = "../entity_access", default-features = false }
-kafka_util = { path = "../kafka_util", optional = true }
-macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
-messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
+call = { workspace = true, features = ["ports"], optional = true }
+entity_access = { workspace = true }
+kafka_util = { workspace = true, optional = true }
+macro_event_broker = { workspace = true, optional = true }
+messages = { workspace = true, features = ["ports"], optional = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 
 # AI toolset dependencies
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
-macro_user_id = { path = "../macro_user_id", optional = true }
-models_properties = { path = "../models_properties", optional = true }
-properties = { path = "../properties", default-features = false, features = [
+macro_user_id = { workspace = true, optional = true }
+models_properties = { workspace = true, optional = true }
+properties = { workspace = true, features = [
   "ports",
 ], optional = true }
 schemars = { workspace = true, optional = true }
-system_properties = { path = "../system_properties" }
+system_properties = { workspace = true }
 
 # Axum / inbound dependencies
 axum = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
-macro_uuid = { path = "../macro_uuid", optional = true }
-model-error-response = { path = "../model-error-response", optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_uuid = { workspace = true, optional = true }
+model-error-response = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
 opentelemetry = { workspace = true, features = ["trace"], optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
-unfurl = { path = "../unfurl", features = ["ports"], optional = true }
+unfurl = { workspace = true, features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-databases = { path = "../databases", features = ["postgres", "gateway"] }
-entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
+databases = { workspace = true, features = ["postgres", "gateway"] }
+entity_access = { workspace = true, features = ["outbound"] }
+macro_event_broker = { workspace = true }
 
-macro_db_migrator = { path = "../macro_db_migrator" }
-messages = { path = "../messages", default-features = false, features = ["outbound", "test-utils"] }
-macro_user_id = { path = "../macro_user_id" }
-properties = { path = "../properties", default-features = false, features = [
+macro_db_migrator = { workspace = true }
+messages = { workspace = true, features = ["outbound", "test-utils"] }
+macro_user_id = { workspace = true }
+properties = { workspace = true, features = [
   "outbound",
   "ports",
 ] }

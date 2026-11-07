@@ -8,8 +8,8 @@ version = "0.1.0"
 schema = ["dep:utoipa"]
 
 [dependencies]
-bot_id = { path = "../bot_id" }
-macro_user_id = { path = "../macro_user_id" }
+bot_id = { workspace = true }
+macro_user_id = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }
 utoipa = { workspace = true, optional = true }

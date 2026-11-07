@@ -12,14 +12,14 @@ ports = ["entity_access/ports"]
 [dependencies]
 # Core
 anyhow = { workspace = true }
-entity_access = { path = "../entity_access", default-features = false }
-macro_user_id = { path = "../macro_user_id" }
+entity_access = { workspace = true }
+macro_user_id = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
 # Outbound
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-model-entity = { path = "../model-entity", optional = true }
+connection_gateway_client = { workspace = true, optional = true }
+model-entity = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

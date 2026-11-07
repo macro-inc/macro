@@ -25,36 +25,36 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
-agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
-universal_input = { path = "../../crates/universal_input" }
-models_ai_projection = { path = "../../crates/models_ai_projection" }
-activity = { path = "../../crates/activity", default-features = false, features = ["outbound", "schema"] }
-agent = { path = "../../crates/agent", features = ["debug-messages"] }
+agent_correlation = { workspace = true, features = ["http", "postgres"] }
+universal_input = { workspace = true }
+models_ai_projection = { workspace = true }
+activity = { workspace = true, features = ["outbound", "schema"] }
+agent = { workspace = true, features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
-agent_changes = { path = "../../crates/agent_changes" }
-agent_code_mode = { path = "../../crates/agent_code_mode" }
-agent_egress = { path = "../../crates/agent_egress" }
-agent_fold = { path = "../../crates/folds/agent_fold" }
-agent_harness = { path = "../../crates/agent_harness" }
-agent_inmem = { path = "../../crates/agent_inmem" }
-agent_preview = { path = "../../crates/agent_preview" }
-agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
-agent_session = { path = "../../crates/agent_session", features = ["admission", "ai_tools"] }
-agent_session_realtime = { path = "../../crates/agent_session_realtime" }
-agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
-ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
-agent_api_keys = { path = "../../crates/agent_api_keys" }
-ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
-ai_tools = { path = "../../crates/ai_tools" }
-ai_toolset = { path = "../../crates/ai_toolset" }
-calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }
-ai_usage = { path = "../../crates/ai_usage" }
-analytics_client = { path = "../../crates/analytics_client" }
+agent_changes = { workspace = true, default-features = true }
+agent_code_mode = { workspace = true }
+agent_egress = { workspace = true }
+agent_fold = { workspace = true, default-features = true }
+agent_harness = { workspace = true }
+agent_inmem = { workspace = true }
+agent_preview = { workspace = true }
+agent_runtime_protocol = { workspace = true, default-features = true, features = ["utoipa"] }
+agent_session = { workspace = true, default-features = true, features = ["admission", "ai_tools"] }
+agent_session_realtime = { workspace = true, default-features = true }
+agent_trigger = { workspace = true, features = ["outbound"] }
+ai_billing = { workspace = true, features = ["pg-admission"] }
+agent_api_keys = { workspace = true }
+ai_projections = { workspace = true, features = ["agent"] }
+ai_tools = { workspace = true }
+ai_toolset = { workspace = true }
+calendar_events = { workspace = true, features = ["postgres"] }
+ai_usage = { workspace = true }
+analytics_client = { workspace = true }
 anyhow = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-attachment = { path = "../../crates/attachment", features = ["provider"] }
-authentication_service_client = { path = "../../crates/authentication_service_client" }
+attachment = { workspace = true, features = ["provider"] }
+authentication_service_client = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
@@ -62,121 +62,121 @@ aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
-bot_id = { path = "../../crates/bot_id" }
-bots = { path = "../../crates/bots", features = ["outbound", "ports"] }
-call = { path = "../../crates/call", default-features = false, features = ["outbound", "ports"] }
-channels = { path = "../../crates/channels", features = ["attachment", "outbound", "ports"] }
-chat = { path = "../../crates/chat", features = ["ai_tools", "attachment", "outbound"] }
+bot_id = { workspace = true }
+bots = { workspace = true, default-features = true, features = ["outbound", "ports"] }
+call = { workspace = true, features = ["outbound", "ports"] }
+channels = { workspace = true, features = ["attachment", "outbound", "ports"] }
+chat = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "outbound"] }
 chrono = { workspace = true }
-code_execution = { path = "../../crates/code_execution" }
-codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
-codex_connection = { path = "../../crates/codex_connection" }
-cognition = { path = "../../crates/cognition" }
-connection_gateway = { path = "../connection_gateway" }
-connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-contacts = { path = "../../crates/contacts" }
-crm = { path = "../../crates/crm", features = ["lookup", "ports"] }
-cursor_api_key = { path = "../../crates/cursor_api_key" }
-cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
-database_env_vars = { path = "../../crates/database_env_vars" }
-databases = { path = "../../crates/databases", features = ["ai_tools", "gateway", "postgres"] }
-databases_sql = { path = "../../crates/databases_sql", features = ["ai_tools"] }
-document_storage_service_client = { path = "../../crates/document_storage_service_client" }
-documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
+code_execution = { workspace = true }
+codex_cloud_agents = { workspace = true }
+codex_connection = { workspace = true }
+cognition = { workspace = true }
+connection_gateway = { workspace = true }
+connection_gateway_client = { workspace = true }
+contacts = { workspace = true, default-features = true }
+crm = { workspace = true, default-features = true, features = ["lookup", "ports"] }
+cursor_api_key = { workspace = true }
+cursor_cloud_agents = { workspace = true }
+database_env_vars = { workspace = true }
+databases = { workspace = true, features = ["ai_tools", "gateway", "postgres"] }
+databases_sql = { workspace = true, features = ["ai_tools"] }
+document_storage_service_client = { workspace = true }
+documents = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppler-config = { workspace = true }
-email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
-email_service_client = { path = "../../crates/email_service_client" }
-entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
-entity_access_management = { path = "../../crates/entity_access_management" }
-entity_registry = { path = "../../crates/entity_registry/entity_registry", features = ["axum"] }
-entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
-feature_flags = { path = "../../crates/feature_flags" }
-foreign_entity = { path = "../../crates/foreign_entity" }
-frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
-fusionauth = { path = "../../crates/fusionauth" }
+email = { workspace = true, features = ["attachment", "outbound", "sqs"] }
+email_service_client = { workspace = true }
+entity_access = { workspace = true, default-features = true, features = ["inbound", "outbound"] }
+entity_access_management = { workspace = true, default-features = true }
+entity_registry = { workspace = true, features = ["axum"] }
+entity_registry_db_utils = { workspace = true }
+feature_flags = { workspace = true }
+foreign_entity = { workspace = true, default-features = true }
+frecency = { workspace = true, features = ["outbound", "postgres"] }
+fusionauth = { workspace = true }
 futures = { workspace = true }
-github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
-github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
-granola_sync = { path = "../../crates/granola_sync" }
-harness_id = { path = "../../crates/harness_id" }
-harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
+github = { workspace = true, features = ["installation_claims", "outbound", "ports", "sync"] }
+github_pull_requests = { workspace = true, default-features = true, features = ["outbound", "s3", "service"] }
+granola_sync = { workspace = true }
+harness_id = { workspace = true }
+harnesses = { workspace = true, features = ["outbound", "ports"] }
 http = { workspace = true }
 http-body-util = { workspace = true }
-image_generation = { path = "../../crates/image_generation", features = ["axum"] }
-import = { path = "../../crates/import" }
-import_notion = { path = "../../crates/import_notion" }
-import_linear = { path = "../../crates/import_linear" }
-import_jira = { path = "../../crates/import_jira" }
-initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
-jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
-kafka_util = { path = "../../crates/kafka_util" }
-lexical_client = { path = "../../crates/lexical_client" }
-lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
+image_generation = { workspace = true, features = ["axum"] }
+import = { workspace = true }
+import_notion = { workspace = true }
+import_linear = { workspace = true }
+import_jira = { workspace = true }
+initiative = { workspace = true, features = ["postgres"] }
+jev = { workspace = true, features = ["decisions", "outbound"] }
+kafka_util = { workspace = true }
+lexical_client = { workspace = true }
+lexical_mention_extractor = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
-macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization", features = ["axum", "outbound", "postgres"] }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
-macro_config = { path = "../../crates/macro_config" }
-macro_cors = { path = "../../crates/macro_cors" }
-macro_db_client = { path = "../../crates/macro_db_client" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
-soup_realtime = { path = "../../crates/soup_realtime", default-features = false, features = ["outbound"] }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = ["cloud_storage"] }
-macro_queues = { path = "../../crates/macro_queues" }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
-macro_tower_layers = { path = "../../crates/macro_tower_layers" }
-macro_user_id = { path = "../../crates/macro_user_id" }
-macro_uuid = { path = "../../crates/macro_uuid" }
-mcp_auth_proxy = { path = "../mcp_auth_proxy" }
-mcp_client = { path = "../../crates/mcp_client" }
-mcp_select = { path = "../../crates/mcp_select" }
-memory = { path = "../../crates/memory" }
-messages = { path = "../../crates/messages", features = ["broker", "delivery", "outbound"] }
-model = { path = "../../crates/model" }
-model-entity = { path = "../../crates/model-entity" }
-model-error-response = { path = "../../crates/model-error-response" }
-model_notifications = { path = "../../crates/model_notifications" }
-model_owner = { path = "../../crates/model_owner" }
-models_dcs = { path = "../../crates/models_dcs" }
-models_permissions = { path = "../../crates/models_permissions" }
-non_empty = { path = "../../crates/non_empty" }
-notification = { path = "../../crates/notification", features = ["ai_tool"] }
-onboarding = { path = "../../crates/onboarding" }
-pipedream_mcp = { path = "../../crates/pipedream_mcp" }
-prompt = { path = "../../crates/prompt" }
-properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
+macro_auth = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = ["axum", "outbound", "postgres"] }
+macro_aws_config = { workspace = true, features = ["s3"] }
+macro_config = { workspace = true }
+macro_cors = { workspace = true }
+macro_db_client = { workspace = true, default-features = true }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
+soup_realtime = { workspace = true, features = ["outbound"] }
+macro_middleware = { workspace = true, features = ["cloud_storage"] }
+macro_queues = { workspace = true }
+macro_service_urls = { workspace = true }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+mcp_auth_proxy = { workspace = true }
+mcp_client = { workspace = true }
+mcp_select = { workspace = true }
+memory = { workspace = true }
+messages = { workspace = true, features = ["broker", "delivery", "outbound"] }
+model = { workspace = true }
+model-entity = { workspace = true }
+model-error-response = { workspace = true }
+model_notifications = { workspace = true }
+model_owner = { workspace = true }
+models_dcs = { workspace = true }
+models_permissions = { workspace = true }
+non_empty = { workspace = true }
+notification = { workspace = true, default-features = true, features = ["ai_tool"] }
+onboarding = { workspace = true }
+pipedream_mcp = { workspace = true }
+prompt = { workspace = true }
+properties = { workspace = true, features = ["outbound"] }
 rdkafka = { workspace = true }
-readonly_pool = { path = "../../crates/readonly_pool" }
-rate_limit = { path = "../../crates/rate_limit" }
+readonly_pool = { workspace = true }
+rate_limit = { workspace = true }
 redis = { workspace = true, features = ["aio", "streams", "tokio-comp", "tokio-rustls-comp"] }
 reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
-roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
+roles_and_permissions = { workspace = true, features = ["outbound"] }
 rootcause = { workspace = true }
-routine_program = { path = "../../crates/routine_program" }
-scheduled_action = { path = "../../crates/scheduled_action" }
+routine_program = { workspace = true }
+scheduled_action = { workspace = true }
 schemars = { workspace = true }
-search_service_client = { path = "../../crates/search_service_client" }
-secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+search_service_client = { workspace = true }
+secretsmanager_client = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
-skills = { path = "../../crates/skills", features = ["axum"] }
-soup = { path = "../../crates/soup", features = ["outbound"] }
+share_permission_db_utils = { workspace = true }
+skills = { workspace = true, default-features = true, features = ["axum"] }
+soup = { workspace = true, features = ["outbound"] }
 sqlx = { workspace = true }
-sqs_client = { path = "../../crates/sqs_client", default-features = false, features = ["ai_projection", "chat", "document_text_extractor", "email", "gmail", "search"] }
-sqs_worker = { path = "../../crates/sqs_worker" }
-static_file = { path = "../../crates/static_file", features = ["attachment"] }
-static_file_service_client = { path = "../../crates/static_file_service_client" }
-stream = { path = "../../crates/stream" }
+sqs_client = { workspace = true, features = ["ai_projection", "chat", "document_text_extractor", "email", "gmail", "search"] }
+sqs_worker = { workspace = true }
+static_file = { workspace = true, default-features = true, features = ["attachment"] }
+static_file_service_client = { workspace = true }
+stream = { workspace = true }
 strum = { workspace = true }
-sync_service_client = { path = "../../crates/sync_service_client" }
-system_properties = { path = "../../crates/system_properties" }
-teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
+sync_service_client = { workspace = true }
+system_properties = { workspace = true }
+teams = { workspace = true, features = ["outbound", "ports"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
@@ -185,25 +185,25 @@ tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["limit", "timeout"] }
 tracing = { workspace = true }
-unfurl_service = { path = "../unfurl_service" }
+unfurl_service = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
-web_search = { path = "../../crates/web_search", features = ["axum"] }
+web_search = { workspace = true, features = ["axum"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
-agent = { path = "../../crates/agent" }
-agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
-ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
+agent = { workspace = true }
+agent_session = { workspace = true, default-features = true, features = ["test-utils"] }
+ai_tools = { workspace = true, features = ["test-support"] }
 async-trait = { workspace = true }
-bot_id = { path = "../../crates/bot_id", features = ["test-utils"] }
-harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
-harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }
-macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
-mcp_select = { path = "../../crates/mcp_select" }
+bot_id = { workspace = true, features = ["test-utils"] }
+harness_id = { workspace = true, features = ["test-utils"] }
+harnesses = { workspace = true, features = ["test-utils"] }
+macro_auth = { workspace = true, features = ["testing"] }
+macro_db_migrator = { workspace = true }
+mcp_select = { workspace = true }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 

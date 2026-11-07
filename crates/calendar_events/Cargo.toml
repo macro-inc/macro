@@ -41,30 +41,30 @@ postgres = ["dep:sqlx", "dep:tokio"]
 schema = ["dep:utoipa"]
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
-email_validator = { path = "../email_validator", optional = true }
-call = { path = "../call", default-features = false, features = [
+email_validator = { workspace = true, optional = true }
+call = { workspace = true, features = [
   "ports",
 ], optional = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-email_utils = { path = "../email_utils" }
+email_utils = { workspace = true }
 futures = { workspace = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-macro_user_id = { path = "../macro_user_id", optional = true }
-model-entity = { path = "../model-entity", optional = true }
-model_notifications = { path = "../model_notifications", optional = true }
-models_pagination = { path = "../models_pagination", optional = true }
-notification = { path = "../notification", optional = true }
+macro_user_id = { workspace = true, optional = true }
+model-entity = { workspace = true, optional = true }
+model_notifications = { workspace = true, optional = true }
+models_pagination = { workspace = true, optional = true }
+notification = { workspace = true, default-features = true, optional = true }
 reqwest = { workspace = true, optional = true }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 specta = { workspace = true, optional = true, features = ["chrono", "uuid"] }
@@ -82,6 +82,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 wiremock = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
-macro_user_id = { path = "../macro_user_id" }
+macro_db_migrator = { workspace = true }
+macro_user_id = { workspace = true }
 tokio = { workspace = true }

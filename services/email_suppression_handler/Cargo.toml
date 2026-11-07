@@ -8,9 +8,9 @@ version = "0.1.0"
 anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sns"] }
 lambda_runtime = { workspace = true }
-macro_db_client = { path = "../../crates/macro_db_client" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env_var = { path = "../../crates/macro_env_var" }
+macro_db_client = { workspace = true, default-features = true }
+macro_entrypoint = { workspace = true }
+macro_env_var = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

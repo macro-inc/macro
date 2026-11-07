@@ -8,11 +8,11 @@ version = "0.1.0"
 askama = { workspace = true }
 chrono = { workspace = true }
 hmac = { workspace = true }
-macro_env = { path = "../macro_env" }
-macro_service_urls = { path = "../macro_service_urls" }
-macro_user_id = { path = "../macro_user_id" }
-model_notifications = { path = "../model_notifications" }
-notification = { path = "../notification" }
+macro_env = { workspace = true }
+macro_service_urls = { workspace = true }
+macro_user_id = { workspace = true }
+model_notifications = { workspace = true }
+notification = { workspace = true, default-features = true }
 rootcause = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }

@@ -9,7 +9,7 @@ redis_test = []
 
 [dependencies]
 anyhow = { workspace = true }
-model = { path = "../model" }
+model = { workspace = true }
 redis = { workspace = true, features = [
   "aio",
   "tokio-rustls-comp",
@@ -19,5 +19,5 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_env_var = { path = "../macro_env_var" }
+macro_env_var = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -22,22 +22,22 @@ schema = ["dep:utoipa", "git_patch/schema"]
 test-utils = []
 
 [dependencies]
-agent_fold = { path = "../folds/agent_fold", default-features = false }
-agent_session = { path = "../agent_session", default-features = false }
+agent_fold = { workspace = true }
+agent_session = { workspace = true }
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-entity_access = { path = "../entity_access", default-features = false, features = [
+entity_access = { workspace = true, features = [
   "ports",
 ] }
-git_patch = { path = "../git_patch" }
-github_pull_requests = { path = "../github_pull_requests", default-features = false, features = [
+git_patch = { workspace = true }
+github_pull_requests = { workspace = true, features = [
   "ports",
 ] }
-macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
+macro_authorization = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -50,6 +50,6 @@ utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
+agent_session = { workspace = true, features = ["test-utils"] }
+macro_db_migrator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

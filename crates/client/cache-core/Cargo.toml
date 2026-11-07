@@ -9,10 +9,10 @@ apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }
 chrono = { workspace = true }
 lru = { workspace = true }
-maybe_send = { path = "../../maybe_send" }
+maybe_send = { workspace = true }
 miniz_oxide = { workspace = true }
 postcard = { workspace = true }
-predicate-index = { path = "../../predicate_index" }
+predicate-index = { workspace = true }
 serde = { workspace = true }
 # Opaque JSON scalars must preserve floating-point values when reparsed.
 serde_json = { workspace = true, features = ["float_roundtrip"] }

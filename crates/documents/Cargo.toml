@@ -105,12 +105,12 @@ service = [
 ]
 
 [dependencies]
-agent_correlation = { path = "../agent_correlation" }
-macro_db_client = { path = "../macro_db_client", optional = true }
-macro_sha_count_client = { path = "../macro_sha_count_client", optional = true }
-sqs_client = { path = "../sqs_client", optional = true }
-activity = { path = "../activity", default-features = false }
-bot_id = { path = "../bot_id" }
+agent_correlation = { workspace = true }
+macro_db_client = { workspace = true, default-features = true, optional = true }
+macro_sha_count_client = { workspace = true, optional = true }
+sqs_client = { workspace = true, default-features = true, optional = true }
+activity = { workspace = true }
+bot_id = { workspace = true }
 # Core
 anyhow = { workspace = true }
 chrono = { workspace = true }
@@ -123,39 +123,39 @@ unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models (always included)
-connection = { path = "../connection", default-features = false, features = [
+connection = { workspace = true, features = [
   "ports",
 ] }
-document_sub_type = { path = "../document_sub_type" }
-entity_access = { path = "../entity_access" }
-entity_mutation = { path = "../entity_mutation" }
-entity_access_management = { path = "../entity_access_management", default-features = false, features = [
+document_sub_type = { workspace = true, default-features = true }
+entity_access = { workspace = true, default-features = true }
+entity_mutation = { workspace = true }
+entity_access_management = { workspace = true, features = [
   "outbound",
   "ports",
 ], optional = true }
-foreign_entity = { path = "../foreign_entity", default-features = false, features = [
+foreign_entity = { workspace = true, features = [
   "ports",
 ], optional = true }
-github_pull_requests = { path = "../github_pull_requests", default-features = false, optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+github_pull_requests = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
-macro_entrypoint = { path = "../macro_entrypoint", optional = true }
-macro_env_var = { path = "../macro_env_var" }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_service_urls = { path = "../macro_service_urls", optional = true }
-macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-system_skills = { path = "../system_skills" }
-model = { path = "../model" }
-model-entity = { path = "../model-entity" }
-models_permissions = { path = "../models_permissions" }
-models_properties = { path = "../models_properties" }
+macro_aws_config = { workspace = true, features = ["s3"] }
+macro_entrypoint = { workspace = true, optional = true }
+macro_env_var = { workspace = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_service_urls = { workspace = true, optional = true }
+macro_sync_service_jwt = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+system_skills = { workspace = true }
+model = { workspace = true }
+model-entity = { workspace = true }
+models_permissions = { workspace = true }
+models_properties = { workspace = true }
 rootcause = { workspace = true }
-s3_key = { path = "../s3_key" }
+s3_key = { workspace = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
@@ -165,63 +165,63 @@ tokio-retry = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
-model-error-response = { path = "../model-error-response", optional = true }
-model_user = { path = "../model_user", optional = true }
+model-error-response = { workspace = true, optional = true }
+model_user = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
 aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
-comms_db_client = { path = "../comms_db_client", optional = true }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
-entity_registry = { path = "../entity_registry/entity_registry", optional = true }
-entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
-shared_entity_registry = { path = "../entity_registry/shared_entity_registry", optional = true }
-model_owner = { path = "../model_owner" }
+comms_db_client = { workspace = true, optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
+entity_registry = { workspace = true, optional = true }
+entity_registry_db_utils = { workspace = true, optional = true }
+shared_entity_registry = { workspace = true, optional = true }
+model_owner = { workspace = true }
 futures = { workspace = true }
-share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+share_permission_db_utils = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 redis = { workspace = true, optional = true, features = ["aio", "tokio-rustls-comp"] }
 sqlx = { workspace = true, optional = true }
-sync_service_client = { path = "../sync_service_client" }
-task_dedup = { path = "../task_dedup", optional = true }
+sync_service_client = { workspace = true }
+task_dedup = { workspace = true, optional = true }
 
 # AI Tool dependencies
-ai_billing = { path = "../ai_billing", optional = true }
-ai_toolset = { path = "../ai_toolset", optional = true }
-ai_usage = { path = "../ai_usage", optional = true }
+ai_billing = { workspace = true, optional = true }
+ai_toolset = { workspace = true, optional = true }
+ai_usage = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
-lexical_client = { path = "../lexical_client", optional = true }
+lexical_client = { workspace = true, optional = true }
 loro = { workspace = true, optional = true }
-macro_tower_layers = { path = "../macro_tower_layers", optional = true }
-messages = { path = "../messages", optional = true, features = ["ports"] }
-model_file_type = { path = "../model_file_type", optional = true }
-ai_engine = { path = "../ai_engine", optional = true }
-docx_engine = { path = "../docx_engine", optional = true }
-fig_engine = { path = "../fig_engine", optional = true }
-pptx_engine = { path = "../pptx_engine", optional = true, features = ["embedded-fonts", "schema"] }
-psd_engine = { path = "../psd_engine", optional = true }
+macro_tower_layers = { workspace = true, optional = true }
+messages = { workspace = true, optional = true, features = ["ports"] }
+model_file_type = { workspace = true, optional = true }
+ai_engine = { workspace = true, optional = true }
+docx_engine = { workspace = true, optional = true }
+fig_engine = { workspace = true, default-features = true, optional = true }
+pptx_engine = { workspace = true, default-features = true, optional = true, features = ["embedded-fonts", "schema"] }
+psd_engine = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
 
 # Attachment
-attachment = { path = "../attachment", optional = true }
-non_empty = { path = "../non_empty" }
+attachment = { workspace = true, optional = true }
+non_empty = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-channel_sender = { path = "../channel_sender" }
-messages = { path = "../messages", features = ["ports", "test-utils"] }
-bot_id = { path = "../bot_id", features = ["test-utils"] }
-embedding = { path = "../embedding" }
+channel_sender = { workspace = true }
+messages = { workspace = true, features = ["ports", "test-utils"] }
+bot_id = { workspace = true, features = ["test-utils"] }
+embedding = { workspace = true }
 http-body-util = { workspace = true }
-kafka_util = { path = "../kafka_util" }
-macro_db_migrator = { path = "../macro_db_migrator" }
+kafka_util = { workspace = true }
+macro_db_migrator = { workspace = true }
 # Examples need the Kafka adapter (outbound); the library itself only uses ports.
-macro_event_broker = { path = "../macro_event_broker" }
+macro_event_broker = { workspace = true, default-features = true }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
 serde_json = { workspace = true }

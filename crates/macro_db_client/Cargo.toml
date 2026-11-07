@@ -10,36 +10,36 @@ default = ["account_merge_request", "team"]
 team = ["dep:models_team"]
 
 [dependencies]
-messages = { path = "../messages", features = ["outbound", "annotations"] }
-agent = { path = "../agent" }
+messages = { workspace = true, features = ["outbound", "annotations"] }
+agent = { workspace = true }
 anyhow = { workspace = true }
 rootcause = { workspace = true }
 cached = { workspace = true }
 chrono = { workspace = true }
-document_sub_type = { path = "../document_sub_type" }
-entity_access_db_utils = { path = "../entity_access_db_utils" }
-entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
+document_sub_type = { workspace = true, default-features = true }
+entity_access_db_utils = { workspace = true }
+entity_registry_db_utils = { workspace = true }
 futures = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid" }
-model = { path = "../model" }
-model-entity = { path = "../model-entity" }
-model_owner = { path = "../model_owner" }
-models_dcs = { path = "../models_dcs" }
-models_opensearch = { path = "../models_opensearch" }
-models_permissions = { path = "../models_permissions" }
-models_team = { path = "../models_team", optional = true }
-non_empty = { path = "../non_empty" }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+model = { workspace = true }
+model-entity = { workspace = true }
+model_owner = { workspace = true }
+models_dcs = { workspace = true }
+models_opensearch = { workspace = true }
+models_permissions = { workspace = true }
+models_team = { workspace = true, optional = true }
+non_empty = { workspace = true }
 rand = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-system_properties = { path = "../system_properties" }
+system_properties = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-user_quota = { path = "../user_quota" }
+user_quota = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+entity_access = { workspace = true, features = ["outbound"] }

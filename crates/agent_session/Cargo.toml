@@ -48,59 +48,59 @@ schema = ["activity/schema", "dep:utoipa", "agent_runtime_protocol/utoipa", "mac
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
-activity = { path = "../activity", default-features = false }
-ai_billing = { path = "../ai_billing", optional = true }
+activity = { workspace = true }
+ai_billing = { workspace = true, optional = true }
 lazy-regex = { workspace = true }
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 
 agent-client-protocol = { workspace = true }
-harness_id = { path = "../harness_id" }
-agent = { path = "../agent", optional = true }
-ai_usage = { path = "../ai_usage", optional = true }
-jev = { path = "../jev", optional = true }
+harness_id = { workspace = true }
+agent = { workspace = true, optional = true }
+ai_usage = { workspace = true, optional = true }
+jev = { workspace = true, optional = true }
 dashmap = { workspace = true }
-macro_uuid = { path = "../macro_uuid" }
-messages = { path = "../messages", features = ["ports", "schema"] }
+macro_uuid = { workspace = true }
+messages = { workspace = true, features = ["ports", "schema"] }
 mockall = { workspace = true, optional = true }
-agent_fold = { path = "../folds/agent_fold" }
+agent_fold = { workspace = true, default-features = true }
 # Only the domain vocabulary; `outbound` would pull rdkafka into every
 # consumer of this crate.
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+agent_runtime_protocol = { workspace = true, default-features = true }
 axum = { workspace = true, optional = true }
-bots = { path = "../bots", default-features = false }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-entity_access = { path = "../entity_access", default-features = false, features = [
+bots = { workspace = true }
+connection_gateway_client = { workspace = true, optional = true }
+entity_access = { workspace = true, features = [
   "ports",
 ] }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
-entity_registry = { path = "../entity_registry/entity_registry", default-features = false, optional = true }
-entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
-genai_telemetry = { path = "../genai_telemetry" }
-model-entity = { path = "../model-entity", optional = true }
-model_owner = { path = "../model_owner" }
-models_permissions = { path = "../models_permissions" }
-share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
-shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
+entity_access_db_utils = { workspace = true, optional = true }
+entity_registry = { workspace = true, optional = true }
+entity_registry_db_utils = { workspace = true, optional = true }
+genai_telemetry = { workspace = true }
+model-entity = { workspace = true, optional = true }
+model_owner = { workspace = true }
+models_permissions = { workspace = true }
+share_permission_db_utils = { workspace = true, optional = true }
+shared_entity_registry = { workspace = true }
 clap = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
-macro_user_id = { path = "../macro_user_id" }
+macro_authorization = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true, optional = true }
-macro_tower_layers = { path = "../macro_tower_layers", optional = true }
+macro_tower_layers = { workspace = true, optional = true }
 uuid = { workspace = true }
 sqlx = { workspace = true, features = ["json"], optional = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-bot_id = { path = "../bot_id" }
-mention_utils = { path = "../mention_utils" }
-trigger_context = { path = "../trigger_context" }
+bot_id = { workspace = true }
+mention_utils = { workspace = true }
+trigger_context = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -115,16 +115,16 @@ path = "src/bin/seed_jsonl.rs"
 required-features = ["cli"]
 
 [dev-dependencies]
-messages = { path = "../messages", features = ["outbound"] }
-entity_access = { path = "../entity_access", features = ["outbound"] }
+messages = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true, default-features = true, features = ["outbound"] }
 agent-client-protocol = { workspace = true }
-bot_id = { path = "../bot_id", features = ["test-utils"] }
-harness_id = { path = "../harness_id", features = ["test-utils"] }
-model_user = { path = "../model_user" }
-non_empty = { path = "../non_empty" }
-agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
+bot_id = { workspace = true, features = ["test-utils"] }
+harness_id = { workspace = true, features = ["test-utils"] }
+model_user = { workspace = true }
+non_empty = { workspace = true }
+agent_fold = { workspace = true, default-features = true, features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
