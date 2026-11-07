@@ -184,6 +184,7 @@ fn comparison_point(view: StateRef<'_>, point: Point) -> Result<Point, Error> {
     let mut index = offset.0 as usize;
     loop {
         let children = view.children_keys(key)?;
+        index = index.min(children.len());
         if index > 0 {
             if let Some(previous) = children.get(index - 1)
                 && let Some(text) = view.text(*previous)

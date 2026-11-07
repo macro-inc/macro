@@ -248,3 +248,24 @@ fn node_selection_wrap_and_unwrap_ignores_title() -> Result<()> {
     assert_eq!(tx.children_keys(p)?, vec![text.key()]);
     Ok(())
 }
+
+#[test]
+fn wrapping_line_break_restores_only_the_captured_focus_endpoint() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let line = tx.create(LineBreak::default())?;
+    tx.append(paragraph, &[line.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_end(line)?;
+    toggle_link(&mut tx, Some("/"), Default::default())?;
+    let link = tx.children_keys(paragraph)?[0];
+    let range = tx.selection().and_then(Selection::as_range).expect("range");
+    assert_eq!(range.anchor, Point::element(paragraph, ChildIndex(2)));
+    assert_eq!(range.focus, Point::element(link, ChildIndex(1)));
+    assert!(range.is_backward(tx.view())?);
+    Ok(())
+}

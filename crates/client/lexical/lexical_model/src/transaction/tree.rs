@@ -457,7 +457,15 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
+        let insertion_selection = self.pending.selection.clone();
         self.default_splice(parent, ChildIndex(position.0 + 1), 0, &[node])?;
+        if restore_selection {
+            self.update_element_selection_on_insert(
+                parent,
+                position.0 + 1,
+                insertion_selection.as_ref(),
+            )?;
+        }
         if !restore_selection {
             self.pending.selection = selection;
         }
@@ -487,11 +495,74 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
+        let insertion_selection = self.pending.selection.clone();
         self.default_splice(parent, position, 0, &[node])?;
+        if restore_selection {
+            self.update_element_selection_on_insert(
+                parent,
+                position.0,
+                insertion_selection.as_ref(),
+            )?;
+        }
         if !restore_selection {
             self.pending.selection = selection;
         }
         Ok(node)
+    }
+    fn update_element_selection_on_insert(
+        &mut self,
+        parent: NodeKey,
+        index: u32,
+        previous: Option<&Selection>,
+    ) -> Result<(), Error> {
+        let Some(Selection::Range(previous)) = previous else {
+            return Ok(());
+        };
+        if previous.anchor.key() != parent && previous.focus.key() != parent {
+            return Ok(());
+        }
+        if !previous.is_collapsed() {
+            // Upstream validates direction while updating element endpoints,
+            // even if a text endpoint became stale during a caret-range edit.
+            self.range_at(SelectionSlot::Active)?
+                .is_backward(self.view())?;
+        }
+        for (role, point) in [
+            (PointRole::Anchor, previous.anchor),
+            (PointRole::Focus, previous.focus),
+        ] {
+            if matches!(point, Point::Element { key, offset } if key == parent && offset.0 == index)
+            {
+                self.set_point_at(
+                    SelectionSlot::Active,
+                    role,
+                    Point::element(parent, ChildIndex(index + 1)),
+                )?;
+            }
+        }
+        let range = self.range_at(SelectionSlot::Active)?.clone();
+        for (role, point) in [
+            (PointRole::Anchor, range.anchor),
+            (PointRole::Focus, range.focus),
+        ] {
+            if let Point::Element { key, offset } = point {
+                let at_end = offset.0 == self.children_size(key);
+                let child = if at_end {
+                    self.last_child(key)
+                } else {
+                    self.child_at_index(key, offset)
+                };
+                if let Some(child) = child.filter(|child| self.is_text(*child)) {
+                    let offset = if at_end {
+                        self.text_content_size(child)
+                    } else {
+                        Utf16Offset::ZERO
+                    };
+                    self.set_point_at(SelectionSlot::Active, role, Point::text(child, offset))?;
+                }
+            }
+        }
+        Ok(())
     }
     /// Base replacement, optionally transferring children.
     pub fn default_replace(
