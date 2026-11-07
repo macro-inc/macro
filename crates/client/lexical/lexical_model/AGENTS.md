@@ -94,3 +94,6 @@ and removal; opaque text hooks rule out the local root-text proof.
 Collaborative callers opt into `opaque_unknown_types(true)`; strict import stays
 the default. Opaque records keep original type/version and own JSON, while framework
 links own children. Own export stays flat and overlays changed framework fields.
+
+Opaque future framework enum values round-trip unchanged; known node validation stays strict.
+Copy only own fields when importing opaque elements; never recursively clone children.

@@ -428,6 +428,10 @@ impl<'editor> Transaction<'editor> {
         raw: bool,
     ) -> Result<(), Error> {
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
+        let opaque = self
+            .view()
+            .slot(key)
+            .is_some_and(|slot| crate::opaque::raw(slot.data.as_ref()).is_some());
         let existing = self.view().slot(key).and_then(|slot| slot.state.clone());
         let mut filtered = json.clone();
         match import.state {
@@ -474,7 +478,15 @@ impl<'editor> Transaction<'editor> {
                     let detail = TextDetail::from_bits_retain(number("detail"));
                     let mode = json
                         .get("mode")
-                        .map(|value| serde_json::from_value(value.clone()))
+                        .map(|value| {
+                            serde_json::from_value(value.clone()).or_else(|error| {
+                                if opaque {
+                                    Ok(Default::default())
+                                } else {
+                                    Err(error)
+                                }
+                            })
+                        })
                         .transpose()?
                         .unwrap_or_default();
                     let style = json
@@ -510,12 +522,23 @@ impl<'editor> Transaction<'editor> {
                 Some(NodeKind::Element) => {
                     let format = json
                         .get("format")
-                        .map(|value| serde_json::from_value(value.clone()))
+                        .map(|value| {
+                            serde_json::from_value(value.clone()).or_else(|error| {
+                                if opaque {
+                                    Ok(Default::default())
+                                } else {
+                                    Err(error)
+                                }
+                            })
+                        })
                         .transpose()?
                         .unwrap_or_default();
                     let direction = json
                         .get("direction")
-                        .map(|value| serde_json::from_value(value.clone()))
+                        .map(|value| {
+                            serde_json::from_value(value.clone())
+                                .or_else(|error| if opaque { Ok(None) } else { Err(error) })
+                        })
                         .transpose()?
                         .flatten();
                     let indent = number("indent");

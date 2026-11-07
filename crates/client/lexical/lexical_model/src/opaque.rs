@@ -11,6 +11,24 @@ struct Payload {
     baseline: SerializedNode,
 }
 
+fn decode(json: &SerializedNode) -> Payload {
+    let raw = json
+        .iter()
+        .map(|(key, value)| {
+            let value = if key == "children" && value.is_array() {
+                Value::Array(vec![])
+            } else {
+                value.clone()
+            };
+            (key.clone(), value)
+        })
+        .collect();
+    Payload {
+        raw,
+        baseline: SerializedNode::new(),
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub(crate) struct OpaqueElement(Payload);
@@ -18,6 +36,9 @@ impl NodeType for OpaqueElement {
     const TYPE: &'static str = "__opaque_element";
     type Kind = ElementKind;
     impl_default_node!();
+    fn import_json(json: &SerializedNode) -> Result<Self, Error> {
+        Ok(Self(decode(json)))
+    }
 }
 impl ElementNode for OpaqueElement {
     element_node_base!();
@@ -30,6 +51,9 @@ impl NodeType for OpaqueText {
     const TYPE: &'static str = "__opaque_text";
     type Kind = TextKind;
     impl_default_node!();
+    fn import_json(json: &SerializedNode) -> Result<Self, Error> {
+        Ok(Self(decode(json)))
+    }
 }
 impl TextNode for OpaqueText {
     text_node_base!();
@@ -42,6 +66,9 @@ impl NodeType for OpaqueDecorator {
     const TYPE: &'static str = "__opaque_decorator";
     type Kind = DecoratorKind;
     impl_default_node!();
+    fn import_json(json: &SerializedNode) -> Result<Self, Error> {
+        Ok(Self(decode(json)))
+    }
 }
 impl DecoratorNode for OpaqueDecorator {
     decorator_node_base!();
