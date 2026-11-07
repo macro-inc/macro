@@ -249,7 +249,11 @@ impl Transaction<'_> {
             || (at_end && self.next_sibling(key).is_none() && !self.can_insert_text_after(parent));
         if original.is_collapsed() && protected && (at_start || at_end) {
             force_selection = true;
-            let adjacent = if at_start {
+            let insert_before = !(at_end
+                && (self.is_token_or_segmented(key)
+                    || !self.can_insert_text_after(key)
+                    || (self.next_sibling(key).is_none() && !self.can_insert_text_after(parent))));
+            let adjacent = if insert_before {
                 self.prev_sibling(key)
             } else {
                 self.next_sibling(key)
@@ -257,7 +261,7 @@ impl Transaction<'_> {
             let target = if let Some(adjacent) = adjacent.filter(|key| {
                 self.is_text(*key)
                     && !self.is_token_or_segmented(*key)
-                    && if at_start {
+                    && if insert_before {
                         self.can_insert_text_after(*key)
                     } else {
                         self.can_insert_text_before(*key)
@@ -269,13 +273,13 @@ impl Transaction<'_> {
                 self.text(new)?
                     .set_format(range.format)?
                     .set_style(&range.style)?;
-                let outside = if at_start {
+                let outside = if insert_before {
                     !self.can_insert_text_before(parent)
                 } else {
                     !self.can_insert_text_after(parent)
                 };
                 let target = if outside { parent } else { key };
-                if at_start {
+                if insert_before {
                     self.insert_before(target, new, false)?;
                 } else {
                     self.insert_after(target, new, false)?;
@@ -283,11 +287,20 @@ impl Transaction<'_> {
                 new.key()
             };
             key = target;
-            offset = if at_start {
+            offset = if insert_before {
                 self.text_content_size(target)
             } else {
                 Utf16Offset::ZERO
             };
+            if !text.is_empty() {
+                self.collapsed_selection_at(
+                    slot,
+                    Point::text(key, offset),
+                    range.format,
+                    range.style.clone(),
+                )?;
+                return self.insert_text_at(slot, text);
+            }
         } else if self.is_token_or_tab(key) {
             let replacement = self.create_text(text)?;
             self.replace(key, replacement, false)?;
