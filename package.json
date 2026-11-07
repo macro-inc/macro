@@ -87,7 +87,7 @@
 			"packages/sdk-docs"
 		],
 		"catalog": {
-			"loro-crdt": "1.16.3"
+			"loro-crdt": "1.17.1"
 		}
 	},
 	"devDependencies": {

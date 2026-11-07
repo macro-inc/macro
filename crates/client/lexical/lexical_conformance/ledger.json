@@ -1,0 +1,289 @@
+{
+  "upstream": "0.45.0",
+  "patches": [],
+  "strictPackages": [
+    "lexical"
+  ],
+  "entries": [
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableCellNode.test.ts",
+      "test": "LexicalTableCellNode tests > TableCellNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/table.$createTableCellNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableCellNode"
+    },
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableRowNode.test.ts",
+      "test": "LexicalTableRowNode tests > TableRowNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/table.$createTableRowNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableRowNode"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalEditorState.test.ts",
+      "test": "LexicalEditorState tests > constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4 call: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "declarePeerDependency > validates the type argument",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "defineExtension > can define an extension without config",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "defineExtension > infers the expected type (base case)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "defineExtension > infers the expected type (config inference)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalGenMap.test.ts",
+      "test": "cloneMap > plain Map below threshold returns a fresh plain Map",
+      "status": "xfail",
+      "reason": "genmap",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a75.1 persistent NodeMap; S4 \u00a72.6 genmap",
+      "note": "Upstream GenMap is replaced by the persistent map; its private clone helper has no port.",
+      "failure": "op 0 call: unmapped API: lexical/LexicalGenMap.cloneMap"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNode.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertAfter' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNode.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertBefore' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNodeState.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertAfter' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNodeState.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertBefore' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
+      "test": "LexicalReconciler > Should allow overriding direction of root node children when root node has no direction",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
+      "test": "LexicalReconciler > Should set direction of root node children to auto if root node has no direction",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > $onUpdate > adding fn throws outside update",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 API inventory: $onUpdate n/a; code runs after commit; WORKPLAN WP-13 callbacks",
+      "note": "Missing capability: lexical.$onUpdate. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4 call: unmapped API: lexical.$onUpdate"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > generateRandomKey()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > resetRandomKey()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 5 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalCaret > $removeTextFromCaretRange > ported Table e2e tests > Can delete all with range selection anchored in table",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/table.$createTableNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalLineBreakNode.test.ts",
+      "test": "LexicalLineBreakNode tests > LineBreakNode.updateDOM()",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: Node.updateDOM",
+      "failure": "op 4: call 1: unmapped API: Node.updateDOM"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > Cached getTextContent with decorators",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode is selected when its selected child is removed",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.clear() to handle selection update",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.clone()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.exportJSON() should return and object conforming to the expected schema",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.isAttached()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.isRootNode()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.updateDOM()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    }
+  ]
+}

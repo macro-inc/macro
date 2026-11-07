@@ -1,0 +1,69 @@
+use super::*;
+#[test]
+fn ids_preserve_duplicates_but_add_and_delete_only_one() {
+    let mut mark = MarkNode {
+        ids: vec!["a".into(), "a".into(), "b".into()],
+    };
+    mark.add_id("a");
+    mark.add_id("c");
+    mark.delete_id("a");
+    mark.delete_id("missing");
+    assert_eq!(mark.ids(), ["a", "b", "c"]);
+    mark.set_ids(vec!["z".into(), "z".into()]);
+    assert_eq!(
+        serde_json::to_string(&mark).unwrap(),
+        r#"{"ids":["z","z"]}"#
+    );
+}
+#[test]
+fn wrapping_splits_boundaries_and_line_breaks_then_unwraps() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<MarkNode>()
+        .build()
+        .unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let a = tx.create_text("abc")?;
+        let lb = tx.create(LineBreak {})?;
+        let b = tx.create_text("def")?;
+        tx.append(p, &[a.key(), lb.key(), b.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_start(a)?;
+        let range = RangeSelection::new(
+            Point::text(b, Utf16Offset(2)),
+            Point::text(a, Utf16Offset(1)),
+        );
+        wrap_selection_in_mark_node::<
+            fn(&mut Transaction<'_>, Vec<String>) -> Result<NodeKey, Error>,
+        >(tx, &range, true, "id", None)?;
+        assert_eq!(range.anchor, Point::text(b, Utf16Offset(2)));
+        let children = tx.children_keys(p)?;
+        assert_eq!(
+            children
+                .iter()
+                .map(|key| tx.type_name(*key).unwrap())
+                .collect::<Vec<_>>(),
+            ["text", "mark", "linebreak", "mark", "text"]
+        );
+        let marks = children
+            .into_iter()
+            .filter(|key| is_mark_node(tx, *key))
+            .collect::<Vec<_>>();
+        let first = marks[0];
+        let child = tx.children_keys(first)?[0];
+        assert_eq!(tx.text_content(first), "bc");
+        assert_eq!(
+            get_mark_ids(tx, child, Utf16Offset(0)),
+            Some(vec!["id".into()])
+        );
+        assert!(!tx.can_insert_text_before(first));
+        assert!(tx.exclude_from_copy(first, Some(CopyDestination::Html)));
+        assert!(!tx.exclude_from_copy(first, Some(CopyDestination::Clone)));
+        for mark in marks {
+            unwrap_mark_node(tx, mark)?;
+        }
+        assert_eq!(tx.text_content(p), "abc\ndef");
+        Ok(())
+    })?;
+    Ok(())
+}
