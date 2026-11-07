@@ -43,7 +43,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, email_address))]
 pub(super) async fn link_by_fusionauth_email_provider(
     pool: &PgPool,
     fusionauth_user_id: &str,

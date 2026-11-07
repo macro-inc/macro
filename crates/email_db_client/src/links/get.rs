@@ -13,7 +13,7 @@ use crate::links::types::{DbLink, DbUserProvider};
 mod test;
 
 /// fetches a link given an email address and provider.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address), err)]
 pub async fn fetch_link_by_email(
     pool: &PgPool,
     email_address: &str,
@@ -77,7 +77,7 @@ pub async fn fetch_link_by_macro_id(
 /// [`fetch_link_by_macro_id`] would return. The comparison is
 /// case-insensitive: the macro_id email part is always lowercased, but
 /// `email_address` preserves its original casing.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address), err)]
 pub async fn fetch_link_by_macro_id_and_email_address(
     pool: &PgPool,
     macro_id: &str,
