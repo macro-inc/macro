@@ -258,6 +258,7 @@ impl Editor {
             return Ok((
                 Handled::No,
                 Commit {
+                    events: Vec::new(),
                     id: self.keys.next_commit()?,
                     prev: self.state.clone(),
                     next: self.state.clone(),

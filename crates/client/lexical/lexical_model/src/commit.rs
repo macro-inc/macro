@@ -49,6 +49,8 @@ pub struct WorkCounters {
 /// An atomically published state transition.
 #[derive(Clone)]
 pub struct Commit {
+    /// Plugin notifications staged by this transaction, in emission order.
+    pub events: Vec<PluginEvent>,
     /// Monotonic commit identity.
     pub id: CommitId,
     /// Previous state.
@@ -78,7 +80,7 @@ pub struct Commit {
 impl Commit {
     /// Nothing dirty and no selection change.
     pub fn is_noop(&self) -> bool {
-        self.changes.is_empty() && !self.selection_changed
+        self.changes.is_empty() && !self.selection_changed && self.events.is_empty()
     }
     /// Lazy, memoized root-text comparison.
     pub fn text_content_changed(&self) -> bool {
@@ -203,6 +205,7 @@ impl Transaction<'_> {
         self.editor.composition_key = self.composition_key;
         self.editor.extensions = self.extensions.clone();
         Ok(Commit {
+            events: std::mem::take(&mut self.events),
             id: next_id,
             prev,
             next: self.editor.state.clone(),

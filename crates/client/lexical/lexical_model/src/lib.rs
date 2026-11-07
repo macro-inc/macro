@@ -59,3 +59,6 @@ pub use commit::*;
 
 mod caret;
 pub use caret::*;
+
+mod event;
+pub use event::*;
