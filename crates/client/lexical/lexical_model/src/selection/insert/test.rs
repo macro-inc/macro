@@ -779,9 +779,31 @@ fn typing_between_tabs_creates_plain_text_instead_of_splicing_a_tab() -> Result<
         let last = tx.create(Tab::default())?;
         tx.append(p, &[first.key(), last.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
-        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(Point::text(first, Utf16Offset(1))))))?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::text(first, Utf16Offset(1)),
+        ))))?;
         tx.insert_text("x")?;
         assert_eq!(tx.text_content(p).as_ref(), "\tx\t");
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn replacing_a_selected_tab_removes_its_protected_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let tab = tx.create(Tab::default())?;
+        tx.append(p, &[tab.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        let mut range = RangeSelection::new(Point::text(tab, Utf16Offset(1)), Point::text(tab, Utf16Offset::ZERO));
+        range.format = TextFormat::BOLD;
+        tx.set_selection(Some(Selection::Range(range)))?;
+        tx.insert_text("text")?;
+        assert_eq!(tx.text_content(p).as_ref(), "text");
+        assert!(!tx.is_attached(tab));
+        assert_eq!(tx.range_selection()?.format, TextFormat::BOLD);
         Ok(())
     })?;
     Ok(())

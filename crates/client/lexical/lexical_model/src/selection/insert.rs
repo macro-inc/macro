@@ -111,6 +111,16 @@ impl Transaction<'_> {
             return self
                 .insert_text_across_paragraph_nodes(slot, &original, &selected, text, backward);
         }
+        if !original.is_collapsed()
+            && let [key] = selected.as_slice()
+            && self.is_token_or_tab(*key)
+        {
+            let replacement = self.create_text(text)?;
+            self.replace(*key, replacement, false)?;
+            return self.finish_text_insertion(slot, true,
+                Point::text(replacement, TextBuffer::new(text).utf16_len()),
+                original.format, original.style);
+        }
         let first_format = selected
             .first()
             .and_then(|key| self.view().text(*key))
@@ -185,10 +195,11 @@ impl Transaction<'_> {
             } else {
                 self.next_sibling(key)
             };
-            let target = if let Some(adjacent) =
-                adjacent.filter(|key| self.is_text(*key) && !self.is_token_or_segmented(*key)
-                    && (at_start || self.can_insert_text_before(*key)))
-            {
+            let target = if let Some(adjacent) = adjacent.filter(|key| {
+                self.is_text(*key)
+                    && !self.is_token_or_segmented(*key)
+                    && (at_start || self.can_insert_text_before(*key))
+            }) {
                 adjacent
             } else {
                 let new = self.create_text("")?;
