@@ -534,3 +534,45 @@ fn current_peer_superset_does_not_supersede_later_adopted_peer() {
     assert!(h.core.wal.entries[0].superseded);
     assert!(!h.core.wal.entries[1].superseded);
 }
+
+#[test]
+fn expired_push_retry_does_not_spin_while_a_reconnect_is_pending() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.close(1006);
+    let retry = h.core.push_retry.unwrap();
+    h.at(1_000, SyncInput::Tick);
+    assert!(!h.core.connection.synced());
+    h.at(retry.0, SyncInput::Tick);
+    assert!(h.out.wake_at.is_none_or(|at| at > retry));
+    assert!(!h.core.wal.entries.is_empty());
+}
+
+#[test]
+fn expired_push_retry_does_not_spin_while_rows_are_read_only() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.core.push_failed(now(h.time), &mut h.out);
+    let retry = h.core.push_retry.unwrap();
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    h.at(retry.0, SyncInput::Tick);
+    assert!(h.out.wake_at.is_none_or(|at| at > retry));
+    assert_eq!(h.core.parked()[0].1, ParkReason::ReadOnly);
+}
+
+#[test]
+fn assisted_retry_schedules_only_the_new_ack_deadline() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.core.assist.push(row(1));
+    h.core.push_assist(now(h.time), &mut h.out);
+    let timeout = h.core.assist_push.as_ref().unwrap().deadline;
+    h.at(timeout.0, SyncInput::Tick);
+    let retry = h.core.assist_retry.unwrap();
+    h.at(retry.0, SyncInput::Tick);
+    assert!(h.core.assist_push.is_some());
+    assert!(h.out.wake_at.is_none_or(|at| at > retry));
+}

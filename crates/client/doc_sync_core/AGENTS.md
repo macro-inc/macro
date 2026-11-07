@@ -62,3 +62,6 @@ identities come from callers; transport and durable storage run outside this cra
 timestamps plus controlled storage and socket completions. Tests named
 `s7_NNN_*` map to core-owned S7 section 6 rows. Router cases are in
 `src/router/test.rs`; shared presence wire/expiry tests are in `src/presence/test.rs`.
+
+Consume due own/assist retry timers once; reconnect or authorization inputs drive
+blocked pushes. Never return an already-consumed retry as the next wake.
