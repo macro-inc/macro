@@ -648,7 +648,7 @@ fn brief(
 
 You are setting up this routine for {owner}, with their access; they review the draft before it is saved. Now is {now}; their time zone is {timezone}. Work in code mode: read the SDK methods you use with ReadCodeDocs, and do the whole job in as few ExecuteCode programs as you can.
 
-1. Find the items the words name. For each channel, person, folder, project, label, tag, agent, database or document the words name, search for it with the SDK as they would, page through the results and refine the search until you find the item itself. Use an item only when exactly one item is the one they named. When none is, or several could be, leave it out (no `ids`, or an empty knob) and they will pick it before saving.
+1. Find the items the words name. For each channel, person, folder, project, label, tag, agent, database or document the words name, search for it with the SDK as they would, page through the results and refine the search until you find the item itself. The item they named is the one whose name is exactly the name they used (ignoring case and a leading # or @), not one whose name only contains it: \"bug-reports\" is the channel named bug-reports, never bug-reports-archive. Put the ids of the items a trigger watches in its filter's `ids`, and items a step uses in its knobs. When no item has that name, or several do, leave it out (no `ids`, or an empty knob) and they will pick it before saving.
 
 2. Create only what the routine needs to exist before it runs. When the words ask for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it now with the name the words give and use its id in the routine. Create nothing else.
 
