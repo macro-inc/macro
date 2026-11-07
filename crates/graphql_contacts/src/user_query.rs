@@ -1,5 +1,5 @@
 use async_graphql::{Context, Enum, ErrorExtensions, ID, Object, SimpleObject};
-use contacts::domain::models::{
+use contacts_core::models::{
     contact::Contact,
     page::{ContactCursor, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
     query::{ContactLookup, ContactSearch},

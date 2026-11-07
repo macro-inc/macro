@@ -8,7 +8,7 @@ pub(crate) mod test;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use contacts::domain::ports::ContactsService;
+use contacts_core::ports::ContactsService;
 use database_sql::resolve::{CompileError, Query};
 use database_sql::run::{OutcomeKind, RunError, RunFailure};
 use databases::domain::models::{

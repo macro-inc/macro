@@ -22,7 +22,7 @@ async-trait = { workspace = true, optional = true }
 base64 = { workspace = true }
 bot_id = { workspace = true }
 chrono = { workspace = true }
-contacts = { workspace = true, features = ["ports"] }
+contacts_core = { workspace = true }
 database_sql = { workspace = true, features = ["schema"] }
 databases = { workspace = true, features = ["ports", "view_rows"] }
 email = { workspace = true }

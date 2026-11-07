@@ -1,4 +1,4 @@
-use contacts::domain::{
+use contacts_core::{
     models::{
         contact::{Contact, ContactPage},
         page::{ContactCursor, ContactPageSize},

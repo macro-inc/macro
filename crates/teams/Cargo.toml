@@ -30,7 +30,7 @@ inbound = ["axum", "ports"]
 outbound = [
   "model_user/sqlx",
   "dep:analytics_client",
-  "dep:contacts",
+  "dep:contacts_core",
   "dep:entity_access_db_utils",
   "dep:models_email",
   "dep:sqlx",
@@ -60,7 +60,7 @@ async-stripe = { workspace = true, default-features = false, features = [
 async-trait = { workspace = true, optional = true }
 bot_id = { workspace = true }
 chrono = { workspace = true }
-contacts = { workspace = true, optional = true }
+contacts_core = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }

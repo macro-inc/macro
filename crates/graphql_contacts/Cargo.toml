@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true }
-contacts = { workspace = true, features = ["ports"] }
+contacts_core = { workspace = true }
 macro_user_id = { workspace = true }
 models_pagination = { workspace = true }
 rootcause = { workspace = true }
