@@ -122,8 +122,8 @@ pub fn escape_table_selection(tx: &mut Transaction<'_>, table: Id<TableNode>) ->
     let Some(Selection::Table(s)) = tx.selection() else {
         return Ok(false);
     };
-    let Some(cell) = find_cell_node(tx.view(), s.focus.key())
-        .filter(|c| find_table_node(tx.view(), c.key()) == Some(table))
+    let Some(cell) =
+        find_parent_table_cell_node_in_table(tx.view(), table.key(), Some(s.focus.key()))
     else {
         return Ok(false);
     };
@@ -148,8 +148,8 @@ pub fn delete_text_in_table(
     let Selection::Range(r) = s else {
         return Ok(DeleteOutcome::NotHandled);
     };
-    let Some(cell) = find_cell_node(tx.view(), r.anchor.key())
-        .filter(|c| find_table_node(tx.view(), c.key()) == Some(table))
+    let Some(_cell) =
+        find_parent_table_cell_node_in_table(tx.view(), table.key(), Some(r.anchor.key()))
     else {
         return Ok(DeleteOutcome::NotHandled);
     };
@@ -160,7 +160,7 @@ pub fn delete_text_in_table(
         return Ok(DeleteOutcome::NotHandled);
     };
     while let Some(parent) = tx.parent(block) {
-        if parent == cell.key() {
+        if tx.is::<TableCellNode>(parent) {
             return Ok(
                 if kind == DeleteTextKind::Line && tx.prev_sibling(block).is_none() {
                     DeleteOutcome::Handled
