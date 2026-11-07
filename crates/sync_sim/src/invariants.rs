@@ -93,9 +93,16 @@ pub fn settled(outcome: &Outcome) -> Result<(), Failure> {
         }) => Ok(()),
         Some(Event {
             at,
-            fact: Fact::SettleTimedOut { busy },
+            fact:
+                Fact::SettleTimedOut {
+                    busy,
+                    queued_non_periodic,
+                },
         }) => {
-            let mut failure = Failure::new("settled", format!("settle timed out: {busy:?}"));
+            let mut failure = Failure::new(
+                "settled",
+                format!("settle timed out: {busy:?}; queued_non_periodic={queued_non_periodic}"),
+            );
             failure.at = Some(*at);
             Err(failure)
         }

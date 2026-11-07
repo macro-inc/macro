@@ -807,3 +807,36 @@ fn settlement_thaws_evicted_source_and_recovers_offline_edit() {
         port.effect.operation == "storage.put" && port.effect.value.to_string().contains("thawed")
     }));
 }
+
+#[test]
+fn settle_waits_for_delayed_cached_input_before_the_heartbeat_hold() {
+    let mut config = SimConfig::calm(257);
+    config.budgets.quiet = Millis(0);
+    config.seeds.insert(
+        DocIx(0),
+        SeedDocument::Cached {
+            server: vec![(1, 42)],
+            s3: Some((vec![(1, 17)], Millis(30_000))),
+            local: None,
+        },
+    );
+    let heartbeat = config.session.heartbeat.interval.0;
+    let outcome = verify(
+        config,
+        &[Step::Open(OpenSpec::form("a", "one")), Step::Settle],
+    );
+    let settled = outcome
+        .events
+        .iter()
+        .find(|event| matches!(event.fact, Fact::Settled))
+        .unwrap();
+    assert!(
+        settled.at.0 >= 30_000 + heartbeat,
+        "early settlement {:?}",
+        settled.at
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+        42
+    );
+}

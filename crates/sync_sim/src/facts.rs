@@ -424,6 +424,8 @@ pub enum Fact {
     SettleTimedOut {
         /// Real core busy reasons.
         busy: BTreeMap<ClientName, String>,
+        /// Scheduled non-periodic work remains even when every client is idle.
+        queued_non_periodic: bool,
     },
     /// Observed physical router socket transition, shared by a whole profile.
     RouterSocket {
