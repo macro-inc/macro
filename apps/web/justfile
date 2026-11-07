@@ -140,6 +140,7 @@ node_heap := "--max-old-space-size=8192"
 cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
+natural_time_wasm_target := justfile_directory() / "../../target/natural-time-wasm"
 pptx_engine_wasm_target := justfile_directory() / "../../target/pptx-engine-wasm"
 docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm"
 fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
@@ -147,7 +148,7 @@ psd_engine_wasm_target := justfile_directory() / "../../target/psd-engine-wasm"
 ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-natural-time-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
 
 build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
@@ -372,6 +373,23 @@ ensure-database-sql-wasm:
     done
     if [ -n "$(find "${SOURCES[@]}" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-database-sql-wasm
+    fi
+
+# Build the natural-time wasm module (English date phrases, read in the
+# browser) into src/lib/core/natural-time/wasm (gitignored).
+build-natural-time-wasm:
+    scripts/cached-wasm-build.sh natural_time {{justfile_directory()}}/src/lib/core/natural-time/wasm -- env CARGO_TARGET_DIR="{{natural_time_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/natural_time --target web --release --out-dir {{justfile_directory()}}/src/lib/core/natural-time/wasm
+
+# Dev fast path: build the natural-time wasm pkg only when it is missing or
+# any crate source is newer than the built artifact. The crate has no
+# workspace dependencies, so its own sources are the whole closure.
+ensure-natural-time-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/natural-time/wasm/natural_time_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/natural_time"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-natural-time-wasm
     fi
 
 # Build the pptx-engine wasm module (PPTX rendering and editing, hosted in a

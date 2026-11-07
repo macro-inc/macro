@@ -13706,8 +13706,11 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "nom 8.0.0",
+ "serde",
+ "serde-wasm-bindgen",
  "strsim",
  "thiserror 2.0.18",
+ "wasm-bindgen",
 ]
 
 [[package]]
