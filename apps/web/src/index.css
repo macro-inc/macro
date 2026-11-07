@@ -875,7 +875,10 @@ html:not([data-touch-device="true"]) [data-invert] {
 }
 
 @custom-variant mobile {
-  &:where(html[data-touch-device="true"] *) {
+  &:where(html[data-touch-device="true"][data-native-horizontal-size-class="compact"] *) {
+    @slot;
+  }
+  &:where(html[data-touch-device="true"]:not([data-native-horizontal-size-class]) *) {
     @media (max-width: 639px) {
       @slot;
     }
