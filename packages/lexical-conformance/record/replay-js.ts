@@ -325,7 +325,11 @@ export async function replay(
             editable: config.editable,
             nodes: [
               ...(config.nodes as Value[]).map((node) =>
-                decode({ $klass: node })
+                decode(
+                  (config.nodeClasses as Record<string, Value> | undefined)?.[
+                    String(node)
+                  ] ?? { $klass: node }
+                )
               ),
               ...((config.replacements ?? []) as Value[]).map(decode),
             ],
