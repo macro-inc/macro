@@ -530,3 +530,28 @@ fn interior_surrogate_selection_can_be_ordered_but_not_edited() -> Result<(), Er
     assert_eq!(editor.state().text_content(p), "😀");
     Ok(())
 }
+
+#[test]
+fn range_removal_marks_leaves_inside_completely_selected_blocks() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let (middle_text, _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let middle = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let first_text = tx.create_text("first")?;
+        let middle_text = tx.create_text("middle")?;
+        let last_text = tx.create_text("last")?;
+        tx.append(first, &[first_text.key()])?;
+        tx.append(middle, &[middle_text.key()])?;
+        tx.append(last, &[last_text.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), middle.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(first_text, Utf16Offset(1)), Point::text(last_text, Utf16Offset(1)),
+        ))))?;
+        Ok(middle_text.key())
+    })?;
+    let (_, commit) = editor.update(|tx| tx.remove_text())?;
+    assert!(commit.changes.dirty_leaves.contains(&middle_text));
+    assert_eq!(commit.changes.mutations.get(&middle_text), Some(&Mutation::Destroyed));
+    Ok(())
+}

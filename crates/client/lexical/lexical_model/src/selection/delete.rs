@@ -121,10 +121,14 @@ impl Transaction<'_> {
                     }
                 }
             } else if self.is_element(node) {
-                if complete_elements.contains(&node) {
-                    self.remove(node, false)?;
-                }
+                // Delete leaves before their complete containers so their writes
+                // and dirty marks remain observable in the removal commit.
             } else {
+                self.remove(node, false)?;
+            }
+        }
+        for node in complete_elements {
+            if self.is_attached(node) {
                 self.remove(node, false)?;
             }
         }
