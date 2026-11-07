@@ -86,6 +86,10 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   source's mappings first. A peer's first owner keeps it; registration only
   claims peers the system author holds.
   A new write path does the same (`tests/peer_authors.test.ts`).
+- `transcript` is test-only boundary capture; never enable it in a deployed worker.
+  `just record-transcripts` records the Vitest suite; `just diff-transcripts`
+  compares it with the committed corpus. See `tests/transcripts/COVERAGE.md`.
+  The local test wrapper uses Miniflare 4.20260625+ for socket-preserving eviction.
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
 - Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.

@@ -1,4 +1,4 @@
-// Loaded only by the `transcript` Cargo feature. Calls retain native receivers,
+// Installed only by the `transcript` Cargo feature. Calls retain native receivers,
 // arguments, return values and errors; no clocks or entropy are substituted.
 const rooms = new Map();
 const socketIds = new WeakMap();
@@ -87,12 +87,22 @@ export function observePorts(state, env, emit) {
       socket?.record(typeof data === 'string'
         ? { out: 'send_text', ws_id: socket.id, text: data }
         : { out: 'send', ws_id: socket.id, frame_b64: bytes(data) });
-      return Reflect.apply(originalSend, this, [data]);
+      try {
+        return Reflect.apply(originalSend, this, [data]);
+      } catch (error) {
+        socket?.record({ throw: 'connections.send', ws_id: socket.id, error: String(error) });
+        throw error;
+      }
     };
     WebSocket.prototype.close = function(code, reason) {
       const socket = socketIds.get(this);
       socket?.record({ out: 'close', ws_id: socket.id, code, reason });
-      return Reflect.apply(originalClose, this, arguments);
+      try {
+        return Reflect.apply(originalClose, this, arguments);
+      } catch (error) {
+        socket?.record({ throw: 'connections.close', ws_id: socket.id, error: String(error) });
+        throw error;
+      }
     };
   }
 
@@ -145,6 +155,13 @@ export function observePorts(state, env, emit) {
       async run(...args) {
         record({ port: 'd1.run', sql, params: valueOf(params) });
         return native.run(...args);
+      },
+      async first(...args) {
+        const context = record.context();
+        record({ port: 'd1.first', sql, params: valueOf(params), args: valueOf(args) }, context);
+        const result = await native.first(...args);
+        record({ return: 'd1.first', value: valueOf(result) }, context);
+        return result;
       },
       async all(...args) {
         const context = record.context();
