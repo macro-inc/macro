@@ -75,11 +75,6 @@ impl OperationLog {
         }
     }
 
-    /// Identity of the document or surface whose operations this log owns.
-    pub fn key(&self) -> &SessionKey {
-        &self.key
-    }
-
     /// Import synchronously, then persist pending bytes, archive and attribution
     /// in that order. The returned future deliberately does not borrow `document`.
     pub fn apply<'a, S: RoomStorage, C: Clock>(

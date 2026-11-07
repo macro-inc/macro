@@ -24,6 +24,7 @@ struct Runtime {
     sent: RefCell<Vec<(crate::domain::socket::WebSocketId, Vec<u8>)>>,
     text: RefCell<Vec<String>>,
     fail_map: Cell<bool>,
+    fail_close: Cell<bool>,
     mapped_users: RefCell<Vec<String>>,
     fail_socket: RefCell<Option<crate::domain::socket::WebSocketId>>,
     gate_calls: Cell<usize>,
@@ -72,6 +73,9 @@ impl Connections for Runtime {
     }
     fn close(&self, socket: &Self::Socket, _: CloseReason) -> io::Result<()> {
         self.events.borrow_mut().push("close");
+        if self.fail_close.get() {
+            return Err(io::Error::other("close failure"));
+        }
         self.closed.borrow_mut().push(socket.as_str().into());
         Ok(())
     }

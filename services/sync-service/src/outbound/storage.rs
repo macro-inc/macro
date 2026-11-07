@@ -1,29 +1,9 @@
-use crate::storage::backends::durable_kv::DurableKVStorage;
 use backends::Storage;
-use worker::{Env, Result, State};
+use worker::{Env, State};
 pub mod backends;
 pub mod op_log;
 pub mod room_snapshot;
 pub mod snapshot;
-/// Temporary debug transport handle, removed with the callback shim.
-pub struct SessionStorage {
-    storage: DurableKVStorage,
-}
-impl SessionStorage {
-    pub fn new(storage: DurableKVStorage) -> Self {
-        Self { storage }
-    }
-    pub async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        self.storage.get_pending_operations().await
-    }
-    pub async fn debug_do_kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        self.storage.get_key(key).await
-    }
-    pub async fn debug_list_do_kv(&self, prefix: &str) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        self.storage.list_do_kv(prefix).await
-    }
-}
-
 pub fn get_snapshot_storage(
     _env: &Env,
     _state: &State,

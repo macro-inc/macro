@@ -37,10 +37,6 @@ impl DocumentKey {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
-    /// The underlying session identity.
-    pub fn session_key(&self) -> &SessionKey {
-        &self.0
-    }
 }
 
 /// An operation-log ID without its adapter-owned storage namespace.

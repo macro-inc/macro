@@ -5,13 +5,12 @@ use crate::outbound::room_ports::WorkerPorts;
 use std::{rc::Rc, sync::Arc};
 use sync_protocol::time::WallDuration;
 use sync_server_core::domain::{
-    operation_log::OperationLog,
     ports::RoomPorts,
-    room::{Room, RoomConfig, RoomMemory},
+    room::{Room, RoomConfig},
     types::SessionKey,
 };
 
-use tracing::{Instrument, error, instrument, trace, warn};
+use tracing::{Instrument, error, trace, warn};
 use worker::{
     DurableObject, Env, Error, Method, Request, Response, ResponseBody, ResponseBuilder, Result,
     State, WebSocket, WebSocketIncomingMessage, durable_object,
@@ -21,7 +20,6 @@ use crate::{
     auth::AuthToken,
     error::ResultExt,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
-    storage::SessionStorage,
     tags::get_ws_id_from_tags,
 };
 
@@ -46,26 +44,13 @@ pub fn response(status_code: u16) -> Response {
     Response::builder().with_status(status_code).empty()
 }
 
-/// A callback-local adapter borrowing the single locked room.
-pub struct SyncSession<'room> {
+/// Request parsing and HTTP serialization over a borrowed core Room.
+pub struct HttpHandlers<'room> {
     room: &'room mut Room<WorkerPorts>,
-    state: Rc<State>,
-    env: Env,
 }
-impl<'room> SyncSession<'room> {
-    pub(super) fn new(room: &'room mut Room<WorkerPorts>, state: Rc<State>, env: Env) -> Self {
-        Self { room, state, env }
-    }
-}
-impl std::ops::Deref for SyncSession<'_> {
-    type Target = RoomMemory;
-    fn deref(&self) -> &Self::Target {
-        self.room.memory_view()
-    }
-}
-impl std::ops::DerefMut for SyncSession<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.room.memory_mut()
+impl<'room> HttpHandlers<'room> {
+    pub(super) fn new(room: &'room mut Room<WorkerPorts>) -> Self {
+        Self { room }
     }
 }
 
@@ -74,16 +59,25 @@ pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
     get_ws_id_from_tags(&tags)
 }
 
-impl SyncSession<'_> {
+impl HttpHandlers<'_> {
     pub(super) async fn debug_get(&mut self, key: &str) -> Result<Response> {
-        Response::from_json(&self.session_storage().await?.debug_do_kv_get(key).await?)
+        self.room
+            .prepare_debug_storage()
+            .await
+            .map_err(room_error)?;
+        Response::from_json(&self.room.ports().storage().get_key(key).await?)
     }
 
     pub(super) async fn debug_list(&mut self, prefix: &str) -> Result<Response> {
+        self.room
+            .prepare_debug_storage()
+            .await
+            .map_err(room_error)?;
         let values: Vec<(String, Vec<u8>)> = self
-            .session_storage()
-            .await?
-            .debug_list_do_kv(prefix)
+            .room
+            .ports()
+            .storage()
+            .list_do_kv(prefix)
             .await?
             .into_iter()
             .filter_map(Result::ok)
@@ -205,11 +199,11 @@ impl SyncSession<'_> {
         if !self.exists(document_id).await? {
             return Ok(response(status_codes::NOT_FOUND));
         }
-        let pending_ops = self
-            .session_storage()
-            .await?
-            .get_pending_operations()
-            .await?;
+        self.room
+            .prepare_debug_storage()
+            .await
+            .map_err(room_error)?;
+        let pending_ops = self.room.ports().storage().get_pending_operations().await?;
 
         let n_pending_ops = pending_ops.len();
         trace!(
@@ -327,39 +321,6 @@ impl SyncSession<'_> {
             .exists(&SessionKey::new(document_id.to_owned()))
             .await
             .map_err(room_error)
-    }
-
-    #[instrument(skip_all, err)]
-    /// Get the `document_id`. First try checking self.session_key, if not there get from DOKV.
-    async fn document_id(&mut self) -> Result<String> {
-        self.try_document_id()
-            .await?
-            .ok_or(Error::from("DOCUMENT_ID not found in storage"))
-    }
-
-    /// Like [`Self::document_id`], but `None` instead of an error when this
-    /// object holds no session.
-    async fn try_document_id(&mut self) -> Result<Option<String>> {
-        self.room
-            .try_session_key()
-            .await
-            .map(|key| key.map(|key| key.as_str().to_owned()))
-            .map_err(room_error)
-    }
-
-    async fn session_storage(&mut self) -> Result<Rc<SessionStorage>> {
-        if let Some(storage) = &self.room.ports().session_storage {
-            return Ok(storage.clone());
-        }
-        let id = self.document_id().await?;
-        let key = SessionKey::new(id.clone());
-        self.room.ports().snapshots().backend(&key)?;
-        let storage = Rc::new(SessionStorage::new(self.room.ports().storage().clone()));
-        self.room.ports_mut().session_storage = Some(storage.clone());
-        if self.operation_log.is_none() {
-            self.operation_log = Some(OperationLog::new(key.clone(), key.kind()));
-        }
-        Ok(storage)
     }
 }
 

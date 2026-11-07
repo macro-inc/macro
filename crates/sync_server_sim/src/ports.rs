@@ -688,20 +688,18 @@ impl SnapshotStore for SimPorts {
         &self,
         operation: uuid_types::Uuid,
     ) -> Result<Vec<u8>, SnapshotReadError<SimError>> {
-        self.get(&SessionKey::new(format!("migration-export:{operation}")))
-            .await
+        let key = SessionKey::new(format!("migration-export:{operation}"));
+        self.prepare(&key).map_err(SnapshotReadError::Storage)?;
+        self.get(&key).await
     }
     async fn put_export(
         &self,
         operation: uuid_types::Uuid,
         snapshot: &[u8],
     ) -> Result<(), SimError> {
-        SnapshotStore::put(
-            self,
-            &SessionKey::new(format!("migration-export:{operation}")),
-            snapshot,
-        )
-        .await
+        let key = SessionKey::new(format!("migration-export:{operation}"));
+        self.prepare(&key)?;
+        SnapshotStore::put(self, &key, snapshot).await
     }
 }
 impl AlarmScheduler for SimPorts {

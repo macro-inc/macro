@@ -53,7 +53,7 @@ fn room_error_response(error: sync_server_core::domain::room::RoomError) -> Resu
     }
 }
 
-impl SyncSession<'_> {
+impl HttpHandlers<'_> {
     pub(in crate::inbound) async fn document_handler(
         &mut self,
         mut req: Request,

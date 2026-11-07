@@ -185,3 +185,34 @@ export, freeze, thaw, seal and retirement faults, plus target claim, snapshot,
 verification, activation and ready faults. Cold retries preserve receipts and
 original snapshots. Worker S7–S8 re-recording and the migration-hook suites
 cover live pending-log drains, forged proofs and recovery across runtime aborts.
+
+C16 adds complete native replay of A4's acknowledged-pending-import compaction
+and H1, H2, H5, H8, H9 and H10 eviction scenarios. Callback record positions
+separate restarted counters. Manual alarm invocations retain scheduled alarms;
+final runtime flushes consume them. H10's intentional truncated-frame failure
+pins its exact input and diagnostic, then compares all emitted effects; other
+callback errors still fail replay.
+
+The native comparison ruling for S6 §4.3 (2026-11-07) permits Loro export
+lengths and chunk boundaries to differ after reassembly. Both logical envelopes
+must be canonical; non-Loro fields and effect ordering remain exact. The native
+revision comparator decodes generated VVs as maps, including `/update`, `/state`
+and stored `LAST_VERSION_VECTOR` metadata. Client VV echoes stay byte-exact.
+The real-workerd re-record comparison has no additional exceptions.
+
+Complete atomic compact-state and surface-isolation fixtures now replay natively.
+The receipt ruling applies the same principle to SHA-256 digests over snapshot
+bytes. Replay verifies each recorded/native digest against its own snapshot,
+compares state, VV and frontiers, and keeps every other proof field exact.
+Only complete validated receipt/snapshot references translate in later native
+requests and persisted migration metadata; altered proofs or snapshots are never
+repaired. The complete source freeze/restart/import/activation/retirement/revoke
+fixture and isolated-initialization fixture now replay, for 18 complete enabled
+fixtures. Tests reject forged digests, changed proof fields and different content.
+
+The additional export-derived values are generated `/state` and
+`LAST_VERSION_VECTOR` VV encodings, freeze receipt digest fields and their later
+control-request/storage references. These have no exception in the real-workerd
+diff. The runtime projection separately maps JS undefined/omitted optional
+migration source IDs to typed None, and records migration-export SQL constructor
+and direct chunk-read effects; native policy and ordering remain strict.

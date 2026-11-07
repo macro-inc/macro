@@ -12,6 +12,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
   output-gate confirmation and socket lifecycle.
 - `src/replay.rs`: the real core Room and the explicit `ENABLED` allowlist.
 - `src/replay/golden.rs`: ordered Worker-boundary projection and final storage checks.
+- `src/replay/golden/receipts.rs`: validated native snapshot/receipt correspondence.
 - `src/transcript.rs`: lossless JSONL parsing and comparison helpers.
 - `tests/transcripts/COVERAGE.md`: behavior inventory and representative fixtures.
 
@@ -37,6 +38,29 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - D1 claims may replace only the system author; missing-peer insertion never
   replaces an existing owner. D1 writes survive DO output-gate rollback.
 - Re-record comparison is byte-exact except the documented time/UUID and
-  awareness normalization. Native Loro snapshot comparison is semantic;
-  RequestSince deltas require the pre-message document context.
+  awareness normalization. Under the S6 native comparison ruling (2026-11-07),
+  native Loro envelopes allow export-derived lengths/chunks to differ while
+  comparing state, vectors and frontiers. Generated revision VVs compare as maps;
+  forwarded updates, client VV echoes and all other envelope fields stay exact.
+  RequestSince deltas require the pre-message document context. Native migration
+  receipts verify SHA-256 against each side's snapshot before semantic comparison;
+  translate only exact previously validated receipt/snapshot references. Never
+  repair forged inputs. Keep workerd digest bytes exact.
 - Keep this crate excluded from hakari; no ambient clock or random UUID calls.
+
+## Native coverage floor
+
+Install `cargo-llvm-cov` as a local development tool. From the repository root:
+
+```sh
+TMPDIR=/home/wolf/tmp cargo llvm-cov -p sync_server_core -p sync_server_sim --json --output-path /home/wolf/tmp/sync-core-coverage.json
+python3 crates/sync_server_sim/scripts/check-public-coverage.py /home/wolf/tmp/sync-core-coverage.json
+```
+
+The floor checks every public core function, aggregating monomorphized instances
+and async wrappers by source location. Tests call real Room use cases over the
+simulation ports and hand-written fakes; golden replay separately checks ordered
+runtime effects. Presence comparisons include exact native timestamps, including
+tombstones. For C0's unobservable local-delete clocks, only clock inputs are
+recovered from wire timestamps. Runtime enumeration order must retain exact live
+socket membership. Read-only Room diagnostics expose no mutable Loro handle.

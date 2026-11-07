@@ -106,3 +106,27 @@ fn failed_surface_initialization_reloads_durable_truth_before_retry() {
         );
     });
 }
+
+#[test]
+fn failed_surface_close_keeps_the_persisted_revocation_for_retry() {
+    block_on(async {
+        let mut room = room();
+        let socket = connect_access(&mut room, AccessLevel::Edit).await;
+        room.ports.runtime.fail_close.set(true);
+        assert!(matches!(
+            room.revoke_surface().await,
+            Err(RoomError::Port {
+                port: PortName::Connections,
+                ..
+            })
+        ));
+        assert_eq!(
+            room.ports.store.lifecycle.get(),
+            Some(SurfaceLifecycle::Revoked)
+        );
+        assert!(room.ports.runtime.closed.borrow().is_empty());
+        room.ports.runtime.fail_close.set(false);
+        assert_eq!(room.revoke_surface().await.unwrap(), SurfaceStatus::Ok);
+        assert_eq!(*room.ports.runtime.closed.borrow(), [socket.as_str()]);
+    });
+}
