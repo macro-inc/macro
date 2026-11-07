@@ -2475,6 +2475,16 @@
               }
             }
           },
+          "403": {
+            "description": "An agent's program asked to send; it must go through a review or a confirmed send",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -6137,7 +6147,8 @@
           "retryable",
           "persist_failed",
           "macro_call_failed",
-          "copy_choice_required"
+          "copy_choice_required",
+          "confirmation_required"
         ]
       },
       "CalendarOccurrence": {
@@ -8971,6 +8982,10 @@
             "type": "string",
             "format": "date-time",
             "description": "The time to send the message (ISO 8601 format)."
+          },
+          "user_confirmation": {
+            "type": ["string", "null"],
+            "description": "The user's own reply approving this send, quoted verbatim. Required\nfrom an agent's program, which is refused without it; ignored for a\nperson in the app, whose Send Later is their confirmation."
           }
         }
       },

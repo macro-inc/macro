@@ -44,6 +44,9 @@ where
 /// - `snippet`, `sender`, `pretty_sender`: from the *latest* message in the thread
 /// - `subject`: from the *earliest* message in the thread (so it doesn't include "Re:"s
 ///
+/// `sender` and `pretty_sender` are empty when the latest message has no
+/// sender contact (`from_contact_id` is nullable and `ON DELETE SET NULL`).
+///
 /// The "earliest" and "latest" messages are determined by:
 /// 1. Priority: Non-drafts with a valid `sent_at` take precedence over drafts (or messages without `sent_at`).
 /// 2. Sort: Chronological order of `sent_at` (or `updated_at` fallback).
@@ -77,8 +80,8 @@ pub async fn get_thread_summary_info(
                 earliest_msg.subject as "subject?",
                 l.macro_id,
                 t.link_id,
-                latest_msg.sender as sender,
-                latest_msg.pretty_sender as "pretty_sender!",
+                latest_msg.sender as "sender?",
+                latest_msg.pretty_sender as "pretty_sender?",
                 latest_msg.trash_label as trash_label,
                 (
                     SELECT m_latest.is_draft
@@ -174,6 +177,11 @@ pub async fn get_thread_summary_info(
         if row.trash_label.unwrap_or_default() {
             continue;
         }
+        let sender = row.sender.unwrap_or_else(|| {
+            tracing::warn!(thread_id = %row.thread_id, "latest message has no sender contact");
+            String::new()
+        });
+        let pretty_sender = row.pretty_sender.unwrap_or_else(|| sender.clone());
         let summary_info = ThreadHistoryInfo {
             item_id: row.thread_id,
             user_id: row.macro_id,
@@ -187,8 +195,8 @@ pub async fn get_thread_summary_info(
             viewed_at: row
                 .viewed_at
                 .filter(|&viewed| viewed >= row.last_message_ts),
-            sender: row.sender,
-            pretty_sender: row.pretty_sender,
+            sender,
+            pretty_sender,
             is_read: row.is_read,
             inbox_visible: row.inbox_visible,
             is_draft: row.is_draft,

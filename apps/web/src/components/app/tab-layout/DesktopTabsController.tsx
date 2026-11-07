@@ -69,6 +69,34 @@ function registerTabHotkeys(tabManager: TabManager) {
     },
     runWithInputFocused: true,
   });
+
+  // Browser-style arrows. Skipped while typing, where shift+cmd+arrow selects
+  // to the line edge.
+  registerHotkey({
+    hotkey: 'shift+cmd+arrowright',
+    scopeId: 'global',
+    description: () => t('tabs.nextTab'),
+    condition: () => tabManager.tabs().length > 1,
+    keyDownHandler: () => {
+      tabManager.activateNextTab(1);
+      return true;
+    },
+    runWithInputFocused: false,
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+arrowleft',
+    scopeId: 'global',
+    description: () => t('tabs.previousTab'),
+    condition: () => tabManager.tabs().length > 1,
+    keyDownHandler: () => {
+      tabManager.activateNextTab(-1);
+      return true;
+    },
+    runWithInputFocused: false,
+    hide: true,
+  });
 }
 
 function TabsOwner(props: {

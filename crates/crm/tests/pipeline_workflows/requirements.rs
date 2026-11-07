@@ -31,7 +31,7 @@ async fn agent_add_and_csv_import_enforce_stage_rules_and_report_invalid_rows(po
             &owner,
             pipeline,
             vec![EntryAddition {
-                record: RecordTarget::Id(acme),
+                record: Some(RecordTarget::Id(acme)),
                 set: vec![set("Stage", "Prospect")],
             }],
             true,

@@ -11,7 +11,7 @@ use super::{
     FieldInput, FieldKind, NewField, PipelineField, PipelineOverview, WorkflowError, fields,
 };
 
-/// The stage field every pipeline starts with.
+/// The stage field every tracked pipeline starts with.
 pub(super) const STAGE_FIELD: &str = "Stage";
 
 /// The cells `set` writes, by field name.

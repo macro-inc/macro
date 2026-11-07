@@ -5,18 +5,35 @@ name = "document_storage_service"
 publish = false
 version = "0.1.0"
 
+# The bins hold no tests and the library no doctests. Neither target builds under
+# `cargo test`, so the test job compiles the library once, as its test binary.
+# The `build-service-bins` job builds the real binary.
+[lib]
+doctest = false
+
 [[bin]]
 name = "document_storage_service"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
+test = false
 
 [[bin]]
 name = "document_storage_service_doppler_config"
 path = "src/doppler_config.rs"
+test = false
 
+
+
+# Built only by the `build-service-bins` CI job, which needs the real binaries;
+# `test = false` keeps it out of the test job.
+[[test]]
+name = "service_binary_builds"
+path = "tests/service_binary_builds.rs"
+test = false
 
 [features]
 connection_gateway = []
@@ -27,10 +44,10 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
 ai_billing = { path = "../../crates/ai_billing" }
-roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 agent_changes = { path = "../../crates/agent_changes", default-features = false, features = ["outbound"] }
 dictation = { path = "../../crates/dictation", features = ["inbound", "outbound"] }
@@ -60,13 +77,10 @@ axum-extra = { workspace = true }
 base64 = { workspace = true }
 bots = { path = "../../crates/bots" }
 bot_id = { path = "../../crates/bot_id" }
-bytes = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
-bzip2 = { workspace = true, default-features = false, features = [
-  "libbz2-rs-sys",
-] }
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
+feature_flags = { path = "../../crates/feature_flags" }
 channel_bots = { path = "../../crates/channel_bots" }
 messages = { path = "../../crates/messages", features = ["annotations", "broker", "delivery", "inbound"] }
 channels = { path = "../../crates/channels", features = [
@@ -80,7 +94,6 @@ chat = { path = "../../crates/chat", default-features = false, features = [
   "outbound",
 ] }
 chrono = { workspace = true }
-clap = { workspace = true }
 collab_surface = { path = "../../crates/collab_surface", features = [
   "inbound",
   "postgres",
@@ -91,10 +104,8 @@ complete_graph = { path = "../../crates/complete_graph" }
 connection = { path = "../../crates/connection", default-features = false, features = [
   "outbound",
 ] }
-channel_sender = { path = "../../crates/channel_sender" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts" }
-cowlike = { path = "../../crates/cowlike" }
 channel_labels = { path = "../../crates/channel_labels", features = [
   "inbound",
   "postgres",
@@ -170,8 +181,6 @@ hyper-util = { workspace = true }
 import = { path = "../../crates/import" }
 initiative = { path = "../../crates/initiative", features = ["inbound", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
-last_online_tracker = { path = "../../crates/last_online_tracker" }
-lazy_static = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_auth = { path = "../../crates/macro_auth" }
@@ -205,11 +214,8 @@ model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
-model_user = { path = "../../crates/model_user" }
-models_bulk_upload = { path = "../../crates/models_bulk_upload" }
 models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
-models_opensearch = { path = "../../crates/models_opensearch" }
 models_pagination = { path = "../../crates/models_pagination", features = [
   "axum",
 ] }
@@ -221,7 +227,6 @@ notification_inbox = { path = "../../crates/notification_inbox" }
 opensearch_client = { path = "../../crates/opensearch_client" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }
-properties_service = { path = "../../crates/properties_service" }
 rate_limit = { path = "../../crates/rate_limit", default-features = false, features = [
   "axum",
 ] }
@@ -232,7 +237,6 @@ redis = { workspace = true, features = [
   "cluster-async",
   "tokio-rustls-comp",
 ] }
-regex = { workspace = true }
 reminders = { path = "../../crates/reminders", features = [
   "dispatch-sqs",
   "inbound",
@@ -290,8 +294,12 @@ tungstenite-signal = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["compression-gzip"] }
 tracing = { workspace = true }
-unicode-segmentation = { workspace = true }
 urlencoding = { workspace = true }
+account_manager = { path = "../../crates/account_manager", features = [
+  "inbound",
+  "outbound",
+  "postgres",
+] }
 user_api_key = { path = "../../crates/user_api_key", features = [
   "inbound",
   "postgres",
@@ -312,14 +320,12 @@ zip = { workspace = true }
 bebop = { workspace = true }
 sync_service_bebop_schema = { path = "../sync-service/bebop-schema" }
 tokio-tungstenite = { workspace = true }
-cool_asserts = "2"
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
-ordered-float = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }

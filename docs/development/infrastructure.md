@@ -126,7 +126,7 @@ its source filter. Assets generated from JavaScript are built in their own
 derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
 `node_modules`, and every crane build of `crates/code_mode_assets` reads it
 through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,
-restoring the output from Namespace's remote cache when another job already built it.
+restoring the output from Namespace's remote cache when another job already built it. On a miss, node_modules comes from the same cache, keyed by its own store path.
 Run it locally with `nix build --no-link .#code-mode-assets`.
 
 ## Other resources
@@ -166,9 +166,27 @@ local resources.
 | Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app; once the web app is deployed, `ios-app-store-publish.yml` releases the held iOS App Store version |
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
+| Manual, observability host only | `deploy-observability.yml`: builds the NixOS image, publishes and smoke-boots the AMI, then replaces the prod observability host (a few minutes of Grafana, Loki and Tempo downtime). `dry_run`, the default, stops before `pulumi up`. See `infra/stacks/observability/README.md`, "Deploying" |
+
+Build handoffs use Namespace artifact storage at
+`handoff/<run_id>-<run_attempt>/<service>/<file>`, with a 24-hour expiry.
+The shared upload wrapper retries only the explicit finalization
+`DeadlineExceeded` diagnostic, at most three invocations with 5/10-second
+backoff and a five-minute bound per CLI process (20-minute step bound).
+Other errors, cancellation, local timeouts and exhausted retries fail the job.
+It verifies the completed tarball's SHA-256 and size before each invocation and
+after completion; retries never rebuild, repack or read from another attempt.
+Success requires an actual zero CLI exit, not object existence or a receipt.
+Namespace [versions repeated uploads](https://namespace.so/docs/architecture/storage/artifact-storage),
+so a lost finalization response can leave duplicate, identical expiring versions;
+this is content-safe repetition, not exactly-once publication. Each path has one
+build-job producer and the archive must remain immutable while it uploads.
+Both deploy-all and single-service workflows use this helper. Download paths and
+build/deployment failure gates remain attempt-scoped.
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
-  `macrodb`, `doppler-projects`, `monitoring`, and a few others are manual.
+  `macrodb`, `doppler-projects`, `monitoring`, `observability` and a few
+  others are manual.
 - Dev MacroDB's primary and replica are both configured as `db.t4g.large`
   (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
   `applyImmediately` setting makes that resize interrupt replica connections.

@@ -152,6 +152,7 @@ where
     ) -> Result<(), EmailErr> {
         self.change_thread_mailbox_state(user_id, thread_id, action)
             .await
+            .map(|_| ())
     }
     async fn send_email_message(
         &self,

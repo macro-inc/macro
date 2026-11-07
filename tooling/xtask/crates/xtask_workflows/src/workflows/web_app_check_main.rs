@@ -2,8 +2,7 @@
 //! Generated into `web-app-check-main.yml`.
 
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Strategy, Use, Workflow,
+    Event, Expression, Job, Level, Permissions, Run, Step, Strategy, Use, Workflow, WorkflowCall,
 };
 
 use crate::workflows::{
@@ -36,20 +35,7 @@ fn mid_web_runner() -> String {
 /// Build the workflow.
 pub fn web_app_check_main() -> Workflow {
     Workflow::new("Web App Pr Checks")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview),
-        ))
-        .concurrency(
-            Concurrency::new(Expression::new(
-                "${{ github.workflow }}-${{ github.ref }}-check",
-            ))
-            .cancel_in_progress(true),
-        )
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("path-check", path_check())
         .add_job(android_native_check::JOB_ID, android_native_check())
         .add_job("typescript", typescript())
@@ -76,7 +62,7 @@ fn path_check() -> Job {
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
         .add_output(
             "codegen_changed",
-            "${{ steps.filter.outputs.codegen_changed }}",
+            "${{ steps.codegen.outputs.codegen_changed }}",
         )
         .add_output(
             "web_artifact_changed",
@@ -91,8 +77,9 @@ fn path_check() -> Job {
             "calendar_details_changed",
             "${{ steps.filter.outputs.calendar_details_changed }}",
         )
-        .add_step(checkout("Checkout Repo", false))
+        .add_step(path_check_checkout())
         .add_step(paths_filter())
+        .add_step(detect_schema_changes())
 }
 
 /// TypeScript checks against the committed generated code. Whether that code
@@ -108,35 +95,108 @@ fn typescript() -> Job {
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(false))
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
-        .add_step(check_types())
-        .add_step(check_floating_promises())
-        .add_step(check_functional_test_types())
-        .add_step(check_collaboration_types())
-        .add_step(check_lexical_service_types())
-        .add_step(test_lexical_service())
         .add_step(
             Step::new("Install SDK Documentation Dependencies")
                 .run("bun install --frozen-lockfile")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
-        .add_step(
-            Step::new("Check SDK Documentation")
-                .run("bun run type-check && bun run test")
-                .working_directory(xtask_paths::repo_dir!("packages/sdk-docs")),
-        )
-        .add_step(
-            Step::new("Check Editing Worker")
-                .run("bun run type-check")
-                .working_directory(xtask_paths::repo_dir!("services/ai-editing-worker")),
-        )
-        .add_step(
-            Step::new("Check Code Mode SDK")
-                .run("bun run type-check && bun run test")
-                .working_directory(xtask_paths::repo_dir!("packages/code-mode-sdk")),
-        )
+        .add_step(typecheck_in_parallel())
         .add_step(steps::teardown_nix())
+}
+
+/// Typecheck's checks, each `(name, directory, command)`. They read the same
+/// installed tree and write nothing, so they run at once: in sequence they took
+/// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
+/// SDK documentation's dependencies install first, as they did before.
+const TYPECHECKS: [(&str, &str, &str); 9] = [
+    // `type-check` runs the native TypeScript 7 compiler.
+    ("Check Types", "apps/web", "bun run type-check"),
+    // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
+    // error and needs type information to run at all.
+    (
+        "Check Floating Promises",
+        ".",
+        "bun run lint:oxlint --quiet",
+    ),
+    (
+        "Check Functional Test Types",
+        "apps/web",
+        "bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json",
+    ),
+    (
+        "Check Collaboration Package Types",
+        "packages/collaboration",
+        "bun run type-check",
+    ),
+    (
+        "Check Lexical Service Types",
+        "services/lexical-service",
+        "bun run check",
+    ),
+    (
+        "Test Lexical Service Endpoints",
+        "services/lexical-service",
+        "bun test src",
+    ),
+    (
+        "Check SDK Documentation",
+        "packages/sdk-docs",
+        "bun run type-check && bun run test",
+    ),
+    (
+        "Check Editing Worker",
+        "services/ai-editing-worker",
+        "bun run type-check",
+    ),
+    (
+        "Check Code Mode SDK",
+        "packages/code-mode-sdk",
+        "bun run type-check && bun run test",
+    ),
+];
+
+/// Runs [`TYPECHECKS`] concurrently. Each check's output is printed as its own
+/// group once all finish, every failure is annotated by name, and the step fails
+/// if any check does.
+fn typecheck_in_parallel() -> Step<Run> {
+    Step::new("Run checks").run(typecheck_script(&TYPECHECKS))
+}
+
+fn typecheck_script(checks: &[(&str, &str, &str)]) -> String {
+    let mut script = String::from(indoc::indoc! {r#"
+        set -uo pipefail
+        logs="$RUNNER_TEMP/typecheck"
+        mkdir -p "$logs"
+        names=()
+        pids=()
+        check() {
+          local name="$1" directory="$2" command="$3"
+          ( cd "$directory" && eval "$command" ) > "$logs/${#names[@]}.log" 2>&1 &
+          names+=("$name")
+          pids+=("$!")
+        }
+    "#});
+    for (name, directory, command) in checks {
+        script.push_str(&format!("check '{name}' '{directory}' '{command}'\n"));
+    }
+    script.push_str(indoc::indoc! {r#"
+        failed=0
+        for index in "${!names[@]}"; do
+          status=0
+          wait "${pids[$index]}" || status=$?
+          echo "::group::${names[$index]} (exit $status)"
+          cat "$logs/$index.log"
+          echo "::endgroup::"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::${names[$index]} failed with exit code $status"
+            failed=1
+          fi
+        done
+        exit "$failed"
+    "#});
+    script
 }
 
 /// Everything generated from Rust binaries: the OpenAPI clients in `apps/web`
@@ -166,7 +226,7 @@ fn generated_code() -> Job {
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=mold"))
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_cache_volume(true))
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(
             steps::setup_reqs_web("Setup Prereqs", false)
                 .timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES),
@@ -198,7 +258,7 @@ fn biome_check() -> Job {
     gated_web_job("Biome Check")
         .add_step(checkout("Checkout Repo", true))
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
@@ -207,16 +267,16 @@ fn biome_check() -> Job {
 }
 
 fn test() -> Job {
-    gated_web_job("Test (${{ matrix.shard }}/3)")
+    gated_web_job("Test (${{ matrix.shard }}/6)")
         .runs_on(mid_web_runner())
         .strategy(
             Strategy::default()
                 .fail_fast(false)
-                .matrix(serde_json::json!({ "shard": [1, 2, 3] })),
+                .matrix(serde_json::json!({ "shard": [1, 2, 3, 4, 5, 6] })),
         )
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
@@ -231,7 +291,7 @@ fn functional() -> Job {
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
@@ -249,7 +309,7 @@ fn browser() -> Job {
         .runs_on(mid_web_runner())
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_test_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
@@ -264,13 +324,15 @@ fn cycles() -> Job {
     gated_web_job("Cycles Import Check")
         .add_step(checkout("Checkout", false))
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell())
         .add_step(cycles_import_check())
         .add_step(collaboration_cycles_import_check())
         .add_step(steps::teardown_nix())
 }
 
+/// The one web job without the Nix seed: it holds the preview deploy's AWS
+/// credentials, and PR jobs write the seed.
 fn build() -> Job {
     let (preview_credentials, preview_steps) = preview::steps();
     let job = gated_web_job("Build")
@@ -341,16 +403,76 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
         .when(full_history, |step| step.add_with(("fetch-depth", 0)))
 }
 
+/// The filter reads the PR's files from the API and [`detect_schema_changes`]
+/// reads trees and a few blobs, so path-check fetches no blobs up front and
+/// writes almost no work tree: 18 s became 6 s on the tiny runner.
+fn path_check_checkout() -> Step<Use> {
+    checkout("Checkout Repo", false)
+        .add_with(("filter", "blob:none"))
+        .add_with(("sparse-checkout", ".github"))
+}
+
+/// Whether a pull request can change generated output. Schemas come from
+/// `utoipa`, `specta` and `schemars` items, so a Rust file naming none of them,
+/// before or after the change, can't alter one. Replayed over 1,021 commits on
+/// `main` (a span where the job blocked every merge, so any schema change shipped
+/// with its generated output): this skips 44% of them and missed none of the 378
+/// that changed generated output. A schema crate's version change still counts.
+fn detect_schema_changes() -> Step<Run> {
+    Step::new("Detect schema changes")
+        .run(DETECT_SCHEMA_CHANGES)
+        .id("codegen")
+        .add_env((
+            "CODEGEN_INPUTS",
+            "${{ steps.filter.outputs.codegen_inputs }}",
+        ))
+}
+
+/// The checkout is blobless, so `git diff` and `git show` fetch blobs as they
+/// read them. Each read is its own command, so a failed fetch fails the step
+/// instead of reading as "no schema item"; a file absent from one revision is
+/// skipped by a tree lookup, which needs no blob.
+const DETECT_SCHEMA_CHANGES: &str = indoc::indoc! {r#"
+    set -euo pipefail
+    result() {
+      echo "$1"
+      echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+      exit 0
+    }
+    [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+    # The merge commit's first parent is the main this merge result was
+    # built on; a fresh fetch of main could be newer.
+    base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+    [ -n "$base" ] || result "No base commit to compare with." true
+    git fetch -q --depth=1 origin "$base"
+    names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+    manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
+    if grep -E "^[-+].*($names)" <<< "$manifests"; then
+      result "A schema crate's version changed." true
+    fi
+    changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      for revision in HEAD "$base"; do
+        [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
+        contents=$(git show "$revision:$file")
+        if grep -E "$names" <<< "$contents" > /dev/null; then
+          result "$file names a schema item." true
+        fi
+      done
+    done <<< "$changed"
+    result "No changed Rust file names a schema item." false
+"#};
+
 fn paths_filter() -> Step<Use> {
     let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");
 
-    // `codegen_changed` is the union of what feeds [`generated_code`]: the
-    // Rust sources and manifests the schema binaries compile from, the
-    // `gen-api` scripts, and the SDK and docs packages that hold generated
-    // output. xtask, flake.nix, the Nix dev-shell action, and this workflow
-    // file do not change generated output, so they must not start that job.
-    // The Nix dev-shell action is also omitted from `should_run` so Typecheck
-    // stays off for a shell-only tweak. Workflow YAML drift is `check
+    // `codegen_inputs` holds the `gen-api` scripts and the SDK and docs packages
+    // that hold generated output; [`detect_schema_changes`] reads Rust changes
+    // from git. xtask, flake.nix, the Nix dev-shell action, and
+    // this workflow file do not change generated output, so they must not start
+    // that job. The Nix dev-shell action is also omitted from `should_run` so
+    // Typecheck stays off for a shell-only tweak. Workflow YAML drift is `check
     // generated workflows`. `i18n_changed` covers what the interface language
     // browser tests render: translations, the menu primitives, and settings
     // navigation. `database_grid_changed` covers the database grid's browser
@@ -367,7 +489,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
@@ -382,7 +504,8 @@ fn build_schema_binaries() -> Step<Run> {
     Step::new("Build schema binaries").run(indoc::indoc! {r#"
         set -euo pipefail
         read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
-        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
+        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas \
+          --bin agent_fold_types --bin export_review_types
     "#})
 }
 
@@ -408,6 +531,12 @@ fn check_specta_types() -> Step<Run> {
             fi
         "#})
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+        // Two of the four exporters come from the build step, built with the same
+        // feature resolution as the schema binaries. `cargo run -p` resolves the
+        // features of one package's dependencies, which recompiled 101 and 131
+        // crates for them. The other two need a `cli` feature that would change
+        // the libraries every schema binary links, so they keep `cargo run -p`.
+        .add_env(("SPECTA_BIN_DIR", "${{ github.workspace }}/target/debug"))
 }
 
 /// The tail of `just update-generated` in `packages/sdk`: its first line reruns
@@ -443,43 +572,6 @@ fi
     ))
 }
 
-/// `type-check` runs the native TypeScript 7 compiler.
-fn check_types() -> Step<Run> {
-    Step::new("Check Types")
-        .run("bun run type-check")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-}
-
-/// Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
-/// error and needs type information to run at all.
-fn check_floating_promises() -> Step<Run> {
-    Step::new("Check Floating Promises").run("bun run lint:oxlint --quiet")
-}
-
-fn check_functional_test_types() -> Step<Run> {
-    Step::new("Check Functional Test Types")
-        .run("bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-}
-
-fn check_collaboration_types() -> Step<Run> {
-    Step::new("Check Collaboration Package Types")
-        .run("bun run type-check")
-        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
-}
-
-fn check_lexical_service_types() -> Step<Run> {
-    Step::new("Check Lexical Service Types")
-        .run("bun run check")
-        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
-}
-
-fn test_lexical_service() -> Step<Run> {
-    Step::new("Test Lexical Service Endpoints")
-        .run("bun test src")
-        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
-}
-
 fn run_biome() -> Step<Run> {
     Step::new("Run Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
@@ -513,7 +605,7 @@ fn build_agent_fold_for_tests() -> Step<Run> {
 /// keeps it warm across jobs.
 fn run_tests() -> Step<Run> {
     Step::new("Test")
-        .run("bun run test --shard=${{ matrix.shard }}/3")
+        .run("bun run test --shard=${{ matrix.shard }}/6")
         .add_env((
             "VITEST_MODULE_CACHE_DIR",
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,

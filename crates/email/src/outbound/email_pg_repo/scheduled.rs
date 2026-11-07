@@ -97,14 +97,14 @@ async fn change_schedule(
             }
             let updated = sqlx::query!(
                 r#"INSERT INTO email_scheduled_messages
-                    (link_id, message_id, send_time, sent, processing, actor_id, created_at, updated_at)
-                   VALUES ($1, $2, $3, false, false, $4, NOW(), NOW())
+                    (link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id, created_at, updated_at)
+                   VALUES ($1, $2, $3, false, false, $4, $5, NOW(), NOW())
                    ON CONFLICT (link_id, message_id) DO UPDATE SET
-                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, updated_at = NOW(),
+                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, agent_correlation_id = EXCLUDED.agent_correlation_id, updated_at = NOW(),
                     -- Rescheduling a pending sequence step makes it the user's own send.
                     source = NULL
                    WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing"#,
-                link_id, message_id, send_time, actor.as_ref(),
+                link_id, message_id, send_time, actor.as_ref(), agent_correlation::context::current(),
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
             if updated.rows_affected() != 1 {
                 return Err(EmailErr::MessageDeliveryConflict(message_id));

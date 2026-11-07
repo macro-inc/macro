@@ -6,6 +6,7 @@ import type {
 import { MacroError } from '../utils';
 import type { MacroClient } from '../utils/client';
 import { hydrateAgentSessionEvent } from './hydrate/agentSession';
+import { hydrateCallEvent } from './hydrate/call';
 import { hydrateChannelEvent } from './hydrate/channel';
 import { hydrateDocumentEvent } from './hydrate/document';
 import { hydrateMessageEvent } from './hydrate/message';
@@ -48,6 +49,9 @@ function hydrate(
   return match(event)
     .with({ event_type: P.string.startsWith('document.') }, (documentEvent) =>
       hydrateDocumentEvent(client, documentEvent),
+    )
+    .with({ event_type: P.string.startsWith('call.') }, (callEvent) =>
+      hydrateCallEvent(client, callEvent),
     )
     .with({ event_type: P.string.startsWith('channel.') }, (channelEvent) =>
       hydrateChannelEvent(client, channelEvent),

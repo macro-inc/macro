@@ -7,7 +7,8 @@
 //! and macOS, and the launcher layout plus `install.ps1` on Windows. Nothing
 //! is published. Runs on pull requests that touch macrod, and on demand.
 
-use gh_workflow::{Event, Job, Level, Permissions, PullRequest, Run, Step, Workflow};
+use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
 
@@ -18,6 +19,12 @@ const E2E: &str = "crates/coding_agent_worker/e2e";
 const V1: &str = "v2000.1.1.1";
 const V2: &str = "v2000.1.1.2";
 
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("crates/coding_agent_worker/**"),
+    xtask_paths::repo_glob!(".github/workflows/test_macrod_update.yml"),
+];
+
 /// Build the workflow.
 pub fn test_macrod_update() -> Workflow {
     Workflow::new("Test macrod update")
@@ -26,15 +33,8 @@ pub fn test_macrod_update() -> Workflow {
             ..Default::default()
         })
         .on(Event::default()
-            .pull_request(
-                PullRequest::default()
-                    .add_branch("main")
-                    .add_path(xtask_paths::repo_glob!("crates/coding_agent_worker/**"))
-                    .add_path(xtask_paths::repo_glob!(
-                        ".github/workflows/test_macrod_update.yml"
-                    )),
-            )
-            .workflow_dispatch(gh_workflow::WorkflowDispatch::default()))
+            .workflow_dispatch(gh_workflow::WorkflowDispatch::default())
+            .workflow_call(WorkflowCall::default()))
         .add_job("linux", linux_job())
         .add_job("macos", macos_job())
         .add_job("windows", windows_job())

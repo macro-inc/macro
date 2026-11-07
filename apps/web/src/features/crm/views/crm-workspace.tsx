@@ -27,7 +27,6 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
 import {
   enableCrmActivity,
-  enableDatabases,
   enableSequences,
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -80,6 +79,7 @@ import { createCrmExportLoader } from '../primitives/export-source';
 import { CrmActivityView } from './activity';
 import { useApplyCrmView } from './apply-view';
 import { Crm as CrmSettings } from './crm-settings';
+import { CrmEmailOptInBanner } from './email-privacy';
 import { CrmExport } from './export-companies';
 import { CrmImport } from './import-companies';
 import { CrmItemDetail } from './item-detail';
@@ -107,10 +107,10 @@ function NavigationToggle(props: {
         <Show
           when={shell.breakpoints.narrow?.()}
           fallback={
-            <Tooltip label="Expand CRM sidebar">
+            <Tooltip label={t('crm.expandSidebar')}>
               <Button
-                aria-label="Expand CRM sidebar"
-                tooltip="Expand CRM sidebar"
+                aria-label={t('crm.expandSidebar')}
+                tooltip={t('crm.expandSidebar')}
                 variant="ghost"
                 size="icon-sm"
                 ref={toggleTarget}
@@ -126,11 +126,11 @@ function NavigationToggle(props: {
             onOpenChange={setOpen}
             placement="bottom-start"
           >
-            <Tooltip label="Show CRM navigation">
+            <Tooltip label={t('crm.showNavigation')}>
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Show CRM navigation"
+                aria-label={t('crm.showNavigation')}
                 ref={toggleTarget}
               >
                 <ListIcon class="size-4" />
@@ -262,7 +262,6 @@ export function CrmWorkspaceView(props: {
   }) => JSX.Element;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const sequencesFlag = useFeatureFlag(enableSequences);
   const {
     openCreateCompany: openCreateCompanyModal,
@@ -340,7 +339,8 @@ export function CrmWorkspaceView(props: {
   const teamId = () => team()?.id;
   const pipelinesEnabled = useCrmContext().pipelinesEnabled();
   const crmEnabled = () => team()?.crm_enabled === true;
-  const canCreatePipeline = () => pipelinesEnabled() && crmEnabled();
+  const canCreatePipeline = () =>
+    pipelinesEnabled() && teamQuery.isSuccess && !!teamQuery.data;
   const pipelines = useCrmContext().createPipelines(() =>
     pipelinesEnabled() ? teamId() : undefined
   );
@@ -367,16 +367,10 @@ export function CrmWorkspaceView(props: {
   const peopleActive = () => active() === 'people';
   const activityTab = () => {
     const tab = active();
-    return activityFlag().enabled &&
-      (tab !== 'databases' || databasesFlag().enabled) &&
-      isCrmActivityTab(tab)
-      ? tab
-      : undefined;
+    return activityFlag().enabled && isCrmActivityTab(tab) ? tab : undefined;
   };
   const activityPending = () =>
-    isCrmActivityTab(active()) &&
-    (activityFlag().loading ||
-      (active() === 'databases' && databasesFlag().loading));
+    isCrmActivityTab(active()) && activityFlag().loading;
   // Sequences need the flag and a team with CRM on.
   const sequencesEnabled = () => sequencesFlag().enabled && crmEnabled();
   const sequencesLoading = () =>
@@ -437,7 +431,6 @@ export function CrmWorkspaceView(props: {
     settings.close();
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
-    if (id === 'databases' && !databasesFlag().enabled) id = 'active';
     if (!sequencesEnabled() && isSequencesTab(id)) id = 'active';
     if (
       id !== 'people' &&
@@ -483,6 +476,8 @@ export function CrmWorkspaceView(props: {
   };
   onMount(() => {
     if (!listsEnabled() && active().startsWith('list:')) navigate('active');
+    // Saved and shared links to the retired Databases view open Companies.
+    if (active() === 'databases') navigate('active');
   });
   const toolbarCreateMenu = () => (
     <CrmCreateMenu
@@ -502,19 +497,9 @@ export function CrmWorkspaceView(props: {
   // Keep cold activity links intact until PostHog resolves; off falls back to Companies.
   createEffect(
     on(
-      () =>
-        [
-          activityPending(),
-          activityFlag().enabled,
-          databasesFlag().enabled,
-          active(),
-        ] as const,
-      ([loading, activityEnabled, databasesEnabled, tab]) => {
-        if (
-          !loading &&
-          isCrmActivityTab(tab) &&
-          (!activityEnabled || (tab === 'databases' && !databasesEnabled))
-        )
+      () => [activityPending(), activityFlag().enabled, active()] as const,
+      ([loading, activityEnabled, tab]) => {
+        if (!loading && isCrmActivityTab(tab) && !activityEnabled)
           navigate('active');
       }
     )
@@ -620,6 +605,9 @@ export function CrmWorkspaceView(props: {
         </Suspense>
       </ViewShell.Aside>
       <ViewShell.Main>
+        <Suspense>
+          <CrmEmailOptInBanner />
+        </Suspense>
         <Show
           when={!settings.isOpen()}
           fallback={

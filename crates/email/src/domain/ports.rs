@@ -560,8 +560,10 @@ pub trait EmailRepo: Send + Sync + 'static {
 }
 
 /// Read-only capability for fetching email thread previews. The composition
-/// root supplies the replica-backed service for ordinary REST/GraphQL Soup.
-/// Mutation replies reload through the primary-backed email writer instead.
+/// root supplies the replica-backed service for ordinary REST/GraphQL Soup,
+/// but CRM-scoped eligibility must read the primary so replica lag cannot
+/// retain withdrawn or excluded contributions. Mutation replies also reload
+/// through the primary-backed email writer.
 pub trait EmailPreviewServiceReadOnly: Send + Sync + 'static {
     fn get_email_thread_previews(
         &self,
@@ -719,12 +721,14 @@ pub trait EmailService: Send + Sync + 'static {
         request: super::models::mailbox_operation::MessageResolutionRequest,
     ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
     /// Set semantic mailbox state without requiring a provider system-label ID.
+    /// The number of the thread's messages it changed; none when they were
+    /// already in that state.
     fn change_thread_mailbox_state(
         &self,
         _macro_id: MacroUserIdStr<'static>,
         _thread_id: Uuid,
         _action: crate::domain::models::mailbox_action::MailboxAction,
-    ) -> impl Future<Output = Result<(), EmailErr>> + Send {
+    ) -> impl Future<Output = Result<usize, EmailErr>> + Send {
         async { Err(no_op_email_err()) }
     }
     /// Authorize the caller's sending inbox, resolve client handles, and enqueue

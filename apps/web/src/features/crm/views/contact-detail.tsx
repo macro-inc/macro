@@ -16,7 +16,6 @@ import { ContactEmailsSection } from './contact-emails-section';
 import { ContactHeader } from './contact-header';
 import {
   RecordCallsSection,
-  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
@@ -126,9 +125,6 @@ function ContactContent(props: ContactProps) {
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
-            </Match>
-            <Match when={section() === 'databases'}>
-              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />

@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod test;
 
+use bot_id::{BotId, BotIdStr};
 use chrono::DateTime;
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
@@ -16,7 +17,7 @@ use livekit_api::services::{ServiceError, TwirpError, TwirpErrorCode};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
     AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
-    VideoCodec, encoded_file_output,
+    TrackSource, VideoCodec, encoded_file_output, participant_info,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -24,7 +25,8 @@ use notification::domain::models::apple::VoipPushPayload;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
-    CallError, CallWebhookEvent, EgressS3Config, RtcRoom, VerifiedRingToken, VoipPushPayloadRequest,
+    CallError, CallWebhookEvent, EgressS3Config, LiveCallParticipant, LiveCallTrack,
+    LiveParticipantKind, LiveTrackSource, RtcRoom, VerifiedRingToken, VoipPushPayloadRequest,
 };
 use crate::domain::ports::CallRtcClient;
 
@@ -203,6 +205,80 @@ impl CallRtcClient for LivekitRtcClient {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn generate_program_token(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'_>,
+        program: &str,
+        name: Option<String>,
+    ) -> anyhow::Result<String> {
+        let mut token = AccessToken::with_api_key(&self.api_key, &self.api_secret)
+            .with_identity(participant_identity.as_ref())
+            .with_attributes([("macro.program", program)])
+            .with_ttl(std::time::Duration::from_secs(6 * 3600))
+            .with_grants(VideoGrants {
+                room_join: true,
+                room: room_name.to_string(),
+                can_publish: true,
+                can_subscribe: true,
+                can_publish_data: true,
+                ..Default::default()
+            });
+        if let Some(name) = name {
+            token = token.with_name(&name);
+        }
+        token.to_jwt().map_err(Into::into)
+    }
+
+    async fn generate_bot_token(
+        &self,
+        room_name: &str,
+        bot_id: BotId,
+        name: Option<String>,
+    ) -> anyhow::Result<String> {
+        let identity = bot_id.into_storage_id();
+        let mut token = AccessToken::with_api_key(&self.api_key, &self.api_secret)
+            .with_identity(identity.as_ref())
+            .with_attributes([("macro.program", "bot")])
+            .with_ttl(std::time::Duration::from_secs(6 * 3600))
+            .with_grants(VideoGrants {
+                room_join: true,
+                room: room_name.to_string(),
+                can_publish: true,
+                can_subscribe: true,
+                can_publish_data: true,
+                ..Default::default()
+            });
+        if let Some(name) = name {
+            token = token.with_name(&name);
+        }
+        token.to_jwt().map_err(Into::into)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn generate_named_token(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'_>,
+        name: &str,
+    ) -> anyhow::Result<String> {
+        AccessToken::with_api_key(&self.api_key, &self.api_secret)
+            .with_identity(participant_identity.as_ref())
+            .with_name(name)
+            .with_ttl(std::time::Duration::from_secs(6 * 3600))
+            .with_grants(VideoGrants {
+                room_join: true,
+                room: room_name.to_string(),
+                can_publish: true,
+                can_subscribe: true,
+                can_publish_data: true,
+                ..Default::default()
+            })
+            .to_jwt()
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn generate_guest_token(
         &self,
         room_name: &str,
@@ -229,6 +305,14 @@ impl CallRtcClient for LivekitRtcClient {
         ignore_not_found(
             self.room_client
                 .remove_participant(room_name, &guest_id.to_string())
+                .await,
+        )
+    }
+
+    async fn remove_bot(&self, room_name: &str, bot_id: BotId) -> anyhow::Result<()> {
+        ignore_not_found(
+            self.room_client
+                .remove_participant(room_name, bot_id.into_storage_id().as_ref())
                 .await,
         )
     }
@@ -323,6 +407,63 @@ impl CallRtcClient for LivekitRtcClient {
             Err(error) if is_not_found(&error) => Ok(None),
             Err(error) => Err(error.into()),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn list_live_participants(
+        &self,
+        room_name: &str,
+    ) -> anyhow::Result<Option<Vec<LiveCallParticipant>>> {
+        let participants = match self.room_client.list_participants(room_name).await {
+            Ok(participants) => participants,
+            Err(error) if is_not_found(&error) => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        Ok(Some(
+            participants
+                .into_iter()
+                .filter(|participant| participant.kind != participant_info::Kind::Agent as i32)
+                .map(|participant| {
+                    let user_id = MacroUserIdStr::parse_from_str(&participant.identity)
+                        .ok()
+                        .map(|_| participant.identity.clone());
+                    let kind = if user_id.is_some() {
+                        LiveParticipantKind::User
+                    } else if GuestId::parse_rtc_identity(&participant.identity).is_some() {
+                        LiveParticipantKind::Guest
+                    } else if BotIdStr::parse_from_str(&participant.identity).is_ok() {
+                        LiveParticipantKind::Bot
+                    } else {
+                        LiveParticipantKind::Guest
+                    };
+                    let tracks = participant
+                        .tracks
+                        .into_iter()
+                        .map(|track| LiveCallTrack {
+                            source: match TrackSource::try_from(track.source)
+                                .unwrap_or(TrackSource::Unknown)
+                            {
+                                TrackSource::Microphone => LiveTrackSource::Microphone,
+                                TrackSource::Camera => LiveTrackSource::Camera,
+                                TrackSource::ScreenShare => LiveTrackSource::ScreenShare,
+                                TrackSource::ScreenShareAudio => LiveTrackSource::ScreenShareAudio,
+                                TrackSource::Unknown => LiveTrackSource::Unknown,
+                            },
+                            muted: track.muted,
+                        })
+                        .collect();
+                    LiveCallParticipant {
+                        identity: participant.identity,
+                        display_name: participant.name,
+                        kind,
+                        user_id,
+                        is_program: participant.attributes.contains_key("macro.program"),
+                        joined_at: DateTime::from_timestamp(participant.joined_at, 0),
+                        tracks,
+                    }
+                })
+                .collect(),
+        ))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -422,6 +563,11 @@ impl CallRtcClient for LivekitRtcClient {
             .as_ref()
             .filter(|p| MacroUserIdStr::parse_from_str(&p.identity).is_err())
             .and_then(|p| GuestId::parse_rtc_identity(&p.identity));
+        let bot_identity = event
+            .participant
+            .as_ref()
+            .and_then(|p| BotIdStr::parse_from_str(&p.identity).ok())
+            .map(|id| id.bot_id());
 
         Ok(CallWebhookEvent {
             guest_identity,
@@ -440,6 +586,7 @@ impl CallRtcClient for LivekitRtcClient {
                     }
                 }
             }),
+            bot_identity,
             egress_id,
             file_url,
             created_at: event.created_at,

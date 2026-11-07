@@ -7,6 +7,273 @@
 import * as zod from 'zod';
 
 /**
+ * @summary List the managers of the caller's account.
+ */
+export const listAccountManagersResponse = zod
+  .object({
+    grants: zod
+      .array(
+        zod
+          .object({
+            claimedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the manager claimed the credential.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the request was made.'),
+            expiresAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the pending request or unclaimed approval stops being usable.'
+              ),
+            id: zod.uuid().describe('Grant id.'),
+            lastUsedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the credential was last used, to the minute.'),
+            managedUserId: zod.string().describe('The account being managed.'),
+            managerUserId: zod
+              .string()
+              .describe('The agent account doing the managing.'),
+            requestedBy: zod
+              .enum(['managed', 'manager'])
+              .describe('One side of a grant.'),
+            status: zod
+              .enum([
+                'pending',
+                'approved',
+                'declined',
+                'active',
+                'revoked',
+                'expired',
+              ])
+              .describe('Where a grant is in its lifecycle.'),
+          })
+          .describe('A request for manager access and what became of it.')
+      )
+      .describe("Approved and active grants on the caller's account."),
+  })
+  .describe("The managers of the caller's account.");
+
+/**
+ * @summary Ask another account for manager access, in your DM with them.
+ */
+export const requestAccountManagerBody = zod
+  .object({
+    callerRole: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    counterpartyId: zod.string().describe('The other account (`macro|...`).'),
+  })
+  .describe('Request body for asking for a grant.');
+
+export const requestAccountManagerResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Read a grant the caller is part of.
+ */
+export const getAccountManagerGrantParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const getAccountManagerGrantResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary End a grant. Either side may withdraw it.
+ */
+export const revokeAccountManagerGrantParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const revokeAccountManagerGrantResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Approve or decline a request the caller didn't make.
+ */
+export const respondToAccountManagerRequestParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const respondToAccountManagerRequestBody = zod
+  .object({
+    decision: zod
+      .enum(['approve', 'decline'])
+      .describe('A response to a request.'),
+  })
+  .describe('Request body for responding to a request.');
+
+export const respondToAccountManagerRequestResponse = zod
+  .object({
+    claimedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the manager claimed the credential.'),
+    createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+    expiresAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When the pending request or unclaimed approval stops being usable.'
+      ),
+    id: zod.uuid().describe('Grant id.'),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the credential was last used, to the minute.'),
+    managedUserId: zod.string().describe('The account being managed.'),
+    managerUserId: zod
+      .string()
+      .describe('The agent account doing the managing.'),
+    requestedBy: zod
+      .enum(['managed', 'manager'])
+      .describe('One side of a grant.'),
+    status: zod
+      .enum(['pending', 'approved', 'declined', 'active', 'revoked', 'expired'])
+      .describe('Where a grant is in its lifecycle.'),
+  })
+  .describe('A request for manager access and what became of it.');
+
+/**
+ * @summary Issue the credential to the manager. Works once. A POST, so link previews
+and crawlers can't use it up.
+ */
+export const claimAccountManagerTokenParams = zod.object({
+  id: zod.uuid().describe('Grant id.'),
+});
+
+export const claimAccountManagerTokenResponse = zod
+  .object({
+    grant: zod
+      .object({
+        claimedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the manager claimed the credential.'),
+        createdAt: zod.iso.datetime({}).describe('When the request was made.'),
+        expiresAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'When the pending request or unclaimed approval stops being usable.'
+          ),
+        id: zod.uuid().describe('Grant id.'),
+        lastUsedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the credential was last used, to the minute.'),
+        managedUserId: zod.string().describe('The account being managed.'),
+        managerUserId: zod
+          .string()
+          .describe('The agent account doing the managing.'),
+        requestedBy: zod
+          .enum(['managed', 'manager'])
+          .describe('One side of a grant.'),
+        status: zod
+          .enum([
+            'pending',
+            'approved',
+            'declined',
+            'active',
+            'revoked',
+            'expired',
+          ])
+          .describe('Where a grant is in its lifecycle.'),
+      })
+      .describe('A request for manager access and what became of it.'),
+    token: zod.string().describe('The secret. Shown only once.'),
+  })
+  .describe('The credential, returned only by the claim that issued it.');
+
+/**
  * @summary Handler for `GET /agents`.
  */
 export const listAgentsResponseItem = zod
@@ -34,7 +301,7 @@ export const listAgentsResponseItem = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -335,7 +602,232 @@ export const updateAgentResponse = zod
         has_agent: zod
           .boolean()
           .describe(
-            'Whether mentioning this bot opens a sandboxed coding-agent session.'
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+          ),
+        id: zod.string(),
+        kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+        name: zod.string().describe('Display name.'),
+        owner: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['user']),
+                    user_id: zod.string().describe('Owner user id.'),
+                  })
+                  .describe('User-owned bot.'),
+                zod
+                  .object({
+                    team_id: zod.uuid().describe('Owner team id.'),
+                    type: zod.enum(['team']),
+                  })
+                  .describe('Team-owned bot.'),
+              ])
+              .describe('Bot owner.'),
+          ])
+          .optional(),
+        updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+      })
+      .describe(
+        'Bot row.\n\nClients deserialize this, so both derives are used.'
+      ),
+    channel_ids: zod
+      .array(zod.uuid())
+      .describe('Selected channel ids. Empty for a global agent.'),
+    channel_scope: zod
+      .enum(['all', 'selected'])
+      .describe(
+        'Whether an agent is available everywhere or only in selected channels.'
+      ),
+    default_model: zod
+      .string()
+      .describe('Model selected specifically for this agent.'),
+    harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
+    instructions: zod
+      .string()
+      .describe(
+        'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+  })
+  .describe('A persisted user- or team-owned AI agent.');
+
+/**
+ * @summary Handler for `PATCH /agents/{agent_id}`: change only the settings the body
+names, keeping every other one, as the `ConfigureAgent` tool does.
+ */
+export const patchAgentParams = zod.object({
+  agent_id: zod.string().describe('Agent bot ID'),
+});
+
+export const patchAgentBody = zod
+  .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Replacement permission choice: approve without asking (`true`) or\nprompt (`false`). A patch cannot clear the choice back to unset; an\nexplicit `false` prompts exactly as unset does.'
+      ),
+    channels: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            channel_ids: zod
+              .array(zod.uuid())
+              .optional()
+              .describe(
+                'Selected channels. Must be non-empty only for `selected` scope.'
+              ),
+            channel_scope: zod
+              .enum(['all', 'selected'])
+              .describe(
+                'Whether an agent is available everywhere or only in selected channels.'
+              ),
+          })
+          .describe(
+            'Where an agent can be mentioned: everywhere its owner can use it, or\nexactly the listed channels.'
+          ),
+      ])
+      .optional(),
+    default_model: zod.string().nullish().describe('Replacement model.'),
+    harness: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            harness: zod
+              .string()
+              .describe(
+                'Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.'
+              ),
+            harness_id: zod.union([zod.null(), zod.string()]).optional(),
+          })
+          .describe(
+            'The runtime an agent runs on: a harness slug and, for `macrod`, the\nregistered harness serving it. Travel together because one without the\nother is never a valid choice.'
+          ),
+      ])
+      .optional(),
+    instructions: zod
+      .string()
+      .nullish()
+      .describe('Replacement instructions, whole.'),
+    is_coding: zod.boolean().nullish().describe('Replacement coding choice.'),
+    mcp: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                scope: zod.enum(['owner_connections']),
+              })
+              .describe(
+                'Whatever apps the person running the session has connected.'
+              ),
+            zod
+              .object({
+                scope: zod.enum(['selected']),
+                servers: zod
+                  .array(
+                    zod
+                      .object({
+                        app_slug: zod
+                          .string()
+                          .describe('Pipedream app slug, e.g. `linear`.'),
+                        server_name: zod
+                          .string()
+                          .describe('Display name, e.g. `Linear`.'),
+                      })
+                      .describe(
+                        'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                      )
+                  )
+                  .describe(
+                    "The apps, in the order the agent's author picked them."
+                  ),
+              })
+              .describe('Exactly these apps, connected or not.'),
+          ])
+          .describe(
+            "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    "Request to change part of a persisted agent's instructions or settings.\n\nEvery field is optional; an absent field keeps the agent's current value.\nOwnership and the bot profile (name, handle, description, avatar) are not\npatchable here: the profile has [`PatchBotRequest`], and ownership changes\ngo through [`UpdateAgentRequest`]. Unknown fields are refused, so a\nmisspelled or flattened setting is never silently ignored."
+  );
+
+export const patchAgentResponse = zod
+  .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
+    bot: zod
+      .object({
+        avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+        created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+        created_by: zod
+          .string()
+          .nullish()
+          .describe('User that created this bot.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Soft-delete timestamp.'),
+        description: zod.string().nullish().describe('Optional description.'),
+        handle: zod.string().describe('Stable handle.'),
+        has_agent: zod
+          .boolean()
+          .describe(
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
           ),
         id: zod.string(),
         kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -756,6 +1248,78 @@ export const createAnchorResponse = zod
   );
 
 /**
+ * @summary Handler for `GET /bots`: the bots the caller can manage.
+ */
+export const listBotsResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+export const listBotsResponse = zod.array(listBotsResponseItem);
+
+/**
+ * @summary Handler for `POST /bots`.
+ */
+export const createBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
+      ),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Team owner. The caller must be a team administrator or owner. Omit for a user-owned bot.'
+      ),
+  })
+  .describe('Request to create a bot.');
+
+/**
  * @summary Handler for `GET /bots/me`.
  */
 export const getSelfBotResponse = zod
@@ -772,7 +1336,7 @@ export const getSelfBotResponse = zod
     has_agent: zod
       .boolean()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
       ),
     id: zod.string(),
     kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
@@ -859,6 +1423,130 @@ export const getBotOwnerProfilesResponse = zod.array(
 );
 
 /**
+ * @summary Handler for `GET /bots/{bot_id}`.
+ */
+export const getBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const getBotResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}`.
+ */
+export const deleteBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+/**
+ * @summary Handler for `PATCH /bots/{bot_id}`.
+ */
+export const patchBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const patchBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().nullish().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Omit to leave unchanged.'
+      ),
+    name: zod.string().nullish().describe('Display name.'),
+  })
+  .describe('Request to patch a bot.');
+
+export const patchBotResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+
+/**
  * @summary Handler for `GET /bots/{bot_id}/channels`.
  */
 export const listBotChannelsParams = zod.object({
@@ -885,6 +1573,65 @@ export const listBotChannelsResponse = zod.array(listBotChannelsResponseItem);
 export const removeBotFromChannelByBotParams = zod.object({
   bot_id: zod.string().describe('Bot ID'),
   channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `GET /bots/{bot_id}/tokens`.
+ */
+export const listBotTokensParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const listBotTokensResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Expiration timestamp.'),
+    id: zod.uuid().describe('Token id.'),
+    label: zod.string().nullish().describe('Optional token label.'),
+    last_used_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last successful use.'),
+    revoked_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Revocation timestamp.'),
+    token_prefix: zod
+      .string()
+      .describe(
+        'Display prefix of the bearer token. The raw secret is never stored here.'
+      ),
+  })
+  .describe('Bot token metadata.');
+export const listBotTokensResponse = zod.array(listBotTokensResponseItem);
+
+/**
+ * @summary Handler for `POST /bots/{bot_id}/tokens`.
+ */
+export const createBotTokenParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const createBotTokenBody = zod
+  .object({
+    expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional expiration timestamp.'),
+    label: zod.string().nullish().describe('Token label.'),
+  })
+  .describe('Request to create a bot token.');
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}/tokens/{token_id}`.
+ */
+export const revokeBotTokenParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+  token_id: zod.uuid().describe('Token ID'),
 });
 
 /**
@@ -1905,6 +2652,52 @@ export const getActiveCallsResponse = zod
   );
 
 /**
+ * @summary List all channel and standalone calls this account can join.
+ */
+export const getLiveCallsResponse = zod
+  .object({
+    calls: zod
+      .array(
+        zod
+          .object({
+            callId: zod.uuid().describe('Session identifier.'),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe('Channel identifier, if present.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the session was created.'),
+            createdBy: zod.string().describe('Caller identifier.'),
+            kind: zod
+              .enum(['channel', 'standalone'])
+              .describe('Whether a live call is associated with a channel.'),
+            meetingId: zod
+              .uuid()
+              .nullish()
+              .describe('Invitation identifier, if present.'),
+            participantCount: zod
+              .number()
+              .describe('Number of active people and guests.'),
+            ringing: zod
+              .boolean()
+              .describe('Whether this account is currently being rung.'),
+            shareToken: zod
+              .string()
+              .nullish()
+              .describe('Invitation capability, if present.'),
+            title: zod
+              .string()
+              .nullish()
+              .describe('Invitation title, if present.'),
+          })
+          .describe('A live call visible to an account that can join it.')
+      )
+      .describe('Joinable live calls.'),
+  })
+  .describe('Response containing every live call this account may join.');
+
+/**
  * @summary Read the live call discussion as a verified guest.
  */
 export const guestCallChatReadParams = zod.object({
@@ -2041,6 +2834,7 @@ export const meetingGuestJoinResponse = zod
       .string()
       .nullish()
       .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
@@ -2304,6 +3098,23 @@ export const meetingJoinParams = zod.object({
   token: zod.string(),
 });
 
+export const meetingJoinBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('Optional display name in the RTC room.'),
+    onOtherCall: zod
+      .enum(['fail', 'switch'])
+      .optional()
+      .describe('Policy for another active call.'),
+    replace: zod
+      .boolean()
+      .optional()
+      .describe('Disconnect an existing RTC connection for this identity.'),
+  })
+  .describe('Options for an authenticated call join.');
+
 export const meetingJoinResponse = zod
   .object({
     callId: zod.uuid().describe('The call identifier.'),
@@ -2320,6 +3131,7 @@ export const meetingJoinResponse = zod
       .string()
       .nullish()
       .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
@@ -2556,6 +3368,27 @@ export const getCallRecordResponse = zod
       .nullish()
       .describe(
         'User-supplied or AI-generated display name for the call. Only set on\narchived `call_records`; active calls always return `None`.'
+      ),
+    discussion: zod
+      .union([
+        zod
+          .object({
+            channel_id: zod.uuid().describe('The channel holding the thread.'),
+            kind: zod.enum(['channel_thread']),
+            root_id: zod.uuid().describe("The thread's root message."),
+          })
+          .describe(
+            "A thread in the call's channel, rooted at the message with the call's id."
+          ),
+        zod
+          .object({
+            call_id: zod.uuid().describe('The call owning the thread.'),
+            kind: zod.enum(['call_chat']),
+          })
+          .describe("The call's own thread on the call parent."),
+      ])
+      .describe(
+        "Where a call's discussion lives, decided once when the call is created.\n`channel_id` cannot decide this: past channel calls keep their own thread."
       ),
     durationMs: zod
       .number()
@@ -2844,6 +3677,66 @@ export const declineCallParams = zod.object({
 });
 
 /**
+ * @summary Join a live call by its session id.
+ */
+export const joinCallParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const joinCallBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('Optional display name in the RTC room.'),
+    onOtherCall: zod
+      .enum(['fail', 'switch'])
+      .optional()
+      .describe('Policy for another active call.'),
+    replace: zod
+      .boolean()
+      .optional()
+      .describe('Disconnect an existing RTC connection for this identity.'),
+  })
+  .describe('Options for an authenticated call join.');
+
+export const joinCallResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Leave a specific live call.
+ */
+export const leaveCallParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const leaveCallResponse = zod
+  .object({
+    callEnded: zod
+      .boolean()
+      .describe('Whether the entire call was ended (room deleted).'),
+  })
+  .describe('Response for the leave\/end call operation.');
+
+/**
  * @summary Handle `POST /call/record/{call_id}/link` through the call domain service.
  */
 export const meetingShareParams = zod.object({
@@ -2881,6 +3774,88 @@ export const meetingShareResponse = zod
   .describe(
     'Persistent meeting metadata. No channel contents or archived media are exposed.'
   );
+
+/**
+ * @summary Read live participants and track state for a joinable call.
+ */
+export const getCallParticipantsParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const getCallParticipantsResponse = zod
+  .object({
+    participants: zod
+      .array(
+        zod
+          .object({
+            displayName: zod
+              .string()
+              .describe('Name displayed to room members.'),
+            identity: zod.string().describe('RTC identity.'),
+            isProgram: zod
+              .boolean()
+              .describe('Whether the caller is a program.'),
+            joinedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('RTC connection time.'),
+            kind: zod
+              .enum(['user', 'guest', 'bot'])
+              .describe('Participant kind in the live room.'),
+            tracks: zod
+              .array(
+                zod
+                  .object({
+                    muted: zod
+                      .boolean()
+                      .describe('Whether the track is muted.'),
+                    source: zod
+                      .enum([
+                        'microphone',
+                        'camera',
+                        'screen_share',
+                        'screen_share_audio',
+                        'unknown',
+                      ])
+                      .describe('A live media track.'),
+                  })
+                  .describe('A live media track.')
+              )
+              .describe('Published media tracks.'),
+            userId: zod
+              .string()
+              .nullish()
+              .describe('Macro account identifier, if this is a user.'),
+          })
+          .describe('A connected participant in an RTC room.')
+      )
+      .describe('Connected participants.'),
+  })
+  .describe('A live RTC room roster.');
+
+/**
+ * @summary Stream the recording bytes for a call record the caller may view.
+ */
+export const getCallRecordingParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
+
+/**
+ * @summary Read this account's ring state for a call.
+ */
+export const getCallRingStateParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const getCallRingStateResponse = zod
+  .object({
+    status: zod
+      .enum(['ringing', 'answered', 'declined', 'ended'])
+      .describe(
+        'Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.'
+      ),
+  })
+  .describe('Response body for `GET \/call\/ring-status\/{call_id}`.');
 
 /**
  * Flips the live call's share-with-team toggle and returns the new value as
@@ -2993,6 +3968,52 @@ export const getOrCreateCallResponse = zod
       .string()
       .nullish()
       .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Start or join a channel call explicitly.
+ */
+export const startCallParams = zod.object({
+  channel_id: zod.uuid(),
+});
+
+export const startCallBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe('Optional display name in the RTC room.'),
+    onOtherCall: zod
+      .enum(['fail', 'switch'])
+      .optional()
+      .describe('Policy for another active call.'),
+    replace: zod
+      .boolean()
+      .optional()
+      .describe('Disconnect an existing RTC connection for this identity.'),
+  })
+  .describe('Options for an authenticated call join.');
+
+export const startCallResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    started: zod.boolean().describe('Whether this request allocated the call.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
@@ -4102,6 +5123,71 @@ export const getChannelAttachmentsResponse = zod
   .describe('Paginated response of channel attachments.');
 
 /**
+ * @summary Handler for `GET /channels/{channel_id}/bots`.
+ */
+export const listChannelBotsParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const listChannelBotsResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().nullish().describe('User that created this bot.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Soft-delete timestamp.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    has_agent: zod
+      .boolean()
+      .describe(
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+      ),
+    id: zod.string(),
+    kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned bot.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned bot.'),
+          ])
+          .describe('Bot owner.'),
+      ])
+      .optional(),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe('Bot row.\n\nClients deserialize this, so both derives are used.');
+export const listChannelBotsResponse = zod.array(listChannelBotsResponseItem);
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/bots`.
+ */
+export const addChannelBotParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const addChannelBotBody = zod
+  .object({
+    bot_id: zod.string(),
+  })
+  .describe('Request to add a bot to a channel.');
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/bots/scoped`.
  */
 export const createChannelScopedBotParams = zod.object({
@@ -4117,7 +5203,7 @@ export const createChannelScopedBotBody = zod
       .boolean()
       .nullish()
       .describe(
-        'Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.'
+        'Whether this bot runs as an AI agent: mentions and DMs start an agent session. Defaults to false.'
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -4227,6 +5313,40 @@ export const setChannelPictureBody = zod
   .describe(
     "Replace a channel's picture, or remove it by sending a null file id."
   );
+
+/**
+ * Grants the channel's current members access to one item, the way posting
+it in a message does. Calendar events can be shared only from the caller's
+own calendar, and private or confidential events are refused. Sharing again
+is a no-op.
+ * @summary Handler for `POST /channels/{channel_id}/shares`.
+ */
+export const shareWithChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const shareWithChannelBody = zod
+  .object({
+    entityId: zod
+      .uuid()
+      .describe('Id of the item to share. For a calendar event, the event id.'),
+    entityType: zod
+      .enum([
+        'calendar_event',
+        'document',
+        'project',
+        'database',
+        'form',
+        'call',
+        'thread',
+        'agent_session',
+        'external_chat',
+      ])
+      .describe(
+        'Entity types a channel grant can cover.\n\nValues are the stored entity types. `calendar` is accepted for a calendar\nchip, whose stored type is `calendar_event`.'
+      ),
+  })
+  .describe("Request to share one item with a channel's current members.");
 
 /**
  * @summary Handler for `POST /channels/{channel_id}/webhook`.
@@ -4694,6 +5814,12 @@ export const createCrmCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -4808,6 +5934,12 @@ export const getCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -4916,6 +6048,12 @@ export const listCompanyContactsResponseItem = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -4986,6 +6124,12 @@ export const createCrmContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -4995,9 +6139,8 @@ export const createCrmContactResponse = zod
   );
 
 /**
- * @summary Toggle `email_sync` on a CRM company. Purely a visibility flag —
-it gates whether team members can see each other's emails with
-this company. Existing CRM data is unaffected.
+ * @summary Toggle email contribution for a CRM company without archiving its records.
+Individual consent and all remaining exclusions still apply.
  */
 export const setEmailSyncParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
@@ -5008,7 +6151,7 @@ export const setEmailSyncBody = zod
     email_sync: zod
       .boolean()
       .describe(
-        "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility\/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
+        "Allow eligible email contributions for this company's domains.\nDisabling excludes new ingestion and CRM thread access while preserving\nrecords. Re-enabling requires an admin, removes exact team exclusions,\nand schedules backfill only for explicitly consenting primary mailboxes.\nPersonal and broader team exclusions continue to apply."
       ),
   })
   .describe(
@@ -5115,6 +6258,12 @@ export const searchContactsResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -5178,6 +6327,12 @@ export const createCrmTeamContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -5237,6 +6392,12 @@ export const getContactByEmailResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -5293,6 +6454,138 @@ export const getContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactCompanyParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactCompanyBody = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe(
+        'Destination company in the same team. Unlinking is not supported.'
+      ),
+  })
+  .describe('Link or switch a contact with a known personal-provider email.');
+
+export const setCrmContactCompanyResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe('The address to add. An identical retry is accepted.'),
+  })
+  .describe('Add a missing contact email. Existing addresses are read-only.');
+
+export const setCrmContactEmailResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -5341,6 +6634,121 @@ export const setCrmContactNameBody = zod
   .describe('Request body for `PUT \/contacts\/{contact_id}\/name`.');
 
 /**
+ * @summary Read the caller's mailbox consent and both exclusion lists.
+ */
+export const getCrmEmailPrivacyResponse = zod
+  .object({
+    can_remove_team_domains: zod
+      .boolean()
+      .describe('Whether the caller can remove a team exclusion.'),
+    enabled: zod
+      .boolean()
+      .describe(
+        'Whether this exact mailbox has explicit contribution consent.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe(
+        'The primary mailbox that would contribute; absent before email connection.'
+      ),
+    mailbox_link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact current primary connection; clients bind opt-in to this identifier.'
+      ),
+    personal_domains: zod
+      .array(zod.string())
+      .describe("Domains excluded only for the caller's contributions."),
+    team_domains: zod
+      .array(zod.string())
+      .describe(
+        'Domains excluded across the team, including legacy company exclusions.'
+      ),
+  })
+  .describe('Current consent and exclusions, readable by any team member.');
+
+/**
+ * @summary Apply one consent or domain-exclusion change as the authenticated member.
+ */
+export const updateCrmEmailPrivacyBody = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['set_consent']),
+        enabled: zod
+          .boolean()
+          .describe(
+            "False withdraws this mailbox's CRM contribution without deleting records."
+          ),
+        link_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Required when enabling; must match the displayed primary connection.'
+          ),
+      })
+      .describe(
+        'Consent covers all available past and future emails in the primary mailbox.'
+      ),
+    zod
+      .object({
+        action: zod.enum(['add_domain']),
+        domain: zod.string().describe('Bare company domain.'),
+        scope: zod
+          .enum(['team', 'personal'])
+          .describe('The audience affected by a domain exclusion.'),
+      })
+      .describe('Add a domain and its subdomains to an exclusion list.'),
+    zod
+      .object({
+        action: zod.enum(['remove_domain']),
+        domain: zod.string().describe('Bare company domain.'),
+        scope: zod
+          .enum(['team', 'personal'])
+          .describe('The audience affected by a domain exclusion.'),
+      })
+      .describe('Remove an exclusion; other exclusions still apply.'),
+  ])
+  .describe(
+    'One explicit privacy change, avoiding lost updates to whole blocklists.'
+  );
+
+export const updateCrmEmailPrivacyResponse = zod
+  .object({
+    can_remove_team_domains: zod
+      .boolean()
+      .describe('Whether the caller can remove a team exclusion.'),
+    enabled: zod
+      .boolean()
+      .describe(
+        'Whether this exact mailbox has explicit contribution consent.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe(
+        'The primary mailbox that would contribute; absent before email connection.'
+      ),
+    mailbox_link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact current primary connection; clients bind opt-in to this identifier.'
+      ),
+    personal_domains: zod
+      .array(zod.string())
+      .describe("Domains excluded only for the caller's contributions."),
+    team_domains: zod
+      .array(zod.string())
+      .describe(
+        'Domains excluded across the team, including legacy company exclusions.'
+      ),
+  })
+  .describe('Current consent and exclusions, readable by any team member.');
+
+/**
  * @summary List the caller's live pipelines in their CRM.
  */
 export const listCrmPipelinesResponseItem = zod
@@ -5351,12 +6759,19 @@ export const listCrmPipelinesResponseItem = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5396,10 +6811,15 @@ export const createCrmPipelineBody = zod
   .object({
     name: zod.string().describe('Pipeline name.'),
     recordType: zod
-      .enum(['company', 'contact'])
-      .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
-      ),
+      .union([
+        zod.null(),
+        zod
+          .enum(['company', 'contact'])
+          .describe(
+            'Which CRM entity each row references. Fixed when a pipeline is created.'
+          ),
+      ])
+      .optional(),
     sharing: zod
       .enum(['private', 'team'])
       .optional()
@@ -5408,7 +6828,7 @@ export const createCrmPipelineBody = zod
       ),
   })
   .describe(
-    'Request to create an empty pipeline with the standard CRM columns.'
+    'Request to create an empty pipeline: the standard CRM columns for a tracked\nrecord, or one Name column, like a new database, for a generic pipeline.'
   );
 
 export const createCrmPipelineResponse = zod
@@ -5419,12 +6839,19 @@ export const createCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -5471,12 +6898,19 @@ export const getCrmPipelineResponse = zod
       .uuid()
       .describe('Entity identity, used with `CrmPipeline` access receipts.'),
     name: zod.string().describe('Pipeline display name.'),
-    primaryColumnId: zod.uuid().describe('Protected primary column.'),
-    recordType: zod
-      .enum(['company', 'contact'])
+    primaryColumnId: zod
+      .uuid()
       .describe(
-        'Which CRM entity each row references. Fixed when a pipeline is created.'
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
       ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
     sharing: zod
       .enum(['private', 'team'])
       .describe(
@@ -10566,7 +12000,7 @@ export const getCrmTeamSettingsResponse = zod
       ),
   })
   .describe(
-    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `\/crm\/email-privacy`."
   );
 
 /**
@@ -10682,7 +12116,7 @@ export const putCrmTeamSettingsResponse = zod
       ),
   })
   .describe(
-    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `\/crm\/email-privacy`."
   );
 
 /**
@@ -10798,10 +12232,25 @@ export const createDatabaseBody = zod
   .describe('Request body for creating a database.');
 
 /**
- * @summary Save an immutable query. Editing a question saves a new one.
+ * @summary Save a question: a `SELECT` that compiles against the caller's databases,
+whose chart columns, when given, are ones it returns. Saved questions
+never change; editing one saves a new one.
  */
 export const saveDatabaseQueryBody = zod
   .object({
+    chart: zod
+      .object({
+        color: zod
+          .string()
+          .optional()
+          .describe('The column whose values split the series.'),
+        x: zod.string().describe('The label column.'),
+        y: zod
+          .array(zod.string())
+          .describe('The value columns, each a number.'),
+      })
+      .optional()
+      .describe('The result columns a chart of a saved question plots.'),
     databaseId: zod
       .uuid()
       .optional()
@@ -10817,7 +12266,7 @@ export const saveDatabaseQueryBody = zod
       })
       .describe('A versioned query definition.'),
   })
-  .describe('Request body for saving a query.');
+  .describe('Request body for saving a question.');
 
 /**
  * @summary A saved query's definition, for its creator or a viewer of its database.
@@ -17721,6 +19170,22 @@ export const createSnippetHandlerResponse = zod
   .describe('Response for creating a snippet.');
 
 /**
+ * @summary Create a blank native spreadsheet, ready to read and edit.
+ */
+export const createSpreadsheetBody = zod
+  .object({
+    documentName: zod.string().describe('Spreadsheet name.'),
+    projectId: zod.uuid().nullish().describe('Optional parent project.'),
+  })
+  .describe('Request to create a blank native spreadsheet.');
+
+export const createSpreadsheetResponse = zod
+  .object({
+    documentId: zod.string().describe("The new spreadsheet's document ID."),
+  })
+  .describe('A created native spreadsheet.');
+
+/**
  * @summary Creates a task document with properties and initialized markdown content in
 one backend-owned lifecycle.
  */
@@ -18506,6 +19971,37 @@ export const getSystemSkillsHandlerResponse = zod
       .describe('Every system skill, in display order.'),
   })
   .describe('Response listing the built-in system skills.');
+
+/**
+ * The body is the raw file content. Preview generation and indexing may
+finish after the response.
+ * @summary Upload a file's bytes as a new document, up to 25 MiB.
+ */
+export const uploadFileQueryParams = zod.object({
+  fileName: zod
+    .string()
+    .describe(
+      'Filename including its extension, such as `report.pdf`; the extension\nsets the file type. No directory components.'
+    ),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe(
+      'Destination project. Requires edit access; omit for top-level files.'
+    ),
+});
+
+export const uploadFileResponseSizeBytesMin = 0;
+
+export const uploadFileResponse = zod
+  .object({
+    documentId: zod.string().describe('The new document.'),
+    sizeBytes: zod
+      .number()
+      .min(uploadFileResponseSizeBytesMin)
+      .describe('Number of bytes stored.'),
+  })
+  .describe('The document created from the uploaded bytes.');
 
 /**
  * Returns document metadata, user access level, and view location.
@@ -19400,6 +20896,245 @@ export const getDocumentBranchNameResponse = zod
   .describe('Branch name response.');
 
 /**
+ * @summary Edit a canvas by natural-language instructions with edit access, through
+EditCanvas's editor, AI admission and billing.
+ */
+export const editCanvasWithAiParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const editCanvasWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions, naming items by id where they exist.'
+      ),
+  })
+  .describe('What to change, in words.');
+
+export const editCanvasWithAiResponseOperationsAppliedMin = 0;
+
+export const editCanvasWithAiResponse = zod
+  .object({
+    clarification: zod
+      .string()
+      .nullish()
+      .describe(
+        'What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays.'
+      ),
+    operationsApplied: zod
+      .number()
+      .min(editCanvasWithAiResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    summary: zod.string().describe('What the editor did, in words.'),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
+ * @summary Apply one batch of CanvasEditor code with edit access, against the revision
+it was planned on, without a model. The batch validates, measures text and
+commits once, or not at all.
+ */
+export const applyCanvasEditsParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const applyCanvasEditsBody = zod
+  .object({
+    code: zod
+      .string()
+      .min(1)
+      .describe(
+        'JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.'
+      ),
+    expectedRevision: zod
+      .string()
+      .describe(
+        'The revision the batch was planned against, from a fresh scene read.'
+      ),
+    snippets: zod
+      .record(zod.string(), zod.string())
+      .nullish()
+      .describe('Plain text values the code reads as `snippets.<key>`.'),
+  })
+  .describe('One batch of CanvasEditor code to apply against a revision.');
+
+export const applyCanvasEditsResponseOperationsAppliedMin = 0;
+
+export const applyCanvasEditsResponse = zod
+  .object({
+    operationsApplied: zod
+      .number()
+      .min(applyCanvasEditsResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    revision: zod.string().describe("The scene's revision after the batch."),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene after the batch, with `textLayout` for measured text.'
+      ),
+    summary: zod.string().describe('What happened, in words.'),
+  })
+  .describe('A committed batch.');
+
+/**
+ * @summary Render a canvas to a PNG with view access, with the Canvas renderer, and
+keep it as a static file owned by the caller. No model runs.
+ */
+export const renderCanvasParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const renderCanvasBody = zod
+  .object({
+    crop: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            height: zod.number().describe('Positive world height.'),
+            width: zod.number().describe('Positive world width.'),
+            x: zod.number().describe('World x coordinate.'),
+            y: zod.number().describe('World y coordinate.'),
+          })
+          .describe('World-space crop or object bounds.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Items to fit the image to, at most 100.'),
+  })
+  .describe('What to render.');
+
+export const renderCanvasResponseHeightMin = 0;
+
+export const renderCanvasResponseWidthMin = 0;
+
+export const renderCanvasResponse = zod
+  .object({
+    crop: zod
+      .object({
+        height: zod.number().describe('Positive world height.'),
+        width: zod.number().describe('Positive world width.'),
+        x: zod.number().describe('World x coordinate.'),
+        y: zod.number().describe('World y coordinate.'),
+      })
+      .describe('World-space crop or object bounds.'),
+    fileId: zod.string().describe('Static file id of the PNG.'),
+    height: zod
+      .number()
+      .min(renderCanvasResponseHeightMin)
+      .describe('Image height in pixels.'),
+    objects: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Canvas item ID.'),
+          })
+          .describe('Stable object-to-image mapping.')
+      )
+      .describe('Items in the image, with their world bounds.'),
+    revision: zod.string().describe('Revision of the scene the image shows.'),
+    textLayout: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Stable item ID.'),
+            overflow: zod
+              .boolean()
+              .describe(
+                'Whether the DOM text exceeds its intended text frame.'
+              ),
+          })
+          .describe(
+            'Actual browser text bounds and overflow for a read-only render.'
+          )
+      )
+      .describe('Rendered text bounds and whether text overflows its frame.'),
+    unavailable: zod
+      .array(
+        zod
+          .object({
+            id: zod.string().describe('Canvas item ID.'),
+            reason: zod
+              .string()
+              .describe('Why no referenced resource was loaded.'),
+          })
+          .describe('Explicitly unavailable referenced content.')
+      )
+      .describe('Referenced content the renderer could not show, and why.'),
+    url: zod.string().describe('Permanent URL of the PNG.'),
+    width: zod
+      .number()
+      .min(renderCanvasResponseWidthMin)
+      .describe('Image width in pixels.'),
+  })
+  .describe(
+    'A PNG of the canvas, stored as a static file owned by the caller.'
+  );
+
+/**
+ * @summary Read a canvas's live scene with view access: stable item ids, containment
+and order, transforms, world bounds, shapes and text. No model runs.
+ */
+export const readCanvasSceneParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const readCanvasSceneBody = zod
+  .object({
+    format: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['scene', 'overview'])
+          .describe('Scene representation requested by a reader.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Stable item ids to read, at most 100; omit for the whole scene, up to\n300 items.'
+      ),
+  })
+  .describe('Which part of the scene to read.');
+
+export const readCanvasSceneResponse = zod
+  .object({
+    revision: zod
+      .string()
+      .describe(
+        "The scene's immutable revision; pass it as `expectedRevision` to edit."
+      ),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and\n`items` with stable ids, transforms, world bounds, shapes and text.'
+      ),
+  })
+  .describe('The live scene at one revision.');
+
+/**
  * Copies an existing document, creating a new document with the same content.
 Does not require re-uploading the document file.
  * @summary Handler for `POST /documents/{document_id}/copy`.
@@ -19576,6 +21311,35 @@ export const copyDocumentResponse = zod
     error: zod.boolean().describe('Indicates if an error occurred.'),
   })
   .describe('Response wrapper for the copy document endpoint.');
+
+/**
+ * @summary Read a Figma (.fig) design as text with the caller's view access: its
+pages, each page's top-level frames and sections with their text, the
+components their instances use, and the file's components, styles and
+variables.
+ */
+export const readDesignParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readDesignQueryPageItemMin = 0;
+
+export const readDesignQueryParams = zod.object({
+  page: zod
+    .array(zod.number().min(readDesignQueryPageItemMin))
+    .optional()
+    .describe('1-based page numbers to read; omit for the whole design.'),
+});
+
+export const readDesignResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe(
+        'The description: pages or artboards, the layer tree, and the text of\ntext layers.'
+      ),
+  })
+  .describe('A design file described as text.');
 
 /**
  * @summary Generates a presigned url to download the raw content of the document
@@ -19848,6 +21612,25 @@ export const getDocumentGithubPullRequestsResponse = zod
   );
 
 /**
+ * @summary Read an Illustrator (.ai) document as text with the caller's view access:
+its artboards, its layer tree from top to bottom, and the text of its
+text objects.
+ */
+export const readIllustratorDocumentParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readIllustratorDocumentResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe(
+        'The description: pages or artboards, the layer tree, and the text of\ntext layers.'
+      ),
+  })
+  .describe('A design file described as text.');
+
+/**
  * @summary Gets the presigned url(s) for the document. aka location
  */
 export const getLocationHandlerParams = zod.object({
@@ -20104,6 +21887,7850 @@ export const permanentlyDeleteDocumentResponse = zod.object({
 });
 
 /**
+ * @summary Read a Photoshop (.psd or .psb) document as text with the caller's view
+access: its canvas, its layer tree from top to bottom with each layer's
+settings, and the text of its text layers.
+ */
+export const readPhotoshopDocumentParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readPhotoshopDocumentResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe(
+        'The description: pages or artboards, the layer tree, and the text of\ntext layers.'
+      ),
+  })
+  .describe('A design file described as text.');
+
+/**
+ * @summary Read a PowerPoint deck as text with the caller's view access: every
+slide's id and shapes with their ids, positions and text. Edits address
+slides and shapes by these ids, which are not slide numbers.
+ */
+export const readPresentationParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readPresentationQuerySlideItemMin = 0;
+
+export const readPresentationQueryParams = zod.object({
+  slide: zod
+    .array(zod.number().min(readPresentationQuerySlideItemMin))
+    .optional()
+    .describe('1-based slide numbers to read; omit for the whole deck.'),
+});
+
+export const readPresentationResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe(
+        "Slide size, layouts, theme colors, and each slide's id, layout and\nshapes (ids, kinds, positions and sizes in points, text, tables,\ncharts, pictures), plus sections, masters, comments and notes."
+      ),
+  })
+  .describe('A presentation described as text.');
+
+/**
+ * @summary Create an edited copy of a PowerPoint deck as a new presentation, leaving
+the original unchanged. Needs view access to the deck and edit access to
+the destination project; the outcome's `documentId` is the copy.
+ */
+export const copyPresentationParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const copyPresentationBodyOperationsItemCellColMin = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMin = 0;
+
+export const copyPresentationBodyOperationsItemAtOffsetMin = 0;
+
+export const copyPresentationBodyOperationsItemAtParagraphMin = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinOne = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinOne = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinOne = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOne = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemEndOffsetMin = 0;
+
+export const copyPresentationBodyOperationsItemEndParagraphMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemStartOffsetMin = 0;
+
+export const copyPresentationBodyOperationsItemStartParagraphMin = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinThree = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinThree = 0;
+
+export const copyPresentationBodyOperationsItemEndOffsetMinOne = 0;
+
+export const copyPresentationBodyOperationsItemEndParagraphMinOne = 0;
+
+export const copyPresentationBodyOperationsItemPropsBaselineDefault = null;
+export const copyPresentationBodyOperationsItemPropsBoldDefault = null;
+export const copyPresentationBodyOperationsItemPropsColorDefault = null;
+export const copyPresentationBodyOperationsItemPropsFontDefault = null;
+export const copyPresentationBodyOperationsItemPropsGlowColorDefault = null;
+export const copyPresentationBodyOperationsItemPropsGlowSizePtDefault = null;
+export const copyPresentationBodyOperationsItemPropsGlowTransparencyDefault =
+  null;
+export const copyPresentationBodyOperationsItemPropsGlowDefault = null;
+export const copyPresentationBodyOperationsItemPropsHighlightDefault = null;
+export const copyPresentationBodyOperationsItemPropsItalicDefault = null;
+export const copyPresentationBodyOperationsItemPropsLinkDefault = null;
+export const copyPresentationBodyOperationsItemPropsLinkTipDefault = null;
+export const copyPresentationBodyOperationsItemPropsShadowAngleDegDefault =
+  null;
+export const copyPresentationBodyOperationsItemPropsShadowBlurPtDefault = null;
+export const copyPresentationBodyOperationsItemPropsShadowColorDefault = null;
+export const copyPresentationBodyOperationsItemPropsShadowDistancePtDefault =
+  null;
+export const copyPresentationBodyOperationsItemPropsShadowPresetDefault = null;
+export const copyPresentationBodyOperationsItemPropsShadowSizePctDefault = null;
+export const copyPresentationBodyOperationsItemPropsShadowTransparencyDefault =
+  null;
+export const copyPresentationBodyOperationsItemPropsShadowDefault = null;
+export const copyPresentationBodyOperationsItemPropsSizeDefault = null;
+export const copyPresentationBodyOperationsItemPropsSpacingDefault = null;
+export const copyPresentationBodyOperationsItemPropsStrikeDefault = null;
+export const copyPresentationBodyOperationsItemPropsUnderlineDefault = null;
+export const copyPresentationBodyOperationsItemShapeMinThree = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThree = 0;
+
+export const copyPresentationBodyOperationsItemStartOffsetMinOne = 0;
+
+export const copyPresentationBodyOperationsItemStartParagraphMinOne = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinFour = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinFour = 0;
+
+export const copyPresentationBodyOperationsItemFromMin = 0;
+
+export const copyPresentationBodyOperationsItemPropsAlignDefault = null;
+export const copyPresentationBodyOperationsItemPropsBulletStartMin = 0;
+
+export const copyPresentationBodyOperationsItemPropsBulletDefault = null;
+export const copyPresentationBodyOperationsItemPropsIndentDefault = null;
+export const copyPresentationBodyOperationsItemPropsLevelDefault = null;
+export const copyPresentationBodyOperationsItemPropsLevelMin = 0;
+
+export const copyPresentationBodyOperationsItemPropsLineSpacingDefault = null;
+export const copyPresentationBodyOperationsItemPropsMarginLeftDefault = null;
+export const copyPresentationBodyOperationsItemPropsSpaceAfterDefault = null;
+export const copyPresentationBodyOperationsItemPropsSpaceBeforeDefault = null;
+export const copyPresentationBodyOperationsItemShapeMinFour = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFour = 0;
+
+export const copyPresentationBodyOperationsItemToMin = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinFive = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinFive = 0;
+
+export const copyPresentationBodyOperationsItemPropsAnchorDefault = null;
+export const copyPresentationBodyOperationsItemPropsAutofitDefault = null;
+export const copyPresentationBodyOperationsItemPropsColumnsDefault = null;
+export const copyPresentationBodyOperationsItemPropsColumnsMin = 0;
+
+export const copyPresentationBodyOperationsItemPropsDirectionDefault = null;
+export const copyPresentationBodyOperationsItemPropsInsetsDefault = null;
+export const copyPresentationBodyOperationsItemPropsWrapDefault = null;
+export const copyPresentationBodyOperationsItemShapeMinFive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFive = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinSix = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinSix = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinSeven = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinSeven = 0;
+
+export const copyPresentationBodyOperationsItemLineColorDefault = null;
+export const copyPresentationBodyOperationsItemLineDashDefault = null;
+export const copyPresentationBodyOperationsItemLineHeadDefault = null;
+export const copyPresentationBodyOperationsItemLineNoneDefault = false;
+export const copyPresentationBodyOperationsItemLineTailDefault = null;
+export const copyPresentationBodyOperationsItemLineWidthDefault = null;
+export const copyPresentationBodyOperationsItemShapeMinEight = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinEight = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinNine = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinNine = 0;
+
+export const copyPresentationBodyOperationsItemShapeItemsItemLevelMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOnezero = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwozero = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOneone = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwoone = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOnetwo = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwotwo = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOnethree = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwothree = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOnefour = 0;
+
+export const copyPresentationBodyOperationsItemColMin = 0;
+
+export const copyPresentationBodyOperationsItemRowMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwofour = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOnefive = 0;
+
+export const copyPresentationBodyOperationsItemAtMinOne = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwofive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOnesix = 0;
+
+export const copyPresentationBodyOperationsItemRowMinOne = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwosix = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOneseven = 0;
+
+export const copyPresentationBodyOperationsItemAtMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwoseven = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOneeight = 0;
+
+export const copyPresentationBodyOperationsItemColMinOne = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwoeight = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinOnenine = 0;
+
+export const copyPresentationBodyOperationsItemFromColMin = 0;
+
+export const copyPresentationBodyOperationsItemFromRowMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinTwonine = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwozero = 0;
+
+export const copyPresentationBodyOperationsItemToColMin = 0;
+
+export const copyPresentationBodyOperationsItemToRowMin = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinSix = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinSix = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreezero = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwoone = 0;
+
+export const copyPresentationBodyOperationsItemBordersLineColorDefault = null;
+export const copyPresentationBodyOperationsItemBordersLineDashDefault = null;
+export const copyPresentationBodyOperationsItemBordersLineNoneDefault = false;
+export const copyPresentationBodyOperationsItemBordersLineWidthDefault = null;
+export const copyPresentationBodyOperationsItemFromColMinOne = 0;
+
+export const copyPresentationBodyOperationsItemFromRowMinOne = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreeone = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwotwo = 0;
+
+export const copyPresentationBodyOperationsItemToColMinOne = 0;
+
+export const copyPresentationBodyOperationsItemToRowMinOne = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreetwo = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwothree = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreethree = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwofour = 0;
+
+export const copyPresentationBodyOperationsItemAfterMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwofive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwosix = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwoseven = 0;
+
+export const copyPresentationBodyOperationsItemToMinFour = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwoeight = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinTwonine = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreezero = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreefour = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreeone = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreefive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreetwo = 0;
+
+export const copyPresentationBodyOperationsItemSeriesColorsItemSeriesMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreesix = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreethree = 0;
+
+export const copyPresentationBodyOperationsItemShapesItemMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreefour = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreeseven = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreefive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreesix = 0;
+
+export const copyPresentationBodyOperationsItemAfterMinOne = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreeseven = 0;
+
+export const copyPresentationBodyOperationsItemAdvanceAfterMsMin = 0;
+
+export const copyPresentationBodyOperationsItemDurationMsMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreeeight = 0;
+
+export const copyPresentationBodyOperationsItemAnimationsItemDelayMsMin = 0;
+
+export const copyPresentationBodyOperationsItemAnimationsItemDurationMsMin = 0;
+
+export const copyPresentationBodyOperationsItemAnimationsItemParagraphMin = 0;
+
+export const copyPresentationBodyOperationsItemAnimationsItemShapeIdMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinThreenine = 0;
+
+export const copyPresentationBodyOperationsItemAnimationDelayMsMin = 0;
+
+export const copyPresentationBodyOperationsItemAnimationDurationMsMin = 0;
+
+export const copyPresentationBodyOperationsItemAnimationParagraphMin = 0;
+
+export const copyPresentationBodyOperationsItemAnimationShapeIdMin = 0;
+
+export const copyPresentationBodyOperationsItemIndexMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFourzero = 0;
+
+export const copyPresentationBodyOperationsItemIndexesItemMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeIdsItemMin = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFourone = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFourtwo = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreeeight = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFourthree = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinThreenine = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFourfour = 0;
+
+export const copyPresentationBodyOperationsItemShapesItemMinOne = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFourfive = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinFourzero = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFoursix = 0;
+
+export const copyPresentationBodyOperationsItemFromShapeMin = 0;
+
+export const copyPresentationBodyOperationsItemFromSlideMin = 0;
+
+export const copyPresentationBodyOperationsItemShapesItemMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFourseven = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinFourone = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFoureight = 0;
+
+export const copyPresentationBodyOperationsItemShapesItemMinThree = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFournine = 0;
+
+export const copyPresentationBodyOperationsItemGlowColorDefault = null;
+export const copyPresentationBodyOperationsItemGlowSizePtDefault = null;
+export const copyPresentationBodyOperationsItemGlowTransparencyDefault = null;
+export const copyPresentationBodyOperationsItemReflectionBlurPtDefault = null;
+export const copyPresentationBodyOperationsItemReflectionDistancePtDefault =
+  null;
+export const copyPresentationBodyOperationsItemReflectionPresetDefault = null;
+export const copyPresentationBodyOperationsItemReflectionSizePctDefault = null;
+export const copyPresentationBodyOperationsItemReflectionTransparencyDefault =
+  null;
+export const copyPresentationBodyOperationsItemShadowAngleDegDefault = null;
+export const copyPresentationBodyOperationsItemShadowBlurPtDefault = null;
+export const copyPresentationBodyOperationsItemShadowColorDefault = null;
+export const copyPresentationBodyOperationsItemShadowDistancePtDefault = null;
+export const copyPresentationBodyOperationsItemShadowPresetDefault = null;
+export const copyPresentationBodyOperationsItemShadowSizePctDefault = null;
+export const copyPresentationBodyOperationsItemShadowTransparencyDefault = null;
+export const copyPresentationBodyOperationsItemShapesItemMinFour = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFivezero = 0;
+
+export const copyPresentationBodyOperationsItemSoftEdgeSizePtDefault = null;
+export const copyPresentationBodyOperationsItemShapeMinFourtwo = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFiveone = 0;
+
+export const copyPresentationBodyOperationsItemShapesItemMinFive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFivetwo = 0;
+
+export const copyPresentationBodyOperationsItemSlidesItemMin = 0;
+
+export const copyPresentationBodyOperationsItemBeforeSlideMin = 0;
+
+export const copyPresentationBodyOperationsItemToIndexMin = 0;
+
+export const copyPresentationBodyOperationsItemGuidesItemIdMin = 0;
+
+export const copyPresentationBodyOperationsItemAfterMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemDuplicateMin = 0;
+
+export const copyPresentationBodyOperationsItemMasterMin = 0;
+
+export const copyPresentationBodyOperationsItemLayoutMinTwo = 0;
+
+export const copyPresentationBodyOperationsItemLayoutMinThree = 0;
+
+export const copyPresentationBodyOperationsItemLayoutMinFour = 0;
+
+export const copyPresentationBodyOperationsItemLayoutMinFive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFivethree = 0;
+
+export const copyPresentationBodyOperationsItemStyleMinOne = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinFourthree = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFivefour = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFivefive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFivesix = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFiveseven = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFiveeight = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinFivenine = 0;
+
+export const copyPresentationBodyOperationsItemAtOffsetMinOne = 0;
+
+export const copyPresentationBodyOperationsItemAtParagraphMinOne = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinSeven = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinSeven = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinFourfour = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinSixzero = 0;
+
+export const copyPresentationBodyOperationsItemCellColMinEight = 0;
+
+export const copyPresentationBodyOperationsItemCellRowMinEight = 0;
+
+export const copyPresentationBodyOperationsItemIndexMinOne = 0;
+
+export const copyPresentationBodyOperationsItemParagraphMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinFourfive = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinSixone = 0;
+
+export const copyPresentationBodyOperationsItemEditItemsItemLevelMin = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinFoursix = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinSixtwo = 0;
+
+export const copyPresentationBodyOperationsItemShapeMinFourseven = 0;
+
+export const copyPresentationBodyOperationsItemSlideMinSixthree = 0;
+
+export const copyPresentationBody = zod
+  .object({
+    name: zod
+      .string()
+      .min(1)
+      .describe('Name of the new presentation, without the `.pptx` extension.'),
+    operations: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellColMin)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellRowMin)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['setText']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMin)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMin)
+                  .describe('Slide id.'),
+                text: zod.string().describe('New text.'),
+              })
+              .describe(
+                'Replaces all text of a shape (`\\n` separates paragraphs, `\\u{b}` is a line\nbreak), keeping the formatting of the first run of each paragraph.'
+              ),
+            zod
+              .object({
+                at: zod
+                  .object({
+                    offset: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemAtOffsetMin)
+                      .describe('Character offset within the paragraph.'),
+                    paragraph: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemAtParagraphMin)
+                      .describe('Paragraph index.'),
+                  })
+                  .describe("A position inside a shape's text."),
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellColMinOne)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellRowMinOne)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['insertText']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinOne)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOne)
+                  .describe('Slide id.'),
+                text: zod.string().describe('Text to insert.'),
+              })
+              .describe(
+                'Inserts text at a position (`\\n` splits paragraphs).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellColMinTwo)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellRowMinTwo)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                end: zod
+                  .object({
+                    offset: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemEndOffsetMin)
+                      .describe('Character offset within the paragraph.'),
+                    paragraph: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemEndParagraphMin)
+                      .describe('Paragraph index.'),
+                  })
+                  .describe("A position inside a shape's text."),
+                op: zod.enum(['deleteText']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwo)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwo)
+                  .describe('Slide id.'),
+                start: zod
+                  .object({
+                    offset: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemStartOffsetMin)
+                      .describe('Character offset within the paragraph.'),
+                    paragraph: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemStartParagraphMin)
+                      .describe('Paragraph index.'),
+                  })
+                  .describe("A position inside a shape's text."),
+              })
+              .describe(
+                'Deletes text between two positions (may span paragraphs).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemCellColMinThree
+                          )
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemCellRowMinThree
+                          )
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                end: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        offset: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemEndOffsetMinOne
+                          )
+                          .describe('Character offset within the paragraph.'),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemEndParagraphMinOne
+                          )
+                          .describe('Paragraph index.'),
+                      })
+                      .describe("A position inside a shape's text."),
+                  ])
+                  .optional(),
+                op: zod.enum(['formatText']),
+                props: zod
+                  .object({
+                    baseline: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Baseline shift in percent (30 = superscript, -25 = subscript, 0 = normal).'
+                      ),
+                    bold: zod.boolean().nullish().describe('Bold.'),
+                    color: zod
+                      .string()
+                      .nullish()
+                      .describe('Text color as `RRGGBB`.'),
+                    font: zod.string().nullish().describe('Latin typeface.'),
+                    glow: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .string()
+                              .describe(
+                                'A preset name, or `none` to remove the effect.'
+                              ),
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    "Color: `RRGGBB` or a theme color name (`accent1`...; theme colors\nget PowerPoint's 175% saturation). A new glow defaults to `accent1`."
+                                  ),
+                                sizePt: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Glow size in points (a new glow defaults to 10; 0 removes the glow).'
+                                  ),
+                                transparency: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Transparency 0-1 (a new glow defaults to 0.6).'
+                                  ),
+                              })
+                              .describe(
+                                "Glow options (PowerPoint's Glow Options)."
+                              ),
+                          ])
+                          .describe(
+                            'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                          ),
+                      ])
+                      .optional(),
+                    highlight: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Highlight color as `RRGGBB`, or `\"\"` to remove.'
+                      ),
+                    italic: zod.boolean().nullish().describe('Italic.'),
+                    link: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Hyperlink, or `\"\"` to remove: an address (`https:\/\/…`, `mailto:…`),\n`#slide=<id>` for another slide by stable id, or a slide show jump\n(`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,\n`#lastslideviewed`, `#endshow`).'
+                      ),
+                    linkTip: zod
+                      .string()
+                      .nullish()
+                      .describe("The link's ScreenTip (written with `link`)."),
+                    shadow: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .string()
+                              .describe(
+                                'A preset name, or `none` to remove the effect.'
+                              ),
+                            zod
+                              .object({
+                                angleDeg: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Direction the shadow falls, in degrees clockwise from the right\n(45 = toward the bottom right, 90 = straight down).'
+                                  ),
+                                blurPt: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Blur radius in points.'),
+                                color: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    'Color: `RRGGBB` or a theme color name (presets use black).'
+                                  ),
+                                distancePt: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Distance from the shape in points.'
+                                  ),
+                                preset: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    'Preset to start from (the names `shadow` takes); omitted: the\ncurrent shadow, or `outerBottomRight` when there is none.'
+                                  ),
+                                sizePct: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Size in percent of the shape (outer shadows only; 100 = same size).'
+                                  ),
+                                transparency: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Transparency 0-1 (0 = opaque).'),
+                              })
+                              .describe(
+                                "Shadow options (PowerPoint's Shadow Options pane)."
+                              ),
+                          ])
+                          .describe(
+                            'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                          ),
+                      ])
+                      .optional(),
+                    size: zod.number().nullish().describe('Size in points.'),
+                    spacing: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Character spacing in points added between letters (negative\ncondenses; 0 = normal).'
+                      ),
+                    strike: zod.boolean().nullish().describe('Strikethrough.'),
+                    underline: zod.boolean().nullish().describe('Underline.'),
+                  })
+                  .describe(
+                    'Character formatting changes (`None` = leave unchanged).'
+                  ),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThree)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThree)
+                  .describe('Slide id.'),
+                start: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        offset: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemStartOffsetMinOne
+                          )
+                          .describe('Character offset within the paragraph.'),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemStartParagraphMinOne
+                          )
+                          .describe('Paragraph index.'),
+                      })
+                      .describe("A position inside a shape's text."),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Applies character formatting to a range (whole shape when omitted).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellColMinFour)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellRowMinFour)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                from: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemFromMin)
+                  .nullish()
+                  .describe('First paragraph.'),
+                op: zod.enum(['formatParagraphs']),
+                props: zod
+                  .object({
+                    align: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        '`left`, `center`, `right`, `justify`, `distributed`.'
+                      ),
+                    bullet: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['none']),
+                              })
+                              .describe('No bullet.'),
+                            zod
+                              .object({
+                                kind: zod.enum(['inherit']),
+                              })
+                              .describe(
+                                'Inherit from the layout\/master (removes explicit bullet settings).'
+                              ),
+                            zod
+                              .object({
+                                char: zod
+                                  .string()
+                                  .describe('The bullet character.'),
+                                kind: zod.enum(['char']),
+                              })
+                              .describe('A character bullet.'),
+                            zod
+                              .object({
+                                kind: zod.enum(['number']),
+                                scheme: zod
+                                  .string()
+                                  .describe('Numbering scheme.'),
+                                start: zod
+                                  .number()
+                                  .min(
+                                    copyPresentationBodyOperationsItemPropsBulletStartMin
+                                  )
+                                  .optional()
+                                  .describe('First number.'),
+                              })
+                              .describe(
+                                'Automatic numbering (`arabicPeriod`, `romanUcPeriod`, `alphaLcParenR`...).'
+                              ),
+                          ])
+                          .describe('Bullet style for paragraphs.'),
+                      ])
+                      .optional(),
+                    indent: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'First-line indent in points (negative = hanging).'
+                      ),
+                    level: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemPropsLevelMin)
+                      .nullish()
+                      .describe('Outline level 0-8.'),
+                    lineSpacing: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Line spacing as a multiple of single spacing (1.0, 1.5...).'
+                      ),
+                    marginLeft: zod
+                      .number()
+                      .nullish()
+                      .describe('Left margin in points.'),
+                    spaceAfter: zod
+                      .number()
+                      .nullish()
+                      .describe('Space after in points.'),
+                    spaceBefore: zod
+                      .number()
+                      .nullish()
+                      .describe('Space before in points.'),
+                  })
+                  .describe('Paragraph formatting changes.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFour)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFour)
+                  .describe('Slide id.'),
+                to: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemToMin)
+                  .nullish()
+                  .describe('Last paragraph.'),
+              })
+              .describe(
+                'Applies paragraph formatting to paragraphs `from..=to` (all when omitted).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellColMinFive)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemCellRowMinFive)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['formatBody']),
+                props: zod
+                  .object({
+                    anchor: zod
+                      .string()
+                      .nullish()
+                      .describe('`top`, `middle`, `bottom`.'),
+                    autofit: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        '`none`, `shrink` (shrink text on overflow), `resize` (resize shape to fit).'
+                      ),
+                    columns: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemPropsColumnsMin)
+                      .nullish()
+                      .describe('Number of columns.'),
+                    direction: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'horz',
+                            'vert',
+                            'vert270',
+                            'wordArtVert',
+                            'eaVert',
+                            'mongolianVert',
+                            'wordArtVertRtl',
+                          ])
+                          .describe(
+                            'A text direction (`ST_TextVerticalType`).'
+                          ),
+                      ])
+                      .optional(),
+                    insets: zod
+                      .array(zod.number())
+                      .nullish()
+                      .describe(
+                        'Insets `[left, top, right, bottom]` in points.'
+                      ),
+                    wrap: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Wrap text at the box width.'),
+                  })
+                  .describe('Text box (body) changes.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFive)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFive)
+                  .describe('Slide id.'),
+              })
+              .describe('Changes text box properties.'),
+            zod
+              .object({
+                flipH: zod.boolean().nullish().describe('Horizontal flip.'),
+                flipV: zod.boolean().nullish().describe('Vertical flip.'),
+                h: zod.number().nullish().describe('Height (points).'),
+                op: zod.enum(['setTransform']),
+                rotation: zod
+                  .number()
+                  .nullish()
+                  .describe('Rotation in degrees.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinSix)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinSix)
+                  .describe('Slide id.'),
+                w: zod.number().nullish().describe('Width (points).'),
+                x: zod.number().nullish().describe('Left (points).'),
+                y: zod.number().nullish().describe('Top (points).'),
+              })
+              .describe(
+                'Moves, resizes, rotates, or flips a shape (omitted fields stay).\nValues are in slide space, also for group members (as the outline\nreports them); their group grows or shrinks to fit.'
+              ),
+            zod
+              .object({
+                fill: zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['none']),
+                      })
+                      .describe('No fill.'),
+                    zod
+                      .object({
+                        alpha: zod.number().nullish().describe('Opacity 0-1.'),
+                        color: zod
+                          .string()
+                          .describe(
+                            '`RRGGBB`, or a theme color name (`accent1`, `tx1`, `bg1`...).'
+                          ),
+                        kind: zod.enum(['solid']),
+                      })
+                      .describe('Solid color.'),
+                    zod
+                      .object({
+                        angle: zod
+                          .number()
+                          .optional()
+                          .describe('Angle in degrees.'),
+                        colors: zod
+                          .array(zod.string())
+                          .describe(
+                            'Stop colors (`RRGGBB` or theme names), evenly spaced.'
+                          ),
+                        kind: zod.enum(['gradient']),
+                      })
+                      .describe('Linear gradient.'),
+                  ])
+                  .describe('A fill specification.'),
+                op: zod.enum(['setFill']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinSeven)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinSeven)
+                  .describe('Slide id.'),
+              })
+              .describe("Sets a shape's fill."),
+            zod
+              .object({
+                line: zod
+                  .object({
+                    color: zod
+                      .string()
+                      .nullish()
+                      .describe('Color (`RRGGBB` or theme name).'),
+                    dash: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Preset dash (`solid`, `dash`, `dot`, `dashDot`, `lgDash`, `sysDash`, `sysDot`).'
+                      ),
+                    head: zod
+                      .string()
+                      .nullish()
+                      .describe('Arrowhead at the start.'),
+                    none: zod
+                      .boolean()
+                      .optional()
+                      .describe('Remove the outline.'),
+                    tail: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Arrowhead at the end (`none`, `triangle`, `stealth`, `diamond`, `oval`, `arrow`).'
+                      ),
+                    width: zod.number().nullish().describe('Width in points.'),
+                  })
+                  .describe('Outline changes.'),
+                op: zod.enum(['setLine']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinEight)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinEight)
+                  .describe('Slide id.'),
+              })
+              .describe("Changes a shape's outline."),
+            zod
+              .object({
+                op: zod.enum(['setGeometry']),
+                preset: zod.string().describe('Preset name.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinNine)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinNine)
+                  .describe('Slide id.'),
+              })
+              .describe("Changes a shape's preset geometry."),
+            zod
+              .object({
+                h: zod.number().describe('Height (points).'),
+                op: zod.enum(['addShape']),
+                shape: zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['textBox']),
+                        text: zod
+                          .string()
+                          .optional()
+                          .describe(
+                            'Initial text (`\\n` separates paragraphs).'
+                          ),
+                      })
+                      .describe('A text box.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['shape']),
+                        preset: zod.string().describe('Preset geometry name.'),
+                        text: zod.string().optional().describe('Initial text.'),
+                      })
+                      .describe(
+                        'A preset shape (`rect`, `roundRect`, `ellipse`, `rightArrow`...).'
+                      ),
+                    zod
+                      .object({
+                        arrow: zod
+                          .boolean()
+                          .optional()
+                          .describe('Arrowhead at the end.'),
+                        kind: zod.enum(['line']),
+                      })
+                      .describe(
+                        'A straight line from the top-left to the bottom-right of the box.'
+                      ),
+                    zod
+                      .object({
+                        data: zod
+                          .string()
+                          .describe('Base64-encoded PNG, JPEG, or GIF bytes.'),
+                        description: zod
+                          .string()
+                          .optional()
+                          .describe('Alt text.'),
+                        kind: zod.enum(['image']),
+                      })
+                      .describe('A picture.'),
+                    zod
+                      .object({
+                        contentType: zod
+                          .string()
+                          .describe("The file's MIME type (`video\/mp4`...)."),
+                        data: zod
+                          .string()
+                          .describe(
+                            'Base64-encoded MP4, M4V, MOV, WebM, WMV, or AVI bytes.'
+                          ),
+                        description: zod
+                          .string()
+                          .optional()
+                          .describe('Alt text.'),
+                        kind: zod.enum(['video']),
+                        poster: zod
+                          .string()
+                          .describe(
+                            'Base64-encoded PNG or JPEG shown until it plays (its first frame).'
+                          ),
+                      })
+                      .describe(
+                        "A video, played when clicked in a slide show. A zero width or height\ntakes the poster's aspect ratio."
+                      ),
+                    zod
+                      .object({
+                        contentType: zod
+                          .string()
+                          .describe("The file's MIME type (`audio\/mpeg`...)."),
+                        data: zod
+                          .string()
+                          .describe(
+                            'Base64-encoded MP3, M4A, WAV, or OGG bytes.'
+                          ),
+                        description: zod
+                          .string()
+                          .optional()
+                          .describe('Alt text.'),
+                        kind: zod.enum(['audio']),
+                        poster: zod
+                          .string()
+                          .describe('Base64-encoded PNG or JPEG icon.'),
+                      })
+                      .describe(
+                        'An audio clip, shown as its poster (a speaker icon) and played when\nclicked in a slide show.'
+                      ),
+                    zod
+                      .object({
+                        cells: zod
+                          .array(zod.array(zod.string()))
+                          .describe('Cell text, row by row.'),
+                        kind: zod.enum(['table']),
+                      })
+                      .describe('A table.'),
+                    zod
+                      .object({
+                        categories: zod
+                          .array(zod.string())
+                          .describe('Category labels.'),
+                        chartType: zod
+                          .string()
+                          .describe(
+                            '`bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.'
+                          ),
+                        grouping: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "`clustered`, `stacked`, `percentStacked`, or `standard` (the type's default when omitted)."
+                          ),
+                        kind: zod.enum(['chart']),
+                        series: zod
+                          .array(
+                            zod
+                              .object({
+                                name: zod
+                                  .string()
+                                  .describe('Series name (legend text).'),
+                                values: zod
+                                  .array(zod.number().nullable())
+                                  .describe(
+                                    'One value per category (`null` for a blank).'
+                                  ),
+                              })
+                              .describe('One series of chart data.')
+                          )
+                          .describe('Series in plot order.'),
+                        title: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Chart title (no title when omitted or empty).'
+                          ),
+                      })
+                      .describe(
+                        'A chart with an embedded workbook holding its data.'
+                      ),
+                    zod
+                      .object({
+                        colors: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Color variation (`accent1_2` when omitted; see `editSmartArt`'s\n`setColors`)."
+                          ),
+                        items: zod
+                          .array(
+                            zod
+                              .object({
+                                level: zod
+                                  .number()
+                                  .min(
+                                    copyPresentationBodyOperationsItemShapeItemsItemLevelMin
+                                  )
+                                  .optional()
+                                  .describe(
+                                    'Outline level: 1 for top-level shapes, 2 for their sub-bullets (or\nchild shapes in hierarchies), and so on. The first item must be at\nlevel 1, and each item at most one level below the one before it.\nOmitted (or null) means 1.'
+                                  ),
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    'The node\'s text (`\"\"` leaves the \"[Text]\" prompt; `\\u{b}` is a line break).'
+                                  ),
+                              })
+                              .describe(
+                                "One bullet of a SmartArt graphic's text: a node and its outline level."
+                              )
+                          )
+                          .nullish()
+                          .describe(
+                            'The text as an outline (one item per node); omit for the\nlayout\'s sample nodes showing the \"[Text]\" prompt.'
+                          ),
+                        kind: zod.enum(['smartArt']),
+                        layout: zod
+                          .string()
+                          .describe(
+                            'Layout: `default` (Basic Block List), `vList2` (Vertical Bullet\nList), `hList1` (Horizontal Bullet List), `process1` (Basic\nProcess), `chevron1` (Basic Chevron Process), `cycle2` (Basic\nCycle), `radial1` (Basic Radial: the first item is the center,\nlevel-2 items around it), `hierarchy1` (Hierarchy), `orgChart1`\n(Organization Chart), `venn1` (Basic Venn), or `pyramid1` (Basic\nPyramid).'
+                          ),
+                        style: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "SmartArt style (`simple1` when omitted; see `editSmartArt`'s\n`setStyle`)."
+                          ),
+                      })
+                      .describe(
+                        "A SmartArt graphic (PowerPoint's Insert ▸ SmartArt), laid out to\nfill the box. PowerPoint's default box on a 16:9 slide is 640 x 426.7\npoints at (160, 56.7)."
+                      ),
+                  ])
+                  .describe(
+                    'What to add with [`EditOp::AddShape`](super::EditOp::AddShape).'
+                  ),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOnezero)
+                  .describe('Slide id.'),
+                w: zod.number().describe('Width (points).'),
+                x: zod.number().describe('Left (points).'),
+                y: zod.number().describe('Top (points).'),
+              })
+              .describe('Adds a shape (its id is reported in the result).'),
+            zod
+              .object({
+                op: zod.enum(['deleteShape']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwozero)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOneone)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a shape.'),
+            zod
+              .object({
+                dx: zod.number().optional().describe('Horizontal offset.'),
+                dy: zod.number().optional().describe('Vertical offset.'),
+                op: zod.enum(['duplicateShape']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwoone)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOnetwo)
+                  .describe('Slide id.'),
+              })
+              .describe('Duplicates a shape, offset by (dx, dy) points.'),
+            zod
+              .object({
+                op: zod.enum(['reorderShape']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwotwo)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOnethree)
+                  .describe('Slide id.'),
+                to: zod
+                  .enum(['front', 'back', 'forward', 'backward'])
+                  .describe('Z-order moves.'),
+              })
+              .describe("Changes a shape's z-order."),
+            zod
+              .object({
+                data: zod
+                  .string()
+                  .describe('Base64-encoded PNG, JPEG, or GIF bytes.'),
+                op: zod.enum(['replaceImage']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwothree)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOnefour)
+                  .describe('Slide id.'),
+              })
+              .describe("Replaces a picture's image."),
+            zod
+              .object({
+                col: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemColMin)
+                  .describe('Column.'),
+                op: zod.enum(['setCellText']),
+                row: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemRowMin)
+                  .describe('Row.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwofour)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOnefive)
+                  .describe('Slide id.'),
+                text: zod.string().describe('Text.'),
+              })
+              .describe('Sets the text of a table cell.'),
+            zod
+              .object({
+                at: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemAtMinOne)
+                  .describe('Index of the new row.'),
+                op: zod.enum(['insertTableRow']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwofive)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOnesix)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Inserts a table row (copying the formatting of an adjacent row).'
+              ),
+            zod
+              .object({
+                op: zod.enum(['deleteTableRow']),
+                row: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemRowMinOne)
+                  .describe('Row index.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwosix)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOneseven)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a table row.'),
+            zod
+              .object({
+                at: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemAtMinTwo)
+                  .describe('Index of the new column.'),
+                op: zod.enum(['insertTableColumn']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwoseven)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOneeight)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Inserts a table column (copying the formatting of an adjacent column).'
+              ),
+            zod
+              .object({
+                col: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemColMinOne)
+                  .describe('Column index.'),
+                op: zod.enum(['deleteTableColumn']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwoeight)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinOnenine)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a table column.'),
+            zod
+              .object({
+                from: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemFromColMin)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemFromRowMin)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+                op: zod.enum(['mergeCells']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinTwonine)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwozero)
+                  .describe('Slide id.'),
+                to: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemToColMin)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemToRowMin)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+              })
+              .describe(
+                'Merges the rectangle of table cells between two corners into one cell.\nThe top-left cell keeps its formatting; the text of the other cells is\nappended to it as paragraphs. Merged cells already inside the rectangle\nare absorbed; a rectangle that cuts through a merged cell is rejected.'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemCellColMinSix)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemCellRowMinSix)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+                op: zod.enum(['splitCell']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreezero)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwoone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Splits a merged cell back into the grid cells it covers. The revealed\ncells are empty and take the merged cell's fill and outer borders."
+              ),
+            zod
+              .object({
+                anchor: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Vertical text alignment: `top`, `middle`, or `bottom`.'
+                  ),
+                borders: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        edges: zod
+                          .enum([
+                            'all',
+                            'outside',
+                            'inside',
+                            'top',
+                            'bottom',
+                            'left',
+                            'right',
+                            'insideHorizontal',
+                            'insideVertical',
+                          ])
+                          .describe(
+                            'Which borders of a cell range [`EditOp::FormatCells`](super::EditOp::FormatCells) changes. A border\nbetween two cells is shared, so both cells get the change.'
+                          ),
+                        line: zod
+                          .object({
+                            color: zod
+                              .string()
+                              .nullish()
+                              .describe('Color (`RRGGBB` or theme name).'),
+                            dash: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Preset dash (`solid`, `dash`, `dot`, `dashDot`, `lgDash`, `sysDash`, `sysDot`).'
+                              ),
+                            none: zod
+                              .boolean()
+                              .optional()
+                              .describe('Remove the border (no line).'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Width in points.'),
+                          })
+                          .describe(
+                            'A table border change (`None` = leave unchanged). A border that did not\nexist yet becomes a solid 1 pt `tx1` line unless the change says otherwise.'
+                          ),
+                      })
+                      .describe(
+                        'Borders to change in [`EditOp::FormatCells`](super::EditOp::FormatCells).'
+                      ),
+                  ])
+                  .optional(),
+                fill: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['none']),
+                          })
+                          .describe('No fill.'),
+                        zod
+                          .object({
+                            alpha: zod
+                              .number()
+                              .nullish()
+                              .describe('Opacity 0-1.'),
+                            color: zod
+                              .string()
+                              .describe(
+                                '`RRGGBB`, or a theme color name (`accent1`, `tx1`, `bg1`...).'
+                              ),
+                            kind: zod.enum(['solid']),
+                          })
+                          .describe('Solid color.'),
+                        zod
+                          .object({
+                            angle: zod
+                              .number()
+                              .optional()
+                              .describe('Angle in degrees.'),
+                            colors: zod
+                              .array(zod.string())
+                              .describe(
+                                'Stop colors (`RRGGBB` or theme names), evenly spaced.'
+                              ),
+                            kind: zod.enum(['gradient']),
+                          })
+                          .describe('Linear gradient.'),
+                      ])
+                      .describe('A fill specification.'),
+                  ])
+                  .optional(),
+                from: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemFromColMinOne)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemFromRowMinOne)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+                margins: zod
+                  .array(zod.number())
+                  .nullish()
+                  .describe(
+                    'Cell margins `[left, top, right, bottom]` in points.'
+                  ),
+                op: zod.enum(['formatCells']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreeone)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwotwo)
+                  .describe('Slide id.'),
+                to: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemToColMinOne)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemToRowMinOne)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+              })
+              .describe(
+                'Formats the table cells in the rectangle between two corners (widened\nto whole merged cells). Omitted fields stay unchanged.'
+              ),
+            zod
+              .object({
+                bandCol: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Alternate the shading of columns.'),
+                bandRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Alternate the shading of rows.'),
+                firstCol: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the first column.'),
+                firstRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the first (header) row.'),
+                lastCol: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the last column.'),
+                lastRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the last (total) row.'),
+                op: zod.enum(['setTableStyle']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreetwo)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwothree)
+                  .describe('Slide id.'),
+                style: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Style id (a GUID from the deck outline\'s `tableStyles`, e.g.\n`{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}` = Medium Style 2 - Accent 1),\nor `\"\"` for no style.'
+                  ),
+              })
+              .describe(
+                "Sets a table's style and which of its parts the style emphasizes\n(omitted fields stay unchanged). Applying a different style clears\nfills and borders set directly on cells, as PowerPoint does, so the\ntable shows the new style."
+              ),
+            zod
+              .object({
+                columnWidths: zod
+                  .array(zod.number())
+                  .nullish()
+                  .describe('One width per column.'),
+                op: zod.enum(['setTableGrid']),
+                rowHeights: zod
+                  .array(zod.number())
+                  .nullish()
+                  .describe('One minimum height per row.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreethree)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwofour)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Sets table column widths and minimum row heights in points (rows still\ngrow to fit their text). The frame is resized to match.'
+              ),
+            zod
+              .object({
+                after: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemAfterMin)
+                  .nullish()
+                  .describe(
+                    'Insert after this slide (end of deck when omitted).'
+                  ),
+                body: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Body placeholder text (`\\n` separates paragraphs).'
+                  ),
+                layout: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Layout name (e.g. \"Title and Content\"); defaults to the layout of the reference slide.'
+                  ),
+                op: zod.enum(['addSlide']),
+                title: zod
+                  .string()
+                  .nullish()
+                  .describe('Title placeholder text.'),
+              })
+              .describe(
+                'Adds a slide based on a layout (its id is reported in the result).'
+              ),
+            zod
+              .object({
+                op: zod.enum(['duplicateSlide']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwofive)
+                  .describe('Slide id.'),
+              })
+              .describe('Duplicates a slide right after itself.'),
+            zod
+              .object({
+                op: zod.enum(['deleteSlide']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwosix)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a slide.'),
+            zod
+              .object({
+                op: zod.enum(['moveSlide']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwoseven)
+                  .describe('Slide id.'),
+                to: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemToMinFour)
+                  .describe('New index.'),
+              })
+              .describe('Moves a slide to a 0-based position.'),
+            zod
+              .object({
+                hidden: zod.boolean().describe('Hidden.'),
+                op: zod.enum(['setSlideHidden']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwoeight)
+                  .describe('Slide id.'),
+              })
+              .describe('Hides or shows a slide in slideshows.'),
+            zod
+              .object({
+                op: zod.enum(['setNotes']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinTwonine)
+                  .describe('Slide id.'),
+                text: zod
+                  .string()
+                  .describe('Notes text (`\\n` separates paragraphs).'),
+              })
+              .describe('Replaces the speaker notes of a slide.'),
+            zod
+              .object({
+                fill: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['none']),
+                          })
+                          .describe('No fill.'),
+                        zod
+                          .object({
+                            alpha: zod
+                              .number()
+                              .nullish()
+                              .describe('Opacity 0-1.'),
+                            color: zod
+                              .string()
+                              .describe(
+                                '`RRGGBB`, or a theme color name (`accent1`, `tx1`, `bg1`...).'
+                              ),
+                            kind: zod.enum(['solid']),
+                          })
+                          .describe('Solid color.'),
+                        zod
+                          .object({
+                            angle: zod
+                              .number()
+                              .optional()
+                              .describe('Angle in degrees.'),
+                            colors: zod
+                              .array(zod.string())
+                              .describe(
+                                'Stop colors (`RRGGBB` or theme names), evenly spaced.'
+                              ),
+                            kind: zod.enum(['gradient']),
+                          })
+                          .describe('Linear gradient.'),
+                      ])
+                      .describe('A fill specification.'),
+                  ])
+                  .optional(),
+                op: zod.enum(['setBackground']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreezero)
+                  .describe('Slide id.'),
+              })
+              .describe("Sets a slide's background."),
+            zod
+              .object({
+                categories: zod
+                  .array(zod.string())
+                  .describe('Category labels.'),
+                op: zod.enum(['setChartData']),
+                series: zod
+                  .array(
+                    zod
+                      .object({
+                        name: zod
+                          .string()
+                          .describe('Series name (legend text).'),
+                        values: zod
+                          .array(zod.number().nullable())
+                          .describe(
+                            'One value per category (`null` for a blank).'
+                          ),
+                      })
+                      .describe('One series of chart data.')
+                  )
+                  .describe('Series in plot order (one value per category).'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreefour)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreeone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces a chart's categories and series (the chart must be `editable`\nin the outline). Existing series keep their formatting; new series\ncopy the last one's with the next theme accent color. The embedded\nworkbook is rewritten to match."
+              ),
+            zod
+              .object({
+                grouping: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "`clustered`, `stacked`, `percentStacked`, or `standard` (kept or the type's default when omitted)."
+                  ),
+                kind: zod
+                  .string()
+                  .describe(
+                    '`bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.'
+                  ),
+                op: zod.enum(['setChartType']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreefive)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreetwo)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Changes a chart's type (the chart must be `editable` in the outline)."
+              ),
+            zod
+              .object({
+                dataLabels: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Show or hide value data labels on every series.'),
+                legend: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Legend position: `right`, `left`, `top`, `bottom`, `topRight`, or `none`.'
+                  ),
+                op: zod.enum(['formatChart']),
+                seriesColors: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod
+                          .string()
+                          .describe(
+                            '`RRGGBB`, or a theme color name (`accent1`, `tx1`...).'
+                          ),
+                        series: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemSeriesColorsItemSeriesMin
+                          )
+                          .describe('Series index in plot order (0-based).'),
+                      })
+                      .describe(
+                        'A series color for [`EditOp::FormatChart`](super::EditOp::FormatChart).'
+                      )
+                  )
+                  .nullish()
+                  .describe('Series colors.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreesix)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreethree)
+                  .describe('Slide id.'),
+                title: zod
+                  .string()
+                  .nullish()
+                  .describe('Title text (`\"\"` removes the title).'),
+              })
+              .describe(
+                "Changes a chart's title, legend, data labels, or series colors (omitted fields stay)."
+              ),
+            zod
+              .object({
+                op: zod.enum(['groupShapes']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemShapesItemMin)
+                  )
+                  .describe('Ids of the shapes to group (at least two).'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreefour)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Groups two or more shapes that share a parent (usually top-level\nshapes) into a new group placed at the z-position of the topmost of\nthem. They keep their order and exactly where they are. The group's id\nis reported in the result. Placeholders cannot be grouped."
+              ),
+            zod
+              .object({
+                op: zod.enum(['ungroupShape']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreeseven)
+                  .describe('Group id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreefive)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Ungroups a group: its members take its place in the z-order and keep\nexactly where and how they appear (the group's offset, scale,\nrotation, and flips are applied to each). The members' ids are\nreported in the result, back to front."
+              ),
+            zod
+              .object({
+                dx: zod
+                  .number()
+                  .optional()
+                  .describe('Horizontal offset in points.'),
+                dy: zod
+                  .number()
+                  .optional()
+                  .describe('Vertical offset in points.'),
+                op: zod.enum(['pasteShapes']),
+                payload: zod
+                  .string()
+                  .describe(
+                    'The clipboard payload JSON returned by `copyShapes`.'
+                  ),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreesix)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Pastes shapes copied with `copyShapes` (from this or another\npresentation) on top of a slide, with fresh ids, offset by (dx, dy)\npoints. Pictures, media, charts, and links come along. Theme colors,\ntheme fonts, and style references take this presentation\'s theme\n(PowerPoint\'s \"Use Destination Theme\"). The new top-level shape ids are\nreported in the result, back to front.'
+              ),
+            zod
+              .object({
+                after: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemAfterMinOne)
+                  .nullish()
+                  .describe(
+                    'Insert after this slide (end of deck when omitted).'
+                  ),
+                op: zod.enum(['pasteSlides']),
+                payload: zod
+                  .string()
+                  .describe(
+                    'The clipboard payload JSON returned by `copySlides`.'
+                  ),
+              })
+              .describe(
+                'Pastes slides copied with `copySlides` (from this or another\npresentation), with their speaker notes. Each slide takes this deck\'s\nlayout of the same name, else the first with the same placeholder\ntypes, else \"Title and Content\", else the first layout; theme colors\nand fonts follow this deck\'s theme. New slide ids are reported in the\nresult, in order.'
+              ),
+            zod
+              .object({
+                layout: zod
+                  .string()
+                  .describe(
+                    'Layout name (e.g. \"Title Only\"), as listed in the deck\'s layouts.'
+                  ),
+                op: zod.enum(['setSlideLayout']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreeseven)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Changes a slide's layout. Placeholders are matched to the new layout's\nplaceholders by type and index and take their position; placeholders\nwithout a match stay where they are. Content is kept, and the new\nlayout's other placeholders are added empty."
+              ),
+            zod
+              .object({
+                advanceAfterMs: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemAdvanceAfterMsMin)
+                  .nullish()
+                  .describe(
+                    'Advance automatically after this many milliseconds; `0` turns\nautomatic advance off, and an omitted (or null) field keeps the\ncurrent setting.'
+                  ),
+                advanceOnClick: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Whether a click advances to the next slide.'),
+                applyToAll: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Give every slide of the deck the resulting transition.'
+                  ),
+                direction: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Effect option: `fade`: `smooth` or `black`; `push`, `wipe`: `l`,\n`r`, `u`, `d`; `cover`, `uncover`: those or `lu`, `ru`, `ld`, `rd`;\n`split`: `horzOut`, `horzIn`, `vertOut`, `vertIn`; `reveal`: `l`,\n`r`; `randomBar`: `horz`, `vert`; `shape`: `circle`, `diamond`,\n`plus`; `zoom`: `in`, `out`; `morph`: `byObject`, `byWord`,\n`byChar`. Directions are the OOXML `dir` values.'
+                  ),
+                durationMs: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemDurationMsMin)
+                  .nullish()
+                  .describe('Duration in milliseconds (at most 60000).'),
+                kind: zod
+                  .string()
+                  .describe(
+                    'Effect: `none` (removes the transition), `cut`, `fade`, `push`,\n`wipe`, `split`, `reveal`, `randomBar`, `shape`, `uncover`,\n`cover`, `zoom`, `dissolve`, `flash`, or `morph`.'
+                  ),
+                op: zod.enum(['setTransition']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreeeight)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Sets the transition into a slide. Omitted fields keep the slide's\ncurrent value, or take the effect's default for a new transition."
+              ),
+            zod
+              .object({
+                animations: zod
+                  .array(
+                    zod
+                      .object({
+                        class: zod
+                          .enum([
+                            'entrance',
+                            'emphasis',
+                            'exit',
+                            'path',
+                            'media',
+                            'other',
+                          ])
+                          .describe(
+                            "An animation's effect group (PowerPoint's Entrance, Emphasis, Exit, and\nMotion Paths galleries)."
+                          ),
+                        delayMs: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemAnimationsItemDelayMsMin
+                          )
+                          .nullish()
+                          .describe(
+                            "Wait in milliseconds after the animation's start (click, previous\nanimation's start, or its end) before it plays, 0-60000 (default 0)."
+                          ),
+                        direction: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Effect option (default: the first listed). `flyIn`, `flyOut` (edge it\nflies in from or out to): `bottom`, `left`, `right`, `top`,\n`bottomLeft`, `bottomRight`, `topLeft`, `topRight`; `wipe` (edge it\nstarts from): `bottom`, `left`, `right`, `top`; `split` (entrance):\n`verticalOut`, `horizontalOut`, `verticalIn`, `horizontalIn` (exit:\nthe `In` ones first); `shape` (entrance): `circleOut`, `circleIn`,\n`boxOut`, `boxIn`, `diamondOut`, `diamondIn`, `plusOut`, `plusIn`\n(exit: `circleIn` first); `wheel`: `spokes1`, `spokes2`, `spokes3`,\n`spokes4`, `spokes8`; `randomBars`: `horizontal`, `vertical`; `zoom`:\n`objectCenter`, `slideCenter`; `floatIn`: `up`, `down`; `floatOut`:\n`down`, `up`; `spin`: `clockwise`, `counterclockwise`; `path`: `down`,\n`left`, `right`, `up` (a straight line a quarter of the slide long).'
+                          ),
+                        durationMs: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemAnimationsItemDurationMsMin
+                          )
+                          .nullish()
+                          .describe(
+                            "Duration of one play in milliseconds, 10-60000 (default: the\neffect's, e.g. 500 for fade, flyIn, wipe, and zoom, 1000 for floatIn\nand teeter, 2000 for spin, growShrink, shape, wheel, and paths).\n`appear` and `disappear` are instant and ignore it."
+                          ),
+                        effect: zod
+                          .string()
+                          .describe(
+                            "Effect name. Entrance: `appear`, `fade`, `flyIn`, `floatIn`, `split`,\n`wipe`, `shape`, `wheel`, `randomBars`, `growTurn`, `zoom`, `swivel`,\n`bounce`. Emphasis: `pulse`, `colorPulse`, `teeter`, `spin`,\n`growShrink`, `desaturate`, `darken`, `lighten`, `transparency`,\n`boldFlash`, `wave`. Exit: `disappear`, `fadeOut`, `flyOut`,\n`floatOut`, `split`, `wipe`, `shape`, `wheel`, `randomBars`,\n`shrinkTurn`, `zoom`, `swivel`, `bounce`. Path: `path`. Other names\nthe slide's outline reports (and `custom`) only keep an existing\nanimation of that name on the same shape."
+                          ),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemAnimationsItemParagraphMin
+                          )
+                          .nullish()
+                          .describe(
+                            "Animate only this paragraph of the shape's text (0-based); omit to\nanimate the whole shape. One animation per paragraph builds a list\nparagraph by paragraph."
+                          ),
+                        path: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "`path` class only: a motion path of its own instead of a direction,\nin PowerPoint's syntax with coordinates as fractions of the slide's\nwidth and height relative to the shape's position (`M 0 0 L 0.25 0.1 E`;\ncommands `M`, `L`, `C`, `Z`, and `E` for the end)."
+                          ),
+                        repeat: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Plays this many times in all (`1` = once, no repeat; fractions such as 2.5 are allowed).'
+                                  ),
+                                zod
+                                  .enum(['untilNextClick', 'untilEndOfSlide'])
+                                  .describe(
+                                    'The event that ends a repeating animation.'
+                                  ),
+                              ])
+                              .describe('How often an animation plays.'),
+                          ])
+                          .optional(),
+                        shapeId: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemAnimationsItemShapeIdMin
+                          )
+                          .describe(
+                            "Id of the shape to animate. A group member's id animates only that member."
+                          ),
+                        start: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .enum([
+                                'onClick',
+                                'withPrevious',
+                                'afterPrevious',
+                              ])
+                              .describe('When an animation starts.'),
+                          ])
+                          .optional(),
+                      })
+                      .describe(
+                        "One animation of a slide, for [`EditOp::SetAnimations`] and\n[`EditOp::AddAnimation`]. Omitted (or null) fields take the effect's\ndefaults, or keep the values of the existing animation it matches."
+                      )
+                  )
+                  .describe('Animations in playback order.'),
+                op: zod.enum(['setAnimations']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinThreenine)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces a slide's animations (its main sequence, which plays as the\npresenter clicks through the slide) with these, in playback order;\n`[]` removes them all. An entry matching an animation the slide has\n(same shape, class, effect, and paragraph, and direction when given)\nkeeps it, with its other settings unless the entry gives them, so\nlisting the current animations in a new order reorders them.\nAnimations started by clicking a shape (triggers) are kept."
+              ),
+            zod
+              .object({
+                animation: zod
+                  .object({
+                    class: zod
+                      .enum([
+                        'entrance',
+                        'emphasis',
+                        'exit',
+                        'path',
+                        'media',
+                        'other',
+                      ])
+                      .describe(
+                        "An animation's effect group (PowerPoint's Entrance, Emphasis, Exit, and\nMotion Paths galleries)."
+                      ),
+                    delayMs: zod
+                      .number()
+                      .min(
+                        copyPresentationBodyOperationsItemAnimationDelayMsMin
+                      )
+                      .nullish()
+                      .describe(
+                        "Wait in milliseconds after the animation's start (click, previous\nanimation's start, or its end) before it plays, 0-60000 (default 0)."
+                      ),
+                    direction: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Effect option (default: the first listed). `flyIn`, `flyOut` (edge it\nflies in from or out to): `bottom`, `left`, `right`, `top`,\n`bottomLeft`, `bottomRight`, `topLeft`, `topRight`; `wipe` (edge it\nstarts from): `bottom`, `left`, `right`, `top`; `split` (entrance):\n`verticalOut`, `horizontalOut`, `verticalIn`, `horizontalIn` (exit:\nthe `In` ones first); `shape` (entrance): `circleOut`, `circleIn`,\n`boxOut`, `boxIn`, `diamondOut`, `diamondIn`, `plusOut`, `plusIn`\n(exit: `circleIn` first); `wheel`: `spokes1`, `spokes2`, `spokes3`,\n`spokes4`, `spokes8`; `randomBars`: `horizontal`, `vertical`; `zoom`:\n`objectCenter`, `slideCenter`; `floatIn`: `up`, `down`; `floatOut`:\n`down`, `up`; `spin`: `clockwise`, `counterclockwise`; `path`: `down`,\n`left`, `right`, `up` (a straight line a quarter of the slide long).'
+                      ),
+                    durationMs: zod
+                      .number()
+                      .min(
+                        copyPresentationBodyOperationsItemAnimationDurationMsMin
+                      )
+                      .nullish()
+                      .describe(
+                        "Duration of one play in milliseconds, 10-60000 (default: the\neffect's, e.g. 500 for fade, flyIn, wipe, and zoom, 1000 for floatIn\nand teeter, 2000 for spin, growShrink, shape, wheel, and paths).\n`appear` and `disappear` are instant and ignore it."
+                      ),
+                    effect: zod
+                      .string()
+                      .describe(
+                        "Effect name. Entrance: `appear`, `fade`, `flyIn`, `floatIn`, `split`,\n`wipe`, `shape`, `wheel`, `randomBars`, `growTurn`, `zoom`, `swivel`,\n`bounce`. Emphasis: `pulse`, `colorPulse`, `teeter`, `spin`,\n`growShrink`, `desaturate`, `darken`, `lighten`, `transparency`,\n`boldFlash`, `wave`. Exit: `disappear`, `fadeOut`, `flyOut`,\n`floatOut`, `split`, `wipe`, `shape`, `wheel`, `randomBars`,\n`shrinkTurn`, `zoom`, `swivel`, `bounce`. Path: `path`. Other names\nthe slide's outline reports (and `custom`) only keep an existing\nanimation of that name on the same shape."
+                      ),
+                    paragraph: zod
+                      .number()
+                      .min(
+                        copyPresentationBodyOperationsItemAnimationParagraphMin
+                      )
+                      .nullish()
+                      .describe(
+                        "Animate only this paragraph of the shape's text (0-based); omit to\nanimate the whole shape. One animation per paragraph builds a list\nparagraph by paragraph."
+                      ),
+                    path: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "`path` class only: a motion path of its own instead of a direction,\nin PowerPoint's syntax with coordinates as fractions of the slide's\nwidth and height relative to the shape's position (`M 0 0 L 0.25 0.1 E`;\ncommands `M`, `L`, `C`, `Z`, and `E` for the end)."
+                      ),
+                    repeat: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .number()
+                              .describe(
+                                'Plays this many times in all (`1` = once, no repeat; fractions such as 2.5 are allowed).'
+                              ),
+                            zod
+                              .enum(['untilNextClick', 'untilEndOfSlide'])
+                              .describe(
+                                'The event that ends a repeating animation.'
+                              ),
+                          ])
+                          .describe('How often an animation plays.'),
+                      ])
+                      .optional(),
+                    shapeId: zod
+                      .number()
+                      .min(
+                        copyPresentationBodyOperationsItemAnimationShapeIdMin
+                      )
+                      .describe(
+                        "Id of the shape to animate. A group member's id animates only that member."
+                      ),
+                    start: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['onClick', 'withPrevious', 'afterPrevious'])
+                          .describe('When an animation starts.'),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "One animation of a slide, for [`EditOp::SetAnimations`] and\n[`EditOp::AddAnimation`]. Omitted (or null) fields take the effect's\ndefaults, or keep the values of the existing animation it matches."
+                  ),
+                index: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemIndexMin)
+                  .nullish()
+                  .describe(
+                    '0-based position in playback order (the end when omitted).'
+                  ),
+                op: zod.enum(['addAnimation']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFourzero)
+                  .describe('Slide id.'),
+              })
+              .describe("Adds a new animation to a slide's sequence."),
+            zod
+              .object({
+                indexes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemIndexesItemMin)
+                  )
+                  .nullish()
+                  .describe('0-based playback positions to remove.'),
+                op: zod.enum(['removeAnimations']),
+                shapeIds: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemShapeIdsItemMin)
+                  )
+                  .nullish()
+                  .describe('Shapes whose animations to remove.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFourone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Removes animations from a slide's sequence: every animation of the\nlisted shapes and the animations at the listed playback positions.\nGive at least one of the lists (`setAnimations` with `[]` removes all)."
+              ),
+            zod
+              .object({
+                find: zod
+                  .string()
+                  .describe('Text to find (within one paragraph).'),
+                matchCase: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Match upper and lower case exactly (default: ignore case).'
+                  ),
+                op: zod.enum(['replaceText']),
+                replace: zod
+                  .string()
+                  .describe(
+                    'Replacement text (may be empty; no paragraph or line breaks).'
+                  ),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFourtwo)
+                  .nullish()
+                  .describe('Slide id; omit to replace on every slide.'),
+                wholeWord: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Only match whole words (no letter, digit, or `_` on either side).'
+                  ),
+              })
+              .describe(
+                'Replaces text in shapes, group members, and table cells, on one slide\nor on every slide. A match may span differently formatted runs but not\nparagraphs; the replacement takes the formatting of the first matched\ncharacter. The number of replacements is reported in the result.'
+              ),
+            zod
+              .object({
+                op: zod.enum(['setAltText']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreeeight)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFourthree)
+                  .describe('Slide id.'),
+                text: zod.string().describe('Alt text.'),
+              })
+              .describe(
+                'Sets a shape\'s alt text (its description for screen readers); `\"\"` removes it.'
+              ),
+            zod
+              .object({
+                name: zod.string().describe('New name.'),
+                op: zod.enum(['setShapeName']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinThreenine)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFourfour)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Renames a shape (the name shown in the selection pane).'
+              ),
+            zod
+              .object({
+                link: zod
+                  .string()
+                  .describe(
+                    'An address (`https:\/\/…`, `mailto:…`), `#slide=<id>`, a slide show\njump (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,\n`#lastslideviewed`, `#endshow`), or `\"\"` to remove the link.'
+                  ),
+                op: zod.enum(['setShapeLink']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemShapesItemMinOne)
+                  )
+                  .describe('Shape ids.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFourfive)
+                  .describe('Slide id.'),
+                tip: zod
+                  .string()
+                  .nullish()
+                  .describe('The ScreenTip shown on hover.'),
+              })
+              .describe(
+                "Links whole shapes: clicking one in a slide show follows the link.\nLinks on text are set with formatText's `link`."
+              ),
+            zod
+              .object({
+                hidden: zod.boolean().describe('Hidden.'),
+                op: zod.enum(['setShapeHidden']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFourzero)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFoursix)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Hides or shows a shape (hidden shapes are not drawn).'
+              ),
+            zod
+              .object({
+                fromShape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemFromShapeMin)
+                  .describe(
+                    'Shape id to copy from (a shape, line, or picture).'
+                  ),
+                fromSlide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemFromSlideMin)
+                  .describe('Slide id of the shape to copy from.'),
+                op: zod.enum(['pasteFormat']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemShapesItemMinTwo)
+                  )
+                  .describe('Shape ids to restyle.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFourseven)
+                  .describe('Slide id of the shapes to restyle.'),
+              })
+              .describe(
+                'Format painter: gives shapes the look of another shape — its fill,\noutline, effects, theme style, and text margins and anchoring.\nCharacter and paragraph formatting are not copied (use formatText and\nformatParagraphs). Group targets paint every member.'
+              ),
+            zod
+              .object({
+                bottom: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's height cropped off its bottom edge."
+                  ),
+                left: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's width cropped off its left edge."
+                  ),
+                mode: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['fill', 'fit'])
+                      .describe(
+                        "How `cropPicture` fits a picture's image to its frame."
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['cropPicture']),
+                right: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's width cropped off its right edge."
+                  ),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFourone)
+                  .describe('Picture id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFoureight)
+                  .describe('Slide id.'),
+                top: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's height cropped off its top edge."
+                  ),
+              })
+              .describe(
+                "Crops a picture (PowerPoint's Crop). Edges are fractions of the\noriginal image: 0.1 crops 10% of its width (left, right) or height\n(top, bottom) off that edge, 0 shows the edge, and a negative value\nadds empty padding; omitted edges keep their current crop. The image\nkeeps its size and place on the slide, so the picture's frame moves\nand resizes to the part left visible. With `mode` (and no edges), the\nimage is instead cropped (`fill`) or padded (`fit`) to the frame's\naspect ratio, centered, and the frame stays. To crop to a shape, use\n`setGeometry` on the picture."
+              ),
+            zod
+              .object({
+                brightness: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    'Brightness from -1 to 1 (0 = unchanged, 0.2 = +20%).'
+                  ),
+                contrast: zod
+                  .number()
+                  .nullish()
+                  .describe('Contrast from -1 to 1 (0 = unchanged).'),
+                op: zod.enum(['formatPicture']),
+                recolor: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Recolor: `none`, `grayscale`, `sepia`, `washout`, `blackWhite`\n(50% threshold), `blackWhite25`, `blackWhite75`,\n`duotone:<color>` (the image in dark shades of the color, on\nwhite), `duotoneLight:<color>` (in light shades of it, on black),\nor `duotone:<dark>,<light>` (black and white become these\ncolors). Colors are `RRGGBB` or theme names (`accent1`...).'
+                  ),
+                reset: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'First remove the crop (the frame grows back to the whole image at\nits current scale) and every adjustment; the other fields then\napply.'
+                  ),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemShapesItemMinThree)
+                  )
+                  .describe('Ids of the pictures.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFournine)
+                  .describe('Slide id.'),
+                transparency: zod
+                  .number()
+                  .nullish()
+                  .describe('Transparency from 0 (opaque) to 1.'),
+              })
+              .describe(
+                "Adjusts pictures (PowerPoint's Corrections, Color, and Transparency).\nOmitted fields keep their current value."
+              ),
+            zod
+              .object({
+                glow: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            color: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Color: `RRGGBB` or a theme color name (`accent1`...; theme colors\nget PowerPoint's 175% saturation). A new glow defaults to `accent1`."
+                              ),
+                            sizePt: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Glow size in points (a new glow defaults to 10; 0 removes the glow).'
+                              ),
+                            transparency: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Transparency 0-1 (a new glow defaults to 0.6).'
+                              ),
+                          })
+                          .describe(
+                            "Glow options (PowerPoint's Glow Options)."
+                          ),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['setShapeEffects']),
+                reflection: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            blurPt: zod
+                              .number()
+                              .nullish()
+                              .describe('Blur radius in points.'),
+                            distancePt: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Gap between the shape and its reflection in points.'
+                              ),
+                            preset: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Preset to start from (the names `reflection` takes); omitted: the\ncurrent reflection, or `tightTouching` when there is none.'
+                              ),
+                            sizePct: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'How much of the shape is reflected, in percent of its height (1-100).'
+                              ),
+                            transparency: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Transparency 0-1 where the reflection starts (it fades out from there).'
+                              ),
+                          })
+                          .describe(
+                            "Reflection options (PowerPoint's Reflection Options)."
+                          ),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+                shadow: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            angleDeg: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Direction the shadow falls, in degrees clockwise from the right\n(45 = toward the bottom right, 90 = straight down).'
+                              ),
+                            blurPt: zod
+                              .number()
+                              .nullish()
+                              .describe('Blur radius in points.'),
+                            color: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Color: `RRGGBB` or a theme color name (presets use black).'
+                              ),
+                            distancePt: zod
+                              .number()
+                              .nullish()
+                              .describe('Distance from the shape in points.'),
+                            preset: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Preset to start from (the names `shadow` takes); omitted: the\ncurrent shadow, or `outerBottomRight` when there is none.'
+                              ),
+                            sizePct: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Size in percent of the shape (outer shadows only; 100 = same size).'
+                              ),
+                            transparency: zod
+                              .number()
+                              .nullish()
+                              .describe('Transparency 0-1 (0 = opaque).'),
+                          })
+                          .describe(
+                            "Shadow options (PowerPoint's Shadow Options pane)."
+                          ),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemShapesItemMinFour)
+                  )
+                  .describe('Shape ids.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFivezero)
+                  .describe('Slide id.'),
+                softEdge: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            sizePt: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Width of the feathered edge in points (a new soft edge defaults to\n5; 0 removes it).'
+                              ),
+                          })
+                          .describe('Soft edge options.'),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Sets shape effects (PowerPoint\'s Shape Effects and Picture Effects)\non shapes, pictures, lines, or groups. Each effect is kept when\nomitted (or null), removed with `\"none\"`, or set from a preset name\nor an options object (omitted options keep the current values). A\nshape that inherits effects from the theme starts from those.'
+              ),
+            zod
+              .object({
+                fit: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    "When true (the default when omitted or null), the shape's box is\nmoved and resized to the paths' bounds so the outline stays\nexactly where it is drawn on the slide, as PowerPoint does after\nEdit Points; points may then lie outside the current box. When\nfalse, the box stays and the paths are drawn in it as given\n(resizing the shape later stretches them)."
+                  ),
+                op: zod.enum(['setCustomGeometry']),
+                paths: zod
+                  .array(
+                    zod
+                      .object({
+                        commands: zod
+                          .array(
+                            zod
+                              .union([
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['moveTo']),
+                                    x: zod.number().describe('X (points).'),
+                                    y: zod.number().describe('Y (points).'),
+                                  })
+                                  .describe(
+                                    'Starts a sub-path at a point (every path starts with one).'
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['lineTo']),
+                                    x: zod.number().describe('X (points).'),
+                                    y: zod.number().describe('Y (points).'),
+                                  })
+                                  .describe('A straight line to a point.'),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['cubicBezTo']),
+                                    x: zod.number().describe('End X (points).'),
+                                    x1: zod
+                                      .number()
+                                      .describe(
+                                        'First control point X (points).'
+                                      ),
+                                    x2: zod
+                                      .number()
+                                      .describe(
+                                        'Second control point X (points).'
+                                      ),
+                                    y: zod.number().describe('End Y (points).'),
+                                    y1: zod
+                                      .number()
+                                      .describe(
+                                        'First control point Y (points).'
+                                      ),
+                                    y2: zod
+                                      .number()
+                                      .describe(
+                                        'Second control point Y (points).'
+                                      ),
+                                  })
+                                  .describe(
+                                    'A cubic Bézier curve to `(x, y)` with control points `(x1, y1)` and `(x2, y2)`.'
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['quadBezTo']),
+                                    x: zod.number().describe('End X (points).'),
+                                    x1: zod
+                                      .number()
+                                      .describe('Control point X (points).'),
+                                    y: zod.number().describe('End Y (points).'),
+                                    y1: zod
+                                      .number()
+                                      .describe('Control point Y (points).'),
+                                  })
+                                  .describe(
+                                    'A quadratic Bézier curve to `(x, y)` with control point `(x1, y1)`.'
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['arcTo']),
+                                    hR: zod
+                                      .number()
+                                      .describe('Vertical radius (points).'),
+                                    stAng: zod
+                                      .number()
+                                      .describe('Start angle in degrees.'),
+                                    swAng: zod
+                                      .number()
+                                      .describe(
+                                        'Sweep in degrees (negative sweeps counter-clockwise).'
+                                      ),
+                                    wR: zod
+                                      .number()
+                                      .describe('Horizontal radius (points).'),
+                                  })
+                                  .describe(
+                                    "An elliptical arc continuing from the current point, as DrawingML's\n`arcTo`: the ellipse has radii `wR` and `hR`, the arc starts at angle\n`stAng` on it and sweeps `swAng` (degrees, clockwise on screen; 0° is\nthe ellipse's rightmost point)."
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['close']),
+                                  })
+                                  .describe(
+                                    'Closes the sub-path with a straight line back to its start.'
+                                  ),
+                              ])
+                              .describe(
+                                "One drawing command of a [`GeometryPath`], in shape-local points:\n`(0, 0)` is the top-left corner of the shape's box before rotation and\nflips, x grows to the right and y downward."
+                              )
+                          )
+                          .describe(
+                            'The drawing commands; each sub-path starts with `moveTo`.'
+                          ),
+                        fill: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .enum([
+                                'norm',
+                                'none',
+                                'lighten',
+                                'lightenLess',
+                                'darken',
+                                'darkenLess',
+                              ])
+                              .describe(
+                                "How a [`GeometryPath`] is filled (DrawingML's path `fill`)."
+                              ),
+                          ])
+                          .optional(),
+                        stroke: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether the shape outline draws this path; true when omitted.'
+                          ),
+                      })
+                      .describe(
+                        "One path of a shape's outline: sub-paths filled together (a sub-path\ninside another and running the other way is a hole) and outlined."
+                      )
+                  )
+                  .describe(
+                    "The outline's paths, in shape-local points (see `PathCommand`)."
+                  ),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFourtwo)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFiveone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces a shape's outline with custom geometry (PowerPoint's Edit\nPoints; a preset shape becomes a freeform). Fill, outline, effects,\ntext, rotation, and flips stay. Works on drawn shapes, text boxes,\nplaceholders, and pictures (it reshapes their crop outline). The\ntext area keeps its place on the slide."
+              ),
+            zod
+              .object({
+                mode: zod
+                  .enum([
+                    'union',
+                    'combine',
+                    'fragment',
+                    'intersect',
+                    'subtract',
+                  ])
+                  .describe(
+                    "How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes)."
+                  ),
+                op: zod.enum(['mergeShapes']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemShapesItemMinFive)
+                  )
+                  .describe(
+                    "Ids of two or more shapes in selection order; the first one's\nformatting wins (and `subtract` cuts the others out of it)."
+                  ),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFivetwo)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Merges shapes into new outlines (PowerPoint's Shape Format ▸ Merge\nShapes), working in slide space with each shape's rotation, flips,\nand group transform. The result takes the formatting, text, and\neffects of the first shape (and its rotation, so its fill and text\nkeep their orientation) and replaces the shapes. The result's shape\nids are reported as created: the first is the first shape's id, which\nthe result keeps (`fragment` adds the other pieces as new shapes).\nLines, connectors, tables, charts, and groups cannot be merged; a\nmerge that leaves nothing is an error."
+              ),
+            zod
+              .object({
+                colors: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod.string().describe('`RRGGBB`.'),
+                        slot: zod
+                          .string()
+                          .describe(
+                            '`dk1`, `lt1`, `dk2`, `lt2`, `accent1`-`accent6`, `hlink`, or `folHlink`.'
+                          ),
+                      })
+                      .describe(
+                        'One theme color for [`EditOp::SetThemeColors`](super::EditOp::SetThemeColors).'
+                      )
+                  )
+                  .describe('Slots to set.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('New name of the color scheme.'),
+                op: zod.enum(['setThemeColors']),
+              })
+              .describe(
+                "Recolors the deck: sets theme color slots in every slide master's\ntheme, so everything that uses theme colors (most text, shapes,\ncharts, and tables) follows. Omitted slots keep their color."
+              ),
+            zod
+              .object({
+                major: zod
+                  .string()
+                  .nullish()
+                  .describe('Heading font (kept when omitted).'),
+                minor: zod
+                  .string()
+                  .nullish()
+                  .describe('Body font (kept when omitted).'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('New name of the font scheme.'),
+                op: zod.enum(['setThemeFonts']),
+              })
+              .describe(
+                "Sets the theme's heading (`major`) and body (`minor`) Latin fonts in\nevery slide master's theme; text that uses theme fonts follows."
+              ),
+            zod
+              .object({
+                date: zod.boolean().nullish().describe('Show the date.'),
+                dateFormat: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Format of an automatic date: `datetime1` (10\/12\/2007, the\ndefault), `datetime2` (Friday, October 12, 2007), `datetime3` (12\nOctober 2007), `datetime4` (October 12, 2007), `datetime5`\n(12-Oct-07), `datetime6` (October 07), `datetime7` (Oct-07),\n`datetime8` (10\/12\/2007 4:28 PM), `datetime9` (10\/12\/2007 4:28:34\nPM), `datetime10` (16:28), `datetime11` (16:28:34), `datetime12`\n(4:28 PM), or `datetime13` (4:28:34 PM). A format without\n`dateText` makes the date automatic.'
+                  ),
+                dateText: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Fixed date text (e.g. \"Q3 2026\"); `\"\"` makes the date automatic\n(it shows the current date). Changes slides that show a date, so\npass `date: true` to turn it on.'
+                  ),
+                footer: zod.boolean().nullish().describe('Show the footer.'),
+                footerText: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Footer text. Changes slides that show a footer, so pass\n`footer: true` to turn it on.'
+                  ),
+                notOnTitle: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    "Don't show the elements on slides whose layout is a Title Slide\nlayout (they are removed there)."
+                  ),
+                op: zod.enum(['setHeaderFooter']),
+                slideNumber: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Show the slide number.'),
+                slides: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(copyPresentationBodyOperationsItemSlidesItemMin)
+                  )
+                  .nullish()
+                  .describe(
+                    'Slide ids to change; omit (or null) for every slide (\"Apply to\nAll\", which also makes slides added later show the same elements).'
+                  ),
+              })
+              .describe(
+                "Shows, hides, or changes the slide number, date, and footer of slides\n(PowerPoint's Insert ▸ Header & Footer). Each element shown is a\nplaceholder that takes its position and style from the slide's\nlayout; a slide whose layout has no such placeholder cannot show it.\nOmitted fields keep each slide's current state."
+              ),
+            zod
+              .object({
+                height: zod
+                  .number()
+                  .describe(
+                    'Height in points, 72-4032 (540 for widescreen, 4:3, and A4; 405\nfor 16:9 on-screen show).'
+                  ),
+                op: zod.enum(['setSlideSize']),
+                scale: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['none', 'fit', 'maximize'])
+                      .describe(
+                        'How slide content follows a new slide size\n([`EditOp::SetSlideSize`](super::EditOp::SetSlideSize)).'
+                      ),
+                  ])
+                  .optional(),
+                width: zod
+                  .number()
+                  .describe(
+                    'Width in points, 72-4032 (960 for 16:9 widescreen, 720 for 4:3\nand 16:9 on-screen show, 780 for A4).'
+                  ),
+              })
+              .describe(
+                "Changes the slide size of the deck (PowerPoint's Design ▸ Slide\nSize). Every slide, layout, and master changes; speaker notes keep\ntheir size."
+              ),
+            zod
+              .object({
+                beforeSlide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemBeforeSlideMin)
+                  .describe("Id of the section's first slide."),
+                name: zod.string().describe('Section name.'),
+                op: zod.enum(['addSection']),
+              })
+              .describe(
+                'Starts a new section at a slide: the section takes that slide and the\nslides after it in its current section. In a deck without sections,\nthe slides before it go into a \"Default Section\", as in PowerPoint.\nThe new section\'s id is reported in the result.'
+              ),
+            zod
+              .object({
+                id: zod
+                  .string()
+                  .describe(
+                    "Section id (a GUID from the deck outline's `sections`)."
+                  ),
+                name: zod.string().describe('New name.'),
+                op: zod.enum(['renameSection']),
+              })
+              .describe('Renames a section.'),
+            zod
+              .object({
+                deleteSlides: zod
+                  .boolean()
+                  .optional()
+                  .describe("Delete the section's slides too."),
+                id: zod.string().describe('Section id.'),
+                op: zod.enum(['removeSection']),
+              })
+              .describe(
+                'Removes a section. Its slides join the previous section (the next\none when it is the first), or are deleted with `deleteSlides`.\nRemoving the only section leaves the deck without sections.'
+              ),
+            zod
+              .object({
+                id: zod.string().describe('Section id.'),
+                op: zod.enum(['moveSection']),
+                toIndex: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemToIndexMin)
+                  .describe('New index among the sections.'),
+              })
+              .describe(
+                'Moves a section and all its slides to a 0-based position among the\nsections; the slides are reordered to match.'
+              ),
+            zod
+              .object({
+                guides: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Color as `RRGGBB` or a theme color name (`accent1`, `tx1`...).\nOmitted or null keeps the color of the guide `id` names, and gives a\nnew guide PowerPoint's gray."
+                          ),
+                        id: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemGuidesItemIdMin
+                          )
+                          .nullish()
+                          .describe(
+                            "The id (from the deck outline's `guides`) of the guide this entry\nkeeps, with anything else the file stores on it. Omitted or null for\na new guide."
+                          ),
+                        orient: zod
+                          .enum(['horizontal', 'vertical'])
+                          .describe('Which way a drawing guide runs.'),
+                        position: zod
+                          .number()
+                          .describe(
+                            "Distance in points from the slide's top edge (horizontal guides) or\nleft edge (vertical guides), from 0 to the slide's height or width.\nThe slide's center is half its height or width."
+                          ),
+                      })
+                      .describe(
+                        'One drawing guide of [`EditOp::SetGuides`](super::EditOp::SetGuides).'
+                      )
+                  )
+                  .describe('The guides, in order.'),
+                op: zod.enum(['setGuides']),
+              })
+              .describe(
+                "Replaces the deck's drawing guides (PowerPoint's View ▸ Guides): the\ndashed lines shown over every slide for lining shapes up, which\nshapes snap to while dragged. Pass the whole list (the deck outline's\n`guides`, changed); an empty list removes every guide. Guides that\nslide layouts and masters define are not affected."
+              ),
+            zod
+              .object({
+                after: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemAfterMinTwo)
+                  .nullish()
+                  .describe(
+                    "Id of the layout to insert it after; a master's id puts it first\n(default: right after `duplicate`, else after the master's last\nlayout)."
+                  ),
+                duplicate: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemDuplicateMin)
+                  .nullish()
+                  .describe(
+                    'Id of a layout to copy, with its shapes and background.'
+                  ),
+                master: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemMasterMin)
+                  .nullish()
+                  .describe(
+                    'Id of the master to add it to (default: the master of `after`\nor `duplicate`, else the first master).'
+                  ),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Name (default: \"Custom Layout\", or for a copy the original\'s name\nprefixed \"1_\", numbered further when the master has one already).'
+                  ),
+                op: zod.enum(['addLayout']),
+              })
+              .describe(
+                "Adds a slide layout to a slide master (PowerPoint's Slide Master ▸\nInsert Layout): a layout with a title placeholder and the master's\ndate, footer, and slide number placeholders, or with `duplicate` a\ncopy of that layout. Masters and layouts are listed in the deck\noutline's `masters`. The new layout's id is reported in the result\n(as `slide`); it addresses the layout's shapes like a slide id."
+              ),
+            zod
+              .object({
+                layout: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemLayoutMinTwo)
+                  .describe('Layout or master id.'),
+                name: zod.string().describe('New name.'),
+                op: zod.enum(['renameLayout']),
+              })
+              .describe(
+                "Renames a slide layout, or a slide master (a master's name is its\ntheme's name, as PowerPoint shows it)."
+              ),
+            zod
+              .object({
+                layout: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemLayoutMinThree)
+                  .describe('Layout or master id.'),
+                op: zod.enum(['deleteLayout']),
+              })
+              .describe(
+                "Deletes a slide layout no slide uses (give those slides another\nlayout with `setSlideLayout` first). A master keeps at least one\nlayout. With a master's id, deletes that master and its layouts when\nno slide uses any of them and another master remains."
+              ),
+            zod
+              .object({
+                h: zod.number().describe('Height (points).'),
+                kind: zod
+                  .enum([
+                    'content',
+                    'text',
+                    'picture',
+                    'chart',
+                    'table',
+                    'smartArt',
+                    'media',
+                  ])
+                  .describe(
+                    "What a placeholder inserted on a slide layout holds (PowerPoint's Slide\nMaster ▸ Insert Placeholder menu)."
+                  ),
+                layout: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemLayoutMinFour)
+                  .describe('Layout id.'),
+                op: zod.enum(['insertPlaceholder']),
+                vertical: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Vertical text (PowerPoint\'s \"Content (Vertical)\" and \"Text\n(Vertical)\"); content and text placeholders only.'
+                  ),
+                w: zod.number().describe('Width (points).'),
+                x: zod.number().describe('Left (points).'),
+                y: zod.number().describe('Top (points).'),
+              })
+              .describe(
+                "Adds a placeholder to a slide layout (PowerPoint's Slide Master ▸\nInsert Placeholder). Slides added with the layout afterwards get it,\nempty, where the layout has it; existing slides get it when their\nlayout is applied again (`setSlideLayout`). Content and text\nplaceholders take the master's text styles. The new shape's id is\nreported in the result."
+              ),
+            zod
+              .object({
+                footers: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Show the date, footer, and slide number placeholders the master\nhas (added where the master has them, or removed).'
+                  ),
+                hideBackgroundGraphics: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    "Hide the master's shapes (logos, lines, pictures) on the layout\nand its slides."
+                  ),
+                layout: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemLayoutMinFive)
+                  .describe('Layout id.'),
+                op: zod.enum(['setLayoutOptions']),
+                title: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    "Show a title placeholder (added where the master's title is, or\nremoved)."
+                  ),
+              })
+              .describe(
+                "Sets what a slide layout shows (PowerPoint's Slide Master ▸ Title,\nFooters, and Hide Background Graphics). Omitted fields keep the\nlayout's current state."
+              ),
+            zod
+              .object({
+                op: zod.enum(['setBackgroundStyle']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFivethree)
+                  .describe('Slide, master, or layout id.'),
+                style: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemStyleMinOne)
+                  .describe('Style number, 1-12.'),
+              })
+              .describe(
+                "Gives a slide, slide master, or layout one of the theme's background\nstyles (PowerPoint's Background Styles gallery), which follow the\ntheme's colors and background fills. Styles 1-4 are the theme's\nfirst background fill (usually solid) in Light 1, Dark 1, Light 2,\nand Dark 2; 5-8 its second and 9-12 its third, in the same colors."
+              ),
+            zod
+              .object({
+                author: zod
+                  .string()
+                  .describe(
+                    "The author's name, as the Comments pane shows it."
+                  ),
+                initials: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "The author's initials (omit or null: the first letters of the\nfirst two words of `author`)."
+                  ),
+                op: zod.enum(['addComment']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFourthree)
+                  .nullish()
+                  .describe(
+                    "Shape id to attach the comment to (its marker sits at the\nshape's top-right corner); omit or null for the slide itself."
+                  ),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFivefour)
+                  .describe('Slide id.'),
+                text: zod
+                  .string()
+                  .describe('The comment (`\\n` separates paragraphs).'),
+                x: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Where the comment's marker sits, in points from the slide's left\nedge, for a comment on the slide (omit or null with `y` for\nPowerPoint's default, the slide's top-left corner). Ignored with\n`shape`."
+                  ),
+                y: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Marker position in points from the slide's top edge."
+                  ),
+              })
+              .describe(
+                "Adds a comment thread to a slide (PowerPoint's Review ▸ New\nComment), attached to a shape or to the slide. Written as PowerPoint\nfor Microsoft 365 writes comments. Read threads and their ids from\nthe slide outline's `comments`."
+              ),
+            zod
+              .object({
+                author: zod.string().describe("The author's name."),
+                comment: zod
+                  .string()
+                  .describe(
+                    "Thread id (a comment's `id` in the outline). Legacy comments\n(`legacy-…` ids) cannot be replied to."
+                  ),
+                initials: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "The author's initials (omit or null: derived from `author`)."
+                  ),
+                op: zod.enum(['replyComment']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFivefive)
+                  .describe('Slide id.'),
+                text: zod
+                  .string()
+                  .describe('The reply (`\\n` separates paragraphs).'),
+              })
+              .describe('Replies to a comment thread.'),
+            zod
+              .object({
+                comment: zod.string().describe('Thread or reply id.'),
+                op: zod.enum(['editComment']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFivesix)
+                  .describe('Slide id.'),
+                text: zod.string().describe('The new text.'),
+              })
+              .describe(
+                "Replaces the text of a comment: a thread's first comment or a reply."
+              ),
+            zod
+              .object({
+                comment: zod.string().describe('Thread id.'),
+                op: zod.enum(['resolveComment']),
+                resolved: zod
+                  .boolean()
+                  .describe('`true` resolves; `false` reopens.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFiveseven)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Resolves a comment thread, or reopens it (PowerPoint's Resolve\nthread \/ Reopen). Legacy comments cannot be resolved."
+              ),
+            zod
+              .object({
+                comment: zod.string().describe('Thread or reply id.'),
+                op: zod.enum(['deleteComment']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFiveeight)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Deletes a comment thread with its replies, or a single reply.'
+              ),
+            zod
+              .object({
+                op: zod.enum(['deleteAllComments']),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinFivenine)
+                  .nullish()
+                  .describe('Slide id (omit or null: all slides).'),
+              })
+              .describe(
+                'Deletes every comment on a slide, or with `slide` omitted (or null)\nevery comment in the presentation.'
+              ),
+            zod
+              .object({
+                at: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        offset: zod
+                          .number()
+                          .min(copyPresentationBodyOperationsItemAtOffsetMinOne)
+                          .describe('Character offset within the paragraph.'),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemAtParagraphMinOne
+                          )
+                          .describe('Paragraph index.'),
+                      })
+                      .describe("A position inside a shape's text."),
+                  ])
+                  .optional(),
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemCellColMinSeven
+                          )
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemCellRowMinSeven
+                          )
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                display: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    '`true`: a display equation on a line (paragraph) of its own,\ncentered, with large operators and fractions at full size (what\nPowerPoint inserts); `false`: inline, flowing with the text\naround it. Omit (or null) for display in an empty paragraph or a\nnew text box, inline otherwise.'
+                  ),
+                latex: zod
+                  .string()
+                  .describe(
+                    'The equation, e.g. `x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}`.'
+                  ),
+                op: zod.enum(['insertEquation']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFourfour)
+                  .nullish()
+                  .describe(
+                    'Shape whose text gets the equation; omit (or null) to add a new\ntext box holding only the equation.'
+                  ),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinSixzero)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Inserts an equation (PowerPoint's Insert ▸ Equation) written in the\nLaTeX-style linear format: into a shape's text at `at`, or, without\n`shape`, in a new text box centered on the slide (its id is reported\nin the result). In text an equation counts as one character (U+FFFC\nin the outline's paragraph text, listed in the paragraph's\n`equations`): delete it with `deleteText`, change it with\n`setEquation`. Supported: `\\frac{a}{b}`, `^`, `_`, `\\sqrt[n]{x}`,\n`\\sum_{i=1}^{n}`, `\\prod`, `\\int_{a}^{b}`, `\\oint`, `\\lim_{x\\to 0}`,\n`\\sin` and other functions, `\\left( \\right)` (brackets such as\n`(…)` pair and grow by themselves), `\\begin{matrix}` \/ `pmatrix` \/\n`bmatrix` \/ `vmatrix` \/ `cases` \/ `aligned`, `\\binom{n}{k}`, accents\n(`\\hat \\bar \\vec \\dot \\ddot \\tilde`), `\\overline`, `\\underline`,\n`\\overbrace{x}^{a}`, `\\underbrace{x}_{a}`, `\\boxed`, Greek letters,\nsymbols (`\\infty \\pm \\times \\cdot \\le \\ge \\ne \\approx \\to\n\\Rightarrow \\partial \\nabla`...), `\\mathrm{}`, `\\mathbf{}`,\n`\\mathbb{}`, `\\mathcal{}`, `\\text{}`, and spaces (`\\, \\; \\quad`)."
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemCellColMinEight
+                          )
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(
+                            copyPresentationBodyOperationsItemCellRowMinEight
+                          )
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                display: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Make it a display (`true`) or inline (`false`) equation; omit\n(or null) to keep.'
+                  ),
+                index: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemIndexMinOne)
+                  .describe(
+                    "The equation's character index in the paragraph (its `index` in\nthe outline)."
+                  ),
+                latex: zod
+                  .string()
+                  .describe(
+                    'The new equation in the linear format (see `insertEquation`).'
+                  ),
+                op: zod.enum(['setEquation']),
+                paragraph: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemParagraphMin)
+                  .describe('Paragraph index.'),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFourfive)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinSixone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces an equation (one of a paragraph's `equations` in the\noutline) with new linear text, keeping its size and color."
+              ),
+            zod
+              .object({
+                edit: zod
+                  .union([
+                    zod
+                      .object({
+                        action: zod.enum(['setText']),
+                        node: zod
+                          .string()
+                          .describe(
+                            "Node id (from the outline's `smartArt.nodes`)."
+                          ),
+                        text: zod.string().describe('New text.'),
+                      })
+                      .describe(
+                        "Replaces a node's text, keeping the formatting of its first run\n(`\\n` separates paragraphs inside the node, `\\u{b}` is a line break)."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['addNode']),
+                        node: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'The node to add next to; omit to add a last top-level node.'
+                          ),
+                        position: zod
+                          .enum([
+                            'after',
+                            'before',
+                            'above',
+                            'below',
+                            'assistant',
+                          ])
+                          .optional()
+                          .describe(
+                            "Where `addNode` puts the new node, relative to the given one\n(PowerPoint's Add Shape After\/Before\/Above\/Below\/Add Assistant)."
+                          ),
+                        text: zod
+                          .string()
+                          .optional()
+                          .describe(
+                            'Text of the new node (empty: the \"[Text]\" prompt).'
+                          ),
+                      })
+                      .describe("Adds a node (PowerPoint's Add Shape)."),
+                    zod
+                      .object({
+                        action: zod.enum(['deleteNode']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Deletes a node; its children move up into its place.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['promote']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Moves a node one level up (Promote, Shift+Tab in the text pane).\nIts following siblings become its children.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['demote']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Moves a node one level down (Demote, Tab in the text pane): it\nbecomes the last child of its previous sibling, with its children.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['moveUp']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Swaps a node (with its children) with its previous sibling.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['moveDown']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Swaps a node (with its children) with its next sibling.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setNodes']),
+                        items: zod
+                          .array(
+                            zod
+                              .object({
+                                level: zod
+                                  .number()
+                                  .min(
+                                    copyPresentationBodyOperationsItemEditItemsItemLevelMin
+                                  )
+                                  .optional()
+                                  .describe(
+                                    'Outline level: 1 for top-level shapes, 2 for their sub-bullets (or\nchild shapes in hierarchies), and so on. The first item must be at\nlevel 1, and each item at most one level below the one before it.\nOmitted (or null) means 1.'
+                                  ),
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    'The node\'s text (`\"\"` leaves the \"[Text]\" prompt; `\\u{b}` is a line break).'
+                                  ),
+                              })
+                              .describe(
+                                "One bullet of a SmartArt graphic's text: a node and its outline level."
+                              )
+                          )
+                          .describe('The bullets, in order.'),
+                      })
+                      .describe(
+                        'Replaces all the text: one node per item, as typed in the text pane.\nExisting nodes are reused in order, keeping their formatting.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setLayout']),
+                        layout: zod
+                          .string()
+                          .describe(
+                            'Layout: `default` (Basic Block List), `vList2` (Vertical Bullet\nList), `hList1` (Horizontal Bullet List), `process1` (Basic\nProcess), `chevron1` (Basic Chevron Process), `cycle2` (Basic\nCycle), `radial1` (Basic Radial), `hierarchy1` (Hierarchy),\n`orgChart1` (Organization Chart), `venn1` (Basic Venn), or\n`pyramid1` (Basic Pyramid); a full id\n(`urn:microsoft.com\/office\/officeart\/2005\/8\/layout\/process1`) or\nthe display name also works.'
+                          ),
+                      })
+                      .describe(
+                        "Changes the layout (PowerPoint's Layouts gallery), keeping the text."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setColors']),
+                        colors: zod
+                          .string()
+                          .describe(
+                            "Color variation: `accent0_1` Dark 1 Outline, `accent0_2` Dark 2\nOutline, `accent0_3` Dark 2 Fill, `colorful1` Colorful - Accent\nColors, `colorful2`-`colorful5` Colorful Range - Accent Colors\n2 to 3 ... 5 to 6, and for accent N = 1-6: `accentN_1` Colored\nOutline, `accentN_2` Colored Fill (PowerPoint's default\n`accent1_2`), `accentN_3` Gradient Range, `accentN_4` Gradient\nLoop, `accentN_5` Transparent Gradient Range. Full ids\n(`urn:microsoft.com\/office\/officeart\/2005\/8\/colors\/colorful1`)\nand display names also work."
+                          ),
+                      })
+                      .describe(
+                        "Changes the colors (PowerPoint's Change Colors)."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setStyle']),
+                        style: zod
+                          .string()
+                          .describe(
+                            'Style: `simple1` Simple Fill (the default), `simple2` White\nOutline, `simple3` Subtle Effect, `simple4` Moderate Effect, or\n`simple5` Intense Effect (or a full id or display name).'
+                          ),
+                      })
+                      .describe(
+                        "Changes the SmartArt style (PowerPoint's SmartArt Styles gallery)."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['reset']),
+                      })
+                      .describe(
+                        "Reset Graphic: discards changes to the shapes' sizes, positions, and\nformatting, keeping the text, layout, colors, and style."
+                      ),
+                  ])
+                  .describe('One change to a SmartArt graphic.'),
+                op: zod.enum(['editSmartArt']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFoursix)
+                  .describe("The SmartArt graphic frame's id."),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinSixtwo)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Edits a SmartArt graphic (a shape of kind `diagram` whose outline has\n`smartArt`): its nodes and their text as in PowerPoint's text pane,\nits layout, colors, or style. The diagram is laid out again, its text\nshrinking together to fit. Nodes are addressed by the ids in\n`smartArt.nodes`; a new node's id appears there afterwards. Diagrams\nwhose layout the outline reports as not `supported` take text edits,\ncolors, styles, and a new supported layout, but not node changes."
+              ),
+            zod
+              .object({
+                op: zod.enum(['convertSmartArt']),
+                shape: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemShapeMinFourseven)
+                  .describe("The SmartArt graphic frame's id."),
+                slide: zod
+                  .number()
+                  .min(copyPresentationBodyOperationsItemSlideMinSixthree)
+                  .describe('Slide id.'),
+                to: zod
+                  .enum(['shapes', 'text'])
+                  .describe(
+                    'What `convertSmartArt` turns a SmartArt graphic into.'
+                  ),
+              })
+              .describe(
+                "Converts a SmartArt graphic into ordinary shapes (a group that looks\nthe same) or into a bulleted text box. The new shape's id is reported\nin the result."
+              ),
+          ])
+          .describe('One edit operation.')
+      )
+      .optional()
+      .describe(
+        'Operations to apply to the copy, at most 100; none for a plain copy.'
+      ),
+    projectId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "Project to create it in; defaults to the original's project when the\ncaller can edit it."
+      ),
+  })
+  .describe('Where an edited copy of a presentation is created.');
+
+export const copyPresentationResponseCreatedItemShapeMin = 0;
+
+export const copyPresentationResponseCreatedItemSlideMin = 0;
+
+export const copyPresentationResponse = zod
+  .object({
+    changedSlides: zod
+      .string()
+      .describe(
+        'The changed slides as they now read (after a structure change, the\ndeck summary and sections too).'
+      ),
+    created: zod
+      .array(
+        zod
+          .object({
+            section: zod
+              .string()
+              .nullish()
+              .describe('Section id, for created sections.'),
+            shape: zod
+              .number()
+              .min(copyPresentationResponseCreatedItemShapeMin)
+              .nullish()
+              .describe('Shape id, for created shapes.'),
+            slide: zod
+              .number()
+              .min(copyPresentationResponseCreatedItemSlideMin)
+              .describe('Slide id.'),
+          })
+          .describe('A slide or shape an edit created.')
+      )
+      .describe('Slides and shapes the operations created, in order.'),
+    documentId: zod
+      .string()
+      .describe('The edited document (clients reload open editors of it).'),
+    structureChanged: zod
+      .boolean()
+      .describe(
+        'Whether slides were added, removed, or reordered, or the slide size\nor sections changed.'
+      ),
+  })
+  .describe('What an edit did.');
+
+/**
+ * @summary Apply a batch of edit operations to a PowerPoint deck atomically with the
+caller's edit access, saved as a new version. If any operation fails,
+nothing is saved.
+ */
+export const editPresentationParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editPresentationBodyOperationsItemCellColMin = 0;
+
+export const editPresentationBodyOperationsItemCellRowMin = 0;
+
+export const editPresentationBodyOperationsItemShapeMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMin = 0;
+
+export const editPresentationBodyOperationsItemAtOffsetMin = 0;
+
+export const editPresentationBodyOperationsItemAtParagraphMin = 0;
+
+export const editPresentationBodyOperationsItemCellColMinOne = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinOne = 0;
+
+export const editPresentationBodyOperationsItemShapeMinOne = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOne = 0;
+
+export const editPresentationBodyOperationsItemCellColMinTwo = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinTwo = 0;
+
+export const editPresentationBodyOperationsItemEndOffsetMin = 0;
+
+export const editPresentationBodyOperationsItemEndParagraphMin = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwo = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwo = 0;
+
+export const editPresentationBodyOperationsItemStartOffsetMin = 0;
+
+export const editPresentationBodyOperationsItemStartParagraphMin = 0;
+
+export const editPresentationBodyOperationsItemCellColMinThree = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinThree = 0;
+
+export const editPresentationBodyOperationsItemEndOffsetMinOne = 0;
+
+export const editPresentationBodyOperationsItemEndParagraphMinOne = 0;
+
+export const editPresentationBodyOperationsItemPropsBaselineDefault = null;
+export const editPresentationBodyOperationsItemPropsBoldDefault = null;
+export const editPresentationBodyOperationsItemPropsColorDefault = null;
+export const editPresentationBodyOperationsItemPropsFontDefault = null;
+export const editPresentationBodyOperationsItemPropsGlowColorDefault = null;
+export const editPresentationBodyOperationsItemPropsGlowSizePtDefault = null;
+export const editPresentationBodyOperationsItemPropsGlowTransparencyDefault =
+  null;
+export const editPresentationBodyOperationsItemPropsGlowDefault = null;
+export const editPresentationBodyOperationsItemPropsHighlightDefault = null;
+export const editPresentationBodyOperationsItemPropsItalicDefault = null;
+export const editPresentationBodyOperationsItemPropsLinkDefault = null;
+export const editPresentationBodyOperationsItemPropsLinkTipDefault = null;
+export const editPresentationBodyOperationsItemPropsShadowAngleDegDefault =
+  null;
+export const editPresentationBodyOperationsItemPropsShadowBlurPtDefault = null;
+export const editPresentationBodyOperationsItemPropsShadowColorDefault = null;
+export const editPresentationBodyOperationsItemPropsShadowDistancePtDefault =
+  null;
+export const editPresentationBodyOperationsItemPropsShadowPresetDefault = null;
+export const editPresentationBodyOperationsItemPropsShadowSizePctDefault = null;
+export const editPresentationBodyOperationsItemPropsShadowTransparencyDefault =
+  null;
+export const editPresentationBodyOperationsItemPropsShadowDefault = null;
+export const editPresentationBodyOperationsItemPropsSizeDefault = null;
+export const editPresentationBodyOperationsItemPropsSpacingDefault = null;
+export const editPresentationBodyOperationsItemPropsStrikeDefault = null;
+export const editPresentationBodyOperationsItemPropsUnderlineDefault = null;
+export const editPresentationBodyOperationsItemShapeMinThree = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThree = 0;
+
+export const editPresentationBodyOperationsItemStartOffsetMinOne = 0;
+
+export const editPresentationBodyOperationsItemStartParagraphMinOne = 0;
+
+export const editPresentationBodyOperationsItemCellColMinFour = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinFour = 0;
+
+export const editPresentationBodyOperationsItemFromMin = 0;
+
+export const editPresentationBodyOperationsItemPropsAlignDefault = null;
+export const editPresentationBodyOperationsItemPropsBulletStartMin = 0;
+
+export const editPresentationBodyOperationsItemPropsBulletDefault = null;
+export const editPresentationBodyOperationsItemPropsIndentDefault = null;
+export const editPresentationBodyOperationsItemPropsLevelDefault = null;
+export const editPresentationBodyOperationsItemPropsLevelMin = 0;
+
+export const editPresentationBodyOperationsItemPropsLineSpacingDefault = null;
+export const editPresentationBodyOperationsItemPropsMarginLeftDefault = null;
+export const editPresentationBodyOperationsItemPropsSpaceAfterDefault = null;
+export const editPresentationBodyOperationsItemPropsSpaceBeforeDefault = null;
+export const editPresentationBodyOperationsItemShapeMinFour = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFour = 0;
+
+export const editPresentationBodyOperationsItemToMin = 0;
+
+export const editPresentationBodyOperationsItemCellColMinFive = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinFive = 0;
+
+export const editPresentationBodyOperationsItemPropsAnchorDefault = null;
+export const editPresentationBodyOperationsItemPropsAutofitDefault = null;
+export const editPresentationBodyOperationsItemPropsColumnsDefault = null;
+export const editPresentationBodyOperationsItemPropsColumnsMin = 0;
+
+export const editPresentationBodyOperationsItemPropsDirectionDefault = null;
+export const editPresentationBodyOperationsItemPropsInsetsDefault = null;
+export const editPresentationBodyOperationsItemPropsWrapDefault = null;
+export const editPresentationBodyOperationsItemShapeMinFive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFive = 0;
+
+export const editPresentationBodyOperationsItemShapeMinSix = 0;
+
+export const editPresentationBodyOperationsItemSlideMinSix = 0;
+
+export const editPresentationBodyOperationsItemShapeMinSeven = 0;
+
+export const editPresentationBodyOperationsItemSlideMinSeven = 0;
+
+export const editPresentationBodyOperationsItemLineColorDefault = null;
+export const editPresentationBodyOperationsItemLineDashDefault = null;
+export const editPresentationBodyOperationsItemLineHeadDefault = null;
+export const editPresentationBodyOperationsItemLineNoneDefault = false;
+export const editPresentationBodyOperationsItemLineTailDefault = null;
+export const editPresentationBodyOperationsItemLineWidthDefault = null;
+export const editPresentationBodyOperationsItemShapeMinEight = 0;
+
+export const editPresentationBodyOperationsItemSlideMinEight = 0;
+
+export const editPresentationBodyOperationsItemShapeMinNine = 0;
+
+export const editPresentationBodyOperationsItemSlideMinNine = 0;
+
+export const editPresentationBodyOperationsItemShapeItemsItemLevelMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOnezero = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwozero = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOneone = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwoone = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOnetwo = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwotwo = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOnethree = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwothree = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOnefour = 0;
+
+export const editPresentationBodyOperationsItemColMin = 0;
+
+export const editPresentationBodyOperationsItemRowMin = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwofour = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOnefive = 0;
+
+export const editPresentationBodyOperationsItemAtMinOne = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwofive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOnesix = 0;
+
+export const editPresentationBodyOperationsItemRowMinOne = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwosix = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOneseven = 0;
+
+export const editPresentationBodyOperationsItemAtMinTwo = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwoseven = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOneeight = 0;
+
+export const editPresentationBodyOperationsItemColMinOne = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwoeight = 0;
+
+export const editPresentationBodyOperationsItemSlideMinOnenine = 0;
+
+export const editPresentationBodyOperationsItemFromColMin = 0;
+
+export const editPresentationBodyOperationsItemFromRowMin = 0;
+
+export const editPresentationBodyOperationsItemShapeMinTwonine = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwozero = 0;
+
+export const editPresentationBodyOperationsItemToColMin = 0;
+
+export const editPresentationBodyOperationsItemToRowMin = 0;
+
+export const editPresentationBodyOperationsItemCellColMinSix = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinSix = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreezero = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwoone = 0;
+
+export const editPresentationBodyOperationsItemBordersLineColorDefault = null;
+export const editPresentationBodyOperationsItemBordersLineDashDefault = null;
+export const editPresentationBodyOperationsItemBordersLineNoneDefault = false;
+export const editPresentationBodyOperationsItemBordersLineWidthDefault = null;
+export const editPresentationBodyOperationsItemFromColMinOne = 0;
+
+export const editPresentationBodyOperationsItemFromRowMinOne = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreeone = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwotwo = 0;
+
+export const editPresentationBodyOperationsItemToColMinOne = 0;
+
+export const editPresentationBodyOperationsItemToRowMinOne = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreetwo = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwothree = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreethree = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwofour = 0;
+
+export const editPresentationBodyOperationsItemAfterMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwofive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwosix = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwoseven = 0;
+
+export const editPresentationBodyOperationsItemToMinFour = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwoeight = 0;
+
+export const editPresentationBodyOperationsItemSlideMinTwonine = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreezero = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreefour = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreeone = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreefive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreetwo = 0;
+
+export const editPresentationBodyOperationsItemSeriesColorsItemSeriesMin = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreesix = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreethree = 0;
+
+export const editPresentationBodyOperationsItemShapesItemMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreefour = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreeseven = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreefive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreesix = 0;
+
+export const editPresentationBodyOperationsItemAfterMinOne = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreeseven = 0;
+
+export const editPresentationBodyOperationsItemAdvanceAfterMsMin = 0;
+
+export const editPresentationBodyOperationsItemDurationMsMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreeeight = 0;
+
+export const editPresentationBodyOperationsItemAnimationsItemDelayMsMin = 0;
+
+export const editPresentationBodyOperationsItemAnimationsItemDurationMsMin = 0;
+
+export const editPresentationBodyOperationsItemAnimationsItemParagraphMin = 0;
+
+export const editPresentationBodyOperationsItemAnimationsItemShapeIdMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMinThreenine = 0;
+
+export const editPresentationBodyOperationsItemAnimationDelayMsMin = 0;
+
+export const editPresentationBodyOperationsItemAnimationDurationMsMin = 0;
+
+export const editPresentationBodyOperationsItemAnimationParagraphMin = 0;
+
+export const editPresentationBodyOperationsItemAnimationShapeIdMin = 0;
+
+export const editPresentationBodyOperationsItemIndexMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFourzero = 0;
+
+export const editPresentationBodyOperationsItemIndexesItemMin = 0;
+
+export const editPresentationBodyOperationsItemShapeIdsItemMin = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFourone = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFourtwo = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreeeight = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFourthree = 0;
+
+export const editPresentationBodyOperationsItemShapeMinThreenine = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFourfour = 0;
+
+export const editPresentationBodyOperationsItemShapesItemMinOne = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFourfive = 0;
+
+export const editPresentationBodyOperationsItemShapeMinFourzero = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFoursix = 0;
+
+export const editPresentationBodyOperationsItemFromShapeMin = 0;
+
+export const editPresentationBodyOperationsItemFromSlideMin = 0;
+
+export const editPresentationBodyOperationsItemShapesItemMinTwo = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFourseven = 0;
+
+export const editPresentationBodyOperationsItemShapeMinFourone = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFoureight = 0;
+
+export const editPresentationBodyOperationsItemShapesItemMinThree = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFournine = 0;
+
+export const editPresentationBodyOperationsItemGlowColorDefault = null;
+export const editPresentationBodyOperationsItemGlowSizePtDefault = null;
+export const editPresentationBodyOperationsItemGlowTransparencyDefault = null;
+export const editPresentationBodyOperationsItemReflectionBlurPtDefault = null;
+export const editPresentationBodyOperationsItemReflectionDistancePtDefault =
+  null;
+export const editPresentationBodyOperationsItemReflectionPresetDefault = null;
+export const editPresentationBodyOperationsItemReflectionSizePctDefault = null;
+export const editPresentationBodyOperationsItemReflectionTransparencyDefault =
+  null;
+export const editPresentationBodyOperationsItemShadowAngleDegDefault = null;
+export const editPresentationBodyOperationsItemShadowBlurPtDefault = null;
+export const editPresentationBodyOperationsItemShadowColorDefault = null;
+export const editPresentationBodyOperationsItemShadowDistancePtDefault = null;
+export const editPresentationBodyOperationsItemShadowPresetDefault = null;
+export const editPresentationBodyOperationsItemShadowSizePctDefault = null;
+export const editPresentationBodyOperationsItemShadowTransparencyDefault = null;
+export const editPresentationBodyOperationsItemShapesItemMinFour = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFivezero = 0;
+
+export const editPresentationBodyOperationsItemSoftEdgeSizePtDefault = null;
+export const editPresentationBodyOperationsItemShapeMinFourtwo = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFiveone = 0;
+
+export const editPresentationBodyOperationsItemShapesItemMinFive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFivetwo = 0;
+
+export const editPresentationBodyOperationsItemSlidesItemMin = 0;
+
+export const editPresentationBodyOperationsItemBeforeSlideMin = 0;
+
+export const editPresentationBodyOperationsItemToIndexMin = 0;
+
+export const editPresentationBodyOperationsItemGuidesItemIdMin = 0;
+
+export const editPresentationBodyOperationsItemAfterMinTwo = 0;
+
+export const editPresentationBodyOperationsItemDuplicateMin = 0;
+
+export const editPresentationBodyOperationsItemMasterMin = 0;
+
+export const editPresentationBodyOperationsItemLayoutMinTwo = 0;
+
+export const editPresentationBodyOperationsItemLayoutMinThree = 0;
+
+export const editPresentationBodyOperationsItemLayoutMinFour = 0;
+
+export const editPresentationBodyOperationsItemLayoutMinFive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFivethree = 0;
+
+export const editPresentationBodyOperationsItemStyleMinOne = 0;
+
+export const editPresentationBodyOperationsItemShapeMinFourthree = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFivefour = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFivefive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFivesix = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFiveseven = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFiveeight = 0;
+
+export const editPresentationBodyOperationsItemSlideMinFivenine = 0;
+
+export const editPresentationBodyOperationsItemAtOffsetMinOne = 0;
+
+export const editPresentationBodyOperationsItemAtParagraphMinOne = 0;
+
+export const editPresentationBodyOperationsItemCellColMinSeven = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinSeven = 0;
+
+export const editPresentationBodyOperationsItemShapeMinFourfour = 0;
+
+export const editPresentationBodyOperationsItemSlideMinSixzero = 0;
+
+export const editPresentationBodyOperationsItemCellColMinEight = 0;
+
+export const editPresentationBodyOperationsItemCellRowMinEight = 0;
+
+export const editPresentationBodyOperationsItemIndexMinOne = 0;
+
+export const editPresentationBodyOperationsItemParagraphMin = 0;
+
+export const editPresentationBodyOperationsItemShapeMinFourfive = 0;
+
+export const editPresentationBodyOperationsItemSlideMinSixone = 0;
+
+export const editPresentationBodyOperationsItemEditItemsItemLevelMin = 0;
+
+export const editPresentationBodyOperationsItemShapeMinFoursix = 0;
+
+export const editPresentationBodyOperationsItemSlideMinSixtwo = 0;
+
+export const editPresentationBodyOperationsItemShapeMinFourseven = 0;
+
+export const editPresentationBodyOperationsItemSlideMinSixthree = 0;
+
+export const editPresentationBody = zod
+  .object({
+    operations: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellColMin)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellRowMin)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['setText']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMin)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMin)
+                  .describe('Slide id.'),
+                text: zod.string().describe('New text.'),
+              })
+              .describe(
+                'Replaces all text of a shape (`\\n` separates paragraphs, `\\u{b}` is a line\nbreak), keeping the formatting of the first run of each paragraph.'
+              ),
+            zod
+              .object({
+                at: zod
+                  .object({
+                    offset: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemAtOffsetMin)
+                      .describe('Character offset within the paragraph.'),
+                    paragraph: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemAtParagraphMin)
+                      .describe('Paragraph index.'),
+                  })
+                  .describe("A position inside a shape's text."),
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellColMinOne)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellRowMinOne)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['insertText']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinOne)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOne)
+                  .describe('Slide id.'),
+                text: zod.string().describe('Text to insert.'),
+              })
+              .describe(
+                'Inserts text at a position (`\\n` splits paragraphs).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellColMinTwo)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellRowMinTwo)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                end: zod
+                  .object({
+                    offset: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemEndOffsetMin)
+                      .describe('Character offset within the paragraph.'),
+                    paragraph: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemEndParagraphMin)
+                      .describe('Paragraph index.'),
+                  })
+                  .describe("A position inside a shape's text."),
+                op: zod.enum(['deleteText']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwo)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwo)
+                  .describe('Slide id.'),
+                start: zod
+                  .object({
+                    offset: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemStartOffsetMin)
+                      .describe('Character offset within the paragraph.'),
+                    paragraph: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemStartParagraphMin)
+                      .describe('Paragraph index.'),
+                  })
+                  .describe("A position inside a shape's text."),
+              })
+              .describe(
+                'Deletes text between two positions (may span paragraphs).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemCellColMinThree
+                          )
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemCellRowMinThree
+                          )
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                end: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        offset: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemEndOffsetMinOne
+                          )
+                          .describe('Character offset within the paragraph.'),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemEndParagraphMinOne
+                          )
+                          .describe('Paragraph index.'),
+                      })
+                      .describe("A position inside a shape's text."),
+                  ])
+                  .optional(),
+                op: zod.enum(['formatText']),
+                props: zod
+                  .object({
+                    baseline: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Baseline shift in percent (30 = superscript, -25 = subscript, 0 = normal).'
+                      ),
+                    bold: zod.boolean().nullish().describe('Bold.'),
+                    color: zod
+                      .string()
+                      .nullish()
+                      .describe('Text color as `RRGGBB`.'),
+                    font: zod.string().nullish().describe('Latin typeface.'),
+                    glow: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .string()
+                              .describe(
+                                'A preset name, or `none` to remove the effect.'
+                              ),
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    "Color: `RRGGBB` or a theme color name (`accent1`...; theme colors\nget PowerPoint's 175% saturation). A new glow defaults to `accent1`."
+                                  ),
+                                sizePt: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Glow size in points (a new glow defaults to 10; 0 removes the glow).'
+                                  ),
+                                transparency: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Transparency 0-1 (a new glow defaults to 0.6).'
+                                  ),
+                              })
+                              .describe(
+                                "Glow options (PowerPoint's Glow Options)."
+                              ),
+                          ])
+                          .describe(
+                            'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                          ),
+                      ])
+                      .optional(),
+                    highlight: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Highlight color as `RRGGBB`, or `\"\"` to remove.'
+                      ),
+                    italic: zod.boolean().nullish().describe('Italic.'),
+                    link: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Hyperlink, or `\"\"` to remove: an address (`https:\/\/…`, `mailto:…`),\n`#slide=<id>` for another slide by stable id, or a slide show jump\n(`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,\n`#lastslideviewed`, `#endshow`).'
+                      ),
+                    linkTip: zod
+                      .string()
+                      .nullish()
+                      .describe("The link's ScreenTip (written with `link`)."),
+                    shadow: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .string()
+                              .describe(
+                                'A preset name, or `none` to remove the effect.'
+                              ),
+                            zod
+                              .object({
+                                angleDeg: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Direction the shadow falls, in degrees clockwise from the right\n(45 = toward the bottom right, 90 = straight down).'
+                                  ),
+                                blurPt: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Blur radius in points.'),
+                                color: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    'Color: `RRGGBB` or a theme color name (presets use black).'
+                                  ),
+                                distancePt: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Distance from the shape in points.'
+                                  ),
+                                preset: zod
+                                  .string()
+                                  .nullish()
+                                  .describe(
+                                    'Preset to start from (the names `shadow` takes); omitted: the\ncurrent shadow, or `outerBottomRight` when there is none.'
+                                  ),
+                                sizePct: zod
+                                  .number()
+                                  .nullish()
+                                  .describe(
+                                    'Size in percent of the shape (outer shadows only; 100 = same size).'
+                                  ),
+                                transparency: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Transparency 0-1 (0 = opaque).'),
+                              })
+                              .describe(
+                                "Shadow options (PowerPoint's Shadow Options pane)."
+                              ),
+                          ])
+                          .describe(
+                            'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                          ),
+                      ])
+                      .optional(),
+                    size: zod.number().nullish().describe('Size in points.'),
+                    spacing: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Character spacing in points added between letters (negative\ncondenses; 0 = normal).'
+                      ),
+                    strike: zod.boolean().nullish().describe('Strikethrough.'),
+                    underline: zod.boolean().nullish().describe('Underline.'),
+                  })
+                  .describe(
+                    'Character formatting changes (`None` = leave unchanged).'
+                  ),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThree)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThree)
+                  .describe('Slide id.'),
+                start: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        offset: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemStartOffsetMinOne
+                          )
+                          .describe('Character offset within the paragraph.'),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemStartParagraphMinOne
+                          )
+                          .describe('Paragraph index.'),
+                      })
+                      .describe("A position inside a shape's text."),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Applies character formatting to a range (whole shape when omitted).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellColMinFour)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellRowMinFour)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                from: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemFromMin)
+                  .nullish()
+                  .describe('First paragraph.'),
+                op: zod.enum(['formatParagraphs']),
+                props: zod
+                  .object({
+                    align: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        '`left`, `center`, `right`, `justify`, `distributed`.'
+                      ),
+                    bullet: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                kind: zod.enum(['none']),
+                              })
+                              .describe('No bullet.'),
+                            zod
+                              .object({
+                                kind: zod.enum(['inherit']),
+                              })
+                              .describe(
+                                'Inherit from the layout\/master (removes explicit bullet settings).'
+                              ),
+                            zod
+                              .object({
+                                char: zod
+                                  .string()
+                                  .describe('The bullet character.'),
+                                kind: zod.enum(['char']),
+                              })
+                              .describe('A character bullet.'),
+                            zod
+                              .object({
+                                kind: zod.enum(['number']),
+                                scheme: zod
+                                  .string()
+                                  .describe('Numbering scheme.'),
+                                start: zod
+                                  .number()
+                                  .min(
+                                    editPresentationBodyOperationsItemPropsBulletStartMin
+                                  )
+                                  .optional()
+                                  .describe('First number.'),
+                              })
+                              .describe(
+                                'Automatic numbering (`arabicPeriod`, `romanUcPeriod`, `alphaLcParenR`...).'
+                              ),
+                          ])
+                          .describe('Bullet style for paragraphs.'),
+                      ])
+                      .optional(),
+                    indent: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'First-line indent in points (negative = hanging).'
+                      ),
+                    level: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemPropsLevelMin)
+                      .nullish()
+                      .describe('Outline level 0-8.'),
+                    lineSpacing: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Line spacing as a multiple of single spacing (1.0, 1.5...).'
+                      ),
+                    marginLeft: zod
+                      .number()
+                      .nullish()
+                      .describe('Left margin in points.'),
+                    spaceAfter: zod
+                      .number()
+                      .nullish()
+                      .describe('Space after in points.'),
+                    spaceBefore: zod
+                      .number()
+                      .nullish()
+                      .describe('Space before in points.'),
+                  })
+                  .describe('Paragraph formatting changes.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFour)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFour)
+                  .describe('Slide id.'),
+                to: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemToMin)
+                  .nullish()
+                  .describe('Last paragraph.'),
+              })
+              .describe(
+                'Applies paragraph formatting to paragraphs `from..=to` (all when omitted).'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellColMinFive)
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemCellRowMinFive)
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['formatBody']),
+                props: zod
+                  .object({
+                    anchor: zod
+                      .string()
+                      .nullish()
+                      .describe('`top`, `middle`, `bottom`.'),
+                    autofit: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        '`none`, `shrink` (shrink text on overflow), `resize` (resize shape to fit).'
+                      ),
+                    columns: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemPropsColumnsMin)
+                      .nullish()
+                      .describe('Number of columns.'),
+                    direction: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'horz',
+                            'vert',
+                            'vert270',
+                            'wordArtVert',
+                            'eaVert',
+                            'mongolianVert',
+                            'wordArtVertRtl',
+                          ])
+                          .describe(
+                            'A text direction (`ST_TextVerticalType`).'
+                          ),
+                      ])
+                      .optional(),
+                    insets: zod
+                      .array(zod.number())
+                      .nullish()
+                      .describe(
+                        'Insets `[left, top, right, bottom]` in points.'
+                      ),
+                    wrap: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Wrap text at the box width.'),
+                  })
+                  .describe('Text box (body) changes.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFive)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFive)
+                  .describe('Slide id.'),
+              })
+              .describe('Changes text box properties.'),
+            zod
+              .object({
+                flipH: zod.boolean().nullish().describe('Horizontal flip.'),
+                flipV: zod.boolean().nullish().describe('Vertical flip.'),
+                h: zod.number().nullish().describe('Height (points).'),
+                op: zod.enum(['setTransform']),
+                rotation: zod
+                  .number()
+                  .nullish()
+                  .describe('Rotation in degrees.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinSix)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinSix)
+                  .describe('Slide id.'),
+                w: zod.number().nullish().describe('Width (points).'),
+                x: zod.number().nullish().describe('Left (points).'),
+                y: zod.number().nullish().describe('Top (points).'),
+              })
+              .describe(
+                'Moves, resizes, rotates, or flips a shape (omitted fields stay).\nValues are in slide space, also for group members (as the outline\nreports them); their group grows or shrinks to fit.'
+              ),
+            zod
+              .object({
+                fill: zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['none']),
+                      })
+                      .describe('No fill.'),
+                    zod
+                      .object({
+                        alpha: zod.number().nullish().describe('Opacity 0-1.'),
+                        color: zod
+                          .string()
+                          .describe(
+                            '`RRGGBB`, or a theme color name (`accent1`, `tx1`, `bg1`...).'
+                          ),
+                        kind: zod.enum(['solid']),
+                      })
+                      .describe('Solid color.'),
+                    zod
+                      .object({
+                        angle: zod
+                          .number()
+                          .optional()
+                          .describe('Angle in degrees.'),
+                        colors: zod
+                          .array(zod.string())
+                          .describe(
+                            'Stop colors (`RRGGBB` or theme names), evenly spaced.'
+                          ),
+                        kind: zod.enum(['gradient']),
+                      })
+                      .describe('Linear gradient.'),
+                  ])
+                  .describe('A fill specification.'),
+                op: zod.enum(['setFill']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinSeven)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinSeven)
+                  .describe('Slide id.'),
+              })
+              .describe("Sets a shape's fill."),
+            zod
+              .object({
+                line: zod
+                  .object({
+                    color: zod
+                      .string()
+                      .nullish()
+                      .describe('Color (`RRGGBB` or theme name).'),
+                    dash: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Preset dash (`solid`, `dash`, `dot`, `dashDot`, `lgDash`, `sysDash`, `sysDot`).'
+                      ),
+                    head: zod
+                      .string()
+                      .nullish()
+                      .describe('Arrowhead at the start.'),
+                    none: zod
+                      .boolean()
+                      .optional()
+                      .describe('Remove the outline.'),
+                    tail: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Arrowhead at the end (`none`, `triangle`, `stealth`, `diamond`, `oval`, `arrow`).'
+                      ),
+                    width: zod.number().nullish().describe('Width in points.'),
+                  })
+                  .describe('Outline changes.'),
+                op: zod.enum(['setLine']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinEight)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinEight)
+                  .describe('Slide id.'),
+              })
+              .describe("Changes a shape's outline."),
+            zod
+              .object({
+                op: zod.enum(['setGeometry']),
+                preset: zod.string().describe('Preset name.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinNine)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinNine)
+                  .describe('Slide id.'),
+              })
+              .describe("Changes a shape's preset geometry."),
+            zod
+              .object({
+                h: zod.number().describe('Height (points).'),
+                op: zod.enum(['addShape']),
+                shape: zod
+                  .union([
+                    zod
+                      .object({
+                        kind: zod.enum(['textBox']),
+                        text: zod
+                          .string()
+                          .optional()
+                          .describe(
+                            'Initial text (`\\n` separates paragraphs).'
+                          ),
+                      })
+                      .describe('A text box.'),
+                    zod
+                      .object({
+                        kind: zod.enum(['shape']),
+                        preset: zod.string().describe('Preset geometry name.'),
+                        text: zod.string().optional().describe('Initial text.'),
+                      })
+                      .describe(
+                        'A preset shape (`rect`, `roundRect`, `ellipse`, `rightArrow`...).'
+                      ),
+                    zod
+                      .object({
+                        arrow: zod
+                          .boolean()
+                          .optional()
+                          .describe('Arrowhead at the end.'),
+                        kind: zod.enum(['line']),
+                      })
+                      .describe(
+                        'A straight line from the top-left to the bottom-right of the box.'
+                      ),
+                    zod
+                      .object({
+                        data: zod
+                          .string()
+                          .describe('Base64-encoded PNG, JPEG, or GIF bytes.'),
+                        description: zod
+                          .string()
+                          .optional()
+                          .describe('Alt text.'),
+                        kind: zod.enum(['image']),
+                      })
+                      .describe('A picture.'),
+                    zod
+                      .object({
+                        contentType: zod
+                          .string()
+                          .describe("The file's MIME type (`video\/mp4`...)."),
+                        data: zod
+                          .string()
+                          .describe(
+                            'Base64-encoded MP4, M4V, MOV, WebM, WMV, or AVI bytes.'
+                          ),
+                        description: zod
+                          .string()
+                          .optional()
+                          .describe('Alt text.'),
+                        kind: zod.enum(['video']),
+                        poster: zod
+                          .string()
+                          .describe(
+                            'Base64-encoded PNG or JPEG shown until it plays (its first frame).'
+                          ),
+                      })
+                      .describe(
+                        "A video, played when clicked in a slide show. A zero width or height\ntakes the poster's aspect ratio."
+                      ),
+                    zod
+                      .object({
+                        contentType: zod
+                          .string()
+                          .describe("The file's MIME type (`audio\/mpeg`...)."),
+                        data: zod
+                          .string()
+                          .describe(
+                            'Base64-encoded MP3, M4A, WAV, or OGG bytes.'
+                          ),
+                        description: zod
+                          .string()
+                          .optional()
+                          .describe('Alt text.'),
+                        kind: zod.enum(['audio']),
+                        poster: zod
+                          .string()
+                          .describe('Base64-encoded PNG or JPEG icon.'),
+                      })
+                      .describe(
+                        'An audio clip, shown as its poster (a speaker icon) and played when\nclicked in a slide show.'
+                      ),
+                    zod
+                      .object({
+                        cells: zod
+                          .array(zod.array(zod.string()))
+                          .describe('Cell text, row by row.'),
+                        kind: zod.enum(['table']),
+                      })
+                      .describe('A table.'),
+                    zod
+                      .object({
+                        categories: zod
+                          .array(zod.string())
+                          .describe('Category labels.'),
+                        chartType: zod
+                          .string()
+                          .describe(
+                            '`bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.'
+                          ),
+                        grouping: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "`clustered`, `stacked`, `percentStacked`, or `standard` (the type's default when omitted)."
+                          ),
+                        kind: zod.enum(['chart']),
+                        series: zod
+                          .array(
+                            zod
+                              .object({
+                                name: zod
+                                  .string()
+                                  .describe('Series name (legend text).'),
+                                values: zod
+                                  .array(zod.number().nullable())
+                                  .describe(
+                                    'One value per category (`null` for a blank).'
+                                  ),
+                              })
+                              .describe('One series of chart data.')
+                          )
+                          .describe('Series in plot order.'),
+                        title: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Chart title (no title when omitted or empty).'
+                          ),
+                      })
+                      .describe(
+                        'A chart with an embedded workbook holding its data.'
+                      ),
+                    zod
+                      .object({
+                        colors: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Color variation (`accent1_2` when omitted; see `editSmartArt`'s\n`setColors`)."
+                          ),
+                        items: zod
+                          .array(
+                            zod
+                              .object({
+                                level: zod
+                                  .number()
+                                  .min(
+                                    editPresentationBodyOperationsItemShapeItemsItemLevelMin
+                                  )
+                                  .optional()
+                                  .describe(
+                                    'Outline level: 1 for top-level shapes, 2 for their sub-bullets (or\nchild shapes in hierarchies), and so on. The first item must be at\nlevel 1, and each item at most one level below the one before it.\nOmitted (or null) means 1.'
+                                  ),
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    'The node\'s text (`\"\"` leaves the \"[Text]\" prompt; `\\u{b}` is a line break).'
+                                  ),
+                              })
+                              .describe(
+                                "One bullet of a SmartArt graphic's text: a node and its outline level."
+                              )
+                          )
+                          .nullish()
+                          .describe(
+                            'The text as an outline (one item per node); omit for the\nlayout\'s sample nodes showing the \"[Text]\" prompt.'
+                          ),
+                        kind: zod.enum(['smartArt']),
+                        layout: zod
+                          .string()
+                          .describe(
+                            'Layout: `default` (Basic Block List), `vList2` (Vertical Bullet\nList), `hList1` (Horizontal Bullet List), `process1` (Basic\nProcess), `chevron1` (Basic Chevron Process), `cycle2` (Basic\nCycle), `radial1` (Basic Radial: the first item is the center,\nlevel-2 items around it), `hierarchy1` (Hierarchy), `orgChart1`\n(Organization Chart), `venn1` (Basic Venn), or `pyramid1` (Basic\nPyramid).'
+                          ),
+                        style: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "SmartArt style (`simple1` when omitted; see `editSmartArt`'s\n`setStyle`)."
+                          ),
+                      })
+                      .describe(
+                        "A SmartArt graphic (PowerPoint's Insert ▸ SmartArt), laid out to\nfill the box. PowerPoint's default box on a 16:9 slide is 640 x 426.7\npoints at (160, 56.7)."
+                      ),
+                  ])
+                  .describe(
+                    'What to add with [`EditOp::AddShape`](super::EditOp::AddShape).'
+                  ),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOnezero)
+                  .describe('Slide id.'),
+                w: zod.number().describe('Width (points).'),
+                x: zod.number().describe('Left (points).'),
+                y: zod.number().describe('Top (points).'),
+              })
+              .describe('Adds a shape (its id is reported in the result).'),
+            zod
+              .object({
+                op: zod.enum(['deleteShape']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwozero)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOneone)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a shape.'),
+            zod
+              .object({
+                dx: zod.number().optional().describe('Horizontal offset.'),
+                dy: zod.number().optional().describe('Vertical offset.'),
+                op: zod.enum(['duplicateShape']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwoone)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOnetwo)
+                  .describe('Slide id.'),
+              })
+              .describe('Duplicates a shape, offset by (dx, dy) points.'),
+            zod
+              .object({
+                op: zod.enum(['reorderShape']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwotwo)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOnethree)
+                  .describe('Slide id.'),
+                to: zod
+                  .enum(['front', 'back', 'forward', 'backward'])
+                  .describe('Z-order moves.'),
+              })
+              .describe("Changes a shape's z-order."),
+            zod
+              .object({
+                data: zod
+                  .string()
+                  .describe('Base64-encoded PNG, JPEG, or GIF bytes.'),
+                op: zod.enum(['replaceImage']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwothree)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOnefour)
+                  .describe('Slide id.'),
+              })
+              .describe("Replaces a picture's image."),
+            zod
+              .object({
+                col: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemColMin)
+                  .describe('Column.'),
+                op: zod.enum(['setCellText']),
+                row: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemRowMin)
+                  .describe('Row.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwofour)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOnefive)
+                  .describe('Slide id.'),
+                text: zod.string().describe('Text.'),
+              })
+              .describe('Sets the text of a table cell.'),
+            zod
+              .object({
+                at: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemAtMinOne)
+                  .describe('Index of the new row.'),
+                op: zod.enum(['insertTableRow']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwofive)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOnesix)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Inserts a table row (copying the formatting of an adjacent row).'
+              ),
+            zod
+              .object({
+                op: zod.enum(['deleteTableRow']),
+                row: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemRowMinOne)
+                  .describe('Row index.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwosix)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOneseven)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a table row.'),
+            zod
+              .object({
+                at: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemAtMinTwo)
+                  .describe('Index of the new column.'),
+                op: zod.enum(['insertTableColumn']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwoseven)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOneeight)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Inserts a table column (copying the formatting of an adjacent column).'
+              ),
+            zod
+              .object({
+                col: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemColMinOne)
+                  .describe('Column index.'),
+                op: zod.enum(['deleteTableColumn']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwoeight)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinOnenine)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a table column.'),
+            zod
+              .object({
+                from: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemFromColMin)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemFromRowMin)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+                op: zod.enum(['mergeCells']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinTwonine)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwozero)
+                  .describe('Slide id.'),
+                to: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemToColMin)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemToRowMin)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+              })
+              .describe(
+                'Merges the rectangle of table cells between two corners into one cell.\nThe top-left cell keeps its formatting; the text of the other cells is\nappended to it as paragraphs. Merged cells already inside the rectangle\nare absorbed; a rectangle that cuts through a merged cell is rejected.'
+              ),
+            zod
+              .object({
+                cell: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemCellColMinSix)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemCellRowMinSix)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+                op: zod.enum(['splitCell']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreezero)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwoone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Splits a merged cell back into the grid cells it covers. The revealed\ncells are empty and take the merged cell's fill and outer borders."
+              ),
+            zod
+              .object({
+                anchor: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Vertical text alignment: `top`, `middle`, or `bottom`.'
+                  ),
+                borders: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        edges: zod
+                          .enum([
+                            'all',
+                            'outside',
+                            'inside',
+                            'top',
+                            'bottom',
+                            'left',
+                            'right',
+                            'insideHorizontal',
+                            'insideVertical',
+                          ])
+                          .describe(
+                            'Which borders of a cell range [`EditOp::FormatCells`](super::EditOp::FormatCells) changes. A border\nbetween two cells is shared, so both cells get the change.'
+                          ),
+                        line: zod
+                          .object({
+                            color: zod
+                              .string()
+                              .nullish()
+                              .describe('Color (`RRGGBB` or theme name).'),
+                            dash: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Preset dash (`solid`, `dash`, `dot`, `dashDot`, `lgDash`, `sysDash`, `sysDot`).'
+                              ),
+                            none: zod
+                              .boolean()
+                              .optional()
+                              .describe('Remove the border (no line).'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Width in points.'),
+                          })
+                          .describe(
+                            'A table border change (`None` = leave unchanged). A border that did not\nexist yet becomes a solid 1 pt `tx1` line unless the change says otherwise.'
+                          ),
+                      })
+                      .describe(
+                        'Borders to change in [`EditOp::FormatCells`](super::EditOp::FormatCells).'
+                      ),
+                  ])
+                  .optional(),
+                fill: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['none']),
+                          })
+                          .describe('No fill.'),
+                        zod
+                          .object({
+                            alpha: zod
+                              .number()
+                              .nullish()
+                              .describe('Opacity 0-1.'),
+                            color: zod
+                              .string()
+                              .describe(
+                                '`RRGGBB`, or a theme color name (`accent1`, `tx1`, `bg1`...).'
+                              ),
+                            kind: zod.enum(['solid']),
+                          })
+                          .describe('Solid color.'),
+                        zod
+                          .object({
+                            angle: zod
+                              .number()
+                              .optional()
+                              .describe('Angle in degrees.'),
+                            colors: zod
+                              .array(zod.string())
+                              .describe(
+                                'Stop colors (`RRGGBB` or theme names), evenly spaced.'
+                              ),
+                            kind: zod.enum(['gradient']),
+                          })
+                          .describe('Linear gradient.'),
+                      ])
+                      .describe('A fill specification.'),
+                  ])
+                  .optional(),
+                from: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemFromColMinOne)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemFromRowMinOne)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+                margins: zod
+                  .array(zod.number())
+                  .nullish()
+                  .describe(
+                    'Cell margins `[left, top, right, bottom]` in points.'
+                  ),
+                op: zod.enum(['formatCells']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreeone)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwotwo)
+                  .describe('Slide id.'),
+                to: zod
+                  .object({
+                    col: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemToColMinOne)
+                      .describe('Column index.'),
+                    row: zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemToRowMinOne)
+                      .describe('Row index.'),
+                  })
+                  .describe('A table cell inside a graphic frame (0-based).'),
+              })
+              .describe(
+                'Formats the table cells in the rectangle between two corners (widened\nto whole merged cells). Omitted fields stay unchanged.'
+              ),
+            zod
+              .object({
+                bandCol: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Alternate the shading of columns.'),
+                bandRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Alternate the shading of rows.'),
+                firstCol: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the first column.'),
+                firstRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the first (header) row.'),
+                lastCol: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the last column.'),
+                lastRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Emphasize the last (total) row.'),
+                op: zod.enum(['setTableStyle']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreetwo)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwothree)
+                  .describe('Slide id.'),
+                style: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Style id (a GUID from the deck outline\'s `tableStyles`, e.g.\n`{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}` = Medium Style 2 - Accent 1),\nor `\"\"` for no style.'
+                  ),
+              })
+              .describe(
+                "Sets a table's style and which of its parts the style emphasizes\n(omitted fields stay unchanged). Applying a different style clears\nfills and borders set directly on cells, as PowerPoint does, so the\ntable shows the new style."
+              ),
+            zod
+              .object({
+                columnWidths: zod
+                  .array(zod.number())
+                  .nullish()
+                  .describe('One width per column.'),
+                op: zod.enum(['setTableGrid']),
+                rowHeights: zod
+                  .array(zod.number())
+                  .nullish()
+                  .describe('One minimum height per row.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreethree)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwofour)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Sets table column widths and minimum row heights in points (rows still\ngrow to fit their text). The frame is resized to match.'
+              ),
+            zod
+              .object({
+                after: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemAfterMin)
+                  .nullish()
+                  .describe(
+                    'Insert after this slide (end of deck when omitted).'
+                  ),
+                body: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Body placeholder text (`\\n` separates paragraphs).'
+                  ),
+                layout: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Layout name (e.g. \"Title and Content\"); defaults to the layout of the reference slide.'
+                  ),
+                op: zod.enum(['addSlide']),
+                title: zod
+                  .string()
+                  .nullish()
+                  .describe('Title placeholder text.'),
+              })
+              .describe(
+                'Adds a slide based on a layout (its id is reported in the result).'
+              ),
+            zod
+              .object({
+                op: zod.enum(['duplicateSlide']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwofive)
+                  .describe('Slide id.'),
+              })
+              .describe('Duplicates a slide right after itself.'),
+            zod
+              .object({
+                op: zod.enum(['deleteSlide']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwosix)
+                  .describe('Slide id.'),
+              })
+              .describe('Deletes a slide.'),
+            zod
+              .object({
+                op: zod.enum(['moveSlide']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwoseven)
+                  .describe('Slide id.'),
+                to: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemToMinFour)
+                  .describe('New index.'),
+              })
+              .describe('Moves a slide to a 0-based position.'),
+            zod
+              .object({
+                hidden: zod.boolean().describe('Hidden.'),
+                op: zod.enum(['setSlideHidden']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwoeight)
+                  .describe('Slide id.'),
+              })
+              .describe('Hides or shows a slide in slideshows.'),
+            zod
+              .object({
+                op: zod.enum(['setNotes']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinTwonine)
+                  .describe('Slide id.'),
+                text: zod
+                  .string()
+                  .describe('Notes text (`\\n` separates paragraphs).'),
+              })
+              .describe('Replaces the speaker notes of a slide.'),
+            zod
+              .object({
+                fill: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            kind: zod.enum(['none']),
+                          })
+                          .describe('No fill.'),
+                        zod
+                          .object({
+                            alpha: zod
+                              .number()
+                              .nullish()
+                              .describe('Opacity 0-1.'),
+                            color: zod
+                              .string()
+                              .describe(
+                                '`RRGGBB`, or a theme color name (`accent1`, `tx1`, `bg1`...).'
+                              ),
+                            kind: zod.enum(['solid']),
+                          })
+                          .describe('Solid color.'),
+                        zod
+                          .object({
+                            angle: zod
+                              .number()
+                              .optional()
+                              .describe('Angle in degrees.'),
+                            colors: zod
+                              .array(zod.string())
+                              .describe(
+                                'Stop colors (`RRGGBB` or theme names), evenly spaced.'
+                              ),
+                            kind: zod.enum(['gradient']),
+                          })
+                          .describe('Linear gradient.'),
+                      ])
+                      .describe('A fill specification.'),
+                  ])
+                  .optional(),
+                op: zod.enum(['setBackground']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreezero)
+                  .describe('Slide id.'),
+              })
+              .describe("Sets a slide's background."),
+            zod
+              .object({
+                categories: zod
+                  .array(zod.string())
+                  .describe('Category labels.'),
+                op: zod.enum(['setChartData']),
+                series: zod
+                  .array(
+                    zod
+                      .object({
+                        name: zod
+                          .string()
+                          .describe('Series name (legend text).'),
+                        values: zod
+                          .array(zod.number().nullable())
+                          .describe(
+                            'One value per category (`null` for a blank).'
+                          ),
+                      })
+                      .describe('One series of chart data.')
+                  )
+                  .describe('Series in plot order (one value per category).'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreefour)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreeone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces a chart's categories and series (the chart must be `editable`\nin the outline). Existing series keep their formatting; new series\ncopy the last one's with the next theme accent color. The embedded\nworkbook is rewritten to match."
+              ),
+            zod
+              .object({
+                grouping: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "`clustered`, `stacked`, `percentStacked`, or `standard` (kept or the type's default when omitted)."
+                  ),
+                kind: zod
+                  .string()
+                  .describe(
+                    '`bar` (horizontal), `column`, `line`, `pie`, `doughnut`, or `area`.'
+                  ),
+                op: zod.enum(['setChartType']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreefive)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreetwo)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Changes a chart's type (the chart must be `editable` in the outline)."
+              ),
+            zod
+              .object({
+                dataLabels: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Show or hide value data labels on every series.'),
+                legend: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Legend position: `right`, `left`, `top`, `bottom`, `topRight`, or `none`.'
+                  ),
+                op: zod.enum(['formatChart']),
+                seriesColors: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod
+                          .string()
+                          .describe(
+                            '`RRGGBB`, or a theme color name (`accent1`, `tx1`...).'
+                          ),
+                        series: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemSeriesColorsItemSeriesMin
+                          )
+                          .describe('Series index in plot order (0-based).'),
+                      })
+                      .describe(
+                        'A series color for [`EditOp::FormatChart`](super::EditOp::FormatChart).'
+                      )
+                  )
+                  .nullish()
+                  .describe('Series colors.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreesix)
+                  .describe('Graphic frame id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreethree)
+                  .describe('Slide id.'),
+                title: zod
+                  .string()
+                  .nullish()
+                  .describe('Title text (`\"\"` removes the title).'),
+              })
+              .describe(
+                "Changes a chart's title, legend, data labels, or series colors (omitted fields stay)."
+              ),
+            zod
+              .object({
+                op: zod.enum(['groupShapes']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemShapesItemMin)
+                  )
+                  .describe('Ids of the shapes to group (at least two).'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreefour)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Groups two or more shapes that share a parent (usually top-level\nshapes) into a new group placed at the z-position of the topmost of\nthem. They keep their order and exactly where they are. The group's id\nis reported in the result. Placeholders cannot be grouped."
+              ),
+            zod
+              .object({
+                op: zod.enum(['ungroupShape']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreeseven)
+                  .describe('Group id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreefive)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Ungroups a group: its members take its place in the z-order and keep\nexactly where and how they appear (the group's offset, scale,\nrotation, and flips are applied to each). The members' ids are\nreported in the result, back to front."
+              ),
+            zod
+              .object({
+                dx: zod
+                  .number()
+                  .optional()
+                  .describe('Horizontal offset in points.'),
+                dy: zod
+                  .number()
+                  .optional()
+                  .describe('Vertical offset in points.'),
+                op: zod.enum(['pasteShapes']),
+                payload: zod
+                  .string()
+                  .describe(
+                    'The clipboard payload JSON returned by `copyShapes`.'
+                  ),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreesix)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Pastes shapes copied with `copyShapes` (from this or another\npresentation) on top of a slide, with fresh ids, offset by (dx, dy)\npoints. Pictures, media, charts, and links come along. Theme colors,\ntheme fonts, and style references take this presentation\'s theme\n(PowerPoint\'s \"Use Destination Theme\"). The new top-level shape ids are\nreported in the result, back to front.'
+              ),
+            zod
+              .object({
+                after: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemAfterMinOne)
+                  .nullish()
+                  .describe(
+                    'Insert after this slide (end of deck when omitted).'
+                  ),
+                op: zod.enum(['pasteSlides']),
+                payload: zod
+                  .string()
+                  .describe(
+                    'The clipboard payload JSON returned by `copySlides`.'
+                  ),
+              })
+              .describe(
+                'Pastes slides copied with `copySlides` (from this or another\npresentation), with their speaker notes. Each slide takes this deck\'s\nlayout of the same name, else the first with the same placeholder\ntypes, else \"Title and Content\", else the first layout; theme colors\nand fonts follow this deck\'s theme. New slide ids are reported in the\nresult, in order.'
+              ),
+            zod
+              .object({
+                layout: zod
+                  .string()
+                  .describe(
+                    'Layout name (e.g. \"Title Only\"), as listed in the deck\'s layouts.'
+                  ),
+                op: zod.enum(['setSlideLayout']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreeseven)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Changes a slide's layout. Placeholders are matched to the new layout's\nplaceholders by type and index and take their position; placeholders\nwithout a match stay where they are. Content is kept, and the new\nlayout's other placeholders are added empty."
+              ),
+            zod
+              .object({
+                advanceAfterMs: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemAdvanceAfterMsMin)
+                  .nullish()
+                  .describe(
+                    'Advance automatically after this many milliseconds; `0` turns\nautomatic advance off, and an omitted (or null) field keeps the\ncurrent setting.'
+                  ),
+                advanceOnClick: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Whether a click advances to the next slide.'),
+                applyToAll: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Give every slide of the deck the resulting transition.'
+                  ),
+                direction: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Effect option: `fade`: `smooth` or `black`; `push`, `wipe`: `l`,\n`r`, `u`, `d`; `cover`, `uncover`: those or `lu`, `ru`, `ld`, `rd`;\n`split`: `horzOut`, `horzIn`, `vertOut`, `vertIn`; `reveal`: `l`,\n`r`; `randomBar`: `horz`, `vert`; `shape`: `circle`, `diamond`,\n`plus`; `zoom`: `in`, `out`; `morph`: `byObject`, `byWord`,\n`byChar`. Directions are the OOXML `dir` values.'
+                  ),
+                durationMs: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemDurationMsMin)
+                  .nullish()
+                  .describe('Duration in milliseconds (at most 60000).'),
+                kind: zod
+                  .string()
+                  .describe(
+                    'Effect: `none` (removes the transition), `cut`, `fade`, `push`,\n`wipe`, `split`, `reveal`, `randomBar`, `shape`, `uncover`,\n`cover`, `zoom`, `dissolve`, `flash`, or `morph`.'
+                  ),
+                op: zod.enum(['setTransition']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreeeight)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Sets the transition into a slide. Omitted fields keep the slide's\ncurrent value, or take the effect's default for a new transition."
+              ),
+            zod
+              .object({
+                animations: zod
+                  .array(
+                    zod
+                      .object({
+                        class: zod
+                          .enum([
+                            'entrance',
+                            'emphasis',
+                            'exit',
+                            'path',
+                            'media',
+                            'other',
+                          ])
+                          .describe(
+                            "An animation's effect group (PowerPoint's Entrance, Emphasis, Exit, and\nMotion Paths galleries)."
+                          ),
+                        delayMs: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemAnimationsItemDelayMsMin
+                          )
+                          .nullish()
+                          .describe(
+                            "Wait in milliseconds after the animation's start (click, previous\nanimation's start, or its end) before it plays, 0-60000 (default 0)."
+                          ),
+                        direction: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Effect option (default: the first listed). `flyIn`, `flyOut` (edge it\nflies in from or out to): `bottom`, `left`, `right`, `top`,\n`bottomLeft`, `bottomRight`, `topLeft`, `topRight`; `wipe` (edge it\nstarts from): `bottom`, `left`, `right`, `top`; `split` (entrance):\n`verticalOut`, `horizontalOut`, `verticalIn`, `horizontalIn` (exit:\nthe `In` ones first); `shape` (entrance): `circleOut`, `circleIn`,\n`boxOut`, `boxIn`, `diamondOut`, `diamondIn`, `plusOut`, `plusIn`\n(exit: `circleIn` first); `wheel`: `spokes1`, `spokes2`, `spokes3`,\n`spokes4`, `spokes8`; `randomBars`: `horizontal`, `vertical`; `zoom`:\n`objectCenter`, `slideCenter`; `floatIn`: `up`, `down`; `floatOut`:\n`down`, `up`; `spin`: `clockwise`, `counterclockwise`; `path`: `down`,\n`left`, `right`, `up` (a straight line a quarter of the slide long).'
+                          ),
+                        durationMs: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemAnimationsItemDurationMsMin
+                          )
+                          .nullish()
+                          .describe(
+                            "Duration of one play in milliseconds, 10-60000 (default: the\neffect's, e.g. 500 for fade, flyIn, wipe, and zoom, 1000 for floatIn\nand teeter, 2000 for spin, growShrink, shape, wheel, and paths).\n`appear` and `disappear` are instant and ignore it."
+                          ),
+                        effect: zod
+                          .string()
+                          .describe(
+                            "Effect name. Entrance: `appear`, `fade`, `flyIn`, `floatIn`, `split`,\n`wipe`, `shape`, `wheel`, `randomBars`, `growTurn`, `zoom`, `swivel`,\n`bounce`. Emphasis: `pulse`, `colorPulse`, `teeter`, `spin`,\n`growShrink`, `desaturate`, `darken`, `lighten`, `transparency`,\n`boldFlash`, `wave`. Exit: `disappear`, `fadeOut`, `flyOut`,\n`floatOut`, `split`, `wipe`, `shape`, `wheel`, `randomBars`,\n`shrinkTurn`, `zoom`, `swivel`, `bounce`. Path: `path`. Other names\nthe slide's outline reports (and `custom`) only keep an existing\nanimation of that name on the same shape."
+                          ),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemAnimationsItemParagraphMin
+                          )
+                          .nullish()
+                          .describe(
+                            "Animate only this paragraph of the shape's text (0-based); omit to\nanimate the whole shape. One animation per paragraph builds a list\nparagraph by paragraph."
+                          ),
+                        path: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "`path` class only: a motion path of its own instead of a direction,\nin PowerPoint's syntax with coordinates as fractions of the slide's\nwidth and height relative to the shape's position (`M 0 0 L 0.25 0.1 E`;\ncommands `M`, `L`, `C`, `Z`, and `E` for the end)."
+                          ),
+                        repeat: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .union([
+                                zod
+                                  .number()
+                                  .describe(
+                                    'Plays this many times in all (`1` = once, no repeat; fractions such as 2.5 are allowed).'
+                                  ),
+                                zod
+                                  .enum(['untilNextClick', 'untilEndOfSlide'])
+                                  .describe(
+                                    'The event that ends a repeating animation.'
+                                  ),
+                              ])
+                              .describe('How often an animation plays.'),
+                          ])
+                          .optional(),
+                        shapeId: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemAnimationsItemShapeIdMin
+                          )
+                          .describe(
+                            "Id of the shape to animate. A group member's id animates only that member."
+                          ),
+                        start: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .enum([
+                                'onClick',
+                                'withPrevious',
+                                'afterPrevious',
+                              ])
+                              .describe('When an animation starts.'),
+                          ])
+                          .optional(),
+                      })
+                      .describe(
+                        "One animation of a slide, for [`EditOp::SetAnimations`] and\n[`EditOp::AddAnimation`]. Omitted (or null) fields take the effect's\ndefaults, or keep the values of the existing animation it matches."
+                      )
+                  )
+                  .describe('Animations in playback order.'),
+                op: zod.enum(['setAnimations']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinThreenine)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces a slide's animations (its main sequence, which plays as the\npresenter clicks through the slide) with these, in playback order;\n`[]` removes them all. An entry matching an animation the slide has\n(same shape, class, effect, and paragraph, and direction when given)\nkeeps it, with its other settings unless the entry gives them, so\nlisting the current animations in a new order reorders them.\nAnimations started by clicking a shape (triggers) are kept."
+              ),
+            zod
+              .object({
+                animation: zod
+                  .object({
+                    class: zod
+                      .enum([
+                        'entrance',
+                        'emphasis',
+                        'exit',
+                        'path',
+                        'media',
+                        'other',
+                      ])
+                      .describe(
+                        "An animation's effect group (PowerPoint's Entrance, Emphasis, Exit, and\nMotion Paths galleries)."
+                      ),
+                    delayMs: zod
+                      .number()
+                      .min(
+                        editPresentationBodyOperationsItemAnimationDelayMsMin
+                      )
+                      .nullish()
+                      .describe(
+                        "Wait in milliseconds after the animation's start (click, previous\nanimation's start, or its end) before it plays, 0-60000 (default 0)."
+                      ),
+                    direction: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Effect option (default: the first listed). `flyIn`, `flyOut` (edge it\nflies in from or out to): `bottom`, `left`, `right`, `top`,\n`bottomLeft`, `bottomRight`, `topLeft`, `topRight`; `wipe` (edge it\nstarts from): `bottom`, `left`, `right`, `top`; `split` (entrance):\n`verticalOut`, `horizontalOut`, `verticalIn`, `horizontalIn` (exit:\nthe `In` ones first); `shape` (entrance): `circleOut`, `circleIn`,\n`boxOut`, `boxIn`, `diamondOut`, `diamondIn`, `plusOut`, `plusIn`\n(exit: `circleIn` first); `wheel`: `spokes1`, `spokes2`, `spokes3`,\n`spokes4`, `spokes8`; `randomBars`: `horizontal`, `vertical`; `zoom`:\n`objectCenter`, `slideCenter`; `floatIn`: `up`, `down`; `floatOut`:\n`down`, `up`; `spin`: `clockwise`, `counterclockwise`; `path`: `down`,\n`left`, `right`, `up` (a straight line a quarter of the slide long).'
+                      ),
+                    durationMs: zod
+                      .number()
+                      .min(
+                        editPresentationBodyOperationsItemAnimationDurationMsMin
+                      )
+                      .nullish()
+                      .describe(
+                        "Duration of one play in milliseconds, 10-60000 (default: the\neffect's, e.g. 500 for fade, flyIn, wipe, and zoom, 1000 for floatIn\nand teeter, 2000 for spin, growShrink, shape, wheel, and paths).\n`appear` and `disappear` are instant and ignore it."
+                      ),
+                    effect: zod
+                      .string()
+                      .describe(
+                        "Effect name. Entrance: `appear`, `fade`, `flyIn`, `floatIn`, `split`,\n`wipe`, `shape`, `wheel`, `randomBars`, `growTurn`, `zoom`, `swivel`,\n`bounce`. Emphasis: `pulse`, `colorPulse`, `teeter`, `spin`,\n`growShrink`, `desaturate`, `darken`, `lighten`, `transparency`,\n`boldFlash`, `wave`. Exit: `disappear`, `fadeOut`, `flyOut`,\n`floatOut`, `split`, `wipe`, `shape`, `wheel`, `randomBars`,\n`shrinkTurn`, `zoom`, `swivel`, `bounce`. Path: `path`. Other names\nthe slide's outline reports (and `custom`) only keep an existing\nanimation of that name on the same shape."
+                      ),
+                    paragraph: zod
+                      .number()
+                      .min(
+                        editPresentationBodyOperationsItemAnimationParagraphMin
+                      )
+                      .nullish()
+                      .describe(
+                        "Animate only this paragraph of the shape's text (0-based); omit to\nanimate the whole shape. One animation per paragraph builds a list\nparagraph by paragraph."
+                      ),
+                    path: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "`path` class only: a motion path of its own instead of a direction,\nin PowerPoint's syntax with coordinates as fractions of the slide's\nwidth and height relative to the shape's position (`M 0 0 L 0.25 0.1 E`;\ncommands `M`, `L`, `C`, `Z`, and `E` for the end)."
+                      ),
+                    repeat: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .number()
+                              .describe(
+                                'Plays this many times in all (`1` = once, no repeat; fractions such as 2.5 are allowed).'
+                              ),
+                            zod
+                              .enum(['untilNextClick', 'untilEndOfSlide'])
+                              .describe(
+                                'The event that ends a repeating animation.'
+                              ),
+                          ])
+                          .describe('How often an animation plays.'),
+                      ])
+                      .optional(),
+                    shapeId: zod
+                      .number()
+                      .min(
+                        editPresentationBodyOperationsItemAnimationShapeIdMin
+                      )
+                      .describe(
+                        "Id of the shape to animate. A group member's id animates only that member."
+                      ),
+                    start: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['onClick', 'withPrevious', 'afterPrevious'])
+                          .describe('When an animation starts.'),
+                      ])
+                      .optional(),
+                  })
+                  .describe(
+                    "One animation of a slide, for [`EditOp::SetAnimations`] and\n[`EditOp::AddAnimation`]. Omitted (or null) fields take the effect's\ndefaults, or keep the values of the existing animation it matches."
+                  ),
+                index: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemIndexMin)
+                  .nullish()
+                  .describe(
+                    '0-based position in playback order (the end when omitted).'
+                  ),
+                op: zod.enum(['addAnimation']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFourzero)
+                  .describe('Slide id.'),
+              })
+              .describe("Adds a new animation to a slide's sequence."),
+            zod
+              .object({
+                indexes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemIndexesItemMin)
+                  )
+                  .nullish()
+                  .describe('0-based playback positions to remove.'),
+                op: zod.enum(['removeAnimations']),
+                shapeIds: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemShapeIdsItemMin)
+                  )
+                  .nullish()
+                  .describe('Shapes whose animations to remove.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFourone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Removes animations from a slide's sequence: every animation of the\nlisted shapes and the animations at the listed playback positions.\nGive at least one of the lists (`setAnimations` with `[]` removes all)."
+              ),
+            zod
+              .object({
+                find: zod
+                  .string()
+                  .describe('Text to find (within one paragraph).'),
+                matchCase: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Match upper and lower case exactly (default: ignore case).'
+                  ),
+                op: zod.enum(['replaceText']),
+                replace: zod
+                  .string()
+                  .describe(
+                    'Replacement text (may be empty; no paragraph or line breaks).'
+                  ),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFourtwo)
+                  .nullish()
+                  .describe('Slide id; omit to replace on every slide.'),
+                wholeWord: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Only match whole words (no letter, digit, or `_` on either side).'
+                  ),
+              })
+              .describe(
+                'Replaces text in shapes, group members, and table cells, on one slide\nor on every slide. A match may span differently formatted runs but not\nparagraphs; the replacement takes the formatting of the first matched\ncharacter. The number of replacements is reported in the result.'
+              ),
+            zod
+              .object({
+                op: zod.enum(['setAltText']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreeeight)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFourthree)
+                  .describe('Slide id.'),
+                text: zod.string().describe('Alt text.'),
+              })
+              .describe(
+                'Sets a shape\'s alt text (its description for screen readers); `\"\"` removes it.'
+              ),
+            zod
+              .object({
+                name: zod.string().describe('New name.'),
+                op: zod.enum(['setShapeName']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinThreenine)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFourfour)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Renames a shape (the name shown in the selection pane).'
+              ),
+            zod
+              .object({
+                link: zod
+                  .string()
+                  .describe(
+                    'An address (`https:\/\/…`, `mailto:…`), `#slide=<id>`, a slide show\njump (`#nextslide`, `#previousslide`, `#firstslide`, `#lastslide`,\n`#lastslideviewed`, `#endshow`), or `\"\"` to remove the link.'
+                  ),
+                op: zod.enum(['setShapeLink']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemShapesItemMinOne)
+                  )
+                  .describe('Shape ids.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFourfive)
+                  .describe('Slide id.'),
+                tip: zod
+                  .string()
+                  .nullish()
+                  .describe('The ScreenTip shown on hover.'),
+              })
+              .describe(
+                "Links whole shapes: clicking one in a slide show follows the link.\nLinks on text are set with formatText's `link`."
+              ),
+            zod
+              .object({
+                hidden: zod.boolean().describe('Hidden.'),
+                op: zod.enum(['setShapeHidden']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFourzero)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFoursix)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Hides or shows a shape (hidden shapes are not drawn).'
+              ),
+            zod
+              .object({
+                fromShape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemFromShapeMin)
+                  .describe(
+                    'Shape id to copy from (a shape, line, or picture).'
+                  ),
+                fromSlide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemFromSlideMin)
+                  .describe('Slide id of the shape to copy from.'),
+                op: zod.enum(['pasteFormat']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemShapesItemMinTwo)
+                  )
+                  .describe('Shape ids to restyle.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFourseven)
+                  .describe('Slide id of the shapes to restyle.'),
+              })
+              .describe(
+                'Format painter: gives shapes the look of another shape — its fill,\noutline, effects, theme style, and text margins and anchoring.\nCharacter and paragraph formatting are not copied (use formatText and\nformatParagraphs). Group targets paint every member.'
+              ),
+            zod
+              .object({
+                bottom: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's height cropped off its bottom edge."
+                  ),
+                left: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's width cropped off its left edge."
+                  ),
+                mode: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['fill', 'fit'])
+                      .describe(
+                        "How `cropPicture` fits a picture's image to its frame."
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['cropPicture']),
+                right: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's width cropped off its right edge."
+                  ),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFourone)
+                  .describe('Picture id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFoureight)
+                  .describe('Slide id.'),
+                top: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Fraction of the image's height cropped off its top edge."
+                  ),
+              })
+              .describe(
+                "Crops a picture (PowerPoint's Crop). Edges are fractions of the\noriginal image: 0.1 crops 10% of its width (left, right) or height\n(top, bottom) off that edge, 0 shows the edge, and a negative value\nadds empty padding; omitted edges keep their current crop. The image\nkeeps its size and place on the slide, so the picture's frame moves\nand resizes to the part left visible. With `mode` (and no edges), the\nimage is instead cropped (`fill`) or padded (`fit`) to the frame's\naspect ratio, centered, and the frame stays. To crop to a shape, use\n`setGeometry` on the picture."
+              ),
+            zod
+              .object({
+                brightness: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    'Brightness from -1 to 1 (0 = unchanged, 0.2 = +20%).'
+                  ),
+                contrast: zod
+                  .number()
+                  .nullish()
+                  .describe('Contrast from -1 to 1 (0 = unchanged).'),
+                op: zod.enum(['formatPicture']),
+                recolor: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Recolor: `none`, `grayscale`, `sepia`, `washout`, `blackWhite`\n(50% threshold), `blackWhite25`, `blackWhite75`,\n`duotone:<color>` (the image in dark shades of the color, on\nwhite), `duotoneLight:<color>` (in light shades of it, on black),\nor `duotone:<dark>,<light>` (black and white become these\ncolors). Colors are `RRGGBB` or theme names (`accent1`...).'
+                  ),
+                reset: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'First remove the crop (the frame grows back to the whole image at\nits current scale) and every adjustment; the other fields then\napply.'
+                  ),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemShapesItemMinThree)
+                  )
+                  .describe('Ids of the pictures.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFournine)
+                  .describe('Slide id.'),
+                transparency: zod
+                  .number()
+                  .nullish()
+                  .describe('Transparency from 0 (opaque) to 1.'),
+              })
+              .describe(
+                "Adjusts pictures (PowerPoint's Corrections, Color, and Transparency).\nOmitted fields keep their current value."
+              ),
+            zod
+              .object({
+                glow: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            color: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Color: `RRGGBB` or a theme color name (`accent1`...; theme colors\nget PowerPoint's 175% saturation). A new glow defaults to `accent1`."
+                              ),
+                            sizePt: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Glow size in points (a new glow defaults to 10; 0 removes the glow).'
+                              ),
+                            transparency: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Transparency 0-1 (a new glow defaults to 0.6).'
+                              ),
+                          })
+                          .describe(
+                            "Glow options (PowerPoint's Glow Options)."
+                          ),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+                op: zod.enum(['setShapeEffects']),
+                reflection: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            blurPt: zod
+                              .number()
+                              .nullish()
+                              .describe('Blur radius in points.'),
+                            distancePt: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Gap between the shape and its reflection in points.'
+                              ),
+                            preset: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Preset to start from (the names `reflection` takes); omitted: the\ncurrent reflection, or `tightTouching` when there is none.'
+                              ),
+                            sizePct: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'How much of the shape is reflected, in percent of its height (1-100).'
+                              ),
+                            transparency: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Transparency 0-1 where the reflection starts (it fades out from there).'
+                              ),
+                          })
+                          .describe(
+                            "Reflection options (PowerPoint's Reflection Options)."
+                          ),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+                shadow: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            angleDeg: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Direction the shadow falls, in degrees clockwise from the right\n(45 = toward the bottom right, 90 = straight down).'
+                              ),
+                            blurPt: zod
+                              .number()
+                              .nullish()
+                              .describe('Blur radius in points.'),
+                            color: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Color: `RRGGBB` or a theme color name (presets use black).'
+                              ),
+                            distancePt: zod
+                              .number()
+                              .nullish()
+                              .describe('Distance from the shape in points.'),
+                            preset: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Preset to start from (the names `shadow` takes); omitted: the\ncurrent shadow, or `outerBottomRight` when there is none.'
+                              ),
+                            sizePct: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Size in percent of the shape (outer shadows only; 100 = same size).'
+                              ),
+                            transparency: zod
+                              .number()
+                              .nullish()
+                              .describe('Transparency 0-1 (0 = opaque).'),
+                          })
+                          .describe(
+                            "Shadow options (PowerPoint's Shadow Options pane)."
+                          ),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemShapesItemMinFour)
+                  )
+                  .describe('Shape ids.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFivezero)
+                  .describe('Slide id.'),
+                softEdge: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .string()
+                          .describe(
+                            'A preset name, or `none` to remove the effect.'
+                          ),
+                        zod
+                          .object({
+                            sizePt: zod
+                              .number()
+                              .nullish()
+                              .describe(
+                                'Width of the feathered edge in points (a new soft edge defaults to\n5; 0 removes it).'
+                              ),
+                          })
+                          .describe('Soft edge options.'),
+                      ])
+                      .describe(
+                        'One effect of `setShapeEffects` (or a text effect of `formatText`): a\npreset name (`\"none\"` removes the effect), or options.'
+                      ),
+                  ])
+                  .optional(),
+              })
+              .describe(
+                'Sets shape effects (PowerPoint\'s Shape Effects and Picture Effects)\non shapes, pictures, lines, or groups. Each effect is kept when\nomitted (or null), removed with `\"none\"`, or set from a preset name\nor an options object (omitted options keep the current values). A\nshape that inherits effects from the theme starts from those.'
+              ),
+            zod
+              .object({
+                fit: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    "When true (the default when omitted or null), the shape's box is\nmoved and resized to the paths' bounds so the outline stays\nexactly where it is drawn on the slide, as PowerPoint does after\nEdit Points; points may then lie outside the current box. When\nfalse, the box stays and the paths are drawn in it as given\n(resizing the shape later stretches them)."
+                  ),
+                op: zod.enum(['setCustomGeometry']),
+                paths: zod
+                  .array(
+                    zod
+                      .object({
+                        commands: zod
+                          .array(
+                            zod
+                              .union([
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['moveTo']),
+                                    x: zod.number().describe('X (points).'),
+                                    y: zod.number().describe('Y (points).'),
+                                  })
+                                  .describe(
+                                    'Starts a sub-path at a point (every path starts with one).'
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['lineTo']),
+                                    x: zod.number().describe('X (points).'),
+                                    y: zod.number().describe('Y (points).'),
+                                  })
+                                  .describe('A straight line to a point.'),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['cubicBezTo']),
+                                    x: zod.number().describe('End X (points).'),
+                                    x1: zod
+                                      .number()
+                                      .describe(
+                                        'First control point X (points).'
+                                      ),
+                                    x2: zod
+                                      .number()
+                                      .describe(
+                                        'Second control point X (points).'
+                                      ),
+                                    y: zod.number().describe('End Y (points).'),
+                                    y1: zod
+                                      .number()
+                                      .describe(
+                                        'First control point Y (points).'
+                                      ),
+                                    y2: zod
+                                      .number()
+                                      .describe(
+                                        'Second control point Y (points).'
+                                      ),
+                                  })
+                                  .describe(
+                                    'A cubic Bézier curve to `(x, y)` with control points `(x1, y1)` and `(x2, y2)`.'
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['quadBezTo']),
+                                    x: zod.number().describe('End X (points).'),
+                                    x1: zod
+                                      .number()
+                                      .describe('Control point X (points).'),
+                                    y: zod.number().describe('End Y (points).'),
+                                    y1: zod
+                                      .number()
+                                      .describe('Control point Y (points).'),
+                                  })
+                                  .describe(
+                                    'A quadratic Bézier curve to `(x, y)` with control point `(x1, y1)`.'
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['arcTo']),
+                                    hR: zod
+                                      .number()
+                                      .describe('Vertical radius (points).'),
+                                    stAng: zod
+                                      .number()
+                                      .describe('Start angle in degrees.'),
+                                    swAng: zod
+                                      .number()
+                                      .describe(
+                                        'Sweep in degrees (negative sweeps counter-clockwise).'
+                                      ),
+                                    wR: zod
+                                      .number()
+                                      .describe('Horizontal radius (points).'),
+                                  })
+                                  .describe(
+                                    "An elliptical arc continuing from the current point, as DrawingML's\n`arcTo`: the ellipse has radii `wR` and `hR`, the arc starts at angle\n`stAng` on it and sweeps `swAng` (degrees, clockwise on screen; 0° is\nthe ellipse's rightmost point)."
+                                  ),
+                                zod
+                                  .object({
+                                    cmd: zod.enum(['close']),
+                                  })
+                                  .describe(
+                                    'Closes the sub-path with a straight line back to its start.'
+                                  ),
+                              ])
+                              .describe(
+                                "One drawing command of a [`GeometryPath`], in shape-local points:\n`(0, 0)` is the top-left corner of the shape's box before rotation and\nflips, x grows to the right and y downward."
+                              )
+                          )
+                          .describe(
+                            'The drawing commands; each sub-path starts with `moveTo`.'
+                          ),
+                        fill: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .enum([
+                                'norm',
+                                'none',
+                                'lighten',
+                                'lightenLess',
+                                'darken',
+                                'darkenLess',
+                              ])
+                              .describe(
+                                "How a [`GeometryPath`] is filled (DrawingML's path `fill`)."
+                              ),
+                          ])
+                          .optional(),
+                        stroke: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether the shape outline draws this path; true when omitted.'
+                          ),
+                      })
+                      .describe(
+                        "One path of a shape's outline: sub-paths filled together (a sub-path\ninside another and running the other way is a hole) and outlined."
+                      )
+                  )
+                  .describe(
+                    "The outline's paths, in shape-local points (see `PathCommand`)."
+                  ),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFourtwo)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFiveone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces a shape's outline with custom geometry (PowerPoint's Edit\nPoints; a preset shape becomes a freeform). Fill, outline, effects,\ntext, rotation, and flips stay. Works on drawn shapes, text boxes,\nplaceholders, and pictures (it reshapes their crop outline). The\ntext area keeps its place on the slide."
+              ),
+            zod
+              .object({
+                mode: zod
+                  .enum([
+                    'union',
+                    'combine',
+                    'fragment',
+                    'intersect',
+                    'subtract',
+                  ])
+                  .describe(
+                    "How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes)."
+                  ),
+                op: zod.enum(['mergeShapes']),
+                shapes: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemShapesItemMinFive)
+                  )
+                  .describe(
+                    "Ids of two or more shapes in selection order; the first one's\nformatting wins (and `subtract` cuts the others out of it)."
+                  ),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFivetwo)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Merges shapes into new outlines (PowerPoint's Shape Format ▸ Merge\nShapes), working in slide space with each shape's rotation, flips,\nand group transform. The result takes the formatting, text, and\neffects of the first shape (and its rotation, so its fill and text\nkeep their orientation) and replaces the shapes. The result's shape\nids are reported as created: the first is the first shape's id, which\nthe result keeps (`fragment` adds the other pieces as new shapes).\nLines, connectors, tables, charts, and groups cannot be merged; a\nmerge that leaves nothing is an error."
+              ),
+            zod
+              .object({
+                colors: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod.string().describe('`RRGGBB`.'),
+                        slot: zod
+                          .string()
+                          .describe(
+                            '`dk1`, `lt1`, `dk2`, `lt2`, `accent1`-`accent6`, `hlink`, or `folHlink`.'
+                          ),
+                      })
+                      .describe(
+                        'One theme color for [`EditOp::SetThemeColors`](super::EditOp::SetThemeColors).'
+                      )
+                  )
+                  .describe('Slots to set.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('New name of the color scheme.'),
+                op: zod.enum(['setThemeColors']),
+              })
+              .describe(
+                "Recolors the deck: sets theme color slots in every slide master's\ntheme, so everything that uses theme colors (most text, shapes,\ncharts, and tables) follows. Omitted slots keep their color."
+              ),
+            zod
+              .object({
+                major: zod
+                  .string()
+                  .nullish()
+                  .describe('Heading font (kept when omitted).'),
+                minor: zod
+                  .string()
+                  .nullish()
+                  .describe('Body font (kept when omitted).'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('New name of the font scheme.'),
+                op: zod.enum(['setThemeFonts']),
+              })
+              .describe(
+                "Sets the theme's heading (`major`) and body (`minor`) Latin fonts in\nevery slide master's theme; text that uses theme fonts follows."
+              ),
+            zod
+              .object({
+                date: zod.boolean().nullish().describe('Show the date.'),
+                dateFormat: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Format of an automatic date: `datetime1` (10\/12\/2007, the\ndefault), `datetime2` (Friday, October 12, 2007), `datetime3` (12\nOctober 2007), `datetime4` (October 12, 2007), `datetime5`\n(12-Oct-07), `datetime6` (October 07), `datetime7` (Oct-07),\n`datetime8` (10\/12\/2007 4:28 PM), `datetime9` (10\/12\/2007 4:28:34\nPM), `datetime10` (16:28), `datetime11` (16:28:34), `datetime12`\n(4:28 PM), or `datetime13` (4:28:34 PM). A format without\n`dateText` makes the date automatic.'
+                  ),
+                dateText: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Fixed date text (e.g. \"Q3 2026\"); `\"\"` makes the date automatic\n(it shows the current date). Changes slides that show a date, so\npass `date: true` to turn it on.'
+                  ),
+                footer: zod.boolean().nullish().describe('Show the footer.'),
+                footerText: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Footer text. Changes slides that show a footer, so pass\n`footer: true` to turn it on.'
+                  ),
+                notOnTitle: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    "Don't show the elements on slides whose layout is a Title Slide\nlayout (they are removed there)."
+                  ),
+                op: zod.enum(['setHeaderFooter']),
+                slideNumber: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Show the slide number.'),
+                slides: zod
+                  .array(
+                    zod
+                      .number()
+                      .min(editPresentationBodyOperationsItemSlidesItemMin)
+                  )
+                  .nullish()
+                  .describe(
+                    'Slide ids to change; omit (or null) for every slide (\"Apply to\nAll\", which also makes slides added later show the same elements).'
+                  ),
+              })
+              .describe(
+                "Shows, hides, or changes the slide number, date, and footer of slides\n(PowerPoint's Insert ▸ Header & Footer). Each element shown is a\nplaceholder that takes its position and style from the slide's\nlayout; a slide whose layout has no such placeholder cannot show it.\nOmitted fields keep each slide's current state."
+              ),
+            zod
+              .object({
+                height: zod
+                  .number()
+                  .describe(
+                    'Height in points, 72-4032 (540 for widescreen, 4:3, and A4; 405\nfor 16:9 on-screen show).'
+                  ),
+                op: zod.enum(['setSlideSize']),
+                scale: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['none', 'fit', 'maximize'])
+                      .describe(
+                        'How slide content follows a new slide size\n([`EditOp::SetSlideSize`](super::EditOp::SetSlideSize)).'
+                      ),
+                  ])
+                  .optional(),
+                width: zod
+                  .number()
+                  .describe(
+                    'Width in points, 72-4032 (960 for 16:9 widescreen, 720 for 4:3\nand 16:9 on-screen show, 780 for A4).'
+                  ),
+              })
+              .describe(
+                "Changes the slide size of the deck (PowerPoint's Design ▸ Slide\nSize). Every slide, layout, and master changes; speaker notes keep\ntheir size."
+              ),
+            zod
+              .object({
+                beforeSlide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemBeforeSlideMin)
+                  .describe("Id of the section's first slide."),
+                name: zod.string().describe('Section name.'),
+                op: zod.enum(['addSection']),
+              })
+              .describe(
+                'Starts a new section at a slide: the section takes that slide and the\nslides after it in its current section. In a deck without sections,\nthe slides before it go into a \"Default Section\", as in PowerPoint.\nThe new section\'s id is reported in the result.'
+              ),
+            zod
+              .object({
+                id: zod
+                  .string()
+                  .describe(
+                    "Section id (a GUID from the deck outline's `sections`)."
+                  ),
+                name: zod.string().describe('New name.'),
+                op: zod.enum(['renameSection']),
+              })
+              .describe('Renames a section.'),
+            zod
+              .object({
+                deleteSlides: zod
+                  .boolean()
+                  .optional()
+                  .describe("Delete the section's slides too."),
+                id: zod.string().describe('Section id.'),
+                op: zod.enum(['removeSection']),
+              })
+              .describe(
+                'Removes a section. Its slides join the previous section (the next\none when it is the first), or are deleted with `deleteSlides`.\nRemoving the only section leaves the deck without sections.'
+              ),
+            zod
+              .object({
+                id: zod.string().describe('Section id.'),
+                op: zod.enum(['moveSection']),
+                toIndex: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemToIndexMin)
+                  .describe('New index among the sections.'),
+              })
+              .describe(
+                'Moves a section and all its slides to a 0-based position among the\nsections; the slides are reordered to match.'
+              ),
+            zod
+              .object({
+                guides: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "Color as `RRGGBB` or a theme color name (`accent1`, `tx1`...).\nOmitted or null keeps the color of the guide `id` names, and gives a\nnew guide PowerPoint's gray."
+                          ),
+                        id: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemGuidesItemIdMin
+                          )
+                          .nullish()
+                          .describe(
+                            "The id (from the deck outline's `guides`) of the guide this entry\nkeeps, with anything else the file stores on it. Omitted or null for\na new guide."
+                          ),
+                        orient: zod
+                          .enum(['horizontal', 'vertical'])
+                          .describe('Which way a drawing guide runs.'),
+                        position: zod
+                          .number()
+                          .describe(
+                            "Distance in points from the slide's top edge (horizontal guides) or\nleft edge (vertical guides), from 0 to the slide's height or width.\nThe slide's center is half its height or width."
+                          ),
+                      })
+                      .describe(
+                        'One drawing guide of [`EditOp::SetGuides`](super::EditOp::SetGuides).'
+                      )
+                  )
+                  .describe('The guides, in order.'),
+                op: zod.enum(['setGuides']),
+              })
+              .describe(
+                "Replaces the deck's drawing guides (PowerPoint's View ▸ Guides): the\ndashed lines shown over every slide for lining shapes up, which\nshapes snap to while dragged. Pass the whole list (the deck outline's\n`guides`, changed); an empty list removes every guide. Guides that\nslide layouts and masters define are not affected."
+              ),
+            zod
+              .object({
+                after: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemAfterMinTwo)
+                  .nullish()
+                  .describe(
+                    "Id of the layout to insert it after; a master's id puts it first\n(default: right after `duplicate`, else after the master's last\nlayout)."
+                  ),
+                duplicate: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemDuplicateMin)
+                  .nullish()
+                  .describe(
+                    'Id of a layout to copy, with its shapes and background.'
+                  ),
+                master: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemMasterMin)
+                  .nullish()
+                  .describe(
+                    'Id of the master to add it to (default: the master of `after`\nor `duplicate`, else the first master).'
+                  ),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Name (default: \"Custom Layout\", or for a copy the original\'s name\nprefixed \"1_\", numbered further when the master has one already).'
+                  ),
+                op: zod.enum(['addLayout']),
+              })
+              .describe(
+                "Adds a slide layout to a slide master (PowerPoint's Slide Master ▸\nInsert Layout): a layout with a title placeholder and the master's\ndate, footer, and slide number placeholders, or with `duplicate` a\ncopy of that layout. Masters and layouts are listed in the deck\noutline's `masters`. The new layout's id is reported in the result\n(as `slide`); it addresses the layout's shapes like a slide id."
+              ),
+            zod
+              .object({
+                layout: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemLayoutMinTwo)
+                  .describe('Layout or master id.'),
+                name: zod.string().describe('New name.'),
+                op: zod.enum(['renameLayout']),
+              })
+              .describe(
+                "Renames a slide layout, or a slide master (a master's name is its\ntheme's name, as PowerPoint shows it)."
+              ),
+            zod
+              .object({
+                layout: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemLayoutMinThree)
+                  .describe('Layout or master id.'),
+                op: zod.enum(['deleteLayout']),
+              })
+              .describe(
+                "Deletes a slide layout no slide uses (give those slides another\nlayout with `setSlideLayout` first). A master keeps at least one\nlayout. With a master's id, deletes that master and its layouts when\nno slide uses any of them and another master remains."
+              ),
+            zod
+              .object({
+                h: zod.number().describe('Height (points).'),
+                kind: zod
+                  .enum([
+                    'content',
+                    'text',
+                    'picture',
+                    'chart',
+                    'table',
+                    'smartArt',
+                    'media',
+                  ])
+                  .describe(
+                    "What a placeholder inserted on a slide layout holds (PowerPoint's Slide\nMaster ▸ Insert Placeholder menu)."
+                  ),
+                layout: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemLayoutMinFour)
+                  .describe('Layout id.'),
+                op: zod.enum(['insertPlaceholder']),
+                vertical: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    'Vertical text (PowerPoint\'s \"Content (Vertical)\" and \"Text\n(Vertical)\"); content and text placeholders only.'
+                  ),
+                w: zod.number().describe('Width (points).'),
+                x: zod.number().describe('Left (points).'),
+                y: zod.number().describe('Top (points).'),
+              })
+              .describe(
+                "Adds a placeholder to a slide layout (PowerPoint's Slide Master ▸\nInsert Placeholder). Slides added with the layout afterwards get it,\nempty, where the layout has it; existing slides get it when their\nlayout is applied again (`setSlideLayout`). Content and text\nplaceholders take the master's text styles. The new shape's id is\nreported in the result."
+              ),
+            zod
+              .object({
+                footers: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Show the date, footer, and slide number placeholders the master\nhas (added where the master has them, or removed).'
+                  ),
+                hideBackgroundGraphics: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    "Hide the master's shapes (logos, lines, pictures) on the layout\nand its slides."
+                  ),
+                layout: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemLayoutMinFive)
+                  .describe('Layout id.'),
+                op: zod.enum(['setLayoutOptions']),
+                title: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    "Show a title placeholder (added where the master's title is, or\nremoved)."
+                  ),
+              })
+              .describe(
+                "Sets what a slide layout shows (PowerPoint's Slide Master ▸ Title,\nFooters, and Hide Background Graphics). Omitted fields keep the\nlayout's current state."
+              ),
+            zod
+              .object({
+                op: zod.enum(['setBackgroundStyle']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFivethree)
+                  .describe('Slide, master, or layout id.'),
+                style: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemStyleMinOne)
+                  .describe('Style number, 1-12.'),
+              })
+              .describe(
+                "Gives a slide, slide master, or layout one of the theme's background\nstyles (PowerPoint's Background Styles gallery), which follow the\ntheme's colors and background fills. Styles 1-4 are the theme's\nfirst background fill (usually solid) in Light 1, Dark 1, Light 2,\nand Dark 2; 5-8 its second and 9-12 its third, in the same colors."
+              ),
+            zod
+              .object({
+                author: zod
+                  .string()
+                  .describe(
+                    "The author's name, as the Comments pane shows it."
+                  ),
+                initials: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "The author's initials (omit or null: the first letters of the\nfirst two words of `author`)."
+                  ),
+                op: zod.enum(['addComment']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFourthree)
+                  .nullish()
+                  .describe(
+                    "Shape id to attach the comment to (its marker sits at the\nshape's top-right corner); omit or null for the slide itself."
+                  ),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFivefour)
+                  .describe('Slide id.'),
+                text: zod
+                  .string()
+                  .describe('The comment (`\\n` separates paragraphs).'),
+                x: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Where the comment's marker sits, in points from the slide's left\nedge, for a comment on the slide (omit or null with `y` for\nPowerPoint's default, the slide's top-left corner). Ignored with\n`shape`."
+                  ),
+                y: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "Marker position in points from the slide's top edge."
+                  ),
+              })
+              .describe(
+                "Adds a comment thread to a slide (PowerPoint's Review ▸ New\nComment), attached to a shape or to the slide. Written as PowerPoint\nfor Microsoft 365 writes comments. Read threads and their ids from\nthe slide outline's `comments`."
+              ),
+            zod
+              .object({
+                author: zod.string().describe("The author's name."),
+                comment: zod
+                  .string()
+                  .describe(
+                    "Thread id (a comment's `id` in the outline). Legacy comments\n(`legacy-…` ids) cannot be replied to."
+                  ),
+                initials: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "The author's initials (omit or null: derived from `author`)."
+                  ),
+                op: zod.enum(['replyComment']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFivefive)
+                  .describe('Slide id.'),
+                text: zod
+                  .string()
+                  .describe('The reply (`\\n` separates paragraphs).'),
+              })
+              .describe('Replies to a comment thread.'),
+            zod
+              .object({
+                comment: zod.string().describe('Thread or reply id.'),
+                op: zod.enum(['editComment']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFivesix)
+                  .describe('Slide id.'),
+                text: zod.string().describe('The new text.'),
+              })
+              .describe(
+                "Replaces the text of a comment: a thread's first comment or a reply."
+              ),
+            zod
+              .object({
+                comment: zod.string().describe('Thread id.'),
+                op: zod.enum(['resolveComment']),
+                resolved: zod
+                  .boolean()
+                  .describe('`true` resolves; `false` reopens.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFiveseven)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Resolves a comment thread, or reopens it (PowerPoint's Resolve\nthread \/ Reopen). Legacy comments cannot be resolved."
+              ),
+            zod
+              .object({
+                comment: zod.string().describe('Thread or reply id.'),
+                op: zod.enum(['deleteComment']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFiveeight)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                'Deletes a comment thread with its replies, or a single reply.'
+              ),
+            zod
+              .object({
+                op: zod.enum(['deleteAllComments']),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinFivenine)
+                  .nullish()
+                  .describe('Slide id (omit or null: all slides).'),
+              })
+              .describe(
+                'Deletes every comment on a slide, or with `slide` omitted (or null)\nevery comment in the presentation.'
+              ),
+            zod
+              .object({
+                at: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        offset: zod
+                          .number()
+                          .min(editPresentationBodyOperationsItemAtOffsetMinOne)
+                          .describe('Character offset within the paragraph.'),
+                        paragraph: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemAtParagraphMinOne
+                          )
+                          .describe('Paragraph index.'),
+                      })
+                      .describe("A position inside a shape's text."),
+                  ])
+                  .optional(),
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemCellColMinSeven
+                          )
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemCellRowMinSeven
+                          )
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                display: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    '`true`: a display equation on a line (paragraph) of its own,\ncentered, with large operators and fractions at full size (what\nPowerPoint inserts); `false`: inline, flowing with the text\naround it. Omit (or null) for display in an empty paragraph or a\nnew text box, inline otherwise.'
+                  ),
+                latex: zod
+                  .string()
+                  .describe(
+                    'The equation, e.g. `x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}`.'
+                  ),
+                op: zod.enum(['insertEquation']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFourfour)
+                  .nullish()
+                  .describe(
+                    'Shape whose text gets the equation; omit (or null) to add a new\ntext box holding only the equation.'
+                  ),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinSixzero)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Inserts an equation (PowerPoint's Insert ▸ Equation) written in the\nLaTeX-style linear format: into a shape's text at `at`, or, without\n`shape`, in a new text box centered on the slide (its id is reported\nin the result). In text an equation counts as one character (U+FFFC\nin the outline's paragraph text, listed in the paragraph's\n`equations`): delete it with `deleteText`, change it with\n`setEquation`. Supported: `\\frac{a}{b}`, `^`, `_`, `\\sqrt[n]{x}`,\n`\\sum_{i=1}^{n}`, `\\prod`, `\\int_{a}^{b}`, `\\oint`, `\\lim_{x\\to 0}`,\n`\\sin` and other functions, `\\left( \\right)` (brackets such as\n`(…)` pair and grow by themselves), `\\begin{matrix}` \/ `pmatrix` \/\n`bmatrix` \/ `vmatrix` \/ `cases` \/ `aligned`, `\\binom{n}{k}`, accents\n(`\\hat \\bar \\vec \\dot \\ddot \\tilde`), `\\overline`, `\\underline`,\n`\\overbrace{x}^{a}`, `\\underbrace{x}_{a}`, `\\boxed`, Greek letters,\nsymbols (`\\infty \\pm \\times \\cdot \\le \\ge \\ne \\approx \\to\n\\Rightarrow \\partial \\nabla`...), `\\mathrm{}`, `\\mathbf{}`,\n`\\mathbb{}`, `\\mathcal{}`, `\\text{}`, and spaces (`\\, \\; \\quad`)."
+              ),
+            zod
+              .object({
+                cell: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        col: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemCellColMinEight
+                          )
+                          .describe('Column index.'),
+                        row: zod
+                          .number()
+                          .min(
+                            editPresentationBodyOperationsItemCellRowMinEight
+                          )
+                          .describe('Row index.'),
+                      })
+                      .describe(
+                        'A table cell inside a graphic frame (0-based).'
+                      ),
+                  ])
+                  .optional(),
+                display: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Make it a display (`true`) or inline (`false`) equation; omit\n(or null) to keep.'
+                  ),
+                index: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemIndexMinOne)
+                  .describe(
+                    "The equation's character index in the paragraph (its `index` in\nthe outline)."
+                  ),
+                latex: zod
+                  .string()
+                  .describe(
+                    'The new equation in the linear format (see `insertEquation`).'
+                  ),
+                op: zod.enum(['setEquation']),
+                paragraph: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemParagraphMin)
+                  .describe('Paragraph index.'),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFourfive)
+                  .describe('Shape id.'),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinSixone)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Replaces an equation (one of a paragraph's `equations` in the\noutline) with new linear text, keeping its size and color."
+              ),
+            zod
+              .object({
+                edit: zod
+                  .union([
+                    zod
+                      .object({
+                        action: zod.enum(['setText']),
+                        node: zod
+                          .string()
+                          .describe(
+                            "Node id (from the outline's `smartArt.nodes`)."
+                          ),
+                        text: zod.string().describe('New text.'),
+                      })
+                      .describe(
+                        "Replaces a node's text, keeping the formatting of its first run\n(`\\n` separates paragraphs inside the node, `\\u{b}` is a line break)."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['addNode']),
+                        node: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'The node to add next to; omit to add a last top-level node.'
+                          ),
+                        position: zod
+                          .enum([
+                            'after',
+                            'before',
+                            'above',
+                            'below',
+                            'assistant',
+                          ])
+                          .optional()
+                          .describe(
+                            "Where `addNode` puts the new node, relative to the given one\n(PowerPoint's Add Shape After\/Before\/Above\/Below\/Add Assistant)."
+                          ),
+                        text: zod
+                          .string()
+                          .optional()
+                          .describe(
+                            'Text of the new node (empty: the \"[Text]\" prompt).'
+                          ),
+                      })
+                      .describe("Adds a node (PowerPoint's Add Shape)."),
+                    zod
+                      .object({
+                        action: zod.enum(['deleteNode']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Deletes a node; its children move up into its place.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['promote']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Moves a node one level up (Promote, Shift+Tab in the text pane).\nIts following siblings become its children.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['demote']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Moves a node one level down (Demote, Tab in the text pane): it\nbecomes the last child of its previous sibling, with its children.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['moveUp']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Swaps a node (with its children) with its previous sibling.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['moveDown']),
+                        node: zod.string().describe('Node id.'),
+                      })
+                      .describe(
+                        'Swaps a node (with its children) with its next sibling.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setNodes']),
+                        items: zod
+                          .array(
+                            zod
+                              .object({
+                                level: zod
+                                  .number()
+                                  .min(
+                                    editPresentationBodyOperationsItemEditItemsItemLevelMin
+                                  )
+                                  .optional()
+                                  .describe(
+                                    'Outline level: 1 for top-level shapes, 2 for their sub-bullets (or\nchild shapes in hierarchies), and so on. The first item must be at\nlevel 1, and each item at most one level below the one before it.\nOmitted (or null) means 1.'
+                                  ),
+                                text: zod
+                                  .string()
+                                  .describe(
+                                    'The node\'s text (`\"\"` leaves the \"[Text]\" prompt; `\\u{b}` is a line break).'
+                                  ),
+                              })
+                              .describe(
+                                "One bullet of a SmartArt graphic's text: a node and its outline level."
+                              )
+                          )
+                          .describe('The bullets, in order.'),
+                      })
+                      .describe(
+                        'Replaces all the text: one node per item, as typed in the text pane.\nExisting nodes are reused in order, keeping their formatting.'
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setLayout']),
+                        layout: zod
+                          .string()
+                          .describe(
+                            'Layout: `default` (Basic Block List), `vList2` (Vertical Bullet\nList), `hList1` (Horizontal Bullet List), `process1` (Basic\nProcess), `chevron1` (Basic Chevron Process), `cycle2` (Basic\nCycle), `radial1` (Basic Radial), `hierarchy1` (Hierarchy),\n`orgChart1` (Organization Chart), `venn1` (Basic Venn), or\n`pyramid1` (Basic Pyramid); a full id\n(`urn:microsoft.com\/office\/officeart\/2005\/8\/layout\/process1`) or\nthe display name also works.'
+                          ),
+                      })
+                      .describe(
+                        "Changes the layout (PowerPoint's Layouts gallery), keeping the text."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setColors']),
+                        colors: zod
+                          .string()
+                          .describe(
+                            "Color variation: `accent0_1` Dark 1 Outline, `accent0_2` Dark 2\nOutline, `accent0_3` Dark 2 Fill, `colorful1` Colorful - Accent\nColors, `colorful2`-`colorful5` Colorful Range - Accent Colors\n2 to 3 ... 5 to 6, and for accent N = 1-6: `accentN_1` Colored\nOutline, `accentN_2` Colored Fill (PowerPoint's default\n`accent1_2`), `accentN_3` Gradient Range, `accentN_4` Gradient\nLoop, `accentN_5` Transparent Gradient Range. Full ids\n(`urn:microsoft.com\/office\/officeart\/2005\/8\/colors\/colorful1`)\nand display names also work."
+                          ),
+                      })
+                      .describe(
+                        "Changes the colors (PowerPoint's Change Colors)."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['setStyle']),
+                        style: zod
+                          .string()
+                          .describe(
+                            'Style: `simple1` Simple Fill (the default), `simple2` White\nOutline, `simple3` Subtle Effect, `simple4` Moderate Effect, or\n`simple5` Intense Effect (or a full id or display name).'
+                          ),
+                      })
+                      .describe(
+                        "Changes the SmartArt style (PowerPoint's SmartArt Styles gallery)."
+                      ),
+                    zod
+                      .object({
+                        action: zod.enum(['reset']),
+                      })
+                      .describe(
+                        "Reset Graphic: discards changes to the shapes' sizes, positions, and\nformatting, keeping the text, layout, colors, and style."
+                      ),
+                  ])
+                  .describe('One change to a SmartArt graphic.'),
+                op: zod.enum(['editSmartArt']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFoursix)
+                  .describe("The SmartArt graphic frame's id."),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinSixtwo)
+                  .describe('Slide id.'),
+              })
+              .describe(
+                "Edits a SmartArt graphic (a shape of kind `diagram` whose outline has\n`smartArt`): its nodes and their text as in PowerPoint's text pane,\nits layout, colors, or style. The diagram is laid out again, its text\nshrinking together to fit. Nodes are addressed by the ids in\n`smartArt.nodes`; a new node's id appears there afterwards. Diagrams\nwhose layout the outline reports as not `supported` take text edits,\ncolors, styles, and a new supported layout, but not node changes."
+              ),
+            zod
+              .object({
+                op: zod.enum(['convertSmartArt']),
+                shape: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemShapeMinFourseven)
+                  .describe("The SmartArt graphic frame's id."),
+                slide: zod
+                  .number()
+                  .min(editPresentationBodyOperationsItemSlideMinSixthree)
+                  .describe('Slide id.'),
+                to: zod
+                  .enum(['shapes', 'text'])
+                  .describe(
+                    'What `convertSmartArt` turns a SmartArt graphic into.'
+                  ),
+              })
+              .describe(
+                "Converts a SmartArt graphic into ordinary shapes (a group that looks\nthe same) or into a bulleted text box. The new shape's id is reported\nin the result."
+              ),
+          ])
+          .describe('One edit operation.')
+      )
+      .describe(
+        'Operations validated and committed together, in order: 1 to 100.'
+      ),
+  })
+  .describe('An atomic batch of edit operations.');
+
+export const editPresentationResponseCreatedItemShapeMin = 0;
+
+export const editPresentationResponseCreatedItemSlideMin = 0;
+
+export const editPresentationResponse = zod
+  .object({
+    changedSlides: zod
+      .string()
+      .describe(
+        'The changed slides as they now read (after a structure change, the\ndeck summary and sections too).'
+      ),
+    created: zod
+      .array(
+        zod
+          .object({
+            section: zod
+              .string()
+              .nullish()
+              .describe('Section id, for created sections.'),
+            shape: zod
+              .number()
+              .min(editPresentationResponseCreatedItemShapeMin)
+              .nullish()
+              .describe('Shape id, for created shapes.'),
+            slide: zod
+              .number()
+              .min(editPresentationResponseCreatedItemSlideMin)
+              .describe('Slide id.'),
+          })
+          .describe('A slide or shape an edit created.')
+      )
+      .describe('Slides and shapes the operations created, in order.'),
+    documentId: zod
+      .string()
+      .describe('The edited document (clients reload open editors of it).'),
+    structureChanged: zod
+      .boolean()
+      .describe(
+        'Whether slides were added, removed, or reordered, or the slide size\nor sections changed.'
+      ),
+  })
+  .describe('What an edit did.');
+
+/**
  * @summary Fetches the document pdf processing result for a given document id
  */
 export const getDocumentProcessingResultParams = zod.object({
@@ -20312,6 +29939,2985 @@ export const setSkillDescriptionResponse = zod
   .describe("A skill's routing description.");
 
 /**
+ * A client that disconnects drops the worker request, which cancels the
+edit before its save.
+ * @summary Edit a native spreadsheet by instructions with the caller's edit access:
+a writer model reads the workbook and saves one atomic batch, with AI
+admission and billing. A workbook changed while it worked saves nothing
+and answers 409.
+ */
+export const editSpreadsheetWithAiParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editSpreadsheetWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions. Name the sheet and the cells, columns\nor table to change, describe the outcome, and say what must stay.'
+      ),
+  })
+  .describe('What to change in a workbook, in words.');
+
+export const editSpreadsheetWithAiResponseSheetsItemColumnCountMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemErrorCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemRowCountMin = 0;
+
+export const editSpreadsheetWithAiResponse = zod
+  .object({
+    applied: zod.boolean().describe('Whether a new change was persisted.'),
+    changes: zod
+      .array(
+        zod
+          .object({
+            range: zod
+              .string()
+              .nullish()
+              .describe('Affected range, when applicable.'),
+            sheetId: zod.string().describe('Affected stable sheet identity.'),
+            summary: zod.string().describe('Human-readable change summary.'),
+            type: zod.string().describe('Operation type.'),
+          })
+          .describe('Applied edit summary.')
+      )
+      .describe('What changed, one summary per operation.'),
+    revision: zod.string().describe('Revision after the edit.'),
+    sheets: zod
+      .array(
+        zod
+          .object({
+            columnCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemColumnCountMin)
+              .describe('Available columns.'),
+            errorCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemErrorCellsMin)
+              .describe('Number of calculated errors.'),
+            formulaCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin)
+              .describe('Number of formulas.'),
+            id: zod
+              .string()
+              .describe('Stable sheet identity for future calls.'),
+            name: zod.string().describe('Current sheet name.'),
+            populatedCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin)
+              .describe('Number of populated cells.'),
+            rowCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemRowCountMin)
+              .describe('Available rows.'),
+            tables: zod
+              .array(
+                zod
+                  .object({
+                    columnTypes: zod
+                      .array(
+                        zod
+                          .object({
+                            column: zod
+                              .string()
+                              .describe(
+                                'Header name of the column, ignoring case.'
+                              ),
+                            type: zod
+                              .enum([
+                                'text',
+                                'number',
+                                'percent',
+                                'currency',
+                                'date',
+                                'datetime',
+                                'time',
+                                'checkbox',
+                                'dropdown',
+                                'person',
+                              ])
+                              .describe(
+                                'What a table column holds, as Google Sheets types table columns.'
+                              ),
+                          })
+                          .describe(
+                            "A table column's type, by its header name."
+                          )
+                      )
+                      .optional()
+                      .describe('Typed columns; untyped columns are left out.'),
+                    columns: zod
+                      .array(zod.string())
+                      .describe('Column names, from the header row.'),
+                    filteredColumns: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe('Columns whose filters currently hide rows.'),
+                    name: zod
+                      .string()
+                      .describe('Table name, as in Sales[Amount].'),
+                    range: zod
+                      .string()
+                      .describe(
+                        'A1 rectangle from the header row through the total row, if any.'
+                      ),
+                    totalsRow: zod
+                      .boolean()
+                      .describe('Whether the last row is a total row.'),
+                  })
+                  .describe(
+                    'A named table (an Excel table) that formulas address with structured references.'
+                  )
+              )
+              .optional()
+              .describe('Named tables on the sheet.'),
+            usedRange: zod
+              .string()
+              .nullish()
+              .describe(
+                'Bounding rectangle of used cells, or null for an empty sheet.'
+              ),
+          })
+          .describe('Compact metadata for a sheet.')
+      )
+      .describe('Every sheet after the edit.'),
+    warnings: zod
+      .array(zod.string())
+      .describe(
+        'Issues to check, such as formula errors; they are not repaired.'
+      ),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
+ * @summary Evaluate scratch formulas against a native spreadsheet with view access,
+optionally with hypothetical inputs. Nothing is saved.
+ */
+export const calculateSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const calculateSpreadsheetBodyOverridesItemCellsItemValueDefaultFour =
+  null;
+
+export const calculateSpreadsheetBody = zod
+  .object({
+    formulas: zod
+      .array(
+        zod
+          .object({
+            formula: zod
+              .string()
+              .describe('Excel-style formula, beginning with =.'),
+            label: zod
+              .string()
+              .nullish()
+              .describe('Optional label echoed with the result.'),
+          })
+          .describe('A scratch formula evaluated without persisting it.')
+      )
+      .describe('At most 20 formulas beginning with =.'),
+    overrides: zod
+      .array(
+        zod
+          .object({
+            cells: zod
+              .array(
+                zod
+                  .object({
+                    address: zod
+                      .string()
+                      .describe('A1 address, from A1 through XFD100000.'),
+                    value: zod
+                      .union([
+                        zod.boolean().describe('TRUE or FALSE.'),
+                        zod
+                          .number()
+                          .describe(
+                            'A number, passed to the engine exactly as written.'
+                          ),
+                        zod
+                          .string()
+                          .describe(
+                            'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                          ),
+                        zod
+                          .null()
+                          .describe(
+                            "Empties the cell's input; formatting stays."
+                          ),
+                      ])
+                      .describe(
+                        "A cell's new input, typed as the caller has it."
+                      ),
+                  })
+                  .describe(
+                    'Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.'
+                  )
+              )
+              .describe('Cells to change in this hypothetical calculation.'),
+            sheetId: zod
+              .string()
+              .describe(
+                'Stable sheet ID or exact sheet name from ReadSpreadsheet.'
+              ),
+          })
+          .describe(
+            "Hypothetical inputs applied only to the calculation's disposable workbook."
+          )
+      )
+      .nullish()
+      .describe('Hypothetical cell inputs, never saved.'),
+    sheetId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Sheet for unqualified references; defaults to the first sheet.'
+      ),
+  })
+  .describe(
+    'Scratch formulas to evaluate against a workbook, without writing anything.'
+  );
+
+export const calculateSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const calculateSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const calculateSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      calculateSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      calculateSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(
+                    calculateSpreadsheetResponseSheetsItemPopulatedCellsMinOne
+                  )
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
+ * @summary Apply one atomic batch of operations to a native spreadsheet with edit
+access. Every operation validates before anything is saved; a workbook that
+changed since `expectedRevision` rejects the batch with 409.
+ */
+export const editSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editSpreadsheetBodyOperationsItemCellsItemValueDefaultFour = null;
+export const editSpreadsheetBodyOperationsItemStyleFontSizeMin = 0;
+
+export const editSpreadsheetBodyOperationsItemStyleIndentMin = 0;
+
+export const editSpreadsheetBodyOperationsItemCountMin = 0;
+
+export const editSpreadsheetBodyOperationsItemColumnsItemWidthMin = 0;
+
+export const editSpreadsheetBody = zod
+  .object({
+    expectedRevision: zod
+      .string()
+      .describe(
+        'The revision a read returned; a changed workbook rejects the batch.'
+      ),
+    operations: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        address: zod
+                          .string()
+                          .describe('A1 address, from A1 through XFD100000.'),
+                        value: zod
+                          .union([
+                            zod.boolean().describe('TRUE or FALSE.'),
+                            zod
+                              .number()
+                              .describe(
+                                'A number, passed to the engine exactly as written.'
+                              ),
+                            zod
+                              .string()
+                              .describe(
+                                'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                              ),
+                            zod
+                              .null()
+                              .describe(
+                                "Empties the cell's input; formatting stays."
+                              ),
+                          ])
+                          .describe(
+                            "A cell's new input, typed as the caller has it."
+                          ),
+                      })
+                      .describe(
+                        'Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.'
+                      )
+                  )
+                  .describe('Cells and their new source inputs.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['set_cells']),
+              })
+              .describe(
+                'Set raw values\/formulas while preserving existing formatting.'
+              ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example A1:D20.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                style: zod
+                  .object({
+                    bold: zod.boolean().nullish().describe('Bold text.'),
+                    borderBottom: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Bottom border.'),
+                    borderBottomColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Bottom border color.'),
+                    borderBottomStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderLeft: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Left border.'),
+                    borderLeftColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Left border color.'),
+                    borderLeftStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderRight: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Right border.'),
+                    borderRightColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Right border color.'),
+                    borderRightStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderTop: zod.boolean().nullish().describe('Top border.'),
+                    borderTopColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Top border color.'),
+                    borderTopStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    checkbox: zod
+                      .boolean()
+                      .nullish()
+                      .describe(
+                        "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                      ),
+                    decimals: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Decimal places, 0 through 10; -1 restores automatic.'
+                      ),
+                    fillColor: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Fill color as #RRGGBB; empty string resets it.'
+                      ),
+                    fontFamily: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['sans', 'serif', 'mono'])
+                          .describe('Font family.'),
+                      ])
+                      .optional(),
+                    fontName: zod
+                      .string()
+                      .nullish()
+                      .describe('Exact Excel font name, up to 128 characters.'),
+                    fontSize: zod
+                      .number()
+                      .min(editSpreadsheetBodyOperationsItemStyleFontSizeMin)
+                      .nullish()
+                      .describe('Font size in points, 8 through 36.'),
+                    format: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'general',
+                            'number',
+                            'currency',
+                            'accounting',
+                            'percent',
+                            'date',
+                            'time',
+                            'scientific',
+                            'text',
+                          ])
+                          .describe(
+                            'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                          ),
+                      ])
+                      .optional(),
+                    horizontalAlign: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['auto', 'left', 'center', 'right'])
+                          .describe('Horizontal alignment.'),
+                      ])
+                      .optional(),
+                    indent: zod
+                      .number()
+                      .min(editSpreadsheetBodyOperationsItemStyleIndentMin)
+                      .nullish()
+                      .describe(
+                        "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                      ),
+                    italic: zod.boolean().nullish().describe('Italic text.'),
+                    numberFormat: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                      ),
+                    strikethrough: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Struck-through text.'),
+                    textColor: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Text color as #RRGGBB; empty string resets it.'
+                      ),
+                    underline: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Underlined text.'),
+                    verticalAlign: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['top', 'middle', 'bottom'])
+                          .describe('Vertical alignment.'),
+                      ])
+                      .optional(),
+                    wrap: zod.boolean().nullish().describe('Wrap text.'),
+                  })
+                  .describe(
+                    'Sparse cell styling patch. Omitted fields remain unchanged.'
+                  ),
+                type: zod.enum(['format_cells']),
+              })
+              .describe('Apply a sparse formatting patch to a rectangle.'),
+            zod
+              .object({
+                clearFormatting: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Defaults to false; preserves formatting unless requested.'
+                  ),
+                range: zod.string().describe('A1 rectangle.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['clear_cells']),
+              })
+              .describe(
+                "Clear a rectangle's inputs, optionally its formatting too."
+              ),
+            zod
+              .object({
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                sourceRange: zod.string().describe('Source rectangle.'),
+                targetRange: zod.string().describe('Target rectangle.'),
+                type: zod.enum(['fill_cells']),
+              })
+              .describe(
+                'Repeat a source rectangle into a target using relative formula translation.'
+              ),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .describe(
+                    'Unique Excel-compatible name, at most 31 characters.'
+                  ),
+                type: zod.enum(['add_sheet']),
+              })
+              .describe(
+                'Add an empty sheet; later operations may address it by this name.'
+              ),
+            zod
+              .object({
+                name: zod.string().describe('New unique name.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['rename_sheet']),
+              })
+              .describe(
+                'Rename a sheet; rejected when existing formulas directly reference its current name.'
+              ),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional unique name for the copy.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['duplicate_sheet']),
+              })
+              .describe(
+                'Duplicate a sheet, including values, formulas, styles, and layout.'
+              ),
+            zod
+              .object({
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['delete_sheet']),
+              })
+              .describe(
+                'Delete a sheet; the final sheet and directly referenced sheets are protected.'
+              ),
+            zod
+              .object({
+                count: zod
+                  .number()
+                  .min(editSpreadsheetBodyOperationsItemCountMin)
+                  .describe('Number of rows to append.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['append_rows']),
+              })
+              .describe('Append rows, up to the 100,000-row sheet limit.'),
+            zod
+              .object({
+                columns: zod
+                  .array(
+                    zod
+                      .object({
+                        column: zod
+                          .string()
+                          .describe('Column letter A through XFD.'),
+                        width: zod
+                          .number()
+                          .min(
+                            editSpreadsheetBodyOperationsItemColumnsItemWidthMin
+                          )
+                          .describe('Width in pixels, 8 through 640.'),
+                      })
+                      .describe('A column width.')
+                  )
+                  .describe('Column widths to set.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['resize_columns']),
+              })
+              .describe('Resize one or more columns.'),
+            zod
+              .object({
+                colors: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod
+                          .string()
+                          .describe(
+                            'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                          ),
+                        item: zod
+                          .string()
+                          .describe(
+                            'The choice, matched to cell text ignoring case.'
+                          ),
+                      })
+                      .describe(
+                        "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                      )
+                  )
+                  .nullish()
+                  .describe(
+                    'Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them.'
+                  ),
+                items: zod
+                  .array(zod.string())
+                  .nullish()
+                  .describe(
+                    'Typed choices, without commas, at most 253 characters in total.'
+                  ),
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example C2:C200.'),
+                rejectInvalid: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Defaults to true: reject typed entries that are not a choice. False only suggests the choices.'
+                  ),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                source: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet."
+                  ),
+                type: zod.enum(['set_dropdown']),
+              })
+              .describe(
+                'Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.\nGive exactly one of items or source. Cell values are unchanged; set them separately.'
+              ),
+            zod
+              .object({
+                range: zod.string().describe('A1 rectangle.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['clear_validation']),
+              })
+              .describe(
+                'Remove dropdowns and any other data validation from a rectangle.'
+              ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example D2:D50.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['insert_checkboxes']),
+              })
+              .describe(
+                'Turn a rectangle into checkboxes backed by TRUE\/FALSE values: blank cells become FALSE\n(unchecked) and other values are kept. Check or uncheck them with set_cells TRUE or FALSE.'
+              ),
+            zod
+              .object({
+                columnTypes: zod
+                  .array(
+                    zod
+                      .object({
+                        column: zod
+                          .string()
+                          .describe(
+                            'Header name of the column, ignoring case.'
+                          ),
+                        type: zod
+                          .enum([
+                            'text',
+                            'number',
+                            'percent',
+                            'currency',
+                            'date',
+                            'datetime',
+                            'time',
+                            'checkbox',
+                            'dropdown',
+                            'person',
+                          ])
+                          .describe(
+                            'What a table column holds, as Google Sheets types table columns.'
+                          ),
+                      })
+                      .describe("A table column's type, by its header name.")
+                  )
+                  .nullish()
+                  .describe(
+                    "Column types by header name. A type formats the column's data cells; checkbox makes\nthem checkboxes and dropdown offers the column's values as colored choices."
+                  ),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Unique table name, such as Sales; spaces become underscores. Defaults to the next free\nTableN.'
+                  ),
+                range: zod
+                  .string()
+                  .describe(
+                    'A1 rectangle including the header row, for example A1:D20. Must not overlap a table.'
+                  ),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                totalsRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Add a total row below the data, which must be empty. Defaults to false.'
+                  ),
+                type: zod.enum(['create_table']),
+              })
+              .describe(
+                'Convert a rectangle to a named table (an Excel table). Its first row becomes the header\nrow; blank or repeated headers are named. Formulas can then use structured references\nsuch as Table1[Amount], [@Amount] or Table1 for its data, and each header gets sort and\nfilter controls. Columns take the type their values suggest unless column_types says.'
+              ),
+          ])
+          .describe(
+            'One operation in an atomic workbook edit. All operations validate before any write.'
+          )
+      )
+      .describe('Between 1 and 25 operations, validated and saved together.'),
+  })
+  .describe(
+    'One atomic batch of operations against the revision it was planned on.'
+  );
+
+export const editSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const editSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const editSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const editSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const editSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const editSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      editSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      editSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemPopulatedCellsMinOne)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
+ * @summary Read a native spreadsheet with view access: every sheet's summary, and the
+cells of the requested ranges. Returns the revision an edit needs.
+ */
+export const readSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readSpreadsheetBody = zod
+  .object({
+    includeStyles: zod.boolean().nullish().describe('Include cell formatting.'),
+    ranges: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'A1 ranges such as A1:F20. Omit for the workbook overview and samples.'
+      ),
+    sheetId: zod
+      .string()
+      .nullish()
+      .describe('Stable sheet ID or exact name; defaults to the first sheet.'),
+  })
+  .describe('What to read from a workbook.');
+
+export const readSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const readSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const readSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const readSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const readSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const readSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      readSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      readSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemPopulatedCellsMinOne)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
  * @summary Gets the team-share state of a document. The team is resolved from the
 document owner's team membership; `teamId` is omitted when the owner does
 not belong to a team.
@@ -20407,6 +33013,231 @@ export const getDocumentViewsHandlerResponse = zod.object({
     .array(zod.string())
     .describe('List of user emails who have viewed the document'),
 });
+
+/**
+ * @summary Read an uploaded Word document as it stands now, including edits made in
+Macro, with the caller's view access: every paragraph, table cell and
+content control with its stable id, style and text, tracked changes, and
+Word comments. Long documents are paged.
+ */
+export const readWordDocumentParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readWordDocumentQueryStartMin = 0;
+
+export const readWordDocumentQueryCountMin = 0;
+
+export const readWordDocumentQueryParams = zod.object({
+  start: zod
+    .number()
+    .min(readWordDocumentQueryStartMin)
+    .optional()
+    .describe('First block to show, 1-based; omit to start at the beginning.'),
+  count: zod
+    .number()
+    .min(readWordDocumentQueryCountMin)
+    .optional()
+    .describe('Most blocks to show; omit for as many as fit.'),
+});
+
+export const readWordDocumentResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe('Blocks with their ids and text, or what an edit changed.'),
+  })
+  .describe(
+    "The worker's answer: the document, or the changed blocks, as text."
+  );
+
+/**
+ * @summary Apply a batch of edits to an uploaded Word document's live copy
+atomically with the caller's edit access. Nothing changes if any
+operation fails. Returns the changed blocks as they now read.
+ */
+export const editWordDocumentParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editWordDocumentBodyOperationsItemOccurrenceMin = 0;
+
+export const editWordDocumentBodyOperationsItemOccurrenceMinOne = 0;
+
+export const editWordDocumentBodyOperationsItemOccurrenceMinTwo = 0;
+
+export const editWordDocumentBody = zod
+  .object({
+    author: zod
+      .string()
+      .nullish()
+      .describe(
+        "Name tracked changes and comments are attributed to; omit for the\nrequesting user's name."
+      ),
+    operations: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                find: zod
+                  .string()
+                  .describe(
+                    "Exact text to find in that paragraph's plain text."
+                  ),
+                occurrence: zod
+                  .number()
+                  .min(editWordDocumentBodyOperationsItemOccurrenceMin)
+                  .nullish()
+                  .describe(
+                    'Which match (1-based) when `find` appears more than once.'
+                  ),
+                paragraph: zod.string().describe('Paragraph id.'),
+                replace: zod
+                  .string()
+                  .describe(
+                    'Replacement text, empty to delete. No line breaks; tabs are kept.'
+                  ),
+                type: zod.enum(['replaceText']),
+              })
+              .describe(
+                'Replace text inside one paragraph. The new text takes the formatting of\nthe text it replaces; everything else in the paragraph is kept.'
+              ),
+            zod
+              .object({
+                paragraph: zod.string().describe('Paragraph id.'),
+                text: zod
+                  .string()
+                  .describe(
+                    'The new text. No line breaks; use insertParagraph for more paragraphs.'
+                  ),
+                type: zod.enum(['setText']),
+              })
+              .describe(
+                "Rewrite a paragraph's whole text, keeping its style and the formatting\nof its first run."
+              ),
+            zod
+              .object({
+                bold: zod.boolean().nullish().describe('Bold.'),
+                find: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Exact text to format; omit for the whole paragraph.'
+                  ),
+                italic: zod.boolean().nullish().describe('Italic.'),
+                occurrence: zod
+                  .number()
+                  .min(editWordDocumentBodyOperationsItemOccurrenceMinOne)
+                  .nullish()
+                  .describe(
+                    'Which match (1-based) when `find` appears more than once.'
+                  ),
+                paragraph: zod.string().describe('Paragraph id.'),
+                strikethrough: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Strikethrough.'),
+                type: zod.enum(['formatText']),
+                underline: zod
+                  .boolean()
+                  .nullish()
+                  .describe('Single underline.'),
+              })
+              .describe(
+                'Turn character formatting on or off for found text, or the whole\nparagraph when `find` is omitted. Omitted properties are unchanged.'
+              ),
+            zod
+              .object({
+                after: zod
+                  .string()
+                  .nullish()
+                  .describe('Insert after this paragraph or block id.'),
+                before: zod
+                  .string()
+                  .nullish()
+                  .describe('Insert before this paragraph or block id.'),
+                style: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Paragraph style id or name. Omitted: after a heading the style's\nnext style (usually Normal), otherwise the neighbour's formatting."
+                  ),
+                text: zod
+                  .string()
+                  .describe('Text; newlines separate paragraphs.'),
+                type: zod.enum(['insertParagraph']),
+              })
+              .describe(
+                'Insert paragraphs next to a paragraph or block; each line of `text`\nbecomes one paragraph. Inside a table cell they stay in that cell.'
+              ),
+            zod
+              .object({
+                id: zod.string().describe('Paragraph, table or block id.'),
+                type: zod.enum(['delete']),
+              })
+              .describe('Delete a paragraph, table or other block.'),
+            zod
+              .object({
+                paragraph: zod.string().describe('Paragraph id.'),
+                style: zod
+                  .string()
+                  .describe(
+                    'Paragraph style id or name, from the list ReadWordDocument shows.'
+                  ),
+                type: zod.enum(['setStyle']),
+              })
+              .describe(
+                'Apply a paragraph style, such as Heading1, Title, Normal or ListBullet.'
+              ),
+            zod
+              .object({
+                find: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Exact text to comment on; omit for the whole paragraph.'
+                  ),
+                occurrence: zod
+                  .number()
+                  .min(editWordDocumentBodyOperationsItemOccurrenceMinTwo)
+                  .nullish()
+                  .describe(
+                    'Which match (1-based) when `find` appears more than once.'
+                  ),
+                paragraph: zod.string().describe('Paragraph id.'),
+                text: zod
+                  .string()
+                  .describe('The comment. Newlines separate its paragraphs.'),
+                type: zod.enum(['addComment']),
+              })
+              .describe(
+                "Add a Word comment on found text, or on the whole paragraph when\n`find` is omitted. The comment is written into the file, attributed\nto the edit's author, so it travels with the document into Word."
+              ),
+          ])
+          .describe(
+            "One change to a Word document's body. Ids are the paragraph, table and\nblock ids `ReadWordDocument` reports."
+          )
+      )
+      .describe('Operations applied together, in order: 1 to 50.'),
+    trackChanges: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Record the edits as tracked changes (true) or apply them directly\n(false); omit to follow the document's own Track Changes setting."
+      ),
+  })
+  .describe('An atomic batch of edits to a Word document.');
+
+export const editWordDocumentResponse = zod
+  .object({
+    content: zod
+      .string()
+      .describe('Blocks with their ids and text, or what an edit changed.'),
+  })
+  .describe(
+    "The worker's answer: the document, or the changed blocks, as text."
+  );
 
 /**
  * @summary Gets a particular document by its id
@@ -21279,6 +34110,11 @@ export const externalChatResponse = zod
                         .string()
                         .describe(
                           'Their id at the provider (WhatsApp: phone-number or LID JID).'
+                        ),
+                      name: zod
+                        .string()
+                        .describe(
+                          'What to call them: their provider name, else their phone number,\nelse a generic name.'
                         ),
                     })
                     .describe(
@@ -52328,6 +65164,12 @@ export const messageTimelineResponse = zod
                   ),
               ])
               .optional(),
+            kind: zod
+              .enum(['message', 'call_root'])
+              .optional()
+              .describe(
+                'What a persisted message is. Set by the server, never by a client.'
+              ),
             mentions: zod
               .array(
                 zod
@@ -52663,6 +65505,12 @@ export const messageTimelineResponse = zod
                                 ),
                             ])
                             .optional(),
+                          kind: zod
+                            .enum(['message', 'call_root'])
+                            .optional()
+                            .describe(
+                              'What a persisted message is. Set by the server, never by a client.'
+                            ),
                           mentions: zod
                             .array(
                               zod
@@ -53058,6 +65906,12 @@ export const entityMessageCreateResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -53226,6 +66080,12 @@ export const entityMessageGetMessageResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -53398,6 +66258,12 @@ export const entityMessageDeleteMessageResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -53666,6 +66532,12 @@ export const entityMessageEditResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -53842,6 +66714,12 @@ export const entityMessageReactResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -54017,6 +66895,12 @@ export const entityMessageLegacyResponse = zod
           ),
       ])
       .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
     mentions: zod
       .array(
         zod
@@ -54202,6 +67086,12 @@ export const entityMessageGetThreadResponse = zod
                   ),
               ])
               .optional(),
+            kind: zod
+              .enum(['message', 'call_root'])
+              .optional()
+              .describe(
+                'What a persisted message is. Set by the server, never by a client.'
+              ),
             mentions: zod
               .array(
                 zod
@@ -54377,6 +67267,12 @@ export const entityMessageGetThreadResponse = zod
               ),
           ])
           .optional(),
+        kind: zod
+          .enum(['message', 'call_root'])
+          .optional()
+          .describe(
+            'What a persisted message is. Set by the server, never by a client.'
+          ),
         mentions: zod
           .array(
             zod
@@ -54965,6 +67861,12 @@ export const messageTimelineEntriesResponse = zod
                           ),
                       ])
                       .optional(),
+                    kind: zod
+                      .enum(['message', 'call_root'])
+                      .optional()
+                      .describe(
+                        'What a persisted message is. Set by the server, never by a client.'
+                      ),
                     mentions: zod
                       .array(
                         zod
@@ -55330,6 +68232,12 @@ export const messageTimelineEntriesResponse = zod
                                         ),
                                     ])
                                     .optional(),
+                                  kind: zod
+                                    .enum(['message', 'call_root'])
+                                    .optional()
+                                    .describe(
+                                      'What a persisted message is. Set by the server, never by a client.'
+                                    ),
                                   mentions: zod
                                     .array(
                                       zod
@@ -55519,6 +68427,652 @@ export const messageTimelineEntriesResponse = zod
               })
               .describe(
                 'A recorded fact about the parent, such as a rename or a finished call.'
+              ),
+            zod
+              .object({
+                message: zod
+                  .object({
+                    attachments: zod
+                      .array(
+                        zod
+                          .object({
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('When the attachment was added.'),
+                            entity_id: zod
+                              .string()
+                              .describe('Attached entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Attached entity type.'),
+                            height: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media height.'),
+                            id: zod.uuid().describe('Attachment UUID.'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media width.'),
+                          })
+                          .describe('An entity attached to a message.')
+                      )
+                      .describe('Attached entities.'),
+                    bot_profile: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Bot avatar URL.'),
+                            name: zod.string().describe('Bot display name.'),
+                          })
+                          .describe(
+                            'Public bot profile attached to bot-authored messages.'
+                          ),
+                      ])
+                      .optional(),
+                    content: zod.string().describe('Macro Markdown body.'),
+                    created_at: zod.iso.datetime({}).describe('Creation time.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Message tombstone, independent of thread deletion.'
+                      ),
+                    edited_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Last content edit, if any.'),
+                    guest_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name of a verified call guest, retained after the call ends.'
+                      ),
+                    id: zod.uuid().describe('Message UUID.'),
+                    imported_author: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Original author text; never interpreted as an authenticated principal.'
+                              ),
+                          })
+                          .describe(
+                            'Display attribution for a comment imported from an external document.'
+                          ),
+                      ])
+                      .optional(),
+                    kind: zod
+                      .enum(['message', 'call_root'])
+                      .optional()
+                      .describe(
+                        'What a persisted message is. Set by the server, never by a client.'
+                      ),
+                    mentions: zod
+                      .array(
+                        zod
+                          .object({
+                            entity_id: zod
+                              .string()
+                              .describe('Mentioned entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Mentioned entity type.'),
+                          })
+                          .describe('A mention tracked in a message body.')
+                      )
+                      .describe(
+                        'Tracked mentions, retained when a caller changes attachments only.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A channel, including direct messages.'
+                              ),
+                            type: zod.enum(['channel']),
+                          })
+                          .describe('A channel, including direct messages.'),
+                        zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'A validated document identifier. Historical document ids need not be UUIDs.'
+                              ),
+                            type: zod.enum(['document']),
+                          })
+                          .describe('A document, including tasks and PDFs.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'An initiative, presented as a project in the application.'
+                              ),
+                            type: zod.enum(['initiative']),
+                          })
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM company.'),
+                            type: zod.enum(['crm_company']),
+                          })
+                          .describe('A CRM company.'),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM contact.'),
+                            type: zod.enum(['crm_contact']),
+                          })
+                          .describe('A CRM contact.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A video call and its persistent chat thread.'
+                              ),
+                            type: zod.enum(['call']),
+                          })
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                      ])
+                      .describe(
+                        'The entity whose permissions and lifecycle govern a message.'
+                      ),
+                    reactions: zod
+                      .array(
+                        zod
+                          .object({
+                            emoji: zod
+                              .string()
+                              .describe('Emoji being reacted with.'),
+                            users: zod
+                              .array(zod.string())
+                              .describe('User identifiers.'),
+                          })
+                          .describe(
+                            'Reaction emoji and the users who added it.'
+                          )
+                      )
+                      .describe('Aggregated reactions.'),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Authenticated actor or owner of imported content.'
+                      ),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Root message UUID for replies; absent on roots.'
+                      ),
+                    triggered_by: zod
+                      .string()
+                      .nullish()
+                      .describe('User who triggered a bot-authored message.'),
+                    triggered_via: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                      ),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Last persisted update.'),
+                  })
+                  .describe(
+                    'Shared message representation for channel timelines and entity discussions.'
+                  )
+                  .and(
+                    zod.object({
+                      state: zod
+                        .object({
+                          anchor: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .union([
+                                  zod
+                                    .object({
+                                      mark_id: zod
+                                        .uuid()
+                                        .describe(
+                                          'Mark UUID serialized in the document.'
+                                        ),
+                                      marked_text: zod
+                                        .string()
+                                        .nullish()
+                                        .describe(
+                                          'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                                        ),
+                                      type: zod.enum(['markdown']),
+                                    })
+                                    .describe(
+                                      'Stable Lexical mark identity, independent of transient node keys.'
+                                    ),
+                                  zod
+                                    .object({
+                                      anchor_id: zod
+                                        .uuid()
+                                        .describe('Highlight annotation UUID.'),
+                                      marked_text: zod
+                                        .string()
+                                        .nullish()
+                                        .describe(
+                                          'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                                        ),
+                                      type: zod.enum(['pdf_highlight']),
+                                    })
+                                    .describe(
+                                      'An independently existing PDF highlight.'
+                                    ),
+                                  zod
+                                    .object({
+                                      anchor_id: zod
+                                        .uuid()
+                                        .describe('Placeable annotation UUID.'),
+                                      type: zod.enum(['pdf_placeable']),
+                                    })
+                                    .describe(
+                                      'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+                                    ),
+                                  zod
+                                    .object({
+                                      range: zod
+                                        .string()
+                                        .describe(
+                                          'A1 cell or range, such as B4 or B4:C9.'
+                                        ),
+                                      sheetId: zod
+                                        .string()
+                                        .describe(
+                                          'Stable sheet identity within the workbook.'
+                                        ),
+                                      sheetName: zod
+                                        .string()
+                                        .describe(
+                                          'Sheet name when the discussion was created.'
+                                        ),
+                                      type: zod.enum(['spreadsheet']),
+                                    })
+                                    .describe(
+                                      'A cell or rectangular range in a native spreadsheet.'
+                                    ),
+                                  zod
+                                    .object({
+                                      nodeId: zod
+                                        .string()
+                                        .nullish()
+                                        .describe(
+                                          'Layer the pin follows; absent for a pin on the bare canvas.'
+                                        ),
+                                      pageId: zod
+                                        .string()
+                                        .describe(
+                                          'Page (canvas) the pin is on.'
+                                        ),
+                                      type: zod.enum(['fig']),
+                                      x: zod
+                                        .number()
+                                        .describe(
+                                          "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                                        ),
+                                      y: zod
+                                        .number()
+                                        .describe(
+                                          'Vertical offset, measured like `x`.'
+                                        ),
+                                    })
+                                    .describe(
+                                      'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+                                    ),
+                                ])
+                                .describe(
+                                  "A thread's location within its document. PDF geometry remains annotation-owned."
+                                ),
+                            ])
+                            .optional(),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation time of the discussion.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Explicit deletion of the entire thread, distinct from root deletion.'
+                            ),
+                          resolved: zod
+                            .boolean()
+                            .describe(
+                              'Whether this discussion has been resolved.'
+                            ),
+                          root_id: zod
+                            .uuid()
+                            .describe(
+                              'Root message UUID; there is no separate thread identity.'
+                            ),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Last state change.'),
+                          user_id: zod
+                            .string()
+                            .describe(
+                              'User who owns this discussion, including imported discussions.'
+                            ),
+                        })
+                        .describe(
+                          'State belonging to a whole thread, keyed by its root message.'
+                        ),
+                      thread: zod
+                        .object({
+                          latest_reply_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'Creation time of the latest live reply.'
+                            ),
+                          preview: zod
+                            .array(
+                              zod
+                                .object({
+                                  attachments: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          created_at: zod.iso
+                                            .datetime({})
+                                            .describe(
+                                              'When the attachment was added.'
+                                            ),
+                                          entity_id: zod
+                                            .string()
+                                            .describe(
+                                              'Attached entity identifier.'
+                                            ),
+                                          entity_type: zod
+                                            .string()
+                                            .describe('Attached entity type.'),
+                                          height: zod
+                                            .number()
+                                            .nullish()
+                                            .describe('Optional media height.'),
+                                          id: zod
+                                            .uuid()
+                                            .describe('Attachment UUID.'),
+                                          width: zod
+                                            .number()
+                                            .nullish()
+                                            .describe('Optional media width.'),
+                                        })
+                                        .describe(
+                                          'An entity attached to a message.'
+                                        )
+                                    )
+                                    .describe('Attached entities.'),
+                                  bot_profile: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .object({
+                                          avatar_url: zod
+                                            .string()
+                                            .nullish()
+                                            .describe('Bot avatar URL.'),
+                                          name: zod
+                                            .string()
+                                            .describe('Bot display name.'),
+                                        })
+                                        .describe(
+                                          'Public bot profile attached to bot-authored messages.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  content: zod
+                                    .string()
+                                    .describe('Macro Markdown body.'),
+                                  created_at: zod.iso
+                                    .datetime({})
+                                    .describe('Creation time.'),
+                                  deleted_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe(
+                                      'Message tombstone, independent of thread deletion.'
+                                    ),
+                                  edited_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe('Last content edit, if any.'),
+                                  guest_name: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Display name of a verified call guest, retained after the call ends.'
+                                    ),
+                                  id: zod.uuid().describe('Message UUID.'),
+                                  imported_author: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .object({
+                                          name: zod
+                                            .string()
+                                            .describe(
+                                              'Original author text; never interpreted as an authenticated principal.'
+                                            ),
+                                        })
+                                        .describe(
+                                          'Display attribution for a comment imported from an external document.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  kind: zod
+                                    .enum(['message', 'call_root'])
+                                    .optional()
+                                    .describe(
+                                      'What a persisted message is. Set by the server, never by a client.'
+                                    ),
+                                  mentions: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          entity_id: zod
+                                            .string()
+                                            .describe(
+                                              'Mentioned entity identifier.'
+                                            ),
+                                          entity_type: zod
+                                            .string()
+                                            .describe('Mentioned entity type.'),
+                                        })
+                                        .describe(
+                                          'A mention tracked in a message body.'
+                                        )
+                                    )
+                                    .describe(
+                                      'Tracked mentions, retained when a caller changes attachments only.'
+                                    ),
+                                  parent: zod
+                                    .union([
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe(
+                                              'A channel, including direct messages.'
+                                            ),
+                                          type: zod.enum(['channel']),
+                                        })
+                                        .describe(
+                                          'A channel, including direct messages.'
+                                        ),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .string()
+                                            .describe(
+                                              'A validated document identifier. Historical document ids need not be UUIDs.'
+                                            ),
+                                          type: zod.enum(['document']),
+                                        })
+                                        .describe(
+                                          'A document, including tasks and PDFs.'
+                                        ),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe(
+                                              'An initiative, presented as a project in the application.'
+                                            ),
+                                          type: zod.enum(['initiative']),
+                                        })
+                                        .describe(
+                                          'An initiative, presented as a project in the application.'
+                                        ),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe('A CRM company.'),
+                                          type: zod.enum(['crm_company']),
+                                        })
+                                        .describe('A CRM company.'),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe('A CRM contact.'),
+                                          type: zod.enum(['crm_contact']),
+                                        })
+                                        .describe('A CRM contact.'),
+                                      zod
+                                        .object({
+                                          id: zod
+                                            .uuid()
+                                            .describe(
+                                              'A video call and its persistent chat thread.'
+                                            ),
+                                          type: zod.enum(['call']),
+                                        })
+                                        .describe(
+                                          'A video call and its persistent chat thread.'
+                                        ),
+                                    ])
+                                    .describe(
+                                      'The entity whose permissions and lifecycle govern a message.'
+                                    ),
+                                  reactions: zod
+                                    .array(
+                                      zod
+                                        .object({
+                                          emoji: zod
+                                            .string()
+                                            .describe(
+                                              'Emoji being reacted with.'
+                                            ),
+                                          users: zod
+                                            .array(zod.string())
+                                            .describe('User identifiers.'),
+                                        })
+                                        .describe(
+                                          'Reaction emoji and the users who added it.'
+                                        )
+                                    )
+                                    .describe('Aggregated reactions.'),
+                                  sender_id: zod
+                                    .string()
+                                    .describe(
+                                      'Authenticated actor or owner of imported content.'
+                                    ),
+                                  thread_id: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'Root message UUID for replies; absent on roots.'
+                                    ),
+                                  triggered_by: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'User who triggered a bot-authored message.'
+                                    ),
+                                  triggered_via: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                                    ),
+                                  updated_at: zod.iso
+                                    .datetime({})
+                                    .describe('Last persisted update.'),
+                                })
+                                .describe(
+                                  'Shared message representation for channel timelines and entity discussions.'
+                                )
+                            )
+                            .describe(
+                              'Bounded preview using the canonical message shape.'
+                            ),
+                          reply_count: zod
+                            .number()
+                            .describe('Total live reply count.'),
+                        })
+                        .describe(
+                          'Thread counts and its oldest three live replies.'
+                        ),
+                    })
+                  )
+                  .describe(
+                    'Root message with its small thread preview, independent of its parent type.'
+                  ),
+                status: zod
+                  .union([
+                    zod
+                      .object({
+                        state: zod.enum(['live']),
+                      })
+                      .describe('The call has not ended.'),
+                    zod
+                      .object({
+                        duration_ms: zod
+                          .number()
+                          .describe('How long it lasted.'),
+                        ended_at: zod.iso
+                          .datetime({})
+                          .describe('When it ended.'),
+                        state: zod.enum(['ended']),
+                      })
+                      .describe('The call ended.'),
+                    zod
+                      .object({
+                        state: zod.enum(['record_deleted']),
+                      })
+                      .describe(
+                        "The call's record was deleted; its discussion stays in the channel."
+                      ),
+                  ])
+                  .describe(
+                    "A channel call's life, as its timeline row shows it."
+                  ),
+                type: zod.enum(['call']),
+              })
+              .describe(
+                "A channel call and its thread. The root message's id is the call id."
               ),
           ])
           .describe("One chronological entry in a parent's timeline.")

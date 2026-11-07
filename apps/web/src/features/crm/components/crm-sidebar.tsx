@@ -1,10 +1,8 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { getIconConfig } from '@core/component/EntityIcon';
-import {
-  enableCrmActivity,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import ExportIcon from '@icon/system/regular/download-simple.svg';
@@ -29,7 +27,6 @@ const RECORD_ICONS = {
   email: getIconConfig('email').icon,
   notes: getIconConfig('md').icon,
   calls: getIconConfig('call').icon,
-  databases: getIconConfig('database').icon,
 };
 
 export function CrmSidebar(props: {
@@ -60,11 +57,10 @@ export function CrmSidebar(props: {
   searchLabel?: string;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
-    <ViewSidebar.Root aria-label="CRM navigation">
+    <ViewSidebar.Root aria-label={t('crm.navigation')}>
       <header class="flex shrink-0 flex-col">
         <Show when={!isTouchDevice()}>
           <ViewSidebar.Header
@@ -72,10 +68,10 @@ export function CrmSidebar(props: {
             searchLabel={props.searchLabel}
             collapseControl={
               <Show when={props.onCollapse}>
-                <Tooltip label="Collapse CRM sidebar">
+                <Tooltip label={t('crm.collapseSidebar')}>
                   <Button
-                    aria-label="Collapse CRM sidebar"
-                    tooltip="Collapse CRM sidebar"
+                    aria-label={t('crm.collapseSidebar')}
+                    tooltip={t('crm.collapseSidebar')}
                     variant="ghost"
                     size="icon-xs"
                     onClick={props.onCollapse}
@@ -90,7 +86,7 @@ export function CrmSidebar(props: {
               <Show when={props.onCollapse}>
                 <ViewSidebar.CloseButton class="shrink-0" />
               </Show>
-              <ViewSidebar.Title>Customers</ViewSidebar.Title>
+              <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
             </div>
           </ViewSidebar.Header>
         </Show>
@@ -108,23 +104,18 @@ export function CrmSidebar(props: {
           onOpenChange={setRecordsOpen}
         >
           <CollapsibleSection.Trigger>
-            <span>Records</span>
+            <span>{t('crm.records')}</span>
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
           <CollapsibleSection.Content>
             <ViewSidebar.Nav
-              aria-label="CRM records"
+              aria-label={t('crm.recordsNavigation')}
               ref={tourTarget(COMPANIES_TOUR.records)}
             >
               <For
                 each={[
                   ...CRM_RECORDS,
-                  ...(activityFlag().enabled
-                    ? CRM_ACTIVITY_TABS.filter(
-                        (tab) =>
-                          tab.id !== 'databases' || databasesFlag().enabled
-                      )
-                    : []),
+                  ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
                 ]}
               >
                 {(record) => (
@@ -153,11 +144,11 @@ export function CrmSidebar(props: {
             onOpenChange={setListsOpen}
           >
             <CollapsibleSection.Trigger>
-              <span>Lists</span>
+              <span>{t('crm.lists')}</span>
               <CollapsibleSection.Indicator />
             </CollapsibleSection.Trigger>
             <CollapsibleSection.Content>
-              <ViewSidebar.Nav aria-label="Company lists">
+              <ViewSidebar.Nav aria-label={t('crm.listsNavigation')}>
                 <For each={props.lists}>
                   {(list) => (
                     <ViewSidebar.Item
@@ -191,7 +182,7 @@ export function CrmSidebar(props: {
                   <ViewSidebar.Icon>
                     <PlusIcon class="size-4" />
                   </ViewSidebar.Icon>
-                  <span>New list</span>
+                  <span>{t('crm.newList')}</span>
                 </ViewSidebar.Item>
               </ViewSidebar.Nav>
             </CollapsibleSection.Content>
@@ -200,7 +191,7 @@ export function CrmSidebar(props: {
         {props.promotion}
       </ViewSidebar.Content>
       <ViewSidebar.Footer>
-        <ViewSidebar.Nav aria-label="CRM tools">
+        <ViewSidebar.Nav aria-label={t('crm.toolsNavigation')}>
           <ViewSidebar.Item
             onClick={props.onImport}
             disabled={!props.canCreateList}
@@ -208,7 +199,7 @@ export function CrmSidebar(props: {
             <ViewSidebar.Icon>
               <ImportIcon class="size-4" />
             </ViewSidebar.Icon>
-            Import
+            {t('crm.import')}
           </ViewSidebar.Item>
           <ViewSidebar.Item
             onClick={props.onExport}
@@ -217,7 +208,7 @@ export function CrmSidebar(props: {
             <ViewSidebar.Icon>
               <ExportIcon class="size-4" />
             </ViewSidebar.Icon>
-            Export
+            {t('crm.export')}
           </ViewSidebar.Item>
           <ViewSidebar.Item
             active={props.active === 'settings'}
@@ -226,7 +217,7 @@ export function CrmSidebar(props: {
             <ViewSidebar.Icon>
               <GearIcon class="size-4" />
             </ViewSidebar.Icon>
-            CRM settings
+            {t('crm.settings')}
           </ViewSidebar.Item>
         </ViewSidebar.Nav>
       </ViewSidebar.Footer>

@@ -6,6 +6,7 @@ chat). WhatsApp is the only provider today. The view, its rail button, its More-
 mobile and the `g x` shortcut exist only with the `enable-whatsapp-linked`
 flag; a deep link with the flag off goes to Home once the flag resolves. Turn
 it on locally with `VITE_ENABLE_WHATSAPP_LINKED=true`.
+The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/video-tutorials`, shaped like the page's chat rows) once that video is in its catalog, above the chats whether or not an account is linked.
 
 ## Where it is
 
@@ -98,7 +99,11 @@ in place, voice notes read **Voice note · 0:42** above an inline player; bytes
 come from the attachment's static file, like Chat's media. Other ready files
 (PDF, text) show as file chips that open the stored file in a new tab; other
 states show loading, unavailable or unsupported. Senders
-show their WhatsApp name. `@<number>` in a body shows the person: a verified
+show their WhatsApp name (from any of their messages, else the linked
+account's contacts or address book), else their phone number, and only then
+"WhatsApp participant"; history imports usually carry no names, so a later
+message or group sync names earlier messages too. Members are named the same
+way. `@<number>` in a body shows the person: a verified
 Macro user as Chat's mention chip, anyone else their WhatsApp name in bold.
 Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded
 messages. Polls (read-only tallies, "Vote in WhatsApp"), locations (**Open in
@@ -149,8 +154,8 @@ owner's phone only when they press Import. While a chat is
 `waiting_for_phone`, its owner sees a bar under the chat header ("Open
 WhatsApp on your phone to import earlier messages." with **Import**), and on desktop and
 tablets a closable bottom-right prompt **Import WhatsApp history** with
-**Import** covers all their waiting chats (never on phones, where it would
-cover the composer; a close sticks until another chat needs it). Both post
+**Import** and **Not now** covers all their waiting chats (never on phones, where it would
+cover the composer; a close sticks until another chat needs it). Both Import actions post
 `/whatsapp/history-import`. The detail's `backfill` drives the header's
 subtitle: **WhatsApp · Importing history…** while `pending`/`running`, and
 *Earlier messages wait for the owner's phone* for shared viewers while
