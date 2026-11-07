@@ -1,5 +1,6 @@
 use bebop::{Record, SliceWrapper};
 use loro::{VersionVector, awareness::EphemeralStore};
+use sync_protocol::{FromPeer, FromRemote};
 use tracing::trace;
 use worker::Result;
 
@@ -8,7 +9,6 @@ use crate::{
     domain::document::writing_peers,
     durable_object::{SyncSession, Wsm},
     error::ResultExt,
-    generated::schema::{FromPeer, FromRemote},
     lexical_service::LexicalServiceClient,
     socket::Socket,
     state::DocumentState,

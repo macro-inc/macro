@@ -6722,8 +6722,8 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file_service_client",
+ "sync_protocol",
  "sync_router",
- "sync_service_bebop_schema",
  "sync_service_client",
  "sync_service_hex",
  "system_properties",
@@ -19765,6 +19765,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_protocol"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+]
+
+[[package]]
 name = "sync_router"
 version = "0.1.0"
 dependencies = [
@@ -19774,7 +19781,7 @@ dependencies = [
  "mockall",
  "opentelemetry",
  "rustls",
- "sync_service_bebop_schema",
+ "sync_protocol",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -19801,7 +19808,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "subtle",
- "sync_service_bebop_schema",
+ "sync_protocol",
  "thiserror 2.0.18",
  "time",
  "tower-service",
@@ -19814,13 +19821,6 @@ dependencies = [
  "web-time",
  "worker",
  "worker-rs-otel",
-]
-
-[[package]]
-name = "sync_service_bebop_schema"
-version = "0.1.0"
-dependencies = [
- "bebop",
 ]
 
 [[package]]

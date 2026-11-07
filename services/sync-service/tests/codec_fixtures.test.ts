@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { FromPeer, FromRemote } from '../bebop/generated/schema';
+import { FromPeer, FromRemote } from '../../../crates/sync_protocol/bebop/generated/schema';
 
 const fixtures = [
   ['peer-update', FromPeer.fromPeerUpdate({ updates: [new Uint8Array([0, 1, 255])], id: 'op' })],

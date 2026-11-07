@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import {
   FromRemote,
   FromPeer,
-} from '../bebop/generated/schema';
+} from '../../../crates/sync_protocol/bebop/generated/schema';
 import fs from 'node:fs';
 import { verify } from 'node:crypto';
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import type { Miniflare } from 'miniflare';
 import { LoroDoc, LoroMap, LoroText } from 'loro-crdt';
-import { FromPeer, InitializeFromSnapshotRequest } from '../bebop/generated/schema';
+import { FromPeer, InitializeFromSnapshotRequest } from '../../../crates/sync_protocol/bebop/generated/schema';
 import { abortObjectBetweenMessages, createTestUser, dispatchConcurrent, getTokenForDocument, getTokenForSurface, setupMiniflare } from './utils';
 
 let mf: Miniflare;
@@ -122,7 +122,7 @@ test('A5 flushes blame but eviction loses the pending in-memory batch', async ()
 test('S9 serves the exact checked-in wire schema', async () => {
   const response = await mf.dispatchFetch('http://localhost/schema');
   expect(response.status).toBe(200);
-  expect(await response.text()).toBe(readFileSync('bebop/schema.bop', 'utf8'));
+  expect(await response.text()).toBe(readFileSync('../../crates/sync_protocol/bebop/schema.bop', 'utf8'));
 });
 
 

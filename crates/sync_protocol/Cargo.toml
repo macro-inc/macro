@@ -2,12 +2,12 @@
 # Generated code (bebop) predates edition-2024 match ergonomics — `ref` binding
 # modifiers in inherited-reference patterns are a hard error there.
 edition = "2021"
-name = "sync_service_bebop_schema"
+name = "sync_protocol"
 version = "0.1.0"
 publish = false
 
 [features]
-bebop-owned-all = []
+owned = []
 
 [dependencies]
 bebop.workspace = true

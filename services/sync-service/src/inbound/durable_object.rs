@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
+use sync_protocol::InitializeFromSnapshotRequest;
 
 use bebop::Record;
 use loro::{ExportMode, awareness::EphemeralStore};
@@ -24,7 +25,6 @@ use crate::{
     domain::document::{DocumentAttribution, writing_peers},
     dss_internal::InteractionReason,
     error::ResultExt,
-    generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
     mutex::Mutex,
     socket::{InboundBuffers, Socket, protocol},

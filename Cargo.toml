@@ -197,7 +197,7 @@ members = [
   "services/static_file_service",
   "crates/sync_router",
   "services/sync-service",
-  "services/sync-service/bebop-schema",
+  "crates/sync_protocol",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
@@ -213,6 +213,7 @@ members = [
 ]
 
 [workspace.dependencies]
+sync_protocol = { path = "crates/sync_protocol" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"

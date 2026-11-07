@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::ports::{MockDownstreamFactory, MockEdgeSink};
 use bebop::{Record, SliceWrapper};
-use sync_service_bebop_schema::ToRouter;
+use sync_protocol::ToRouter;
 
 fn conn(gateway: &str, id: &str) -> ConnectionId {
     ConnectionId(format!("{gateway}:{id}"))

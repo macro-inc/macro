@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 import { EphemeralStore } from 'loro-crdt';
-import { FromPeer, FromRemote } from '../bebop/generated/schema.ts';
+import { FromPeer, FromRemote } from '../../../crates/sync_protocol/bebop/generated/schema.ts';
 
 function files(root) {
   return readdirSync(root, { recursive: true, withFileTypes: true })

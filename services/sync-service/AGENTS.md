@@ -21,8 +21,8 @@ updates over WebSocket.
 - `src/inbound/auth.rs` + `src/inbound/credentials.rs`: route-specific access
   extractors and JWT verification against tokens minted by
   `document_storage_service`.
-- `build.rs` + `bebop-schema/`, `bebop/`: Bebop wire schema and codegen for
-  Rust and TypeScript bindings.
+- `../../crates/sync_protocol/`: shared Bebop wire types, schema and codegen
+  for Rust and TypeScript bindings.
 
 - `src/inbound/router.rs` + `src/inbound/worker.rs`: Axum document/surface
   routing and worker proxy/copy orchestration.
@@ -41,7 +41,7 @@ updates over WebSocket.
 
 - Change the wire protocol with the repository-pinned Bebop generator; update
   both service and collaboration package bindings (see README), then
-  `worker-build` regenerates Rust bindings via `build.rs`.
+  `node ../../crates/sync_protocol/bebop/generate.mjs` regenerates both bindings.
 - Add a storage backend: `src/outbound/storage/backends/` (new file + `mod.rs`) → gate
   it behind a new feature in `Cargo.toml` → wire into `src/outbound/storage.rs`.
 - Add a non-document surface: `src/inbound/durable_object/surface_api.rs` →
