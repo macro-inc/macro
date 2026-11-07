@@ -9,7 +9,7 @@ import {
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Leftover } from '../../settings/connections/model';
-import { AgentComposerAddMenu } from './ComposerAddMenu';
+import { AgentComposerAddMenu } from './AgentComposerAddMenu';
 
 const [savedConnection, setSavedConnection] = createSignal<Leftover>({
   kind: 'pipedream',

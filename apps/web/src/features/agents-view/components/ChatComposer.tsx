@@ -30,13 +30,7 @@ import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import {
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  $isTextNode,
-  $setSelection,
-} from 'lexical';
+import { $getRoot, $setSelection } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -47,7 +41,8 @@ import {
   Show,
 } from 'solid-js';
 import { IMAGE_INPUT_WARNING } from '../../block-agent/state/image-input';
-import { AgentComposerAddMenu } from '../views/ComposerAddMenu';
+import { AgentComposerAddMenu } from '../../block-agent/ui/AgentComposerAddMenu';
+import { openComposerTypeahead } from '../../block-agent/ui/open-composer-typeahead';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
@@ -254,36 +249,15 @@ export function ChatComposer(props: {
     if (event.type === 'pointerdown') editor.controls.focus();
   };
 
-  const openTypeahead = (kind: 'library' | 'skills') => {
-    editor.lexical.focus(() => {
-      editor.lexical.update(
-        () => {
-          if (!$isRangeSelection($getSelection())) $getRoot().selectEnd();
-          const selection = $getSelection();
-          if (!$isRangeSelection(selection)) return;
-          const node = selection.anchor.getNode();
-          const preceding = $isTextNode(node)
-            ? node
-                .getTextContent()
-                .slice(selection.anchor.offset - 1, selection.anchor.offset)
-            : '';
-          if (preceding && !/\s/.test(preceding)) selection.insertText(' ');
-        },
-        {
-          discrete: true,
-          onUpdate: () =>
-            editor.lexical.dispatchCommand(
-              kind === 'library'
-                ? TYPE_AT_SYMBOL_COMMAND
-                : props.session
-                  ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
-                  : TYPE_SKILL_SYMBOL_COMMAND,
-              undefined
-            ),
-        }
-      );
-    });
-  };
+  const openTypeahead = (kind: 'library' | 'skills') =>
+    openComposerTypeahead(
+      editor.lexical,
+      kind === 'library'
+        ? TYPE_AT_SYMBOL_COMMAND
+        : props.session
+          ? TYPE_AGENT_COMMAND_SYMBOL_COMMAND
+          : TYPE_SKILL_SYMBOL_COMMAND
+    );
 
   const editorRow = () => (
     <div
