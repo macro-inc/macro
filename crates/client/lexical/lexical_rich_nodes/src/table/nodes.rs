@@ -8,11 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwn
 pub struct JsNumber(pub f64);
 impl Serialize for JsNumber {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        if self.0.is_finite() && self.0.fract() == 0.0 && self.0.abs() < 9_007_199_254_740_992.0 {
-            serializer.serialize_i64(self.0 as i64)
-        } else {
-            serializer.serialize_f64(self.0)
-        }
+        lexical_model::json::serialize_js_number(&self.0, serializer)
     }
 }
 bitflags::bitflags! {
@@ -62,11 +58,12 @@ fn header_masked<'de, D: Deserializer<'de>>(
 ) -> std::result::Result<TableCellHeaderState, D::Error> {
     let value = serde_json::Value::deserialize(d)?;
     let bits = if js_truthy(&value) {
-        serde_json::from_value::<u32>(value).map_err(serde::de::Error::custom)?
+        let number = serde_json::from_value::<f64>(value).map_err(serde::de::Error::custom)?;
+        number.trunc().rem_euclid(4.0) as u8
     } else {
         0
     };
-    Ok(TableCellHeaderState::from_bits_retain((bits & 3) as u8))
+    Ok(TableCellHeaderState::from_bits_retain(bits))
 }
 fn one() -> u32 {
     1

@@ -156,3 +156,21 @@ fn row_height_and_default_table_payload_have_literal_exports() -> Result<()> {
     assert_eq!(TableNode::column_count(tx.view(), empty), 0);
     Ok(())
 }
+
+#[test]
+fn imported_header_numbers_use_javascript_bitwise_truncation() {
+    let negative: TableCellNode =
+        serde_json::from_value(serde_json::json!({"headerState":-1})).expect("cell");
+    assert_eq!(negative.header_state, TableCellHeaderState::BOTH);
+    let fractional: TableCellNode =
+        serde_json::from_value(serde_json::json!({"headerState":6.75})).expect("cell");
+    assert_eq!(fractional.header_state, TableCellHeaderState::COLUMN);
+    assert_eq!(
+        serde_json::to_value(JsNumber(f64::INFINITY)).expect("JS number"),
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        serde_json::to_value(JsNumber(-0.0)).expect("JS number"),
+        serde_json::json!(0)
+    );
+}
