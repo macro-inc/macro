@@ -19,7 +19,7 @@ default = ["cli"]
 cli = ["dep:clap", "dep:tokio"]
 # In-memory port implementations and recorded fixtures, for crates that test
 # against this one.
-test-utils = []
+test-utils = ["agent_session_id/test-utils"]
 # OpenAPI schemas for the vocabulary that reaches an HTTP boundary. Off by
 # default: `utoipa` is dead weight for the wasm fold, which serializes but
 # never documents.
@@ -45,6 +45,7 @@ agent-client-protocol = { workspace = true }
 # which is what lets this crate reach wasm. Native builds are unaffected:
 # whoever else needs the transport turns it back on, and cargo unifies.
 agent_runtime_protocol = { path = "../../agent_runtime_protocol", default-features = false }
+agent_session_id = { path = "../../types/agent_session_id" }
 chrono = { workspace = true }
 dynamic_ui = { path = "../../dynamic_ui" }
 clap = { workspace = true, optional = true }
@@ -74,5 +75,6 @@ serde-wasm-bindgen = { workspace = true }
 wasm-bindgen = { workspace = true }
 
 [dev-dependencies]
+agent_session_id = { path = "../../types/agent_session_id", features = ["test-utils"] }
 insta = { version = "1.48.0", features = ["glob"] }
 tokio = { workspace = true }

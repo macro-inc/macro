@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "agent_session_id"
+publish = false
+version = "0.1.0"
+
+[features]
+# Fixed ids for tests in other crates.
+test-utils = []
+
+[dependencies]
+macro_uuid = { path = "../../macro_uuid" }
+serde = { workspace = true }
+thiserror = { workspace = true }
