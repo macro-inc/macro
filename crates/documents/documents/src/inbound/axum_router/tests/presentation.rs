@@ -5,7 +5,7 @@ use pptx_engine::{Presentation, inspect::ShapeKindName};
 const DECK_ID: &str = "019fd3b9-3c6c-7c05-89c2-a27f01218140";
 const PROJECT_ID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0456);
 const DECK: &[u8] = include_bytes!(
-    "../../../../../../pptx_engine/tests/corpus/generated/tables-financial-statement.pptx"
+    "../../../../../../engines/pptx_engine/tests/corpus/generated/tables-financial-statement.pptx"
 );
 
 /// Versions of one deck, newest last.

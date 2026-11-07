@@ -2,8 +2,8 @@
 """Refresh tests/corpus/manifest.json from the decks in generated/ and wild/.
 
 Usage:
-    python3 crates/pptx_engine/scripts/update_manifest.py
-    python3 crates/pptx_engine/scripts/update_manifest.py --add wild/foo.pptx \
+    python3 crates/engines/pptx_engine/scripts/update_manifest.py
+    python3 crates/engines/pptx_engine/scripts/update_manifest.py --add wild/foo.pptx \
         --source-url URL --provenance "..." --description "..." [--feature converted-from-ppt ...]
 
 Derived fields are recomputed on every run: sha256, bytes, slides (incl. hidden),

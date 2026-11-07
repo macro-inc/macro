@@ -1,5 +1,5 @@
 /**
- * The JSON shapes the `.fig` engine (`crates/fig_engine`) returns. Mirrors
+ * The JSON shapes the `.fig` engine (`crates/engines/fig_engine`) returns. Mirrors
  * the serde types in `inspect.rs` and `wasm.rs`.
  */
 
