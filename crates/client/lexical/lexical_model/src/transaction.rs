@@ -323,11 +323,8 @@ impl<'editor> Transaction<'editor> {
             .registry
             .resolve_replacements(index)
             .ok_or(Error::Invariant("invalid type index"))?;
-        let data = (self.pending.registry.vtable(index).default_data)().ok_or(Error::NoDefault(
-            self.pending.registry.registered(index).type_name,
-        ))?;
-        let base = (self.pending.registry.vtable(index).initial_base)(data.as_any())?;
-        self.insert_record(index, data, base)
+        let create = self.pending.registry.vtable(index).default_create;
+        create(self)
     }
     /// Copy payload and properties into a detached node with no children.
     /// s2: ID-05, ID-06
