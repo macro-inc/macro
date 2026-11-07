@@ -58,3 +58,6 @@ For legacy JavaScript regexes, use regress's `find_from_ucs2` over UTF-16 code
 units. Its `find_from_utf16` API decodes surrogate pairs regardless of flags;
 that would skip individual surrogates which JavaScript without `u` can match.
 The conformance test covers this distinction over the complete BMP input.
+
+`lexical_rich_nodes` also supplies list, link/autolink, shared UTF-16 matchers
+and the pinned linkify-it port; conformance replay calls these package APIs.
