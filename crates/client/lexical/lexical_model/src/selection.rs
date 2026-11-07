@@ -470,6 +470,7 @@ impl Selection {
 #[cfg(test)]
 mod test;
 
+mod caret;
 mod delete;
 mod insert;
 mod modify;
