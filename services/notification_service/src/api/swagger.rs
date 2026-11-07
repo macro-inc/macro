@@ -41,16 +41,16 @@ use crate::{
                 user_notification::bulk_get_typed_notifications_by_event_item_ids,
                 user_notification::get_typed_by_event_item_id,
                 user_notification::get_typed_notification_by_id,
-                notification_crate::inbound::http::delete_notification,
-                notification_crate::inbound::http::bulk_delete_notifications,
-                notification_crate::inbound::http::bulk_mark_seen,
-                notification_crate::inbound::http::bulk_mark_done,
-                notification_crate::inbound::http::bulk_mark_undone,
+                notification_inbound::http::delete_notification,
+                notification_inbound::http::bulk_delete_notifications,
+                notification_inbound::http::bulk_mark_seen,
+                notification_inbound::http::bulk_mark_done,
+                notification_inbound::http::bulk_mark_undone,
 
                 /// /user_notifications/preferences
-                notification_crate::inbound::http::preferences::get_notification_type_preferences,
-                notification_crate::inbound::http::preferences::disable_notification_type,
-                notification_crate::inbound::http::preferences::enable_notification_type,
+                notification_inbound::http::preferences::get_notification_type_preferences,
+                notification_inbound::http::preferences::disable_notification_type,
+                notification_inbound::http::preferences::enable_notification_type,
 
                 /// /unsubscribe
                 unsubscribe::get_unsubscribes::handler,
@@ -116,8 +116,8 @@ use crate::{
 
                         // WebSocket notification payload
                         notification_crate::domain::models::queue_message::ConnGatewayNotificationPayload,
-                        notification_crate::inbound::http::BulkGetByEventItemIdsRequest,
-                        notification_crate::inbound::http::preferences::GetNotificationTypePreferencesResponse,
+                        notification_inbound::http::BulkGetByEventItemIdsRequest,
+                        notification_inbound::http::preferences::GetNotificationTypePreferencesResponse,
                 ),
         ),
         tags(

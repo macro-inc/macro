@@ -31,7 +31,6 @@
     ],
     "account_manager": [
       "crates/accounts/account_manager",
-      "crates/accounts/last_online_tracker",
       "crates/accounts/user_api_key",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
@@ -63,7 +62,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/app_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -195,7 +193,6 @@
       "crates/workspace-hack"
     ],
     "agent_changes": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_changes",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
@@ -249,7 +246,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -289,7 +285,6 @@
       "crates/workspace-hack"
     ],
     "agent_code_mode": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_code_mode",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
@@ -383,7 +378,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -464,7 +458,6 @@
       "crates/workspace-hack"
     ],
     "agent_egress": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_egress",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
@@ -554,7 +547,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -626,7 +618,6 @@
       "crates/types/non_empty"
     ],
     "agent_git": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/accounts/user_api_key",
       "crates/agents/agent_credentials",
@@ -664,8 +655,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
       "crates/types/bot_id",
@@ -705,7 +694,6 @@
       "crates/workspace-hack"
     ],
     "agent_harness": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_api_keys",
       "crates/agents/agent_egress",
       "crates/agents/agent_fold",
@@ -814,7 +802,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -1028,6 +1015,8 @@
       "crates/macro_db_client",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_inbound",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -1302,6 +1291,8 @@
       "crates/macro_db_client",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_inbound",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -1452,7 +1443,6 @@
       "crates/types/macro_uuid"
     ],
     "agent_session": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -1502,7 +1492,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -1546,7 +1535,6 @@
       "crates/types/macro_uuid"
     ],
     "agent_session_realtime": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -1597,7 +1585,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -1637,7 +1624,6 @@
       "crates/workspace-hack"
     ],
     "agent_trigger": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -1697,7 +1683,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/projects/initiative",
       "crates/search/activity",
@@ -1740,7 +1725,6 @@
       "crates/workspace-hack"
     ],
     "agent_trigger_service": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
@@ -1818,7 +1802,6 @@
       "crates/platform/service_urls/document_storage_service_url",
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/static_file_service_url",
       "crates/platform/single_flight",
@@ -1922,7 +1905,6 @@
       "crates/workspace-hack"
     ],
     "ai_billing_cli": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
@@ -1955,8 +1937,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
       "crates/types/bot_id",
@@ -2129,6 +2109,8 @@
       "crates/macro_db_client",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_inbound",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -2329,7 +2311,6 @@
       "crates/workspace-hack"
     ],
     "attention_feed": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -2402,7 +2383,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -2575,6 +2555,7 @@
       "crates/macro_db_client",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -2625,7 +2606,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/scheduled_action_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/static_file_public_url",
@@ -2725,7 +2705,6 @@
       "crates/workspace-hack"
     ],
     "bots": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/bots",
       "crates/agents/harnessd_protocol",
       "crates/agents/harnesses",
@@ -2759,8 +2738,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -2845,7 +2822,6 @@
       "crates/types/subsequence_match"
     ],
     "cache-wasm": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -2925,7 +2901,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -2992,7 +2967,6 @@
       "crates/types/macro_uuid"
     ],
     "calendar_events": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/calendar/calendar_events",
@@ -3015,7 +2989,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_calendar_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -3036,7 +3009,6 @@
       "crates/workspace-hack"
     ],
     "calendar_scheduling": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
@@ -3073,7 +3045,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_calendar_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -3108,7 +3079,6 @@
       "crates/workspace-hack"
     ],
     "calendar_service": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
@@ -3168,7 +3138,6 @@
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
       "crates/platform/service_urls/microsoft_graph_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -3212,7 +3181,6 @@
       "crates/workspace-hack"
     ],
     "call": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/agent",
       "crates/ai/ai_toolset",
@@ -3254,7 +3222,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -3424,6 +3391,8 @@
       "crates/macro_db_client",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_inbound",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -3566,7 +3535,6 @@
       "crates/workspace-hack"
     ],
     "channels": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/clients/connection_gateway_client",
@@ -3596,8 +3564,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -3632,7 +3598,6 @@
       "crates/workspace-hack"
     ],
     "channels_inbound": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/ai/attachment",
@@ -3664,8 +3629,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -3700,7 +3663,6 @@
       "crates/workspace-hack"
     ],
     "channels_outbound": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/aws/macro_aws_config",
@@ -3735,8 +3697,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -3886,7 +3846,6 @@
       "crates/workspace-hack"
     ],
     "coding_agent_worker": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/password_events",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
@@ -3979,7 +3938,6 @@
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -4119,7 +4077,6 @@
       "crates/workspace-hack"
     ],
     "comms_db_client": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/clients/connection_gateway_client",
@@ -4150,8 +4107,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -4186,7 +4141,6 @@
       "crates/workspace-hack"
     ],
     "complete_graph": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -4325,7 +4279,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -4804,7 +4757,6 @@
       "crates/types/cowlike"
     ],
     "crm": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/agent",
       "crates/ai/ai_toolset",
@@ -4853,7 +4805,6 @@
       "crates/platform/readonly_pool",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -4899,7 +4850,6 @@
       "crates/workspace-hack"
     ],
     "cursor_cloud_agents": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -4952,7 +4902,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -5040,7 +4989,6 @@
       "crates/types/notification_state"
     ],
     "database_webhooks": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/clients/connection_gateway_client",
@@ -5072,8 +5020,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/types/agent_attribution",
@@ -5106,7 +5052,6 @@
       "crates/workspace-hack"
     ],
     "databases": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/clients/connection_gateway_client",
@@ -5137,8 +5082,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/types/agent_attribution",
@@ -5171,7 +5114,6 @@
       "crates/workspace-hack"
     ],
     "databases_sql": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -5245,7 +5187,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -5347,7 +5288,6 @@
       "services/delete_chat_handler"
     ],
     "deleted_item_poller": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/bots",
@@ -5424,7 +5364,6 @@
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -5679,7 +5618,9 @@
       "crates/macro_db_client",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_inbound",
       "crates/notifications/notification_inbox",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -5871,7 +5812,6 @@
       "services/document_text_extractor"
     ],
     "document_upload_finalizer_handler": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/bots",
@@ -5946,7 +5886,6 @@
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -5997,7 +5936,6 @@
       "services/document_upload_finalizer_handler"
     ],
     "documents": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/bots",
@@ -6071,7 +6009,6 @@
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -6198,7 +6135,6 @@
       "crates/workspace-hack"
     ],
     "email": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -6267,7 +6203,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -6326,7 +6261,6 @@
       "crates/workspace-hack"
     ],
     "email_api_client_outbound": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/calendar/calendar_events",
@@ -6356,7 +6290,6 @@
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
       "crates/platform/service_urls/microsoft_graph_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -6389,7 +6322,6 @@
       "crates/workspace-hack"
     ],
     "email_e2e": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -6462,7 +6394,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -6514,7 +6445,6 @@
       "crates/workspace-hack"
     ],
     "email_focus_worker": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -6594,7 +6524,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/typesafe_api_url",
       "crates/platform/single_flight",
@@ -6645,9 +6574,7 @@
       "services/email_focus_worker"
     ],
     "email_formatting": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
-      "crates/ai/ai_toolset",
       "crates/comms/mention_utils",
       "crates/email/email_formatting",
       "crates/email/invite_email",
@@ -6655,10 +6582,8 @@
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
-      "crates/platform/macro_authorization",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
       "crates/platform/macro_event_broker",
@@ -6668,17 +6593,13 @@
       "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
-      "crates/types/bearer_token",
       "crates/types/bot_id",
       "crates/types/channel_sender",
       "crates/types/cowlike",
-      "crates/types/harness_id",
       "crates/types/macro_user_id",
-      "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
       "crates/types/model_owner",
-      "crates/types/model_user",
       "crates/types/models_pagination",
       "crates/types/notification_state",
       "crates/workspace-hack"
@@ -6713,7 +6634,6 @@
       "services/email_refresh_handler"
     ],
     "email_scheduled_handler": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -6783,7 +6703,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -6895,6 +6814,7 @@
       "crates/macro_db_client",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -6929,7 +6849,6 @@
       "crates/platform/service_urls/google_oauth_token_info_url",
       "crates/platform/service_urls/google_people_api_url",
       "crates/platform/service_urls/microsoft_graph_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/static_file_service_url",
       "crates/platform/single_flight",
@@ -6985,7 +6904,6 @@
       "services/email_service"
     ],
     "email_service_client": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -7055,7 +6973,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -7522,7 +7439,6 @@
       "crates/types/macro_uuid"
     ],
     "forms": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
@@ -7582,7 +7498,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_calendar_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -7729,7 +7644,6 @@
       "crates/workspace-hack"
     ],
     "github": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/bots",
@@ -7811,7 +7725,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -8007,7 +7920,6 @@
       "crates/workspace-hack"
     ],
     "granola_sync": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/agent",
       "crates/ai/ai_toolset",
@@ -8053,7 +7965,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -8130,7 +8041,6 @@
       "crates/workspace-hack"
     ],
     "graphql_calendar": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/calendar/calendar_events",
@@ -8155,7 +8065,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_calendar_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/item_filters",
       "crates/types/agent_attribution",
@@ -8182,7 +8091,6 @@
       "crates/workspace-hack"
     ],
     "graphql_channel": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/clients/connection_gateway_client",
@@ -8214,8 +8122,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -8285,7 +8191,6 @@
       "crates/workspace-hack"
     ],
     "graphql_crm": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/agent",
       "crates/ai/ai_toolset",
@@ -8337,7 +8242,6 @@
       "crates/platform/readonly_pool",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -8379,7 +8283,6 @@
       "crates/workspace-hack"
     ],
     "graphql_databases": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -8460,7 +8363,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -8514,7 +8416,6 @@
       "crates/workspace-hack"
     ],
     "graphql_email": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -8585,7 +8486,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -8634,7 +8534,6 @@
       "crates/workspace-hack"
     ],
     "graphql_entity_mutation": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -8714,7 +8613,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -8768,7 +8666,6 @@
       "crates/workspace-hack"
     ],
     "graphql_favorite": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -8849,7 +8746,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -8903,7 +8799,6 @@
       "crates/workspace-hack"
     ],
     "graphql_initiative": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -8984,7 +8879,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -9039,9 +8933,7 @@
       "crates/workspace-hack"
     ],
     "graphql_notification": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
-      "crates/ai/ai_toolset",
       "crates/comms/mention_utils",
       "crates/email/invite_email",
       "crates/graphql/graphql_common",
@@ -9050,7 +8942,6 @@
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
       "crates/platform/macro_authorization",
@@ -9060,8 +8951,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/item_filters",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -9072,7 +8961,6 @@
       "crates/types/filter_ast",
       "crates/types/harness_id",
       "crates/types/macro_user_id",
-      "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
       "crates/types/model_file_type",
@@ -9085,7 +8973,6 @@
       "crates/workspace-hack"
     ],
     "graphql_notification_inbox": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -9167,7 +9054,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -9247,9 +9133,7 @@
       "crates/workspace-hack"
     ],
     "graphql_properties": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
-      "crates/ai/ai_toolset",
       "crates/comms/mention_utils",
       "crates/databases/properties",
       "crates/databases/system_properties",
@@ -9262,7 +9146,6 @@
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
       "crates/platform/macro_authorization",
@@ -9272,8 +9155,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/types/agent_attribution",
@@ -9301,7 +9182,6 @@
       "crates/workspace-hack"
     ],
     "graphql_registered_work": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -9391,7 +9271,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -9448,7 +9327,6 @@
       "crates/workspace-hack"
     ],
     "graphql_scheduled_action": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -9561,7 +9439,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -9622,7 +9499,6 @@
       "crates/workspace-hack"
     ],
     "graphql_soup": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -9701,7 +9577,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -9781,7 +9656,6 @@
       "crates/workspace-hack"
     ],
     "graphql_work_feed": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -9862,7 +9736,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -10141,7 +10014,6 @@
       "crates/workspace-hack"
     ],
     "import": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -10199,7 +10071,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -10336,7 +10207,6 @@
       "crates/workspace-hack"
     ],
     "initiative": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/clients/connection_gateway_client",
@@ -10364,8 +10234,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/projects/initiative",
       "crates/search/activity",
       "crates/types/agent_attribution",
@@ -10396,7 +10264,6 @@
       "crates/workspace-hack"
     ],
     "initiative_description": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -10435,8 +10302,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/projects/initiative",
       "crates/projects/initiative_description",
@@ -10477,34 +10342,23 @@
       "crates/workspace-hack"
     ],
     "invite_email": [
-      "crates/accounts/last_online_tracker",
-      "crates/ai/ai_toolset",
       "crates/email/invite_email",
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
-      "crates/platform/macro_authorization",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
       "crates/platform/macro_event_broker",
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
-      "crates/types/bearer_token",
-      "crates/types/bot_id",
       "crates/types/cowlike",
-      "crates/types/harness_id",
       "crates/types/macro_user_id",
-      "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
-      "crates/types/model_user",
       "crates/types/models_pagination",
       "crates/types/notification_state",
       "crates/workspace-hack"
@@ -10592,7 +10446,6 @@
       "crates/workspace-hack"
     ],
     "lexical_mention_extractor": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -10624,8 +10477,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/types/agent_attribution",
       "crates/types/agent_session_id",
@@ -11157,7 +11008,6 @@
       "crates/workspace-hack"
     ],
     "messages": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/clients/connection_gateway_client",
@@ -11184,8 +11034,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -11278,39 +11126,29 @@
       "crates/types/model_file_type"
     ],
     "model_notifications": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
-      "crates/ai/ai_toolset",
       "crates/comms/mention_utils",
       "crates/email/invite_email",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
-      "crates/platform/macro_authorization",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
       "crates/platform/macro_event_broker",
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
-      "crates/types/bearer_token",
       "crates/types/bot_id",
       "crates/types/channel_sender",
       "crates/types/cowlike",
-      "crates/types/harness_id",
       "crates/types/macro_user_id",
-      "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
       "crates/types/model_owner",
-      "crates/types/model_user",
       "crates/types/models_pagination",
       "crates/types/notification_state",
       "crates/workspace-hack"
@@ -11448,7 +11286,6 @@
       "crates/workspace-hack"
     ],
     "name_search": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/aws/macro_aws_config",
@@ -11483,8 +11320,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -11541,41 +11376,28 @@
       "crates/types/non_empty"
     ],
     "notification": [
-      "crates/accounts/last_online_tracker",
-      "crates/ai/ai_toolset",
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
-      "crates/platform/macro_authorization",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
       "crates/platform/macro_event_broker",
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
-      "crates/types/bearer_token",
-      "crates/types/bot_id",
       "crates/types/cowlike",
-      "crates/types/harness_id",
       "crates/types/macro_user_id",
-      "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
-      "crates/types/model_user",
       "crates/types/models_pagination",
       "crates/types/notification_state",
       "crates/workspace-hack"
     ],
     "notification_db_client": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
-      "crates/ai/ai_toolset",
       "crates/comms/mention_utils",
       "crates/email/invite_email",
       "crates/notifications/model_notifications",
@@ -11583,6 +11405,33 @@
       "crates/notifications/notification_db_client",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
+      "crates/platform/kafka_util",
+      "crates/platform/macro_auth",
+      "crates/platform/macro_env",
+      "crates/platform/macro_env_var",
+      "crates/platform/macro_event_broker",
+      "crates/platform/macro_event_topics",
+      "crates/platform/rate_limit",
+      "crates/platform/remote_env_var",
+      "crates/types/agent_attribution",
+      "crates/types/bot_id",
+      "crates/types/channel_sender",
+      "crates/types/cowlike",
+      "crates/types/macro_user_id",
+      "crates/types/macro_uuid",
+      "crates/types/model_entity",
+      "crates/types/model_error_response",
+      "crates/types/model_owner",
+      "crates/types/models_pagination",
+      "crates/types/notification_state",
+      "crates/workspace-hack"
+    ],
+    "notification_inbound": [
+      "crates/ai/ai_toolset",
+      "crates/notifications/notification",
+      "crates/notifications/notification_inbound",
+      "crates/platform/agent_correlation",
+      "crates/platform/broadcast",
       "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
@@ -11598,21 +11447,17 @@
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
       "crates/types/bot_id",
-      "crates/types/channel_sender",
       "crates/types/cowlike",
       "crates/types/harness_id",
       "crates/types/macro_user_id",
-      "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
-      "crates/types/model_owner",
       "crates/types/model_user",
       "crates/types/models_pagination",
       "crates/types/notification_state",
       "crates/workspace-hack"
     ],
     "notification_inbox": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -11686,7 +11531,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -11738,16 +11582,38 @@
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
-    "notification_retention_handler": [
+    "notification_outbound": [
       "crates/accounts/last_online_tracker",
-      "crates/ai/ai_toolset",
       "crates/notifications/notification",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
-      "crates/platform/macro_authorization",
+      "crates/platform/macro_env",
+      "crates/platform/macro_env_var",
+      "crates/platform/macro_event_broker",
+      "crates/platform/macro_event_topics",
+      "crates/platform/rate_limit",
+      "crates/platform/remote_env_var",
+      "crates/types/agent_attribution",
+      "crates/types/cowlike",
+      "crates/types/macro_user_id",
+      "crates/types/macro_uuid",
+      "crates/types/model_entity",
+      "crates/types/model_error_response",
+      "crates/types/models_pagination",
+      "crates/types/notification_state",
+      "crates/workspace-hack"
+    ],
+    "notification_retention_handler": [
+      "crates/accounts/last_online_tracker",
+      "crates/notifications/notification",
+      "crates/notifications/notification_outbound",
+      "crates/platform/agent_correlation",
+      "crates/platform/broadcast",
+      "crates/platform/kafka_util",
+      "crates/platform/macro_auth",
       "crates/platform/macro_entrypoint",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
@@ -11755,18 +11621,12 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
-      "crates/types/bearer_token",
-      "crates/types/bot_id",
       "crates/types/cowlike",
-      "crates/types/harness_id",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
-      "crates/types/model_user",
       "crates/types/models_pagination",
       "crates/types/notification_state",
       "crates/workspace-hack",
@@ -11775,19 +11635,17 @@
     "notification_sandbox": [
       "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
-      "crates/ai/ai_toolset",
       "crates/aws/macro_aws_config",
       "crates/comms/mention_utils",
       "crates/email/email_formatting",
       "crates/email/invite_email",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
-      "crates/platform/macro_authorization",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
       "crates/platform/macro_event_broker",
@@ -11797,17 +11655,14 @@
       "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
-      "crates/types/bearer_token",
       "crates/types/bot_id",
       "crates/types/channel_sender",
       "crates/types/cowlike",
-      "crates/types/harness_id",
       "crates/types/macro_user_id",
       "crates/types/macro_uuid",
       "crates/types/model_entity",
       "crates/types/model_error_response",
       "crates/types/model_owner",
-      "crates/types/model_user",
       "crates/types/models_pagination",
       "crates/types/notification_state",
       "crates/workspace-hack",
@@ -11832,6 +11687,8 @@
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
       "crates/notifications/notification_db_client",
+      "crates/notifications/notification_inbound",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -12131,7 +11988,6 @@
       "crates/types/project_id"
     ],
     "projects": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/bots",
@@ -12206,7 +12062,6 @@
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -12262,9 +12117,7 @@
       "crates/workspace-hack"
     ],
     "properties": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
-      "crates/ai/ai_toolset",
       "crates/comms/mention_utils",
       "crates/databases/properties",
       "crates/databases/system_properties",
@@ -12275,7 +12128,6 @@
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
       "crates/platform/macro_authorization",
@@ -12285,8 +12137,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -12311,7 +12161,6 @@
       "crates/workspace-hack"
     ],
     "properties_inbound": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
       "crates/comms/mention_utils",
@@ -12335,8 +12184,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -12375,6 +12222,7 @@
       "crates/entities/entity_access_outbound",
       "crates/notifications/model_notifications",
       "crates/notifications/notification",
+      "crates/notifications/notification_outbound",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
       "crates/platform/database_env_vars",
@@ -12389,8 +12237,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
       "crates/types/agent_attribution",
@@ -12433,14 +12279,11 @@
       "crates/workspace-hack"
     ],
     "referral": [
-      "crates/accounts/last_online_tracker",
-      "crates/ai/ai_toolset",
       "crates/billing/referral",
       "crates/email/invite_email",
       "crates/notifications/notification",
       "crates/platform/agent_correlation",
       "crates/platform/broadcast",
-      "crates/platform/genai_telemetry",
       "crates/platform/ip_extractor",
       "crates/platform/kafka_util",
       "crates/platform/macro_auth",
@@ -12451,8 +12294,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
       "crates/types/bot_id",
@@ -12468,7 +12309,6 @@
       "crates/workspace-hack"
     ],
     "reminders": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -12538,7 +12378,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -12600,7 +12439,6 @@
       "crates/workspace-hack"
     ],
     "routine_program": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/bots",
       "crates/agents/harnessd_protocol",
       "crates/agents/harnesses",
@@ -12635,8 +12473,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -12673,7 +12509,6 @@
       "crates/workspace-hack"
     ],
     "routines": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/bots",
       "crates/agents/harnessd_protocol",
       "crates/agents/harnesses",
@@ -12709,8 +12544,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -12764,7 +12597,6 @@
       "crates/workspace-hack"
     ],
     "scheduled_action": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -12876,7 +12708,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -12944,7 +12775,6 @@
       "crates/workspace-hack"
     ],
     "search_processing_service": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -13055,7 +12885,6 @@
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -13126,7 +12955,6 @@
       "crates/workspace-hack"
     ],
     "search_service": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -13199,7 +13027,6 @@
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_calendar_api_url",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -13314,7 +13141,6 @@
       "crates/workspace-hack"
     ],
     "seed_cli": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -13398,7 +13224,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/platform/upstream_error",
@@ -13532,7 +13357,6 @@
       "crates/workspace-hack"
     ],
     "skills": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/bots",
@@ -13636,7 +13460,6 @@
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -13698,7 +13521,6 @@
       "crates/workspace-hack"
     ],
     "slack_import_worker": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -13767,7 +13589,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/search_processing_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
@@ -13816,7 +13637,6 @@
       "services/slack_import_worker"
     ],
     "slack_integration": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -13877,7 +13697,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -13925,7 +13744,6 @@
       "crates/workspace-hack"
     ],
     "soup": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -13998,7 +13816,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",
@@ -14049,7 +13866,6 @@
       "crates/workspace-hack"
     ],
     "soup-filter-cache-adapter": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -14126,7 +13942,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -14180,7 +13995,6 @@
       "crates/workspace-hack"
     ],
     "soup-filter-projection": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -14254,7 +14068,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/predicate_index",
@@ -14331,7 +14144,6 @@
       "crates/workspace-hack"
     ],
     "soup_realtime_inbound": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/bots",
@@ -14430,7 +14242,6 @@
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -14494,7 +14305,6 @@
       "crates/workspace-hack"
     ],
     "soup_realtime_outbound": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -14544,7 +14354,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
@@ -14706,7 +14515,6 @@
       "crates/types/subsequence_match"
     ],
     "suggestion_generation": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -14819,7 +14627,6 @@
       "crates/platform/service_urls/microsoft_graph_url",
       "crates/platform/service_urls/microsoft_login_page_url",
       "crates/platform/service_urls/microsoft_login_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -14880,7 +14687,6 @@
       "crates/workspace-hack"
     ],
     "suggestions": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/agent_session",
@@ -14983,7 +14789,6 @@
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -15123,7 +14928,6 @@
       "crates/workspace-hack"
     ],
     "system_skills": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/bots",
       "crates/agents/harnessd_protocol",
       "crates/agents/harnesses",
@@ -15160,8 +14964,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -15263,7 +15065,6 @@
       "crates/workspace-hack"
     ],
     "team_agents": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/accounts/user_api_key",
       "crates/agents/agent_credentials",
@@ -15307,7 +15108,6 @@
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/agent_git_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
@@ -15348,7 +15148,6 @@
       "crates/types/team_id"
     ],
     "teammate_dm_backfill": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
@@ -15396,8 +15195,6 @@
       "crates/platform/macro_tower_layers",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/search/activity",
       "crates/search/item_filters",
       "crates/search/models_soup",
@@ -15440,7 +15237,6 @@
       "tooling/teammate_dm_backfill"
     ],
     "teams": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
       "crates/agents/harnessd_protocol",
       "crates/ai/ai_toolset",
@@ -15473,8 +15269,6 @@
       "crates/platform/macro_event_topics",
       "crates/platform/rate_limit",
       "crates/platform/remote_env_var",
-      "crates/platform/service_urls/notification_service_url",
-      "crates/platform/service_urls/service_url",
       "crates/types/agent_attribution",
       "crates/types/bearer_token",
       "crates/types/bot_id",
@@ -15792,7 +15586,6 @@
       "crates/workspace-hack"
     ],
     "webhook": [
-      "crates/accounts/last_online_tracker",
       "crates/accounts/password_events",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
@@ -15879,7 +15672,6 @@
       "crates/platform/remote_env_var",
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/lexical_service_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/service_urls/sync_service_url",
       "crates/platform/single_flight",
@@ -16088,7 +15880,6 @@
       "crates/workspace-hack"
     ],
     "work_feed": [
-      "crates/accounts/last_online_tracker",
       "crates/agents/agent_fold",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
@@ -16161,7 +15952,6 @@
       "crates/platform/service_urls/google_generative_ai_api_url",
       "crates/platform/service_urls/google_oauth_certs_url",
       "crates/platform/service_urls/google_people_api_url",
-      "crates/platform/service_urls/notification_service_url",
       "crates/platform/service_urls/service_url",
       "crates/platform/single_flight",
       "crates/search/activity",

@@ -273,7 +273,7 @@ impl World {
                 email_api.clone(),
                 wiring::redis_client(redis_client.clone()),
                 Arc::new(notification::domain::service::SqsNotificationIngress {
-                    queue: notification::outbound::queue::SqsQueue::new(
+                    queue: notification_outbound::queue::SqsQueue::new(
                         sqs_sdk.clone(),
                         format!("{services_url}/queue/notifications"),
                     ),
@@ -332,7 +332,7 @@ impl World {
                 email_api.clone(),
                 wiring::redis_client(redis_client.clone()),
                 Arc::new(notification::domain::service::SqsNotificationIngress {
-                    queue: notification::outbound::queue::SqsQueue::new(
+                    queue: notification_outbound::queue::SqsQueue::new(
                         sqs_sdk.clone(),
                         format!("{services_url}/queue/notifications"),
                     ),
