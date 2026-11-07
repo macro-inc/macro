@@ -186,6 +186,7 @@ impl Transaction<'_> {
             }
         }
         crate::pipeline::apply_model_caches(self);
+        changes.dirty_elements = self.dirty_elements.clone();
         let dirty = !changes.is_empty();
         if let Some(selection) = &mut self.pending.selection {
             selection.set_dirty(false);

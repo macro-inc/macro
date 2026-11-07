@@ -88,9 +88,16 @@ impl Transaction<'_> {
             } else {
                 self.next_sibling(key)
             };
-            let target = if let Some(adjacent) =
-                adjacent.filter(|key| self.is_text(*key) && !self.is_token_or_segmented(*key))
-            {
+            let target = if let Some(adjacent) = adjacent.filter(|key| {
+                self.is_text(*key)
+                    && !self.is_token_or_segmented(*key)
+                    && !self.is::<Tab>(*key)
+                    && if at_start {
+                        self.can_insert_text_after(*key)
+                    } else {
+                        self.can_insert_text_before(*key)
+                    }
+            }) {
                 adjacent
             } else {
                 let new = self.create_text("")?;
