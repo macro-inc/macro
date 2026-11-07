@@ -146,7 +146,13 @@ test('applyEdits sends the batch with its revision and links the result', async 
         {
           type: 'set_cells',
           sheetId: 'sheet1',
-          cells: [{ address: 'D21', value: '=SUM(D2:D20)' }],
+          cells: [
+            { address: 'A21', value: 'Total' },
+            { address: 'B21', value: 12 },
+            { address: 'C21', value: true },
+            { address: 'D21', value: '=SUM(D2:D20)' },
+            { address: 'E21', value: null },
+          ],
         },
       ],
       { expectedRevision: 'r1' },
@@ -163,7 +169,13 @@ test('applyEdits sends the batch with its revision and links the result', async 
       {
         type: 'set_cells',
         sheetId: 'sheet1',
-        cells: [{ address: 'D21', value: '=SUM(D2:D20)' }],
+        cells: [
+          { address: 'A21', value: 'Total' },
+          { address: 'B21', value: 12 },
+          { address: 'C21', value: true },
+          { address: 'D21', value: '=SUM(D2:D20)' },
+          { address: 'E21', value: null },
+        ],
       },
     ],
   });
@@ -233,6 +245,12 @@ test('createSpreadsheet returns a spreadsheet handle in the project', async () =
   });
 
   expect(sheet.webUrl()).toBe('https://macro.com/app/spreadsheet/doc-2');
+  expect(JSON.parse(JSON.stringify({ spreadsheet: sheet }))).toEqual({
+    spreadsheet: {
+      id: 'doc-2',
+      url: 'https://macro.com/app/spreadsheet/doc-2',
+    },
+  });
   expect(new URL(requests[0].url).pathname).toBe(
     '/documents/create_spreadsheet',
   );
