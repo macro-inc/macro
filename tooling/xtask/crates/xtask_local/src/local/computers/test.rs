@@ -185,11 +185,22 @@ fn incus_addresses_reject_missing_or_ambiguous_resolution() {
     ] {
         assert!(IncusNetwork::parse(address, "100.116.73.13").is_err());
     }
-    assert!(IncusNetwork::parse("100.101.102.103", "devbox").is_err());
+    for control_plane in [
+        "",
+        "devbox",
+        "100.116.73.13\n100.104.105.106",
+        "::1",
+        "10.210.0.1",
+        "127.0.0.1",
+        "100.63.255.255",
+        "100.128.0.1",
+    ] {
+        assert!(IncusNetwork::parse("100.101.102.103", control_plane).is_err());
+    }
 }
 
 #[test]
-fn incus_control_plane_address_can_be_overridden() {
+fn incus_uses_the_discovered_devbox_address() {
     let instance = Instance::derive(Some("computers-address"), None).unwrap();
     let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
     let network = IncusNetwork::parse("100.101.102.103\n", "100.104.105.106").unwrap();
@@ -244,4 +255,102 @@ fn loaded_image_marker_roundtrips() {
     };
     assert_eq!(LoadedImage::parse(&loaded.render()), Some(loaded));
     assert_eq!(LoadedImage::parse(""), None);
+}
+
+#[test]
+fn incus_overrides_use_only_direct_tailnet_service_urls() {
+    for name in [None, Some("computers")] {
+        let instance = Instance::derive(name, None).unwrap();
+        let base = local_env(&instance);
+        let network = IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap();
+        let env = Computers::new(Mode::Local, Fleet::Incus, &instance)
+            .incus_env(&base, &credentials(), &network)
+            .unwrap();
+        let overrides: BTreeMap<_, _> = env
+            .into_iter()
+            .filter(|(key, _)| key.starts_with("OVERRIDE_"))
+            .collect();
+        assert_eq!(overrides.len(), 7);
+        assert_eq!(
+            overrides["OVERRIDE_APP_SERVICE_URL"],
+            base["OVERRIDE_APP_SERVICE_URL"]
+        );
+        for (key, port, scheme) in [
+            (
+                "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
+                Port::AgentHarnessEgress,
+                "http",
+            ),
+            (
+                "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
+                Port::AgentHarness,
+                "http",
+            ),
+            (
+                "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+                Port::DocStorage,
+                "http",
+            ),
+            ("OVERRIDE_AUTH_SERVICE_URL", Port::Auth, "http"),
+            ("OVERRIDE_CONNECTION_GATEWAY_URL", Port::ConnGateway, "http"),
+            (
+                "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+                Port::ConnGateway,
+                "ws",
+            ),
+        ] {
+            assert_eq!(
+                overrides[key],
+                format!("{scheme}://100.116.73.13:{}", instance.port(port)),
+                "{key}"
+            );
+        }
+    }
+}
+
+#[test]
+fn incus_guest_ports_are_allowed_by_nix() {
+    let output = match Command::new("nix")
+        .args([
+            "eval",
+            "--json",
+            ".#nixosConfigurations.runtime-dev-1.config.macro.computers.controlPlanePorts",
+        ])
+        .current_dir(repo_root())
+        .output()
+    {
+        Ok(output) => output,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("SKIP incus_guest_ports_are_allowed_by_nix: nix is unavailable");
+            return;
+        }
+        Err(error) => panic!("could not run nix eval: {error}"),
+    };
+    assert!(
+        output.status.success(),
+        "nix eval failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let allowed: Vec<u16> = serde_json::from_slice(&output.stdout).unwrap();
+    let network = IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap();
+    let instances = std::iter::once(Instance::derive(None, None).unwrap())
+        .chain((0..120).map(|bucket| {
+            Instance::derive(Some("computers"), Some(20000 + bucket * 100)).unwrap()
+        }));
+    for instance in instances {
+        let env = Computers::new(Mode::Local, Fleet::Incus, &instance)
+            .incus_env(&local_env(&instance), &credentials(), &network)
+            .unwrap();
+        for (key, value) in env {
+            if !key.starts_with("OVERRIDE_") || key == "OVERRIDE_APP_SERVICE_URL" {
+                continue;
+            }
+            let (_, port) = value.rsplit_once(':').unwrap();
+            let port: u16 = port.parse().unwrap();
+            assert!(
+                allowed.contains(&port),
+                "{key}={value} is missing from controlPlanePorts"
+            );
+        }
+    }
 }
