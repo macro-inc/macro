@@ -91,6 +91,7 @@ impl Transaction<'_> {
             .text(first_point.key())
             .is_some_and(|data| data.is_segmented())
             && first_point.offset() != self.text_content_size(first_point.key()).get()
+            && !(original.is_collapsed() && first_point.offset() == 0)
         {
             let content = self.text_content(first_point.key()).into_owned();
             let plain = self.create_text(&content)?;
@@ -669,7 +670,7 @@ impl Transaction<'_> {
                     .next_sibling(last)
                     .filter(|key| self.is_text(*key) || self.is_element(*key))
                 {
-                    Some(next) => self.start_point(next)?,
+                    Some(next) => self.element_select_point(next, false)?,
                     None => self.end_point(last)?,
                 }
             } else {

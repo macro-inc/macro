@@ -723,6 +723,39 @@ impl Transaction<'_> {
             style,
         })))
     }
+    pub(crate) fn element_select_point(
+        &self,
+        mut key: NodeKey,
+        at_end: bool,
+    ) -> Result<Point, Error> {
+        while self.is_element(key) && !self.can_be_empty(key) {
+            let child = if at_end {
+                self.last_child(key)
+            } else {
+                self.first_child(key)
+            };
+            let Some(child) = child.filter(|child| self.is_text(*child) || self.is_element(*child))
+            else {
+                break;
+            };
+            key = child;
+        }
+        if self.is_text(key) {
+            Ok(Point::text(
+                key,
+                if at_end {
+                    self.text_content_size(key)
+                } else {
+                    Utf16Offset::ZERO
+                },
+            ))
+        } else {
+            Ok(Point::element(
+                key,
+                ChildIndex(if at_end { self.children_size(key) } else { 0 }),
+            ))
+        }
+    }
     /// Select the previous sibling or the parent boundary.
     pub fn select_previous(
         &mut self,
@@ -739,6 +772,10 @@ impl Transaction<'_> {
                     Point::text(previous, anchor.unwrap_or(len)),
                     Point::text(previous, focus.unwrap_or(len)),
                 );
+            }
+            if self.is_element(previous) {
+                let point = self.element_select_point(previous, true)?;
+                return self.select_points(point, point);
             }
             return self.select_end(previous);
         }
@@ -763,6 +800,10 @@ impl Transaction<'_> {
                     Point::text(next, anchor.unwrap_or_default()),
                     Point::text(next, focus.unwrap_or_default()),
                 );
+            }
+            if self.is_element(next) {
+                let point = self.element_select_point(next, false)?;
+                return self.select_points(point, point);
             }
             return self.select_start(next);
         }
