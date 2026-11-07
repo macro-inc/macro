@@ -30,7 +30,9 @@ impl Transaction<'_> {
         preserve_first: bool,
     ) -> Result<(), Error> {
         self.guard_write()?;
-        let range = self.range_at(slot)?.clone();
+        let mut range = self.range_at(slot)?.clone();
+        // Caret conversion descends root and element boundaries before removing content.
+        normalize_range_selection(self.view(), &mut range)?;
         if range.is_collapsed() {
             // Caret-range removal still refreshes the active selection upstream.
             return self.collapsed_selection_at(slot, range.anchor, range.format, range.style);

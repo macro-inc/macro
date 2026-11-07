@@ -446,3 +446,24 @@ fn removing_between_empty_paragraph_starts_merges_the_boundary() -> Result<(), E
     })?;
     Ok(())
 }
+
+#[test]
+fn root_boundary_replacement_preserves_the_first_paragraph_identity() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let text = tx.create_text("old")?;
+        tx.append(last, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
+            Point::element(last, ChildIndex(1)),
+        ))))?;
+        tx.insert_text("new")?;
+        assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![first.key()]);
+        assert_eq!(tx.text_content(first), "new");
+        Ok(())
+    })?;
+    Ok(())
+}
