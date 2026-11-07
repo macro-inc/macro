@@ -10419,6 +10419,14 @@
       "crates/macro_db_migrator",
       "crates/workspace-hack"
     ],
+    "macro_document_model": [
+      "crates/client/lexical/lexical_html",
+      "crates/client/lexical/lexical_model",
+      "crates/client/lexical/lexical_rich_nodes",
+      "crates/client/lexical/macro_document_model",
+      "crates/document_id",
+      "crates/lexical_node_id"
+    ],
     "macro_entrypoint": [
       "crates/macro_entrypoint",
       "crates/macro_env",

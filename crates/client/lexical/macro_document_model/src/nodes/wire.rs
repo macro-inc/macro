@@ -51,10 +51,10 @@ pub(super) fn import_node<T: ImportPolicy>(
             let text = tx.create_text(text)?;
             tx.append(key, &[text.key()])?;
             let mut code = tx.get_mut::<CustomCodeNode>(key)?;
-            if !code
+            if code
                 .code
                 .language()
-                .is_some_and(|lang| lang.to_lowercase() == "svg")
+                .is_none_or(|lang| lang.to_lowercase() != "svg")
             {
                 code.preview_enabled = false;
             }
@@ -192,11 +192,11 @@ pub(super) fn own_json(ty: &str, source: &SerializedNode) -> crate::Result<Seria
                     serde_json::json!({"type":"channel", "id":channel}),
                 );
             }
-            if !json
+            if json
                 .get("parent")
                 .and_then(|p| p.get("id"))
                 .and_then(Value::as_str)
-                .is_some_and(|id| !id.is_empty())
+                .is_none_or(|id| id.is_empty())
             {
                 return Err(Error::Invariant("invalid reply-target data"));
             }

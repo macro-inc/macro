@@ -1,9 +1,12 @@
 //! ImageNode: own payload and model hooks; no browser runtime.
 use super::*;
 /// Portable ImageNode payload in upstream exportJSON field order.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageNode {
+    /// In-memory block alignment; upstream never serializes this property.
+    #[serde(skip, default = "DecoratorBlockData::center")]
+    pub block: DecoratorBlockData,
     /// Stored media payload.
     #[serde(flatten)]
     pub media: MediaData,
@@ -14,6 +17,14 @@ pub struct ImageNode {
 impl NodeType for ImageNode {
     const TYPE: &'static str = "image";
     type Kind = DecoratorKind;
+    fn after_clone(&self) -> Option<Self> {
+        let mut node = self.clone();
+        node.block = DecoratorBlockData::center();
+        if node.media.scale.0 == 0.0 || node.media.scale.0.is_nan() {
+            node.media.scale = JsNumber(1.0);
+        }
+        Some(node)
+    }
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
@@ -42,3 +53,22 @@ impl DecoratorNode for ImageNode {
     }
 }
 impl SearchText for ImageNode {}
+
+impl Default for ImageNode {
+    fn default() -> Self {
+        Self {
+            block: DecoratorBlockData::center(),
+            media: MediaData::default(),
+            alt: String::new(),
+        }
+    }
+}
+
+impl DecoratorBlock for ImageNode {
+    fn block(&self) -> &DecoratorBlockData {
+        &self.block
+    }
+    fn block_mut(&mut self) -> &mut DecoratorBlockData {
+        &mut self.block
+    }
+}

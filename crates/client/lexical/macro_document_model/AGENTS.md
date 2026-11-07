@@ -13,6 +13,8 @@ Markdown transformers and routes are separate work packages.
 - Inject NodeClock, NodeRandom and NodeHost through editor extension state; perform no I/O.
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
+- Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
+- Preserve arbitrary taskListView object keys rather than narrowing its state parser.
 - Keep this client crate excluded from workspace-hack.
 
 ## Checks

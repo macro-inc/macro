@@ -231,7 +231,6 @@ members = [
 ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
-macro_document_model = { path = "crates/client/lexical/macro_document_model" }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_html = { path = "crates/client/lexical/lexical_html" }
 lexical_model = { path = "crates/client/lexical/lexical_model" }

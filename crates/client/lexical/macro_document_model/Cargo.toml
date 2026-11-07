@@ -14,4 +14,6 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 serde_with = { workspace = true }
 regress = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
-time = { workspace = true, features = ["formatting", "macros"] }
+chrono = { workspace = true }
+nom = { workspace = true }
+urlencoding = { workspace = true }

@@ -4,6 +4,9 @@ use super::*;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentCardNode {
+    /// In-memory block alignment; upstream never serializes this property.
+    #[serde(skip, default = "DecoratorBlockData::center")]
+    pub block: DecoratorBlockData,
     /// Stored document id payload.
     #[serde(default, skip_serializing_if = "Maybe::is_missing")]
     pub document_id: Maybe<String>,
@@ -29,6 +32,11 @@ pub struct DocumentCardNode {
 impl NodeType for DocumentCardNode {
     const TYPE: &'static str = "document-card";
     type Kind = DecoratorKind;
+    fn after_clone(&self) -> Option<Self> {
+        let mut node = self.clone();
+        node.block = DecoratorBlockData::center();
+        Some(node)
+    }
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
@@ -65,6 +73,7 @@ impl SearchText for DocumentCardNode {
 impl Default for DocumentCardNode {
     fn default() -> Self {
         Self {
+            block: DecoratorBlockData::center(),
             document_id: Maybe::Missing,
             document_name: Maybe::Missing,
             block_name: Maybe::Missing,
@@ -73,5 +82,14 @@ impl Default for DocumentCardNode {
             preview_data: Maybe::Missing,
             mention_uuid: Maybe::Missing,
         }
+    }
+}
+
+impl DecoratorBlock for DocumentCardNode {
+    fn block(&self) -> &DecoratorBlockData {
+        &self.block
+    }
+    fn block_mut(&mut self) -> &mut DecoratorBlockData {
+        &mut self.block
     }
 }

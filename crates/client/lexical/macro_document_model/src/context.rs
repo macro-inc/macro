@@ -33,11 +33,8 @@ pub fn nanoid(tx: &Transaction<'_>, length: usize) -> crate::Result<String> {
 }
 /// Format the injected clock with JavaScript Date.toISOString precision.
 pub fn now_iso(tx: &Transaction<'_>) -> crate::Result<String> {
-    let nanos = i128::from(now_ms(tx)?) * 1_000_000;
-    time::OffsetDateTime::from_unix_timestamp_nanos(nanos)
-        .map_err(|error| Error::invariant(error.to_string()))?
-        .format(time::macros::format_description!(
-            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z"
-        ))
-        .map_err(|error| Error::invariant(error.to_string()))
+    let millis = i64::try_from(now_ms(tx)?).map_err(|error| Error::invariant(error.to_string()))?;
+    let date = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(millis)
+        .ok_or(Error::Invariant("invalid node timestamp"))?;
+    Ok(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
 }

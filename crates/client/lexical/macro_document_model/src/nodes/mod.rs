@@ -137,3 +137,9 @@ pub use validation::*;
 
 mod maybe;
 pub use maybe::*;
+
+mod decorator_block;
+pub use decorator_block::*;
+
+mod media;
+pub use media::*;
