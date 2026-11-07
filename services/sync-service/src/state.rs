@@ -1,12 +1,7 @@
-//! Read-only Loro views for the Worker adapter; mutable state belongs to Room.
-use loro::{ExportMode, LoroDoc};
+//! Worker monotonic clock; document state belongs to Room.
 use std::cell::Cell;
 use std::time::Duration;
-use sync_server_core::domain::{
-    state::DocumentState as CoreDocumentState, state_error::StateError,
-};
 use web_time::Instant;
-use worker::Result;
 
 pub use sync_server_core::domain::state::RootChange;
 
@@ -23,34 +18,4 @@ pub(crate) fn monotonic() -> Duration {
         origin.set(Some(first));
         instant.duration_since(first)
     })
-}
-
-fn into_worker<T>(result: std::result::Result<T, StateError>) -> Result<T> {
-    result.map_err(|error| worker::Error::from(error.to_string()))
-}
-
-/// Read-only handle for adapter exports. Timestamp mutation belongs to Room.
-#[derive(Debug)]
-pub struct DocumentState {
-    pub loro_doc: LoroDoc,
-    inner: CoreDocumentState,
-}
-impl DocumentState {
-    pub(crate) fn from_core(inner: CoreDocumentState) -> Self {
-        Self {
-            loro_doc: inner.loro_doc.clone(),
-            inner,
-        }
-    }
-    pub fn try_from_snapshot(snapshot: &[u8]) -> Result<Self> {
-        into_worker(CoreDocumentState::try_from_snapshot(snapshot)).map(Self::from_core)
-    }
-
-    pub fn get_json(&self) -> String {
-        self.inner.get_json()
-    }
-
-    pub fn export_snapshot(&self, mode: Option<ExportMode>) -> Result<Vec<u8>> {
-        into_worker(self.inner.export_snapshot(mode))
-    }
 }

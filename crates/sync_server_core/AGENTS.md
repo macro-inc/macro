@@ -50,3 +50,5 @@ Atomic document snapshot/update orchestration lives in `src/domain/room/atomic.r
 Session deletion order and volatile cleanup live in `src/domain/room/delete.rs`; snapshot adapters remove fallback storage before primary storage.
 
 Surface identity binding, lifecycle, seed recovery and revocation live in `src/domain/room/surface.rs`; route/method and Bebop parsing remain in the adapter.
+
+Migration receipts, strict frozen replay and activation policy live in `src/domain/room/migration.rs`. Test-only fault headers map to explicit `FaultPlan`; production always supplies `None`.

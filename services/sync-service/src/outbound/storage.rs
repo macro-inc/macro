@@ -1,45 +1,17 @@
 use crate::storage::backends::durable_kv::DurableKVStorage;
 use backends::Storage;
-use std::rc::Rc;
-use sync_server_core::domain::{
-    ports::{SnapshotReadError, SnapshotStore},
-    types::SessionKey,
-};
-use worker::{Env, Error, Result, State};
-
+use worker::{Env, Result, State};
 pub mod backends;
 pub mod op_log;
 pub mod room_snapshot;
 pub mod snapshot;
-use room_snapshot::WorkerSnapshots;
-
+/// Temporary debug transport handle, removed with the callback shim.
 pub struct SessionStorage {
-    snapshots: WorkerSnapshots,
     storage: DurableKVStorage,
-    key: SessionKey,
 }
-
-fn snapshot_read_error(error: SnapshotReadError<worker::Error>) -> worker::Error {
-    match error {
-        SnapshotReadError::Storage(error) => error,
-        SnapshotReadError::Missing => Error::from("no snapshot is stored"),
-    }
-}
-
 impl SessionStorage {
-    pub fn new(
-        snapshot_storage: Rc<Storage>,
-        storage: DurableKVStorage,
-        key: String,
-        state: Rc<State>,
-    ) -> Self {
-        let snapshots = WorkerSnapshots::fixed(snapshot_storage, state);
-        let key = SessionKey::new(key);
-        Self {
-            snapshots,
-            storage,
-            key,
-        }
+    pub fn new(storage: DurableKVStorage) -> Self {
+        Self { storage }
     }
     pub async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
         self.storage.get_pending_operations().await
@@ -49,12 +21,6 @@ impl SessionStorage {
     }
     pub async fn debug_list_do_kv(&self, prefix: &str) -> Result<Vec<Result<(String, Vec<u8>)>>> {
         self.storage.list_do_kv(prefix).await
-    }
-    pub async fn get_snapshot(&self) -> Result<Vec<u8>> {
-        self.snapshots
-            .get(&self.key)
-            .await
-            .map_err(snapshot_read_error)
     }
 }
 

@@ -179,3 +179,9 @@ C14 moves all four existing surface recovery unit cases into core. New Room
 tests cover persisted revocation before close, cold expired-grant closure,
 failed initialization recovery, ready reads and snapshot exports. Full S1–S6
 Worker fixtures are re-recorded byte-identically under the normalizer.
+
+C15 drives real Room migration methods over SimPorts through source claim,
+export, freeze, thaw, seal and retirement faults, plus target claim, snapshot,
+verification, activation and ready faults. Cold retries preserve receipts and
+original snapshots. Worker S7–S8 re-recording and the migration-hook suites
+cover live pending-log drains, forged proofs and recovery across runtime aborts.

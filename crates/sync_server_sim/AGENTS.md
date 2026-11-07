@@ -7,6 +7,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 
 ## Start here
 
+- `src/migration_test.rs`: real Room recovery at source/target persistence boundaries.
 - `src/ports.rs`: synchronous in-memory ports, ordered effects, clocks, faults,
   output-gate confirmation and socket lifecycle.
 - `src/replay.rs`: the real core Room and the explicit `ENABLED` allowlist.

@@ -321,13 +321,6 @@ impl SyncSession<'_> {
         }
     }
 
-    async fn maybe_set_document_id(&mut self, document_id: &str) -> Result<bool> {
-        self.room
-            .maybe_set_session_key(&SessionKey::new(document_id.to_owned()))
-            .await
-            .map_err(room_error)
-    }
-
     /// A connected room identity does not imply initialized collaborative content.
     async fn exists(&mut self, document_id: &str) -> Result<bool> {
         self.room
@@ -360,13 +353,8 @@ impl SyncSession<'_> {
         }
         let id = self.document_id().await?;
         let key = SessionKey::new(id.clone());
-        let snapshot = self.room.ports().snapshots().backend(&key)?;
-        let storage = Rc::new(SessionStorage::new(
-            snapshot,
-            self.room.ports().storage().clone(),
-            id,
-            self.state.clone(),
-        ));
+        self.room.ports().snapshots().backend(&key)?;
+        let storage = Rc::new(SessionStorage::new(self.room.ports().storage().clone()));
         self.room.ports_mut().session_storage = Some(storage.clone());
         if self.operation_log.is_none() {
             self.operation_log = Some(OperationLog::new(key.clone(), key.kind()));

@@ -1,5 +1,5 @@
 //! Isolated surface lifecycle and initialization policy.
-use super::{PortName, Room, RoomError};
+use super::{FaultPlan, FaultPoint, PortName, Room, RoomError};
 use crate::domain::{
     connection::SurfaceLifecycle, ports::*, state::DocumentState, types::SessionKey,
 };
@@ -121,7 +121,7 @@ impl<P: RoomPorts> Room<P> {
         &mut self,
         key: &SessionKey,
         snapshot: &[u8],
-        stop_after_snapshot: bool,
+        faults: FaultPlan,
     ) -> Result<SurfaceStatus, RoomError> {
         DocumentState::try_from_snapshot(snapshot)?;
         match self.surface_lifecycle().await? {
@@ -140,9 +140,7 @@ impl<P: RoomPorts> Room<P> {
             if !prepare_surface_snapshot(self.ports.snapshots(), key, snapshot).await? {
                 return Ok(SurfaceStatus::Conflict);
             }
-            if stop_after_snapshot {
-                return Err(RoomError::InjectedSurfacePersistence);
-            }
+            faults.at(FaultPoint::SurfaceSnapshot)?;
             if self.surface_lifecycle().await? == SurfaceLifecycle::Revoked {
                 return Ok(SurfaceStatus::Forbidden);
             }
