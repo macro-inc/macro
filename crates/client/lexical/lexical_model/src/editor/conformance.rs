@@ -86,7 +86,9 @@ impl Editor {
             generation: 0,
             index: next.index() - 1,
         }));
+        let version = self.keys.next_commit()?;
         self.state = state.with_selection(selection);
+        self.suspend_version = version;
         Ok(())
     }
 }

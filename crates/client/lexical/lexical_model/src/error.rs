@@ -4,6 +4,10 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// An update belongs to another editor or predates a later publication.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("stale suspended update")]
+    StaleSuspendedUpdate,
     /// input cannot be batched.
     #[error("input cannot be batched")]
     InputNotBatchable,
@@ -324,6 +328,8 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            #[cfg(feature = "foreign-nodes")]
+            Self::StaleSuspendedUpdate => "StaleSuspendedUpdate",
             Self::InputNotBatchable => "InputNotBatchable",
             Self::ViewSelectionInHeadless => "ViewSelectionInHeadless",
             Self::RemoteChildrenInCreate => "RemoteChildrenInCreate",
