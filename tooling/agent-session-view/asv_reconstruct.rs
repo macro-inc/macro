@@ -2,7 +2,7 @@
 //! code of the checkout it is built in.
 //!
 //! `agent-session-view --reconstruct` copies this file to
-//! `crates/ai_tools/examples/` of a checkout at the commit that served a
+//! the target tools package's examples directory at the commit that served a
 //! session and runs it there, so every string comes from that commit's own
 //! code; nothing here re-implements it. The leading newlines the harness puts
 //! before the identity and integrations sections are the only glue copied,
@@ -15,6 +15,8 @@
 //! stdout, JSON:
 //!   {"docs": [text], "preamble": text, "macro_prompt": text,
 //!    "routed_macro_prompt": text, "identities": [text], "integrations": [text | null]}
+
+// TARGET_CHECKOUT_LIBRARY_ALIASES
 
 use std::sync::Arc;
 
@@ -113,7 +115,7 @@ fn main() {
         docs.push(runtime.block_on(documentation(request, &user)));
     }
 
-    let tools = ai_tools::tools_for_agent_code_mode();
+    let tools = reconstruction_tools::tools_for_agent_code_mode();
     let identities: Vec<String> = input["identities"]
         .as_array()
         .into_iter()
@@ -121,7 +123,10 @@ fn main() {
         .map(|identity| {
             let name = identity["name"].as_str().unwrap_or_default();
             let handle = identity["handle"].as_str().unwrap_or_default();
-            format!("\n{}", prompt::agent_identity::render(name, handle))
+            format!(
+                "\n{}",
+                reconstruction_prompt::agent_identity::render(name, handle)
+            )
         })
         .collect();
     let integrations: Vec<Option<String>> = input["integrations"]
@@ -129,14 +134,14 @@ fn main() {
         .into_iter()
         .flatten()
         .map(|names| {
-            prompt::connected_toolsets::render(&strings(names))
+            reconstruction_prompt::connected_toolsets::render(&strings(names))
                 .map(|section| format!("\n\n{section}"))
         })
         .collect();
 
     let output = json!({
         "docs": docs,
-        "preamble": prompt::agent_session::PROMPT.to_string(),
+        "preamble": reconstruction_prompt::agent_session::PROMPT.to_string(),
         "macro_prompt": tools.prompt.to_string(),
         "routed_macro_prompt": tools.routed_prompt.to_string(),
         "identities": identities,

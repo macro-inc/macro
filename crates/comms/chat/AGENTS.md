@@ -22,7 +22,7 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 - Owns: the `Chat`/`ChatMessage` tables, chat sharing/ownership, and message
   send/store/delete.
 - Not here: channel messages → `crates/comms/channels`; model selection and provider
-  calls → `crates/agent`.
+  calls → `crates/ai/agent`.
 
 ## Boundaries
 

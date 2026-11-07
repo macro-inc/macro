@@ -51,8 +51,8 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   `ecs describe-task-definition`, and a Rust build: the first run at a commit
   checks it out under `~/.cache/agent-session-view/src/<sha>`, builds that
   commit's `code-mode-assets` Nix package (the generated SDK docs; a
-  checkout without a bun install can't make them) and then `ai_tools`,
-  which takes long; later runs read
+  checkout without a bun install can't make them) and then the target workspace's
+  `ai_tools` or `agent_tools` package; later runs read
   `~/.cache/agent-session-view/reconstruct/<sha>/`. Set `ASV_BUILD_WRAPPER`
   to prefix the build (a build-slot queue, `nice`).
 
@@ -83,7 +83,7 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   `invoke_agent` spans.
 - No span names the eager tools, only their count and bytes
   (`macro.genai.prompt.tools.eager.*`). Names come from `EAGER_TOOLS`
-  (`crates/ai_tools/src/lib.rs`) and `EAGER_INTERNAL_MCP_TOOLS`
+  (`crates/ai/ai_tools/src/lib.rs`) and `EAGER_INTERNAL_MCP_TOOLS`
   (`crates/agent_inmem/src/rig_engine.rs`) as checked out, kept where the
   session shows the tool. Fewer names than the span count is normal (code
   mode's own tools are not in those lists); a list that can't be read is the
@@ -108,6 +108,12 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   harness process. `asv_reconstruct.rs` must compile at old commits: use only
   long-lived public items, and when one moves, the run fails loudly at that
   commit rather than guessing.
+- Resolve reconstruction package directories and Rust library names from the target
+  checkout's workspace member manifests, including explicit `[lib].name`; bind
+  the tools and prompt libraries through the copied template's stable aliases.
+  Reject missing or ambiguous targets. Historical checkout selectors retain both
+  `ai_tools` / `agent_tools` and `prompt` / `agent_prompts` across repository renames;
+  `turn_context.py` instead reads the current checkout and follows its layout.
 - `invoke_agent`'s `gen_ai.tool.definitions` is cut at about 25 KB, so the
   deferred list can be partial. Only names, counts and sizes are read from
   spans, never their prompt or message text.

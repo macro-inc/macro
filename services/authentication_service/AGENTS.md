@@ -31,7 +31,7 @@ key issuance, and account merge/link flows.
   at `/team_agents`, plus its internal enrollment route; computer-facing
   addresses come from `outbound/agent_addresses.rs`).
 - Not here: authorization/permission decisions on other entities →
-  `crates/platform/macro_authorization`; metered AI credits → `crates/ai_billing`;
+  `crates/platform/macro_authorization`; metered AI credits → `crates/billing/ai_billing`;
   team lifecycle and seats → `crates/accounts/teams`; a person's interface language
   (`/user/language`) → `crates/accounts/user_language`.
 
@@ -105,7 +105,7 @@ access, webhook reconciliation and billing workers remain independent of attachm
 ## Stripe webhook and inbox
 
 - `POST /webhooks/user/stripe` only verifies the signature and stores the
-  event (`crates/stripe_inbox`); it calls no Stripe API, so a 500 means only
+  event (`crates/billing/stripe_inbox`); it calls no Stripe API, so a 500 means only
   that storing failed. Consumers in `src/outbound/stripe_consumers.rs` apply
   events in the background on every replica; their decisions are pure
   functions in `src/domain/stripe_consumers.rs`. See

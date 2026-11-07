@@ -27,7 +27,7 @@ maps a data source onto Macro database columns and cells
 - Owns: reading Notion over REST (`Notion-Version: 2026-03-11`, data sources
   API), and the Notion → Macro database column and cell mapping.
 - Not here: import planning, writing Macro entities → `crates/integrations/import`;
-  Pipedream connections and the proxy port → `crates/pipedream_mcp`.
+  Pipedream connections and the proxy port → `crates/ai/pipedream_mcp`.
 
 ## Boundaries
 

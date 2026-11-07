@@ -2,7 +2,7 @@ import type { CreditPurchaseSnapshot } from './generated/schemas/creditPurchaseS
 import type { CreditPurchaseStatus } from './generated/schemas/creditPurchaseStatus';
 /**
  * Hand-written mirrors of the auth service's AI billing OpenAPI types
- * (`crates/ai_billing`). Replace with the orval-generated schemas on the next
+ * (`crates/billing/ai_billing`). Replace with the orval-generated schemas on the next
  * client regeneration (`bun run gen-api auth-service`).
  *
  * Allowance and usage fields (`included_cents`, `used_cents`,

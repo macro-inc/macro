@@ -215,10 +215,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   A scoped hidden session's chat messages and structured completions take
   no tools (`tool_selection::tools_refused_to_current_session`): tools run
   with the person's full access, past the scope its credential carries.
-- `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
+- `crates/ai/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
-- `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
+- `crates/ai/universal_input` owns Command K's authenticated `/universal_input/classify`
   and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.

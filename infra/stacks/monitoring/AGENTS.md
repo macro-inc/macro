@@ -69,7 +69,7 @@ From `infra/`:
 - `monitors/stripe-inbox.ts` reads the logs `stripe inbox cursor
   dead-lettered`, `stripe inbox dead cursors`, `stripe inbox backlog` and
   `stripe audit mismatch` that
-  `crates/stripe_inbox` writes from authentication-service; its header is the
+  `crates/billing/stripe_inbox` writes from authentication-service; its header is the
   message and field contract.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
   `crates/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
@@ -80,7 +80,7 @@ From `infra/`:
   `http.client.request` with its method as the resource.
 - `monitors/ai-providers.ts` reads the `ai provider account unavailable` and
   `ai usage priced` logs (`crates/platform/genai_telemetry/src/provider_account.rs`,
-  `crates/ai_usage/src/domain/service.rs`) and the AI editing worker's
+  `crates/billing/ai_usage/src/domain/service.rs`) and the AI editing worker's
   `ai.provider_account_unavailable` span; its header is the field contract.
   `MONTHLY_CAPS` must match each provider's billing console.
 - `monitors/routine-suggestions.ts` reads the `routine_suggestions.*` log

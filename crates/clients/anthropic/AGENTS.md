@@ -6,7 +6,7 @@ Part of AI: the SDK client for the Anthropic Messages API that the rest of
 the product's AI surfaces (via `agent`) build requests against, plus an
 OpenAI-compatible request/response mapping layer and Anthropic's own
 server-side code-execution tools (bash and text editor). Web search and
-fetch are vendor-neutral tools in `crates/web_search`, not Anthropic server
+fetch are vendor-neutral tools in `crates/ai/web_search`, not Anthropic server
 tools.
 
 ## Start here
@@ -21,15 +21,15 @@ tools.
 
 - Owns: the Anthropic API client, its OpenAI-shaped adapter, and Anthropic's
   built-in code-execution tools.
-- Not here: web search and fetch → `crates/web_search` (wired as tools in `crates/ai_tools`).
+- Not here: web search and fetch → `crates/ai/web_search` (wired as tools in `crates/ai/ai_tools`).
 - Not here: model selection, pricing, usage/billing policy, or the provider-agnostic
-  chat abstraction → `crates/agent`, `crates/ai_billing`, `crates/ai_usage`.
+  chat abstraction → `crates/ai/agent`, `crates/billing/ai_billing`, `crates/billing/ai_usage`.
 
 ## Boundaries
 
 - Depends on: `macro_env_var`, optionally `async-openai` (`openai` feature),
   `ai_billing`/`ai_toolset`/`ai_usage` (`toolset` feature).
-- Used by: `crates/ai_tools`.
+- Used by: `crates/ai/ai_tools`.
 
 ## Recipes
 

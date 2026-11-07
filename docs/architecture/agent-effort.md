@@ -18,7 +18,7 @@ values produce no effort control. No static provider effort list is used.
 ## In-memory
 
 The engine's model catalog controls model availability. Native effort profiles
-are defined in `crates/agent/src/model/reasoning_effort.rs`; adding a model to the
+are defined in `crates/ai/agent/src/model/reasoning_effort.rs`; adding a model to the
 catalog does not guess its effort support from its name. Update the profile and
 provider serialization tests when adding support.
 

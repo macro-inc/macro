@@ -38,7 +38,7 @@ through `databases`' typed ops.
 - Depends on: `database_sql` (engine), `databases` (ops/storage, `ports` only),
   `soup`, `contacts`, `entity_access` (all `ports`-only — this crate is an
   adapter, not a composition root).
-- Used by: `crates/ai_tools` (wires the `ai_tools` feature's `QueryDatabase`/
+- Used by: `crates/ai/ai_tools` (wires the `ai_tools` feature's `QueryDatabase`/
   `SaveDatabaseQuery` into the agent toolset), and DSS (HTTP query composition).
 
 ## Recipes

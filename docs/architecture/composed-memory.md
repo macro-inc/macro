@@ -29,7 +29,7 @@ reports to the team at the time of generation. Shared output describes professio
 personal information, credentials, compensation, and other private details are
 excluded by generation instructions and a separate, fail-closed judge: one
 TypeSafe Jev call per piece, asking one yes/no question per privacy rule, each
-with its own probability threshold (`crates/memory/src/outbound/jev_judge.rs`).
+with its own probability threshold (`crates/ai/memory/src/outbound/jev_judge.rs`).
 Explicit memory is held only to the sensitive-information rules. Model privacy
 review is probabilistic, so this is not a deterministic redaction system.
 

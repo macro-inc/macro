@@ -39,7 +39,7 @@ instants (`wall-clock.ts`).
   wasm32 only, also `wasm-bindgen`, `serde` and `serde-wasm-bindgen`.
 - Used by: the web app's email reminder composer
   (`apps/web/src/features/reminders/core/reminder-phrase.ts`, through wasm).
-  Built for `crates/universal_input` extraction and the other web date fields
+  Built for `crates/ai/universal_input` extraction and the other web date fields
   too.
 
 ## Recipes

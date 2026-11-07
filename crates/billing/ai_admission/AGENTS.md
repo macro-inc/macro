@@ -13,7 +13,7 @@ as `jev`, need not compile billing, teams and Stripe.
   and `IntoResponse` for `AiAdmissionError` (402 for denials, 503 when billing
   can't validate).
 - Not here: the billing-backed implementation, `BillingAdmissionService` →
-  `crates/ai_billing`.
+  `crates/billing/ai_billing`.
 
 ## Boundaries
 
