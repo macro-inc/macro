@@ -116,7 +116,11 @@ export function membranePlugin(): Plugin {
           !resolved.id.includes('/lexical')
         )
           continue;
-        if (specifier.startsWith('@lexical/react')) continue;
+        if (
+          specifier.startsWith('@lexical/react') &&
+          specifier !== '@lexical/react/LexicalTabIndentationPlugin'
+        )
+          continue;
         const location =
           resolved.id.match(
             /\/packages\/(lexical-core)\/(.+?)\.[cm]?[jt]sx?$/
