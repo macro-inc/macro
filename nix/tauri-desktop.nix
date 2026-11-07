@@ -194,7 +194,7 @@
       coreWasmPackages = map mkCoreWasmPackage [
         {
           name = "agent_fold";
-          crate = "crates/folds/agent_fold";
+          crate = "crates/agents/agent_fold";
           dir = "agent-fold";
           cargoArgs = "-- --no-default-features";
         }

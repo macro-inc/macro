@@ -1,5 +1,5 @@
 /**
- * The dynamic-UI view, as `crates/dynamic_ui` defines it. The server decodes
+ * The dynamic-UI view, as `crates/agents/dynamic_ui` defines it. The server decodes
  * every view before the browser sees it, so the renderer takes the view as it
  * is serialized. Run `just gen-dynamic-ui-types` after changing a widget.
  */

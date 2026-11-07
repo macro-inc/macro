@@ -45,7 +45,7 @@ guides; `ReadCodeDocs` provides symbol references. See [documentation hosting](.
 selects likely entity indexes before a code-mode turn, bounded by
 one second and a context byte cap; failure leaves the compact catalog available.
 There is no runtime documentation helper. See the
-[agent playbook](../../crates/agent_code_mode/SKILL.md).
+[agent playbook](../../crates/agents/agent_code_mode/SKILL.md).
 
 ```sh
 bun run --cwd packages/code-mode-sdk generate   # writes the assets to dist/
@@ -57,9 +57,9 @@ The generated `sdk.mjs`, `handlebars.mjs`, `documentation.json`,
 `operations.json` (each SDK operation's label, method, path and whether it
 writes) and `sdk-types.json` (the SDK's declarations routine code is
 type-checked against, with their fingerprint) are build outputs, never
-committed. `crates/code_mode_assets`
+committed. `crates/agents/code_mode_assets`
 builds them when it compiles: local cargo runs `scripts/generate.ts` with bun,
 and Nix builds and Rust CI use the `code-mode-assets` flake package through
 `CODE_MODE_ASSETS_DIR`. See that crate's `AGENTS.md`.
-Real Deno integration tests live in `crates/code_execution`; public SDK entity
+Real Deno integration tests live in `crates/agents/code_execution`; public SDK entity
 behavior is tested under `packages/sdk/tests`.

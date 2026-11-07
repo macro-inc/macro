@@ -442,7 +442,7 @@ pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
     .when(playwright, |step| step.add_with(("playwright", "true")))
 }
 
-/// Build the code-mode assets (`crates/code_mode_assets`) in Nix, or restore them
+/// Build the code-mode assets (`crates/agents/code_mode_assets`) in Nix, or restore them
 /// from Namespace's remote cache, and point later cargo steps at them, so Rust jobs
 /// need no bun install. Any job that compiles that crate or a dependent (DSS, the
 /// agent harness) needs this. Goes after [`configure_namespace_sccache`], whose

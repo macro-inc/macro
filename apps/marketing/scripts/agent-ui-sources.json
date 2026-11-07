@@ -58,7 +58,7 @@
       "consumer": "WorkspaceAgents.tsx"
     },
     {
-      "path": "crates/agent_inmem/src/domain/models.rs",
+      "path": "crates/agents/agent_inmem/src/domain/models.rs",
       "blob": "decc815c424f62bdf0936b49b67100192fa0ad1e",
       "consumer": "agentDemoData.ts"
     },
@@ -138,7 +138,7 @@
       "consumer": "AgentWorkflowStories.tsx / frozen MessageRow"
     },
     {
-      "path": "crates/agent_harness/src/outbound/channel_prompt_context.rs",
+      "path": "crates/agents/agent_harness/src/outbound/channel_prompt_context.rs",
       "blob": "2bf528fbe6dce8c25e0af79b7217781c471619ae",
       "consumer": "AgentWorkflowStories.tsx conversation context"
     },

@@ -494,7 +494,7 @@ struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
     /// Image the local provider runs. `run_local` / `stack up` `docker build`
-    /// `crates/agent_harness/container` to this tag (BuildKit cache is the
+    /// `crates/agents/agent_harness/container` to this tag (BuildKit cache is the
     /// freshness check).
     image: &'static str,
     /// Network sandboxes join, so this service can dial their sidecars and a

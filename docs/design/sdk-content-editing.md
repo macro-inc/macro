@@ -47,7 +47,7 @@ Every direct edit tool has the same two layers:
 | PowerPoint | No (`EditPresentation` takes ops) | `pptx_engine` natively in `crates/documents/documents`, S3 version per edit | None: last writer wins |
 | Canvas | Yes (`EditCanvas`) | `CanvasSession` in the worker, live peer, text measured and rendered in Browser Rendering | Revision hash; unrelated concurrent edits rebased |
 
-The sandbox (`crates/code_execution`) runs a fresh `deno` process per call:
+The sandbox (`crates/agents/code_execution`) runs a fresh `deno` process per call:
 30 s, 128 MiB heap, `--deny-import --no-remote --no-npm`, and network limited
 to the hosts in `sdk_hosts()` (DSS, auth, cognition, email and others). Neither
 sync-service nor the ai-editing-worker is on that list. The SDK bundle
@@ -261,7 +261,7 @@ without a model.
 
 ## Hiding the direct tools
 
-`covered_by_code_sdk` (`crates/agent_code_mode/src/domain/service.rs`) lists the
+`covered_by_code_sdk` (`crates/agents/agent_code_mode/src/domain/service.rs`) lists the
 tools a code-mode session doesn't see because the SDK covers them. Each PR adds
 its tool there once its SDK method lands: `EditDocument` with `doc.edit`,
 `EditSpreadsheet`/`ReadSpreadsheet`/`CalculateSpreadsheet`, the Word and

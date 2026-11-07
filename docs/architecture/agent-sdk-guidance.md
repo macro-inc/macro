@@ -16,7 +16,7 @@ cross-namespace search) carries two agent-only TSDoc block tags:
 
 `packages/sdk-docs/src/render.ts` collects both and strips them from the
 public reference. `packages/code-mode-sdk/scripts/generate.ts` puts them into
-the code-mode catalog (`documentation.json`, built by `crates/code_mode_assets`)
+the code-mode catalog (`documentation.json`, built by `crates/agents/code_mode_assets`)
 as each entity's `description` and `guide`, and appends a namespace's guide to
 its `ReadCodeDocs` reference. Generation fails on a missing routing sentence.
 
@@ -48,6 +48,6 @@ the turn keeps what the other calls ranked.
 - An area's rules: its namespace's `@agent` block in `packages/sdk/src/entities/`.
 - What an entity is for: its `@routing` sentence.
 - Which entities direct hosts and MCP carry inline: `GuideHost` and
-  `mcp_guides` in `crates/agent_code_mode/src/domain/documentation.rs`.
+  `mcp_guides` in `crates/agents/agent_code_mode/src/domain/documentation.rs`.
 - Measure routing with `entity_route_evaluation` (ignored test in
   `agent_code_mode`; needs `TYPESAFE_API_KEY`).

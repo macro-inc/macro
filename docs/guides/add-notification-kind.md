@@ -15,7 +15,7 @@ If the notification is about an entity type that has never carried notifications
 | Building | Copy | Why |
 | --- | --- | --- |
 | A kind on an existing entity, sent from a domain service | `ChannelMessageReaction` (`crates/comms/channels/src/outbound/notification_sender.rs`) | Newest end-to-end kind: push, realtime, GraphQL, inbox stacking, settings toggle |
-| Kinds planned from domain events, with derived ids | `AgentSession*` (`crates/agent_harness/src/domain/notifications.rs`) | Pure planner function, audience rules, idempotent ids, port + ingress adapter |
+| Kinds planned from domain events, with derived ids | `AgentSession*` (`crates/agents/agent_harness/src/domain/notifications.rs`) | Pure planner function, audience rules, idempotent ids, port + ingress adapter |
 | A scheduled kind | `CalendarEventReminder` (`crates/calendar/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
 
 Names: the variant is `PascalCase`; `Notification::TYPE_NAME`, the serde tag, the
@@ -95,10 +95,10 @@ the domain decides *whether* and *to whom*; an outbound adapter calls
 
 1. **Plan in the domain.** A pure function from the domain fact to the
    notifications it warrants, with tests for every audience rule. Copy
-   `crates/agent_harness/src/domain/notifications.rs`.
+   `crates/agents/agent_harness/src/domain/notifications.rs`.
 2. **Port + adapter.** A domain port (e.g. `AgentSessionNotifier`) and an outbound
    adapter generic over `notification::domain::service::NotificationIngress`
-   (`crates/agent_harness/src/outbound/notifications.rs`). Build the request with
+   (`crates/agents/agent_harness/src/outbound/notifications.rs`). Build the request with
    `SendNotificationRequestBuilder { notification_entity, secondary_notification_entity, notification, sender_id, recipient_ids }`,
    then `.into_request()`, `.with_apns()` for a push, and `.with_conn_gateway()`
    for live delivery.

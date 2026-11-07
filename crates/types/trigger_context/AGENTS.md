@@ -29,7 +29,7 @@ producers' dependencies.
 ## Recipes
 
 - Add an origin: a `TriggerOrigin` variant → its producer → `source_columns` in
-  `crates/agent_session/src/outbound/postgres/source.rs` → the table's constraints.
+  `crates/agents/agent_session/src/outbound/postgres/source.rs` → the table's constraints.
   Hold only references to users and entities, and only fields that path always has.
 
 ## Checks

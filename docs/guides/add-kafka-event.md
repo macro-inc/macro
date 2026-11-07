@@ -18,7 +18,7 @@ section below is one place, in order; past misses are called out inline.
 | Events on a topic | `crates/integrations/github_pull_requests/src/broker.rs` (one variant), `crates/comms/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
 | A durable consumer | `crates/databases/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
 | An at-least-once consumer that must not skip | `crates/integrations/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
-| A per-process fan-out (GraphQL subscription, SSE) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
+| A per-process fan-out (GraphQL subscription, SSE) | `crates/agents/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
 
 Background: `crates/platform/macro_event_broker/AGENTS.md` maps the broker crate;
 `crates/databases/properties/README.md` ("Delivery semantics and compatibility") states the
@@ -113,8 +113,8 @@ rg -l 'declare_topics!' crates services | xargs rg -l '<XMacroEvent>'
 | Realtime Soup, `crates/search/soup_realtime/src/inbound/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
 | Activity, `services/document_storage_service/src/service/activity.rs` and the owning domain's activity mapping | Map the variant to an activity row | No activity entry |
 | Search, `services/search_processing_service/src/inbound/kafka_consumer.rs` | Index or delete | Stale search results |
-| Routines and scheduled actions, `crates/scheduled_action/src/inbound/kafka_consumer.rs` | Trigger filter support | Routine never fires |
-| Agent triggers, `crates/agent_trigger/src/domain/sources.rs` | Trigger input, when the event should start an agent | No agent session |
+| Routines and scheduled actions, `crates/agents/scheduled_action/src/inbound/kafka_consumer.rs` | Trigger filter support | Routine never fires |
+| Agent triggers, `crates/agents/agent_trigger/src/domain/sources.rs` | Trigger input, when the event should start an agent | No agent session |
 
 Adding a **new topic** to an existing consumer means adding its `XMacroEvent` to
 that consumer's `declare_topics!` list. The group then reads a partition it has

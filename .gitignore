@@ -43,11 +43,11 @@ infra/local/generated/
 .commandcode/
 **/.webhook.json
 # Code-mode assets and the SDK reference are generated at build time
-# (crates/code_mode_assets, packages/sdk-docs); never commit them.
-/crates/code_execution/src/outbound/deno/sdk.mjs
-/crates/code_execution/src/outbound/deno/handlebars.mjs
-/crates/agent_code_mode/src/domain/documentation.json
-/crates/agent_code_mode/src/domain/operations.json
+# (crates/agents/code_mode_assets, packages/sdk-docs); never commit them.
+/crates/agents/code_execution/src/outbound/deno/sdk.mjs
+/crates/agents/code_execution/src/outbound/deno/handlebars.mjs
+/crates/agents/agent_code_mode/src/domain/documentation.json
+/crates/agents/agent_code_mode/src/domain/operations.json
 /packages/sdk-docs/reference/
 /artifacts
 

@@ -124,7 +124,7 @@ Deployment builds use the filtered source in `nix/cloud-storage.nix`, rather tha
 an entire checkout. Include any new `include_str!` or `include_bytes!` assets in
 its source filter. Assets generated from JavaScript are built in their own
 derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
-`node_modules`, and every crane build of `crates/code_mode_assets` reads it
+`node_modules`, and every crane build of `crates/agents/code_mode_assets` reads it
 through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,
 restoring the output from Namespace's remote cache when another job already built it. On a miss, node_modules comes from the same cache, keyed by its own store path.
 Run it locally with `nix build --no-link .#code-mode-assets`.

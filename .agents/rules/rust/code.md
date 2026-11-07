@@ -65,7 +65,7 @@ Type design, idioms, errors and observability, performance, and tests.
   `crates/platform/genai_telemetry`). Agent sessions of every harness are traced in one
   place: the session actor projects each session's ACP frames onto
   `invoke_agent` / `execute_tool` spans
-  (`crates/agent_session/src/domain/session/telemetry.rs`), so do not add GenAI
+  (`crates/agents/agent_session/src/domain/session/telemetry.rs`), so do not add GenAI
   spans to a harness runtime — `agent_inmem` runs its agent loop with
   `with_genai_telemetry(false)` for that reason. Outside sessions (chat in
   `agent_harness_service::cognition`), the agent loop and

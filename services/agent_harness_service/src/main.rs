@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 //! Composition root for the agent harness service.
 //!
-//! The hexagon lives in `crates/agent_harness`; this binary is the shell
+//! The hexagon lives in `crates/agents/agent_harness`; this binary is the shell
 //! around it: it builds the Postgres repositories, the container
 //! manager (Daytona, or local Docker when opted in), and a channel service with the full side-effect stack for
 //! announcements, derives agent triggers from `macro.channels`, then drives

@@ -42,7 +42,7 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
 #[ignore = "requires pinned Deno runtime"]
 async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: sqlx::PgPool) {
     sqlx::raw_sql(include_str!(
-        "../../../../../crates/agent_code_mode/src/outbound/postgres/test/sessions.sql"
+        "../../../../../crates/agents/agent_code_mode/src/outbound/postgres/test/sessions.sql"
     ))
     .execute(&pool)
     .await
@@ -168,7 +168,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
     assert_eq!(guides["guides"][0]["topic"], "examples");
     assert_eq!(
         guides["guides"][0]["markdown"],
-        include_str!("../../../../../crates/agent_code_mode/SKILL.md")
+        include_str!("../../../../../crates/agents/agent_code_mode/SKILL.md")
     );
     assert!(
         guides["guides"][1]["markdown"]

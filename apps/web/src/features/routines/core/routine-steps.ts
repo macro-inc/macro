@@ -213,7 +213,7 @@ const OUTPUT_ID = /^[a-z][a-z0-9_]{0,31}$/;
 
 /**
  * An unused output id from `name`, as saving derives one; mirrors
- * `RoutineProgram::assign_step_ids` in `crates/routine_program`.
+ * `RoutineProgram::assign_step_ids` in `crates/agents/routine_program`.
  */
 function outputId(name: string, taken: Set<string>): string {
   let slug = '';
