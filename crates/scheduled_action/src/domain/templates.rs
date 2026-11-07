@@ -118,6 +118,8 @@ pub enum TemplateInputError {
     DescriptionTooLong,
     #[error("a template can have at most 100 variables")]
     TooManyVariables,
+    #[error("remove this routine's places before sharing it: they show where you go")]
+    SharesPlaces,
 }
 
 impl ShareRoutineTemplate {
@@ -127,6 +129,9 @@ impl ShareRoutineTemplate {
         }
         if self.variables.len() > MAX_VARIABLES {
             return Err(TemplateInputError::TooManyVariables.into());
+        }
+        if !action.trigger.places().is_empty() {
+            return Err(TemplateInputError::SharesPlaces.into());
         }
         // Writing as its owner is the owner's choice alone; whoever activates
         // the template starts attributed to the agent and opts in themselves.

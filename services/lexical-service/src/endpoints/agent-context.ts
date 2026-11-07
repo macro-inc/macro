@@ -323,6 +323,15 @@ const routineEvent = z.discriminatedUnion('event', [
   }),
 ]);
 
+const placeWatch = z.object({
+  name: z.string().min(1),
+  latitude: z.number(),
+  longitude: z.number(),
+  radius_meters: z.number().int().positive(),
+});
+
+const placeTransition = z.enum(['arrive', 'leave']);
+
 const routineFiring = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('scheduled'),
@@ -332,6 +341,12 @@ const routineFiring = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('manual'),
     requested_at: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('location'),
+    place: placeWatch,
+    on: placeTransition,
+    reported_at: z.string().min(1),
   }),
   z.object({
     type: z.literal('event'),
@@ -349,6 +364,11 @@ const routineTrigger = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('once'),
     at: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('location'),
+    place: placeWatch,
+    on: placeTransition,
   }),
   z.object({
     type: z.literal('events'),

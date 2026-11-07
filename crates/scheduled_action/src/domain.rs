@@ -5,6 +5,7 @@ pub mod event_runs;
 pub mod event_trigger;
 pub mod execution;
 pub mod lambda;
+pub mod location;
 pub mod models;
 pub mod ports;
 pub mod program_runner;

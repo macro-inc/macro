@@ -24,6 +24,10 @@ document_sub_type = { path = "../document_sub_type" }
 email = { path = "../email", default-features = false, features = ["outbound"] }
 github = { path = "../github", default-features = false, features = ["installation_claims"] }
 glob = { workspace = true }
+hex = { workspace = true }
+lazy-regex = { workspace = true }
+rand = { workspace = true }
+sha2 = { workspace = true }
 feature_flags = { path = "../feature_flags" }
 jev = { path = "../jev", features = ["outbound"] }
 lexical_client = { path = "../lexical_client" }

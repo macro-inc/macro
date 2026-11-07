@@ -49,7 +49,8 @@ declare global {
     id: string;
     /**
      * When the run counts as happening (ISO 8601): when its schedule came
-     * due, its event happened, or it was started by hand. A dry run that
+     * due, its event happened, its owner's phone crossed one of its
+     * places, or it was started by hand. A dry run that
      * replays a past trigger gets that trigger's time. Use it, never
      * `new Date()`, for "today" or "since".
      */
@@ -67,7 +68,16 @@ declare global {
   type RoutineStart =
     | { kind: 'schedule'; schedule: string; timezone: string }
     | { kind: 'event'; event: string; item: RoutineItem }
-    | { kind: 'manual'; by: string };
+    | { kind: 'manual'; by: string }
+    | { kind: 'location'; place: RoutinePlace; on: 'arrive' | 'leave' };
+
+  /** A place a routine watches: a circle around a point. */
+  interface RoutinePlace {
+    name: string;
+    latitude: number;
+    longitude: number;
+    radius_meters: number;
+  }
 
   /** The item an event is about, as JSON; its fields depend on the event. */
   type RoutineItem = {

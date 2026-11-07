@@ -7,6 +7,7 @@
  */
 import type { RoutineTriggerOneOf } from './routineTriggerOneOf';
 import type { RoutineTriggerOneOfFive } from './routineTriggerOneOfFive';
+import type { RoutineTriggerOneOfSeven } from './routineTriggerOneOfSeven';
 import type { RoutineTriggerOneOfThree } from './routineTriggerOneOfThree';
 
 /**
@@ -15,4 +16,5 @@ import type { RoutineTriggerOneOfThree } from './routineTriggerOneOfThree';
 export type RoutineTrigger =
   | RoutineTriggerOneOf
   | RoutineTriggerOneOfThree
-  | RoutineTriggerOneOfFive;
+  | RoutineTriggerOneOfFive
+  | RoutineTriggerOneOfSeven;

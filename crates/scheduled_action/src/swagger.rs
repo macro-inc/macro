@@ -18,6 +18,13 @@ use crate::inbound::draft_router::__path_draft_routine;
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
+use crate::inbound::location_router::{
+    __path_list_fences, __path_register_device, __path_remove_device, __path_report_crossing,
+};
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
 use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
@@ -58,6 +65,10 @@ use model::response::EmptyResponse;
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
         crate::inbound::template_router::activate_template,
+        crate::inbound::location_router::register_device,
+        crate::inbound::location_router::remove_device,
+        crate::inbound::location_router::list_fences,
+        crate::inbound::location_router::report_crossing,
     ),
     components(
         schemas(
@@ -85,6 +96,13 @@ use model::response::EmptyResponse;
             ActionTrigger,
             crate::domain::event_trigger::RoutineTrigger,
             crate::domain::event_trigger::RoutineTriggers,
+            crate::domain::location::Place,
+            crate::domain::location::LocationTransition,
+            crate::domain::location::Fence,
+            crate::domain::location::FenceList,
+            crate::domain::location::LocationReport,
+            crate::domain::location::LocationReportOutcome,
+            crate::domain::location::RegisteredDevice,
             EventFilter,
             EventFilters,
             EventName,

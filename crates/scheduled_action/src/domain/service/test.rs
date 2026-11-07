@@ -140,6 +140,7 @@ impl ScheduledActionRepo for FakeRepo {
 #[derive(Default)]
 pub(crate) struct FakeExecutor {
     calls: Mutex<Vec<ScheduledAction>>,
+    pub(crate) locations: Mutex<Vec<crate::domain::location::LocationFiring>>,
     admission_error: Mutex<Option<ai_billing::AiAdmissionError>>,
 }
 
@@ -162,6 +163,15 @@ impl ScheduledActionExecutor for FakeExecutor {
                 id: "manual-chat".into(),
             }),
         })
+    }
+
+    async fn execute_location(
+        &self,
+        action: ScheduledAction,
+        firing: crate::domain::location::LocationFiring,
+    ) -> Result<InProgressExecution> {
+        self.locations.lock().unwrap().push(firing);
+        self.execute_action(action).await
     }
 }
 

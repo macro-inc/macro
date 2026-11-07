@@ -4,6 +4,7 @@ use crate::domain::code_check::{CodeCheckError, StarterRoutine};
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
+use crate::domain::location::LocationError;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
     AlreadyRunningError, InProgressExecution, ListedAction, OwnerNotUserError, Schedule,
@@ -605,6 +606,15 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(location) = error.downcast_ref::<LocationError>() {
+            let status = match location {
+                LocationError::UnknownDevice => StatusCode::UNAUTHORIZED,
+                LocationError::UnknownFence | LocationError::DeviceNotFound => {
+                    StatusCode::NOT_FOUND
+                }
+            };
+            return (status, location.to_string()).into_response();
         }
         if let Some(draft) = error.downcast_ref::<InvalidDraft>() {
             return (StatusCode::BAD_REQUEST, draft.to_string()).into_response();

@@ -1202,6 +1202,7 @@ fn drafted_trigger(triggers: &[DraftTrigger]) -> Option<ActionTrigger> {
                 ActionTrigger::Cron { schedule, timezone }
             }
             RoutineTrigger::Once { at } => ActionTrigger::Once { at },
+            RoutineTrigger::Location { place, on } => ActionTrigger::Location { place, on },
             RoutineTrigger::Events { filters } => ActionTrigger::Events { filters },
         }),
         _ => RoutineTriggers::try_from(valid)

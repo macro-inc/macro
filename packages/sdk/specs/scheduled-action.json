@@ -266,6 +266,203 @@
         }
       }
     },
+    "/scheduled-actions/location/devices": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "register_location_device",
+        "responses": {
+          "201": {
+            "description": "The phone's token, shown only here",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredDevice"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/location/devices/{device_id}": {
+      "delete": {
+        "tags": ["scheduled actions"],
+        "operationId": "remove_location_device",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "description": "The phone to stop reporting",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/location/fences": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_location_fences",
+        "responses": {
+          "200": {
+            "description": "The places the caller's enabled routines watch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FenceList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/location/reports": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Authorized by the phone's device token (`Authorization: Bearer mloc_…`),\nnot a session: the phone reports from the background, without the app.",
+        "operationId": "report_location_crossing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationReportOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unknown device token: the phone should forget it",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown fence: the phone should stop watching it",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1217,6 +1414,23 @@
           },
           {
             "type": "object",
+            "description": "Fires when the owner's phone arrives at or leaves `place`.",
+            "required": ["place", "on", "type"],
+            "properties": {
+              "on": {
+                "$ref": "#/components/schemas/LocationTransition"
+              },
+              "place": {
+                "$ref": "#/components/schemas/Place"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["location"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "required": ["triggers", "type"],
             "properties": {
               "triggers": {
@@ -1229,7 +1443,7 @@
             }
           }
         ],
-        "description": "A routine may run on one trigger or any of several schedules and Macro events."
+        "description": "A routine may run on one trigger or any of several schedules, places and\nMacro events."
       },
       "AgentMcpServer": {
         "type": "object",
@@ -1789,6 +2003,41 @@
           }
         }
       },
+      "Fence": {
+        "type": "object",
+        "description": "A fence for the owner's phones to watch.",
+        "required": ["id", "routine_id", "routine_name", "place", "on"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "on": {
+            "$ref": "#/components/schemas/LocationTransition"
+          },
+          "place": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "routine_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "routine_name": {
+            "type": "string"
+          }
+        }
+      },
+      "FenceList": {
+        "type": "object",
+        "required": ["fences"],
+        "properties": {
+          "fences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Fence"
+            }
+          }
+        }
+      },
       "GithubSelector": {
         "type": "object",
         "description": "Which GitHub deliveries match.",
@@ -1844,6 +2093,36 @@
             ]
           }
         }
+      },
+      "LocationReport": {
+        "type": "object",
+        "description": "A phone saying it crossed one of its fences.",
+        "required": ["fence", "on"],
+        "properties": {
+          "fence": {
+            "type": "string"
+          },
+          "on": {
+            "$ref": "#/components/schemas/LocationTransition"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LocationReportOutcome": {
+        "type": "object",
+        "description": "Whether a report started its routine.",
+        "required": ["started"],
+        "properties": {
+          "started": {
+            "type": "boolean",
+            "description": "False when the place already ran it within the cooldown."
+          }
+        }
+      },
+      "LocationTransition": {
+        "type": "string",
+        "description": "Crossing into or out of a place.",
+        "enum": ["arrive", "leave"]
       },
       "NamedItem": {
         "type": "object",
@@ -1926,6 +2205,40 @@
         ],
         "description": "A JSON text, number, boolean or null that payload values are compared with."
       },
+      "Place": {
+        "type": "object",
+        "description": "A circle around a point: the place a location trigger watches.",
+        "required": ["name", "latitude", "longitude", "radius_meters"],
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Degrees north, -90 to 90.",
+            "maximum": 90,
+            "minimum": -90
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Degrees east, -180 to 180.",
+            "maximum": 180,
+            "minimum": -180
+          },
+          "name": {
+            "type": "string",
+            "description": "What the owner calls it, such as \"Office\".",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "radius_meters": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How far from the point still counts as there. Phones place a fence\nreliably only from about 100 meters.",
+            "maximum": 5000,
+            "minimum": 100
+          }
+        }
+      },
       "PropertySelector": {
         "type": "object",
         "description": "Narrows a task property change filter to one property and, optionally, the\nvalues it must gain.",
@@ -1944,6 +2257,20 @@
           }
         },
         "additionalProperties": false
+      },
+      "RegisteredDevice": {
+        "type": "object",
+        "description": "A newly registered phone. The token is shown only here.",
+        "required": ["device_id", "token"],
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
       },
       "RoutineModelId": {
         "type": "string",
@@ -2072,6 +2399,23 @@
                 "enum": ["once"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Fires when the owner's phone arrives at or leaves `place`.",
+            "required": ["place", "on", "type"],
+            "properties": {
+              "on": {
+                "$ref": "#/components/schemas/LocationTransition"
+              },
+              "place": {
+                "$ref": "#/components/schemas/Place"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["location"]
+              }
+            }
           }
         ],
         "description": "An individual trigger in a routine's trigger list."
@@ -2171,6 +2515,25 @@
               "kind": {
                 "type": "string",
                 "enum": ["manual"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its owner's phone arrived at or left one of its places.",
+            "required": ["place", "on", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["location"]
+              },
+              "on": {
+                "$ref": "#/components/schemas/LocationTransition",
+                "description": "Which crossing it was."
+              },
+              "place": {
+                "$ref": "#/components/schemas/Place",
+                "description": "The place."
               }
             }
           }

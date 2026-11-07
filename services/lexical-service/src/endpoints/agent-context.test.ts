@@ -74,6 +74,35 @@ describe('agent context', () => {
     expect(markdown).toContain(`once at=\\"2026-10-08T09:00:02Z\\"`);
   });
 
+  it('composes a run of a routine its owner started by leaving a place', async () => {
+    const place = {
+      name: 'Office',
+      latitude: 40.7128,
+      longitude: -74.006,
+      radius_meters: 200,
+    };
+    const response = await request({
+      promptMarkdown: 'Tell the team I left.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-2',
+        name: 'Leaving work',
+        owner: { id: 'macro|ada@example.com', name: 'Ada' },
+        instructions: 'Post that I left in #team.',
+        triggers: [{ type: 'location', place, on: 'leave' }],
+        firing: {
+          type: 'location',
+          place,
+          on: 'leave',
+          reported_at: '2026-11-06T18:30:00Z',
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown }: { markdown: string } = await response.json();
+    expect(markdown).toContain(`on=\\"leave\\"`);
+  });
+
   it('states the current time the harness sends', async () => {
     const response = await request({
       promptMarkdown: 'what is due today?',
