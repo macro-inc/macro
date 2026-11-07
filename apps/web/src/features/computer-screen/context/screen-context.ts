@@ -6,7 +6,7 @@ export type ScreenHost = {
   title?: Accessor<string | undefined>;
   canEdit: Accessor<boolean>;
   startControlling?: Accessor<boolean>;
-  mobile: Accessor<boolean>;
+  touch: Accessor<boolean>;
   resolveUrl: (harnessId: string, control: boolean) => Promise<string>;
 };
 export type ScreenController = {

@@ -28,7 +28,9 @@ impl<Repo: ComputerRepo> PersonaCredentialSource for NoPersonaCredentials<Repo> 
             .get(computer)
             .await
             .map_err(|_| PersonaCredentialError::IssuanceFailed)?
-            .ok_or(PersonaCredentialError::NotFound)?;
+            .ok_or(PersonaCredentialError::NotFound)?
+            .into_healthy()
+            .map_err(|_| PersonaCredentialError::Unavailable)?;
         if computer.persona.is_some() {
             return Err(PersonaCredentialError::Unavailable);
         }

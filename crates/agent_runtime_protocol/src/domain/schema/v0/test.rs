@@ -192,3 +192,28 @@ fn computer_control_round_trips_on_the_wire() {
         json!({ "command": "screen_open", "stream_id": "s1" })
     );
 }
+
+#[test]
+fn rejected_claude_code_preserves_its_typed_result() {
+    let result =
+        serde_json::from_value::<ComputerControlResult>(json!({"status": "invalid_code"})).unwrap();
+    assert_eq!(result, ComputerControlResult::InvalidCode);
+}
+
+#[test]
+fn claude_sign_in_cancel_has_a_typed_wire_command_and_terminal_result() {
+    let command =
+        serde_json::from_value::<ComputerCommand>(json!({"command": "claude_sign_in_cancel"}))
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(command).unwrap(),
+        json!({"command": "claude_sign_in_cancel"})
+    );
+    let result =
+        serde_json::from_value::<ComputerControlResult>(json!({"status": "sign_in_cancelled"}))
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(result).unwrap(),
+        json!({"status": "sign_in_cancelled"})
+    );
+}

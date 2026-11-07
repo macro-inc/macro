@@ -421,7 +421,10 @@ where
             self.computer_answers.remove(&request_id);
             return Err(ComputerControlError::Transport(error));
         }
+        // A terminal result already delivered by the runtime must survive its
+        // transport closing in the same scheduling turn.
         let answer = tokio::select! {
+            biased;
             answer = answered => answer.map_err(|_| ComputerControlError::Closed),
             () = self.closed.cancelled() => Err(ComputerControlError::Closed),
         };

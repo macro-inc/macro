@@ -1,6 +1,6 @@
 //! Team agent service implementation.
 
-use hosted_runtimes::domain::ids::ComputerId;
+use hosted_runtimes::domain::{ids::ComputerId, rollout::ComputerRollout};
 
 use crate::domain::mail::{MailMessageId, MailboxId};
 use std::collections::BTreeMap;
@@ -78,6 +78,8 @@ pub struct TeamAgentServiceImpl<Repository, Membership, ApiKeys, Inboxes, Comput
     repos: Repos,
     /// One shared fail-closed rollout policy for administrator operations.
     rollout: TeamAgentRollout<Flags>,
+    /// Independent rollout for teammate computer discovery.
+    computer_rollout: ComputerRollout,
     /// Public API gateway origin the brain reaches Macro through.
     gateway_url: String,
     anthropic_base_url: String,
@@ -109,10 +111,17 @@ impl<Repository, Membership, ApiKeys, Inboxes, Computer, Repos, Flags>
             computers,
             repos,
             rollout: TeamAgentRollout::new(flags),
+            computer_rollout: ComputerRollout::default(),
             gateway_url,
             anthropic_base_url,
             included_email_domain,
         }
+    }
+    /// Enable teammate computer discovery through the canonical computer rollout.
+    /// Without this composition step, discovery stays closed.
+    pub fn with_computer_rollout(mut self, rollout: ComputerRollout) -> Self {
+        self.computer_rollout = rollout;
+        self
     }
 }
 
@@ -761,8 +770,14 @@ where
         receipt: EntityAccessReceipt<MemberTeamRole>,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgentComputer, TeamAgentError> {
-        let caller = receipt.acting_user_id().ok_or(TeamAgentError::Forbidden)?;
-        self.ensure_enabled(caller).await?;
+        let caller = receipt
+            .acting_user_id()
+            .ok_or(TeamAgentError::Forbidden)?
+            .clone()
+            .into_owned();
+        if !self.computer_rollout.enabled(&caller).await {
+            return Err(TeamAgentError::NotEnabled);
+        }
         let team_id = team_id(&receipt)?;
         let agent = self
             .repository

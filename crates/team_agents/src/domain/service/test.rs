@@ -2101,7 +2101,7 @@ impl crate::domain::enrollment::EnrollmentComputers for FakeComputers {
             harness_id: None,
             persona: purchase.persona.clone(),
             enrollment_generation: EnrollmentGeneration::new(1),
-            created_by: purchase.created_by.as_ref().to_owned(),
+            created_by: purchase.created_by.clone(),
             created_at: now,
             enrolled_at: None,
         })

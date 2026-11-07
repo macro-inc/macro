@@ -143,7 +143,7 @@ mod sign_in {
     use std::os::unix::fs::PermissionsExt as _;
 
     use super::super::claude_sign_in::{
-        Pasted, SignIn, oauth_token, sign_in_url, strip_terminal_codes,
+        CompleteError, Pasted, SignIn, oauth_token, sign_in_url, strip_terminal_codes,
     };
 
     const URL: &str = "https://claude.ai/oauth/authorize?code=true&client_id=9d1c&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback&state=abc";
@@ -171,6 +171,48 @@ mod sign_in {
             None
         );
         assert_eq!(strip_terminal_codes("\x1b[1mbold\x1b[22m"), "bold");
+    }
+
+    #[tokio::test]
+    async fn rejected_codes_finish_before_the_token_timeout() {
+        for transcript in [
+            "\x1b[31mInvalid code. Please make sure the full code was copied\x1b[39m\r\n",
+            "\x1b[31mOAuth error: access_denied\x1b[39m\r\n",
+            "Authentication failed: Invalid authorization code\r\n",
+            "OAuth state mismatch\r\n",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let claude = directory.path().join("claude");
+            let script = format!(
+                "#!/bin/sh\nprintf 'https://claude.ai/oauth/authorize?code=true\\n'\nIFS= read -r code\nprintf '%s' '{transcript}'\nIFS= read -r hold\n"
+            );
+            std::fs::write(&claude, script).unwrap();
+            std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let mut sign_in = SignIn::spawn(&claude).unwrap();
+            sign_in.url().await.unwrap();
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                sign_in.complete("bad-code"),
+            )
+            .await;
+            assert!(result.is_ok(), "rejection waited for the token timeout");
+            assert!(matches!(result.unwrap(), Err(CompleteError::InvalidCode)));
+        }
+    }
+
+    #[tokio::test]
+    async fn silent_setup_token_times_out_after_sixty_seconds() {
+        let directory = tempfile::tempdir().unwrap();
+        let claude = directory.path().join("claude");
+        std::fs::write(&claude, "#!/bin/sh\nprintf 'https://claude.ai/oauth/authorize?code=true\\n'\nIFS= read -r code\nIFS= read -r hold\n").unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut sign_in = SignIn::spawn(&claude).unwrap();
+        sign_in.url().await.unwrap();
+        tokio::time::pause();
+        let before = tokio::time::Instant::now();
+        let error = sign_in.complete("test-code").await.unwrap_err();
+        assert!(matches!(error, CompleteError::Timeout));
+        assert_eq!(before.elapsed().as_secs(), 60);
     }
 
     #[test]
@@ -303,4 +345,172 @@ fn computer_sessions_use_the_guest_workspace_and_egress_route() {
     )
     .unwrap();
     assert_eq!(explicit["params"]["cwd"], "/home/macro/work");
+}
+
+#[cfg(unix)]
+mod sign_in_lifecycle {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt as _;
+
+    fn computer(claude: PathBuf) -> Computer {
+        Computer {
+            workspace: PathBuf::from("/tmp"),
+            egress_url: None,
+            token_store: token_store::TokenStore::new(),
+            oauth_token: RwLock::new(None),
+            claude_program: claude,
+            screen: screen::ScreenDialer::new(
+                &MacroApi::default(),
+                &HarnessCredentials {
+                    harness_id: harness_id::HarnessId::TEST_A,
+                    token: "test-token".to_owned(),
+                },
+            ),
+            sign_in: tokio::sync::Mutex::new(None),
+            sign_in_cancel: RwLock::new(CancellationToken::new()),
+            streams: TaskTracker::new(),
+            cancel: CancellationToken::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_sign_in_kills_setup_token_immediately() {
+        let directory = tempfile::tempdir().unwrap();
+        let claude = directory.path().join("claude");
+        let pid_path = directory.path().join("pid");
+        std::fs::write(&claude, format!("#!/bin/sh\necho $$ > '{}'\nprintf 'https://claude.ai/oauth/authorize?code=true\\n'\nIFS= read -r code\nprintf 'Invalid code. Please make sure the full code was copied\\n'\nIFS= read -r hold\n", pid_path.display())).unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let computer = computer(claude);
+        computer.start_sign_in().await.unwrap();
+        let pid = rustix::process::Pid::from_raw(
+            std::fs::read_to_string(pid_path)
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            computer
+                .run(ComputerCommand::ClaudeSignInComplete {
+                    code: "bad-code".to_owned()
+                })
+                .await,
+            ComputerControlResult::InvalidCode
+        );
+        assert!(computer.sign_in.lock().await.is_none());
+        assert_eq!(
+            rustix::process::test_kill_process(pid),
+            Err(rustix::io::Errno::SRCH)
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_sign_in_kills_setup_token_even_during_submission() {
+        let directory = tempfile::tempdir().unwrap();
+        let claude = directory.path().join("claude");
+        let pid_path = directory.path().join("pid");
+        let submitted = directory.path().join("submitted");
+        rustix::fs::mkfifoat(
+            rustix::fs::CWD,
+            &submitted,
+            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+        )
+        .unwrap();
+        std::fs::write(&claude, format!("#!/bin/sh\necho $$ > '{}'\nprintf 'https://claude.ai/oauth/authorize?code=true\\n'\nIFS= read -r code\nprintf submitted > '{}'\nIFS= read -r hold\n", pid_path.display(), submitted.display())).unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let computer = Arc::new(computer(claude));
+        computer.start_sign_in().await.unwrap();
+        let pid = rustix::process::Pid::from_raw(
+            std::fs::read_to_string(pid_path)
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap(),
+        )
+        .unwrap();
+        let input_seen = tokio::task::spawn_blocking(move || std::fs::read(submitted).unwrap());
+        let pending = Arc::clone(&computer);
+        let complete = tokio::spawn(async move {
+            pending
+                .run(ComputerCommand::ClaudeSignInComplete {
+                    code: "test-code".to_owned(),
+                })
+                .await
+        });
+        assert_eq!(input_seen.await.unwrap(), b"submitted");
+        let cancel =
+            serde_json::from_value(serde_json::json!({"command": "claude_sign_in_cancel"}))
+                .unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), computer.run(cancel))
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(result).unwrap(),
+            serde_json::json!({"status": "sign_in_cancelled"})
+        );
+        assert_eq!(
+            serde_json::to_value(complete.await.unwrap()).unwrap(),
+            serde_json::json!({"status": "sign_in_cancelled"})
+        );
+        assert!(computer.sign_in.lock().await.is_none());
+        assert_eq!(
+            rustix::process::test_kill_process(pid),
+            Err(rustix::io::Errno::SRCH)
+        );
+    }
+}
+
+#[cfg(unix)]
+mod sign_in_persistence {
+    use super::*;
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    };
+    use tokio::sync::Notify;
+
+    struct PausedTokenStore {
+        persisted: Mutex<Option<String>>,
+        started: Notify,
+        resume: Notify,
+        first_save: AtomicBool,
+    }
+
+    impl SignInTokenStore for PausedTokenStore {
+        async fn store(&self, token: Option<&str>) -> rootcause::Result<()> {
+            *self.persisted.lock().unwrap() = token.map(str::to_owned);
+            if self.first_save.swap(false, Ordering::SeqCst) {
+                self.started.notify_one();
+                self.resume.notified().await;
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_during_token_save_restores_the_previous_account() {
+        for previous in [None, Some("previous-private-token")] {
+            let store = PausedTokenStore {
+                persisted: Mutex::new(previous.map(str::to_owned)),
+                started: Notify::new(),
+                resume: Notify::new(),
+                first_save: AtomicBool::new(true),
+            };
+            let cancel = CancellationToken::new();
+            let (result, ()) = tokio::join!(
+                persist_sign_in(&store, &cancel, "new-private-token", previous),
+                async {
+                    store.started.notified().await;
+                    cancel.cancel();
+                    store.resume.notify_one();
+                }
+            );
+            assert_eq!(result.unwrap(), ComputerControlResult::SignInCancelled);
+            assert_eq!(
+                *store.persisted.lock().unwrap(),
+                previous.map(str::to_owned)
+            );
+        }
+    }
 }

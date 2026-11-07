@@ -39,7 +39,9 @@ const BYTES_PER_GIB: u64 = 1024 * 1024 * 1024;
 /// The Incus host and what computers are created from.
 #[derive(Debug, Clone)]
 pub struct IncusFleetConfig {
+    /// Owner identity shared by control-plane replicas.
     pub control_plane_id: ControlPlaneId,
+    /// Incus endpoint and request limits.
     pub endpoint: IncusEndpoint,
     /// Usually the local alias `macro-box`.
     pub image: ImageSource,
@@ -47,30 +49,51 @@ pub struct IncusFleetConfig {
     pub profile: ProfileName,
     /// Storage pool of the root disk override; Incus requires it.
     pub storage_pool: StoragePoolName,
+    /// Name used to register host capacity.
     pub host_name: String,
+    /// Memory in GiB reserved for the host.
     pub reserve_gb: u32,
+    /// Sold units per awake unit.
     pub oversell_factor: u32,
     /// Deadline for clean shutdown before forcibly stopping the VM.
     pub shutdown_grace: Duration,
 }
 
+/// Failure while operating the Incus fleet.
 #[derive(Debug, thiserror::Error)]
 pub enum IncusFleetError {
+    /// Guest enrollment could not be prepared.
     #[error(transparent)]
     Enrollment(#[from] PersonaCredentialError),
+    /// Guest enrollment belongs to another pairing or generation.
     #[error("instance enrollment identity does not match the Create generation")]
     EnrollmentMismatch,
+    /// The addressed guest does not exist.
     #[error("instance {computer_id} is missing")]
-    Missing { computer_id: ComputerId },
+    Missing {
+        /// Computer this operation addresses.
+        computer_id: ComputerId,
+    },
+    /// Incus API operation failed.
     #[error(transparent)]
     Incus(#[from] IncusError),
+    /// Enrollment JSON could not be encoded.
     #[error("could not encode the enrollment: {0}")]
     Encode(#[from] serde_json::Error),
+    /// Instance metadata contains an invalid computer identity.
     #[error("instance {name} has an invalid {COMPUTER_ID_KEY} {value:?}")]
-    BadComputerId { name: String, value: String },
+    BadComputerId {
+        /// Incus instance name.
+        name: String,
+        /// Invalid computer identity from instance metadata.
+        value: String,
+    },
+    /// Incus returned an unsupported guest status.
     #[error("instance {name} is in a state this fleet does not know: {status:?}")]
     UnknownStatus {
+        /// Incus instance name.
         name: String,
+        /// Observed guest status.
         status: incus_client::InstanceStatus,
     },
 }
@@ -83,6 +106,7 @@ pub struct IncusFleet {
 }
 
 impl IncusFleet {
+    /// Validate fleet configuration and build the Incus client.
     pub fn new(config: IncusFleetConfig) -> Result<Self, IncusFleetError> {
         if config.shutdown_grace.is_zero() {
             return Err(IncusError::MalformedResponse(
@@ -170,10 +194,25 @@ impl Fleet for IncusFleet {
                 self.client
                     .set_config_key(&name, INCUS_ENROLLMENT_KEY, &enrollment_json)
                     .await?;
-                // Claim has not happened: reboot the enroll oneshot with the fresh payload.
-                self.restart(computer.id).await?;
                 if !start {
                     self.stop(computer.id).await?;
+                } else {
+                    let status = observed_status(&instance)?;
+                    self.start(computer.id).await?;
+                    if status != InstanceStatus::Stopped {
+                        // Refresh the enrollment without resetting a booting guest.
+                        self.client
+                            .exec(
+                                &name,
+                                &[
+                                    "systemctl",
+                                    "restart",
+                                    "macrod-enroll.service",
+                                    "macrod.service",
+                                ],
+                            )
+                            .await?;
+                    }
                 }
             }
             None => {
@@ -268,6 +307,17 @@ impl Fleet for IncusFleet {
             }
             _ => self.client.start(&name).await?,
         }
+        Ok(())
+    }
+
+    #[tracing::instrument(name = "incus_fleet.restart_macrod", skip(self), err)]
+    async fn restart_macrod(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
+        self.client
+            .exec(
+                &instance_name(computer_id),
+                &["systemctl", "restart", "macrod"],
+            )
+            .await?;
         Ok(())
     }
 

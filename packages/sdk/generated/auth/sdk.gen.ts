@@ -479,10 +479,16 @@ export class Sdk extends HeyApiClient {
         });
     }
 
+    /**
+     * Quote a computer for an authenticated internal caller.
+     */
     public internalQuoteComputer<ThrowOnError extends boolean = false>(options: Options<InternalQuoteComputerData, ThrowOnError>): RequestResult<InternalQuoteComputerResponses, InternalQuoteComputerErrors, ThrowOnError> {
         return (options.client ?? this.client).get<InternalQuoteComputerResponses, InternalQuoteComputerErrors, ThrowOnError>({ url: '/internal/computers/quote', ...options });
     }
 
+    /**
+     * Read computer status for an authenticated internal caller.
+     */
     public internalGetComputer<ThrowOnError extends boolean = false>(options: Options<InternalGetComputerData, ThrowOnError>): RequestResult<InternalGetComputerResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<InternalGetComputerResponses, unknown, ThrowOnError>({ url: '/internal/computers/{computer_id}', ...options });
     }

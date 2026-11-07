@@ -56,7 +56,9 @@ impl PersonaCredentialSource for AuthPersonaCredentials {
             .get(computer)
             .await
             .map_err(|_| PersonaCredentialError::IssuanceFailed)?
-            .ok_or(PersonaCredentialError::NotFound)?;
+            .ok_or(PersonaCredentialError::NotFound)?
+            .into_healthy()
+            .map_err(|_| PersonaCredentialError::IssuanceFailed)?;
         if saved.persona.is_none() {
             return Ok(PersonaEnrollment::default());
         }

@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  enableMacroComputers,
-  enableTeamAgents,
-} from '@core/constant/featureFlags';
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import {
   createContext,
   createEffect,
@@ -13,11 +10,8 @@ import {
 
 /** Carries a runtime-card selection to Settings within one application frame. */
 export function SettingsScreenNavigationProvider(props: ParentProps) {
-  const flag = useFeatureFlag(enableTeamAgents);
-  const computers = useFeatureFlag(enableMacroComputers);
-  const enabled = () =>
-    (!flag().loading && flag().enabled) ||
-    (!computers().loading && computers().enabled);
+  const flag = useFeatureFlag(enableMacroComputers);
+  const enabled = () => !flag().loading && flag().enabled;
   const [requestedControl, setRequestedControl] = createSignal(false);
   const [requestedHarness, setRequestedHarness] = createSignal<string>();
   createEffect(() => {

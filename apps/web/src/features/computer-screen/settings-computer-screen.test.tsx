@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
   mobile: false,
   enabled: true,
+  agentsEnabled: false,
   loading: false,
   directoryError: false,
   refetch: vi.fn(),
@@ -18,10 +19,10 @@ const mocks = vi.hoisted(() => ({
   access: 'read' as Harness['access'],
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({
-    enabled: mocks.enabled,
-    loading: mocks.loading,
-  }),
+  useFeatureFlag: (flag: { key: string }) => () =>
+    flag.key === 'enable-macro-computers'
+      ? { enabled: mocks.enabled, loading: mocks.loading }
+      : { enabled: mocks.agentsEnabled, loading: false },
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => mocks.mobile,
@@ -52,7 +53,7 @@ vi.mock('@queries/team-agents', () => ({
   useTeamAgentComputerMutation: () => ({ mutateAsync: mocks.lookup }),
 }));
 vi.mock('./queries/novnc', () => ({ connectScreen: mocks.connect }));
-vi.mock('./queries/screen-url', () => ({
+vi.mock('@app/lib/service-clients/service-agent-harness/screen-url', () => ({
   resolveScreenUrl: async () => 'wss://example.invalid/screen',
 }));
 
@@ -76,6 +77,7 @@ beforeEach(() => {
   );
   mocks.mobile = false;
   mocks.enabled = true;
+  mocks.agentsEnabled = false;
   mocks.loading = false;
   mocks.directoryError = false;
   mocks.directorySnapshot = () => undefined;
@@ -135,6 +137,7 @@ it.each([
 ])(
   'does not discover or connect while the rollout is unavailable: %j',
   ({ enabled, loading }) => {
+    mocks.agentsEnabled = true;
     mocks.enabled = enabled;
     mocks.loading = loading;
     render(() => (

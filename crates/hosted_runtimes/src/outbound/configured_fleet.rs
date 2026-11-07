@@ -9,16 +9,21 @@ use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
 use crate::outbound::incus_fleet::{IncusFleet, IncusFleetError};
 
+/// Explicitly selected fleet backend.
 pub enum ConfiguredFleet {
+    /// Incus VM backend.
     Incus(IncusFleet),
     /// Dev only; [`DockerFleet::new`] refuses non-local environments.
     Docker(DockerFleet),
 }
 
+/// Failure from the selected fleet backend.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfiguredFleetError {
+    /// Incus adapter failure.
     #[error(transparent)]
     Incus(#[from] IncusFleetError),
+    /// Local Docker adapter failure.
     #[error(transparent)]
     Docker(#[from] DockerFleetError),
 }
@@ -77,6 +82,13 @@ impl Fleet for ConfiguredFleet {
         match self {
             Self::Incus(fleet) => Ok(fleet.restart(computer_id).await?),
             Self::Docker(fleet) => Ok(fleet.restart(computer_id).await?),
+        }
+    }
+
+    async fn restart_macrod(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
+        match self {
+            Self::Incus(fleet) => Ok(fleet.restart_macrod(computer_id).await?),
+            Self::Docker(fleet) => Ok(fleet.restart_macrod(computer_id).await?),
         }
     }
 

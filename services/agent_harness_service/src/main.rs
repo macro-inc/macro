@@ -1796,6 +1796,10 @@ async fn run() -> anyhow::Result<()> {
         redis.clone(),
         harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone())),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        feature_flags
+            .clone()
+            .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+            .unwrap_or_default(),
         &computer_tasks,
         service_shutdown.clone(),
     );

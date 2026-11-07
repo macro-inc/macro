@@ -129,6 +129,35 @@ impl macro_authorization::JwtValidator for TestIdentity {
 
 #[tokio::test]
 async fn computer_routes_require_harness_management_and_mode_reads_persisted_state() {
+    computer_route_access(true, None).await;
+}
+
+#[tokio::test]
+async fn computer_viewer_screen_refuses_flag_off() {
+    computer_route_access(false, Some("screen")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_sign_in_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-in")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_complete_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-in/complete")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_sign_out_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-out")).await;
+}
+
+#[tokio::test]
+async fn computer_claude_mode_refuses_flag_off() {
+    computer_route_access(false, Some("claude-mode")).await;
+}
+
+async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
     use axum::{
         body::{Body, to_bytes},
         http::{Request, StatusCode},
@@ -192,11 +221,22 @@ async fn computer_routes_require_harness_management_and_mode_reads_persisted_sta
     );
     let tasks = tokio_util::task::TaskTracker::new();
     let shutdown = tokio_util::sync::CancellationToken::new();
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    for user in ["macro|owner@example.com", "macro|other@example.com"] {
+        flags.set(
+            macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
+            Ok(feature_flags::FlagSnapshot::new([(
+                "enable-macro-computers".into(),
+                feature_flags::FlagValue::Boolean(enabled),
+            )])),
+        );
+    }
     let app = super::router(
         agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
         redis::Client::open("redis://127.0.0.1:1").unwrap(),
         HarnessServiceImpl::new(repo),
         MacroAuthorizationState::new(Arc::new(authorization)),
+        hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
         &tasks,
         shutdown.clone(),
     );
@@ -212,32 +252,67 @@ async fn computer_routes_require_harness_management_and_mode_reads_persisted_sta
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(
-            &to_bytes(response.into_body(), 1024).await.unwrap()
-        )
-        .unwrap(),
-        serde_json::json!({"mode": "own_account"})
+        response.status(),
+        if enabled {
+            StatusCode::OK
+        } else {
+            StatusCode::FORBIDDEN
+        }
     );
+    if enabled {
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(
+                &to_bytes(response.into_body(), 1024).await.unwrap()
+            )
+            .unwrap(),
+            serde_json::json!({"mode": "own_account"})
+        );
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server_shutdown = shutdown.clone();
+    let server_app = app.clone();
+    tasks.spawn(async move {
+        axum::serve(listener, server_app)
+            .with_graceful_shutdown(server_shutdown.cancelled_owned())
+            .await
+            .unwrap();
+    });
+    let client = reqwest::Client::new();
 
     for (method, suffix, body) in [
+        ("GET", "screen", ""),
         ("GET", "claude-mode", ""),
         ("POST", "claude-sign-in", ""),
         ("POST", "claude-sign-in/complete", r#"{"code":"test-code"}"#),
         ("POST", "claude-sign-out", ""),
+        ("POST", "claude-sign-in/cancel", ""),
     ] {
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method(method)
-                    .uri(format!("/harnesses/{}/{suffix}", HarnessId::TEST_A))
-                    .header("authorization", "Bearer other")
-                    .header("content-type", "application/json")
-                    .body(Body::from(body))
-                    .unwrap(),
+        if only_route.is_some_and(|route| route != suffix) {
+            continue;
+        }
+        let response = client
+            .request(
+                method.parse().unwrap(),
+                format!("http://{address}/harnesses/{}/{suffix}", HarnessId::TEST_A),
             )
+            .header(
+                "authorization",
+                if enabled {
+                    "Bearer other"
+                } else {
+                    "Bearer owner"
+                },
+            )
+            .header("connection", "upgrade")
+            .header("upgrade", "websocket")
+            .header("sec-websocket-version", "13")
+            .header("sec-websocket-key", "AAAAAAAAAAAAAAAAAAAAAA==")
+            .header("content-type", "application/json")
+            .body(body)
+            .send()
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{suffix}");
@@ -323,11 +398,28 @@ async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
     );
     let tasks = tokio_util::task::TaskTracker::new();
     let shutdown = tokio_util::sync::CancellationToken::new();
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    for user in [
+        "macro|owner@example.com",
+        "macro|user@example.com",
+        "macro|reader@example.com",
+        "macro|resident@example.com",
+        "macro|other@example.com",
+    ] {
+        flags.set(
+            macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
+            Ok(feature_flags::FlagSnapshot::new([(
+                hosted_runtimes::domain::rollout::ENABLE_MACRO_COMPUTERS.into(),
+                feature_flags::FlagValue::Boolean(true),
+            )])),
+        );
+    }
     let app = super::router(
         agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
         redis::Client::open("redis://127.0.0.1:1").unwrap(),
         HarnessServiceImpl::new(repo),
         MacroAuthorizationState::new(Arc::new(authorization)),
+        hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
         &tasks,
         shutdown.clone(),
     );
@@ -408,4 +500,144 @@ async fn viewer_permission_renewal_observes_revocation_and_fails_closed_on_outag
         Err("authorization_timeout")
     );
     assert_eq!(started.elapsed(), super::VIEWER_ACCESS_TIMEOUT);
+}
+
+#[tokio::test]
+async fn computer_invalid_code_is_a_typed_retryable_response() {
+    use axum::response::IntoResponse as _;
+    let result = serde_json::from_value(serde_json::json!({"status": "invalid_code"})).unwrap();
+    let response = super::ComputerRouteError::from_result(result).into_response();
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::UNPROCESSABLE_ENTITY
+    );
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+        serde_json::json!({
+            "code": "invalid_code",
+            "message": "That code didn't work — sign in again to get a new one"
+        })
+    );
+}
+
+#[tokio::test]
+async fn computer_claude_cancel_refuses_flag_off() {
+    computer_route_access(false, Some("claude-sign-in/cancel")).await;
+}
+
+#[tokio::test]
+async fn computer_dropped_submit_reconciles_a_committed_runtime_result() {
+    dropped_submit_reconciles(true).await;
+}
+
+#[tokio::test]
+async fn computer_dropped_submit_reconciles_even_if_cancellation_disconnects() {
+    dropped_submit_reconciles(false).await;
+}
+
+async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
+    use agent_runtime_protocol::domain::channel::Channel;
+    use agent_runtime_protocol::domain::schema::v0::{
+        ComputerCommand, ComputerControlResult, ToRuntimeMessage, ToServerMessage,
+    };
+    use harness_id::HarnessId;
+    use harnesses::domain::{
+        models::ClaudeMode, ports::MockHarnessRepo, service::HarnessServiceImpl,
+    };
+    use std::sync::Arc;
+
+    let redis = redis::Client::open(macro_env_var::read_env_var("REDIS_URI").unwrap()).unwrap();
+    let harness_id = HarnessId::new_from_uuid(uuid::Uuid::now_v7());
+    let runtimes = agent_harness::outbound::runtime_registry::RuntimeRegistry::new();
+    let (carrier, mut runtime) = Channel::duplex();
+    runtimes.attach(harness_id, carrier);
+    let cleanup = tokio_util::task::TaskTracker::new();
+    let shutdown = tokio_util::sync::CancellationToken::new();
+    let control =
+        super::ComputerControl::start(runtimes, redis.clone(), &cleanup, shutdown.clone());
+    let (mode_saved, saved) = tokio::sync::oneshot::channel();
+    let mut repo = MockHarnessRepo::new();
+    repo.expect_set_claude_mode()
+        .times(1)
+        .return_once(move |id, mode| {
+            assert_eq!(id, harness_id);
+            assert_eq!(mode, ClaudeMode::OwnAccount);
+            Box::pin(async move {
+                mode_saved.send(()).unwrap();
+                Ok(true)
+            })
+        });
+    let state = super::ComputerScreenState {
+        harnesses: Arc::new(HarnessServiceImpl::new(repo)),
+        rollout: hosted_runtimes::domain::rollout::ComputerRollout::new(
+            feature_flags::outbound::fake::FakeFeatureFlags::default(),
+        ),
+        control,
+        redis: redis.clone(),
+        cleanup: cleanup.clone(),
+        authorization_state: macro_authorization::MacroAuthorizationState::new(Arc::new(())),
+    };
+    let request = tokio::spawn(async move {
+        state
+            .complete_sign_in(harness_id, "test-code".to_owned())
+            .await
+    });
+    let ToRuntimeMessage::ComputerControl {
+        request_id: completion_id,
+        command,
+        ..
+    } = runtime.rx.recv().await.unwrap()
+    else {
+        panic!("expected completion command");
+    };
+    assert!(matches!(
+        command,
+        ComputerCommand::ClaudeSignInComplete { .. }
+    ));
+    request.abort();
+    assert!(request.await.unwrap_err().is_cancelled());
+    let ToRuntimeMessage::ComputerControl {
+        request_id: cancel_id,
+        command,
+        ..
+    } = runtime.rx.recv().await.unwrap()
+    else {
+        panic!("expected cancel command");
+    };
+    assert_eq!(command, ComputerCommand::ClaudeSignInCancel);
+    // macrod committed just before cancellation; its result still owns the mode write.
+    runtime
+        .tx
+        .send(ToServerMessage::ComputerControlResponse {
+            request_id: completion_id,
+            result: ComputerControlResult::SignedIn,
+        })
+        .unwrap();
+    if acknowledge_cancel {
+        runtime
+            .tx
+            .send(ToServerMessage::ComputerControlResponse {
+                request_id: cancel_id,
+                result: ComputerControlResult::SignInCancelled,
+            })
+            .unwrap();
+    } else {
+        drop(runtime);
+    }
+    tokio::time::timeout(std::time::Duration::from_secs(2), saved)
+        .await
+        .unwrap()
+        .unwrap();
+    shutdown.cancel();
+    cleanup.close();
+    cleanup.wait().await;
+    super::bus::AccountChange::claim(&redis, harness_id, &cleanup)
+        .await
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
 }

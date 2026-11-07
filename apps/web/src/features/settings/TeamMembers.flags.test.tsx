@@ -20,6 +20,7 @@ function SettingsTestProvider(props: ParentProps) {
 }
 
 const mocks = vi.hoisted(() => ({
+  readComputer: () => ({ enabled: false, loading: false }),
   read: () => ({ enabled: false, loading: true }),
   enabled: (): boolean => false,
   rosterError: false,
@@ -44,7 +45,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) =>
     flag.key === 'enable-team-agents'
       ? () => mocks.read()
-      : () => ({ enabled: false, loading: false }),
+      : flag.key === 'enable-macro-computers'
+        ? () => mocks.readComputer()
+        : () => ({ enabled: false, loading: false }),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
@@ -171,6 +174,10 @@ const agent: TeamAgent = {
   statusReason: 'Setup failed',
 };
 const [flag, setFlag] = createSignal({ enabled: false, loading: true });
+const [computerFlag, setComputerFlag] = createSignal({
+  enabled: false,
+  loading: false,
+});
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rosterError = false;
@@ -178,6 +185,8 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
   setFlag({ enabled: false, loading: true });
   mocks.read = flag;
+  setComputerFlag({ enabled: false, loading: false });
+  mocks.readComputer = computerFlag;
   seedMockDisplayNames([
     { id: 'macro|owner@example.com', firstName: 'Owner' },
     { id: 'macro|agent@example.com', firstName: 'Assistant', isAgent: true },
@@ -257,9 +266,10 @@ it('rejects an old roster-error retry after the rollout is disabled', () => {
   expect(mocks.refetch).not.toHaveBeenCalled();
 });
 
-it('lets a non-admin creator open a computer without loading the management roster and revokes stale actions', async () => {
+it('lets a non-admin teammate open a computer without loading the management roster and revokes stale actions', async () => {
   mocks.viewerRole = () => 'member';
-  setFlag({ enabled: true, loading: false });
+  setFlag({ enabled: false, loading: false });
+  setComputerFlag({ enabled: true, loading: false });
   render(() => <TeamMembers team={team} />, {
     wrapper: SettingsTestProvider,
   });
@@ -273,7 +283,7 @@ it('lets a non-admin creator open a computer without loading the management rost
   fireEvent.keyDown(view, { key: 'Enter' });
   expect(mocks.openComputer).toHaveBeenCalledWith('macro|agent@example.com');
 
-  setFlag({ enabled: true, loading: true });
+  setComputerFlag({ enabled: true, loading: true });
   expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
   fireEvent.click(view);
   expect(mocks.openComputer).toHaveBeenCalledTimes(1);
@@ -282,6 +292,7 @@ it('lets a non-admin creator open a computer without loading the management rost
 
 it('keeps voice and computer actions together and revokes voice settings with the rollout', async () => {
   setFlag({ enabled: true, loading: false });
+  setComputerFlag({ enabled: true, loading: false });
   render(() => <TeamMembers team={team} />, {
     wrapper: SettingsTestProvider,
   });
@@ -299,4 +310,27 @@ it('keeps voice and computer actions together and revokes voice settings with th
   fireEvent.keyDown(voice, { key: 'Enter' });
   expect(screen.queryByText('Voice settings open')).toBeNull();
   expect(mocks.openComputer).not.toHaveBeenCalled();
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  fireEvent.keyDown(
+    await screen.findByRole('menuitem', { name: 'View computer' }),
+    { key: 'Enter' }
+  );
+  expect(mocks.openComputer).toHaveBeenCalledWith('macro|agent@example.com');
+  expect(mocks.enabled()).toBe(false);
+});
+
+it('keeps admin management available with computers disabled', async () => {
+  setFlag({ enabled: true, loading: false });
+  render(() => <TeamMembers team={team} />, { wrapper: SettingsTestProvider });
+  expect(screen.getByRole('button', { name: 'Invite agent' })).toBeTruthy();
+  expect(mocks.enabled()).toBe(true);
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  expect(
+    await screen.findByRole('menuitem', { name: 'Change voice' })
+  ).toBeTruthy();
+  expect(screen.queryByRole('menuitem', { name: 'View computer' })).toBeNull();
 });

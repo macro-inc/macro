@@ -7,6 +7,12 @@
 import type { ComputerSize } from './computerSize';
 
 export type InternalQuoteComputerParams = {
+  /**
+   * Team that owns the computer.
+   */
   teamId: string;
+  /**
+   * Purchased catalog size.
+   */
   size: ComputerSize;
 };

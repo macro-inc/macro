@@ -134,7 +134,9 @@ async fn main() -> Result<(), rootcause::Report> {
         state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
         harness_id: None,
         persona: None,
-        created_by: "incus_fleet_smoke".to_owned(),
+        created_by: macro_user_id::user_id::MacroUserIdStr::try_from(
+            "macro|smoke@example.com".to_owned(),
+        )?,
         created_at: now,
         enrolled_at: None,
         enrollment_generation: Default::default(),

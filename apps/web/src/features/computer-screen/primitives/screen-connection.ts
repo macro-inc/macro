@@ -25,7 +25,7 @@ export function createScreenConnection(
   const [status, setStatus] = createSignal<
     'connecting' | 'connected' | 'error'
   >('connecting');
-  const canControl = () => host.canEdit() && !host.mobile();
+  const canControl = () => host.canEdit() && !host.touch();
   const controlling = createMemo(() => requestedControl() && canControl());
   // Losing permission or changing the computer always resets the request.
   createEffect(

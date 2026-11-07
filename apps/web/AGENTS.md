@@ -511,10 +511,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
-- Keep Macro computers (`features/settings/computers`) team-only behind
-  `enable-macro-computers`: members read the list in Runtimes and Billing,
-  admins buy and manage; show the exact price before buying, and release only
-  after the computer's name is typed. See the
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase,
+  Screen and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, and release only after
+  the computer's name is typed. See the
   [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
@@ -1130,10 +1133,10 @@ and open that same pane; do not create a module-global request bus. Preserve
 cached runtime permissions across refresh failures and show the refresh error.
 Keep screen discovery, access loading and connection inside the caller-owned
 interaction trace, passing its span explicitly across asynchronous work. With
-`enable-team-agents` on, derive control from the server's harness
+`enable-macro-computers` on, derive control from the server's harness
 `access` (`user`/`owner`), never agent/session edit permission; resolve enabled
 session screens from the runtime directory, since the usable-runtime list omits
-Read/Resident/None. Keep directory fetching disabled on the legacy off path;
+Read/Resident/None. Keep screen controls and directory fetching disabled while the computer flag is off or loading;
 refresh the directory
 every 15 seconds in the foreground and explicitly on Settings screen open so
 remote grants and service recovery appear without remounting; `read` and
@@ -1337,7 +1340,9 @@ Gate teammate invitation, management and billing details with `enableTeamAgents`
 wait for flag loading before choosing an off path, and disable feature queries
 until enabled. Keep the data-derived Agent chip when off; use confirmed human
 identity for generic member controls so an agent cannot be managed through them.
-Agent self-service and the separate Runtimes rollout keep their existing gates.
+Gate View computer, screen panes and navigation with `enableMacroComputers`,
+independently of agent management; disabling the agent flag must not revoke
+computer UI access. Agent self-service keeps its existing gate.
 
 Use the shared `Dialog` and `Panel` header/body/footer for agent invitations,
 including the standard phone sheet. `AgentPortrait` generates a fictional face
@@ -1393,3 +1398,10 @@ paired screen-capable harness. Reuse harness User/owner access for desktop
 Take control; keep touch devices watch-only. Bind long-press handlers to the
 underlying DOM element when using Dynamic. The desktop/phone regression is
 `src/features/computer-screen/browser-test/portrait/playwright.config.ts`.
+
+### Computer capacity
+
+Computer offers expose ordinary `soldOut` and persona `alwaysOnSoldOut`
+availability separately. Use generated auth types. Show `waiting_for_capacity`
+as a capacity wait with its translated hint in Runtimes and Billing, including
+on mobile; retain power controls and polling while waiting.

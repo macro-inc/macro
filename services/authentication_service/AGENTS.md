@@ -75,6 +75,11 @@ metered AI usage policy.
 
 ## Macro computers billing
 
+Team computer purchase, quote and offers use the shared fail-closed
+`enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
+it from the existing PostHog provider. Existing management, internal APIs,
+webhook reconciliation and billing workers remain ungated.
+
 - `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the
   `hosted_runtimes` `Billing` port on the team subscription (one item per
   `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the

@@ -4,8 +4,6 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PaymentOutcome } from './paymentOutcome';
 
-/**
- * The versioned identity recorded at purchase.
- */
-export type CatalogEntryId = string;
+export type ComputerStatusPayment = null | PaymentOutcome;

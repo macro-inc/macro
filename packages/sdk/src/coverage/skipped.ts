@@ -29,6 +29,7 @@ import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 export const agentHarnessExcluded = [
   // Batch form of agentSessionsForPullRequest that feeds the web Reviews list.
   'agentSessionsForPullRequests',
+  'cancelClaudeSignIn', // Computer account credentials are managed in the app.
   'classify', // Command K inference is app-internal.
   'claudeSignOut', // Computer account credentials are managed in the app.
   'completeClaudeSignIn', // Computer account credentials are managed in the app.

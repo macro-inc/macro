@@ -61,7 +61,7 @@ function Fixture() {
               harnessId: () => 'fixture-runtime',
               title: () => 'Keyboard computer',
               canEdit: () => !location.search.includes('read'),
-              mobile: isTouchDevice,
+              touch: isTouchDevice,
               resolveUrl: async (_id, control) =>
                 `wss://keyboard.invalid/screen?control=${control}`,
             },

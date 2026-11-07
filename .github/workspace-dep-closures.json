@@ -9707,6 +9707,7 @@
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/entity_access",
+      "crates/feature_flags",
       "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",

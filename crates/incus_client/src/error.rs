@@ -47,6 +47,13 @@ pub enum IncusError {
         operation_id: String,
     },
 
+    /// A guest command exited unsuccessfully.
+    #[error("Incus guest command exited with {exit_code}")]
+    ExecFailed {
+        /// Command exit status.
+        exit_code: i64,
+    },
+
     /// The response decoded but lacks a field this client needs, or holds a
     /// value it does not know.
     #[error("unexpected Incus response: {0}")]

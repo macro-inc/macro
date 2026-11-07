@@ -1,12 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { enableTeamAgents } from '@core/constant/featureFlags';
+import { resolveScreenUrl } from '@app/lib/service-clients/service-agent-harness/screen-url';
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useAgentsQuery } from '@queries/agents/agents';
-import {
-  useHarnessDirectoryQuery,
-  useHarnessesQuery,
-} from '@queries/harnesses/harnesses';
+import { useHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
 import type { Harness } from '@service-storage/generated/schemas/harness';
 import { createMemo, type ParentProps, Show, Suspense } from 'solid-js';
 import { RuntimeAccessAction } from '../runtime-sharing/components/RuntimeAccessAction';
@@ -15,7 +13,6 @@ import { type ScreenHost, ScreenProvider } from './context/screen-context';
 import { hasHarnessEditAccess } from './harness-access';
 import { createScreenPaneState } from './pane-state';
 import { connectScreen } from './queries/novnc';
-import { resolveScreenUrl } from './queries/screen-url';
 import { ScreenPane } from './views/screen-pane';
 import { ScreenSplit } from './views/screen-split';
 
@@ -40,17 +37,12 @@ function ConnectedAgentComputerScreen(
     canEdit: boolean;
   }>
 ) {
-  const flag = useFeatureFlag(enableTeamAgents);
+  const flag = useFeatureFlag(enableMacroComputers);
   const sharingEnabled = () => !flag().loading && flag().enabled;
-  const agents = useAgentsQuery(() => !!props.botId);
-  const harnesses = useHarnessesQuery();
+  const agents = useAgentsQuery(() => sharingEnabled() && !!props.botId);
   const directory = useHarnessDirectoryQuery(sharingEnabled);
-  const registered = (): readonly Harness[] => {
-    if (flag().loading) return [];
-    if (flag().enabled)
-      return directory.isPending ? [] : (directory.data ?? []);
-    return harnesses.isPending ? [] : (harnesses.data ?? []);
-  };
+  const registered = (): readonly Harness[] =>
+    sharingEnabled() && !directory.isPending ? (directory.data ?? []) : [];
   const harness = createMemo(() => {
     if (agents.isPending) return undefined;
     const id = agents.data?.find(
@@ -60,13 +52,9 @@ function ConnectedAgentComputerScreen(
       (item) => item.id === id && item.capabilities?.screen === true
     );
   });
-  const canControl = () => {
-    if (flag().loading) return false;
-    if (!flag().enabled) return props.canEdit;
-    return hasHarnessEditAccess(harness());
-  };
+  const canControl = () => sharingEnabled() && hasHarnessEditAccess(harness());
   const canView = () => {
-    if (!sharingEnabled()) return !flag().loading;
+    if (!sharingEnabled()) return false;
     const access = harness()?.access;
     return (
       access === 'read' ||
@@ -81,12 +69,17 @@ function ConnectedAgentComputerScreen(
     harnessId: () => harness()?.id,
     title: () => harness()?.name,
     canEdit: canControl,
-    mobile: isTouchDevice,
+    touch: isTouchDevice,
     resolveUrl: resolveScreenUrl,
   };
   return (
     <ScreenProvider
-      value={{ host, available: () => !!harness(), open, setOpen }}
+      value={{
+        host,
+        available: () => sharingEnabled() && !!harness(),
+        open,
+        setOpen,
+      }}
     >
       <ScreenSplit
         connect={connectScreen}

@@ -6,6 +6,9 @@
  */
 import type { PurchaseBillingOneOfKind } from './purchaseBillingOneOfKind';
 
+/**
+ * Charge the team subscription.
+ */
 export type PurchaseBillingOneOf = {
   kind: PurchaseBillingOneOfKind;
 };

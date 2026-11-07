@@ -2535,6 +2535,9 @@ export const internalPurchaseComputer = async (
   } as internalPurchaseComputerResponse;
 };
 
+/**
+ * @summary Quote a computer for an authenticated internal caller.
+ */
 export type internalQuoteComputerResponse200 = {
   data: Quote;
   status: 200;
@@ -2597,6 +2600,9 @@ export const internalQuoteComputer = async (
   } as internalQuoteComputerResponse;
 };
 
+/**
+ * @summary Read computer status for an authenticated internal caller.
+ */
 export type internalGetComputerResponse200 = {
   data: ComputerStatus;
   status: 200;

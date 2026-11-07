@@ -22,7 +22,8 @@ update. Failures known to precede billing undo the repo, membership, account
 and mailbox. Repository creation failures return a safe server reason explaining
 that nothing was charged; detailed provider errors stay in server logs. Purchase errors recover the durable computer ID from the team's
 saved agent persona. Its payment outbox resolves unknown outcomes idempotently;
-the agent remains `provisioning` at setup step `paying` ("Confirming payment").
+the agent remains `provisioning` with pending payment and forwards the computer
+service’s creation progress.
 A definite `payment_failed` computer retains its agent as `failed` with reason
 `payment failed`. The response exposes durable `payment` (`pending`, `paid`,
 `unbilled`, `comped`), or null when its computer cannot be read. The agent exists and its
@@ -68,6 +69,10 @@ team computer purchases through `MacroStaffCompPolicy`.
 
 The `enable-team-agents` rollout gates management operations: roster, voice
 discovery/samples/settings, sizes, quote, create, retry and remove. Load one snapshot for the authenticated user and read it synchronously.
+Computer discovery uses the canonical `ComputerRollout` instead: it loads one
+snapshot of `enable-macro-computers` and never checks `enable-team-agents`.
+Missing computer-rollout configuration or evaluation failure denies discovery;
+management retains its separate gate.
 Missing configuration, a missing key, off or load failure denies with HTTP 403.
 Team authorization remains independent. Agent self profile/mail, brain gateway
 and git access never consult this rollout policy.
@@ -80,7 +85,8 @@ and git access never consult this rollout policy.
 
 ## Scope
 
-- `GET /team_agents/{agent_user_id}/computer` permits rollout-enabled teammates
+- `GET /team_agents/{agent_user_id}/computer` uses the independent
+  `enable-macro-computers` rollout and permits enabled teammates
   to discover only their team's bound computer and nullable harness ID, with
   `isAgentComputer: true`. It returns no profile, billing or bootstrap details
   and grants no runtime access. The roster stays administrator-only.

@@ -11,6 +11,10 @@ use serde::{Deserialize, Serialize};
 use crate::domain::models::SubscriptionItem;
 use crate::domain::persona_credentials::EnrollmentGeneration;
 
+mod capacity;
+pub use capacity::CapacityWait;
+use capacity::{make_room, wake};
+
 #[cfg(test)]
 mod test;
 
@@ -18,8 +22,10 @@ mod test;
 pub const PAYMENT_CONFIRM_DELAY: Duration = Duration::minutes(2);
 /// Frozen this long without a prompt, a computer saves its RAM and suspends.
 pub const SUSPEND_AFTER: Duration = Duration::minutes(30);
-/// macrod may be gone this long while awake before we treat it as a crash.
+/// Grace between fleet-backed checks of a missing macrod.
 pub const MACROD_GRACE: Duration = Duration::minutes(3);
+/// Consecutive missing connections on a running guest before restarting macrod.
+pub const MAX_MACROD_MISSES: u8 = 3;
 /// Crashes inside this window count toward [`MAX_CRASHES`].
 pub const CRASH_WINDOW: Duration = Duration::minutes(15);
 /// This many crashes inside [`CRASH_WINDOW`] moves a computer to Failed.
@@ -28,6 +34,8 @@ pub const MAX_CRASHES: usize = 3;
 pub const RETENTION: Duration = Duration::days(14);
 /// How soon a wake blocked by full host capacity is retried.
 pub const WAKE_RETRY: Duration = Duration::seconds(20);
+/// Maximum interval between capacity checks for a waiting computer.
+pub const MAX_WAKE_RETRY: Duration = Duration::minutes(10);
 /// First restart backoff after a crash; doubles per recent crash.
 pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
 
@@ -37,7 +45,9 @@ pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
 pub enum Phase {
     /// Purchase in flight: units held on `host`, payment not yet confirmed.
     PendingPayment {
+        /// Host holding the computer.
         host: HostId,
+        /// Time the purchase began.
         since: DateTime<Utc>,
     },
     /// Payment was definitely refused; no capacity or billing item is held.
@@ -45,39 +55,54 @@ pub enum Phase {
     /// Purchase confirmed; the instance is created on `host`, started when `start`
     /// (a full host creates it stopped and wakes it later).
     Provisioning {
+        /// Host holding the computer.
         host: HostId,
+        /// Whether creation should also start the guest.
         start: bool,
     },
     /// The VM is starting (first boot, resume or restart); macrod not yet connected.
     Booting {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Guest is running.
     Running {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Crashed; restarts when the backoff timer fires.
     Restarting {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Paused in RAM; wakes in milliseconds.
     Frozen {
+        /// Host holding the computer.
         host: HostId,
     },
     /// RAM written to disk (`saved_state` once the snapshot finished); takes no host RAM.
     Suspended {
+        /// Host holding the computer.
         host: HostId,
+        /// Whether RAM has been saved to disk.
         saved_state: bool,
     },
+    /// Guest is shutting down.
     Stopping {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Guest is powered off.
     Stopped {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Gave up restarting; an operator retries.
     Failed {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Guest and its retained disk have been deleted.
     Destroyed,
 }
 
@@ -85,7 +110,9 @@ pub enum Phase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Power {
+    /// Keep the guest powered on.
     On,
+    /// Keep the guest powered off.
     Off,
 }
 
@@ -93,13 +120,16 @@ pub enum Power {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "billing", rename_all = "snake_case")]
 pub enum Billing {
+    /// Billing remains active.
     Active,
     /// Billing stops at `at` (the current period end); undo is allowed until then.
     CancelAtPeriodEnd {
+        /// Time the operation takes effect.
         at: DateTime<Utc>,
     },
     /// No longer billed; the disk is kept until `retained_until`.
     Canceled {
+        /// Deadline for retaining the guest disk.
         retained_until: DateTime<Utc>,
     },
 }
@@ -125,18 +155,29 @@ pub struct ComputerState {
     /// Purchase context retained across outbox retries and first-boot enrollment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provision_traceparent: Option<String>,
+    /// Last observed guest phase.
     pub phase: Phase,
+    /// Requested power state.
     pub power: Power,
+    /// Purchase funding or billing state.
     pub billing: Billing,
+    /// Latched purchase outcome.
     pub payment: PaymentOutcome,
     /// Absent on older Stripe purchases; persisted at reservation for crash recovery.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comp_reason: Option<String>,
+    /// Whether macrod is currently connected.
     pub macrod_connected: bool,
+    /// Consecutive grace expirations while the guest remains running.
+    #[serde(default)]
+    pub macrod_misses: u8,
     /// Crash times inside the current [`CRASH_WINDOW`].
     pub recent_crashes: Vec<DateTime<Utc>>,
     /// A prompt or power-on is waiting for the computer to wake.
     pub wake_requested: bool,
+    /// Absent until a wake first asks for room; older rows start a fresh backoff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capacity_wait: Option<CapacityWait>,
 }
 
 impl ComputerState {
@@ -150,8 +191,10 @@ impl ComputerState {
             payment: PaymentOutcome::Pending,
             comp_reason: None,
             macrod_connected: false,
+            macrod_misses: 0,
             recent_crashes: Vec::new(),
             wake_requested: false,
+            capacity_wait: None,
         }
     }
 
@@ -170,6 +213,21 @@ impl ComputerState {
             | Phase::Failed { host } => Some(host),
             Phase::PaymentFailed | Phase::Destroyed => None,
         }
+    }
+
+    /// Whether an on request is waiting for host capacity rather than setup.
+    pub fn waiting_for_capacity(&self) -> bool {
+        self.power == Power::On
+            && self.wake_requested
+            && matches!(
+                self.phase,
+                Phase::Provisioning { start: false, .. }
+                    | Phase::Stopped { .. }
+                    | Phase::Suspended {
+                        saved_state: true,
+                        ..
+                    }
+            )
     }
 
     /// Whether the computer counts against sold capacity.
@@ -197,8 +255,10 @@ impl ComputerState {
 pub enum Event {
     /// The server granted a computer without a subscription charge.
     Comped {
+        /// Reason for this decision or failure.
         reason: String,
     },
+    /// Purchase payment succeeded.
     PaymentConfirmed,
     /// The purchase was definitely refused by billing.
     PurchaseFailed,
@@ -206,28 +266,47 @@ pub enum Event {
     InstanceStarted,
     /// The fleet finished stopping the instance (or created it stopped).
     InstanceStopped,
+    /// The guest connected to the harness service.
     MacrodConnected,
+    /// The guest disconnected from the harness service.
     MacrodDisconnected,
-    /// Timer: macrod has been gone for [`MACROD_GRACE`].
-    MacrodMissing,
+    /// Timer: macrod has been gone for [`MACROD_GRACE`], with a fresh fleet observation.
+    MacrodMissing {
+        /// Guest status; None means the fleet confirmed the instance is absent.
+        instance_status: Option<InstanceStatus>,
+    },
+    /// All guest sessions are idle.
     SessionsIdle,
+    /// A prompt needs the guest awake.
     PromptArrived,
     /// Timer: frozen for [`SUSPEND_AFTER`].
     SuspendDue,
+    /// Guest RAM was saved to disk.
     SnapshotSaved,
+    /// The guest stopped unexpectedly.
     VmCrashed,
     /// The guest no longer exists; recreate it on its assigned host.
     InstanceLost,
     /// Timer: the backoff after a crash elapsed.
     RestartDue,
+    /// The assigned host is unavailable.
     HostLost,
+    /// Request power on.
     PowerOn,
+    /// Request power off.
     PowerOff,
     /// Timer: retry a wake that found the host full.
     WakeRetry,
+    /// Another computer on the host released awake units.
+    CapacityChanged,
+    /// MakeRoom found no frozen computer to suspend.
+    RoomUnavailable,
+    /// Schedule cancellation at the billing period end.
     CancelAtPeriodEnd {
+        /// Time the operation takes effect.
         at: DateTime<Utc>,
     },
+    /// Withdraw a pending cancellation.
     UndoCancel,
     /// Timer: the billing period of a cancel-at-period-end ended.
     PeriodEnded,
@@ -235,10 +314,13 @@ pub enum Event {
     SubscriptionCanceled,
     /// Release now: stop billing and destroy immediately.
     ReleaseNow,
+    /// The retained disk may now be deleted.
     RetentionExpired,
+    /// Retry a failed guest.
     OperatorRetry,
     /// A fleet effect failed after its retries; an operator looks.
     EffectFailed {
+        /// Reason for this decision or failure.
         reason: String,
     },
 }
@@ -259,22 +341,31 @@ pub enum Event {
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TimerKind {
+    /// Check whether macrod exceeded its connection grace period.
     MacrodMissing,
+    /// Suspend an idle frozen guest.
     SuspendDue,
+    /// Retry after the crash backoff.
     RestartDue,
+    /// Retry a wake blocked by host capacity.
     WakeRetry,
+    /// Another computer on the host released awake units.
+    CapacityChanged,
+    /// Apply the scheduled billing cancellation.
     PeriodEnded,
+    /// The retained disk may now be deleted.
     RetentionExpired,
 }
 
 impl TimerKind {
     /// The event a timer delivers when it fires.
-    pub fn event(self) -> Event {
+    pub fn event(self, instance_status: Option<InstanceStatus>) -> Event {
         match self {
-            Self::MacrodMissing => Event::MacrodMissing,
+            Self::MacrodMissing => Event::MacrodMissing { instance_status },
             Self::SuspendDue => Event::SuspendDue,
             Self::RestartDue => Event::RestartDue,
             Self::WakeRetry => Event::WakeRetry,
+            Self::CapacityChanged => Event::CapacityChanged,
             Self::PeriodEnded => Event::PeriodEnded,
             Self::RetentionExpired => Event::RetentionExpired,
         }
@@ -287,43 +378,66 @@ impl TimerKind {
 pub enum Effect {
     /// Resolve a pending purchase with its original idempotency key and items.
     ConfirmPayment {
+        /// Additional subscription items included in the purchase.
         extra_items: Vec<SubscriptionItem>,
     },
     /// Create the instance from the base image with its enrollment; start it when `start`.
     Create {
+        /// Host holding the computer.
         host: HostId,
+        /// Whether creation should also start the guest.
         start: bool,
+        /// Enrollment generation reserved for this creation.
         generation: EnrollmentGeneration,
     },
+    /// Start the guest.
     Start {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Pause the guest in RAM.
     Freeze {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Resume a guest paused in RAM.
     Unfreeze {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Stateful stop: save RAM to disk.
     Suspend {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Start from saved state.
     Resume {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Shut down the guest.
     Stop {
+        /// Host holding the computer.
         host: HostId,
     },
-    /// Force-stop and start.
+    /// Recover a crashed guest with an idempotent start.
     Restart {
+        /// Host holding the computer.
         host: HostId,
     },
+    /// Restart only the guest connection daemon, preserving the guest and its sessions.
+    RestartMacrod {
+        /// Host holding the computer.
+        host: HostId,
+    },
+    /// Delete the guest and its disk.
     Destroy {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Suspend the coldest idle awake computer on `host` to free units.
     MakeRoom {
+        /// Host holding the computer.
         host: HostId,
     },
     /// Remove this computer's item from the team subscription.
@@ -334,10 +448,14 @@ pub enum Effect {
     /// need no cancel: a timer that fires in a state it no longer applies to
     /// is ignored by [`transition`].
     ScheduleTimer {
+        /// Timer event to deliver.
         kind: TimerKind,
+        /// Time the operation takes effect.
         at: DateTime<Utc>,
     },
+    /// Report a failure requiring operator attention.
     PageOperator {
+        /// Reason for this decision or failure.
         reason: String,
     },
 }
@@ -356,12 +474,28 @@ impl Effect {
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr, strum::EnumString,
 )]
+/// Worker responsible for an outbox action.
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum EffectWorker {
+    /// Executes guest operations.
     Fleet,
+    /// Executes subscription operations.
     Billing,
+    /// Persists scheduled lifecycle events.
     Timers,
+}
+
+/// What the fleet observes about an instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstanceStatus {
+    /// Guest is running.
+    Running,
+    /// Guest is paused in RAM.
+    Frozen,
+    /// Guest is powered off.
+    Stopped,
 }
 
 /// Facts the applier gathers under the host lock before a transition.
@@ -369,6 +503,7 @@ pub enum EffectWorker {
 pub struct Context {
     /// Last creation begun by the fleet; Create effects reserve its successor.
     pub enrollment_generation: EnrollmentGeneration,
+    /// Current time used for this transition.
     pub now: DateTime<Utc>,
     /// Whether the computer's host has awake units free for it to wake.
     pub host_has_room: bool,
@@ -452,7 +587,12 @@ pub fn transition(
         Event::InstanceStarted => {
             if let Phase::Provisioning { start: true, .. } = state.phase {
                 if state.power == Power::On {
-                    boot(&mut next, &mut effects, host, now, None);
+                    if state.macrod_connected {
+                        next.phase = Phase::Running { host };
+                        next.wake_requested = false;
+                    } else {
+                        boot(&mut next, &mut effects, host, now, None);
+                    }
                 } else {
                     stop(&mut next, &mut effects, host);
                 }
@@ -477,6 +617,7 @@ pub fn transition(
 
         Event::MacrodConnected => {
             next.macrod_connected = true;
+            next.macrod_misses = 0;
             if let Phase::Booting { .. } = state.phase {
                 if state.power == Power::On {
                     next.phase = Phase::Running { host };
@@ -497,11 +638,29 @@ pub fn transition(
             }
         }
 
-        Event::MacrodMissing => {
+        Event::MacrodMissing { instance_status } => {
             let gone = !state.macrod_connected
                 && matches!(state.phase, Phase::Booting { .. } | Phase::Running { .. });
             if gone {
-                crash(&mut next, &mut effects, host, now);
+                if *instance_status == Some(InstanceStatus::Running) {
+                    next.macrod_misses =
+                        state.macrod_misses.saturating_add(1).min(MAX_MACROD_MISSES);
+                    effects.push(Effect::ScheduleTimer {
+                        kind: TimerKind::MacrodMissing,
+                        at: now + MACROD_GRACE,
+                    });
+                    if state.macrod_misses < MAX_MACROD_MISSES
+                        && next.macrod_misses == MAX_MACROD_MISSES
+                    {
+                        effects.push(Effect::RestartMacrod { host });
+                        effects.push(Effect::PageOperator {
+                            reason: "macrod missing repeatedly while the guest is running"
+                                .to_owned(),
+                        });
+                    }
+                } else {
+                    crash(&mut next, &mut effects, host, now);
+                }
             }
         }
 
@@ -580,8 +739,27 @@ pub fn transition(
         }
 
         Event::WakeRetry => {
-            if state.power == Power::On && state.wake_requested {
+            let due = state
+                .capacity_wait
+                .as_ref()
+                .is_none_or(|wait| now >= wait.retry_at);
+            if state.power == Power::On && state.wake_requested && due {
                 wake(&mut next, &mut effects, host, context);
+            }
+        }
+
+        Event::CapacityChanged => {
+            if state.waiting_for_capacity() {
+                next.capacity_wait = None;
+                wake(&mut next, &mut effects, host, context);
+            }
+        }
+
+        Event::RoomUnavailable => {
+            if state.waiting_for_capacity()
+                && let Some(wait) = &mut next.capacity_wait
+            {
+                wait.room_unavailable = true;
             }
         }
 
@@ -612,7 +790,7 @@ pub fn transition(
                     } else {
                         next.phase = Phase::Stopped { host };
                         next.wake_requested = true;
-                        make_room(&mut effects, host, now);
+                        make_room(&mut next, &mut effects, host, now);
                     }
                 } else {
                     next.phase = Phase::Stopped { host };
@@ -686,6 +864,9 @@ pub fn transition(
         }
     }
 
+    if !next.waiting_for_capacity() {
+        next.capacity_wait = None;
+    }
     (next, effects)
 }
 
@@ -699,46 +880,14 @@ fn boot(
     start: Option<Effect>,
 ) {
     next.phase = Phase::Booting { host };
+    next.capacity_wait = None;
+    next.macrod_misses = 0;
     next.wake_requested = false;
     next.macrod_connected = false;
     effects.extend(start);
     effects.push(Effect::ScheduleTimer {
         kind: TimerKind::MacrodMissing,
         at: now + MACROD_GRACE,
-    });
-}
-
-/// Wake a stopped or suspended computer when the host has room; otherwise
-/// ask for room and retry. Awake computers need nothing.
-fn wake(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, context: Context) {
-    let start = match next.phase {
-        Phase::Stopped { .. } => Effect::Start { host },
-        Phase::Suspended {
-            saved_state: true, ..
-        } => Effect::Resume { host },
-        Phase::Suspended {
-            saved_state: false, ..
-        }
-        | Phase::Stopping { .. } => {
-            next.wake_requested = true;
-            return;
-        }
-        _ => return,
-    };
-
-    if context.host_has_room {
-        boot(next, effects, host, context.now, Some(start));
-    } else {
-        next.wake_requested = true;
-        make_room(effects, host, context.now);
-    }
-}
-
-fn make_room(effects: &mut Vec<Effect>, host: HostId, now: DateTime<Utc>) {
-    effects.push(Effect::MakeRoom { host });
-    effects.push(Effect::ScheduleTimer {
-        kind: TimerKind::WakeRetry,
-        at: now + WAKE_RETRY,
     });
 }
 

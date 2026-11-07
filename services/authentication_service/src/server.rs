@@ -701,6 +701,10 @@ async fn run_server() -> anyhow::Result<()> {
     .with_agent_invite_rollout(Arc::new(
         team_agents::domain::rollout::TeamAgentRollout::new(feature_flags.clone()),
     ));
+    let computer_rollout = feature_flags
+        .clone()
+        .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+        .unwrap_or_default();
     let computer_prices = config.computer_prices()?;
     let computer_repo = hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone());
     let teams_service = Arc::new(teams_service_impl);
@@ -724,50 +728,56 @@ async fn run_server() -> anyhow::Result<()> {
                 ),
                 config.team_agents_included_email_domain.clone(),
             ),
-        ),
+        )
+        .with_rollout(computer_rollout.clone()),
     );
     let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(
         config.environment,
         matches!(config.computers_fleet.as_deref(), Some("incus" | "docker")),
         config.computers_service_url_overrides.as_deref(),
     )?;
-    let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
-        team_agents_repository.clone(),
-        team_agents::outbound::team_membership::TeamsMembership::new(
-            teams_service.clone(),
-            teams_repo_impl.clone(),
-        ),
-        team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
-            user_api_key::domain::service::UserApiKeyServiceImpl::new(
-                user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
+    let team_agents_service = Arc::new(
+        team_agents::domain::service::TeamAgentServiceImpl::new(
+            team_agents_repository.clone(),
+            team_agents::outbound::team_membership::TeamsMembership::new(
+                teams_service.clone(),
+                teams_repo_impl.clone(),
             ),
-        )),
-        team_agents::outbound::dead_simple_email::DeadSimpleEmail::new(
-            config.dead_simple_mail_api_key.value().map(str::to_string),
-        )
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-        team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
-            computer_service.clone(),
-            computer_repo,
-            harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(db.clone()),
-        ),
-        team_agents::outbound::agent_git_repos::AgentGitRepos::new(
-            agent_git::client::AgentGitClient::new(
-                macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
-                internal_key.clone(),
+            team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+                user_api_key::domain::service::UserApiKeyServiceImpl::new(
+                    user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(
+                        db.clone(),
+                    ),
+                ),
+            )),
+            team_agents::outbound::dead_simple_email::DeadSimpleEmail::new(
+                config.dead_simple_mail_api_key.value().map(str::to_string),
             )
             .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-            computer_urls.git,
-        ),
-        // Gates every administrator operation per user (`enable-team-agents`).
-        // Missing PostHog configuration closes administrator operations.
-        feature_flags.clone(),
-        // The brain runs on its own computer, so it reaches Macro through the
-        // computer-facing gateway, never this container's in-network addresses.
-        computer_urls.gateway,
-        format!("{}/brain/anthropic", computer_urls.egress),
-        config.team_agents_included_email_domain.clone(),
-    ));
+            team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
+                computer_service.clone(),
+                computer_repo,
+                harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(db.clone()),
+            ),
+            team_agents::outbound::agent_git_repos::AgentGitRepos::new(
+                agent_git::client::AgentGitClient::new(
+                    macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
+                    internal_key.clone(),
+                )
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+                computer_urls.git,
+            ),
+            // Gates every administrator operation per user (`enable-team-agents`).
+            // Missing PostHog configuration closes administrator operations.
+            feature_flags.clone(),
+            // The brain runs on its own computer, so it reaches Macro through the
+            // computer-facing gateway, never this container's in-network addresses.
+            computer_urls.gateway,
+            format!("{}/brain/anthropic", computer_urls.egress),
+            config.team_agents_included_email_domain.clone(),
+        )
+        .with_computer_rollout(computer_rollout),
+    );
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(

@@ -4,20 +4,14 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { CatalogEntryId } from './catalogEntryId';
-import type { ComputerSize } from './computerSize';
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
 import type { ComputerStatusCompReason } from './computerStatusCompReason';
 import type { ComputerStatusHarnessId } from './computerStatusHarnessId';
 import type { ComputerStatusKind } from './computerStatusKind';
+import type { ComputerStatusPayment } from './computerStatusPayment';
 import type { ComputerStatusPersonaName } from './computerStatusPersonaName';
 import type { ComputerStatusRetainedUntil } from './computerStatusRetainedUntil';
 import type { ComputerStatusSetup } from './computerStatusSetup';
-import type { DiskGib } from './diskGib';
-import type { MemoryGib } from './memoryGib';
-import type { PaymentOutcome } from './paymentOutcome';
-import type { Vcpus } from './vcpus';
 
 /**
  * A computer as its team sees it.
@@ -25,22 +19,34 @@ import type { Vcpus } from './vcpus';
 export interface ComputerStatus {
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
-  catalogEntry: CatalogEntryId;
+  /** Versioned catalog entry saved at purchase. */
+  catalogEntry: string;
   /** Present for a comped purchase, including after release. */
   compReason?: ComputerStatusCompReason;
+  /** Time the computer was reserved. */
   createdAt: string;
-  diskGib: DiskGib;
+  /** Root disk limit saved at purchase. */
+  diskGib: number;
+  /** Harness claimed by this guest. */
   harnessId?: ComputerStatusHarnessId;
+  /** Stable resource identity. */
   id: string;
-  memoryGib: MemoryGib;
+  /** Memory limit saved at purchase. */
+  memoryGib: number;
+  /** Display name. */
   name: string;
-  payment: PaymentOutcome;
+  payment?: ComputerStatusPayment;
+  /** Display name of the installed persona. */
   personaName?: ComputerStatusPersonaName;
+  /** Whether validated state requests power on; false for quarantined records. */
   poweredOn: boolean;
   /** When the disk is destroyed, for a canceled computer. */
   retainedUntil?: ComputerStatusRetainedUntil;
   setup?: ComputerStatusSetup;
-  size: ComputerSize;
+  /** Purchased catalog size. */
+  size: string;
+  /** Observed guest status. */
   status: ComputerStatusKind;
-  vcpus: Vcpus;
+  /** Virtual CPU count. */
+  vcpus: number;
 }

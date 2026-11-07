@@ -1,15 +1,13 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { resolveScreenUrl } from '@app/lib/service-clients/service-agent-harness/screen-url';
 import {
   beginInteraction,
   TraceFlow,
   usePending,
 } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableMacroComputers,
-  enableTeamAgents,
-} from '@core/constant/featureFlags';
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Span } from '@macro-inc/observability';
@@ -32,17 +30,13 @@ import { SettingsComputerScreenContext } from './context/settings-screen-context
 import { useOptionalSettingsScreenNavigation } from './context/settings-screen-navigation';
 import { hasHarnessEditAccess } from './harness-access';
 import { connectScreen } from './queries/novnc';
-import { resolveScreenUrl } from './queries/screen-url';
 import { ScreenPane } from './views/screen-pane';
 import { ScreenSplit } from './views/screen-split';
 
 /** Settings reuses the screen pane as its main content at every width. */
 export function SettingsComputerScreen(props: ParentProps) {
-  const flag = useFeatureFlag(enableTeamAgents);
-  const computers = useFeatureFlag(enableMacroComputers);
-  const enabled = () =>
-    (!flag().loading && flag().enabled) ||
-    (!computers().loading && computers().enabled);
+  const flag = useFeatureFlag(enableMacroComputers);
+  const enabled = () => !flag().loading && flag().enabled;
   return (
     <Show when={enabled()} fallback={props.children}>
       <Suspense
@@ -99,7 +93,7 @@ function ConnectedSettingsComputerScreen(props: ParentProps) {
     title: () => harness()?.name,
     startControlling,
     canEdit: () => hasHarnessEditAccess(harness()),
-    mobile: isTouchDevice,
+    touch: isTouchDevice,
     resolveUrl: (id, control) =>
       operationSpan
         ? operationSpan.run(() => resolveScreenUrl(id, control))

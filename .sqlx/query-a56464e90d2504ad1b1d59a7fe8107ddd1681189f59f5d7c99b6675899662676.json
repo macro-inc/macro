@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(MAX(free), 0)::INTEGER AS \"free!\"\n            FROM (\n                SELECT LEAST(\n                    host.sold_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)), 0),\n                    CASE WHEN $1::BOOLEAN THEN host.awake_capacity_units - COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.persona IS NOT NULL), 0) ELSE host.sold_capacity_units END\n                ) AS free\n                FROM hosted_runtime_host host\n                LEFT JOIN hosted_runtime computer\n                    ON computer.host_id = host.id AND computer.holds_units\n                GROUP BY host.id, host.sold_capacity_units, host.awake_capacity_units\n            ) hosts\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "free!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a56464e90d2504ad1b1d59a7fe8107ddd1681189f59f5d7c99b6675899662676"
+}

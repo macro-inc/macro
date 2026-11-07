@@ -11,6 +11,7 @@ pub mod no_persona_credentials;
 pub mod operator;
 pub mod persona_credentials;
 pub mod ports;
+pub mod rollout;
 pub mod service;
 pub mod size;
 

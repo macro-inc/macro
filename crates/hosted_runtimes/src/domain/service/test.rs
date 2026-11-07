@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Mutex;
 
@@ -11,6 +12,9 @@ use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOu
 use crate::domain::models::{BillingInterval, SubscriptionItem};
 
 mod comped;
+mod purchase;
+mod quarantine;
+mod rollout;
 mod sold_resources;
 
 /// Records subscription updates; fails them when `decline` is set.
@@ -147,7 +151,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: Some(persona()),
@@ -170,7 +174,14 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             format!("computer-add:{computer_id}"),
         )]
     );
-    let stored = service.repo.get(computer_id).await.unwrap().unwrap();
+    let stored = service
+        .repo
+        .get(computer_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(
         stored.resources,
         crate::domain::size::ComputerResources {
@@ -192,8 +203,8 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         status.setup,
         Some(crate::domain::models::SetupProgress {
             step: crate::domain::models::SetupStep::Creating,
-            position: 2,
-            total: 5,
+            position: 1,
+            total: 4,
         })
     );
     assert_eq!(
@@ -205,20 +216,11 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             .iter()
             .map(|pending| pending.effect.clone())
             .collect::<Vec<_>>(),
-        vec![
-            Effect::ConfirmPayment {
-                extra_items: vec![SubscriptionItem {
-                    price_id: crate::domain::models::StripePriceId::parse("price_agent_seat")
-                        .unwrap(),
-                    quantity: 1
-                }]
-            },
-            Effect::Create {
-                host: HOST,
-                start: true,
-                generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
-            }
-        ]
+        vec![Effect::Create {
+            host: HOST,
+            start: true,
+            generation: crate::domain::persona_credentials::EnrollmentGeneration::new(1),
+        }]
     );
 }
 
@@ -240,7 +242,7 @@ async fn declined_payment_drops_the_reservation() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Large,
             name: Some("Build box".to_owned()),
             persona: None,
@@ -265,13 +267,13 @@ async fn declined_payment_drops_the_reservation() {
         Phase::PaymentFailed
     );
     service.repo.effect_run_after.lock().unwrap().clear();
-    assert_eq!(service.run_billing_effects().await.unwrap(), 1);
+    assert_eq!(service.run_billing_effects().await.unwrap(), 0);
     assert_eq!(
         *service.billing.calls.lock().unwrap(),
         vec!["quote", "add_computer"]
     );
     assert!(service.billing.charged.lock().unwrap().is_empty());
-    assert_eq!(computers[0].payment, PaymentOutcome::Unbilled);
+    assert_eq!(computers[0].payment.unwrap(), PaymentOutcome::Unbilled);
     let released = service
         .release_now(TEAM, computers[0].id, "Build box")
         .await
@@ -280,9 +282,14 @@ async fn declined_payment_drops_the_reservation() {
         released.status,
         crate::domain::models::ComputerStatusKind::Released
     );
-    assert_eq!(released.payment, PaymentOutcome::Unbilled);
+    assert_eq!(released.payment.unwrap(), PaymentOutcome::Unbilled);
     assert_eq!(
-        service.status(TEAM, released.id).await.unwrap().payment,
+        service
+            .status(TEAM, released.id)
+            .await
+            .unwrap()
+            .payment
+            .unwrap(),
         PaymentOutcome::Unbilled
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);
@@ -304,7 +311,7 @@ async fn sold_out_size_is_not_billed() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Xl,
             name: None,
             persona: None,
@@ -336,7 +343,7 @@ async fn persona_with_a_multiline_value_is_rejected_before_anything_is_held() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: Some(multiline),
@@ -362,7 +369,7 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: Some("Build box".to_owned()),
             persona: None,
@@ -382,9 +389,14 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
         released.status,
         crate::domain::models::ComputerStatusKind::Released
     );
-    assert_eq!(released.payment, PaymentOutcome::Paid);
+    assert_eq!(released.payment.unwrap(), PaymentOutcome::Paid);
     assert_eq!(
-        service.status(TEAM, computer_id).await.unwrap().payment,
+        service
+            .status(TEAM, computer_id)
+            .await
+            .unwrap()
+            .payment
+            .unwrap(),
         PaymentOutcome::Paid
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
@@ -410,7 +422,7 @@ async fn other_teams_cannot_see_or_change_a_computer() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -466,7 +478,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
                 state,
                 harness_id: None,
                 persona: None,
-                created_by: "macro|admin@example.com".to_owned(),
+                created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 created_at,
                 enrolled_at: Some(created_at),
                 enrollment_generation: Default::default(),
@@ -498,6 +510,8 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         .get(ComputerId::new_from_uuid(Uuid::from_u128(2)))
         .await
         .unwrap()
+        .unwrap()
+        .into_healthy()
         .unwrap();
     assert_eq!(newest.state.power, Power::Off);
     assert!(matches!(
@@ -535,12 +549,14 @@ async fn retry_failed_computer_restarts_without_billing() {
                 comp_reason: None,
                 macrod_connected: false,
                 provision_traceparent: None,
+                macrod_misses: 0,
                 recent_crashes: vec![],
                 wake_requested: false,
+                capacity_wait: None,
             },
             harness_id: None,
             persona: None,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
             enrollment_generation: Default::default(),
@@ -552,7 +568,14 @@ async fn retry_failed_computer_restarts_without_billing() {
 
     let status = result.unwrap();
     assert_eq!(status, service.status(TEAM, computer_id).await.unwrap());
-    let computer = service.repo.get(computer_id).await.unwrap().unwrap();
+    let computer = service
+        .repo
+        .get(computer_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
     assert_eq!(computer.state.phase, Phase::Booting { host: HOST });
     assert_eq!(
         *service.repo.events.lock().unwrap(),
@@ -607,12 +630,14 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
                 comp_reason: None,
                 macrod_connected: false,
                 provision_traceparent: None,
+                macrod_misses: 0,
                 recent_crashes: vec![],
                 wake_requested: false,
+                capacity_wait: None,
             },
             harness_id: None,
             persona: None,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
             enrollment_generation: Default::default(),
@@ -657,12 +682,14 @@ async fn retry_another_teams_computer_is_not_found() {
                 comp_reason: None,
                 macrod_connected: false,
                 provision_traceparent: None,
+                macrod_misses: 0,
                 recent_crashes: vec![],
                 wake_requested: false,
+                capacity_wait: None,
             },
             harness_id: None,
             persona: None,
-            created_by: "macro|admin@example.com".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
             enrollment_generation: Default::default(),
@@ -693,7 +720,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Large,
             name: Some("Build box".to_owned()),
             persona: None,
@@ -722,7 +749,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
     );
     assert_eq!(
         computer.status().setup.unwrap().step,
-        crate::domain::models::SetupStep::Paying
+        crate::domain::models::SetupStep::Creating
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);
     service.repo.effect_run_after.lock().unwrap().clear();
@@ -733,6 +760,8 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
             .get(computer.id)
             .await
             .unwrap()
+            .unwrap()
+            .into_healthy()
             .unwrap()
             .state
             .phase,
@@ -774,7 +803,7 @@ async fn provider_error_stays_pending_and_confirmation_keeps_retrying() {
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -797,7 +826,16 @@ async fn provider_error_stays_pending_and_confirmation_keeps_retrying() {
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
-        service.repo.get(id).await.unwrap().unwrap().state.phase,
+        service
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
         Phase::PendingPayment {
             host: HOST,
             since: now()
@@ -825,11 +863,11 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
         FakeBilling::default(),
         FixedClock,
     );
-    service
+    let computer_id = service
         .purchase(PurchaseRequest {
             billing: crate::domain::models::PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -837,6 +875,19 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
         })
         .await
         .unwrap();
+    service
+        .repo
+        .effects
+        .lock()
+        .unwrap()
+        .push(crate::domain::ports::PendingEffect {
+            id: 100,
+            computer_id,
+            effect: Effect::ConfirmPayment {
+                extra_items: vec![],
+            },
+            attempts: 0,
+        });
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
@@ -881,7 +932,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
                     crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
                 ),
                 persona: None,
-                created_by: "test-admin".to_owned(),
+                created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 extra_items: vec![],
             },
             now(),
@@ -891,7 +942,16 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
     service.repo.effect_run_after.lock().unwrap().clear();
     assert_eq!(service.run_billing_effects().await.unwrap(), 1);
     assert_eq!(
-        service.repo.get(id).await.unwrap().unwrap().state.phase,
+        service
+            .repo
+            .get(id)
+            .await
+            .unwrap()
+            .unwrap()
+            .into_healthy()
+            .unwrap()
+            .state
+            .phase,
         Phase::PaymentFailed
     );
     assert!(service.repo.effects.lock().unwrap().is_empty());
@@ -914,7 +974,7 @@ async fn disabled_sales_reject_purchase_before_reserving_capacity() {
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
             team_id: TEAM,
-            created_by: "test-admin".to_owned(),
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
             name: None,
             persona: None,
@@ -928,3 +988,7 @@ async fn disabled_sales_reject_purchase_before_reserving_capacity() {
     assert!(service.repo.list_for_team(TEAM).await.unwrap().is_empty());
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }
+
+mod capacity;
+
+mod waiting;

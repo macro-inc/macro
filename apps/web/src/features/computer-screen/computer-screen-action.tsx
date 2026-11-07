@@ -1,7 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
-import { enableTeamAgents } from '@core/constant/featureFlags';
+import { enableMacroComputers } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import MonitorIcon from '@icon/system/regular/desktop.svg';
 import { Button } from '@ui';
@@ -14,7 +14,7 @@ export function ComputerScreenAction(props: {
   harnessId: string;
   available: boolean;
 }) {
-  const flag = useFeatureFlag(enableTeamAgents);
+  const flag = useFeatureFlag(enableMacroComputers);
   const screen = useSettingsComputerScreen();
   return (
     <Show when={!flag().loading && flag().enabled && props.available}>

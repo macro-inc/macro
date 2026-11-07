@@ -8,6 +8,7 @@ import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   enableAiUsageBilling,
+  enableMacroComputers,
   enableTeamAgents,
 } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -415,9 +416,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
   } = useTeamViewer(() => props.team);
   const invitesQuery = useTeamInvitesQuery(() => props.team.id);
   const agentFlag = useFeatureFlag(enableTeamAgents);
+  const computerFlag = useFeatureFlag(enableMacroComputers);
   const screen = useSettingsComputerScreen();
   const canViewAgentComputers = () =>
-    !agentFlag().loading && agentFlag().enabled && !!screen;
+    !computerFlag().loading && computerFlag().enabled && !!screen;
   const canManageAgents = () =>
     isAdminOrOwner() && !agentFlag().loading && agentFlag().enabled;
   const agentsQuery = useTeamAgentsQuery(() => props.team.id, canManageAgents);

@@ -321,7 +321,7 @@ async fn enrollment_locks_the_agent_and_claims_an_unbound_purchase_before_the_in
             NewComputer {
                 id,
                 team_id: team,
-                created_by: ADMIN.to_owned(),
+                created_by: user(ADMIN),
                 name: ComputerName::try_new("Agent").unwrap(),
                 size: catalog[0].size,
                 resources: catalog[0].resources,

@@ -18,7 +18,7 @@ it('reconnects for control and revokes it when edit permission is lost', async (
         sessionId: () => 'session',
         harnessId: () => 'computer',
         canEdit,
-        mobile: () => false,
+        touch: () => false,
         resolveUrl,
       },
       () => document.createElement('div'),
@@ -41,9 +41,9 @@ it('reconnects for control and revokes it when edit permission is lost', async (
 });
 
 it.each([
-  { edit: false, mobile: false },
-  { edit: true, mobile: true },
-])('keeps watch-only for %j', async ({ edit, mobile }) => {
+  { edit: false, touch: false },
+  { edit: true, touch: true },
+])('keeps watch-only for %j', async ({ edit, touch }) => {
   const resolveUrl = vi.fn(async () => 'wss://screen');
   const connect = vi.fn<ConnectScreen>(async () => ({ disconnect: vi.fn() }));
   const { result } = renderHook(() =>
@@ -52,7 +52,7 @@ it.each([
         sessionId: () => 'session',
         harnessId: () => 'computer',
         canEdit: () => edit,
-        mobile: () => mobile,
+        touch: () => touch,
         resolveUrl,
       },
       () => document.createElement('div'),
@@ -78,7 +78,7 @@ it('does not connect after an authorization request outlives the pane', async ()
         sessionId: () => 'session',
         harnessId: () => 'computer',
         canEdit: () => true,
-        mobile: () => false,
+        touch: () => false,
         resolveUrl: () => authorized,
       },
       () => document.createElement('div'),
@@ -103,7 +103,7 @@ it('keeps control and its connection when polling refreshes the same harness', a
         sessionId: () => 'session',
         harnessId: () => harness().id,
         canEdit: () => true,
-        mobile: () => false,
+        touch: () => false,
         resolveUrl: async () => 'wss://screen',
       },
       () => document.createElement('div'),
@@ -133,7 +133,7 @@ it.each([
           sessionId: () => undefined,
           harnessId: () => 'computer',
           canEdit: () => edit,
-          mobile: () => mobile,
+          touch: () => mobile,
           startControlling: () => true,
           resolveUrl: async () => 'wss://screen',
         },

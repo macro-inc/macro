@@ -9,5 +9,6 @@
  * Body of a power change.
  */
 export interface PowerBody {
+  /** Requested power state. */
   on: boolean;
 }

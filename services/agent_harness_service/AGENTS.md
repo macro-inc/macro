@@ -42,10 +42,16 @@ Pulumi stacks; they do not host extra agent processes.
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
-- `src/computers.rs`: configures the optional fleet operator, runs fleet effects,
+- `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
+  directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
   `incus`, local-only `docker`, or explicit `disabled`; missing selection fails startup.
+  Shutdown stops computer passes through the shared CancellationToken and waits
+  on their TaskTracker; fleet effects drain for up to thirty seconds and release
+  unfinished leases. Completion still notifies brain wake waiters. See
+  hosted_runtimes' Contracts for redeploy grace, bounded effect execution, and
+  hard-kill recovery.
   `COMPUTERS_IMAGE` selects the local Incus image alias or Docker image;
   an Incus override must not silently use the shared `macro-box` alias.
   HostedHarnesses pairing retains the buying admin as the harness owner and
@@ -69,12 +75,26 @@ Pulumi stacks; they do not host extra agent processes.
   its team. See `hosted_runtimes/AGENTS.md` Contracts for the credential contract.
 - `src/computer_screen.rs` + `src/computer_screen/`: runtime screen and Macro
   computer account routes.
+  Viewer screen and all Claude routes require the caller's `enable-macro-computers`
+  flag through `hosted_runtimes::domain::rollout::ComputerRollout`; missing
+  providers/flags and evaluation errors return 403. The macrod
+  `/harnesses/me/screen` endpoint and fleet workers stay ungated. Viewer socket
+  renewals recheck the rollout and shared View/Use authorization, failing closed.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
-  `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`,
+  `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
+  (a rejected code returns 422 with `code: "invalid_code"`),
+  `POST /harnesses/{id}/claude-sign-in/cancel` → 204 (same manage rights
+  and rollout gate; interrupts an active start or completion and waits for
+  its account-mode reconciliation and lease release before answering),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
   written to the harness row on macrod's confirmation; a shared 180-second
   account-change lease covers the command and mode write, preventing opposing
-  requests from persisting out of order; concurrent requests get 409),
+  requests from persisting out of order; concurrent requests get 409; terminal
+  responses release the lease after the mode write, and failed or dropped
+  requests schedule owner-checked cleanup instead of waiting for expiry;
+  abandoned sign-in requests cancel macrod before releasing their lease;
+  completion and its mode write run in a tracked task so a dropped HTTP waiter
+  still reconciles any token macrod already committed),
   `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights), and two
   websockets: the viewer's `GET /harnesses/{id}/screen[?control=true]` (view
   rights; `control` needs use rights from the harness domain; `rfb.rs` drops
@@ -202,7 +222,8 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset; computer
+  account-lease tests require `REDIS_URI` pointing at isolated local Redis). Add
   `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
   routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).

@@ -77,7 +77,7 @@ export default defineConfig({
         replacement: `${directory}/transport.ts`,
       },
       {
-        find: /^\.\/queries\/screen-url$/,
+        find: /^@app\/lib\/service-clients\/service-agent-harness\/screen-url$/,
         replacement: `${directory}/transport.ts`,
       },
     ],

@@ -29,11 +29,13 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 computer_id = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
-incus_client = { path = "../incus_client", optional = true }
+feature_flags = { path = "../feature_flags" }
 harness_id = { path = "../harness_id" }
+incus_client = { path = "../incus_client", optional = true }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 macro_env = { path = "../macro_env", optional = true }
+macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
 rootcause = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace", "metrics"] }

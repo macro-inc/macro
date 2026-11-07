@@ -139,3 +139,7 @@ export const accessRequestsClient = {
 };
 export async function invalidateAccessRequests() {}
 export function refreshSharedAccess() {}
+
+export function useTeamAgentComputerQuery() {
+  return { isPending: false, data: undefined };
+}

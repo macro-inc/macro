@@ -20,6 +20,17 @@ const CALLBACK_TIMEOUT: Duration = Duration::from_secs(30);
 /// Longest pasted code accepted; real ones are far shorter.
 const MAX_CODE_CHARS: usize = 512;
 
+/// A rejected code is distinct from a silent or broken CLI.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum CompleteError {
+    #[error("That code didn't work — sign in again to get a new one")]
+    InvalidCode,
+    #[error("Claude did not accept the sign-in in time")]
+    Timeout,
+    #[error("{0}")]
+    Internal(rootcause::Report),
+}
+
 /// A `claude setup-token` waiting for the user.
 pub struct SignIn {
     pty: Pty,
@@ -49,14 +60,17 @@ impl SignIn {
     }
 
     /// Finish with what the user pasted and return the OAuth token.
-    pub async fn complete(&mut self, pasted: &str) -> rootcause::Result<String> {
-        match Pasted::parse(pasted)? {
-            Pasted::Callback(url) => open_callback(&self.http, url).await?,
-            Pasted::Code(code) => self.pty.type_line(&code)?,
+    pub async fn complete(&mut self, pasted: &str) -> Result<String, CompleteError> {
+        match Pasted::parse(pasted).map_err(CompleteError::Internal)? {
+            Pasted::Callback(url) => open_callback(&self.http, url)
+                .await
+                .map_err(CompleteError::Internal)?,
+            Pasted::Code(code) => self.pty.type_line(&code).map_err(CompleteError::Internal)?,
         }
-        tokio::time::timeout(TOKEN_TIMEOUT, self.pty.wait_for(oauth_token))
+        tokio::time::timeout(TOKEN_TIMEOUT, self.pty.wait_for(token_result))
             .await
-            .map_err(|_| rootcause::report!("Claude did not accept the sign-in in time"))?
+            .map_err(|_| CompleteError::Timeout)?
+            .map_err(CompleteError::Internal)?
     }
 }
 
@@ -137,6 +151,19 @@ pub(super) fn oauth_token(output: &str) -> Option<String> {
         .captures(&visible)?
         .get(1)
         .map(|token| token.as_str().to_owned())
+}
+
+/// Rejections from the OAuth flow in the pinned Claude Code 2.1.214 binary
+/// (nixpkgs in flake.lock). Keep the provider's phrases together and do not
+/// match generic "expired" text, which also appears in successful output.
+fn token_result(output: &str) -> Option<Result<String, CompleteError>> {
+    let visible = strip_terminal_codes(output);
+    if lazy_regex::regex!(
+        r"(?i)\b(?:Invalid code\. Please make sure the full code was copied|Authentication failed: Invalid authorization code|OAuth error:|OAuth state mismatch)"
+    ).is_match(&visible) {
+        return Some(Err(CompleteError::InvalidCode));
+    }
+    oauth_token(output).map(Ok)
 }
 
 /// Terminal output without escape sequences: CSI (colors, cursor moves) and

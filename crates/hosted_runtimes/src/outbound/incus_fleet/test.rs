@@ -1,4 +1,5 @@
 use incus_client::{ImageProtocol, ImageRemote, IncusTimeouts};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use uuid::Uuid;
@@ -99,7 +100,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         ),
         harness_id: None,
         persona: None,
-        created_by: "macro|owner@example.com".to_owned(),
+        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
         enrollment_generation: Default::default(),
@@ -206,7 +207,7 @@ fn a_remote_image_names_its_server_and_protocol() {
         ),
         harness_id: None,
         persona: None,
-        created_by: "macro|owner@example.com".to_owned(),
+        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
         enrollment_generation: Default::default(),

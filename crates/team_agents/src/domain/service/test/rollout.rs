@@ -71,10 +71,13 @@ impl FeatureFlags for CountingFlags {
             .lock()
             .expect("lock")
             .push(caller.clone().into_owned());
-        Ok(FlagSnapshot::new([(
-            TEAM_AGENTS_FLAG.to_owned(),
-            FlagValue::Boolean(true),
-        )]))
+        Ok(FlagSnapshot::new([
+            (TEAM_AGENTS_FLAG.to_owned(), FlagValue::Boolean(true)),
+            (
+                hosted_runtimes::domain::rollout::ENABLE_MACRO_COMPUTERS.to_owned(),
+                FlagValue::Boolean(true),
+            ),
+        ]))
     }
 }
 
@@ -95,7 +98,10 @@ async fn each_admin_operation_loads_once_and_self_operations_load_no_flags() {
         base.gateway_url,
         base.anthropic_base_url,
         base.included_email_domain,
-    );
+    )
+    .with_computer_rollout(ComputerRollout::new(CountingFlags {
+        calls: calls.clone(),
+    }));
     service.sizes(receipt(TEAM_ID)).await.expect("sizes");
     assert_eq!(calls.lock().expect("lock").len(), 1);
     service

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Button, Dialog, Input } from '@ui';
@@ -16,11 +17,16 @@ export function ComputerPurchaseDialog(props: {
   const nameId = createUniqueId();
   const [name, setName] = createSignal('');
   const price = () => formatQuote(props.offer.quote);
-  const renewal = () =>
+  const billingDescription = () =>
     match(props.offer.quote.interval)
-      .with('month', () => 'each month')
-      .with('year', () => 'each year')
-      .exhaustive((unknown) => `each ${unknown}`);
+      .with('month', () => t('computers.purchaseMonthly', { price: price() }))
+      .with('year', () => t('computers.purchaseYearly', { price: price() }))
+      .exhaustive((interval) =>
+        t('computers.purchaseInterval', {
+          price: price(),
+          interval: String(interval),
+        })
+      );
 
   const confirm = () => {
     if (props.pending) return;
@@ -40,29 +46,26 @@ export function ComputerPurchaseDialog(props: {
         <ActionDialogShell.Body>
           <ActionDialogShell.Header>
             <ActionDialogShell.Title>
-              Buy a {sizeLabel(props.offer.size)} Macro computer?
+              {t('computers.purchaseTitle', {
+                size: sizeLabel(props.offer.size),
+              })}
             </ActionDialogShell.Title>
             <ActionDialogShell.Description as="div" class="space-y-2">
               <p>{offerSpecs(props.offer)}.</p>
-              <p>
-                <span class="font-medium text-ink">{price()}</span>, added to
-                your team's subscription today. You're charged a prorated amount
-                now for the rest of this billing period, then {price()}{' '}
-                {renewal()} with your subscription.
-              </p>
+              <p>{billingDescription()}</p>
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
 
           <div class="flex flex-col gap-2">
             <label for={nameId} class="text-sm leading-5 text-ink-muted">
-              Name (optional)
+              {t('computers.nameOptional')}
             </label>
             <Input
               id={nameId}
               type="text"
               value={name()}
               maxLength={64}
-              placeholder="Build machine"
+              placeholder={t('computers.namePlaceholder')}
               disabled={props.pending}
               onInput={(event) => setName(event.currentTarget.value)}
               onKeyDown={(event) => {
@@ -87,7 +90,7 @@ export function ComputerPurchaseDialog(props: {
             disabled={props.pending}
             onClick={props.onClose}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             type="button"
@@ -95,9 +98,12 @@ export function ComputerPurchaseDialog(props: {
             disabled={props.pending}
             onClick={confirm}
           >
-            <Show when={props.pending} fallback={`Buy for ${price()}`}>
+            <Show
+              when={props.pending}
+              fallback={t('computers.buyFor', { price: price() })}
+            >
               <SpinnerIcon class="size-4 animate-spin" />
-              <span class="sr-only">Buying</span>
+              <span class="sr-only">{t('computers.buying')}</span>
             </Show>
           </Button>
         </ActionDialogShell.Footer>

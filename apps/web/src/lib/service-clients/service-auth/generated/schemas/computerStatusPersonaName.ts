@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Display name of the installed persona.
+ */
 export type ComputerStatusPersonaName = string | null;
