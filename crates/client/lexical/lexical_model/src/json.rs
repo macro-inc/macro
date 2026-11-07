@@ -1,4 +1,6 @@
 //! Import policy shared by node types and transactions.
+mod coercion;
+pub use coercion::{js_string, js_to_number};
 /// Serialized field containing extensible node state.
 pub const NODE_STATE_KEY: &str = "$";
 /// Controls which fields a custom node importer accepts.
