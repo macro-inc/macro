@@ -12,3 +12,5 @@ invalid:
   - 'fn clock() { std::time::Instant::now(); }'
   - 'fn random_id() { uuid::Uuid::new_v4(); }'
   - 'fn random_bytes(bytes: &mut [u8]) { getrandom::fill(bytes); }'
+  - 'type Timeout = std::time::Duration;'
+  - 'use std::{time as clock};'

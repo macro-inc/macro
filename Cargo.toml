@@ -4,6 +4,8 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/sync_doc_id",
+  "crates/client/doc_sync_core",
   "crates/lexical_node_id",
   "crates/document_id",
   "crates/access_requests",
@@ -217,6 +219,8 @@ members = [
 ]
 
 [workspace.dependencies]
+macro_user_id = { path = "crates/macro_user_id" }
+sync_doc_id = { path = "crates/sync_doc_id" }
 lexical_node_id = { path = "crates/lexical_node_id" }
 document_id = { path = "crates/document_id" }
 # Parsing-only UUIDs for wasm-safe value crates; no random generation.
@@ -596,5 +600,5 @@ lto = "fat"
 codegen-units = 1
 
 [workspace.metadata.cargo-shear]
-# Leaf IDs registered for document-model and sync consumers landing separately.
-ignored = ["lexical_node_id", "document_id"]
+# Leaf ID registered for the document model, which lands in the next work package.
+ignored = ["lexical_node_id"]
