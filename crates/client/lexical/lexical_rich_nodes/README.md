@@ -69,3 +69,25 @@ package. The heading test involving an empty ListItem inside ListNode belongs to
 the list-node port; this package covers all its non-list heading/quote cases.
 Tier A rich-text/plain-text/hashtag fixture replay is a later conformance layer;
 these unit ports run directly against the model without a fixture replay DSL.
+
+
+`list` implements ListNode/ListItemNode, intrinsic numbering/merge/orphan repair,
+list conversion/removal, structural indent/outdent, empty-item Enter, optional
+strict indentation, marker style synchronization and checklist navigation. The
+five package command keys dispatch at Low priority. Host Enter routing calls
+`handle_registered_insert_paragraph` before rich-text insertion, so the registered
+numbering option is consumed without introducing a duplicate stock-command key.
+Numbering is signed 32-bit as specified for stored list values; command start
+payloads use the same integer contract rather than the later JsNumber sketch.
+
+The literal list tests port model assertions from LexicalListNode,
+LexicalListItemNode, formatList and utils suites, and cover strict-indent and
+checklist model branches. They include S4 R2-35's nested collapse (content is
+intentionally dropped), orphan grouping/lifting, element-point remapping,
+subclass dispatch, check-state reset/copy, numbering and every package command.
+DOM classes, HTML import/export, focus/hit testing and fractional JS indent input
+remain view/HTML concerns or use the core's typed unsigned indent boundary.
+The replayer now runs all eleven recorded rich-text, one hashtag and both list
+fixtures; there are no recorded plain-text fixtures. JS return objects with an
+undefined checked property retain that marker in the replayer, while model JSON
+correctly omits it from serialized snapshots.

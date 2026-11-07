@@ -434,13 +434,12 @@ impl Replayer {
                 let selection = tx.selection().cloned();
                 let replacements = tx.selection_replacements();
                 let result = crate::api::lexical::call(self, tx, op);
-                if replacements != tx.selection_replacements() {
-                    if let Some(id) = self.active_selection.take()
+                if replacements != tx.selection_replacements()
+                    && let Some(id) = self.active_selection.take()
                         && let Some(selection) = selection
                     {
                         self.selections[id] = tx.detach_selection(selection);
                     }
-                }
                 if let Some(expected) = op.get("throws") {
                     match result {
                         Ok(value) => {

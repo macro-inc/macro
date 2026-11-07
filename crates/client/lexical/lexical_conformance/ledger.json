@@ -256,26 +256,6 @@
       "failure": "op 0 call: unmapped API: @lexical/link.formatUrl"
     },
     {
-      "file": "packages/lexical-list/src/__tests__/unit/LexicalListItemNode.test.ts",
-      "test": "LexicalListItemNode tests > Can serialize a node that is not attached",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/list.$createListItemNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/list.$createListItemNode"
-    },
-    {
-      "file": "packages/lexical-list/src/__tests__/unit/utils.test.ts",
-      "test": "Lexical List Utils tests > getListDepth should return the 1-based depth of a list with one levels",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/list.$createListNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 1: unmapped API: @lexical/list.$createListNode"
-    },
-    {
       "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
       "test": "LexicalMarkNode tests > $wrapSelectionInMarkNode > does not include block element nodes",
       "status": "xfail",
@@ -744,16 +724,6 @@
       "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
       "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
       "failure": "op 5 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "LexicalCaret > $removeTextFromCaretRange > ported File e2e tests > $selectAll() with nesting and a trailing decorator",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/list.$createListNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 5: unmapped API: @lexical/list.$createListNode"
     },
     {
       "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",

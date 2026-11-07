@@ -76,7 +76,20 @@ pub(crate) fn call(
             };
             return nodes.into_iter().map(|key| r.node(view, key)).collect();
         }
-        "exportJSON" => return Ok(Value::Object(view.export_json(key)?)),
+        "exportJSON" => {
+            let mut json = view.export_json(key)?;
+            // JS object returns retain undefined; JSON snapshots omit the property.
+            if view.is::<lexical_rich_nodes::list::ListItemNode>(key)
+                && !json.contains_key("checked")
+            {
+                let value = json.remove("value");
+                json.insert("checked".into(), undefined());
+                if let Some(value) = value {
+                    json.insert("value".into(), value);
+                }
+            }
+            return Ok(Value::Object(json));
+        }
         "hasFormat" => {
             return Ok(json!(
                 view.text_data(key)?

@@ -31,3 +31,47 @@ pub fn handle_indent_and_outdent(
     }
     Ok(!handled.is_empty())
 }
+
+/// ECMAScript trim whitespace, excluding Unicode-only whitespace such as NEL.
+pub(crate) fn is_js_whitespace(ch: char) -> bool {
+    matches!(ch, '\u{0009}'..='\u{000d}' | ' ' | '\u{00a0}' | '\u{1680}' | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}')
+}
+
+/// Lift a block at its current position to its nearest root, splitting enclosing blocks.
+/// Suppresses empty edge copies, as upstream shouldSplit=false does.
+pub(crate) fn lift_to_nearest_root(
+    tx: &mut Transaction<'_>,
+    node: NodeKey,
+    remove_empty: bool,
+) -> std::result::Result<(), lexical_model::Error> {
+    let mut parent = tx.parent_or_err(node)?;
+    let mut index = tx
+        .index_within_parent(node)
+        .ok_or(lexical_model::Error::NoParent(node))?
+        .0;
+    tx.remove(node, true)?;
+    while !tx.is_root_or_shadow_root(parent) {
+        let grand = tx.parent_or_err(parent)?;
+        let parent_index = tx
+            .index_within_parent(parent)
+            .ok_or(lexical_model::Error::NoParent(parent))?
+            .0;
+        let size = tx.children_size(parent);
+        if index == 0 {
+            index = parent_index;
+            if remove_empty && size == 0 {
+                tx.remove(parent, false)?;
+            }
+        } else {
+            if index < size {
+                let after: Vec<_> = tx.children(parent).skip(index as usize).collect();
+                let copy = tx.copy_node(parent, false)?;
+                tx.splice(copy, ChildIndex(0), 0, &after)?;
+                tx.insert_after(parent, copy, true)?;
+            }
+            index = parent_index + 1;
+        }
+        parent = grand;
+    }
+    tx.splice(parent, ChildIndex(index), 0, &[node])
+}
