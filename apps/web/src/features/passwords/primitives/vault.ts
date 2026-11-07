@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { useQuery } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
@@ -36,6 +37,9 @@ export function createVault(teamId: string) {
   const [search, setSearch] = createSignal('');
   const [draft, setDraft] = createSignal<PasswordDraft>();
   const [values, setValues] = createSignal<PasswordValues>();
+  const [username, setUsername] = createSignal<string>();
+  const [usernameLoading, setUsernameLoading] = createSignal(false);
+  const [usernameCopied, setUsernameCopied] = createSignal(false);
   const [failure, setFailure] = createSignal<PasswordFailure>();
   const [validation, setValidation] = createSignal<'name' | 'url'>();
   const [busy, setBusy] = createSignal(false);
@@ -48,6 +52,7 @@ export function createVault(teamId: string) {
   const [code, setCode] = createSignal<{ code: string; validUntil: string }>();
   const [totpKey, setTotpKey] = createSignal('');
   let requestGeneration = 0;
+  let usernameGeneration = 0;
   let operationId: string | undefined;
   let submittedDraft: PasswordDraft | undefined;
   let codePending = false;
@@ -71,17 +76,39 @@ export function createVault(teamId: string) {
     clearDraft();
     setPendingSelection(undefined);
   };
+  function clearUsername() {
+    usernameGeneration++;
+    setUsername(undefined);
+    setUsernameLoading(false);
+    setUsernameCopied(false);
+  }
+  async function loadUsername(item: PasswordItem) {
+    const generation = ++usernameGeneration;
+    setUsername(undefined);
+    setUsernameLoading(true);
+    setUsernameCopied(false);
+    const response = await source.username(item.id);
+    if (generation !== usernameGeneration || selected()?.id !== item.id) return;
+    setUsernameLoading(false);
+    if (response.isErr()) {
+      setFailure(response.error);
+      return;
+    }
+    setUsername(response.value.username);
+  }
   function select(item: PasswordItem | undefined) {
     if (draft()) {
       setPendingSelection({ item });
       return;
     }
     lock();
+    clearUsername();
     setSelected(item);
     setFailure(undefined);
     setHistory([]);
     setActivity([]);
     setCopied(false);
+    if (item) fireAndForget(loadUsername(item), 'passwords');
   }
   function discard() {
     clearDraft();
@@ -92,6 +119,7 @@ export function createVault(teamId: string) {
   function createItem() {
     if (draft()) return;
     lock();
+    clearUsername();
     setSelected(undefined);
     setFailure(undefined);
     setDraft({
@@ -176,9 +204,10 @@ export function createVault(teamId: string) {
     conceal();
     setSelected(response.value);
     setFailure(undefined);
+    await loadUsername(response.value);
     await items.refetch();
   }
-  async function copyField(field: 'password' | 'username' | 'notes') {
+  async function copyPassword() {
     const item = selected();
     if (!item) return;
     const generation = requestGeneration;
@@ -189,11 +218,41 @@ export function createVault(teamId: string) {
       return;
     }
     const copied = await catchToResult(() =>
-      writeClipboard(response.value.values[field])
+      writeClipboard(response.value.values.password)
     );
     if (generation !== requestGeneration) return;
     if (copied.isErr()) setFailure('failed');
     else setCopied(true);
+    await refreshUsedItem(item.id, generation);
+  }
+  async function copyUsername() {
+    const item = selected();
+    if (!item) return;
+    const generation = requestGeneration;
+    const identifierGeneration = usernameGeneration;
+    const response = await source.copyUsername(item.id);
+    if (
+      generation !== requestGeneration ||
+      identifierGeneration !== usernameGeneration
+    )
+      return;
+    if (response.isErr()) {
+      setFailure(response.error);
+      return;
+    }
+    const copied = await catchToResult(() =>
+      writeClipboard(response.value.username)
+    );
+    if (
+      generation !== requestGeneration ||
+      identifierGeneration !== usernameGeneration
+    )
+      return;
+    if (copied.isErr()) setFailure('failed');
+    else {
+      setUsername(response.value.username);
+      setUsernameCopied(true);
+    }
     await refreshUsedItem(item.id, generation);
   }
   async function loadHistory() {
@@ -241,8 +300,10 @@ export function createVault(teamId: string) {
       setFailure(response.error);
       return false;
     }
-    setSelected({ ...item, shared: grants.length > 0 });
-    await items.refetch();
+    const refreshed = await items.refetch();
+    if (generation !== requestGeneration) return true;
+    const metadata = refreshed.data?.find((entry) => entry.id === item.id);
+    if (metadata) setSelected(metadata);
     return true;
   }
   async function createFolder(name: string) {
@@ -271,6 +332,7 @@ export function createVault(teamId: string) {
     lock();
     clearDraft();
     setSelected(undefined);
+    clearUsername();
     await items.refetch();
   }
   async function setTotp(key: string) {
@@ -318,6 +380,7 @@ export function createVault(teamId: string) {
   window.addEventListener('beforeunload', beforeUnload);
   onCleanup(() => {
     lock();
+    clearUsername();
     window.removeEventListener('blur', blur);
     document.removeEventListener('visibilitychange', hide);
     window.removeEventListener('beforeunload', beforeUnload);
@@ -334,6 +397,9 @@ export function createVault(teamId: string) {
     draft,
     setDraft,
     values,
+    username,
+    usernameLoading,
+    usernameCopied,
     failure,
     validation,
     busy,
@@ -341,8 +407,8 @@ export function createVault(teamId: string) {
     edit,
     save,
     reveal,
-    copy: () => copyField('password'),
-    copyUsername: () => copyField('username'),
+    copy: copyPassword,
+    copyUsername,
     copied,
     lock,
     history,

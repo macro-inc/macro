@@ -10,6 +10,7 @@ export type PasswordItem = {
   version: number;
   hasTotp: boolean;
   shared: boolean;
+  shareCount: number;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;

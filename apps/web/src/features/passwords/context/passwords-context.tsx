@@ -33,6 +33,10 @@ export type PasswordSource = {
   ): PasswordResult<PasswordItem>;
   grants(id: string): PasswordResult<PasswordGrant[]>;
   remove(id: string): PasswordResult<void>;
+  username(id: string): PasswordResult<{ username: string; version: number }>;
+  copyUsername(
+    id: string
+  ): PasswordResult<{ username: string; version: number }>;
   reveal(
     id: string,
     version?: number

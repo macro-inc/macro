@@ -13,6 +13,7 @@ import type { PasswordRevealed } from '@service-storage/generated/schemas/passwo
 import type { PasswordShareBody } from '@service-storage/generated/schemas/passwordShareBody';
 import type { PasswordTotpBody } from '@service-storage/generated/schemas/passwordTotpBody';
 import type { PasswordTotpCode } from '@service-storage/generated/schemas/passwordTotpCode';
+import type { PasswordUsername } from '@service-storage/generated/schemas/passwordUsername';
 import type { PasswordVersion as VersionDto } from '@service-storage/generated/schemas/passwordVersion';
 import type { PasswordWriteItem } from '@service-storage/generated/schemas/passwordWriteItem';
 import { err, ok } from 'neverthrow';
@@ -115,6 +116,20 @@ export function createPasswordSource(teamId: string): PasswordSource {
     async remove(id) {
       return (await action('passwords.delete', `/items/${id}`, 'DELETE')).map(
         () => undefined
+      );
+    },
+    username(id) {
+      return action<PasswordUsername>(
+        'passwords.username',
+        `/items/${id}/username`,
+        'GET'
+      );
+    },
+    copyUsername(id) {
+      return action<PasswordUsername>(
+        'passwords.copy_username',
+        `/items/${id}/username/copy`,
+        'POST'
       );
     },
     reveal(id, version) {
