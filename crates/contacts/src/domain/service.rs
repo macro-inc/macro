@@ -2,9 +2,11 @@ use crate::domain::models::graph::{UndirectedGraph, Vertex};
 use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
 };
+use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use crate::domain::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
-    ContactsOutboxService, ContactsRepository, ContactsService,
+    ContactsOutboxService, ContactsPageRepository, ContactsPageService, ContactsRepository,
+    ContactsService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -12,6 +14,9 @@ use rootcause::Report;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::instrument;
+
+/// Bounded name enrichment of the viewer's contact graph.
+pub mod directory;
 
 #[cfg(test)]
 mod test;
@@ -88,6 +93,20 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
 
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         self.process_message(ContactsMessage::Nodes(nodes)).await
+    }
+}
+
+impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
+    for ContactsDomainService<R, N>
+{
+    #[tracing::instrument(name = "contacts.page", skip_all, fields(limit = limit.get(), has_cursor = after.is_some()), err)]
+    async fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        self.repository.contact_id_page(viewer, after, limit).await
     }
 }
 

@@ -8,7 +8,12 @@ and kept in sync via the connection gateway.
 
 ## Start here
 
-- `src/domain/service.rs`: the contacts use cases (`domain::service`).
+- `src/domain/service.rs`: the contacts use cases (`domain::service`), including bounded ID pages through `ContactsPageService`; the deployed full-list API is unchanged.
+- `src/domain/service/directory.rs`: enriches one authorized ID page with one name batch; empty-page continuations survive and names never add membership.
+- `src/domain/models/contact.rs`: viewer/person-derived normalized identity and nullable resolved names; email fallback stays with the consuming surface.
+- `src/outbound/names.rs`: `directory-names` feature, reusing the existing user-name owner's profile-over-address-book query without duplicating SQL.
+- `src/domain/models/page.rs`: page sizes (default 100, maximum 500), exclusive contact-ID positions, and page completeness. A short or empty page can still have a continuation after malformed legacy IDs.
+- `src/outbound/repository/page.rs`: indexed paging of both graph directions and self, with at most one page plus a lookahead row returned from Postgres.
 - `src/domain/ports.rs`: the traits `inbound`/`outbound` implement.
 - `src/inbound/http.rs`: HTTP handlers, router, DTOs, swagger.
 - `src/inbound/worker.rs`: SQS worker that ingests contact-affecting events.
@@ -26,7 +31,7 @@ and kept in sync via the connection gateway.
 
 - Depends on: `macro_authorization` (axum feature), `rate_limit`, `sqs_worker`,
   `macro_user_id`.
-- Used by: `contacts_service` (composition root), `teams` (backfill on team
+- Used by: `graphql_contacts` (paged directory reads), `contacts_service` (composition root), `teams` (backfill on team
   join), `channels`, `ai_tools`, `databases_sql`; also linked into
   `document_storage_service`, `authentication_service`, `email_service`,
   `agent_harness_service`.
@@ -41,7 +46,7 @@ and kept in sync via the connection gateway.
 
 ## Checks
 
-- `cargo test -p contacts` (`SQLX_OFFLINE` unset; the `outbound`/`default`
+- `cargo test -p contacts --all-features -- --test-threads=2` (`SQLX_OFFLINE` unset; `directory-names` covers name precedence/account isolation; the `outbound`/`default`
   features need a local MacroDB — see `.agents/rules/rust/guardrails.md`).
 
 ## Related

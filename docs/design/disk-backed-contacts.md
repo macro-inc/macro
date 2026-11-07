@@ -1,8 +1,11 @@
 # Disk-backed contacts
 
-**Status:** approved implementation direction; contact migration not started.
-**Next step:** phase 1, a bounded backend contact-read contract, followed by one
-end-to-end cached contact-search slice.
+**Status:** phase 1 in progress. Bounded pages now include viewer-scoped names and
+identities and are exposed as `user.contacts(limit, after)` through GraphQL. The
+frontend still uses the full directory; the generated page operation has no UI
+consumer yet.
+**Next step:** add bounded search and exact ID/email resolution, then connect the
+first cached search consumer with hydration-page retention handled explicitly.
 
 ## Goal and scope
 
@@ -63,21 +66,32 @@ and search projection, not a new database or bespoke contact-storage subsystem.
 
 ## Phase 1 — bounded backend contract
 
-- [ ] Extend the existing `contacts` domain service and repository with stable,
-  keyset-paginated reads; do not load everyone before slicing a page.
-- [ ] Expose the reads under the authenticated GraphQL viewer, composing domain
-  behavior through `complete_graph` rather than embedding database queries in resolvers.
-- [ ] Return identity, email, and resolved names together, avoiding a second
+- [x] Extend the existing `contacts` domain service and repository with stable,
+  keyset-paginated contact-ID reads; do not load everyone before slicing a page.
+  `ContactsPageService` uses a validated 1–500 row bound (default 100), includes
+  self in the sorted page, and advances through malformed legacy IDs. The reverse
+  `(user2, user1)` index complements the existing forward unique index.
+- [x] Expose paged reads under the authenticated GraphQL viewer through
+  `graphql_contacts`, composed by `complete_graph`. DSS inserts the context for
+  HTTP and websocket requests. Both graph and name reads use the primary to
+  follow immediate contact invalidations without replica lag.
+- [x] Return identity, email, and resolved names together, avoiding a second
   all-contact name-fetch step.
-- [ ] Preserve name precedence: Macro profile, then the viewer's email-contact
-  name, then the existing email fallback. Preserve the current inclusion of self.
-- [ ] Define a distinct viewer-scoped contact record and stable normalized identity.
+- [x] Preserve name precedence through the existing user-name owner query: Macro
+  profile, then the viewer's email-contact name. A null name keeps each surface's
+  existing email fallback choice. Self remains included.
+- [x] Define a distinct viewer-scoped contact record and stable normalized identity.
+  `GraphqlContact.id` derives from the viewer/person pair; `userId` identifies the
+  target. Names do not affect identity.
   Do not reuse `GraphqlUser`, which is the authenticated viewer/identity witness;
   do not merge viewer-specific names into a global public-profile record.
 - [ ] Provide bounded search and batch ID/email resolution under the same authorized
   contract. Cached user-profile data alone must not imply contact membership.
-- [ ] Set explicit limits for read pages, search results, and lookup batches.
-  Generate GraphQL/wire types from their source of truth.
+- [ ] Set explicit limits for search results and lookup batches; the enriched read
+  page limit is already 500 (default 100).
+- [x] Generate the SDL, `ContactDirectoryPage` operation types, and cache entity
+  metadata from their source of truth. Do not use this foreground page operation
+  for full background ingestion until phase 2 omits retained page wrappers.
 
 Read [contacts ownership](../../crates/contacts/AGENTS.md),
 [schema conventions](../../crates/complete_graph/AGENTS.md), and the
@@ -92,7 +106,9 @@ Keep deployed full-list APIs compatible until their clients can be retired.
   `@cacheOnly` limits returned fields; it does not by itself prevent retained page
   wrappers. Extend the relevant hydration-retention policy deliberately.
 - [ ] Project the new contact type into `person`, using the existing covering index
-  and borrowed-row ranker. Include names and emails in matching.
+  and borrowed-row ranker. Include names and emails in matching. Materialized
+  `IUser.id` must remain the target `userId`; the viewer-scoped `GraphqlContact.id`
+  is the normalized cache key, not a DM/navigation target.
 - [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
   facts needed to choose the top results must apply before the result limit;
   relationship `updated_at` is not automatically equivalent to DM activity.

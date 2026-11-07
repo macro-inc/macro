@@ -22,6 +22,7 @@ outbound = [
   "ports",
 ]
 ports = []
+directory-names = ["dep:macro_db_client", "dep:non_empty", "dep:sqlx", "ports"]
 
 [dependencies]
 aws-sdk-sqs = { workspace = true, optional = true }
@@ -32,6 +33,8 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
   "axum",
 ], optional = true }
 macro_user_id = { path = "../macro_user_id" }
+macro_db_client = { path = "../macro_db_client", optional = true }
+non_empty = { path = "../non_empty", optional = true }
 rootcause = { workspace = true }
 rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
 serde = { workspace = true }

@@ -3827,6 +3827,42 @@ type GraphqlCommentedOnDocumentMetadata {
 }
 
 """
+One viewer's directory entry, not a globally shared user profile or CRM contact.
+"""
+type GraphqlContact {
+	"""
+	Stable identity of the viewer/person pair. Names do not affect this key.
+	"""
+	id: ID!
+	"""
+	Target user identifier, also used for people who have not joined Macro.
+	"""
+	userId: ID!
+	"""
+	Email address derived from the target user identifier.
+	"""
+	email: String!
+	"""
+	Macro profile name, then this viewer's address-book name; null means use email fallback.
+	"""
+	name: String
+}
+
+"""
+A bounded contact-ID-ordered page; an empty page may still have a continuation.
+"""
+type GraphqlContactPage {
+	"""
+	Authorized contacts, including self in sorted position.
+	"""
+	nodes: [GraphqlContact!]!
+	"""
+	Opaque continuation, or null only when the source is exhausted.
+	"""
+	nextCursor: String
+}
+
+"""
 GraphQL input naming the CRM record an association filter restricts to.
 """
 input GraphqlCrmAssociation @oneOf {
@@ -10442,6 +10478,19 @@ type GraphqlUser {
 	into local dates in the requested time zone.
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
+	"""
+	Read one page of the viewer's personal contacts with resolved names.
+	"""
+	contacts(
+		"""
+		Maximum contacts to read, from 1 to 500; defaults to 100.
+		"""
+		limit: Int,
+		"""
+		Opaque nextCursor from an earlier page in this directory.
+		"""
+		after: String
+	): GraphqlContactPage!
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
