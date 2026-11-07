@@ -22,7 +22,7 @@ threads, pins, recents, notifications, folders, activity.
   search ("Soup" items); see `crates/graphql/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
-  notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
+  notification/withdrawal/realtime ports. Policy lives in `crates/entities/access_requests`.
   It also builds the attention feeds (Home's work feed and the notifications
   inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
 - `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,

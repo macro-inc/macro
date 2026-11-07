@@ -1,0 +1,56 @@
+[package]
+edition = "2024"
+name = "favorites"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:uuid", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "ports",
+]
+outbound = ["ports"]
+ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
+postgres = ["dep:sqlx", "outbound"]
+
+[dependencies]
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+# `query` brings `axum_extra::extract::Query`, whose deserializer collects
+# repeated query keys into a vector; `axum::extract::Query` keeps only one.
+axum-extra = { workspace = true, optional = true, features = ["query"] }
+chrono = { workspace = true, features = ["serde"] }
+cowlike = { workspace = true }
+entity_access = { workspace = true, optional = true, features = ["ports"] }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
+uuid = { workspace = true, features = ["v7"] }

@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "entity_access_db_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+macro_uuid = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+model_owner = { workspace = true }
+models_entity_access_management = { workspace = true, default-features = true, features = [
+  "db",
+] }
+models_permissions = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { workspace = true }

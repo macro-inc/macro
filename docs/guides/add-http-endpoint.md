@@ -50,7 +50,7 @@ those in place, but new routers live in the crate.
   request, changes who can sign in, or deletes the account: it refuses an account
   manager's credential.
 - **Authorization: every route keyed by an entity id needs that entity's access
-  extractor** from `crates/entity_access/src/inbound/axum_extractors/`
+  extractor** from `crates/entities/entity_access/src/inbound/axum_extractors/`
   (`DocumentAccessExtractor`, `ForeignEntityAccessLevelExtractor`,
   `ChannelAccessLevelExtractor`, ...) at the right level (`ViewAccessLevel`,
   `EditAccessLevel`, `OwnerAccessLevel`, team roles). A DSS job-results route
