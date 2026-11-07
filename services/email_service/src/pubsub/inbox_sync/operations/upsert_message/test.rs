@@ -406,7 +406,7 @@ async fn inserting_into_a_concurrently_deleted_thread_is_retryable(pool: PgPool)
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../../crates/email/email_db_client/fixtures",
         scripts("upload_claim_tests")
     )
 )]

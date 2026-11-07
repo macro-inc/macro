@@ -16,7 +16,7 @@ If the notification is about an entity type that has never carried notifications
 | --- | --- | --- |
 | A kind on an existing entity, sent from a domain service | `ChannelMessageReaction` (`crates/channels/src/outbound/notification_sender.rs`) | Newest end-to-end kind: push, realtime, GraphQL, inbox stacking, settings toggle |
 | Kinds planned from domain events, with derived ids | `AgentSession*` (`crates/agent_harness/src/domain/notifications.rs`) | Pure planner function, audience rules, idempotent ids, port + ingress adapter |
-| A scheduled kind | `CalendarEventReminder` (`crates/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
+| A scheduled kind | `CalendarEventReminder` (`crates/calendar/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
 
 Names: the variant is `PascalCase`; `Notification::TYPE_NAME`, the serde tag, the
 `notification_event_type` column, and the web `tag` are all its `snake_case`
@@ -56,7 +56,7 @@ In `crates/notifications/model_notifications/src/metadata.rs` (or a submodule li
 - Add title/body tests to `crates/notifications/model_notifications/src/metadata/test.rs`.
 
 Only invite-style kinds send direct email (`NotificationExtEmail`, see
-`crates/invite_email`). Everything else reaches email through the digest, which
+`crates/email/invite_email`). Everything else reaches email through the digest, which
 formats any `NotifEvent` via `NotificationTitle`.
 
 ## 2. Register the variant (required)

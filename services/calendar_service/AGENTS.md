@@ -18,7 +18,7 @@ gateway `/calendar` prefix.
 - Owns: the Google Calendar push webhook, calendar mutation routes, calendar
   sync scheduling/outbox, and the backfill queue worker.
 - Not here: calendar domain logic and the Postgres/Google adapters →
-  `crates/calendar_events`, `crates/calendar_scheduling`.
+  `crates/calendar/calendar_events`, `crates/calendar/calendar_scheduling`.
 
 ## Boundaries
 
@@ -30,7 +30,7 @@ gateway `/calendar` prefix.
 
 ## Recipes
 
-- Add a mutation route: `crates/calendar_events` (domain + Postgres adapter) →
+- Add a mutation route: `crates/calendar/calendar_events` (domain + Postgres adapter) →
   `src/api/context.rs` → `src/api.rs` (router) → `src/openapi.rs`.
 - Add a backfill step: `src/calendar_backfill.rs` → `src/calendar_backfill_adapters.rs`
   → `src/backfill_queue.rs`.

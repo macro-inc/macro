@@ -16,7 +16,7 @@ function latestTimestamp(
 
 /** The server's per-view sort key, recomputed from the thread's own facts so a
  * cache re-read never dates a row by the view that fetched the thread last.
- * Mirrors `get_sort_timestamp_field` in crates/email; INBOX is the server's
+ * Mirrors `get_sort_timestamp_field` in crates/email/email; INBOX is the server's
  * default view. */
 export function emailThreadSortTs(
   thread: {

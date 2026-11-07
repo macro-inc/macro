@@ -89,7 +89,7 @@ artifacts. It is report-only: nothing fails on a violation yet.
 
 - **New crate:** if the report lists it as `unassigned`, add its directory to
   the layer it belongs in. A crate directory under a group (`crates/types/`,
-  `crates/email/`, …) is placed by that group's glob.
+  `crates/email/email/`, …) is placed by that group's glob.
 - **`violation`:** a normal or build dependency from one layer into a layer it
   may not use. Cut the edge (move the shared types down into a `types` crate,
   or construct the adapter in the composition root). If the edge must stay for

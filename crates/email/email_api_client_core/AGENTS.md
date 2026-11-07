@@ -23,14 +23,14 @@ adapters are `crates/email/email_api_client_outbound`.
 
 - Owns: the provider-neutral vocabulary and orchestration over it.
 - Not here: provider adapters → `crates/email/email_api_client_outbound`;
-  Macro's own email domain (threads, scheduling) → `crates/email`; SQLx
+  Macro's own email domain (threads, scheduling) → `crates/email/email`; SQLx
   storage → `email_db_client`.
 
 ## Boundaries
 
 - Depends on: `models_email`. Ports, service and request counting are behind
   the `ports` feature (which adds tokio).
-- Used by: `crates/email` (ports only), `email_api_client_outbound`,
+- Used by: `crates/email/email` (ports only), `email_api_client_outbound`,
   `services/email_service`, `services/calendar_service`.
 
 ## Recipes

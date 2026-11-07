@@ -73,7 +73,7 @@
       "consumer": "ProductAgentsPage.tsx MCP copy"
     },
     {
-      "path": "crates/email/src/inbound/toolset/send_email.rs",
+      "path": "crates/email/email/src/inbound/toolset/send_email.rs",
       "blob": "e0de1039c4f89b4dbc7642c9e21edc5ad248fe0f",
       "consumer": "NorthwindSession.tsx review behavior"
     },

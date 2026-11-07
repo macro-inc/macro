@@ -431,7 +431,7 @@ properties. A custom decline scheduler or a conference replacement would have
 additional behavior and failure modes; do not silently substitute one. Build and
 validate the equivalents, then present any remaining material limitation with
 its exact user impact. Full parity stays the release gate.
-[Current calendar contracts](../../crates/calendar_events/src/domain/models.rs),
+[Current calendar contracts](../../crates/calendar/calendar_events/src/domain/models.rs),
 [Graph event model](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0).
 
 **Implementation and acceptance order.**
@@ -483,11 +483,11 @@ The evidence is in the [GraphQL message fields](../../crates/graphql/graphql_ema
 The mapper is strong evidence that Outlook should use the existing message viewer.
 
 The less obvious coupling is below the response types:
-[thread actions](../../crates/email/src/domain/service/thread_labels.rs) resolve
+[thread actions](../../crates/email/email/src/domain/service/thread_labels.rs) resolve
 system labels and call `enqueue_gmail_ops_modify_labels_batch`;
 [message classification](../../crates/types/models_email/src/email/service/message.rs)
 uses INBOX, TRASH, and SPAM; and
-[thread queries](../../crates/email/src/outbound/email_pg_repo/thread.rs) use Gmail
+[thread queries](../../crates/email/email/src/outbound/email_pg_repo/thread.rs) use Gmail
 category names for signal/noise decisions. Returning the same JSON shape is not
 enough if Outlook messages land in the wrong view or trigger the wrong action.
 
@@ -538,7 +538,7 @@ mailbox binding.**
 
 | Component | Responsibility |
 | --- | --- |
-| `crates/email/src/domain` | Mailbox access policy, setup and teardown, sync state transitions, mutation intent, delivery state, and capability enforcement. Add focused services/ports alongside existing services. |
+| `crates/email/email/src/domain` | Mailbox access policy, setup and teardown, sync state transitions, mutation intent, delivery state, and capability enforcement. Add focused services/ports alongside existing services. |
 | `crates/email/email_api_client_core` | Provider operation contracts, normalized content, typed identities/cursors, capabilities, and classified provider outcomes. |
 | `crates/email/email_api_client_outbound/src/outlook` | Graph requests, wire models, pagination, conversion, and provider error mapping, behind an `outbound-outlook` feature. |
 | Existing calendar and contacts domains | Own their current product behavior and provider contracts; email orchestration calls their services rather than duplicating their policy. |
@@ -775,7 +775,7 @@ misreporting completion.
 **Decision: make sending a durable state machine with an explicit ambiguous
 outcome.**
 
-The current [scheduled delivery contract](../../crates/email/src/domain/scheduled_delivery.rs)
+The current [scheduled delivery contract](../../crates/email/email/src/domain/scheduled_delivery.rs)
 claims work, sends it, and releases the claim on failure. Outlook needs to retain
 provider preparation/submission state across failures. A Graph send returns
 `202 Accepted` with no response body, while a sent copy may become visible later.

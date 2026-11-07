@@ -53,7 +53,7 @@ event contract (schema, sanitization, delivery semantics).
 - Used by: `services/authentication_service`, `services/document_storage_service`,
   `services/calendar_service`, `services/agent_harness_service`,
   `services/agent_harness_service`, `crates/scheduled_action`, `crates/ai_tools`,
-  `crates/ai_billing`, `crates/calendar_scheduling`.
+  `crates/ai_billing`, `crates/calendar/calendar_scheduling`.
 
 ## Recipes
 
