@@ -348,8 +348,8 @@ fn writing_peers_are_the_peers_with_operations_in_the_blob() {
 
 #[test]
 fn persisted_editor_metadata_distinguishes_invocations_by_the_same_actor() {
-    let first = uuid::Uuid::from_u128(1);
-    let second = uuid::Uuid::from_u128(2);
+    let first = uuid_types::Uuid::from_u128(1);
+    let second = uuid_types::Uuid::from_u128(2);
     let one = DocumentAttribution::from_session_claims(
         Some("bot|agent".into()),
         Some("macro|actor@example.com".into()),

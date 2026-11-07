@@ -1,5 +1,5 @@
-mod ai_peer;
 use inbound::credentials as auth;
+pub use sync_server_core::domain::ai_peer;
 mod inbound;
 mod outbound;
 use outbound::{d1, dss_internal, lexical_service, secrets, storage};

@@ -5,6 +5,7 @@ Service responsible for syncing collaborative documents between multiple users.
 ```bash
 .
 ├── ../../crates/sync_protocol/ # shared schema and wire codecs
+├── ../../crates/sync_server_core/ # pure policy and persisted domain types
 ├── build.rs # build metadata for the worker
 ├── justfile # justfile for running commands
 ├── src/ # rust worker-rs worker

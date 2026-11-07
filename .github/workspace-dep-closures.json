@@ -14156,9 +14156,14 @@
       "crates/sync_router",
       "crates/workspace-hack"
     ],
+    "sync_server_core": [
+      "crates/macro_sync_service_jwt",
+      "crates/sync_server_core"
+    ],
     "sync_service": [
       "crates/macro_sync_service_jwt",
       "crates/sync_protocol",
+      "crates/sync_server_core",
       "crates/worker-rs-otel",
       "services/sync-service"
     ],

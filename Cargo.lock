@@ -19795,6 +19795,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_server_core"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "lazy-regex",
+ "loro",
+ "macro_sync_service_jwt",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
@@ -19810,7 +19825,7 @@ dependencies = [
  "sha2 0.10.9",
  "subtle",
  "sync_protocol",
- "thiserror 2.0.18",
+ "sync_server_core",
  "time",
  "tower-service",
  "tracing",
