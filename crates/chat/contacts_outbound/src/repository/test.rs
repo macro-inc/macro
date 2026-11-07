@@ -1,4 +1,4 @@
-use crate::domain::ports::{ContactsBackfillOutboxRepo, ContactsRepository};
+use contacts_core::ports::{ContactsBackfillOutboxRepo, ContactsRepository};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;

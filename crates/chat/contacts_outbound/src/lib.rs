@@ -1,9 +1,11 @@
+//! The adapters behind `contacts_core`'s ports: the Postgres repository,
+//! the SQS ingress queue and the connection gateway notifier.
+
+#![deny(missing_docs)]
+
 /// Connection gateway notifier adapter.
-#[cfg(feature = "outbound")]
 pub mod gateway;
 /// SQS-backed contacts ingress queue adapter.
-#[cfg(feature = "outbound")]
 pub mod ingress;
 /// Database-backed contacts repository.
-#[cfg(feature = "outbound")]
 pub mod repository;

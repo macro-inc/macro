@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "contacts_inbound"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["axum", "worker"]
+# HTTP handlers, router, DTOs and swagger.
+axum = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:macro_authorization",
+  "dep:rate_limit",
+  "dep:utoipa",
+]
+# The SQS worker that ingests contact-affecting events.
+worker = ["axum", "dep:aws-sdk-sqs", "dep:sqs_worker"]
+
+[dependencies]
+aws-sdk-sqs = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+contacts_core = { path = "../contacts_core" }
+macro_authorization = { path = "../../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
+macro_user_id = { path = "../../macro_user_id" }
+rate_limit = { path = "../../rate_limit", features = ["axum"], optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqs_worker = { path = "../../sqs_worker", optional = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+rate_limit = { path = "../../rate_limit", features = ["axum", "testing"] }
+tower = { workspace = true }

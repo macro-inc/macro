@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use chrono::Utc;
-use contacts::domain::models::messages::ContactsNodes;
+use contacts_core::models::messages::ContactsNodes;
 use database_sql::catalog::Catalog;
 use database_sql::fold::Bin;
 use database_sql::run::{OpsSink, Outcome};

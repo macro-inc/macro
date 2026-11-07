@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "contacts_core"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+macro_user_id = { path = "../../macro_user_id" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true }

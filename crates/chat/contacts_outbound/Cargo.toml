@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "contacts_outbound"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+aws-sdk-sqs = { workspace = true }
+contacts_core = { path = "../contacts_core" }
+macro_user_id = { path = "../../macro_user_id" }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+axum = { workspace = true }
+futures = { workspace = true }
+macro_db_migrator = { path = "../../macro_db_migrator" }

@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use contacts::domain::ports::ContactsService;
+use contacts_core::ports::ContactsService;
 use databases::domain::{
     models::{DatabaseId, QueryDefinition, SavedQuery, TableId, TableVersion, Viewer},
     ports::DatabasesService,

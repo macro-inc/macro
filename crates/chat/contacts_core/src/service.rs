@@ -1,8 +1,8 @@
-use crate::domain::models::graph::{UndirectedGraph, Vertex};
-use crate::domain::models::messages::{
+use crate::models::graph::{UndirectedGraph, Vertex};
+use crate::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
 };
-use crate::domain::ports::{
+use crate::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
     ContactsOutboxService, ContactsRepository, ContactsService,
 };
@@ -41,10 +41,7 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsDomainService<R, N> {
     /// Processes either the existing complete-graph message or a separate
     /// explicit-relationships message.
     #[instrument(err, skip(self))]
-    pub(crate) async fn process_message(
-        &self,
-        msg: ContactsMessage,
-    ) -> Result<(), rootcause::Report> {
+    pub async fn process_message(&self, msg: ContactsMessage) -> Result<(), rootcause::Report> {
         let (users, connections) = match msg {
             ContactsMessage::Nodes(ContactsNodes { users }) => {
                 let graph = UndirectedGraph::new(users.iter().map(Vertex::new)).complete();

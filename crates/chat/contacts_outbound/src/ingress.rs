@@ -1,5 +1,5 @@
-use crate::domain::models::messages::{ContactConnections, ContactsNodes};
-use crate::domain::ports::ContactsIngressQueue;
+use contacts_core::models::messages::{ContactConnections, ContactsNodes};
+use contacts_core::ports::ContactsIngressQueue;
 use rootcause::Report;
 
 /// SQS-backed implementation of [`ContactsIngressQueue`].
