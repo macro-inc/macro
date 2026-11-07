@@ -6,7 +6,7 @@ use axum::extract::FromRef;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
-use macro_service_urls::StaticFilePublicUrl;
+use static_file_public_url::StaticFilePublicUrl;
 use std::sync::Arc;
 
 /// Concrete authorization service used by the `MacroAuthorizationExtractor` in handlers.

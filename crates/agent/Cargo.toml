@@ -31,7 +31,8 @@ ai_toolset = { workspace = true }
 attachment = { workspace = true }
 genai_telemetry = { workspace = true }
 macro_env_var = { workspace = true }
-macro_service_urls = { workspace = true }
+google_generative_ai_api_url = { workspace = true }
+service_url = { workspace = true }
 macro_user_id = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio-util.workspace = true

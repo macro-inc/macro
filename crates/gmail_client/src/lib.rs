@@ -52,7 +52,9 @@ use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, list_messages};
 use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
-use macro_service_urls::{GmailApiUrl, GoogleOauthCertsUrl, GooglePeopleApiUrl};
+use gmail_api_url::GmailApiUrl;
+use google_oauth_certs_url::GoogleOauthCertsUrl;
+use google_people_api_url::GooglePeopleApiUrl;
 use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
 pub use models_email::gmail::filters::Filter;
 use models_email::gmail::inbox_sync::{

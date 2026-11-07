@@ -13,7 +13,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
-use macro_service_urls::StaticFilePublicUrl;
+use static_file_public_url::StaticFilePublicUrl;
 use std::sync::Arc;
 use tower_http::limit::RequestBodyLimitLayer;
 use utoipa::OpenApi;

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
+use agent_harness_service_url::AgentHarnessServiceUrl;
 use agent_session::outbound::coding_agents_client::CodingAgentsClient;
-use macro_service_urls::AgentHarnessServiceUrl;
 
 /// Coding-agent discovery and dispatch context shared by the in-app AI hosts.
 pub type ToolCodingAgentToolContext = agent_session::inbound::toolset::CodingAgentToolContext;

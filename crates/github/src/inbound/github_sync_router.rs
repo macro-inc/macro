@@ -10,6 +10,7 @@ mod test;
 
 use std::sync::Arc;
 
+use app_service_url::AppServiceUrl;
 use axum::{
     Router,
     extract::{FromRef, FromRequest, Query, Request, State},
@@ -23,7 +24,6 @@ use entity_access::{
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
 };
-use macro_service_urls::AppServiceUrl;
 use reqwest::StatusCode;
 use uuid::Uuid;
 

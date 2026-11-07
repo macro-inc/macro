@@ -106,8 +106,9 @@ Follow the [infrastructure guide](../development/infrastructure.md) for the patt
 
 ## 5. Service discovery
 
-- Add a `service_url!` entry to `crates/macro_service_urls/src/lib.rs` with
-  `local`, `dev`, and `prod` values.
+- Add a crate for the URL in `crates/platform/service_urls/` with `local`,
+  `dev`, and `prod` values; that directory's `AGENTS.md` has the steps. Callers
+  depend on that crate.
 - Add the in-network override in `local_env.rs`:
   `OVERRIDE_<NAME>_URL = http://<compose-alias>:8080`. The `local` default is a host
   port, which inside Docker points back at the caller.

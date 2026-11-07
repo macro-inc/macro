@@ -2,11 +2,15 @@
 //! sees them: each service's canonical URL type, resolved afresh for every
 //! enrollment. Local stacks override them per fleet (`OVERRIDE_*`).
 
-use macro_service_urls::{
-    AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AuthServiceUrl,
-    ConnectionGatewayWebsocketUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl,
-    McpServiceUrl, ScheduledActionServiceUrl,
-};
+use agent_harness_egress_url::AgentHarnessEgressUrl;
+use agent_harness_service_url::AgentHarnessServiceUrl;
+use api_gateway_url::ApiGatewayUrl;
+use auth_service_url::AuthServiceUrl;
+use connection_gateway_websocket_url::ConnectionGatewayWebsocketUrl;
+use document_cognition_service_url::DocumentCognitionServiceUrl;
+use document_storage_service_url::DocumentStorageServiceUrl;
+use mcp_service_url::McpServiceUrl;
+use scheduled_action_service_url::ScheduledActionServiceUrl;
 use team_agents::domain::{models::TeamAgentError, ports::EnrollmentEnvironment};
 
 #[cfg(test)]
@@ -31,7 +35,7 @@ struct UnreachableAddress {
 
 fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, TeamAgentError> {
     let invalid = || TeamAgentError::internal(UnreachableAddress { name });
-    let url = macro_service_urls::Url::parse(raw).map_err(|_| invalid())?;
+    let url = service_url::Url::parse(raw).map_err(|_| invalid())?;
     let scheme_ok = if websocket {
         matches!(url.scheme(), "ws" | "wss")
     } else {

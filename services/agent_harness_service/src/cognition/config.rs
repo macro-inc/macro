@@ -1,9 +1,9 @@
+use ai_editing_worker_url::AiEditingWorkerUrl;
 use anyhow::Context;
 use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_service_urls::AiEditingWorkerUrl;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 use crate::cognition::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;

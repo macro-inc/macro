@@ -11,8 +11,8 @@ document_storage_service_client = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
-macro_service_urls = { workspace = true }
 s3_key = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+document_storage_service_url = { workspace = true }

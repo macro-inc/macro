@@ -45,8 +45,8 @@ use clap::Parser;
 use futures::StreamExt;
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::MarkdownTarget;
+use lexical_service_url::LexicalServiceUrl;
 use macro_env_var::env_var;
-use macro_service_urls::LexicalServiceUrl;
 use secretsmanager_client::{SecretManager, SecretsManager};
 use serde_json::json;
 use sqlx::PgPool;
@@ -106,9 +106,9 @@ impl Env {
 
     fn lexical_service_url(self) -> Result<String> {
         let environment = match self {
-            Env::Local => macro_service_urls::macro_env::Environment::Local,
-            Env::Dev => macro_service_urls::macro_env::Environment::Develop,
-            Env::Prod => macro_service_urls::macro_env::Environment::Production,
+            Env::Local => macro_env::Environment::Local,
+            Env::Dev => macro_env::Environment::Develop,
+            Env::Prod => macro_env::Environment::Production,
         };
         Ok(LexicalServiceUrl::new_for_environment(environment)?.to_string())
     }

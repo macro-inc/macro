@@ -15,7 +15,7 @@ use reqwest::{StatusCode, header::HeaderValue};
 /// Neither response bodies nor credentials are logged.
 pub(crate) struct AuthAgentEnrollment {
     http: reqwest::Client,
-    base: macro_service_urls::AuthServiceUrl,
+    base: auth_service_url::AuthServiceUrl,
     key: HeaderValue,
 }
 
@@ -31,7 +31,7 @@ impl AuthAgentEnrollment {
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(60))
                 .build()?,
-            base: macro_service_urls::AuthServiceUrl::new()?,
+            base: auth_service_url::AuthServiceUrl::new()?,
             key,
         })
     }

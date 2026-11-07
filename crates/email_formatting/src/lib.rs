@@ -2,7 +2,6 @@ use askama::Template;
 use chrono::{DateTime, Utc};
 use hmac::Hmac;
 use macro_env::Environment;
-use macro_service_urls::NotificationServiceUrl;
 use macro_user_id::cowlike::CowLike;
 use model_notifications::NotifEvent;
 use notification::domain::models::{
@@ -12,6 +11,7 @@ use notification::domain::models::{
     queue_message::EmailContent,
     signing::{self, SignedUrl},
 };
+use notification_service_url::NotificationServiceUrl;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;

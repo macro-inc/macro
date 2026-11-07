@@ -38,5 +38,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 calendar_events = { workspace = true }
 email_api_client = { workspace = true, features = ["outbound-outlook"] }
 fusionauth = { workspace = true }
-macro_service_urls = { workspace = true }
+microsoft_graph_url = { workspace = true }
 models_email = { workspace = true }

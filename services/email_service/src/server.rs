@@ -4,15 +4,16 @@
 use crate::api;
 use crate::composition::api::{ApiDependencies, api_context};
 use anyhow::Context;
+use auth_service_url::AuthServiceUrl;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
-};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use std::time::Duration;
 use tokio_util::task::TaskTracker;
 

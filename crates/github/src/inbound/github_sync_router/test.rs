@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use app_service_url::AppServiceUrl;
 use axum::{Router, http::Request};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use entity_access::domain::{
@@ -13,7 +14,6 @@ use macro_authorization::{
     InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
     MacroAuthorizationState,
 };
-use macro_service_urls::AppServiceUrl;
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},

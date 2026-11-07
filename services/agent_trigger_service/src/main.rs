@@ -25,7 +25,9 @@ use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use config::Config;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use entity_access::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};
 use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
@@ -34,13 +36,11 @@ use jev::domain::JevClassifier;
 use jev::outbound::SystemOneJev;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
-};
-use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentStorageServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
 };
 use messages::domain::api::MessageCommands;
 use messages::outbound::pg_message_repo::PgMessageRepository;
@@ -50,6 +50,7 @@ use properties::{
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_url::StaticFileServiceUrl;
 use std::sync::Arc;
 use system_properties::{
     PgSystemPropertiesRepository, SystemPropertiesService, SystemPropertiesServiceImpl,

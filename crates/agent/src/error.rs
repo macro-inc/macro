@@ -37,7 +37,7 @@ pub enum AgentError {
     RigHttpClient(#[from] rig_core::http_client::Error),
     /// A provider's URL override could not be read
     #[error(transparent)]
-    ServiceUrl(#[from] macro_service_urls::ServiceUrlVarErr),
+    ServiceUrl(#[from] service_url::ServiceUrlVarErr),
 }
 
 impl AgentError {
