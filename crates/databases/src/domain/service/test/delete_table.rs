@@ -10,7 +10,7 @@ async fn deleting_a_table_removes_its_rows_cells_and_columns() {
         seeded.table_id,
         seeded.row_id,
     );
-    let tickets = TableId::new();
+    let tickets = TableId::generate();
     svc.apply_ops(
         edit(db),
         viewer(OWNER),
@@ -114,7 +114,7 @@ async fn a_table_another_table_relates_to_is_not_deleted() {
         seeded.database_id,
         seeded.table_id,
     );
-    let invites = TableId::new();
+    let invites = TableId::generate();
     svc.apply_ops(
         edit(db),
         viewer(OWNER),
@@ -127,7 +127,7 @@ async fn a_table_another_table_relates_to_is_not_deleted() {
             },
             DatabaseOp::Column {
                 table: invites,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 change: ColumnChange::Create {
                     definition: NewColumn::New {
                         name: "Guest".into(),

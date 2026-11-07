@@ -18,7 +18,7 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn create_storage(&self) -> Result<DatabaseId, Self::Error> {
-        let id = DatabaseId::new();
+        let id = DatabaseId::generate();
         sqlx::query!("INSERT INTO databases (id) VALUES ($1)", id.into_uuid())
             .execute(&self.pool)
             .await?;

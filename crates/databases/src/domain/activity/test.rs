@@ -75,7 +75,7 @@ fn renamed_restored_and_tables_changed_map_to_edited() {
             database_id: DATABASE_ID.parse().unwrap(),
             attribution: by_user("macro|editor@example.com"),
             tables: vec![TableVersionChange {
-                table_id: TableId::new(),
+                table_id: TableId::generate(),
                 version: TableVersion(3),
             }],
         }),
@@ -192,7 +192,7 @@ fn events_round_trip_through_json() {
         database_id: DATABASE_ID.parse().unwrap(),
         attribution: by_user("macro|editor@example.com"),
         tables: vec![TableVersionChange {
-            table_id: TableId::new(),
+            table_id: TableId::generate(),
             version: TableVersion(7),
         }],
     });

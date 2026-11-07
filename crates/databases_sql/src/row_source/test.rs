@@ -220,7 +220,7 @@ impl SoupService for ReplaySoup {
                 // Soup numbers a group's items from 1.
                 index_in_group: 1,
                 item: soup_row(&Row {
-                    id: RowId::new(),
+                    id: RowId::generate(),
                     position: None,
                     cells: HashMap::new(),
                 }),

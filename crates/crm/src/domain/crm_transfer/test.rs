@@ -27,7 +27,7 @@ fn viewer() -> Viewer {
 
 fn field(name: &str, kind: FieldKind) -> PipelineField {
     PipelineField {
-        id: ColumnId::new(),
+        id: ColumnId::generate(),
         name: name.into(),
         kind,
         multiple: false,
@@ -47,9 +47,9 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
                 user_id: "macro|me@example.com".into(),
                 name: "Deals".into(),
                 record_type: Some(record_type),
-                database_id: DatabaseId::new(),
-                table_id: TableId::new(),
-                primary_column_id: ColumnId::new(),
+                database_id: DatabaseId::generate(),
+                table_id: TableId::generate(),
+                primary_column_id: ColumnId::generate(),
                 sharing: PipelineSharing::Team,
                 created_at: Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap(),
                 trashed_at: None,
@@ -59,7 +59,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
         fields: vec![
             field("Company", FieldKind::Record(record_type)),
             PipelineField {
-                options: vec![(OptionId::new(), "Lead".into())],
+                options: vec![(OptionId::generate(), "Lead".into())],
                 ..field("Stage", FieldKind::Select)
             },
             field("Owner", FieldKind::Person),
@@ -76,7 +76,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
 fn entry(id: Uuid) -> PipelineEntryView {
     PipelineEntryView {
         currencies: Default::default(),
-        entry_id: RowId::new(),
+        entry_id: RowId::generate(),
         record: Some(PipelineRecord {
             id,
             name: None,
@@ -450,8 +450,8 @@ async fn a_rejected_currency_row_does_not_add_its_stage_option() {
     let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
     let currency = PipelineField {
         options: vec![
-            (OptionId::new(), "USD".into()),
-            (OptionId::new(), "EUR".into()),
+            (OptionId::generate(), "USD".into()),
+            (OptionId::generate(), "EUR".into()),
         ],
         ..field("Revenue currency", FieldKind::Select)
     };
@@ -514,9 +514,9 @@ async fn blank_commercial_values_use_defaults_without_skipping_stage_options() {
     let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
     let outcome = PipelineField {
         options: vec![
-            (OptionId::new(), "Open".into()),
-            (OptionId::new(), "Won".into()),
-            (OptionId::new(), "Lost".into()),
+            (OptionId::generate(), "Open".into()),
+            (OptionId::generate(), "Won".into()),
+            (OptionId::generate(), "Lost".into()),
         ],
         ..field("Outcome", FieldKind::Select)
     };
@@ -530,8 +530,8 @@ async fn blank_commercial_values_use_defaults_without_skipping_stage_options() {
 
     let currency = PipelineField {
         options: vec![
-            (OptionId::new(), "USD".into()),
-            (OptionId::new(), "EUR".into()),
+            (OptionId::generate(), "USD".into()),
+            (OptionId::generate(), "EUR".into()),
         ],
         ..field("Revenue currency", FieldKind::Select)
     };
@@ -738,8 +738,8 @@ async fn an_export_writes_people_as_emails_and_reimports() {
     let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
     let currency = PipelineField {
         options: vec![
-            (OptionId::new(), "EUR".into()),
-            (OptionId::new(), "USD".into()),
+            (OptionId::generate(), "EUR".into()),
+            (OptionId::generate(), "USD".into()),
         ],
         ..field("Revenue currency", FieldKind::Select)
     };
@@ -760,7 +760,7 @@ async fn an_export_writes_people_as_emails_and_reimports() {
         .push(field("Contract period", FieldKind::DateRange));
     workflows.exported = vec![PipelineEntryView {
         currencies: Default::default(),
-        entry_id: RowId::new(),
+        entry_id: RowId::generate(),
         record: Some(PipelineRecord {
             id: Uuid::now_v7(),
             name: Some("=Acme".into()),
@@ -829,7 +829,7 @@ async fn a_generic_pipeline_exports_its_fields_and_refuses_a_record_import() {
     let id = generic.pipeline.pipeline.id;
     let mut workflows = Workflows::new(generic);
     workflows.exported = vec![PipelineEntryView {
-        entry_id: RowId::new(),
+        entry_id: RowId::generate(),
         record: None,
         fields: vec![("Name".into(), FieldValue::Text("Launch site".into()))],
         currencies: Default::default(),

@@ -74,7 +74,7 @@ impl<Properties> PgDatabasesRepo<Properties> {
         if !rows::lock_live_database(&mut transaction, DatabaseId::from_uuid(database)).await? {
             return Ok(None);
         }
-        let ids: Vec<RowId> = (0..count).map(|_| RowId::new()).collect();
+        let ids: Vec<RowId> = (0..count).map(|_| RowId::generate()).collect();
         let rows::Placed::Applied(rows) =
             rows::append_rows(&mut transaction, table_id, created_by, &ids).await?
         else {
@@ -187,7 +187,7 @@ fn bind(table_id: TableId, definition_id: Uuid, position: &str) -> Write {
         column: Column {
             protections: vec![],
             nullable: true,
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             table_id,
             property_definition_id: definition_id,
             position: position.parse().expect("a fractional key"),
@@ -220,7 +220,7 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo<PropertiesPgRepo>, Table, Uu
         .await
         .expect("database should insert");
 
-    let table_id = TableId::new();
+    let table_id = TableId::generate();
     let definition_id = insert_definition(pool, "Name").await;
     commit(
         pool,
@@ -482,7 +482,7 @@ async fn get_database_is_none_when_missing(pool: PgPool) {
     let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool));
 
     let missing = repo
-        .get_database(DatabaseId::new())
+        .get_database(DatabaseId::generate())
         .await
         .expect("get should succeed");
 

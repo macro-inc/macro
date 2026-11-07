@@ -114,7 +114,7 @@ where
         )
         .fetch_one(&mut *transaction)
         .await?;
-        let id = TableId::new();
+        let id = TableId::generate();
         let position = last_position(max_position)
             .and_then(|last| key_between(last.as_ref(), None))
             .map_err(PgDatabasesRepoError::from)?;
@@ -140,7 +140,7 @@ where
             keys_between(None, None, definitions.len()).map_err(PgDatabasesRepoError::from)?;
         let mut columns = Vec::with_capacity(definitions.len());
         for (definition, position) in definitions.iter().zip(column_positions) {
-            let column = ColumnId::new();
+            let column = ColumnId::generate();
             columns.push(column);
             sqlx::query!(
                 "INSERT INTO database_columns (id, table_id, property_definition_id, position, infer_type) VALUES ($1, $2, $3, $4, false)",
@@ -157,7 +157,7 @@ where
             .map_err(PgDatabasesRepoError::from)?
             .into_iter();
         for batch in request.rows.chunks(ROWS_PER_INSERT) {
-            let row_ids: Vec<RowId> = batch.iter().map(|_| RowId::new()).collect();
+            let row_ids: Vec<RowId> = batch.iter().map(|_| RowId::generate()).collect();
             let positions: Vec<Position> = row_positions.by_ref().take(batch.len()).collect();
             sqlx::query!(
                 r#"INSERT INTO database_rows (id, table_id, position, created_by)

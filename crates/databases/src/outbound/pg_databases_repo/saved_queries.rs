@@ -38,7 +38,7 @@ impl<Properties> PgDatabasesRepo<Properties> {
             VALUES ($1, $2, $3, $4)
             RETURNING id, database_id, definition, created_by, created_at
             "#,
-            QueryId::new().into_uuid(),
+            QueryId::generate().into_uuid(),
             database_id.map(DatabaseId::into_uuid),
             serde_json::to_value(definition)?,
             created_by,

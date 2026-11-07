@@ -127,7 +127,7 @@ pub fn prepare(draft: &Draft, existing: &[Column]) -> Result<Prepared, Authoring
         key(section_key, &mut section_keys, Code::DuplicateSectionKey)?;
         text(title, 200, section_key)?;
         text(description, 10_000, section_key)?;
-        let id = FormSectionId::new();
+        let id = FormSectionId::generate();
         result.keys.sections.insert(section_key.clone(), id);
         let resolved = match section {
             Section::Questions {
@@ -242,7 +242,7 @@ pub fn prepare(draft: &Draft, existing: &[Column]) -> Result<Prepared, Authoring
                                         "Use distinct nonempty option labels; numeric equivalents name the same choice.",
                                     ));
                                 }
-                                let id = OptionId::new();
+                                let id = OptionId::generate();
                                 option_map.insert(option.key.clone(), id);
                                 saved.push(QuestionOption {
                                     id,
@@ -251,7 +251,7 @@ pub fn prepare(draft: &Draft, existing: &[Column]) -> Result<Prepared, Authoring
                                 });
                             }
                             let column = Column {
-                                id: ColumnId::new(),
+                                id: ColumnId::generate(),
                                 name: name.trim().into(),
                                 kind: *kind,
                                 options: saved,
@@ -284,7 +284,7 @@ pub fn prepare(draft: &Draft, existing: &[Column]) -> Result<Prepared, Authoring
                             "A column may be asked only once.",
                         ));
                     }
-                    let question_id = FormQuestionId::new();
+                    let question_id = FormQuestionId::generate();
                     result
                         .keys
                         .questions

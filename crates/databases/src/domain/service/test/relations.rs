@@ -13,7 +13,11 @@ struct Linked {
 
 async fn linked() -> Linked {
     let seeded = seeded().await;
-    let (sessions, title, relation_column) = (TableId::new(), ColumnId::new(), ColumnId::new());
+    let (sessions, title, relation_column) = (
+        TableId::generate(),
+        ColumnId::generate(),
+        ColumnId::generate(),
+    );
     seeded
         .service
         .apply_ops(

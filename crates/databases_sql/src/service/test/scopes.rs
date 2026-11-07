@@ -4,7 +4,7 @@ use super::*;
 
 #[tokio::test]
 async fn an_unavailable_scope_does_not_read_another_accessible_database() {
-    for scope in [DatabaseId::new(), SECRET] {
+    for scope in [DatabaseId::generate(), SECRET] {
         let world = world();
         let result = sql(&world)
             .execute(
@@ -24,7 +24,7 @@ async fn an_unavailable_scope_does_not_read_another_accessible_database() {
 
 #[tokio::test]
 async fn an_unavailable_scope_does_not_update_another_accessible_database() {
-    for scope in [DatabaseId::new(), SECRET] {
+    for scope in [DatabaseId::generate(), SECRET] {
         let world = world();
         world
             .lock()
@@ -57,7 +57,7 @@ async fn an_unavailable_scope_does_not_update_another_accessible_database() {
 
 #[tokio::test]
 async fn an_unavailable_scope_does_not_rename_another_accessible_database() {
-    for scope in [DatabaseId::new(), SECRET] {
+    for scope in [DatabaseId::generate(), SECRET] {
         let world = world();
         let result = sql(&world)
             .execute(

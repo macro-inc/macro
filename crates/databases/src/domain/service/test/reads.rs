@@ -19,7 +19,7 @@ async fn cells_of_rows_answers_each_row_of_the_table_as_ops_name_its_cells() {
     let empty_row = insert_names(&seeded, &[""]).await[0];
     // A row with nothing in it: clear the text the insert wrote.
     seeded.world.lock().unwrap().cells.remove(&empty_row);
-    let stray = RowId::new();
+    let stray = RowId::generate();
 
     let cells = seeded
         .service
@@ -85,7 +85,11 @@ async fn column_cells_answers_one_columns_nonempty_cells_across_the_table() {
 
     let unknown = seeded
         .service
-        .column_cells(view(seeded.database_id), seeded.table_id, ColumnId::new())
+        .column_cells(
+            view(seeded.database_id),
+            seeded.table_id,
+            ColumnId::generate(),
+        )
         .await;
     assert!(matches!(unknown, Err(DatabaseError::NotFound)));
 }
@@ -115,7 +119,7 @@ async fn row_count_counts_the_tables_rows() {
 #[tokio::test]
 async fn reads_of_a_trashed_database_or_a_table_it_lacks_are_not_found() {
     let seeded = seeded().await;
-    let other_table = TableId::new();
+    let other_table = TableId::generate();
     assert!(matches!(
         seeded
             .service

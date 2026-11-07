@@ -93,7 +93,7 @@ async fn a_trashed_form_stays_where_it_was_and_a_purged_folder_frees_a_form(pool
 
     repo.trash_form(form.id, at(10)).await.unwrap();
     assert!(!repo.move_form(form.id, None).await.unwrap());
-    assert!(!repo.move_form(FormId::new(), None).await.unwrap());
+    assert!(!repo.move_form(FormId::generate(), None).await.unwrap());
     let stored = repo.form(form.id).await.unwrap().unwrap();
     assert_eq!(stored.form.project_id.as_deref(), Some(SUBFOLDER));
 

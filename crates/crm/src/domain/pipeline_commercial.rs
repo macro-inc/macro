@@ -51,7 +51,7 @@ pub struct CommercialFields {
 
 fn select(name: String, labels: &[&str]) -> ProvisionedColumn {
     ProvisionedColumn {
-        id: ColumnId::new(),
+        id: ColumnId::generate(),
         name,
         data_type: DataType::SelectString,
         entity_type: None,

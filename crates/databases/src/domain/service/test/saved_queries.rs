@@ -206,7 +206,7 @@ async fn a_query_is_saved_only_into_a_visible_live_database() {
     let missing = svc
         .save_query(
             viewer(OWNER),
-            Some(DatabaseId::new()),
+            Some(DatabaseId::generate()),
             QueryDefinition::V1 {
                 query: "SELECT COUNT(*) FROM \"Guests\"".into(),
             },

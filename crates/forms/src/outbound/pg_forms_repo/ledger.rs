@@ -82,7 +82,7 @@ pub(super) async fn record_stop(
         WHERE form_responses.status = 'stopped'
         RETURNING id
         "#,
-        FormResponseId::new().into_uuid(),
+        FormResponseId::generate().into_uuid(),
         form.into_uuid(),
         respondent.as_ref(),
         section.into_uuid(),
@@ -117,7 +117,7 @@ pub(super) async fn record_submission(
         WHERE form_responses.status = 'stopped'
         RETURNING id, form_id, status, stopped_at_section, row_id, submitted_at, updated_at
         "#,
-        FormResponseId::new().into_uuid(),
+        FormResponseId::generate().into_uuid(),
         form.into_uuid(),
         respondent.map(|respondent| respondent.as_ref()),
         row.into_uuid(),
