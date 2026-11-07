@@ -63,3 +63,12 @@ openapi:
 # Read-only: verifies binding names without retrieving secret values.
 check-secrets environment:
   node scripts/check-deploy-secrets.mjs {{environment}}
+
+# Local capture only: the transcript feature must never be deployed.
+record-transcripts directory="tests/transcripts":
+  worker-build --features create-default-state,bebop-owned-all,transcript
+  SYNC_RECORD=1 SYNC_TRANSCRIPT_DIR={{directory}} npx vitest run
+
+# Compare the latest local recording to the committed corpus.
+diff-transcripts expected="git:HEAD" actual="tests/transcripts":
+  SYNC_TRANSCRIPT_EXPECTED={{expected}} SYNC_TRANSCRIPT_ACTUAL={{actual}} npx vitest run tests/transcript_diff.test.ts

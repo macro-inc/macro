@@ -16,3 +16,6 @@ impl std::fmt::Display for FromPeer<'_> {
         write!(f, "{m}")
     }
 }
+
+#[cfg(test)]
+mod test;

@@ -45,7 +45,7 @@ export async function setupMiniflare(
   } = {},
 ) {
   const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
-  const capture = process.env.SYNC_RECORD === "1" ? runtimeCapture(Boolean(expect.getState().currentTestName) && !options.persistPath) : undefined;
+  const capture = process.env.SYNC_RECORD === "1" ? runtimeCapture(Boolean(expect.getState().currentTestName) && !options.persistPath, options.persistPath) : undefined;
   const mf = new Miniflare({
     ...(capture ? { handleRuntimeStdio: capture.stdio } : {}),
     d1Databases: {
@@ -75,6 +75,7 @@ export async function setupMiniflare(
     r2Persist: persist('r2'),
     fetchMock: options.fetchMock,
     bindings: {
+      SYNC_RECORD: process.env.SYNC_RECORD === "1",
       ...(options.fetchMock ? { DSS_URL: "https://dss.test", DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       DOCUMENT_PERMISSIONS_SECRET: "local",
       INTERNAL_API_SECRET_KEY: "INTERNAL_API_SECRET",
@@ -197,6 +198,10 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
 
 
   connection.send(registrationMessage);
+  if (process.env.SYNC_RECORD === '1') {
+    connection.send('ping');
+    assert(await connection.waitForNextMessage() === 'pong');
+  }
 
   return {
     doc: loroDoc,

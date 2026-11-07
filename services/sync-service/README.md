@@ -121,6 +121,8 @@ A consuming client can fetch this schema during build time and generate the corr
 By default `bebop-owned-all`, `do-sqlite-snapshot-storage` and `search-service` are enabled. `just worker-build`
 adds `create-default-state`; `alarm-keep-alive` is opt-in.
 
+- `transcript`: Test-only ordered callback, port, clock, and wire capture through
+  the `sync_transcript` tracing target. Never enable it in a deployed worker.
 - `bebop-owned-all`: Enables all bebop owned types
 - `create-default-state`: As of writing this there is no mechanism to initialize a document's state 
 from existing state on the client. If a client fetches a document for the first time the worker will create
@@ -247,3 +249,37 @@ Active peer queries (`include_ai=false`) exclude both signed agent actors and
 reserved AI peer IDs. Canvas workers use independent full-width random
 Loro peer identities across worker isolates; signed actor claims still supply
 durable provenance. Cursor names remain untrusted ephemeral presentation.
+
+
+### Golden transcript checks
+
+`just record-transcripts` builds with the test-only `transcript` feature and runs
+Vitest with `SYNC_RECORD=1`. It writes raw JSONL fixtures beneath
+`tests/transcripts` (pass an output directory to `just record-transcripts`
+for independent recordings). `just diff-transcripts` compares those recordings
+with the committed corpus at HEAD; optional arguments select two other corpus
+directories, or a `git:<revision>` baseline.
+
+The test adapter captures callbacks and host port calls while forwarding their
+original arguments and results. It records raw frame bytes, per-read clock
+values, accepted socket IDs, HTTP responses, outbound effects, and final DO KV,
+SQL, D1 and snapshot-KV state. A ping/pong fence and a stdout dump marker keep
+late callback output within the scenario. Shared runtimes include preceding
+inputs in each fixture so they can be replayed independently, including across
+persisted-runtime restarts. Explicit seed events retain test-side KV and D1 writes.
+
+Recording seeds client document IDs, Loro peer IDs and input bytes. Worker
+entropy and clocks remain real; the normalizer compares their recorded
+references, clock counts/kinds, and decoded awareness values while retaining
+other wire bytes. The raw fixtures keep the values needed by native replay.
+The local-only adapter enables `workerd:unsafe` to evict one object while keeping
+its native hibernatable sockets. No test routes or unsafe bindings enter the
+worker bundle. Local test controls also pin expiry during an accepted connection
+and missing identity after eviction; these controls are never bundled.
+`tests/hibernation.test.ts` exercises H1–H10.
+
+`tests/codec_fixtures.test.ts` and the Bebop crate's Rust tests compare every wire
+variant against the same checked-in bytes. Regenerate those bytes only after an
+intentional schema change with `SYNC_WRITE_CODEC_FIXTURES=1 npx vitest run
+ tests/codec_fixtures.test.ts`. Native replay and its coverage floor are added in
+C7/C8; the inventory-to-transcript map is in `tests/transcripts/COVERAGE.md`.
