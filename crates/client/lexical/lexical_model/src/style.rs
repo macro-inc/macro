@@ -80,6 +80,11 @@ pub fn parse_css_declarations(css: &str) -> IndexMap<String, String> {
         }
         let property: IResult<&str, &str> = take_while1(|c| c != ':' && c != ';').parse(input);
         let Ok((rest, name)) = property else {
+            let skipped: IResult<&str, &str> = take_until(";").parse(input);
+            if let Ok((rest, _)) = skipped {
+                input = rest;
+                continue;
+            }
             break;
         };
         let colon: IResult<&str, char> = char(':').parse(rest);

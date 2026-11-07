@@ -14,3 +14,13 @@ fn css_nested_quoted_escaped_comments_and_duplicates() {
     assert_eq!(css.get("width").map(String::as_str), Some("1px"));
     assert_eq!(css.keys().next().map(String::as_str), Some("color"));
 }
+
+#[test]
+fn malformed_css_drops_invalid_declarations_without_losing_valid_neighbors() {
+    let parsed = parse_css_declarations(
+        "empty:;:bad;no-colon; color: red; x:func(1;2); broken:'unterminated",
+    );
+    assert_eq!(parsed.get("color").map(String::as_str), Some("red"));
+    assert_eq!(parsed.get("x").map(String::as_str), Some("func(1;2)"));
+    assert!(!parsed.contains_key("no-colon"));
+}
