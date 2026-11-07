@@ -372,3 +372,96 @@ fn wrapping_root_orphan_preserves_text_selection() -> Result<()> {
     assert!(tx.parent(item).is_some_and(|k| tx.is::<ListNode>(k)));
     Ok(())
 }
+
+#[test]
+fn inserting_list_before_item_text_merges_tail_into_inner_item() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let (text, _) = editor.update(|tx| {
+        let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let item = tx.create(ListItemNode::default())?;
+        let text = tx.create_text("a")?;
+        tx.append(item, &[text.key()])?;
+        tx.append(list, &[item.key()])?;
+        tx.append(NodeKey::ROOT, &[list.key()])?;
+        tx.select_start(text)?;
+        Ok(text)
+    })?;
+    editor.update(|tx| {
+        let pasted = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let item = tx.create(ListItemNode::default())?;
+        let inserted = tx.create_text("a")?;
+        tx.append(item, &[inserted.key()])?;
+        tx.append(pasted, &[item.key()])?;
+        tx.insert_nodes(&[pasted.key()])
+    })?;
+    let state = editor.state();
+    let roots = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(roots.len(), 1);
+    let list = roots[0];
+    assert!(state.is::<ListNode>(list));
+    assert_eq!(state.children_keys(list)?.len(), 1);
+    assert_eq!(state.text_content(list).as_ref(), "aa");
+    assert!(!state.is_attached(text));
+    assert_eq!(
+        state
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor
+            .offset(),
+        1
+    );
+    Ok(())
+}
+
+#[test]
+fn no_view_backspace_after_line_break_does_not_collapse_list_item() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+    let item = tx.create(ListItemNode::default())?;
+    let line = tx.create(LineBreak::default())?;
+    let text = tx.create_text("text")?;
+    tx.append(item, &[line.key(), text.key()])?;
+    tx.append(list, &[item.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.select_start(text)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![list.key()]);
+    assert_eq!(tx.children_keys(item)?, vec![line.key(), text.key()]);
+    Ok(())
+}
+
+#[test]
+fn element_point_typing_inserts_before_list_child_without_list_splice() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = tx.create(ListNode::new(ListType::Check, 1))?;
+    let first = tx.create(ListItemNode::default())?;
+    let last = tx.create(ListItemNode::default())?;
+    tx.append(list, &[first.key(), last.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::element(list, ChildIndex(1)),
+    ))))?;
+    tx.insert_text("x")?;
+    let children = tx.children_keys(list)?;
+    assert_eq!(children.len(), 3);
+    assert_eq!(children[0], first.key());
+    assert!(tx.is_text(children[1]));
+    assert_eq!(tx.text_content(children[1]), "x");
+    assert_eq!(children[2], last.key());
+    let line = tx.create(LineBreak::default())?;
+    tx.replace(children[1], line, false)?;
+    assert_eq!(
+        tx.children_keys(list)?,
+        vec![first.key(), line.key(), last.key()]
+    );
+    Ok(())
+}

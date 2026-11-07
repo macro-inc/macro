@@ -358,12 +358,24 @@ impl Transaction<'_> {
             }
         }
         if restore_selection && affected.is_some_and(|flags| flags.into_iter().any(|v| v)) {
-            let point = if let Some(previous) = previous {
-                self.end_point(previous)?
-            } else if let Some(next) = next {
-                self.start_point(next)?
+            let point = if let Some(previous) =
+                previous.filter(|key| self.is_text(*key) || self.is_element(*key))
+            {
+                if self.is_text(previous) {
+                    Point::text(previous, self.text_content_size(previous))
+                } else {
+                    Point::element(previous, ChildIndex(self.children_size(previous)))
+                }
+            } else if previous.is_none()
+                && let Some(next) = next.filter(|key| self.is_text(*key) || self.is_element(*key))
+            {
+                if self.is_text(next) {
+                    Point::text(next, Utf16Offset::ZERO)
+                } else {
+                    Point::element(next, ChildIndex(0))
+                }
             } else {
-                Point::element(parent, ChildIndex(0))
+                Point::element(parent, position)
             };
             if let Some(Selection::Range(range)) = &mut self.pending.selection
                 && let Some(affected) = affected
@@ -445,7 +457,15 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
-        self.splice(parent, ChildIndex(position.0 + 1), 0, &[node])?;
+        let insertion_selection = self.pending.selection.clone();
+        self.default_splice(parent, ChildIndex(position.0 + 1), 0, &[node])?;
+        if restore_selection {
+            self.update_element_selection_on_insert(
+                parent,
+                position.0 + 1,
+                insertion_selection.as_ref(),
+            )?;
+        }
         if !restore_selection {
             self.pending.selection = selection;
         }
@@ -475,11 +495,74 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
-        self.splice(parent, position, 0, &[node])?;
+        let insertion_selection = self.pending.selection.clone();
+        self.default_splice(parent, position, 0, &[node])?;
+        if restore_selection {
+            self.update_element_selection_on_insert(
+                parent,
+                position.0,
+                insertion_selection.as_ref(),
+            )?;
+        }
         if !restore_selection {
             self.pending.selection = selection;
         }
         Ok(node)
+    }
+    fn update_element_selection_on_insert(
+        &mut self,
+        parent: NodeKey,
+        index: u32,
+        previous: Option<&Selection>,
+    ) -> Result<(), Error> {
+        let Some(Selection::Range(previous)) = previous else {
+            return Ok(());
+        };
+        if previous.anchor.key() != parent && previous.focus.key() != parent {
+            return Ok(());
+        }
+        if !previous.is_collapsed() {
+            // Upstream validates direction while updating element endpoints,
+            // even if a text endpoint became stale during a caret-range edit.
+            self.range_at(SelectionSlot::Active)?
+                .is_backward(self.view())?;
+        }
+        for (role, point) in [
+            (PointRole::Anchor, previous.anchor),
+            (PointRole::Focus, previous.focus),
+        ] {
+            if matches!(point, Point::Element { key, offset } if key == parent && offset.0 == index)
+            {
+                self.set_point_at(
+                    SelectionSlot::Active,
+                    role,
+                    Point::element(parent, ChildIndex(index + 1)),
+                )?;
+            }
+        }
+        let range = self.range_at(SelectionSlot::Active)?.clone();
+        for (role, point) in [
+            (PointRole::Anchor, range.anchor),
+            (PointRole::Focus, range.focus),
+        ] {
+            if let Point::Element { key, offset } = point {
+                let at_end = offset.0 == self.children_size(key);
+                let child = if at_end {
+                    self.last_child(key)
+                } else {
+                    self.child_at_index(key, offset)
+                };
+                if let Some(child) = child.filter(|child| self.is_text(*child)) {
+                    let offset = if at_end {
+                        self.text_content_size(child)
+                    } else {
+                        Utf16Offset::ZERO
+                    };
+                    self.set_point_at(SelectionSlot::Active, role, Point::text(child, offset))?;
+                }
+            }
+        }
+        Ok(())
     }
     /// Base replacement, optionally transferring children.
     pub fn default_replace(
@@ -517,7 +600,7 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
-        self.splice(parent, position, 1, &[new])?;
+        self.default_splice(parent, position, 1, &[new])?;
         if let Some(Selection::Range(previous)) = selection {
             let destination = self
                 .last_descendant(new)
@@ -711,6 +794,39 @@ impl Transaction<'_> {
             style,
         })))
     }
+    pub(crate) fn element_select_point(
+        &self,
+        mut key: NodeKey,
+        at_end: bool,
+    ) -> Result<Point, Error> {
+        while self.is_element(key) && !self.can_be_empty(key) {
+            let child = if at_end {
+                self.last_child(key)
+            } else {
+                self.first_child(key)
+            };
+            let Some(child) = child.filter(|child| self.is_text(*child) || self.is_element(*child))
+            else {
+                break;
+            };
+            key = child;
+        }
+        if self.is_text(key) {
+            Ok(Point::text(
+                key,
+                if at_end {
+                    self.text_content_size(key)
+                } else {
+                    Utf16Offset::ZERO
+                },
+            ))
+        } else {
+            Ok(Point::element(
+                key,
+                ChildIndex(if at_end { self.children_size(key) } else { 0 }),
+            ))
+        }
+    }
     /// Select the previous sibling or the parent boundary.
     pub fn select_previous(
         &mut self,
@@ -727,6 +843,10 @@ impl Transaction<'_> {
                     Point::text(previous, anchor.unwrap_or(len)),
                     Point::text(previous, focus.unwrap_or(len)),
                 );
+            }
+            if self.is_element(previous) {
+                let point = self.element_select_point(previous, true)?;
+                return self.select_points(point, point);
             }
             return self.select_end(previous);
         }
@@ -751,6 +871,10 @@ impl Transaction<'_> {
                     Point::text(next, anchor.unwrap_or_default()),
                     Point::text(next, focus.unwrap_or_default()),
                 );
+            }
+            if self.is_element(next) {
+                let point = self.element_select_point(next, false)?;
+                return self.select_points(point, point);
             }
             return self.select_start(next);
         }

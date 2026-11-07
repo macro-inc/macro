@@ -7,6 +7,8 @@ pub mod matcher;
 pub mod normalize;
 pub mod options;
 mod patterns;
+pub mod shortcuts;
+pub use shortcuts::*;
 pub mod state;
 pub mod transformer;
 pub mod util;

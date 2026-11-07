@@ -1,5 +1,5 @@
 use super::*;
-fn path(view: StateRef<'_>, key: NodeKey) -> Result<Vec<u32>, Error> {
+pub(crate) fn path(view: StateRef<'_>, key: NodeKey) -> Result<Vec<u32>, Error> {
     let mut key = key;
     let mut result = vec![];
     while key != NodeKey::ROOT {
@@ -13,7 +13,7 @@ fn path(view: StateRef<'_>, key: NodeKey) -> Result<Vec<u32>, Error> {
     result.reverse();
     Ok(result)
 }
-fn point(view: StateRef<'_>, point: Point) -> Result<Value, Error> {
+pub(crate) fn point(view: StateRef<'_>, point: Point) -> Result<Value, Error> {
     Ok(
         json!({"path":path(view,point.key())?,"offset":point.offset(),"type":point.point_type().to_string()}),
     )

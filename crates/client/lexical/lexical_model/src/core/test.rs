@@ -497,3 +497,93 @@ fn apply_error_retains_early_publication_and_reports_its_commit() {
     );
     assert_eq!(&*core.state().root_text_content(), "early publication");
 }
+
+static EMIT_ONLY: CommandKey<()> = CommandKey::new("emit-only");
+static NOTIFICATION: EventKey<u32> = EventKey::new("notification");
+static EMIT_REGISTRATION: [CommandRegistration; 1] = [CommandRegistration {
+    command: CommandKind::Extension(&EMIT_ONLY),
+    priority: CommandPriority::Normal,
+    placement: Placement::After,
+}];
+struct EmitOnly;
+impl Plugin for EmitOnly {
+    fn name(&self) -> &'static str {
+        "emit-only"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &EMIT_REGISTRATION
+    }
+    fn handle(&self, tx: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        tx.emit(&NOTIFICATION, 7);
+        Ok(Handled::Yes)
+    }
+}
+#[test]
+fn event_only_command_is_published_without_advancing_history_merge_clock() {
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .plugin(Typing)
+        .plugin(EmitOnly)
+        .build()
+        .unwrap();
+    let (text, initial) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let t = tx.create_text("a")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[t.key()])?;
+            tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+                Point::text(t, Utf16Offset(1)),
+            ))))?;
+            Ok(t.key())
+        })
+        .unwrap();
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: Some(HistoryConfig::default()),
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    core.history
+        .as_mut()
+        .unwrap()
+        .record(&initial, HistoryTime(0));
+    core.apply(
+        Input::Command {
+            command: Command::InsertText("b".into()),
+            selection: ViewSelection::KeepModel,
+        },
+        HistoryTime(100),
+    )
+    .unwrap();
+    let noop = core
+        .apply(
+            Input::Command {
+                command: Command::Extension(ExtensionCommand::new(&EMIT_ONLY, ())),
+                selection: ViewSelection::KeepModel,
+            },
+            HistoryTime(250),
+        )
+        .unwrap();
+    assert_eq!(noop.commits.len(), 1);
+    assert_eq!(
+        noop.commits[0]
+            .events_of(&NOTIFICATION)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![7]
+    );
+    assert!(noop.diff.ops.is_empty());
+    core.apply(
+        Input::Command {
+            command: Command::InsertText("c".into()),
+            selection: ViewSelection::KeepModel,
+        },
+        HistoryTime(500),
+    )
+    .unwrap();
+    assert_eq!(core.history().unwrap().undo_depth(), 2);
+    assert_eq!(core.state().view().text_content(text), "abc");
+}
