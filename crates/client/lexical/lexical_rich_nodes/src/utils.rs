@@ -44,12 +44,53 @@ pub(crate) fn lift_to_nearest_root(
     node: NodeKey,
     remove_empty: bool,
 ) -> std::result::Result<(), lexical_model::Error> {
-    let mut caret: PointCaret = SiblingCaret::new(node, CaretDirection::Next).rewind(tx.view())?.into();
-    if caret.node_at_caret(tx.view()) == Some(node) || caret.flipped(tx.view()).node_at_caret(tx.view()) == Some(node) {
+    let mut caret: PointCaret = SiblingCaret::new(node, CaretDirection::Next)
+        .rewind(tx.view())?
+        .into();
+    if caret.node_at_caret(tx.view()) == Some(node)
+        || caret.flipped(tx.view()).node_at_caret(tx.view()) == Some(node)
+    {
         tx.remove(node, true)?;
     }
-    let options = SplitAtPointCaretNextOptions { should_split: |_, _, _| false, remove_empty_destination: remove_empty, ..Default::default() };
-    while let Some(next) = tx.split_at_point_caret_next(caret, options)? { caret = next.into(); }
+    let options = SplitAtPointCaretNextOptions {
+        should_split: |_, _, _| false,
+        remove_empty_destination: remove_empty,
+        ..Default::default()
+    };
+    while let Some(next) = tx.split_at_point_caret_next(caret, options)? {
+        caret = next.into();
+    }
     tx.caret_insert(caret, node)?;
     Ok(())
+}
+
+/// Hoist matching descendants out of unsupported wrappers, traversing last-to-first.
+pub fn unwrap_and_filter_descendants(
+    tx: &mut Transaction<'_>,
+    root: NodeKey,
+    mut predicate: impl FnMut(StateRef<'_>, NodeKey) -> bool,
+) -> std::result::Result<bool, lexical_model::Error> {
+    fn walk(
+        tx: &mut Transaction<'_>,
+        root: NodeKey,
+        after: Option<NodeKey>,
+        predicate: &mut impl FnMut(StateRef<'_>, NodeKey) -> bool,
+    ) -> std::result::Result<bool, lexical_model::Error> {
+        let mut changed = false;
+        for node in tx.children_keys(root)?.into_iter().rev() {
+            if predicate(tx.view(), node) {
+                if let Some(after) = after {
+                    tx.insert_after(after, node, true)?;
+                }
+            } else {
+                changed = true;
+                if tx.is_element(node) {
+                    walk(tx, node, after.or(Some(node)), predicate)?;
+                }
+                tx.remove(node, false)?;
+            }
+        }
+        Ok(changed)
+    }
+    walk(tx, root, None, &mut predicate)
 }
