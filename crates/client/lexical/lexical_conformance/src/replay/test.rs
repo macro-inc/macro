@@ -349,3 +349,45 @@ fn macro_markdown_uses_two_space_nested_list_indentation() -> Result<()> {
     assert_eq!(markdown, json!("- a\n  - b"));
     Ok(())
 }
+
+#[test]
+fn partial_seed_with_nonsequential_keys_replays_and_corruption_fails() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-markdown/5ede34e8f1b0f972.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut wrong = fixture;
+    wrong.initial["selection"]["anchor"]["offset"] = json!(99999);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    Ok(())
+}
+
+#[test]
+fn declared_highlight_projection_keeps_allocation_dirty_normalized_and_text_checks() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(ORACLE)?;
+    fixture.normalize = vec!["codeHighlight".into()];
+    Replayer::default().replay(&fixture)?;
+    let mut wrong = fixture.clone();
+    wrong.r#final["text"] = json!("wrong");
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut wrong = fixture.clone();
+    wrong.r#final["nodeMapKeys"] = json!([]);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut wrong = fixture.clone();
+    let commit = wrong
+        .trace
+        .iter_mut()
+        .find(|op| op["op"] == "commit")
+        .expect("commit");
+    commit["snapshot"]["dirty"]["leaves"] = json!(["root"]);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut wrong = fixture;
+    let commit = wrong
+        .trace
+        .iter_mut()
+        .find(|op| op["op"] == "commit")
+        .expect("commit");
+    commit["snapshot"]["normalized"] = json!(["root"]);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    Ok(())
+}

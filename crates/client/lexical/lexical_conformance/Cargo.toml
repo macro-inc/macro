@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-lexical_model = { workspace = true }
+lexical_model = { workspace = true, features = ["foreign-nodes"] }
 lexical_rich_nodes = { workspace = true }
 lexical_markdown = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

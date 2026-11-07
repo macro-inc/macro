@@ -4,6 +4,7 @@ use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 mod config;
+mod initial;
 use config::validate_config;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
@@ -55,6 +56,7 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 #[derive(Default)]
 pub struct Replayer {
     pub(crate) rich_text_registered: bool,
+    pub(crate) code_highlight: bool,
     pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
@@ -87,16 +89,17 @@ impl Replayer {
     /// Replay all trace operations and final state; no original JS executes.
     pub fn replay(&mut self, fixture: &Fixture) -> Result<()> {
         if fixture.schema != 2
-            || fixture.partial
             || fixture.tier != "A-rec"
-            || fixture.initial["editorState"] != Value::Null
-            || fixture.initial["selection"] != Value::Null
+            || (!fixture.partial
+                && (fixture.initial["editorState"] != Value::Null
+                    || fixture.initial["selection"] != Value::Null))
         {
             return Err(fail("unsupported fixture initialization"));
         }
         for normalization in &fixture.normalize {
             match normalization.as_str() {
                 "listIndent: 2" => self.markdown_options.list_indent = 2,
+                "codeHighlight" => self.code_highlight = true,
                 _ => {
                     return Err(fail(format!(
                         "unimplemented declared normalization: {normalization}"
@@ -104,10 +107,11 @@ impl Replayer {
                 }
             }
         }
-        if fixture
-            .initial
-            .as_object()
-            .is_none_or(|initial| initial.len() != 2)
+        if !fixture.partial
+            && fixture
+                .initial
+                .as_object()
+                .is_none_or(|initial| initial.len() != 2)
         {
             return Err(fail("unsupported initial fields"));
         }
@@ -168,12 +172,15 @@ impl Replayer {
                         .iter()
                         .map(|node| string(node).map(str::to_owned))
                         .collect::<Result<Vec<_>>>()?;
-                    let ed =
+                    let mut ed =
                         test_nodes::configured_builder(&nodes, op["config"]["rootElement"] == true)
                             .build()
                             .map_err(|e| fail(e.to_string()))?;
                     if let Some(ret) = op.get("ret") {
                         self.compare(ret, &json!({"$editor":0}))?;
+                    }
+                    if fixture.partial {
+                        self.restore_initial(&mut ed, &fixture.initial)?;
                     }
                     editor = Some(ed);
                     Ok(())
@@ -307,7 +314,10 @@ impl Replayer {
                     if op["name"] != "@lexical/rich-text.registerRichText"
                         || op["args"] != json!([{"$ed":0}])
                     {
-                        return Err(fail("unmapped plugin registration"));
+                        return Err(fail(format!(
+                            "unmapped plugin registration: {}",
+                            op["name"]
+                        )));
                     }
                     self.rich_text_registered = true;
                     Ok(())
