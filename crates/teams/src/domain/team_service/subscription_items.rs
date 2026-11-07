@@ -1,7 +1,6 @@
 //! [`TeamSubscriptionItems`] on the team service: resolves the team's
 //! subscription and serializes item changes with seat changes.
 
-use channels::domain::ports::ChannelService;
 use macro_event_broker::MacroEventBroker;
 use notification::domain::service::NotificationIngress;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
@@ -20,6 +19,7 @@ use crate::domain::{
     owned_entity_cleanup::OwnedEntityCleanup,
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
     team_analytics::TeamAnalytics,
+    team_channels::TeamChannels,
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::TeamRepository,
 };
@@ -29,7 +29,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -60,7 +60,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> TeamSubscriptionIte
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
