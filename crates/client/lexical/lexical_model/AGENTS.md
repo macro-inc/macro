@@ -12,7 +12,6 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
-- `src/command.rs` owns listener ordering and reentrant dispatch; `src/extension.rs` stages per-editor state separately from document snapshots.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
@@ -25,10 +24,10 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 ## Boundaries
 
+- Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
-- Direct splice/append moves preserve source element offsets for explicit package remapping; insert-before/after and replace adjust source offsets.
-- Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
+- TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
@@ -75,8 +74,6 @@ The sibling test modules cover values, reads, node dispatch, tree edits and Node
 literal exported bytes. `selection/*/test.rs` and `selection/test.rs` port explicit
 upstream selection examples, including the §18.5 `remove_text` fixture, detached-slot
 side effects, UTF-16 boundaries, formatting, block deletion and host movement.
-
-Element text-cache changes retain intentional dirty marks after mutation reporting; splice only rewrites changed sibling links.
 
 Root text-cache reconciliation clones its record after mutation reporting and retains
 the intentional root dirty mark; cache-only writes do not add mutations.

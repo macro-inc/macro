@@ -450,6 +450,27 @@ fn run_script(
             }
         };
         assert_eq!(previous.to_json().expect("old export"), json);
+        // Nested generated paragraphs can leave an element caret on a container
+        // with no INTERNAL_$isBlock ancestor. Upstream rejects inline insertion there.
+        if matches!(&result, Err(Error::Invariant("insertion requires a block")))
+            && previous
+                .selection()
+                .and_then(Selection::as_range)
+                .is_some_and(|range| {
+                    range.is_collapsed()
+                        && !previous.is_root_or_shadow_root(range.anchor.key())
+                        && previous
+                            .find_matching_parent(range.anchor.key(), |view, key| {
+                                view.is_block(key)
+                            })
+                            .is_none()
+                })
+        {
+            assert!(editor.state().same_snapshot(&previous));
+            assert_eq!(editor.state().selection(), previous.selection());
+            check_state(editor.state());
+            continue;
+        }
         let ((), commit) = result.expect("generated command with valid active range");
         check_state(editor.state());
         if attached {
@@ -579,4 +600,25 @@ proptest! {
         assert!(matches!(result, Err(Error::InfiniteTransforms)));
         assert!(previous.same_snapshot(editor.state()));
     }
+}
+
+#[test]
+fn nested_block_deletion_then_inline_insertion_rejects_atomically() {
+    run_script(
+        &[Tree::Element(vec![Tree::Decorator, Tree::Element(vec![])])],
+        &[
+            Command::DeleteCharacter {
+                direction: EditDirection::Forward,
+                target: ModifyTarget::NoView,
+            },
+            Command::DeleteCharacter {
+                direction: EditDirection::Forward,
+                target: ModifyTarget::NoView,
+            },
+            Command::InsertLineBreak {
+                select_start: false,
+            },
+        ],
+        false,
+    );
 }

@@ -7,6 +7,7 @@ pub fn insert_node_to_nearest_root_at_caret(
     caret: PointCaret,
     options: Option<SplitAtPointCaretNextOptions>,
 ) -> Result<NodeCaret, Error> {
+    let options = options.unwrap_or_default();
     let direction = caret.direction();
     let mut insert = caret.in_direction(tx.view(), CaretDirection::Next);
     if let PointCaret::Text(text) = insert {
@@ -19,7 +20,10 @@ pub fn insert_node_to_nearest_root_at_caret(
     }
     if insert.origin() == node {
         let PointCaret::Sibling(sibling) = insert else {
-            return Err(Error::Invariant("cannot insert a node into itself"));
+            return Err(Error::invariant(format!(
+                "$insertNodeToNearestRootAtCaret node {node} of type {} can not be inserted into itself",
+                tx.type_name(node)?
+            )));
         };
         insert = sibling.rewind(tx.view())?.into();
     }
@@ -28,11 +32,13 @@ pub fn insert_node_to_nearest_root_at_caret(
     {
         tx.remove(node, true)?;
     }
-    while let Some(next) = tx.split_at_point_caret_next(insert, options.unwrap_or_default())? {
+    while let Some(next) = tx.split_at_point_caret_next(insert, options)? {
         insert = next.into();
     }
     if matches!(insert, PointCaret::Text(_)) {
-        return Err(Error::Invariant("an unattached TextNode cannot be split"));
+        return Err(Error::Invariant(
+            "$insertNodeToNearestRootAtCaret: An unattached TextNode can not be split",
+        ));
     }
     let target = if tx.is_inline(node) {
         let paragraph = tx.create(Paragraph {})?;
