@@ -118,4 +118,8 @@ bytes for headless Macro helpers, retains internal dirty keys, and distinguishes
 JavaScript own undefined fields from JSON snapshots. `corpus/synthetic.ts` also
 records source class names and undefined own properties for this marshalling.
 Macro acceptance is all 452 admitted lexical-core fixtures, with no ledger entries;
-expanded upstream failures are reported separately by package.
+the full 1,421-case corpus passes or matches its exact capability ledger, reported by package.
+Traceability and CI: see [coverage/README.md](coverage/README.md) for the generated
+specification matrix, current-run Rust evidence, and pending ratchet. Native and
+wasm replay run the complete admitted corpus; upstream JavaScript replay success
+does not imply Rust replay success.

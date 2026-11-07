@@ -8,7 +8,12 @@ use lexical_markdown::{
 use lexical_model::*;
 use serde_json::{Value, json};
 use std::sync::Arc;
-fn registry(value: Option<&Value>) -> Result<Transformers> {
+mod recorded;
+use recorded::with_registry;
+fn registry(
+    value: Option<&Value>,
+    owner: &Arc<std::sync::Mutex<Replayer>>,
+) -> Result<Transformers> {
     let Some(value) = value.filter(|v| v.get("$undef").is_none()) else {
         return Ok(Transformers::new(transformers()));
     };
@@ -17,6 +22,12 @@ fn registry(value: Option<&Value>) -> Result<Transformers> {
         .ok_or_else(|| fail("markdown transformer array"))?;
     let mut out = Vec::new();
     for value in array {
+        if value.get("$transformer").is_none() {
+            out.push(Transformer::TextMatch(Arc::new(
+                recorded::RecordedLink::decode(value, owner.clone())?,
+            )));
+            continue;
+        }
         let name = string(&value["$transformer"])?;
         if let Some(index) = name.strip_prefix(
             "@macro-inc/lexical-core/transformers/transformers.HTML_ENTITY_TRANSFORMERS.",
@@ -88,9 +99,9 @@ pub(crate) fn call(
                 .transpose()?
                 .flatten();
             let opts = MarkdownOptions {
-                list_indent: r.list_indent.unwrap_or(4),
+                list_indent: r.list_indent.unwrap_or(r.markdown_options.list_indent),
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
-                ..Default::default()
+                ..r.markdown_options
             };
             if selection
                 .as_ref()
@@ -106,42 +117,46 @@ pub(crate) fn call(
             if !r.in_callback {
                 return Err(ReplayError::NoActiveEditor);
             }
-            Ok(json!(convert_selection_to_markdown_string(
-                &view,
-                &registry(args.first())?,
-                selection.as_ref(),
-                &opts
-            )?))
+            with_registry(r, args.first(), |registry| {
+                Ok(json!(convert_selection_to_markdown_string(
+                    &view,
+                    registry,
+                    selection.as_ref(),
+                    &opts
+                )?))
+            })
         }
         "$convertToMarkdownString" => {
             if !r.in_callback {
                 return Err(ReplayError::NoActiveEditor);
             }
             let opts = MarkdownOptions {
-                list_indent: r.list_indent.unwrap_or(4),
+                list_indent: r.list_indent.unwrap_or(r.markdown_options.list_indent),
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
-                ..Default::default()
+                ..r.markdown_options
             };
-            Ok(json!(convert_to_markdown_string(
-                &view,
-                &registry(args.first())?,
-                root(args.get(1))?,
-                &opts
-            )?))
+            let root = root(args.get(1))?;
+            with_registry(r, args.first(), |registry| {
+                Ok(json!(convert_to_markdown_string(
+                    &view, registry, root, &opts
+                )?))
+            })
         }
         "$convertFromMarkdownString" => {
             if !r.in_callback {
                 return Err(ReplayError::NoActiveEditor);
             }
             let opts = MarkdownOptions {
-                list_indent: r.list_indent.unwrap_or(4),
+                list_indent: r.list_indent.unwrap_or(r.markdown_options.list_indent),
                 should_preserve_new_lines: args.get(3).and_then(Value::as_bool).unwrap_or(false),
                 should_merge_adjacent_lines: args.get(4).and_then(Value::as_bool).unwrap_or(false),
             };
             let text = string(args.first().ok_or_else(|| fail("markdown source"))?)?;
-            let t = registry(args.get(1))?;
             let root = root(args.get(2))?;
-            convert_from_markdown_string(tx, text, &t, root, &opts)?;
+            with_registry(r, args.get(1), |registry| {
+                convert_from_markdown_string(tx, text, registry, root, &opts)?;
+                Ok(())
+            })?;
             Ok(undefined())
         }
         _ => Err(fail(format!("unmapped markdown API: {name}"))),

@@ -348,3 +348,25 @@ fn merge_and_unmerge_preserve_headers_and_interior_cell_content() -> Result<()> 
     assert!(is_simple_table(tx.view(), table));
     Ok(())
 }
+
+#[test]
+fn unmerge_uses_only_the_anchor_cell_when_focus_is_outside_the_table() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<TableNode>()
+        .node::<TableRowNode>()
+        .node::<TableCellNode>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let table = create_table_node_with_dimensions(&mut tx, 1, 1, IncludeHeaders::All(false))?;
+    tx.append(NodeKey::ROOT, &[paragraph.key(), table.key()])?;
+    let row = tx.first_child_or_err(table)?;
+    let cell = tx.first_child_or_err(row)?;
+    let point = Point::element(cell, ChildIndex(0));
+    let range = RangeSelection::new(point, Point::element(paragraph, ChildIndex(0)));
+    tx.set_selection(Some(Selection::Range(range.clone())))?;
+    unmerge_cell(&mut tx)?;
+    assert_eq!(tx.selection(), Some(&Selection::Range(range)));
+    Ok(())
+}

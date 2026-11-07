@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::LazyLock};
 #[serde(rename_all = "camelCase")]
 struct Properties {
     class_types: HashMap<String, String>,
+    class_references: HashMap<String, String>,
     own_undefined: HashMap<String, Vec<String>>,
 }
 static PROPERTIES: LazyLock<Properties> = LazyLock::new(|| {
@@ -17,6 +18,12 @@ static PROPERTIES: LazyLock<Properties> = LazyLock::new(|| {
 });
 pub(crate) fn class_type(name: &str) -> Option<&'static str> {
     PROPERTIES.class_types.get(name).map(String::as_str)
+}
+pub(crate) fn class_reference(reference: &str) -> Option<&'static str> {
+    PROPERTIES
+        .class_references
+        .get(reference)
+        .map(String::as_str)
 }
 /// Preserve source own properties whose undefined values JSON.stringify omits.
 pub(crate) fn exported_object(mut value: Value) -> Value {

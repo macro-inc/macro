@@ -335,6 +335,17 @@ fn multiple_editor_snapshots_remain_independent_and_strict() -> Result<()> {
     );
     Ok(())
 }
+#[test]
+fn generated_namespace_consumes_both_host_draws() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-headless/5f8fd33bbfe13d33.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut missing_draw = fixture;
+    missing_draw.trace.remove(0);
+    assert!(Replayer::default().replay(&missing_draw).is_err());
+    Ok(())
+}
 
 #[test]
 fn internal_dirty_keys_must_name_real_allocations() -> Result<()> {
@@ -356,5 +367,236 @@ fn internal_dirty_keys_must_name_real_allocations() -> Result<()> {
             .to_string()
             .contains("unknown snapshot key")
     );
+    Ok(())
+}
+
+#[test]
+fn macro_markdown_uses_two_space_nested_list_indentation() -> Result<()> {
+    let mut r = Replayer {
+        in_callback: true,
+        markdown_options: lexical_markdown::MarkdownOptions {
+            list_indent: 2,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut editor = test_nodes::configured_builder(&["list".into(), "listitem".into()], false)?
+        .build()
+        .expect("registered lists");
+    let mut tx = editor.transaction();
+    crate::api::markdown::call(
+        &mut r,
+        &mut tx,
+        "$convertFromMarkdownString",
+        &[json!("- a\n  - b")],
+    )?;
+    let markdown = crate::api::markdown::call(&mut r, &mut tx, "$convertToMarkdownString", &[])?;
+    assert_eq!(markdown, json!("- a\n  - b"));
+    Ok(())
+}
+
+#[test]
+fn partial_seed_with_nonsequential_keys_replays_and_corruption_fails() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-markdown/5ede34e8f1b0f972.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut wrong = fixture;
+    wrong.initial["selection"]["anchor"]["offset"] = json!(99999);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    Ok(())
+}
+
+#[test]
+fn declared_highlight_projection_keeps_allocation_dirty_normalized_and_text_checks() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(ORACLE)?;
+    fixture.normalize = vec!["codeHighlight".into()];
+    Replayer::default().replay(&fixture)?;
+    let mut wrong = fixture.clone();
+    wrong.r#final["text"] = json!("wrong");
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut wrong = fixture.clone();
+    wrong.r#final["nodeMapKeys"] = json!([]);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut wrong = fixture.clone();
+    let commit = wrong
+        .trace
+        .iter_mut()
+        .find(|op| op["op"] == "commit")
+        .expect("commit");
+    commit["snapshot"]["dirty"]["leaves"] = json!(["root"]);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut wrong = fixture;
+    let commit = wrong
+        .trace
+        .iter_mut()
+        .find(|op| op["op"] == "commit")
+        .expect("commit");
+    commit["snapshot"]["normalized"] = json!(["root"]);
+    assert!(Replayer::default().replay(&wrong).is_err());
+    Ok(())
+}
+
+#[test]
+fn provenance_metadata_is_validated_literally() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(ORACLE)?;
+    crate::config::validate_config(&fixture.config)?;
+    let mut alias = fixture.config.clone();
+    alias["nodeClasses"]["heading"] =
+        json!({"$fn":"@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"});
+    crate::config::validate_config(&alias)?;
+    alias["nodeClasses"]["heading"] =
+        json!({"$fn":"@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"});
+    assert!(crate::config::validate_config(&alias).is_err());
+    let mut config = fixture.config.clone();
+    config["namespaceGenerated"] = json!("true");
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config.clone();
+    config["nodeClasses"]["paragraph"] = json!({"$fn":"@other.ParagraphNode"});
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config.clone();
+    config["nodeClasses"]["paragraph"] = json!({"$fn":"lexical.TextNode"});
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config.clone();
+    config["nodeClasses"]["paragraph"] = json!({"$fn":"lexical.ParagraphNode","extra":true});
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config;
+    config["headless"] = json!(true);
+    config["rootElement"] = json!(true);
+    assert!(crate::config::validate_config(&config).is_err());
+    Ok(())
+}
+
+#[test]
+fn changing_only_recorded_slice_distance_fails() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical/41395bd854ee320c.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    fixture.trace[8]["calls"][14]["ret"][0]["distance"] = json!(9);
+    assert!(
+        Replayer::default()
+            .replay(&fixture)
+            .expect_err("distance is observable")
+            .to_string()
+            .contains("value mismatch")
+    );
+    Ok(())
+}
+
+#[test]
+fn nondiscrete_noop_keeps_metadata_across_clock_and_log_until_next_update() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(ORACLE)?;
+    let index = fixture
+        .trace
+        .iter()
+        .position(|op| op["op"] == "update")
+        .expect("update");
+    fixture.trace.splice(index..index, [
+        json!({"op":"update","editor":0,"id":900,"cause":"test","calls":[],"opts":{"tag":"batch-only"}}),
+        json!({"op":"clock","src":"perf","t":0}),
+        json!({"op":"log","level":"warn","message":"batch observation"}),
+    ]);
+    let commit = fixture.trace[index + 3..]
+        .iter_mut()
+        .find(|op| op["op"] == "commit")
+        .expect("commit");
+    commit["updates"]
+        .as_array_mut()
+        .expect("updates")
+        .insert(0, json!(900));
+    commit["snapshot"]["tags"]
+        .as_array_mut()
+        .expect("tags")
+        .insert(0, json!("batch-only"));
+    Replayer::default().replay(&fixture)?;
+    Ok(())
+}
+
+#[test]
+fn inline_markdown_transformer_matches_and_enforces_its_empty_callback_tape() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-markdown/011b42a10e88b30c.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut nullable = fixture.clone();
+    nullable.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers")
+        .last_mut()
+        .expect("transformer")["importRegExp"] = Value::Null;
+    Replayer::default().replay(&nullable)?;
+    let mut wrong = fixture.clone();
+    let transformers = wrong.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers");
+    transformers.last_mut().expect("inline transformer")["importRegExp"]["$regexp"] = json!(".+");
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut missing = fixture.clone();
+    let object = missing.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers")
+        .last_mut()
+        .expect("transformer")
+        .as_object_mut()
+        .expect("fields");
+    object.remove("importRegExp");
+    object.insert("unknown".into(), Value::Null);
+    assert!(Replayer::default().replay(&missing).is_err());
+    let mut wrong = fixture;
+    wrong.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers")
+        .last_mut()
+        .expect("transformer")["export"] = json!({"$fn":"other.export"});
+    assert!(Replayer::default().replay(&wrong).is_err());
+    Ok(())
+}
+
+#[test]
+fn child_iterators_and_list_accessors_replay_the_upstream_tapes() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-utils/025f7022d7d34247.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-list/9fe56f2f379adf21.json"
+    ))?;
+    Replayer::default().replay(&fixture)
+}
+#[test]
+fn transient_markdown_records_participate_in_the_exact_key_bijection() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-markdown/04fd0a335fe6356a.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let commit = fixture
+        .trace
+        .iter_mut()
+        .find(|op| {
+            op["op"] == "commit"
+                && op["snapshot"]["dirty"]["leaves"]
+                    .as_array()
+                    .is_some_and(|leaves| !leaves.is_empty())
+        })
+        .expect("dirty commit");
+    commit["snapshot"]["dirty"]["leaves"]
+        .as_array_mut()
+        .expect("leaves")
+        .push(json!("999999"));
+    assert!(Replayer::default().replay(&fixture).is_err());
+    Ok(())
+}
+
+#[test]
+fn macro_class_aliases_are_checked_against_source_constructors() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-core/708f775c22c880f5.json"
+    ))?;
+    crate::config::validate_config(&fixture.config)?;
+    let mut config = fixture.config;
+    config["nodeClasses"]["paragraph"] =
+        json!({"$fn":"@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"});
+    assert!(crate::config::validate_config(&config).is_err());
     Ok(())
 }

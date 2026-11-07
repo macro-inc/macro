@@ -287,8 +287,12 @@ fn nearest_root_caret_splits_text_wraps_inline_and_preserves_direction() -> Resu
         &Point::text(t, Utf16Offset(2)),
         CaretDirection::Previous,
     )?;
-    let result =
-        crate::utils::insert_node_to_nearest_root_at_caret(&mut tx, inline.key(), caret, None)?;
+    let result = crate::utils::insert_node_to_nearest_root_at_caret(
+        &mut tx,
+        inline.key(),
+        caret,
+        Default::default(),
+    )?;
     assert_eq!(result.direction(), CaretDirection::Previous);
     assert_eq!(tx.children_size(NodeKey::ROOT), 3);
     assert!(tx.parent(inline).is_some_and(|k| tx.is::<Paragraph>(k)));

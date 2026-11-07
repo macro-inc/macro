@@ -248,3 +248,53 @@ fn node_selection_wrap_and_unwrap_ignores_title() -> Result<()> {
     assert_eq!(tx.children_keys(p)?, vec![text.key()]);
     Ok(())
 }
+
+#[test]
+fn wrapping_line_break_restores_only_the_captured_focus_endpoint() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let line = tx.create(LineBreak::default())?;
+    tx.append(paragraph, &[line.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_end(line)?;
+    toggle_link(&mut tx, Some("/"), Default::default())?;
+    let link = tx.children_keys(paragraph)?[0];
+    let range = tx.selection().and_then(Selection::as_range).expect("range");
+    assert_eq!(range.anchor, Point::element(paragraph, ChildIndex(2)));
+    assert_eq!(range.focus, Point::element(link, ChildIndex(1)));
+    assert!(range.is_backward(tx.view())?);
+    Ok(())
+}
+
+#[test]
+fn unlink_rejects_an_empty_extracted_edge_of_a_nonempty_link() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let before = tx.create_text("a")?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let text = tx.create_text("link")?;
+        tx.append(link, &[text.key()])?;
+        tx.append(paragraph, &[before.key(), link.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(before, Utf16Offset(0)),
+            Point::text(text, Utf16Offset(0)),
+        ))))
+    })?;
+    let previous = editor.state().to_json()?;
+    let result = editor.update(|tx| toggle_link(tx, None, ToggleLinkAttributes::default()));
+    assert!(matches!(
+        result,
+        Err(Error::Invariant("empty link extraction"))
+    ));
+    assert_eq!(editor.state().to_json()?, previous);
+    Ok(())
+}

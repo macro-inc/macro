@@ -711,3 +711,35 @@ fn collapsed_element_removal_uses_its_raw_caret_text_origin() -> Result<(), Erro
     })?;
     Ok(())
 }
+
+#[test]
+fn cross_block_merge_rejects_stale_text_caret_atomically() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((first, text), _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let middle = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let text = tx.create_text("ahttps://example.com")?;
+        let tail = tx.create_text("a")?;
+        tx.text(tail)?.set_format(TextFormat::BOLD)?;
+        tx.append(last, &[text.key(), tail.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), middle.key(), last.key()])?;
+        Ok((first, text))
+    })?;
+    let before = editor.state().to_json()?;
+    let result = editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(first, ChildIndex(0)),
+            Point::text(text, Utf16Offset(18)),
+        ))))?;
+        tx.remove_text()
+    });
+    assert!(matches!(
+        result,
+        Err(Error::Utf16OffsetOutOfRange(Utf16Offset(18)))
+    ));
+    assert_eq!(editor.state().to_json()?, before);
+    Ok(())
+}
