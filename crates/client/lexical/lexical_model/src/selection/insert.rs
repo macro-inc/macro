@@ -179,8 +179,16 @@ impl Transaction<'_> {
                     *key,
                     Utf16Offset(start.offset()) + TextBuffer::new(text).utf16_len(),
                 ),
-                data.format,
-                data.style,
+                if self.text_content_size(*key) == Utf16Offset::ZERO {
+                    original.format
+                } else {
+                    data.format
+                },
+                if self.text_content_size(*key) == Utf16Offset::ZERO {
+                    original.style
+                } else {
+                    data.style
+                },
             )?;
             if self.text_content_size(*key) == Utf16Offset::ZERO {
                 self.remove(*key, true)?;
