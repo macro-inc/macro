@@ -23,18 +23,8 @@ pub(super) static ID: StateKey<String> = StateKey::new("id", |value| {
 });
 #[derive(Clone, Default)]
 struct NodeIdIndex {
-    ids: imbl::GenericHashMap<
-        String,
-        NodeKey,
-        std::collections::hash_map::RandomState,
-        imbl::shared_ptr::ArcK,
-    >,
-    keys: imbl::GenericHashMap<
-        NodeKey,
-        String,
-        std::collections::hash_map::RandomState,
-        imbl::shared_ptr::ArcK,
-    >,
+    ids: imbl::GenericOrdMap<String, NodeKey, imbl::shared_ptr::ArcK>,
+    keys: imbl::GenericOrdMap<NodeKey, String, imbl::shared_ptr::ArcK>,
 }
 struct NodeIds(u64);
 impl Plugin for NodeIds {
