@@ -7,11 +7,10 @@ version = "0.1.0"
 [features]
 default = []
 batches = ["dep:futures", "dep:tokio"]
-decisions = ["dep:ai_billing", "dep:async-trait", "dep:macro_user_id", "dep:tokio"]
+decisions = ["dep:ai_admission", "dep:async-trait", "dep:macro_user_id", "dep:tokio"]
 outbound = ["dep:macro_env_var", "dep:reqwest", "dep:tokio"]
 
 [dependencies]
-ai_billing = { workspace = true, optional = true }
 ai_usage = { workspace = true }
 async-trait = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
@@ -26,6 +25,7 @@ tokio = { workspace = true, optional = true, features = ["rt", "sync", "time"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+ai_admission = { workspace = true, optional = true }
 
 [dev-dependencies]
 macro_user_id = { workspace = true }
