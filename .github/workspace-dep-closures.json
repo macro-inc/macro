@@ -9261,16 +9261,16 @@
       "services/agent_harness_service/load-test"
     ],
     "local_e2e": [
-      "crates/integration_tests/local_e2e",
+      "crates/testing/local_e2e",
       "crates/workspace-hack"
     ],
     "local_e2e_test_support": [
-      "crates/local_e2e_test_support",
       "crates/model_error_response",
       "crates/platform/macro_auth",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
       "crates/platform/remote_env_var",
+      "crates/testing/local_e2e_test_support",
       "crates/types/cowlike",
       "crates/types/macro_user_id",
       "crates/workspace-hack"

@@ -124,7 +124,6 @@ members = [
   "crates/graphql/graphql_soup",
   "crates/graphql/graphql_soup_filter_input",
   "crates/graphql/graphql_work_feed",
-  "crates/integration_tests/local_e2e",
   "crates/integrations/git_patch",
   "crates/integrations/granola_sync",
   "crates/integrations/import",
@@ -188,6 +187,7 @@ members = [
   "crates/search/work_feed",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
+  "crates/testing/local_e2e",
   "crates/types/agent_session_id",
   "crates/types/bearer_token",
   "crates/types/bot_id",
@@ -784,7 +784,7 @@ last_online_tracker = { path = "crates/accounts/last_online_tracker" }
 lexical_client = { path = "crates/clients/lexical_client" }
 lexical_mention_extractor = { path = "crates/documents/lexical_mention_extractor" }
 lexical_service_url = { path = "crates/platform/service_urls/lexical_service_url" }
-local_e2e_test_support = { path = "crates/local_e2e_test_support" }
+local_e2e_test_support = { path = "crates/testing/local_e2e_test_support" }
 loops_client = { path = "crates/clients/loops_client" }
 macro_auth = { path = "crates/platform/macro_auth" }
 macro_authorization = { path = "crates/platform/macro_authorization", default-features = false }

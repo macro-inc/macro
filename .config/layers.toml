@@ -107,8 +107,6 @@ may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "do
 name = "testing"
 paths = [
   "crates/testing/**",
-  "crates/integration_tests/**",
-  "crates/local_e2e_test_support",
 ]
 may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql", "testing", "services"]
 dev_only = true
