@@ -23,7 +23,7 @@ enum BoundaryError {
 /// Pinned upstream version shared with the recorder.
 #[wasm_bindgen]
 pub fn upstream_version() -> String {
-    "0.45.0".into()
+    env!("LEXICAL_UPSTREAM_VERSION").into()
 }
 
 /// Raw model transactions for the upstream text/paragraph profile.
@@ -96,6 +96,11 @@ impl CoreHandle {
             } else {
                 EditorMode::Headless
             });
+        if command.is_view_input() && !self.editor.state().is_empty_state() {
+            // Match the oracle's headless-to-attached setEditorState hydration.
+            self.editor
+                .set_editor_state(self.editor.state().clone(), TagSet::default())?;
+        }
         let result = self.editor.update(|tx| command.apply(tx));
         let (commit, error) = match result {
             Ok(((), commit)) => (Some(commit), None),
@@ -106,6 +111,14 @@ impl CoreHandle {
             commit.as_ref().filter(|c| !c.is_noop()),
         )?;
         value["error"] = json!(error);
+        if command.is_view_input() && !self.editor.state().is_empty_state() {
+            #[cfg(feature = "js-nodes")]
+            self.editor.set_conformance_mode(EditorMode::Headless);
+            // The oracle copies the attached state back to its headless editor;
+            // that full state installation does not carry DOM-only update tags.
+            self.editor
+                .set_editor_state(self.editor.state().clone(), TagSet::default())?;
+        }
         Ok(to_js_json_string(&value))
     }
 }

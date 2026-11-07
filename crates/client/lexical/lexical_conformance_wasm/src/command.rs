@@ -159,6 +159,9 @@ impl Command {
                     kind: PointType::Text,
                 }
                 .point(tx.view())?;
+                if !composition_end && tx.text_content(point.key()).as_ref() == text {
+                    return Ok(());
+                }
                 let mut text = text.clone();
                 let mut anchor = *anchor;
                 let mut focus = *focus;
@@ -190,11 +193,13 @@ impl Command {
                     })?;
                 }
                 tx.text(point.key())?.set_text_content(&text)?;
-                tx.apply_view_range(
-                    Point::text(point.key(), Utf16Offset(anchor)),
-                    Point::text(point.key(), Utf16Offset(focus)),
-                    false,
-                )
+                // DOM text updates set the raw text range. Selection-change
+                // boundary normalization would incorrectly move offset zero to
+                // a differently formatted preceding text sibling.
+                let anchor = Point::text(point.key(), Utf16Offset(anchor));
+                let focus = Point::text(point.key(), Utf16Offset(focus));
+                tx.set_point(PointRole::Anchor, anchor)?;
+                tx.set_point(PointRole::Focus, focus)
             }
         }
     }

@@ -64,3 +64,30 @@ fn seeded_state_and_handles_are_independent() {
     let empty = CoreHandle::create("upstream", None).unwrap();
     assert_eq!(empty.editor.state().text_content(NodeKey::ROOT), "");
 }
+
+#[test]
+fn unchanged_dom_text_does_not_deliver_a_selection_change() {
+    let mut core = CoreHandle::create("upstream", None).unwrap();
+    core.apply_json(r#"{"kind":"InsertText","text":"same"}"#)
+        .unwrap();
+    let before = snapshot::capture(core.editor.state(), None).unwrap();
+    let actual: Value = serde_json::from_str(&core.apply_json(r#"{"kind":"TextFromView","path":[0,0],"text":"same","anchor":0,"focus":0,"compositionEnd":false}"#).unwrap()).unwrap();
+    assert_eq!(actual["selection"], before["selection"]);
+    assert!(actual["commit"].is_null());
+}
+
+#[test]
+fn dom_text_input_keeps_a_raw_zero_offset_after_a_formatted_sibling() {
+    let mut core = CoreHandle::create("upstream", None).unwrap();
+    core.apply_json(r#"{"kind":"InsertText","text":"a"}"#)
+        .unwrap();
+    core.apply_json(r#"{"kind":"FormatText","format":"bold"}"#)
+        .unwrap();
+    core.apply_json(r#"{"kind":"InsertText","text":"b"}"#)
+        .unwrap();
+    let actual: Value = serde_json::from_str(&core.apply_json(r#"{"kind":"TextFromView","path":[0,1],"text":"b","anchor":0,"focus":0,"compositionEnd":true}"#).unwrap()).unwrap();
+    assert_eq!(
+        actual["selection"]["anchor"],
+        json!({"path":[0,1],"offset":0,"type":"text"})
+    );
+}
