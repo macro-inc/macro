@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveComponent } from '../componentRegistry';
 
 const state = vi.hoisted(() => ({
-  authenticated: (): boolean => true,
+  authenticated: (): boolean | undefined => true,
   enabled: (): boolean => false,
   flagsLoaded: (): boolean => true,
   touch: (): boolean => false,
@@ -286,7 +286,7 @@ describe('activity registration', () => {
   );
 
   it('keeps an enabled feed behind authentication', async () => {
-    const [authenticated, setAuthenticated] = createSignal(false);
+    const [authenticated, setAuthenticated] = createSignal<boolean>();
     state.authenticated = authenticated;
     state.enabled = () => true;
     await renderActivity();
