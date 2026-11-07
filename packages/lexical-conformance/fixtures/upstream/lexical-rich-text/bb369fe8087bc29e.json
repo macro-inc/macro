@@ -1,0 +1,502 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+    "test": [
+      "Backspace at start of heading (#4359)",
+      "preserves heading wrapped inside another ElementNode"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical/__tests__/utils.$createTestElementNode",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "test_block",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/rich-text.$createHeadingNode",
+          "args": [
+            "h1"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "2",
+            "type": "heading",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Heading"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "3",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "HeadingNode.append",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 5,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 1
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "HeadingNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "HeadingNode.collapseAtStart",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": true
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Heading",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "heading",
+                    "version": 1,
+                    "tag": "h1"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "test_block",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "Heading",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            3
+          ],
+          "elements": [
+            [
+              1,
+              true
+            ],
+            [
+              2,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getFirstChildOrThrow",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getType",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": "test_block"
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getFirstChild",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/rich-text.$isHeadingNode",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "HeadingNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "HeadingNode.getTag",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": "h1"
+        },
+        {
+          "op": "call",
+          "fn": "HeadingNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": "Heading"
+        }
+      ]
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Heading",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "heading",
+                "version": 1,
+                "tag": "h1"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "test_block",
+            "version": 1
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "Heading",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3"
+    ]
+  }
+}

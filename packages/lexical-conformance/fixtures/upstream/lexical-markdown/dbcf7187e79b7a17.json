@@ -1,0 +1,82 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "$convertSelectionToMarkdownString",
+      "returns empty string for null selection"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@lexical/markdown.$convertSelectionToMarkdownString",
+      "args": [
+        [
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.HEADING"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.QUOTE"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.CODE"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.INLINE_CODE"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_STAR"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH"
+          },
+          {
+            "$transformer": "@lexical/markdown/MarkdownTransformers.LINK"
+          }
+        ],
+        null
+      ],
+      "ret": ""
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

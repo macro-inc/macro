@@ -1,0 +1,900 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalTabNode.test.ts",
+    "test": [
+      "LexicalTabNode tests",
+      "INSERT_TAB_COMMAND applies selection format and style to TabNode"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "plugin",
+      "name": "@lexical/rich-text.registerRichText",
+      "args": [
+        {
+          "$ed": 0
+        }
+      ]
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 3,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.select",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$sel": 4,
+            "kind": "range"
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "clock",
+      "src": "perf",
+      "t": 0
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 2,
+              "raw": "1"
+            },
+            "path": [
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "focus": {
+            "key": {
+              "$key": 2,
+              "raw": "1"
+            },
+            "path": [
+              0
+            ],
+            "offset": 0,
+            "type": "element"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "",
+        "nodeMapKeys": [
+          "root",
+          "1"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 5,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isRangeSelection",
+          "args": [
+            {
+              "$sel": 5
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "RangeSelection.insertText",
+          "args": [
+            "ab"
+          ],
+          "this": {
+            "$sel": 5
+          },
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getFirstDescendant",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 6,
+            "key": "2",
+            "type": "text",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextNode",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.select",
+          "args": [
+            0,
+            2
+          ],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$sel": 5
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 3,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 4,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 3,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "ab",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 6,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "text"
+          },
+          "focus": {
+            "key": {
+              "$key": 6,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0
+            ],
+            "offset": 2,
+            "type": "text"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "ab",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            6
+          ],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 5,
+      "reason": "await"
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.dispatchCommand",
+      "args": [
+        {
+          "$cmd": "FORMAT_TEXT_COMMAND"
+        },
+        "bold"
+      ],
+      "this": {
+        "$ed": 0
+      },
+      "ret": true
+    },
+    {
+      "op": "update",
+      "id": 2,
+      "editor": 0,
+      "cause": "listener-enqueued",
+      "opts": {},
+      "calls": []
+    },
+    {
+      "op": "tick",
+      "n": 6,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 7,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 4,
+      "updates": [
+        2
+      ],
+      "causes": [
+        "listener-enqueued"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 1,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "ab",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 1,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 6,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "text"
+          },
+          "focus": {
+            "key": {
+              "$key": 6,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0
+            ],
+            "offset": 2,
+            "type": "text"
+          },
+          "format": 1,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "ab",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            6
+          ],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.dispatchCommand",
+      "args": [
+        {
+          "$cmd": "INSERT_TAB_COMMAND"
+        },
+        {
+          "$undef": true
+        }
+      ],
+      "this": {
+        "$ed": 0
+      },
+      "ret": true
+    },
+    {
+      "op": "update",
+      "id": 3,
+      "editor": 0,
+      "cause": "listener-enqueued",
+      "opts": {},
+      "calls": []
+    },
+    {
+      "op": "tick",
+      "n": 8,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 9,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 5,
+      "updates": [
+        3
+      ],
+      "causes": [
+        "listener-enqueued"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 2,
+                    "format": 1,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "\t",
+                    "type": "tab",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 1,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": "3",
+            "path": [
+              0,
+              0
+            ],
+            "offset": 1,
+            "type": "text"
+          },
+          "focus": {
+            "key": "3",
+            "path": [
+              0,
+              0
+            ],
+            "offset": 1,
+            "type": "text"
+          },
+          "format": 1,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "\t",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "3"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            "3",
+            6
+          ],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 7,
+            "key": "root",
+            "type": "root",
+            "ver": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getAllTextNodes",
+          "args": [],
+          "this": {
+            "$h": 7
+          },
+          "ret": [
+            {
+              "$h": 8,
+              "key": "3",
+              "type": "tab",
+              "ver": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TabNode.getType",
+          "args": [],
+          "this": {
+            "$h": 8
+          },
+          "ret": "tab"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTabNode",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "TabNode.getFormat",
+          "args": [],
+          "this": {
+            "$h": 8
+          },
+          "ret": 1
+        }
+      ]
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 2,
+                "format": 1,
+                "mode": "normal",
+                "style": "",
+                "text": "\t",
+                "type": "tab",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 1,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": {
+          "$key": 8,
+          "raw": "3"
+        },
+        "path": [
+          0,
+          0
+        ],
+        "offset": 1,
+        "type": "text"
+      },
+      "focus": {
+        "key": {
+          "$key": 8,
+          "raw": "3"
+        },
+        "path": [
+          0,
+          0
+        ],
+        "offset": 1,
+        "type": "text"
+      },
+      "format": 1,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "\t",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "3"
+    ]
+  }
+}

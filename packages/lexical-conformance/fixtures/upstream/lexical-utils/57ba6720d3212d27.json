@@ -1,0 +1,743 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-utils/src/__tests__/unit/LexicalNodeHelpers.test.ts",
+    "test": [
+      "LexicalNodeHelpers tests",
+      "DFS triggers getLatest()"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/__tests__/utils.$createTestElementNode",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "test_block",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/__tests__/utils.$createTestElementNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "3",
+            "type": "test_block",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$key": 1,
+            "raw": "root"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$key": 3,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$key": 4,
+            "raw": "3"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 5,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 3
+            },
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "test_block",
+                    "version": 1
+                  },
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "test_block",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "\n\n",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ],
+            [
+              4,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getNodeByKey",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getNodeByKey",
+          "args": [
+            {
+              "$key": 2,
+              "raw": "1"
+            }
+          ],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getNodeByKey",
+          "args": [
+            {
+              "$key": 3,
+              "raw": "2"
+            }
+          ],
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getNodeByKey",
+          "args": [
+            {
+              "$key": 4,
+              "raw": "3"
+            }
+          ],
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical/__tests__/utils.$createTestElementNode",
+          "args": [],
+          "ret": {
+            "$h": 6,
+            "key": "4",
+            "type": "test_block",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 7,
+            "key": "2",
+            "type": "test_block",
+            "ver": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/utils.$dfs",
+          "args": [
+            {
+              "$h": 5
+            }
+          ],
+          "ret": [
+            {
+              "depth": 0,
+              "node": {
+                "$h": 5
+              }
+            },
+            {
+              "depth": 1,
+              "node": {
+                "$h": 2
+              }
+            },
+            {
+              "depth": 2,
+              "node": {
+                "$h": 7
+              }
+            },
+            {
+              "depth": 3,
+              "node": {
+                "$h": 6
+              }
+            },
+            {
+              "depth": 2,
+              "node": {
+                "$h": 4
+              }
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TestElementNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 3,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 4,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 3,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "direction": null,
+                        "format": "",
+                        "indent": 0,
+                        "type": "test_block",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "test_block",
+                    "version": 1
+                  },
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "test_block",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "\n\n",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              6,
+              true
+            ],
+            [
+              2,
+              false
+            ],
+            [
+              7,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 5,
+      "reason": "await"
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "test_block",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "test_block",
+                "version": 1
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "test_block",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "\n\n",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4"
+    ]
+  }
+}

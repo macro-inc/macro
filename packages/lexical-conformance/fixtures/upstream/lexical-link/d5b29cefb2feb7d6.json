@@ -1,0 +1,1032 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+    "test": [
+      "LexicalLinkNode tests",
+      "$toggleLink applies the title attribute when creating"
+    ],
+    "recordedWith": "lexical-conformance@8b15fbeb4983b16df91a6e76d9c2ed9b0b1e8ee29d24941ef18af19dc081a38c"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Some text"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "2",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 1
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 4,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$selectAll",
+          "args": [],
+          "ret": {
+            "$sel": 5,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$toggleLink",
+          "args": [
+            "https://lexical.dev/",
+            {
+              "title": "Lexical Website"
+            }
+          ],
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getFirstChild",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 6,
+            "key": "3",
+            "type": "link",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getTitle",
+          "args": [],
+          "this": {
+            "$h": 6
+          },
+          "ret": "Lexical Website"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isRangeSelection",
+          "args": [
+            {
+              "$sel": 5
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 5
+          },
+          "args": [],
+          "ret": {
+            "$pt": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 5
+          },
+          "args": [],
+          "ret": {
+            "$pt": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": 9
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Some text",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": "noreferrer",
+                    "target": null,
+                    "title": "Lexical Website",
+                    "url": "https://lexical.dev/"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 2,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0,
+              0
+            ],
+            "offset": 0,
+            "type": "text"
+          },
+          "focus": {
+            "key": {
+              "$key": 2,
+              "raw": "2"
+            },
+            "path": [
+              0,
+              0,
+              0
+            ],
+            "offset": 9,
+            "type": "text"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "Some text",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            2
+          ],
+          "elements": [
+            [
+              1,
+              true
+            ],
+            [
+              6,
+              true
+            ],
+            [
+              4,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 9
+      }
+    },
+    {
+      "op": "call",
+      "fn": "EditorState.toJSON",
+      "args": [],
+      "this": {
+        "$state": 9
+      },
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Some text",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "link",
+                  "version": 1,
+                  "rel": "noreferrer",
+                  "target": null,
+                  "title": "Lexical Website",
+                  "url": "https://lexical.dev/"
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": {
+            "$key": 4,
+            "raw": "root"
+          },
+          "version": 1
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Some text",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "link",
+                  "version": 1,
+                  "rel": "noreferrer",
+                  "target": null,
+                  "title": "Lexical Website",
+                  "url": "https://lexical.dev/"
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": {
+            "$key": 4,
+            "raw": "root"
+          },
+          "version": 1
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Some text",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": "noreferrer",
+                "target": null,
+                "title": "Lexical Website",
+                "url": "https://lexical.dev/"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": {
+          "$key": 4,
+          "raw": "root"
+        },
+        "version": 1
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Some text",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": "noreferrer",
+                "target": null,
+                "title": "Lexical Website",
+                "url": "https://lexical.dev/"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": {
+          "$key": 4,
+          "raw": "root"
+        },
+        "version": 1
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Some text",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "link",
+              "version": 1,
+              "rel": "noreferrer",
+              "target": null,
+              "title": "Lexical Website",
+              "url": "https://lexical.dev/"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Some text",
+                  "type": "text",
+                  "version": 1
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "link",
+              "version": 1,
+              "rel": "noreferrer",
+              "target": null,
+              "title": "Lexical Website",
+              "url": "https://lexical.dev/"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Some text",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "link",
+            "version": 1,
+            "rel": "noreferrer",
+            "target": null,
+            "title": "Lexical Website",
+            "url": "https://lexical.dev/"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": ""
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Some text",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "link",
+            "version": 1,
+            "rel": "noreferrer",
+            "target": null,
+            "title": "Lexical Website",
+            "url": "https://lexical.dev/"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Some text",
+              "type": "text",
+              "version": 1
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "link",
+          "version": 1,
+          "rel": "noreferrer",
+          "target": null,
+          "title": "Lexical Website",
+          "url": "https://lexical.dev/"
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Some text",
+              "type": "text",
+              "version": 1
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "link",
+          "version": 1,
+          "rel": "noreferrer",
+          "target": null,
+          "title": "Lexical Website",
+          "url": "https://lexical.dev/"
+        }
+      ],
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Some text",
+            "type": "text",
+            "version": 1
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "link",
+        "version": 1,
+        "rel": "noreferrer",
+        "target": null,
+        "title": "Lexical Website",
+        "url": "https://lexical.dev/"
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:title",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Some text",
+            "type": "text",
+            "version": 1
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "link",
+        "version": 1,
+        "rel": "noreferrer",
+        "target": null,
+        "title": "Lexical Website",
+        "url": "https://lexical.dev/"
+      },
+      "args": [],
+      "ret": "Lexical Website"
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Some text",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": "noreferrer",
+                "target": null,
+                "title": "Lexical Website",
+                "url": "https://lexical.dev/"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": {
+          "$key": 2,
+          "raw": "2"
+        },
+        "path": [
+          0,
+          0,
+          0
+        ],
+        "offset": 0,
+        "type": "text"
+      },
+      "focus": {
+        "key": {
+          "$key": 2,
+          "raw": "2"
+        },
+        "path": [
+          0,
+          0,
+          0
+        ],
+        "offset": 9,
+        "type": "text"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "Some text",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3"
+    ]
+  }
+}
