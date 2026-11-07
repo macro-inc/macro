@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "graphql_entity_mutation"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-graphql = { workspace = true }
+entity_mutation = { workspace = true }
+graphql_common = { workspace = true }
+graphql_permission = { workspace = true }
+graphql_soup = { workspace = true }
+model_entity = { workspace = true }
+models_permissions = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_user_id = { workspace = true }
+tokio = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }

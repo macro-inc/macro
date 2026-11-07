@@ -1,0 +1,87 @@
+[package]
+edition = "2024"
+name = "complete_graph"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde_json = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+async-graphql = { workspace = true, features = ["dataloader"] }
+axum = { workspace = true }
+agent_session = { workspace = true }
+agent_session_realtime = { workspace = true }
+async-stream = { workspace = true }
+bots = { workspace = true, features = ["ports"] }
+email = { workspace = true, features = [
+  "axum",
+  "inbound",
+  "ports",
+] }
+entity_access = { workspace = true, features = [
+  "inbound",
+] }
+entity_mutation = { workspace = true }
+favorites = { workspace = true, features = ["ports"] }
+graphql_activity = { workspace = true }
+graphql_calendar = { workspace = true }
+graphql_channel = { workspace = true }
+graphql_common = { workspace = true }
+graphql_crm = { workspace = true }
+graphql_email = { workspace = true }
+graphql_entity_mutation = { workspace = true }
+graphql_favorite = { workspace = true }
+graphql_initiative = { workspace = true }
+graphql_databases = { workspace = true }
+graphql_notification = { workspace = true }
+graphql_notification_inbox = { workspace = true }
+graphql_permission = { workspace = true }
+graphql_properties = { workspace = true }
+graphql_registered_work = { workspace = true }
+graphql_scheduled_action = { workspace = true }
+graphql_soup = { workspace = true }
+graphql_work_feed = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = [
+  "axum",
+  "outbound",
+] }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+model_notifications = { workspace = true }
+notification = { workspace = true, default-features = true }
+predicate-index = { workspace = true }
+soup = { workspace = true, features = ["ports"] }
+soup-filter-projection = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+saved_views = { workspace = true }
+soup_realtime_core = { workspace = true }
+
+[dev-dependencies]
+bot_id = { workspace = true }
+crm = { workspace = true, features = ["ports"] }
+databases = { workspace = true, features = ["ports"] }
+databases_sql = { workspace = true }
+models_databases = { workspace = true }
+activity = { workspace = true, features = ["realtime"] }
+attention_feed = { workspace = true, features = ["inbound"] }
+notification_inbox = { workspace = true }
+work_feed = { workspace = true }
+agent_runtime_protocol = { workspace = true, default-features = true }
+apollo-compiler = { workspace = true }
+calendar_events = { workspace = true }
+chrono = { workspace = true }
+model_owner = { workspace = true }
+model_user = { workspace = true }
+models_pagination = { workspace = true }
+models_permissions = { workspace = true }
+models_properties = { workspace = true }
+models_soup = { workspace = true }
+rootcause = { workspace = true }
+scheduled_action = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
