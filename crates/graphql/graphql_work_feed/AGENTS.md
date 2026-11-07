@@ -21,8 +21,8 @@ subscription.
 ## Scope
 
 - Owns: GraphQL types/resolvers/subscription for the work feed page.
-- Not here: feed composition and item ranking → `crates/work_feed`; shared
-  keys, tokens, triggers and viewer lookup → `crates/attention_feed`;
+- Not here: feed composition and item ranking → `crates/search/work_feed`; shared
+  keys, tokens, triggers and viewer lookup → `crates/search/attention_feed`;
   notification content → `crates/graphql/graphql_notification`.
 
 ## Boundaries

@@ -718,7 +718,7 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
     ///
     /// The activity team feed applies this audience in SQL
-    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`), and
+    /// (`crates/search/activity/src/outbound/pg_activity_repo/team_feed.sql`), and
     /// [`EntityAudienceLookup`] resolves it for many entities at once
     /// (`outbound/pg_access_repo/queries/entity_audiences.rs`); keep the three
     /// in step.

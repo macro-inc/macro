@@ -95,7 +95,7 @@ ORDER BY e.occurred_at DESC, e.id DESC
 LIMIT $4
 ```
 
-That is `crates/activity/src/outbound/pg_activity_repo/team_feed.sql`. Two
+That is `crates/search/activity/src/outbound/pg_activity_repo/team_feed.sql`. Two
 details in it matter:
 
 - The `ORDER BY` matches an index, column for column and direction for
@@ -104,7 +104,7 @@ details in it matter:
 - The first page uses `COALESCE`, not `$2 IS NULL OR (…) < (…)`. The `OR` form
   stops being an index condition once the prepared statement gets a generic
   plan. Separate first-page and next-page queries
-  (`crates/activity/src/outbound/pg_activity_repo/timeline.rs`) work too.
+  (`crates/search/activity/src/outbound/pg_activity_repo/timeline.rs`) work too.
 
 The scope key, the sort columns, and the tiebreaker must sit in one index on
 one table. When the scope is on a parent (a channel's messages) and the sort

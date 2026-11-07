@@ -21,7 +21,7 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("crates/client/turso-opfs/**"),
     RepoGlob::new("crates/database_sql/**"),
     RepoGlob::new("crates/types/filter_ast/**"),
-    RepoGlob::new("crates/item_filters/**"),
+    RepoGlob::new("crates/search/item_filters/**"),
     RepoGlob::new("crates/types/natural_time/**"),
     RepoGlob::new("crates/accounts/password_import/**"),
     RepoGlob::new("crates/accounts/password_import_wasm/**"),

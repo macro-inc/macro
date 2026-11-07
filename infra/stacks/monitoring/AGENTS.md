@@ -114,7 +114,7 @@ From `infra/`:
   its no-readings monitor fires on missing data.
 - `monitors/storage-pool.ts` reads the `db.client.connection.*` pool metrics
   cloud-storage-service records and the `perform_unified_search` span fields
-  from `crates/search_service`; its header is the name and tag contract.
+  from `crates/search/search_service`; its header is the name and tag contract.
 - The Kafka lag monitors in `monitors/queues.ts` read MSK's offset lag. Do not
   alert on `aws.kafka.estimated_max_time_lag` or
   `rolling_estimated_time_lag_max`: they divide lag by the current consumption

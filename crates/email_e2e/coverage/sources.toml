@@ -233,7 +233,7 @@ reason = "Sent by the Gmail contact sync for a contact with a photo URL; Outlook
 # against anything.
 [[elsewhere]]
 service = "document_storage_service"
-file = "crates/soup/src/inbound/axum_router.rs"
+file = "crates/search/soup/src/inbound/axum_router.rs"
 routes = ["POST /items/soup/ast"]
 
 [[elsewhere]]
