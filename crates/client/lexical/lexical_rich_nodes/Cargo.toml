@@ -14,3 +14,4 @@ serde_json = { workspace = true }
 phf = { workspace = true }
 indexmap = { workspace = true }
 tracing = { workspace = true }
+nom = { workspace = true }
