@@ -64,8 +64,8 @@ attachment = [
 ]
 
 [dependencies]
-attachment = { path = "../attachment", optional = true }
-non_empty = { path = "../non_empty" }
+attachment = { workspace = true, optional = true }
+non_empty = { workspace = true }
 ```
 
 ### 2. Wire up the inbound module
