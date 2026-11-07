@@ -1,7 +1,7 @@
 use super::{CodeModeError, ExecutionId, ExecutionIdentity, ExecutionRecord};
 use agent_session::domain::model::AgentSessionId;
 use async_trait::async_trait;
-use code_execution::domain::RunEnvironment;
+use code_execution_core::RunEnvironment;
 use tokio_util::sync::CancellationToken;
 
 /// Current session turn, read from shared state on every replica.

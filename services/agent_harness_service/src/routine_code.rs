@@ -14,7 +14,7 @@ use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
 use agent::{Message, PredefinedModel};
 use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
-use code_execution::domain::{
+use code_execution_core::{
     CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
     SdkEndpoints, SourceFile, Unattended, operations, sdk_declarations,
 };

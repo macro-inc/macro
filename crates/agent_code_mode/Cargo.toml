@@ -16,7 +16,6 @@ anyhow = { workspace = true }
 axum = { workspace = true }
 bot_id = { workspace = true }
 calendar_events = { workspace = true, features = ["ai_tools"] }
-code_execution = { workspace = true }
 code_mode_assets = { workspace = true }
 email = { workspace = true, features = ["ai_tools", "inbound"] }
 entity_access = { workspace = true, features = ["ports", "inbound"] }
@@ -44,6 +43,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+code_execution_core = { workspace = true }
 
 [dev-dependencies]
 jev = { workspace = true, features = ["outbound"] }

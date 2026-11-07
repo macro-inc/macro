@@ -34,7 +34,7 @@ HTML worker belong to `packages/sdk-docs`.
 - Run root `just check` for formatting; CodeMode uses `apps/web/biome.jsonc`, while the standalone SDK has its own formatter.
 
 - `bun run type-check` and `bun run test` (generates into ignored `dist/` first).
-- `cargo test -p code_execution -- --include-ignored` runs the bundle in Deno.
+- `cargo test -p code_execution_outbound -- --include-ignored` runs the bundle in Deno.
 
 Run from this directory after installing the root workspace and the standalone
 `packages/sdk` dependencies with `bun install --frozen-lockfile`, as CI does;

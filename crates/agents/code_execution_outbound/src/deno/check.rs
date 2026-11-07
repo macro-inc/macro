@@ -1,8 +1,8 @@
 //! Type-check TypeScript programs with `deno check` against the SDK's
 //! generated declarations, without running them.
 
-use crate::domain::*;
 use async_trait::async_trait;
+use code_execution_core::*;
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{process::Command, sync::Semaphore};
@@ -42,7 +42,7 @@ impl DenoChecker {
         let binary = super::pinned_deno(binary).await?;
         tokio::fs::create_dir_all(&scratch).await?;
         let root = tokio::fs::canonicalize(scratch).await?;
-        let sdk: SdkTypes = serde_json::from_str(SDK_TYPES)?;
+        let sdk: SdkTypes = serde_json::from_str(code_mode_assets::SDK_TYPES)?;
         let types = root.join("types");
         for (path, text) in &sdk.files {
             let relative = std::path::Path::new(path);

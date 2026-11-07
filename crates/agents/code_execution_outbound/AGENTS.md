@@ -1,21 +1,27 @@
-# JavaScript execution
+# JavaScript execution: Deno runner
 
 ## Scope
 
 Runs a bounded JavaScript program in a fresh Deno process inside the calling
-service. Session authentication, token issuance and execution storage belong to
-`crates/agent_code_mode` and its composition root.
+service. It implements the `CodeRunner` and `ProgramChecker` ports of
+`crates/agents/code_execution_core`, which owns admission, cancellation and the
+protocol types. Session authentication, token issuance and execution storage
+belong to `crates/agent_code_mode` and its composition root.
 
 ## Start here
 
 - `README.md`: permissions, limits and the program contract.
-- `src/domain/service.rs`: admission and cancellation.
-- `src/outbound/deno.rs`: process lifecycle and restricted permissions.
-- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
+- `src/deno.rs`: process lifecycle and restricted permissions.
+- `src/deno/bootstrap.mjs`: program loading, unattended dry runs
   and final JSON protocol.
-- `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
-- `src/domain/operations.rs`: the generated operation catalog (labels, routes,
-  read or write) and the SDK fingerprint.
+- `src/deno/check.rs`: type-checking TypeScript against the SDK.
+
+## Boundaries
+
+- Depends on: `code_execution_core` (ports and models), `code_mode_assets`.
+- Used by: the composition root in `services/agent_harness_service` only.
+  Everything else depends on `code_execution_core`, so a runner edit rebuilds
+  only this crate and the harness.
 
 ## Gotchas
 
@@ -50,5 +56,7 @@ one over the limit fails the run with a message saying so.
 
 ## Checks
 
-- `cargo test -p code_execution --lib -- --include-ignored` from the repository
-  root with Deno available; real-process tests exercise permissions and cleanup.
+- `cargo test -p code_execution_outbound --lib -- --include-ignored` from the
+  repository root with Deno available; real-process tests exercise permissions
+  and cleanup.
+- `cargo test -p code_execution_core` for admission and cancellation.

@@ -1,7 +1,7 @@
 //! Fresh JavaScript processes with run-only credentials and allowlisted API egress.
 
-use crate::domain::*;
 use async_trait::async_trait;
+use code_execution_core::*;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

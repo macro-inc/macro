@@ -4,10 +4,8 @@ use agent_code_mode::{
     outbound::postgres::PgExecutionStore,
 };
 use async_trait::async_trait;
-use code_execution::{
-    domain::{ExecutionService, Limits},
-    outbound::deno::DenoRunner,
-};
+use code_execution_core::{ExecutionService, Limits};
+use code_execution_outbound::deno::DenoRunner;
 use serde_json::json;
 
 struct NoAppEgress;
@@ -32,9 +30,8 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         _: &agent_code_mode::domain::ExecutionIdentity,
         _: &str,
         _: tokio_util::sync::CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, agent_code_mode::domain::CodeModeError>
-    {
-        Ok(code_execution::domain::RunEnvironment::default())
+    ) -> Result<code_execution_core::RunEnvironment, agent_code_mode::domain::CodeModeError> {
+        Ok(code_execution_core::RunEnvironment::default())
     }
 }
 

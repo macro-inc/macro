@@ -9,7 +9,7 @@ use ai_toolset::{
     ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
-use code_execution::domain::ExecuteRequest;
+use code_execution_core::ExecuteRequest;
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;

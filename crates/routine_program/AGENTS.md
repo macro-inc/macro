@@ -38,7 +38,7 @@ no I/O.
 - Owns: the program's shape, its validation, and the code-step contract.
 - Not here: running it → `crates/scheduled_action` (`program_runner.rs`);
   running and type-checking code → `services/agent_harness_service`
-  (`routine_code.rs`, over `crates/code_execution`); trigger conditions →
+  (`routine_code.rs`, over `crates/agents/code_execution_*`); trigger conditions →
   `scheduled_action`'s `event_runs/condition.rs`.
 
 ## Boundaries

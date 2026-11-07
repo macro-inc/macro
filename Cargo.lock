@@ -338,7 +338,7 @@ dependencies = [
  "bot_id",
  "calendar_events",
  "chrono",
- "code_execution",
+ "code_execution_core",
  "code_mode_assets",
  "cognition",
  "dynamic_ui",
@@ -619,7 +619,8 @@ dependencies = [
  "chat",
  "chat_id",
  "chrono",
- "code_execution",
+ "code_execution_core",
+ "code_execution_outbound",
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
@@ -4722,10 +4723,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "code_execution"
+name = "code_execution_core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "code_mode_assets",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "code_execution_outbound"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "code_execution_core",
  "code_mode_assets",
  "futures",
  "rootcause",
@@ -4733,7 +4751,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",

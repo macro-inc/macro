@@ -26,7 +26,7 @@ A failed run or a missing file fails the build; there is no stale fallback.
 
 - Owns: building and embedding the assets.
 - Not here: the generator (`packages/code-mode-sdk`), process isolation
-  (`crates/code_execution`), documentation selection (`crates/agent_code_mode`).
+  (`crates/agents/code_execution_*`), documentation selection (`crates/agent_code_mode`).
 
 ## Checks
 

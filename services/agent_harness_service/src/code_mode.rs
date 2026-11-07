@@ -6,7 +6,7 @@ use agent_correlation::domain::CorrelationRepository;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
-use code_execution::domain::{RunEnvironment, SdkEndpoints};
+use code_execution_core::{RunEnvironment, SdkEndpoints};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;

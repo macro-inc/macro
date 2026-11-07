@@ -17,7 +17,7 @@ see it.
 
 ## What exists
 
-- `crates/code_execution`: fresh Deno child per run, prebundled SDK, network
+- `crates/agents/code_execution_core` + `code_execution_outbound`: fresh Deno child per run, prebundled SDK, network
   limited to Macro service hosts, 30 s deadline.
 - `crates/agent_code_mode`: `ExecuteCode`, `DescribeCodeTools`, execution
   journal, review stacks. Session-bound throughout: `ExecutionIdentity` needs a

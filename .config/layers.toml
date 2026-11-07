@@ -223,7 +223,6 @@ paths = [
   "crates/channel_labels",
   "crates/channels",
   "crates/chat",
-  "crates/code_execution",
   "crates/code_mode_assets",
   "crates/codex_cloud_agents",
   "crates/codex_connection",

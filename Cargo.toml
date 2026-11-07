@@ -20,6 +20,8 @@ members = [
   "crates/agent_session",
   "crates/agent_session_realtime",
   "crates/agent_trigger",
+  "crates/agents/code_execution_core",
+  "crates/agents/code_execution_outbound",
   "crates/ai_billing",
   "crates/ai_engine",
   "crates/ai_projections",
@@ -38,7 +40,6 @@ members = [
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
-  "crates/code_execution",
   "crates/code_mode_assets",
   "crates/codex_cloud_agents",
   "crates/codex_connection",
@@ -647,7 +648,8 @@ chat = { path = "crates/chat", default-features = false }
 chat_id = { path = "crates/types/chat_id" }
 chat_message = { path = "crates/types/chat_message" }
 claude_fold = { path = "crates/folds/claude_fold" }
-code_execution = { path = "crates/code_execution" }
+code_execution_core = { path = "crates/agents/code_execution_core" }
+code_execution_outbound = { path = "crates/agents/code_execution_outbound" }
 code_mode_assets = { path = "crates/code_mode_assets" }
 codex_cloud_agents = { path = "crates/codex_cloud_agents" }
 codex_connection = { path = "crates/codex_connection" }
@@ -920,6 +922,7 @@ work_feed = { path = "crates/work_feed" }
 worker-rs-otel = { path = "crates/worker-rs-otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }
+
 
 [patch.crates-io]
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
