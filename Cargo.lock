@@ -11772,6 +11772,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_html"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "lexical_model",
+ "nom 8.0.0",
+ "regress",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "lexical_mention_extractor"
 version = "0.1.0"
 dependencies = [
@@ -11808,7 +11820,6 @@ dependencies = [
  "bitflags 2.11.1",
  "indexmap 2.14.0",
  "lexical_model",
- "nom 8.0.0",
  "phf 0.13.1",
  "regress",
  "serde",
