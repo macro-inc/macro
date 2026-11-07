@@ -6,8 +6,8 @@ use super::*;
 fn only_layout_operations_add_an_implicit_version_guard() {
     let table = TableDetail {
         table: Table {
-            id: TableId::new(),
-            database_id: DatabaseId::new(),
+            id: TableId::generate(),
+            database_id: DatabaseId::generate(),
             name: "Deals".into(),
             position: "80".parse().unwrap(),
             version: TableVersion(7),
@@ -21,9 +21,9 @@ fn only_layout_operations_add_an_implicit_version_guard() {
         table: table.table.id,
         change: RowsChange::Update {
             changes: RowChanges::Uniform {
-                rows: vec![RowId::new()],
+                rows: vec![RowId::generate()],
                 cells: vec![CellWrite {
-                    column: ColumnId::new(),
+                    column: ColumnId::generate(),
                     value: CellValue::Number(125.0),
                 }],
             },
@@ -37,7 +37,7 @@ fn only_layout_operations_add_an_implicit_version_guard() {
 
     let mut layout = OpBatch::from(vec![DatabaseOp::View {
         table: table.table.id,
-        view: ViewId::new(),
+        view: ViewId::generate(),
         change: ViewChange::Delete,
     }]);
     fields.prepare(&table, &mut layout).unwrap();

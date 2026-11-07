@@ -101,7 +101,7 @@ pub(super) async fn guests(pool: &PgPool) -> Guests {
     let table_id = repo.get_database(database.id).await.unwrap().unwrap().1[0].id;
     // The database starts with its title column, Name.
     let name = repo.columns_for_tables(&[table_id]).await.unwrap()[0].id;
-    let status = ColumnId::new();
+    let status = ColumnId::generate();
     service
         .apply_ops(
             edit(database.id),
@@ -114,7 +114,7 @@ pub(super) async fn guests(pool: &PgPool) -> Guests {
                         name: "Status".into(),
                         kind: ColumnKind::Select { multi: false },
                         options: vec![NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "Going".into(),
                         }],
                         infer_type: false,
@@ -521,8 +521,8 @@ async fn a_refused_op_leaves_nothing_of_its_batch_behind(pool: PgPool) {
 async fn a_relation_cell_holds_rows_of_its_target_table(pool: PgPool) {
     let guests = guests(&pool).await;
     let service = service(&pool);
-    let sessions = TableId::new();
-    let relation = ColumnId::new();
+    let sessions = TableId::generate();
+    let relation = ColumnId::generate();
     service
         .apply_ops(
             edit(guests.database_id),
@@ -831,7 +831,7 @@ async fn a_removed_option_leaves_its_cells_empty_and_the_others_alone(pool: PgPo
                     column: guests.status,
                     change: ColumnChange::AddOptions {
                         options: vec![NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "Maybe".into(),
                         }],
                     },
@@ -973,8 +973,8 @@ async fn a_shared_property_is_editable_by_its_owner_alone(pool: PgPool) {
 async fn appended_options_follow_the_existing_ones_in_place_and_colour(pool: PgPool) {
     let guests = guests(&pool).await;
     let before = version(&pool, guests.table_id).await;
-    let maybe = OptionId::new();
-    let declined = OptionId::new();
+    let maybe = OptionId::generate();
+    let declined = OptionId::generate();
 
     let results = service(&pool)
         .apply_ops(
@@ -1158,7 +1158,7 @@ async fn a_text_column_converts_into_a_new_number_column_and_keeps_its_rows(pool
         }
     );
 
-    let count = ColumnId::new();
+    let count = ColumnId::generate();
     service
         .apply_ops(
             edit(guests.database_id),

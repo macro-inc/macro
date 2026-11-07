@@ -7,7 +7,7 @@ use super::*;
 async fn a_select_column_with_no_options_accepts_nothing() {
     let seeded = seeded().await;
     let (svc, database_id, table_id) = (seeded.service, seeded.database_id, seeded.table_id);
-    let stage = ColumnId::new();
+    let stage = ColumnId::generate();
     svc.apply_ops(
         edit(database_id),
         viewer(OWNER),
@@ -65,7 +65,7 @@ async fn add_options_extends_what_ops_accept_and_bumps_the_version() {
     );
     let published_before = world.lock().unwrap().published.len();
     let before = table_version(&world, guests);
-    let waitlisted = OptionId::new();
+    let waitlisted = OptionId::generate();
 
     let results = svc
         .apply_ops(
@@ -171,11 +171,11 @@ async fn adding_an_existing_option_is_a_no_op() {
                 change: ColumnChange::AddOptions {
                     options: vec![
                         NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "going".into(),
                         },
                         NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "  Declined  ".into(),
                         },
                     ],
@@ -221,13 +221,13 @@ async fn options_are_refused_on_a_column_that_cannot_hold_them() {
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Column {
                 table: guests,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 change: ColumnChange::Create {
                     definition: NewColumn::New {
                         name: "Notes".into(),
                         kind: ColumnKind::Text,
                         options: vec![NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "Main".into(),
                         }],
                         infer_type: false,
@@ -257,7 +257,7 @@ async fn options_are_refused_on_a_column_that_cannot_hold_them() {
                 column: name_column,
                 change: ColumnChange::AddOptions {
                     options: vec![NewOption {
-                        id: OptionId::new(),
+                        id: OptionId::generate(),
                         label: "Main".into(),
                     }],
                 },
@@ -288,7 +288,7 @@ async fn numeric_select_options_are_parsed_as_numbers() {
     let priority_column = |options: &[&str]| {
         OpBatch::from(vec![DatabaseOp::Column {
             table: guests,
-            column: ColumnId::new(),
+            column: ColumnId::generate(),
             change: ColumnChange::Create {
                 definition: NewColumn::New {
                     name: "Priority".into(),
@@ -296,7 +296,7 @@ async fn numeric_select_options_are_parsed_as_numbers() {
                     options: options
                         .iter()
                         .map(|label| NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: (*label).into(),
                         })
                         .collect(),
@@ -369,13 +369,13 @@ async fn option_labels_are_validated() {
     let stage_column = |label: String| {
         OpBatch::from(vec![DatabaseOp::Column {
             table: guests,
-            column: ColumnId::new(),
+            column: ColumnId::generate(),
             change: ColumnChange::Create {
                 definition: NewColumn::New {
                     name: "Stage".into(),
                     kind: ColumnKind::Select { multi: false },
                     options: vec![NewOption {
-                        id: OptionId::new(),
+                        id: OptionId::generate(),
                         label,
                     }],
                     infer_type: false,
@@ -422,7 +422,7 @@ async fn add_options_respects_receipts() {
             column,
             change: ColumnChange::AddOptions {
                 options: vec![NewOption {
-                    id: OptionId::new(),
+                    id: OptionId::generate(),
                     label: "Waitlisted".into(),
                 }],
             },
@@ -430,7 +430,11 @@ async fn add_options_respects_receipts() {
     };
 
     let error = svc
-        .apply_ops(edit(DatabaseId::new()), viewer(OWNER), waitlisted(status))
+        .apply_ops(
+            edit(DatabaseId::generate()),
+            viewer(OWNER),
+            waitlisted(status),
+        )
         .await
         .unwrap_err();
     assert!(
@@ -438,7 +442,7 @@ async fn add_options_respects_receipts() {
         "a receipt for another database reaches nothing: {error:?}"
     );
 
-    let missing = ColumnId::new();
+    let missing = ColumnId::generate();
     let error = svc
         .apply_ops(edit(db), viewer(OWNER), waitlisted(missing))
         .await

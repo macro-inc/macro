@@ -147,7 +147,7 @@ where
             .iter()
             .map(|stage| {
                 (
-                    OptionId::new().into_uuid(),
+                    OptionId::generate().into_uuid(),
                     PropertyOptionValue::String((*stage).to_string()),
                 )
             })
@@ -168,8 +168,8 @@ where
             )
             .await
             .map_err(dependency)?;
-        let title_column_id = ColumnId::new();
-        let stage_column_id = ColumnId::new();
+        let title_column_id = ColumnId::generate();
+        let stage_column_id = ColumnId::generate();
         let column_positions = keys_between(None, None, 2)?;
         for ((column_id, definition_id), position) in [
             (title_column_id, title.definition.id),
@@ -199,7 +199,7 @@ where
                 .property_options
                 .get(*stage_index)
                 .ok_or(PgStarterError::MissingStage(*stage_index))?;
-            let row_id = RowId::new();
+            let row_id = RowId::generate();
             seeded.push(row_id);
             sqlx::query!(
                 "INSERT INTO database_rows (id, table_id, position, created_by) VALUES ($1, $2, $3, $4)",

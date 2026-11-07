@@ -36,7 +36,7 @@ async fn create_view(
     query: ViewQuery,
     layout: ViewLayout,
 ) -> DatabaseView {
-    let id = ViewId::new();
+    let id = ViewId::generate();
     let results = seeded
         .service
         .apply_ops(
@@ -178,7 +178,7 @@ async fn a_view_is_refused_when_it_does_not_fit_its_table() {
     create_view(&seeded, "Everyone", ViewQuery::default(), board(&seeded)).await;
     let create = |name: &str, query: ViewQuery, layout: ViewLayout| DatabaseOp::View {
         table: seeded.table_id,
-        view: ViewId::new(),
+        view: ViewId::generate(),
         change: ViewChange::Create {
             view: NewView {
                 name: name.into(),
@@ -513,7 +513,7 @@ async fn moving_a_card_to_another_lane_sets_its_cell_and_places_it_there() {
 /// A person column naming Sam in Sam's row, holding several people when
 /// `multi`; answers the column.
 async fn person_column(seeded: &Seeded, name: &str, multi: bool) -> ColumnId {
-    let host = ColumnId::new();
+    let host = ColumnId::generate();
     seeded
         .service
         .apply_ops(
@@ -700,7 +700,7 @@ async fn a_board_takes_only_lanes_its_column_groups_by() {
         (
             DatabaseOp::View {
                 table: seeded.table_id,
-                view: ViewId::new(),
+                view: ViewId::generate(),
                 change: ViewChange::Create {
                     view: NewView {
                         name: "By helpers".into(),
@@ -1112,7 +1112,7 @@ async fn a_new_view_under_an_existing_views_id_is_refused_as_taken() {
 #[tokio::test]
 async fn a_board_created_without_a_title_is_titled_by_the_first_column() {
     let seeded = seeded().await;
-    let stages = ViewId::new();
+    let stages = ViewId::generate();
     let results = seeded
         .service
         .apply_ops(
@@ -1219,7 +1219,7 @@ async fn an_update_without_a_title_keeps_the_boards_title() {
 #[tokio::test]
 async fn a_board_titled_by_an_unknown_column_is_refused() {
     let seeded = seeded().await;
-    let ghost = ColumnId::new();
+    let ghost = ColumnId::generate();
     let error = seeded
         .service
         .apply_ops(
@@ -1227,7 +1227,7 @@ async fn a_board_titled_by_an_unknown_column_is_refused() {
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::View {
                 table: seeded.table_id,
-                view: ViewId::new(),
+                view: ViewId::generate(),
                 change: ViewChange::Create {
                     view: NewView {
                         name: "Stages".into(),
@@ -1508,7 +1508,7 @@ async fn a_boards_card_places_read_back_for_its_database_alone() {
             .unwrap(),
         placed
     );
-    let elsewhere = receipt::<ViewAccessLevel>(DatabaseId::new(), OWNER, AccessLevel::Owner);
+    let elsewhere = receipt::<ViewAccessLevel>(DatabaseId::generate(), OWNER, AccessLevel::Owner);
     assert!(matches!(
         seeded.service.view_positions(elsewhere, stages.id).await,
         Err(DatabaseError::NotFound)

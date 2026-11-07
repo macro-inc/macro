@@ -255,7 +255,7 @@ impl DatabasesService for FakeDatabases {
     async fn create_database(&self, input: CreateDatabase) -> Result<Database, DatabaseError> {
         let database = Database {
             appearance: None,
-            id: DatabaseId::new(),
+            id: DatabaseId::generate(),
             name: input.name.clone(),
             owner_id: input.owner_id.to_string(),
             created_at: Utc::now(),

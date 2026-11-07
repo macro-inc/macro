@@ -53,7 +53,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
     assert_eq!(app_rows, 0);
 
     insert_user(&pool).await;
-    let table = TableId::new();
+    let table = TableId::generate();
     let definition = macro_uuid::generate_uuid_v7();
     let Write::CreateColumn { column, .. } = bind(table, definition, "80") else {
         unreachable!()

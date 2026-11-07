@@ -79,7 +79,7 @@ where
     ) -> Result<PropertyDefinitionWithOptions, Self::Error> {
         let options: Vec<(uuid::Uuid, PropertyOptionValue)> = options
             .iter()
-            .map(|value| (OptionId::new().into_uuid(), value.clone()))
+            .map(|value| (OptionId::generate().into_uuid(), value.clone()))
             .collect();
         let mut transaction = self.pool.begin().await?;
         let definition = self

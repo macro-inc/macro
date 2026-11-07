@@ -613,7 +613,7 @@ where
             } => {
                 let placed = if restored.is_empty() {
                     let ids = if ids.is_empty() {
-                        rows.iter().map(|_| RowId::new()).collect()
+                        rows.iter().map(|_| RowId::generate()).collect()
                     } else {
                         ids.clone()
                     };

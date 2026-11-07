@@ -4,15 +4,15 @@ use models_forms::{FormQuestionId, FormSectionId};
 
 #[test]
 fn help_text_edit_changes_only_requested_fields_in_the_current_layout() {
-    let question = FormQuestionId::new();
+    let question = FormQuestionId::generate();
     let base = FormLayout {
         sections: vec![FormSection::Questions {
-            id: FormSectionId::new(),
+            id: FormSectionId::generate(),
             title: "Team".into(),
             description: String::new(),
             questions: vec![QuestionLayout {
                 id: question,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 help_text: "People".into(),
                 required: false,
                 widget: None,
@@ -51,9 +51,9 @@ fn help_text_edit_changes_only_requested_fields_in_the_current_layout() {
 
 #[test]
 fn a_batch_can_move_then_edit_a_question_without_losing_either_change() {
-    let question = FormQuestionId::new();
-    let first = FormSectionId::new();
-    let second = FormSectionId::new();
+    let question = FormQuestionId::generate();
+    let first = FormSectionId::generate();
+    let second = FormSectionId::generate();
     let base = FormLayout {
         sections: vec![
             FormSection::Questions {
@@ -62,7 +62,7 @@ fn a_batch_can_move_then_edit_a_question_without_losing_either_change() {
                 description: String::new(),
                 questions: vec![QuestionLayout {
                     id: question,
-                    column: ColumnId::new(),
+                    column: ColumnId::generate(),
                     help_text: String::new(),
                     required: false,
                     widget: None,
@@ -101,8 +101,8 @@ fn a_batch_can_move_then_edit_a_question_without_losing_either_change() {
 
 #[test]
 fn a_batch_can_add_then_edit_a_question() {
-    let section = FormSectionId::new();
-    let question = FormQuestionId::new();
+    let section = FormSectionId::generate();
+    let question = FormQuestionId::generate();
     let base = FormLayout {
         sections: vec![FormSection::Questions {
             id: section,
@@ -117,7 +117,7 @@ fn a_batch_can_add_then_edit_a_question() {
             section_id: section,
             question: QuestionLayout {
                 id: question,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 help_text: String::new(),
                 required: false,
                 widget: None,
@@ -144,10 +144,10 @@ fn show_when_is_set_kept_by_unrelated_edits_cleared_by_null_and_only_on_question
     use models_databases::views::{
         Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, PresenceOperator,
     };
-    let first = FormSectionId::new();
-    let second = FormSectionId::new();
-    let gate = FormSectionId::new();
-    let column = ColumnId::new();
+    let first = FormSectionId::generate();
+    let second = FormSectionId::generate();
+    let gate = FormSectionId::generate();
+    let column = ColumnId::generate();
     let rules = FilterGroup {
         conjunction: Conjunction::And,
         conditions: vec![FilterNode::Condition(FilterCondition {
@@ -164,7 +164,7 @@ fn show_when_is_set_kept_by_unrelated_edits_cleared_by_null_and_only_on_question
                 title: "About you".into(),
                 description: String::new(),
                 questions: vec![QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column,
                     help_text: String::new(),
                     required: false,

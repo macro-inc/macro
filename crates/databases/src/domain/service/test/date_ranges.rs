@@ -24,7 +24,7 @@ fn refusal(result: Result<Vec<OpResult>, DatabaseError>) -> String {
 
 /// Seeded with a `Stay` date-range column, answering its id.
 async fn with_stay(seeded: &Seeded) -> ColumnId {
-    let stay = ColumnId::new();
+    let stay = ColumnId::generate();
     apply(
         seeded,
         vec![DatabaseOp::Column {
@@ -113,7 +113,7 @@ async fn a_timeline_spans_a_range_column_which_cannot_be_removed_while_it_does()
     let create = |range: ColumnId, color_by: ColumnId| {
         vec![DatabaseOp::View {
             table: seeded.table_id,
-            view: ViewId::new(),
+            view: ViewId::generate(),
             change: ViewChange::Create {
                 view: NewView {
                     name: "Schedule".into(),

@@ -266,7 +266,7 @@ async fn a_form_over_an_unknown_table_or_database_is_not_found() {
                         OWNER,
                         AccessLevel::Owner,
                     ),
-                    table_id: TableId::new(),
+                    table_id: TableId::generate(),
                 },
             },
         )
@@ -279,7 +279,7 @@ async fn a_form_over_an_unknown_table_or_database_is_not_found() {
                 name: "Party RSVP".into(),
                 source: CreateSource::Table {
                     receipt: database_receipt::<OwnerAccessLevel>(
-                        DatabaseId::new(),
+                        DatabaseId::generate(),
                         OWNER,
                         AccessLevel::Owner,
                     ),

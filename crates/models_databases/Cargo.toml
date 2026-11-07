@@ -15,7 +15,6 @@ schema = ["dep:schemars"]
 chrono = { workspace = true }
 fractional_index = { workspace = true }
 macro_user_id = { workspace = true, features = ["schema"] }
-macro_uuid = { workspace = true }
 nom = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -24,6 +23,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
+id_newtype = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

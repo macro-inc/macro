@@ -186,7 +186,7 @@ async fn entries_come_only_from_primary_references_of_tracked_pipelines(pool: Pg
     sqlx::query!("INSERT INTO crm_companies (id, team_id, first_interaction, last_interaction) VALUES ($1, $2, now(), now())", other, team).execute(&pool).await.unwrap();
     // A tracked pipeline with a second company column.
     let tracked = create(&s, team, PipelineRecordType::Company).await;
-    let partner = ColumnId::new();
+    let partner = ColumnId::generate();
     write(&s, &a, &tracked, vec![op(json!({
         "kind": "column", "table": tracked.table_id, "column": partner,
         "change": {"kind": "create", "definition": {"source": "new", "name": "Partner", "type": {"type": "entity", "target": "COMPANY", "multi": false}}}

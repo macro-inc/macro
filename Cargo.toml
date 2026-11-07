@@ -232,6 +232,7 @@ members = [
   "crates/types/bearer_token",
   "crates/types/chat_message",
   "crates/types/entity_basic_types",
+  "crates/types/id_newtype",
   "crates/types/message_parent",
   "crates/types/soup_property",
   "crates/unfurl",
@@ -834,6 +835,7 @@ harness_id = { path = "crates/harness_id" }
 harnessd_protocol = { path = "crates/harnessd_protocol" }
 harnesses = { path = "crates/harnesses", default-features = false }
 hosted_runtimes = { path = "crates/hosted_runtimes", default-features = false }
+id_newtype = { path = "crates/types/id_newtype" }
 image_generation = { path = "crates/image_generation" }
 image_proxy_service_url = { path = "crates/platform/service_urls/image_proxy_service_url" }
 import = { path = "crates/import" }

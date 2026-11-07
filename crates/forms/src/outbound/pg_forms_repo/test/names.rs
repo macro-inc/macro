@@ -14,7 +14,7 @@ async fn whether_a_form_goes_by_its_databases_name_is_read_back_as_created(pool:
         .unwrap();
     let other_table = insert_response_table(&pool, table.database, "Guests", "a1").await;
     let attached = Form {
-        id: FormId::new(),
+        id: FormId::generate(),
         name: "Party RSVP".into(),
         ..form_over(&other_table)
     };
@@ -39,7 +39,7 @@ async fn whether_a_form_goes_by_its_databases_name_is_read_back_as_created(pool:
         })
     );
     assert_eq!(
-        repo.forms_with_database_names(&[standalone.id, attached.id, FormId::new()])
+        repo.forms_with_database_names(&[standalone.id, attached.id, FormId::generate()])
             .await
             .unwrap(),
         vec![standalone.id]
@@ -85,5 +85,8 @@ async fn touching_a_live_form_stamps_only_its_updated_at(pool: PgPool) {
 
     repo.trash_form(form.id, at(13)).await.unwrap();
     assert_eq!(repo.touch_form(form.id, at(14)).await.unwrap(), None);
-    assert_eq!(repo.touch_form(FormId::new(), at(14)).await.unwrap(), None);
+    assert_eq!(
+        repo.touch_form(FormId::generate(), at(14)).await.unwrap(),
+        None
+    );
 }

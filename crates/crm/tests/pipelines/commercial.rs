@@ -278,7 +278,7 @@ async fn board_moves_cannot_clear_system_fields_even_after_regrouping(pool: PgPo
         p.commercial_fields.outcome.unwrap(),
         p.commercial_fields.money[0].currency,
     ] {
-        let view = ViewId::new();
+        let view = ViewId::generate();
         let create: DatabaseOp = serde_json::from_value(json!({"kind":"view", "table":p.table_id, "view":view,
             "change":{"kind":"create", "view":{"name":format!("Board {system}"), "layout":{"kind":"board", "groupBy":stage,"lanes":[],"cardFields":[],"hideEmptyLanes":false}}}})).unwrap();
         write(&s, &a, &p, vec![create]).await.unwrap();

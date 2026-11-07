@@ -410,7 +410,7 @@ async fn the_summary_counts_the_ledger_by_gate_and_the_tables_rows() {
     // A row the grid added, not a response.
     world.lock().unwrap().database_mut(RSVP_DATABASE).tables[0]
         .rows
-        .push((RowId::new(), BTreeMap::new()));
+        .push((RowId::generate(), BTreeMap::new()));
 
     let summary = forms
         .response_summary(form_receipt::<EditAccessLevel>(

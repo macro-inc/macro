@@ -210,7 +210,7 @@ async fn undoing_a_row_delete_brings_omar_back_exactly_after_julia_edits_maria(p
 async fn undoing_a_column_delete_restores_the_column_its_cells_and_the_view_filter(pool: PgPool) {
     let wedding = wedding(&pool).await;
     insert_guests(&pool, &wedding).await;
-    let crowd = ViewId::new();
+    let crowd = ViewId::generate();
     let query = ViewQuery {
         filter: Some(FilterGroup {
             conjunction: Conjunction::And,
