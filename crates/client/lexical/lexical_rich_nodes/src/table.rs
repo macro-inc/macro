@@ -79,3 +79,8 @@ mod grid_test;
 
 #[cfg(test)]
 mod observer_test;
+/// Insert, select-all, triple-click and clipboard model commands.
+pub mod commands;
+pub use commands::*;
+#[cfg(test)]
+mod commands_test;
