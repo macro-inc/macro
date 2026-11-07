@@ -44,12 +44,27 @@ pub(crate) fn lift_to_nearest_root(
     node: NodeKey,
     remove_empty: bool,
 ) -> std::result::Result<(), lexical_model::Error> {
-    let mut caret: PointCaret = SiblingCaret::new(node, CaretDirection::Next).rewind(tx.view())?.into();
-    if caret.node_at_caret(tx.view()) == Some(node) || caret.flipped(tx.view()).node_at_caret(tx.view()) == Some(node) {
+    let mut caret: PointCaret = SiblingCaret::new(node, CaretDirection::Next)
+        .rewind(tx.view())?
+        .into();
+    if caret.node_at_caret(tx.view()) == Some(node)
+        || caret.flipped(tx.view()).node_at_caret(tx.view()) == Some(node)
+    {
         tx.remove(node, true)?;
     }
-    let options = SplitAtPointCaretNextOptions { should_split: |_, _, _| false, remove_empty_destination: remove_empty, ..Default::default() };
-    while let Some(next) = tx.split_at_point_caret_next(caret, options)? { caret = next.into(); }
+    let options = SplitAtPointCaretNextOptions {
+        should_split: |_, _, _| false,
+        remove_empty_destination: remove_empty,
+        ..Default::default()
+    };
+    while let Some(next) = tx.split_at_point_caret_next(caret, options)? {
+        caret = next.into();
+    }
     tx.caret_insert(caret, node)?;
     Ok(())
 }
+
+/// Pinned linkify-it domain/email/protocol recognition.
+pub mod linkify;
+/// Shared UTF-16 match arrays and stateless regex/synthetic matching.
+pub mod matcher;
