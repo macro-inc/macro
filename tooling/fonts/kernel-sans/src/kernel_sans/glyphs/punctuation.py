@@ -1,0 +1,1222 @@
+"""Punctuation and symbols: dots and commas, quotes, dashes, brackets,
+slashes, guillemets, @ & § ¶ © ® ™, daggers, bullets and arrows.
+
+Everything that has a dot uses the period's rounded dot (`geom.dot`, side
+`p.dot`); commas and quotes are that dot with a wedge tail. Curves are
+squircles cut flat at their terminals, stem ends are cut square, and arrow
+and guillemet tips are cut flat across their point.
+"""
+
+import math
+
+import pathops
+
+from .. import params as P
+from ..geom import (
+    DOT_N,
+    Shape,
+    above,
+    band,
+    below,
+    diag,
+    dot,
+    half_plane,
+    hwidth,
+    left_of,
+    poly,
+    rect,
+    right_of,
+    ring,
+    squircle,
+    stroke,
+    superness,
+)
+from . import G, glyph, ref
+from .parts import flush_end, open_bowl
+
+PROOF_TEXT = [
+    "H.H,H:H;H!H?H n.n,n:n;n!n?n",
+    "\u201cQuoted\u201d \u2018text\u2019 \u2014 (parens) [brackets] {braces}",
+    "name@example.com  R&D  A\u2192B \u2190 \u2191 \u2193 \u2197 \u2198 \u2194 \u00a9 \u00ae \u2122 \u00a7 \u00b6",
+    "(HELLO) [WORLD] \u00abNEXT\u00bb \u2013 \u2014 \u2039n\u203a n\u2013n n\u2014n n-n H-H",
+    "(HOH) [HOH] {HOH} n/o\\n n|n \u00a6 n_n n*n \u2020 \u2021 \u2022 n\u00b7n n\u2026",
+    "\u00bfnon? \u00a1non! \u201enon\u201c \u201anon\u2018 'n' \"n\" n@o H@O H&O",
+    "09:30 17:45 H:H n:n KERNEL\u2122 \u00a9 2026 \u00a7 4 H\u2192O",
+]
+
+SQ2 = math.sqrt(2)
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+
+
+def _period(p):
+    """(dot side, period sidebearing, period advance)."""
+    s = p.dot
+    sb = p.psb
+    return s, sb, s + 2 * sb
+
+
+def _ring_part(x0, y0, x1, y1, ix0, iy0, ix1, iy1, n, n_in, clip):
+    """(outer squircle - inner squircle) & clip, for building curves from
+    quadrants whose inner box is not simply inset. Join such pieces where
+    their tangents agree, touching exactly or with the curve overlapping:
+    pathops drops pieces when a rectangle overlaps a squircle just past its
+    tangent point."""
+    return (squircle(x0, y0, x1, y1, n) - squircle(ix0, iy0, ix1, iy1, n_in)) & clip
+
+
+def _comma_tail(p):
+    """Length of the comma's (and curly quotes') tail below the square."""
+    return p.dot * 0.6 + 92
+
+
+def _comma(p, x0, y0):
+    """The comma: the period's dot at (x0, y0) with a wedge tail growing down
+    and to the left, drawn as one contour on the dot's own cubics. The
+    tail's right edge leaves the dot's lower right exactly along its tangent
+    (a union with a polygon left a corner there); its left edge meets the
+    dot's underside in a waist."""
+    s = p.dot
+    h = s / 2
+    cx, cy = x0 + h, y0 + h
+    tail = _comma_tail(p)
+    tw = s * 0.34  # width of the flat tail end
+    tl = x0 - s * 0.06  # left corner of the tail end
+    el, er = (tl, y0 - tail), (tl + tw, y0 - tail)
+    k = superness(DOT_N)
+    # geom.squircle's quadrants, counter-clockwise from the right extreme.
+    q = [
+        [(cx + h, cy), (cx + h, cy + k * h), (cx + k * h, cy + h), (cx, cy + h)],
+        [(cx, cy + h), (cx - k * h, cy + h), (cx - h, cy + k * h), (cx - h, cy)],
+        [(cx - h, cy), (cx - h, cy - k * h), (cx - k * h, cy - h), (cx, cy - h)],
+        [(cx, cy - h), (cx + k * h, cy - h), (cx + h, cy - k * h), (cx + h, cy)],
+    ]
+
+    def at(seg, t):
+        m = 1 - t
+        w = (m**3, 3 * m * m * t, 3 * m * t * t, t**3)
+        return tuple(
+            sum(wi * c[i] for wi, c in zip(w, seg, strict=True)) for i in (0, 1)
+        )
+
+    def split(seg, t):
+        def lerp(u, v):
+            return (u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t)
+
+        a1, b1, c1 = lerp(seg[0], seg[1]), lerp(seg[1], seg[2]), lerp(seg[2], seg[3])
+        d1, e1 = lerp(a1, b1), lerp(b1, c1)
+        f1 = lerp(d1, e1)
+        return [seg[0], a1, d1, f1], [f1, e1, c1, seg[3]]
+
+    def root(f):
+        lo, hi = 0.0, 1.0  # f changes sign once on [0, 1]
+        flo = f(lo)
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            if (f(mid) > 0) == (flo > 0):
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
+
+    def side(pt, a0, a1):
+        """Which side of the line a0 -> a1 the point lies on."""
+        return (a1[0] - a0[0]) * (pt[1] - a0[1]) - (a1[1] - a0[1]) * (pt[0] - a0[0])
+
+    # Tangent point on the lower-right quadrant: where the line from the tail
+    # end just touches the curve (the curve's tangent passes through er).
+    def touch(t):
+        e = 1e-4
+        p0, p1 = at(q[3], max(0.0, t - e)), at(q[3], min(1.0, t + e))
+        return side(er, p0, p1)
+
+    t_t = root(touch)
+    # The waist: the left edge, aimed at a point inside the dot, crosses its
+    # underside on the lower-left quadrant.
+    aim = (x0 + s * 0.42, y0 + s * 0.3)
+    t_w = root(lambda t: side(at(q[2], t), el, aim))
+    left, _ = split(q[2], t_w)
+    _, right = split(q[3], t_t)
+    path = pathops.Path()
+    pen = path.getPen()
+    pen.moveTo(q[0][0])
+    for seg in (q[0], q[1], left):
+        pen.curveTo(*seg[1:])
+    pen.lineTo(el)
+    pen.lineTo(er)
+    pen.lineTo(right[0])
+    pen.curveTo(*right[1:])
+    pen.closePath()
+    path.simplify(fix_winding=True)
+    return Shape(path)
+
+
+def _lr(shape):
+    """The shape with its contours in reading order (left to right, then
+    bottom to top). compat.py pairs contours across masters greedily by
+    nearest centre in path order; for repeated parts that move apart as the
+    glyph widens (the dots of …, the marks of " and ”) a right-to-left order
+    pairs the wrong copies and the variable font garbles them in between."""
+    contours = sorted(
+        shape.path.contours,
+        key=lambda c: (
+            (c.bounds[0] + c.bounds[2]) / 2,
+            (c.bounds[1] + c.bounds[3]) / 2,
+        ),
+    )
+    out = pathops.Path()
+    for c in contours:
+        out.addPath(c)
+    return Shape(out)
+
+
+def _damp(v, v400, k):
+    """Grow a stroke more slowly than the letters do above Regular (k < 1),
+    where small counters (© ® ™, the asterisk hub, §) would close up.
+    Lighter weights keep the plain value."""
+    return v if v <= v400 else v400 + k * (v - v400)
+
+
+def _gap(p):
+    """Gap between the stroke of ! ? and their dot."""
+    return p.dot * 0.3 + 60
+
+
+def _chevron(tip_x, yc, h, dx, w, flat):
+    """A left-pointing guillemet chevron: two diagonal strokes of
+    perpendicular thickness w meeting at a point at (tip_x, yc), ends cut
+    horizontally at yc +- h/2, the point cut flat by `flat`."""
+    hh = h / 2
+    k = 4.0
+    xiv = tip_x + w * math.hypot(dx, hh) / hh  # inner vertex
+    outer = poly(
+        [(tip_x, yc), (tip_x + k * dx, yc + k * hh), (tip_x + k * dx, yc - k * hh)]
+    )
+    inner = poly([(xiv, yc), (xiv + k * dx, yc + k * hh), (xiv + k * dx, yc - k * hh)])
+    shape = (outer - inner) & band(yc - hh, yc + hh)
+    return shape - left_of(tip_x + flat)
+
+
+def _arrow(p, length, heads=(True, False)):
+    """A horizontal arrow along +x from x = 0 to x = length at y = 0, with an
+    open chevron head at the right (heads[0]) and/or left (heads[1]) end.
+    The shaft and arms have thickness t; arm ends are square to the arm; the
+    point is a plain mitre (a square corner on the diagonal arrows)."""
+    t = p.hair * 1.1
+    arm = 120 + 1.4 * t  # arm length along its outer edge
+    k = 1200
+
+    def head(tip):
+        # A chevron pointing to +x whose point is at (tip, 0).
+        outer = poly([(tip, 0), (tip - k, k), (tip - k, -k)])
+        inner_x = tip - t * SQ2
+        inner = poly([(inner_x, 0), (inner_x - k, k), (inner_x - k, -k)])
+        h = outer - inner
+        for sy in (1, -1):
+            ux, uy = -1 / SQ2, sy / SQ2  # along the arm, away from the point
+            ex, ey = tip + arm * ux, arm * uy
+            # Everything past the arm end; half_plane keeps the left of
+            # (ex, ey) -> (ex + uy, ey - ux), whose left normal is u.
+            h = h - half_plane((ex, ey), (ex + uy, ey - ux))
+        return h
+
+    s0, s1 = 0.0, length
+    shape = Shape()
+    if heads[0]:
+        shape = shape + head(length)
+        s1 = length - t * 1.2
+    if heads[1]:
+        shape = shape + head(0).flip_x(0)
+        s0 = t * 1.2
+    return shape + rect(s0, -t / 2, s1, t / 2)
+
+
+def _pair(left, right, codes, draw, sb):
+    """Register `left` drawn by draw(p) and `right` as its mirror image with
+    the sidebearings swapped. codes: (left code point, right code point) or
+    () for unencoded alternates."""
+
+    def draw_left(p):
+        lsb, rsb = sb(p)
+        return G(_lr(draw(p)), l=lsb, r=rsb)
+
+    def draw_right(p):
+        lsb, rsb = sb(p)
+        return G(_lr(draw(p).flip_x(0)), l=rsb, r=lsb)
+
+    glyph(left, *codes[:1])(draw_left)
+    glyph(right, *codes[1:])(draw_right)
+
+
+# ---------------------------------------------------------------------------
+# Dots, commas, quotes
+
+
+@glyph("comma", 0x002C)
+def comma(p):
+    _, sb, adv = _period(p)
+    return G(_comma(p, sb, 0), width=adv)
+
+
+@glyph("colon", 0x003A)
+def colon(p):
+    s, sb, adv = _period(p)
+    shape = dot(sb + s / 2, s / 2, s) + dot(sb + s / 2, P.XH - s / 2, s)
+    return G(shape, width=adv)
+
+
+@glyph("colon.case")
+def colon_case(p):
+    """The colon raised so its dots centre on the figures' and capitals'
+    middle (CAP / 2): 09:30, TIME:. calt picks it between figures."""
+    g = ref("colon")
+    return G(g.shape.move(0, (P.CAP - P.XH) / 2), width=g.width)
+
+
+@glyph("semicolon", 0x003B)
+def semicolon(p):
+    s, sb, adv = _period(p)
+    shape = _comma(p, sb, 0) + dot(sb + s / 2, P.XH - s / 2, s)
+    return G(shape, width=adv)
+
+
+@glyph("periodcentered", 0x00B7)
+def periodcentered(p):
+    s, sb, adv = _period(p)
+    return G(dot(sb + s / 2, P.AXIS, s), width=adv)
+
+
+@glyph("ellipsis", 0x2026)
+def ellipsis(p):
+    s, sb, _ = _period(p)
+    # The gap follows the dot: about 124 / 128 / 147 at 300 / 400 / 800,
+    # 1.3 / 1.2 / 0.85 of the dot (Inter: 1.7 / 1.2 / 0.9), at or a little
+    # under the gap of typed periods so the three read as one sign.
+    pitch = s + s * 0.3 + 95
+    shape = Shape()
+    for i in range(3):
+        shape = shape + dot(sb + s / 2 + i * pitch, s / 2, s)
+    return G(_lr(shape), width=2 * sb + 2 * pitch + s)
+
+
+@glyph("exclam", 0x0021)
+def exclam(p):
+    s = p.dot
+    w = p.stem * 1.05
+    cx = s / 2
+    stem = rect(cx - w / 2, s + _gap(p), cx + w / 2, P.CAP)
+    sb = p.psb
+    return G(stem + dot(cx, s / 2, s), l=sb, r=sb)
+
+
+@glyph("exclamdown", 0x00A1)
+def exclamdown(p):
+    g = ref("exclam")
+    b = g.shape.bounds()
+    shape = g.shape.rotate180((b[0] + b[2]) / 2, P.XH / 2)
+    return G(shape, width=g.width)
+
+
+def _question(p):
+    """? : a squircle hook whose left terminal is cut flat;
+    its right side sweeps down into the stem through two squircle quadrants
+    (an S), so the stem grows out of the curve instead of sitting under it."""
+    s = p.dot
+    w = p.stem * 1.05  # stem, as in exclam
+    heavy = max(0.0, p.grow)
+    W = p.w(410, 1.2) + 0.2 * heavy
+    ws, wt = p.stem * 1.04, p.hair * 1.04
+    top = P.CAP + P.COS
+    n, n_in = p.sq, p.sq_in
+    # Stem centre, a little left as in Inter and SF. Above Regular it moves
+    # further left (and the hook widens a little), so the S between the
+    # hook's right side and the stem keeps real curves: left in place, the
+    # stem crowded the hook and the S's counters shrank to corners.
+    xs_c = W * 0.46 - 0.45 * heavy
+    xs0, xs1 = xs_c - w / 2, xs_c + w / 2
+    xa = (xs1 + W - ws) / 2  # where the lower curve turns from one quadrant to the next
+    y_sb = s + _gap(p)  # stem bottom
+    yb_c = y_sb + 16  # stem top, where the lower quadrant starts
+    ry_b = (xa - xs0) * 0.9
+    top_b = yb_c + ry_b
+    ya = top_b - wt  # bottom of the hook's outer box
+    cy = (ya + top) / 2
+    # Upper hook: top half, left side down to the terminal, which is cut
+    # just under the hook's widest point (as in Inter) so the aperture above
+    # the neck stays open at heavy weights.
+    y_cut = cy - 0.45 * p.cut
+    hook = ring(0, ya, W, top, ws, wt, n=n, n_in=n_in)
+    hook = hook - (left_of(W / 2) & below(y_cut)) - (right_of(W / 2) & below(cy))
+    # Right side down into the bottom of the S (bottom-right quadrant). The
+    # pieces meet exactly where their tangents agree.
+    qa = _ring_part(
+        2 * xa - W,
+        ya,
+        W,
+        top,
+        2 * xa - (W - ws),
+        ya + wt,
+        W - ws,
+        top - wt,
+        n,
+        n_in,
+        below(cy) & right_of(xa),
+    )
+    # From the bottom of the S down into the stem (top-left quadrant).
+    qb = _ring_part(
+        xs0,
+        2 * yb_c - top_b,
+        2 * xa - xs0,
+        top_b,
+        xs1,
+        2 * yb_c - ya,
+        2 * xa - xs1,
+        ya,
+        n,
+        n_in,
+        left_of(xa) & above(yb_c),
+    )
+    stem = rect(xs0, y_sb, xs1, yb_c)
+    return hook + qa + qb + stem + dot(xs_c, s / 2, s)
+
+
+@glyph("question", 0x003F)
+def question(p):
+    return G(_question(p), l=p.sbr * 0.9, r=p.sbr * 1.0)
+
+
+@glyph("questiondown", 0x00BF)
+def questiondown(p):
+    g = ref("question")
+    b = g.shape.bounds()
+    shape = g.shape.rotate180((b[0] + b[2]) / 2, P.XH / 2)
+    return G(shape, l=p.sbr * 1.0, r=p.sbr * 0.9)
+
+
+def _quote(p, x0):
+    """quoteright drawn with its square at x0 and its top at cap height."""
+    s = p.dot
+    return _comma(p, x0, P.CAP - s)
+
+
+def _quote_pitch(p):
+    return p.dot + p.dot * 0.5 + 34
+
+
+def _qsb(p):
+    """(left, right) of the raised quotes: the mark sits right of centre, as
+    in Inter (‘ ’ “ ” share it). kerning.py sets 's 'r 'd from these."""
+    return p.sbr * 1.25 + 15, p.sbr * 0.6
+
+
+def _qsb_low(p):
+    """(left, right) of the low quotes ‚ „: the comma's left side, the raised
+    quotes' tight right."""
+    return p.sbr + 8, p.sbr * 0.6
+
+
+@glyph("quoteright", 0x2019)
+def quoteright(p):
+    lsb, rsb = _qsb(p)
+    return G(_quote(p, 0), l=lsb, r=rsb)
+
+
+@glyph("quoteleft", 0x2018)
+def quoteleft(p):
+    lsb, rsb = _qsb(p)
+    sh = _quote(p, 0)
+    b = sh.bounds()
+    return G(sh.rotate180((b[0] + b[2]) / 2, (b[1] + b[3]) / 2), l=lsb, r=rsb)
+
+
+@glyph("quotesinglbase", 0x201A)
+def quotesinglbase(p):
+    lsb, rsb = _qsb_low(p)
+    return G(_comma(p, 0, 0), l=lsb, r=rsb)
+
+
+@glyph("quotedblright", 0x201D)
+def quotedblright(p):
+    lsb, rsb = _qsb(p)
+    sh = _quote(p, 0) + _quote(p, _quote_pitch(p))
+    return G(_lr(sh), l=lsb, r=rsb)
+
+
+@glyph("quotedblleft", 0x201C)
+def quotedblleft(p):
+    lsb, rsb = _qsb(p)
+    sh = _quote(p, 0) + _quote(p, _quote_pitch(p))
+    b = sh.bounds()
+    return G(_lr(sh.rotate180((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)), l=lsb, r=rsb)
+
+
+@glyph("quotedblbase", 0x201E)
+def quotedblbase(p):
+    lsb, rsb = _qsb_low(p)
+    sh = _comma(p, 0, 0) + _comma(p, _quote_pitch(p), 0)
+    return G(_lr(sh), l=lsb, r=rsb)
+
+
+def _tick(p, x0):
+    """A straight quote: a slightly tapered vertical tick from cap height
+    down to the curly quote's bottom, so ' and ’ are the same height and
+    grow alike with weight (as in Inter)."""
+    w = p.stem * 1.0
+    h = p.dot + _comma_tail(p)
+    wb = w * 0.78
+    cx = x0 + w / 2
+    sh = poly(
+        [
+            (cx - wb / 2, P.CAP - h),
+            (cx + wb / 2, P.CAP - h),
+            (cx + w / 2, P.CAP),
+            (cx - w / 2, P.CAP),
+        ]
+    )
+    return sh
+
+
+@glyph("quotesingle", 0x0027)
+def quotesingle(p):
+    return G(_tick(p, 0), l=p.sb * 1.25, r=p.sb * 1.25)
+
+
+@glyph("quotedbl", 0x0022)
+def quotedbl(p):
+    # The gap grows more slowly than the ticks (about 64 / 71 / 99 at the
+    # top at 300 / 400 / 800), so the pair stays one mark at heavy weights.
+    pitch = p.stem * 1.4 + 38
+    return G(_lr(_tick(p, 0) + _tick(p, pitch)), l=p.sb * 1.25, r=p.sb * 1.25)
+
+
+# ---------------------------------------------------------------------------
+# Guillemets
+
+
+def _guil_dims(p):
+    h = P.XH * 0.6
+    dx = h * 0.42
+    w = p.stem * 0.92
+    flat = p.cut * 0.5
+    return h, dx, w, flat
+
+
+def _guil(p, yc, double=False):
+    h, dx, w, flat = _guil_dims(p)
+    shape = _chevron(0, yc, h, dx, w, flat)
+    if double:
+        # The white between the chevrons, measured square to the strokes:
+        # about 55 / 52 / 40 at 300 / 400 / 800, so heavy « keeps a clear
+        # gap (horizontally about 0.3 of the stroke at ExtraBold, as in
+        # Inter) instead of closing to a hairline.
+        hh = h / 2
+        slant = math.hypot(dx, hh) / hh
+        pitch = (w + 52 - 0.15 * p.grow) * slant
+        shape = shape + shape.move(pitch, 0)
+    return shape
+
+
+def _guil_sb(p):
+    return p.sb * 0.75, p.sb * 0.6
+
+
+for _sfx, _yc, _codes in (
+    ("", P.AXIS, (0x2039, 0x203A, 0x00AB, 0x00BB)),
+    (".case", P.CASE_AXIS, ()),
+):
+    _pair(
+        "guilsinglleft" + _sfx,
+        "guilsinglright" + _sfx,
+        _codes[:2],
+        lambda p, yc=_yc: _guil(p, yc),
+        _guil_sb,
+    )
+    _pair(
+        "guillemotleft" + _sfx,
+        "guillemotright" + _sfx,
+        _codes[2:],
+        lambda p, yc=_yc: _guil(p, yc, True),
+        _guil_sb,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dashes
+
+
+def _dash(p, length, yc, sb):
+    t = p.hair * 1.12  # about 63 / 81 / 126 at 300 / 400 / 800, as in Inter
+    return G(rect(0, yc - t / 2, length, yc + t / 2), l=sb, r=sb)
+
+
+@glyph("hyphen", 0x002D, 0x00AD)
+def hyphen(p):
+    return _dash(p, p.w(280, 0.5), P.AXIS, p.sb * 0.82)
+
+
+@glyph("endash", 0x2013)
+def endash(p):
+    return _dash(p, p.w(440, 0.2), P.AXIS, 30)
+
+
+@glyph("emdash", 0x2014)
+def emdash(p):
+    return _dash(p, 940, P.AXIS, 30)
+
+
+@glyph("hyphen.case")
+def hyphen_case(p):
+    return _dash(p, p.w(280, 0.5), P.CASE_AXIS, p.sb * 0.82)
+
+
+@glyph("endash.case")
+def endash_case(p):
+    return _dash(p, p.w(440, 0.2), P.CASE_AXIS, 30)
+
+
+@glyph("emdash.case")
+def emdash_case(p):
+    return _dash(p, 940, P.CASE_AXIS, 30)
+
+
+@glyph("underscore", 0x005F)
+def underscore(p):
+    t = p.hair * 1.05
+    w = p.w(500, 0.3)
+    return G(rect(0, -60 - t, w, -60), width=w)
+
+
+# ---------------------------------------------------------------------------
+# Brackets
+
+BR_LO, BR_HI = -140, 800  # vertical span of brackets, parens and braces
+CASE_SHIFT = 40
+
+
+def _paren(p, dy=0):
+    ws = p.stem * 0.95
+    wt = p.hair * 1.02
+    rx = p.w(250, 0.5)
+    y0, y1 = BR_LO + dy, BR_HI + dy
+    n, n_in = p.sq, p.sq_in
+    sh = ring(0, y0, 2 * rx, y1, ws, wt, n=n, n_in=n_in)
+    xc = rx * 0.78
+    return sh & left_of(xc)
+
+
+def _inner_sb(p):
+    """Inner sidebearing of ( ) [ ] { }: a full round sidebearing that stops
+    shrinking above Regular (about 73 at ExtraBold), so (on), (A and [j
+    don't clamp at heavy weights."""
+    return p.sbr + 0.4 * max(0.0, p.grow)
+
+
+def _paren_sb(p):
+    """(outer, inner)."""
+    return p.sbr * 1.35, _inner_sb(p)
+
+
+_pair("parenleft", "parenright", (0x0028, 0x0029), _paren, _paren_sb)
+_pair(
+    "parenleft.case", "parenright.case", (), lambda p: _paren(p, CASE_SHIFT), _paren_sb
+)
+
+
+def _bracket(p, dy=0):
+    ws = p.stem * 0.95
+    wt = p.hair * 1.0
+    arm = p.w(200, 0.5)
+    y0, y1 = BR_LO + dy, BR_HI + dy
+    return (
+        rect(0, y0, ws, y1)
+        + rect(ws - 1, y1 - wt, arm, y1)
+        + rect(ws - 1, y0, arm, y0 + wt)
+    )
+
+
+def _bracket_sb(p):
+    return p.sb * 1.35, _inner_sb(p)
+
+
+_pair("bracketleft", "bracketright", (0x005B, 0x005D), _bracket, _bracket_sb)
+_pair(
+    "bracketleft.case",
+    "bracketright.case",
+    (),
+    lambda p: _bracket(p, CASE_SHIFT),
+    _bracket_sb,
+)
+
+
+def _brace(p, dy=0):
+    """{ with rounded corners and a sharp point in the middle."""
+    tv = p.stem * 0.92  # vertical strokes
+    th = p.hair * 0.98  # arms
+    d2 = tv * 0.95  # perpendicular thickness of the point's diagonals
+    y0, y1 = BR_LO + dy, BR_HI + dy
+    ym = (y0 + y1) / 2
+    xs = 78 + 0.25 * p.grow  # stem's outer edge (the point is at x = 0)
+    j = 120 + 0.2 * p.grow  # half height of the point
+    xe = xs + tv + p.w(78, 0.3)  # arm end
+    r = tv * 1.3 + 12  # outer corner radius
+    L = math.hypot(xs, j)
+    xi = d2 * L / j  # inner vertex of the point
+    jj = (xs + tv - xi) * j / xs
+    xin = xs + tv
+    stem = poly(
+        [
+            (xs, y1 - r),
+            (xs, ym + j),
+            (0, ym),
+            (xs, ym - j),
+            (xs, y0 + r),
+            (xin, y0 + r),
+            (xin, ym - jj),
+            (xi, ym),
+            (xin, ym + jj),
+            (xin, y1 - r),
+        ]
+    )
+    # Corner quadrants of a squircle ring, meeting the stem and the arms
+    # exactly where their tangents run straight.
+    top = ring(xs, y1 - 2 * r, xs + 2 * r, y1, tv, th, p.sq, p.sq_in)
+    bot = ring(xs, y0, xs + 2 * r, y0 + 2 * r, tv, th, p.sq, p.sq_in)
+    corners = ((top & above(y1 - r)) + (bot & below(y0 + r))) & left_of(xs + r)
+    arms = rect(xs + r, y1 - th, xe, y1) + rect(xs + r, y0, xe, y0 + th)
+    return stem + corners + arms
+
+
+def _brace_sb(p):
+    return p.sb * 0.9, _inner_sb(p)
+
+
+_pair("braceleft", "braceright", (0x007B, 0x007D), _brace, _brace_sb)
+_pair(
+    "braceleft.case", "braceright.case", (), lambda p: _brace(p, CASE_SHIFT), _brace_sb
+)
+
+
+# ---------------------------------------------------------------------------
+# Slashes and bars
+
+SL_LO, SL_HI = -140, P.ASC
+
+
+def _slash(p):
+    """/ with its advance set (about p.w(380, 0.5)) and its stroke grown
+    inward: heavier slashes get steeper, not much wider."""
+    sb = p.sb * 0.3
+    ink = p.w(380, 0.5) - 2 * sb  # outer left to outer right
+    w = p.stem * 0.95
+    hw = w  # horizontal width of the stroke
+    for _ in range(20):
+        hw = hwidth(w, ink - hw, SL_HI - SL_LO)
+    return diag(hw / 2, SL_LO, ink - hw / 2, SL_HI, w), sb
+
+
+@glyph("slash", 0x002F)
+def slash(p):
+    sh, sb = _slash(p)
+    return G(sh, l=sb, r=sb)
+
+
+@glyph("backslash", 0x005C)
+def backslash(p):
+    sh, sb = _slash(p)
+    return G(sh.flip_x(0), l=sb, r=sb)
+
+
+@glyph("bar", 0x007C)
+def bar(p):
+    w = p.stem * 0.92
+    return G(rect(0, BR_LO, w, BR_HI), l=p.sb * 1.5, r=p.sb * 1.5)
+
+
+@glyph("brokenbar", 0x00A6)
+def brokenbar(p):
+    w = p.stem * 0.92
+    gap = 90 + 0.3 * p.grow
+    mid = (BR_LO + BR_HI) / 2
+    sh = rect(0, mid + gap / 2, w, BR_HI) + rect(0, BR_LO, w, mid - gap / 2)
+    return G(sh, l=p.sb * 1.5, r=p.sb * 1.5)
+
+
+# ---------------------------------------------------------------------------
+# Daggers, asterisk, bullets
+
+
+ASTERISK_R = 186  # outer radius of the asterisk
+
+
+@glyph("asterisk", 0x002A)
+def asterisk(p):
+    """Six square-ended spokes hanging from the cap height. The outer
+    radius (to the spoke ends' corners) stays fixed and the spokes thicken
+    inward, a little more slowly than the text above Regular so the white
+    between them stays open."""
+    t = _damp(p.hair * 0.98, P.params(400).hair * 0.98, 0.75)
+    r = math.sqrt(ASTERISK_R**2 - (t / 2) ** 2)  # spoke half-length
+    cy = P.CAP - r
+    sh = Shape()
+    for a in (90, 30, 150):
+        ra = math.radians(a)
+        dx, dy = r * math.cos(ra), r * math.sin(ra)
+        sh = sh + stroke((-dx, cy - dy), (dx, cy + dy), t)
+    # Its ink no longer widens with weight, so its spacing doesn't shrink
+    # above Regular either (as in Inter).
+    sb = p.sb * 0.75 + 0.25 * max(0.0, p.grow)
+    return G(sh, l=sb, r=sb)
+
+
+def _dagger(p, double=False):
+    w = p.stem * 0.9
+    t = p.hair * 0.95
+    half = p.w(165, 0.4)
+    y0, y1 = -120, P.CAP
+    sh = rect(-w / 2, y0, w / 2, y1)
+    yb = y1 - 220
+    sh = sh + rect(-half, yb - t / 2, half, yb + t / 2)
+    if double:
+        yb2 = y0 + 220
+        sh = sh + rect(-half, yb2 - t / 2, half, yb2 + t / 2)
+    return sh
+
+
+@glyph("dagger", 0x2020)
+def dagger(p):
+    return G(_dagger(p), l=p.sb * 0.8, r=p.sb * 0.8)
+
+
+@glyph("daggerdbl", 0x2021)
+def daggerdbl(p):
+    return G(_dagger(p, True), l=p.sb * 0.8, r=p.sb * 0.8)
+
+
+def _bullet(p, yc):
+    side = p.dot * 1.3 + 66  # the period's dot, scaled up
+    return dot(0, yc, side)
+
+
+@glyph("bullet", 0x2022)
+def bullet(p):
+    return G(_bullet(p, P.AXIS), l=p.sb * 1.2, r=p.sb * 1.2)
+
+
+@glyph("bullet.case")
+def bullet_case(p):
+    return G(_bullet(p, P.CASE_AXIS), l=p.sb * 1.2, r=p.sb * 1.2)
+
+
+# ---------------------------------------------------------------------------
+# @ & § ¶
+
+
+@glyph("at", 0x0040)
+def at(p):
+    """@ : a single-storey a inside a squircle ring. The ring's right side
+    runs straight down and hooks into the foot of the a's stem; below the
+    hook the ring is open. The ring's terminal ends travelling sideways, so
+    it is cut vertically."""
+    W = p.w(840, 1.5)
+    y0, y1 = -150, 730
+    cy = (y0 + y1) / 2
+    n, n_in = p.sq, p.sq_in
+    reg = P.params(400)
+    # The ring's horizontals and the inner a grow more slowly than the text
+    # above Regular, so the a's counter and the channel round it stay open
+    # at ExtraBold (as in Inter, whose inner a is lighter than its n).
+    ws, wt = p.stem * 0.98, _damp(p.hair * 0.98, reg.hair * 0.98, 0.8)  # ring
+    st = _damp(p.stem, reg.stem, 0.6)  # the a's stem
+    hair_a = _damp(p.hair, reg.hair, 0.6)  # the a's top and bottom
+    hook_w = p.w(250, 0.3)  # from the stem's right edge to the ring's outer right
+    xr = W - hook_w
+    xs = xr - st
+    ha = 480 - 0.1 * p.grow
+    oy0, oy1 = cy - ha / 2 - P.OS, cy + ha / 2 + P.OS  # the a, with overshoots
+    xa0 = xr - p.w(372, 0.9)
+    # Ring, open at the lower right.
+    x_cut = W * 0.73
+    ringsh = ring(0, y0, W, y1, ws, wt, n=n, n_in=n_in) - (right_of(x_cut) & below(cy))
+    # The right side continues straight down, then hooks into the stem's foot.
+    yh = oy0 + hook_w * 0.62
+    side = rect(W - ws, yh, W, cy)
+    hook = _ring_part(
+        2 * xr - W,
+        oy0,
+        W,
+        2 * yh - oy0,
+        2 * xr - (W - ws),
+        oy0 + wt,
+        W - ws,
+        2 * yh - oy0 - wt,
+        n,
+        n_in,
+        below(yh) & right_of(xr - 1),
+    )
+    # The a: bowl and stem. The counter runs a fixed fraction of its radius
+    # past the stem's edge, so it meets the stem at the same angle at every
+    # weight.
+    wsb = _damp(p.stem * 1.03, reg.stem * 1.03, 0.6)
+    xi0 = xa0 + wsb
+    k = 0.42
+    ix1 = (xs - k * xi0 / 2) / (1 - k / 2)
+    iy0, iy1 = oy0 + hair_a, oy1 - hair_a
+    bowl = _ring_part(
+        xa0, oy0, ix1 + wsb, oy1, xi0, iy0, ix1, iy1, n, n_in, left_of(xs + 1)
+    )
+    stem = rect(xs, oy0, xr, oy1)
+    # The bowl's crown and foot run flat into the stem's ends (no notch).
+    box = (xa0, oy0, ix1 + wsb, oy1)
+    cxb, rxb, ryb = (xa0 + ix1 + wsb) / 2, (ix1 + wsb - xa0) / 2, (oy1 - oy0) / 2
+    dy = ryb * (1 - min(1.0, abs(xs - cxb) / rxb) ** n) ** (1 / n)
+    cyb = (oy0 + oy1) / 2
+    fill = flush_end(xs, oy1, cyb + dy, box, n, side="left") + flush_end(
+        xs, oy0, cyb - dy, box, n, side="left"
+    )
+    sh = ringsh + side + hook + bowl + stem + fill
+    return G(sh, l=p.sbr, r=p.sbr)
+
+
+def _tangent_point(x0, y0, x1, y1, n, slope):
+    """Point on the lower-left quadrant of the superellipse filling the box
+    where its tangent has the given (negative) slope."""
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
+    a = 2 / n
+    tan_t = (abs(slope) * rx / ry) ** (1 / (a - 2))
+    t = math.atan(tan_t)
+    return cx - rx * math.cos(t) ** a, cy - ry * math.sin(t) ** a
+
+
+# Tuned so the leg, loop and tail meet the same way at every weight: the
+# leg's foot drifts left as weight grows to keep the tail's counter open.
+# At ExtraBold (verticals damped by `damp`) the lower counter is about 128
+# and the loop's about 123 wide, as in Inter.
+AMP = {
+    "lx": 500,
+    "lxk": 1.5,
+    "uw": 272,
+    "uwk": 1.75,
+    "m": -1.3,
+    "foot": 60,
+    "footk": -0.7,
+    "ytail": 0.44,
+    "damp": 0.85,
+}
+
+
+@glyph("ampersand", 0x0026)
+def ampersand(p):
+    """& : a closed squircle loop sitting on a larger bowl that opens at the
+    upper right into the tail; a straight leg leaves the loop tangentially
+    on the left and runs through the bowl to the baseline."""
+    a = AMP
+    # Verticals and the leg grow a little more slowly than the capitals
+    # above Regular so both counters stay open at ExtraBold.
+    reg = P.params(400)
+    ws, wt = _damp(p.cstem * 0.95, reg.cstem * 0.95, a["damp"]), p.chair * 0.95
+    n, n_in = p.sq * 0.92, p.sq_in * 0.95
+    top = P.CAP + P.COS
+    # Lower bowl.
+    lx1 = p.w(a["lx"], a["lxk"])
+    ly1 = P.CAP * 0.6
+    lower = ring(0, -P.COS, lx1, ly1, ws, wt, n=n, n_in=n_in)
+    # Upper loop, its bottom on the bowl's top; placed so the leg's foot
+    # lands `foot` past the bowl.
+    uw = p.w(a["uw"], a["uwk"])
+    uy0 = ly1 - wt
+    m = a["m"]
+    dw = ws
+    hw = dw * math.hypot(1, m) / abs(m)
+    tx0, ty = _tangent_point(0, uy0, uw, top, n, m)
+    # The leg's foot sits on the bowl's overshoot line, so the bowl always
+    # meets the leg's side in a crotch rather than crossing its flat foot.
+    yf = -P.COS
+    foot = lx1 + a["foot"] + a["footk"] * p.grow
+    ux0 = foot - (tx0 + (ty - yf) / abs(m) + hw)
+    tx = ux0 + tx0
+    lws = ws * 0.92
+    upper = ring(ux0, uy0, ux0 + uw, top, lws, wt, n=n, n_in=n_in)
+    counter = squircle(ux0 + lws, uy0 + wt, ux0 + uw - lws, top - wt, n_in)
+    leg = poly([(foot - hw, yf), (foot, yf), (tx + hw, ty), (tx, ty)]) - counter
+    # Open the bowl at the upper right; its top stroke ends inside the leg.
+    # Above its widest point the right side rises straight as the tail, so
+    # the counter between leg and tail stays open at every weight.
+    lcy = (ly1 - P.COS) / 2
+    y_open = ly1 - wt / 2
+    x_open = tx + hw / 2 + (ty - y_open) / abs(m)
+    lower = lower - (right_of(x_open) & above(lcy))
+    tail = rect(lx1 - ws, lcy, lx1, P.CAP * a["ytail"])
+    lower = lower + tail
+    # The bowl's bottom curves up into the leg a little above the leg's flat
+    # foot, which leaves a V-notch at the baseline. Fill it: from the bowl's
+    # lowest point along the foot line to the leg, then up the leg's side to
+    # where the curve meets it (the curve is convex, so the triangle's top
+    # edge stays inside the ink).
+    cxb, rxb, ryb = lx1 / 2, lx1 / 2, (ly1 + P.COS) / 2
+    cyb = (ly1 - P.COS) / 2
+
+    def leg_x(y):
+        # The leg's left edge, from its foot up to the loop.
+        return foot - hw + (tx - (foot - hw)) * (y - yf) / (ty - yf)
+
+    def gap(y):
+        t = min(1.0, abs(leg_x(y) - cxb) / rxb)
+        return y - (cyb - ryb * (1 - t**n) ** (1 / n))
+
+    lo_y, hi_y = yf, ly1 / 2
+    for _ in range(60):
+        mid = (lo_y + hi_y) / 2
+        lo_y, hi_y = (lo_y, mid) if gap(mid) > 0 else (mid, hi_y)
+    y_meet = hi_y + 2
+    fill = poly([(cxb, yf), (foot - hw, yf), (leg_x(y_meet), y_meet)])
+    return G(lower + upper + leg + fill, l=p.sbr * 0.9, r=p.sbr * 0.3)
+
+
+@glyph("section", 0x00A7)
+def section(p):
+    """§ : two squircle S shapes sharing their middle bowl, so it reads as
+    three stacked bowls: the top one open at the lower right below its
+    terminal, the middle one closed, the bottom one the top turned round."""
+    W = p.w(440, 1.0)
+    ws, wt = p.stem * 1.02, _damp(p.hair, P.params(400).hair, 0.8)
+    n, n_in = p.sq, p.sq_in
+    top = P.CAP + P.COS
+    bot = -130
+    mid = (top + bot) / 2
+    h = (top - bot + 2 * wt) / 3  # each bowl; neighbours share a stroke
+    m0, m1 = mid - h / 2, mid + h / 2
+    middle = ring(0, m0, W, m1, ws, wt, n=n, n_in=n_in)
+    # The top bowl's bottom stroke is the middle bowl's top stroke, drawn
+    # 2 units thinner inside it: edges that coincide exactly leave
+    # zero-length segments where the two squircles part.
+    e = 2.0
+    tb = m1 - wt + e
+    upper = ring(0, tb, W, top, ws, wt, n=n, n_in=n_in, wy_bottom=wt - 2 * e)
+    # The terminal is cut a fixed way up the counter's right side (not the
+    # outer box's), so it crosses that side where it runs steeply down at
+    # every weight; at ExtraBold, where the counter is short, a cut placed by
+    # the outer box landed just under the counter's top and left a ledge.
+    i0, i1 = tb + wt - 2 * e, top - wt
+    y_cut = (i0 + i1) / 2 + 0.55 * (i1 - i0) / 2
+    upper = upper - (right_of(W / 2) & below(y_cut))
+    return G(middle + upper + upper.rotate180(W / 2, mid), l=p.sbr, r=p.sbr)
+
+
+@glyph("paragraph", 0x00B6)
+def paragraph(p):
+    """¶ : a filled squircle bowl on the left stem, a top bar and a second
+    stem, standing on the baseline as in Inter. The solid bowl already
+    carries the colour, so above Regular it narrows a little and the stems
+    grow more slowly than the text; otherwise its two stems and bowl made
+    it a third wider at ExtraBold (Inter's ¶ keeps its width)."""
+    st = _damp(p.stem * 0.9, P.params(400).stem * 0.9, 0.75)
+    th = p.hair
+    xl = p.w(250, -0.2)  # bowl width = left edge of the inner stem
+    xr = xl + 2 * st + p.w(70, 0.15)
+    yb = P.CAP * 0.38
+    bowl = squircle(0, yb, 2 * xl, P.CAP, p.sq) & left_of(xl + 1)
+    sh = (
+        bowl
+        + rect(xl, 0, xl + st, P.CAP)
+        + rect(xr - st, 0, xr, P.CAP)
+        + rect(xl, P.CAP - th, xr, P.CAP)
+    )
+    return G(sh, l=p.sbr * 0.9, r=p.sb * 1.0)
+
+
+# ---------------------------------------------------------------------------
+# © ® ™
+
+
+def _ring_mark(p, x0, y0, size, damp=1.0):
+    t = _damp(p.hair * 0.92, P.params(400).hair * 0.92, damp)
+    return ring(x0, y0, x0 + size, y0 + size, t, t, n=p.sq * 0.92, n_in=p.sq_in * 0.95)
+
+
+@glyph("copyright", 0x00A9)
+def copyright(p):
+    size = P.CAP + 2 * P.COS
+    y0 = -P.COS
+    sh = _ring_mark(p, 0, y0, size)
+    ch = size * 0.46
+    cw = ch * 0.86 + 0.3 * max(0.0, p.grow)
+    cx0 = size / 2 - cw / 2 + cw * 0.04
+    cy0 = y0 + size / 2 - ch / 2
+    # The c's strokes grow more slowly than the text above Regular, like
+    # the R of (R); at full weight its counter closed to a slit at 800.
+    reg = P.params(400)
+    cs = _damp(p.stem * 0.92, reg.stem * 0.92, 0.5)
+    chr_ = _damp(p.hair * 0.92, reg.hair * 0.92, 0.5)
+    c = open_bowl(
+        p,
+        cx0,
+        cx0 + cw,
+        cy0,
+        cy0 + ch,
+        cs,
+        chr_,
+        chr_,
+        cut_top=cy0 + ch * 0.66,
+        cut_bottom=cy0 + ch * 0.34,
+    )
+    return G(sh + c, l=p.csbr * 0.9, r=p.csbr * 0.9)
+
+
+def _small_r(p, x0, y0, h, w, st, th):
+    """A small R: stem, squircle bowl, straight leg from the bowl."""
+    n, n_in = p.sq * 0.92, p.sq_in * 0.95
+    x1 = x0 + w
+    yt = y0 + h
+    yb = y0 + h * 0.4  # bowl bottom
+    xc = x0 + st
+    wr = st * 1.04  # bowl's right side
+    stem = rect(x0, y0, xc, yt)
+    bowl = _ring_part(
+        2 * xc - x1,
+        yb,
+        x1,
+        yt,
+        2 * xc - (x1 - wr),
+        yb + th,
+        x1 - wr,
+        yt - th,
+        n,
+        n_in,
+        right_of(xc - 1),
+    )
+    dw = st * 0.98
+    leg_x = xc + (x1 - xc) * 0.12
+    ytop = yb + th * 0.5
+    hw = dw
+    for _ in range(20):  # horizontal width for perpendicular thickness dw
+        hw = hwidth(dw, (x1 - hw) - leg_x, ytop - y0)
+    leg = poly([(x1 - hw, y0), (x1, y0), (leg_x + hw, ytop), (leg_x, ytop)])
+    return stem + bowl + leg
+
+
+@glyph("registered", 0x00AE)
+def registered(p):
+    size = (P.CAP + 2 * P.COS) * 0.8
+    y0 = P.CAP + P.COS - size
+    sh = _ring_mark(p, 0, y0, size, damp=0.7)
+    reg = P.params(400)
+    st = _damp(p.stem * 0.75, reg.stem * 0.75, 0.5)
+    th = _damp(p.hair * 0.7, reg.hair * 0.7, 0.3)
+    rh = size * 0.5
+    rw = p.w(rh * 0.7, 0.6)
+    rx0 = size / 2 - rw / 2 + rw * 0.04
+    ry0 = y0 + size / 2 - rh / 2
+    return G(sh + _small_r(p, rx0, ry0, rh, rw, st, th), l=p.csbr * 0.6, r=p.csbr * 0.6)
+
+
+def _small_m(p, x0, y0, h, w, st):
+    """A small M built like the capital: square-topped vertical sides,
+    diagonals that start inside the side tops and meet at a flat vertex on
+    the baseline."""
+    td = st * 0.94  # diagonals (M: 0.86 / 0.92 of its sides)
+    fv = st * 0.87  # flat vertex on the baseline
+    e = st * 0.3  # diagonals start inside the side tops
+    top = y0 + h
+    cx = x0 + w / 2
+    # Left diagonal by its left edge, from (cx - fv/2, y0) up to (x0 + e, top);
+    # hw is its horizontal width. The right half mirrors it about cx.
+    xb, xt = cx - fv / 2, x0 + e
+    hw = td * math.hypot(xt - xb, h) / h
+    yl = y0 + (x0 + st - xb) * h / (xt - xb)  # where it meets the side's inner edge
+    yv = y0 + (fv / 2 - hw) * h / (xt - xb)  # inner vertex, on the centre line
+    left = [(x0, y0), (x0 + st, y0), (x0 + st, yl), (xb, y0)]
+    right = [(2 * cx - x, y) for x, y in reversed(left)]
+    sh = poly(
+        left
+        + right
+        + [(x0 + w, top), (2 * cx - xt - hw, top), (cx, yv), (xt + hw, top), (x0, top)]
+    )
+    return sh
+
+
+@glyph("trademark", 0x2122)
+def trademark(p):
+    """™ : superior T and M hanging from the cap height, drawn like the
+    capitals (square tops, the M's vertex on its baseline) with strokes that
+    grow more slowly than the text above Regular."""
+    reg = P.params(400)
+    st = _damp(p.stem * 0.66, reg.stem * 0.66, 0.6)
+    th = _damp(p.hair * 0.7, reg.hair * 0.7, 0.6)
+    h = P.CAP * 0.37
+    top = P.CAP
+    y0 = top - h
+    tw = h * 0.84 + 0.2 * p.grow
+    T = rect(0, top - th, tw, top) + rect(
+        tw / 2 - st / 2, y0, tw / 2 + st / 2, top - th / 2
+    )
+    mx0 = tw + 46 + 0.15 * p.grow
+    M = _small_m(p, mx0, y0, h, h * 1.08 + 0.6 * p.grow, st)
+    return G(T + M, l=p.csb * 0.55, r=p.csb * 0.55)
+
+
+# ---------------------------------------------------------------------------
+# Arrows
+
+ARROW_LEN = 660
+
+
+def _arrow_sb(p):
+    return p.sb * 1.0
+
+
+# Horizontal arrows sit on the math axis; their .case forms (A→B, with
+# capitals and figures) on the case axis, like hyphen.case.
+for _sfx, _yc in (("", P.AXIS), (".case", P.CASE_AXIS)):
+
+    @glyph("arrowright" + _sfx, *((0x2192,) if not _sfx else ()))
+    def arrowright(p, yc=_yc):
+        sh = _arrow(p, p.w(ARROW_LEN, 0.5)).move(0, yc)
+        return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+
+    @glyph("arrowleft" + _sfx, *((0x2190,) if not _sfx else ()))
+    def arrowleft(p, yc=_yc):
+        sh = _arrow(p, p.w(ARROW_LEN, 0.5)).flip_x(0).move(0, yc)
+        return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+
+    @glyph("arrowboth" + _sfx, *((0x2194,) if not _sfx else ()))
+    def arrowboth(p, yc=_yc):
+        sh = _arrow(p, p.w(ARROW_LEN + 160, 0.5), heads=(True, True)).move(0, yc)
+        return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+
+
+@glyph("arrowup", 0x2191)
+def arrowup(p):
+    sh = _arrow(p, P.CAP).rotate(90)
+    return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+
+
+@glyph("arrowdown", 0x2193)
+def arrowdown(p):
+    sh = _arrow(p, P.CAP).rotate(-90).move(0, P.CAP)
+    return G(sh, l=_arrow_sb(p), r=_arrow_sb(p))
+
+
+def _diag_arrow(p, deg, cy=P.CAP / 2 - 30):
+    side = 560 + 0.3 * p.grow
+    t = p.hair * 1.1
+    length = (side - t * 0.36) * SQ2
+    sh = _arrow(p, length).rotate(deg)
+    b = sh.bounds()
+    return sh.move(0, cy - (b[1] + b[3]) / 2)
+
+
+for _sfx, _cy in (("", P.CAP / 2 - 30), (".case", P.CAP / 2)):
+
+    @glyph("uni2197" + _sfx, *((0x2197,) if not _sfx else ()))
+    def arrow_ne(p, cy=_cy):
+        return G(_diag_arrow(p, 45, cy), l=_arrow_sb(p), r=_arrow_sb(p))
+
+    @glyph("uni2198" + _sfx, *((0x2198,) if not _sfx else ()))
+    def arrow_se(p, cy=_cy):
+        return G(_diag_arrow(p, -45, cy), l=_arrow_sb(p), r=_arrow_sb(p))
+
+
+__all__ = ["PROOF_TEXT"]

@@ -1,0 +1,312 @@
+"""Shape primitives and boolean helpers for drawing glyphs.
+
+Glyphs are built by constructive geometry: draw simple filled shapes, then
+combine them with `+` (union), `-` (difference) and `&` (intersection). The
+booleans run through skia-pathops, so the result is always a clean outline
+without overlaps. Coordinates are font units, y up.
+
+Keep a glyph's construction the same at every weight (the same shapes meeting
+the same way) so the outlines stay point-compatible for the variable font.
+"""
+
+import math
+
+import pathops
+
+BIG = 4000  # half-size of the "everything" region used by half-planes
+
+
+class Shape:
+    """An immutable filled outline."""
+
+    __slots__ = ("path",)
+
+    def __init__(self, path=None):
+        self.path = path if path is not None else pathops.Path()
+
+    # Booleans -----------------------------------------------------------
+
+    def __add__(self, other):
+        return Shape(pathops.op(self.path, other.path, pathops.PathOp.UNION))
+
+    def __sub__(self, other):
+        return Shape(pathops.op(self.path, other.path, pathops.PathOp.DIFFERENCE))
+
+    def __and__(self, other):
+        return Shape(pathops.op(self.path, other.path, pathops.PathOp.INTERSECTION))
+
+    def __bool__(self):
+        return len(list(self.path.segments)) > 0
+
+    # Transforms ---------------------------------------------------------
+
+    def transform(self, xx, xy, yx, yy, dx, dy):
+        """Affine transform: x' = xx*x + yx*y + dx, y' = xy*x + yy*y + dy.
+        A mirror (negative determinant) reverses the contours back, so every
+        shape keeps pathops' counter-clockwise direction."""
+        p = pathops.Path()
+        self.path.draw(_TransformPen(p.getPen(), (xx, xy, yx, yy, dx, dy)))
+        if xx * yy - xy * yx < 0:
+            p.reverse()
+        return Shape(p)
+
+    def move(self, dx=0.0, dy=0.0):
+        return self.transform(1, 0, 0, 1, dx, dy)
+
+    def flip_x(self, cx=0.0):
+        """Mirror left-right about the vertical line x = cx."""
+        return self.transform(-1, 0, 0, 1, 2 * cx, 0)
+
+    def flip_y(self, cy=0.0):
+        """Mirror top-bottom about the horizontal line y = cy."""
+        return self.transform(1, 0, 0, -1, 0, 2 * cy)
+
+    def rotate180(self, cx, cy):
+        """Rotate half a turn about (cx, cy), e.g. n -> u, b -> q."""
+        return self.transform(-1, 0, 0, -1, 2 * cx, 2 * cy)
+
+    def scale(self, sx, sy=None, cx=0.0, cy=0.0):
+        sy = sx if sy is None else sy
+        return self.transform(sx, 0, 0, sy, cx - sx * cx, cy - sy * cy)
+
+    def rotate(self, degrees, cx=0.0, cy=0.0):
+        a = math.radians(degrees)
+        c, s = math.cos(a), math.sin(a)
+        return self.transform(c, s, -s, c, cx - c * cx + s * cy, cy - s * cx - c * cy)
+
+    def skew(self, degrees, cy=0.0):
+        """Horizontal skew (positive leans right), e.g. for an oblique."""
+        t = math.tan(math.radians(degrees))
+        return self.transform(1, 0, t, 1, -t * cy, 0)
+
+    # Queries ------------------------------------------------------------
+
+    def bounds(self):
+        """(xMin, yMin, xMax, yMax) of the outline, or None when empty."""
+        if not self:
+            return None
+        return tuple(self.path.bounds)
+
+    def clean(self):
+        p = pathops.Path(self.path)
+        p.simplify(fix_winding=True, keep_starting_points=False)
+        return Shape(p)
+
+
+class _TransformPen:
+    def __init__(self, pen, m):
+        self.pen, self.m = pen, m
+
+    def _t(self, pt):
+        xx, xy, yx, yy, dx, dy = self.m
+        x, y = pt
+        return (xx * x + yx * y + dx, xy * x + yy * y + dy)
+
+    def moveTo(self, pt):
+        self.pen.moveTo(self._t(pt))
+
+    def lineTo(self, pt):
+        self.pen.lineTo(self._t(pt))
+
+    def curveTo(self, *pts):
+        self.pen.curveTo(*[self._t(p) for p in pts])
+
+    def qCurveTo(self, *pts):
+        self.pen.qCurveTo(*[self._t(p) if p is not None else None for p in pts])
+
+    def closePath(self):
+        self.pen.closePath()
+
+    def endPath(self):
+        self.pen.endPath()
+
+
+def union(*shapes):
+    """Union of any number of shapes (also accepts one iterable)."""
+    if len(shapes) == 1 and not isinstance(shapes[0], Shape):
+        shapes = tuple(shapes[0])
+    out = Shape()
+    for s in shapes:
+        out = out + s
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Basic shapes
+
+
+def poly(points):
+    """Closed polygon through the points, in either direction."""
+    p = pathops.Path()
+    pen = p.getPen()
+    pen.moveTo(points[0])
+    for pt in points[1:]:
+        pen.lineTo(pt)
+    pen.closePath()
+    # Normalise winding so unions and differences behave.
+    p.simplify(fix_winding=True)
+    return Shape(p)
+
+
+def rect(x0, y0, x1, y1):
+    """Axis-aligned rectangle."""
+    x0, x1 = min(x0, x1), max(x0, x1)
+    y0, y1 = min(y0, y1), max(y0, y1)
+    # Counter-clockwise from the bottom-left corner.
+    return poly([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+
+
+def superness(n):
+    """Cubic handle factor that makes one Bézier per quadrant pass through the
+    45° point of the superellipse |x|^n + |y|^n = 1 (n = 2 gives 0.5523)."""
+    return (8 * 2 ** (-1 / n) - 4) / 3
+
+
+def squircle(x0, y0, x1, y1, n=3.0):
+    """Superellipse filling the box (x0, y0)-(x1, y1). n = 2 is an ellipse;
+    higher n is squarer. Four cubic segments, one per quadrant."""
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rx, ry = abs(x1 - x0) / 2, abs(y1 - y0) / 2
+    k = superness(n)
+    p = pathops.Path()
+    pen = p.getPen()
+    pen.moveTo((cx + rx, cy))
+    pen.curveTo((cx + rx, cy + k * ry), (cx + k * rx, cy + ry), (cx, cy + ry))
+    pen.curveTo((cx - k * rx, cy + ry), (cx - rx, cy + k * ry), (cx - rx, cy))
+    pen.curveTo((cx - rx, cy - k * ry), (cx - k * rx, cy - ry), (cx, cy - ry))
+    pen.curveTo((cx + k * rx, cy - ry), (cx + rx, cy - k * ry), (cx + rx, cy))
+    pen.closePath()
+    p.simplify(fix_winding=True)
+    return Shape(p)
+
+
+def ring(x0, y0, x1, y1, wx, wy, n=3.0, n_in=None, wy_bottom=None):
+    """A closed round stroke (like o or O) filling the box: an outer squircle
+    minus a counter inset by wx on the sides, wy at the top and wy_bottom
+    (default wy) at the bottom."""
+    wyb = wy if wy_bottom is None else wy_bottom
+    outer = squircle(x0, y0, x1, y1, n)
+    inner = squircle(x0 + wx, y0 + wyb, x1 - wx, y1 - wy, n if n_in is None else n_in)
+    return outer - inner
+
+
+def squircle_point(x0, y0, x1, y1, n, deg):
+    """Point on the true superellipse in the box at polar angle `deg` of its
+    parametric form (0 = right, 90 = top). Handy for placing cuts."""
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rx, ry = abs(x1 - x0) / 2, abs(y1 - y0) / 2
+    t = math.radians(deg)
+    c, s = math.cos(t), math.sin(t)
+    x = cx + rx * math.copysign(abs(c) ** (2 / n), c)
+    y = cy + ry * math.copysign(abs(s) ** (2 / n), s)
+    return x, y
+
+
+def box(x0, y0, x1, y1):
+    """Plain rectangle (alias for clipping regions)."""
+    return rect(x0, y0, x1, y1)
+
+
+def half_plane(p0, p1):
+    """Everything to the LEFT of the directed line p0 -> p1.
+
+    Subtract it to cut a stroke along that line, e.g. an angled terminal."""
+    (x0, y0), (x1, y1) = p0, p1
+    dx, dy = x1 - x0, y1 - y0
+    d = math.hypot(dx, dy)
+    ux, uy = dx / d, dy / d
+    nx, ny = -uy, ux  # left normal
+    a = (x0 - ux * BIG, y0 - uy * BIG)
+    b = (x0 + ux * BIG, y0 + uy * BIG)
+    c = (b[0] + nx * BIG, b[1] + ny * BIG)
+    e = (a[0] + nx * BIG, a[1] + ny * BIG)
+    return poly([a, b, c, e])
+
+
+def above(y):
+    return rect(-BIG, y, BIG, BIG)
+
+
+def below(y):
+    return rect(-BIG, -BIG, BIG, y)
+
+
+def left_of(x):
+    return rect(-BIG, -BIG, x, BIG)
+
+
+def right_of(x):
+    return rect(x, -BIG, BIG, BIG)
+
+
+def band(y0, y1):
+    """Horizontal band between y0 and y1, infinitely wide."""
+    return rect(-BIG, y0, BIG, y1)
+
+
+def column(x0, x1):
+    """Vertical band between x0 and x1, infinitely tall."""
+    return rect(x0, -BIG, x1, BIG)
+
+
+# ---------------------------------------------------------------------------
+# Strokes
+
+
+def stroke(p0, p1, w):
+    """A straight stroke of perpendicular thickness w from p0 to p1 with
+    square (butt) ends."""
+    (x0, y0), (x1, y1) = p0, p1
+    d = math.hypot(x1 - x0, y1 - y0)
+    nx, ny = -(y1 - y0) / d * w / 2, (x1 - x0) / d * w / 2
+    return poly(
+        [(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)]
+    )
+
+
+def diag(xb, yb, xt, yt, w):
+    """A diagonal stroke whose centreline runs from (xb, yb) to (xt, yt), with
+    perpendicular thickness w and ends cut horizontally at yb and yt.
+
+    This is how the strokes of v, w, x, A, V and friends are built: their ends
+    sit flat on the baseline and the x-height or cap height."""
+    dx, dy = xt - xb, yt - yb
+    # Horizontal width that gives perpendicular thickness w.
+    hw = w * math.hypot(dx, dy) / abs(dy) / 2
+    return poly([(xb - hw, yb), (xb + hw, yb), (xt + hw, yt), (xt - hw, yt)])
+
+
+def diag_edge(x_left_bottom, yb, x_left_top, yt, w):
+    """Like diag, but positioned by its LEFT edge instead of its centreline."""
+    dx, dy = x_left_top - x_left_bottom, yt - yb
+    hw = w * math.hypot(dx, dy) / abs(dy)
+    return poly(
+        [
+            (x_left_bottom, yb),
+            (x_left_bottom + hw, yb),
+            (x_left_top + hw, yt),
+            (x_left_top, yt),
+        ]
+    )
+
+
+def hwidth(w, dx, dy):
+    """Horizontal width of a stroke of perpendicular thickness w whose
+    direction is (dx, dy)."""
+    return w * math.hypot(dx, dy) / abs(dy)
+
+
+# ---------------------------------------------------------------------------
+# Dots
+
+
+# Dots are a touch squarer than a circle: the one place the squircle shows
+# at its strongest, so they read as the house dot rather than a plain round.
+DOT_N = 2.6
+
+
+def dot(cx, cy, side):
+    """The house dot: a squircle of width and height `side` centred at
+    (cx, cy)."""
+    h = side / 2
+    return squircle(cx - h, cy - h, cx + h, cy + h, DOT_N)
