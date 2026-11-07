@@ -395,11 +395,9 @@ impl Transaction<'_> {
             .text
             .byte_offset(Utf16Offset(point.offset()))?;
         let segment = boundaries.windows(2).enumerate().find(|(_, pair)| {
-            if direction == EditDirection::Backward {
-                pair[0] < offset && offset <= pair[1]
-            } else {
-                pair[0] <= offset && offset < pair[1]
-            }
+            (direction == EditDirection::Backward && pair[1] == offset)
+                || pair[1] > offset
+                || pair[1] == text.len()
         });
         if let Some((index, pair)) = segment {
             let prefix = text
@@ -410,15 +408,12 @@ impl Transaction<'_> {
                 .trim_matches(is_ecma_whitespace)
                 .to_owned();
             if next.is_empty() {
-                self.remove(key, false)?;
+                self.remove(key, true)?;
             } else {
                 let restore = if index + 2 == boundaries.len() {
                     next.encode_utf16().count() as u32
                 } else {
-                    prefix
-                        .trim_start_matches(is_ecma_whitespace)
-                        .encode_utf16()
-                        .count() as u32
+                    prefix.encode_utf16().count() as u32
                 };
                 self.text(key)?.set_text_content(&next)?;
                 let range = self.range_at(slot)?.clone();
