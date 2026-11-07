@@ -6233,14 +6233,164 @@
     {
       "reason": "lone-surrogate",
       "inputUnits": [
-        [
-          55296
-        ],
-        [
-          57343
-        ]
+        55296
       ],
-      "decision": "S3 §2.9 R-5: Rust input receives U+FFFD"
+      "runs": [
+        {
+          "name": "CHECK_LIST",
+          "matches": []
+        },
+        {
+          "name": "CODE_END",
+          "matches": []
+        },
+        {
+          "name": "CODE_SINGLE_LINE",
+          "matches": []
+        },
+        {
+          "name": "CODE_SPAN",
+          "matches": []
+        },
+        {
+          "name": "CODE_START",
+          "matches": []
+        },
+        {
+          "name": "HEADING",
+          "matches": []
+        },
+        {
+          "name": "LINK",
+          "matches": []
+        },
+        {
+          "name": "LINK_IMPORT",
+          "matches": []
+        },
+        {
+          "name": "LIST_ESCAPE",
+          "matches": []
+        },
+        {
+          "name": "ORDERED_LIST",
+          "matches": []
+        },
+        {
+          "name": "QUOTE",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW_DIVIDER",
+          "matches": []
+        },
+        {
+          "name": "TAG_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_END_AT_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_START",
+          "matches": []
+        },
+        {
+          "name": "TAG_START_AT_END",
+          "matches": []
+        },
+        {
+          "name": "UNORDERED_LIST",
+          "matches": []
+        }
+      ],
+      "decision": "S3 §2.9 R-5: raw input cannot cross the Rust UTF-8 boundary; excluded comparison"
+    },
+    {
+      "reason": "lone-surrogate",
+      "inputUnits": [
+        57343
+      ],
+      "runs": [
+        {
+          "name": "CHECK_LIST",
+          "matches": []
+        },
+        {
+          "name": "CODE_END",
+          "matches": []
+        },
+        {
+          "name": "CODE_SINGLE_LINE",
+          "matches": []
+        },
+        {
+          "name": "CODE_SPAN",
+          "matches": []
+        },
+        {
+          "name": "CODE_START",
+          "matches": []
+        },
+        {
+          "name": "HEADING",
+          "matches": []
+        },
+        {
+          "name": "LINK",
+          "matches": []
+        },
+        {
+          "name": "LINK_IMPORT",
+          "matches": []
+        },
+        {
+          "name": "LIST_ESCAPE",
+          "matches": []
+        },
+        {
+          "name": "ORDERED_LIST",
+          "matches": []
+        },
+        {
+          "name": "QUOTE",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW",
+          "matches": []
+        },
+        {
+          "name": "TABLE_ROW_DIVIDER",
+          "matches": []
+        },
+        {
+          "name": "TAG_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_END_AT_END",
+          "matches": []
+        },
+        {
+          "name": "TAG_START",
+          "matches": []
+        },
+        {
+          "name": "TAG_START_AT_END",
+          "matches": []
+        },
+        {
+          "name": "UNORDERED_LIST",
+          "matches": []
+        }
+      ],
+      "decision": "S3 §2.9 R-5: raw input cannot cross the Rust UTF-8 boundary; excluded comparison"
     },
     {
       "reason": "lone-surrogate",

@@ -380,3 +380,51 @@ fn unhandled_multiline_hook_ignores_last_line_and_imports_current_block() -> Res
     assert_eq!(tx.text_content(NodeKey::ROOT), "# literal");
     Ok(())
 }
+#[derive(Debug)]
+struct NoText {
+    regex: RegexMatcher,
+}
+impl TextMatchTransformer for NoText {
+    fn dependencies(&self) -> &[&'static str] {
+        &[]
+    }
+    fn reg_exp(&self) -> &dyn Matcher {
+        &self.regex
+    }
+    fn import_reg_exp(&self) -> Option<&dyn Matcher> {
+        Some(&self.regex)
+    }
+    fn replace(&self, _: &mut Transaction<'_>, _: NodeKey, _: &Match) -> Result<Option<NodeKey>> {
+        Ok(None)
+    }
+}
+/// upstream: undefined replacement text still processes the surrounding split nodes.
+#[test]
+fn no_text_replacement_keeps_surrounding_recursive_formats() -> Result<()> {
+    let t =
+        Transformers::new(
+            text_format_transformers()
+                .into_iter()
+                .chain([Transformer::TextMatch(Arc::new(NoText {
+                    regex: RegexMatcher::new("^X", "")?,
+                }))]),
+        );
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    convert_from_markdown_string(&mut tx, "X **bold**", &t, None, &MarkdownOptions::default())?;
+    tx.commit()?;
+    let st = editor.state();
+    let p = st.first_child_or_err(NodeKey::ROOT)?;
+    assert_eq!(
+        st.children(p)
+            .map(|k| (
+                st.text_content(k).into_owned(),
+                st.text_data(k).expect("text").format.bits()
+            ))
+            .collect::<Vec<_>>(),
+        vec![("X ".into(), 0), ("bold".into(), 1)]
+    );
+    Ok(())
+}

@@ -39,3 +39,15 @@ block. These distinctions follow upstream's actual result-object/control flow.
 
 See AGENTS.md for commands and boundaries. Shortcuts registration belongs to
 WP-23; the engine exposes the callback contracts it will consume.
+
+The standard transformer group includes headings, quotes, ordered/unordered lists,
+fenced code, links and the nine upstream inline formats. Checklist is opt-in.
+Code blocks preserve their fence state, grow colliding fences and export code
+highlight children as raw text. Selection export uses the shared rich-node slice
+helper, including token/segmented-text behavior. Inline format declarations use
+`TextFormatType`, keeping ordered single-format toggles distinct from bitmasks.
+Ordered-list starts outside the model's `i32` range return a typed error.
+
+The oracle records 1,134 comparisons over 63 UTF-8 inputs, 63 upstream delimiter
+selections and 36 actual V8-only lone-surrogate input runs. The latter and two
+split-surrogate captures are explicitly ledgered under R-5.

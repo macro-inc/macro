@@ -92,6 +92,13 @@ fn regex_differential_matches_pinned_v8_and_source_inventory() {
             .collect::<Vec<_>>();
         assert_eq!(actual, case.matches, "{} {:?}", case.name, case.text);
     }
-    assert_eq!(oracle.ledger.len(), 3);
-    assert_eq!(oracle.ledger[0]["reason"], "lone-surrogate");
+    assert_eq!(oracle.ledger.len(), 4);
+    for (entry, unit) in oracle.ledger.iter().zip([0xd800, 0xdfff]) {
+        assert_eq!(entry["reason"], "lone-surrogate");
+        assert_eq!(entry["inputUnits"], serde_json::json!([unit]));
+        let runs = entry["runs"].as_array().expect("actual V8 input probes");
+        assert_eq!(runs.len(), names.len());
+        let run_names: Vec<_> = runs.iter().map(|run| run["name"].as_str().expect("name")).collect();
+        assert_eq!(run_names, names);
+    }
 }

@@ -42,3 +42,25 @@ fn missing_registered_dependency_is_a_typed_error() {
         })
     ));
 }
+/// upstream: quote partial selection only includes selected text.
+#[test]
+fn quote_partial_selection_excludes_earlier_line() -> Result<()> {
+    let t = Transformers::new(crate::builtin::element_transformers());
+    let mut editor =
+        lexical_rich_nodes::register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+            .build()
+            .expect("editor");
+    let mut tx = editor.transaction();
+    let quote = create_quote_node(&mut tx)?;
+    let first = tx.create_text("Line 1")?;
+    let br = tx.create(LineBreak {})?;
+    let second = tx.create_text("Line 2")?;
+    tx.append(quote, &[first.key(), br.key(), second.key()])?;
+    tx.append(NodeKey::ROOT, &[quote.key()])?;
+    tx.text(second)?.select(Some(Utf16Offset::ZERO), None)?;
+    assert_eq!(
+        convert_selection_to_markdown_string(&tx, &t, tx.selection(), &MarkdownOptions::default())?,
+        "> Line 2"
+    );
+    Ok(())
+}

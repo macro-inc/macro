@@ -5,6 +5,9 @@ import vm from 'node:vm';
 import {stripTypeScriptTypes} from 'node:module';
 const upstream=process.argv[2];
 if(!upstream) throw new Error('usage: node record-regex.mjs /path/to/lexical');
+if(process.versions.node.split('.')[0]!=='24')throw new Error('oracle requires Node 24');
+const packageJson=JSON.parse(fs.readFileSync(path.join(upstream,'packages/lexical-markdown/package.json'),'utf8'));
+if(packageJson.version!=='0.45.0')throw new Error('oracle requires Lexical 0.45.0');
 const directory=path.join(upstream,'packages/lexical-markdown/src');
 const context={};
 function source(name){
@@ -41,7 +44,12 @@ for(const file of fs.readdirSync(fixtureDirectory).sort()){
 }
 const inputs=[...snippets];
 const patterns=Object.entries(values).map(([name,re])=>({name,source:re.source.replaceAll('\\/','/'),flags:re.flags})).sort((a,b)=>a.name.localeCompare(b.name));
-const ledger=[{reason:'lone-surrogate',inputUnits:[[0xd800],[0xdfff]],decision:'S3 §2.9 R-5: Rust input receives U+FFFD'}];
+const units=text=>Array.from({length:text.length},(_,i)=>text.charCodeAt(i));
+const ledger=[];
+for(const raw of [String.fromCharCode(0xd800),String.fromCharCode(0xdfff)]){
+  const runs=patterns.map(pattern=>({name:pattern.name,matches:[...raw.matchAll(new RegExp(pattern.source,pattern.flags+'g'))].map(m=>({index:m.index,groups:[...m].map(value=>value===undefined?null:units(value))}))}));
+  ledger.push({reason:'lone-surrogate',inputUnits:units(raw),runs,decision:'S3 §2.9 R-5: raw input cannot cross the Rust UTF-8 boundary; excluded comparison'});
+}
 function matches(re,text){const regex=new RegExp(re.source,re.flags+'g');return [...text.matchAll(regex)].map(m=>({index:m.index,groups:[...m].map((v,group)=>{
   if(v===undefined)return null;
   if(v!==v.toWellFormed())ledger.push({reason:'lone-surrogate',pattern:re.name,text,index:m.index,group,units:Array.from({length:v.length},(_,i)=>v.charCodeAt(i)),decision:'S3 §2.9 R-5: capture decodes lone surrogates as U+FFFD'});
