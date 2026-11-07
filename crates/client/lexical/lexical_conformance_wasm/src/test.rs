@@ -98,5 +98,8 @@ fn empty_peer_transfer_preserves_root_state_and_metadata() {
     let mut core = CoreHandle::create("upstream", None).unwrap();
     let state = core.editor.parse_editor_state_str(r#"{"root":{"children":[],"direction":"rtl","format":"right","indent":2,"type":"root","version":1,"$":{"marker":"kept"}}}"#).unwrap();
     CoreHandle::transfer_state(&mut core.view_editor, state.clone()).unwrap();
-    assert_eq!(core.view_editor.state().to_json().unwrap(), state.to_json().unwrap());
+    assert_eq!(
+        core.view_editor.state().to_json().unwrap(),
+        state.to_json().unwrap()
+    );
 }
