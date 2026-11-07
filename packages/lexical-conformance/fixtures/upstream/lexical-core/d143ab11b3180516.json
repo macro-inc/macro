@@ -1,0 +1,262 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/xml.test.ts",
+    "test": [
+      "xml",
+      "serializes table colWidths"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/transformers/xml.toXml",
+      "args": [
+        {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "a",
+                                "type": "text",
+                                "version": 1,
+                                "$": {
+                                  "id": "t-c1"
+                                }
+                              }
+                            ],
+                            "direction": "ltr",
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "$": {
+                              "id": "p-c1"
+                            },
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": "ltr",
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "$": {
+                          "id": "c1"
+                        },
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "b",
+                                "type": "text",
+                                "version": 1,
+                                "$": {
+                                  "id": "t-c2"
+                                }
+                              }
+                            ],
+                            "direction": "ltr",
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "$": {
+                              "id": "p-c2"
+                            },
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": "ltr",
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "$": {
+                          "id": "c2"
+                        },
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablerow",
+                    "version": 1,
+                    "$": {
+                      "id": "r1"
+                    }
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "c",
+                                "type": "text",
+                                "version": 1,
+                                "$": {
+                                  "id": "t-c3"
+                                }
+                              }
+                            ],
+                            "direction": "ltr",
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "$": {
+                              "id": "p-c3"
+                            },
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": "ltr",
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "$": {
+                          "id": "c3"
+                        },
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "d",
+                                "type": "text",
+                                "version": 1,
+                                "$": {
+                                  "id": "t-c4"
+                                }
+                              }
+                            ],
+                            "direction": "ltr",
+                            "format": "",
+                            "indent": 0,
+                            "type": "paragraph",
+                            "version": 1,
+                            "$": {
+                              "id": "p-c4"
+                            },
+                            "textFormat": 0,
+                            "textStyle": ""
+                          }
+                        ],
+                        "direction": "ltr",
+                        "format": "",
+                        "indent": 0,
+                        "type": "tablecell",
+                        "version": 1,
+                        "$": {
+                          "id": "c4"
+                        },
+                        "backgroundColor": null,
+                        "colSpan": 1,
+                        "headerState": 0,
+                        "rowSpan": 1
+                      }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 0,
+                    "type": "tablerow",
+                    "version": 1,
+                    "$": {
+                      "id": "r2"
+                    }
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "table",
+                "version": 1,
+                "$": {
+                  "id": "t1"
+                },
+                "colWidths": [
+                  120,
+                  120
+                ]
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1,
+            "$": {
+              "documentMetadata": {
+                "version": 1.4,
+                "environmentTags": null
+              },
+              "id": "root"
+            }
+          }
+        }
+      ],
+      "ret": "\n<doc>\n  <table id=\"t1\" colWidths=\"120,120\">\n    <tr id=\"r1\">\n      <td id=\"c1\" row=\"0\" column=\"0\">\n        <p id=\"p-c1\">\n          <t id=\"t-c1\">a</t>\n        </p>\n      </td>\n      <td id=\"c2\" row=\"0\" column=\"1\">\n        <p id=\"p-c2\">\n          <t id=\"t-c2\">b</t>\n        </p>\n      </td>\n    </tr>\n    <tr id=\"r2\">\n      <td id=\"c3\" row=\"1\" column=\"0\">\n        <p id=\"p-c3\">\n          <t id=\"t-c3\">c</t>\n        </p>\n      </td>\n      <td id=\"c4\" row=\"1\" column=\"1\">\n        <p id=\"p-c4\">\n          <t id=\"t-c4\">d</t>\n        </p>\n      </td>\n    </tr>\n  </table>\n</doc>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

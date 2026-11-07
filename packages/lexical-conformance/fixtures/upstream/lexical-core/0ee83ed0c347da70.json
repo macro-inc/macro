@@ -1,0 +1,59 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/database-query.test.ts",
+    "test": [
+      "database query node",
+      "keeps &, < and \" in a title as they were typed, once"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/DatabaseQueryNode.databaseQueryMarkdown",
+      "args": [
+        {
+          "queryId": "0b7d2c52-6f0e-4a8e-9f1f-5b0c1d2e3f40",
+          "databaseId": "db-1",
+          "tableId": "projects-table",
+          "prompt": "Who said \"yes\" & when?",
+          "displayMode": "scalar",
+          "title": "Q&A <draft> \"final\""
+        }
+      ],
+      "ret": "<m-db-query>{\"queryId\":\"0b7d2c52-6f0e-4a8e-9f1f-5b0c1d2e3f40\",\"databaseId\":\"db-1\",\"tableId\":\"projects-table\",\"title\":\"Q&A \\u003cdraft> \\\"final\\\"\",\"prompt\":\"Who said \\\"yes\\\" & when?\",\"displayMode\":\"scalar\"}</m-db-query>"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/DatabaseQueryNode.parseDatabaseQueryJson",
+      "args": [
+        "{\"queryId\":\"0b7d2c52-6f0e-4a8e-9f1f-5b0c1d2e3f40\",\"databaseId\":\"db-1\",\"tableId\":\"projects-table\",\"title\":\"Q&A \\u003cdraft> \\\"final\\\"\",\"prompt\":\"Who said \\\"yes\\\" & when?\",\"displayMode\":\"scalar\"}"
+      ],
+      "ret": {
+        "queryId": "0b7d2c52-6f0e-4a8e-9f1f-5b0c1d2e3f40",
+        "databaseId": "db-1",
+        "tableId": "projects-table",
+        "title": "Q&A <draft> \"final\"",
+        "prompt": "Who said \"yes\" & when?",
+        "displayMode": "scalar"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

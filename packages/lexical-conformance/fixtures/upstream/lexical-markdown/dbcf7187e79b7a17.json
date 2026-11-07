@@ -8,7 +8,7 @@
       "$convertSelectionToMarkdownString",
       "returns empty string for null selection"
     ],
-    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
   },
   "tier": "A-rec",
   "partial": false,
