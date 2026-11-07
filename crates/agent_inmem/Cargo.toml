@@ -39,7 +39,7 @@ macro_uuid = { workspace = true }
 mcp_select = { workspace = true }
 mcp_toolset = { workspace = true }
 memory = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 non_empty = { workspace = true }
 nom = { workspace = true }
 prompt = { workspace = true }

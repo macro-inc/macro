@@ -10,7 +10,7 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "databases/inbound",
   "entity_access/inbound",
 ]
@@ -26,7 +26,7 @@ hex = { workspace = true }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 models_databases = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }

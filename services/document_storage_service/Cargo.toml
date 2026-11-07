@@ -210,7 +210,7 @@ mcp_client = { workspace = true }
 macro_uuid = { workspace = true }
 mockall = { workspace = true }
 model = { workspace = true, features = ["axum"] }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }
 models_databases = { workspace = true }

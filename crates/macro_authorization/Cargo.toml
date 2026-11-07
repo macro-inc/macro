@@ -8,7 +8,7 @@ version = "0.1.0"
 axum = [
   "dep:axum",
   "dep:macro_auth",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:serde",
 ]
 default = ["axum", "outbound"]
@@ -24,7 +24,7 @@ harness_id = { workspace = true }
 macro_auth = { workspace = true, optional = true }
 macro_env_var = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true, optional = true }

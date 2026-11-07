@@ -13,7 +13,7 @@ depend on the `messages` domain.
 
 ## Boundaries
 
-- Depends on: `model-entity` (for `access_entity_type`), serde, uuid.
+- Depends on: `model_entity` (for `access_entity_type`), serde, uuid.
 - Used by: `messages` (re-exported as `messages::domain::models::MessageParent`),
   `lexical_client`.
 

@@ -15,8 +15,8 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 macro_user_id = { workspace = true, features = ["schema"] }
-model-entity = { workspace = true }
-model-error-response = { workspace = true, features = ["anyhow"] }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, features = ["anyhow"] }
 model_owner = { workspace = true }
 model_file_type = { workspace = true, features = ["utoipa"] }
 model_user = { workspace = true }

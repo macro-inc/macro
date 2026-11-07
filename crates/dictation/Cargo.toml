@@ -10,7 +10,7 @@ inbound = [
   "dep:axum",
   "dep:axum-extra",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:rate_limit",
   "dep:rootcause",
   "dep:serde",
@@ -40,7 +40,7 @@ macro_authorization = { workspace = true, optional = true, features = [
 ] }
 macro_env_var = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 opus-pure = { workspace = true, optional = true }
 rate_limit = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }

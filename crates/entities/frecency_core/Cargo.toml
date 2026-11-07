@@ -15,7 +15,7 @@ cowlike = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
 mockall = { workspace = true, optional = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 num-traits = { version = "0.2" }
 ordered-float = { workspace = true }
 serde = { workspace = true }

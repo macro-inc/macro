@@ -10,7 +10,7 @@ default = ["ports", "postgres"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "entity_access/inbound",
   "ports",
@@ -25,7 +25,7 @@ postgres = [
   "dep:sqlx",
   "dep:entity_access_db_utils",
   "dep:share_permission_db_utils",
-  "dep:model-entity",
+  "dep:model_entity",
   "outbound",
 ]
 
@@ -47,8 +47,8 @@ macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }
 messages = { workspace = true, features = ["ports"], optional = true }

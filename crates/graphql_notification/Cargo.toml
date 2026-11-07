@@ -10,7 +10,7 @@ async-graphql = { workspace = true, features = ["dataloader"] }
 async-stream = { workspace = true }
 graphql_common = { workspace = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_notifications = { workspace = true }
 notification = { workspace = true, default-features = true }
 rootcause = { workspace = true }

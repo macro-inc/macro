@@ -31,7 +31,7 @@ distribution.
 ## Boundaries
 
 - Depends on: `macro_event_broker`, `macro_event_topics`, `channel_sender`,
-  `model-entity`, `model_owner`.
+  `model_entity`, `model_owner`.
 - `teammate_feed` (`src/outbound/pg_activity_repo/team_feed.sql`) reads other
   domains' tables to decide in SQL which teammate rows the viewer may see:
   `team_user`, `entity_access`, `comms_channel_participants`, `email_links`,

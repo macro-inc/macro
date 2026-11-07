@@ -8,7 +8,7 @@ version = "0.1.0"
 axum = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
 ]
 default = ["axum", "inbound", "outbound", "ports", "worker"]
@@ -17,7 +17,7 @@ outbound = [
   "dep:sqlx",
   "dep:sqs_client",
   "dep:connection_gateway_client",
-  "dep:model-entity",
+  "dep:model_entity",
   "ports",
 ]
 ports = ["dep:tokio"]
@@ -49,7 +49,7 @@ axum = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
@@ -58,7 +58,7 @@ sqs_client = { workspace = true, features = [
   "ai_projection",
 ], optional = true }
 connection_gateway_client = { workspace = true, optional = true }
-model-entity = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
 
 # Worker (inbound SQS poller) dependencies
 sqs_worker = { workspace = true, optional = true }

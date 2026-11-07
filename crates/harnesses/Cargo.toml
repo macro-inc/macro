@@ -10,7 +10,7 @@ inbound = [
   "dep:axum",
   "dep:macro_authorization",
   "macro_authorization/axum",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "ports",
 ]
@@ -29,7 +29,7 @@ hex = { workspace = true }
 macro_authorization = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
 mockall = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 rand = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

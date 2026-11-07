@@ -54,7 +54,7 @@ wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
 loro.workspace = true
 macro_sync_service_jwt = { workspace = true }
-worker-rs-otel = { workspace = true }
+worker_rs_otel = { workspace = true }
 subtle = { workspace = true }
 base64.workspace = true
 futures.workspace = true

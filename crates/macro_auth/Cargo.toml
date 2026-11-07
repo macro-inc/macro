@@ -25,4 +25,4 @@ tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-model-error-response = { workspace = true, features = ["anyhow"] }
+model_error_response = { workspace = true, features = ["anyhow"] }

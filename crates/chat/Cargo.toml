@@ -51,7 +51,7 @@ macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 model = { workspace = true }
 non_empty = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }

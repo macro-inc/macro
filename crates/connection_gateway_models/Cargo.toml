@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }

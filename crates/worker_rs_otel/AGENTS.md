@@ -1,4 +1,4 @@
-# worker-rs-otel
+# worker_rs_otel
 
 ## What it is
 
@@ -33,7 +33,7 @@ regular `opentelemetry-otlp` exporter.
 
 ## Checks
 
-- `cargo test -p worker-rs-otel` (`SQLX_OFFLINE` unset).
+- `cargo test -p worker_rs_otel` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

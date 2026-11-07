@@ -9,7 +9,7 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "ports",
 ]
@@ -25,7 +25,7 @@ connection_gateway_client = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }

@@ -9,7 +9,7 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "entity_access/inbound",
   "ports",
@@ -29,8 +29,8 @@ macro_sync_service_jwt = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 model = { workspace = true }
-model-entity = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

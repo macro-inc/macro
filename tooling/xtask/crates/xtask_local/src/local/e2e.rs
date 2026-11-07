@@ -190,13 +190,7 @@ fn run_rust(env: &BTreeMap<String, String>, test_args: &[String]) -> Result<()> 
         .current_dir(repo_root())
         .args(["test", "--manifest-path"])
         .arg(repo_root().join("Cargo.toml"))
-        .args([
-            "-p",
-            "local_e2e_integration_tests",
-            "--",
-            "--ignored",
-            "--nocapture",
-        ])
+        .args(["-p", "local_e2e", "--", "--ignored", "--nocapture"])
         .args(test_args)
         .envs(env)
         .env_remove("SQLX_OFFLINE");

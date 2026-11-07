@@ -30,7 +30,7 @@ access and agent-session adapters are `crates/search/soup_realtime_outbound`.
 ## Boundaries
 
 - Depends on: `macro_event_broker`, `macro_event_topics`, `macro_user_id`,
-  `model-entity`. Ports and the service are behind the default `ports`
+  `model_entity`. Ports and the service are behind the default `ports`
   feature.
 - Used by: `complete_graph`, `graphql_soup`, `graphql_registered_work`,
   `attention_feed`, the two adapter crates, and the DSS and harness roots.

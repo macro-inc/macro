@@ -15,7 +15,7 @@ entity_access = { workspace = true, features = ["ports"] }
 kafka_util = { workspace = true, optional = true }
 macro_event_broker = { workspace = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true }
 soup_realtime_core = { workspace = true }

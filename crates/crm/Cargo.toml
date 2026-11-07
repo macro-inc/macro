@@ -20,7 +20,7 @@ axum = [
   "dep:messages",
   "dep:macro_authorization",
   "dep:macro_uuid",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "entity_access/axum",
   "entity_access/inbound",
@@ -101,7 +101,7 @@ system_properties = { workspace = true }
 axum = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_uuid = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies

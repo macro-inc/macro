@@ -9,7 +9,7 @@ axum = [
   "dep:axum",
   "dep:ip_extractor",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:tower",
   "dep:utoipa",
 ]
@@ -39,7 +39,7 @@ rate_limit = { workspace = true, features = ["axum"] }
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
 ip_extractor = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 

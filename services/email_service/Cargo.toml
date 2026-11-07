@@ -144,7 +144,7 @@ channels = { workspace = true, features = ["outbound"] }
 contacts = { workspace = true, default-features = true }
 generic_email_domains = { workspace = true }
 model = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_file_type = { workspace = true }
 model_notifications = { workspace = true }
 models_email = { workspace = true }

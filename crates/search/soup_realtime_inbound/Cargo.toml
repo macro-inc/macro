@@ -17,7 +17,7 @@ kafka_util = { workspace = true }
 macro_event_broker = { workspace = true, features = ["outbound"] }
 macro_user_id = { workspace = true }
 messages = { workspace = true, features = ["broker"] }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_properties = { workspace = true }
 projects = { workspace = true, features = ["service"] }

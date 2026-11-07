@@ -36,7 +36,7 @@ macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 models_properties = { workspace = true }
 properties = { workspace = true, features = ["ports"] }
 schemars = { workspace = true, optional = true }

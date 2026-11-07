@@ -20,7 +20,7 @@ inbound = [
   "dep:channels",
   "dep:documents",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:model_user",
   "dep:rate_limit",
   "dep:serde_json",
@@ -90,7 +90,7 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true, optional = true }
 rate_limit = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }

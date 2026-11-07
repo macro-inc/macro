@@ -22,7 +22,7 @@ inbound = [
   "entity_access/inbound",
   "entity_access/ports",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "macro_authorization/axum",
   "dep:serde_json",
   "dep:utoipa",
@@ -54,7 +54,7 @@ mockall = { workspace = true, optional = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 rand = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

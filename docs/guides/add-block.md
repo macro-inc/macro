@@ -216,7 +216,7 @@ you are only giving it an editor (as `pptx` and `docx` did).
 
 ## 5. Entity type (entity-backed blocks)
 
-The backend entity comes first: `EntityType` in `crates/model-entity/src/lib.rs`,
+The backend entity comes first: `EntityType` in `crates/model_entity/src/lib.rs`,
 `crates/graphql_common/src/entity_type.rs`, access checks in
 `crates/entity_access`, and a domain crate. Use the
 [database-core](../../.agents/skills/database-core/SKILL.md) and

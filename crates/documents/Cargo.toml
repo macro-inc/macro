@@ -56,7 +56,7 @@ axum = [
   "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:model_user",
   "dep:task_dedup",
   "dep:utoipa",
@@ -151,7 +151,7 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 system_skills = { workspace = true }
 model = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 models_permissions = { workspace = true }
 models_properties = { workspace = true }
 rootcause = { workspace = true }
@@ -165,7 +165,7 @@ tokio-retry = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 

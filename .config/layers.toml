@@ -32,8 +32,8 @@ paths = [
   "crates/macro_uuid",
   "crates/maybe_send",
   "crates/model",
-  "crates/model-entity",
-  "crates/model-error-response",
+  "crates/model_entity",
+  "crates/model_error_response",
   "crates/model_file_type",
   "crates/model_owner",
   "crates/model_user",
@@ -96,7 +96,7 @@ paths = [
   "crates/serde_utils",
   "crates/stream",
   "crates/upstream_error",
-  "crates/worker-rs-otel",
+  "crates/worker_rs_otel",
 ]
 may_depend_on = ["types", "platform"]
 

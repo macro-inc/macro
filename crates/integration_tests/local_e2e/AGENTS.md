@@ -3,7 +3,7 @@
 ## What it is
 
 Belongs to local dev tooling: end-to-end Rust tests
-(`local_e2e_integration_tests` package) that run against an isolated local
+(`local_e2e` package) that run against an isolated local
 stack started through the xtask local orchestrator, seeded with the same
 fixtures `seed_cli` and Playwright use.
 
@@ -32,9 +32,9 @@ fixtures `seed_cli` and Playwright use.
 ## Checks
 
 - `just local-e2e-rust` runs the full suite against a fresh isolated stack.
-- `nix develop --command cargo test -p local_e2e_integration_tests --test <name> --no-run`
+- `nix develop --command cargo test -p local_e2e --test <name> --no-run`
   compiles a single test without requiring the stack.
-- `nix develop --command cargo test -p local_e2e_integration_tests --test <name> -- --ignored --nocapture`
+- `nix develop --command cargo test -p local_e2e --test <name> -- --ignored --nocapture`
   runs it against an already-running stack. Tests are `#[ignore]`d so normal
   workspace runs skip them.
 

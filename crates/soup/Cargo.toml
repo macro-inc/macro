@@ -21,7 +21,7 @@ axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "email/axum",
   "email/inbound",
@@ -68,8 +68,8 @@ indexmap = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_authorization = { workspace = true, features = ["axum"], optional = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
 model_owner = { workspace = true }
 models_grouping = { workspace = true }
 models_pagination = { workspace = true }

@@ -23,7 +23,7 @@ macro_authorization = { workspace = true, features = [
 ] }
 macro_env_var = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true }
+model_error_response = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }
