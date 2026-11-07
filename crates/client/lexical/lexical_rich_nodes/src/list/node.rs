@@ -33,11 +33,12 @@ impl ListType {
     }
 }
 /// Upstream ListNode; tree links and element properties belong to the model.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ListNode {
     list_type: ListType,
     start: i32,
+    raw_list_type: Option<Option<serde_json::Value>>,
+    raw_start: Option<Option<serde_json::Value>>,
 }
 impl Default for ListNode {
     fn default() -> Self {
@@ -47,7 +48,12 @@ impl Default for ListNode {
 impl ListNode {
     /// Create a list payload.
     pub fn new(list_type: ListType, start: i32) -> Self {
-        Self { list_type, start }
+        Self {
+            list_type,
+            start,
+            raw_list_type: None,
+            raw_start: None,
+        }
     }
     /// Marker type.
     pub fn list_type(&self) -> ListType {
@@ -61,19 +67,95 @@ impl ListNode {
     pub fn start(&self) -> i32 {
         self.start
     }
+    /// Imported wire marker type, preserving undefined, null and future labels.
+    pub fn list_type_value(&self) -> Option<serde_json::Value> {
+        self.raw_list_type.clone().unwrap_or_else(|| {
+            Some(
+                match self.list_type {
+                    ListType::Number => "number",
+                    ListType::Bullet => "bullet",
+                    ListType::Check => "check",
+                }
+                .into(),
+            )
+        })
+    }
+    /// Imported wire start value; integer setters replace absent/null values.
+    pub fn start_value(&self) -> Option<serde_json::Value> {
+        self.raw_start
+            .clone()
+            .unwrap_or_else(|| Some(self.start.into()))
+    }
+    /// Compare actual wire marker types, including unknown imported labels.
+    pub fn same_list_type(&self, other: &Self) -> bool {
+        self.list_type_value() == other.list_type_value()
+    }
     /// Change marker type.
     pub fn set_list_type(&mut self, list_type: ListType) {
         self.list_type = list_type;
+        self.raw_list_type = None;
     }
     /// Change starting value.
     pub fn set_start(&mut self, start: i32) {
         self.start = start;
+        self.raw_start = None;
+    }
+}
+impl Serialize for ListNode {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        if let Some(value) = self.list_type_value() {
+            map.serialize_entry("listType", &value)?;
+        }
+        if let Some(value) = self.start_value() {
+            map.serialize_entry("start", &value)?;
+        }
+        map.end()
+    }
+}
+impl<'de> Deserialize<'de> for ListNode {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let object = value
+            .as_object()
+            .ok_or_else(|| serde::de::Error::custom("list payload must be an object"))?;
+        let list_type = object.get("listType").cloned();
+        let known_type = match list_type.as_ref().and_then(serde_json::Value::as_str) {
+            Some("number") => Some(ListType::Number),
+            Some("bullet") => Some(ListType::Bullet),
+            Some("check") => Some(ListType::Check),
+            _ => None,
+        };
+        let start = object.get("start").cloned();
+        let known_start = start
+            .as_ref()
+            .and_then(serde_json::Value::as_i64)
+            .and_then(|n| i32::try_from(n).ok());
+        Ok(Self {
+            list_type: known_type.unwrap_or(ListType::Bullet),
+            start: known_start.unwrap_or(0),
+            raw_list_type: known_type.is_none().then_some(list_type),
+            raw_start: known_start.is_none().then_some(start),
+        })
     }
 }
 impl NodeType for ListNode {
     const TYPE: &'static str = "list";
     type Kind = ElementKind;
     impl_default_node!();
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> Result<NodeKey> {
+        // The upstream static-config importer constructs ListNode directly;
+        // NodeReplacements apply to authored creation, not stored list imports.
+        let node = tx.create_exact(Self::import_json(json)?)?;
+        tx.update_from_json(node, json)?;
+        Ok(node.key())
+    }
     fn static_transform() -> Option<TransformFn<Self>> {
         Some(list_node_transform)
     }
