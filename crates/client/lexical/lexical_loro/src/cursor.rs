@@ -1,4 +1,5 @@
 use super::*;
+use crate::policy::synced_owner;
 use lexical_model::{ChildIndex, Point, Selection, Utf16Offset};
 use loro::{
     LoroValue,
@@ -39,6 +40,11 @@ impl LoroProjection {
         })
     }
     fn point_cursor(&self, doc: &LoroDoc, state: &EditorState, point: Point) -> Option<NodeCursor> {
+        if synced_owner(state.view(), point.key(), self.policy) != Some(point.key())
+            || self.policy.is_transparent(state.view(), point.key())
+        {
+            return None;
+        }
         let slots = self.index.nodes.get(&point.key())?;
         let node_id = slots.id.clone()?;
         let cursor = if state.view().is_text(point.key()) {
@@ -68,7 +74,10 @@ impl LoroProjection {
     /// Resolve a durable cursor into a clamped model point; deleted/unindexed nodes return None.
     pub fn point(&self, doc: &LoroDoc, state: &EditorState, cursor: &NodeCursor) -> Option<Point> {
         let key = *self.index.ids.get(&cursor.node_id)?;
-        if !state.view().is_attached(key) {
+        if !state.view().is_attached(key)
+            || synced_owner(state.view(), key, self.policy) != Some(key)
+            || self.policy.is_transparent(state.view(), key)
+        {
             return None;
         }
         let position = doc.get_cursor_pos(&cursor.cursor).ok()?.current.pos;

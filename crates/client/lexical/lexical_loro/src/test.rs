@@ -312,3 +312,9 @@ fn initial_schema_and_plain_text_cursor_errors_remain_explicit() -> Result<()> {
     Ok(())
 }
 mod fields;
+mod hooks;
+mod peers;
+
+mod differential;
+
+mod regressions;

@@ -11,6 +11,8 @@ pub(crate) enum Slot {
 #[derive(Clone)]
 pub(crate) struct NodeSlots {
     pub map: ContainerID,
+    pub state: Option<ContainerID>,
+    pub ids: Option<ContainerID>,
     pub text: Option<ContainerID>,
     pub children: Option<ContainerID>,
     pub plain_composite: bool,
@@ -24,8 +26,8 @@ pub(crate) struct NodeIndex {
     owned: FxHashMap<NodeKey, Vec<ContainerID>>,
 }
 impl NodeIndex {
-    pub fn bind(&mut self, key: NodeKey, map: &LoroMap) -> Result<()> {
-        self.unbind(key);
+    pub fn bind(&mut self, key: NodeKey, map: &LoroMap, policy: &dyn SyncPolicy) -> Result<()> {
+        schema::validate_slots(map)?;
         let children = schema::children(map)?.map(|list| list.id());
         let text = match map.get("text") {
             Some(ValueOrContainer::Container(Container::Text(t))) => Some(t.id()),
@@ -38,6 +40,7 @@ impl NodeIndex {
             .and_then(|v| v.get("id"))
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned);
+        self.unbind(key);
         self.owner.insert(map.id(), (key, Slot::Node));
         self.owned.insert(key, vec![map.id()]);
         map.for_each(|field, value| {
@@ -59,9 +62,11 @@ impl NodeIndex {
             key,
             NodeSlots {
                 map: map.id(),
+                state: schema::slot_id(map, "$"),
+                ids: schema::slot_id(map, "ids"),
                 text,
                 children,
-                plain_composite: schema::has_plain_composites(map),
+                plain_composite: schema::has_plain_composites(map, policy),
                 id,
             },
         );
@@ -115,20 +120,19 @@ impl NodeIndex {
     }
     pub fn bind_tree(
         &mut self,
-        doc: &LoroDoc,
         view: StateRef<'_>,
         key: NodeKey,
         map: &LoroMap,
         policy: &dyn SyncPolicy,
     ) -> Result<()> {
-        self.bind(key, map)?;
+        self.bind(key, map, policy)?;
         let keys = synced_children(view, key, policy);
         let maps = projected_children(map, policy)?;
         if keys.len() != maps.len() {
             return Err(diverged(format!("child count at {key}")));
         }
         for (key, map) in keys.into_iter().zip(maps) {
-            self.bind_tree(doc, view, key, &map, policy)?;
+            self.bind_tree(view, key, &map, policy)?;
         }
         Ok(())
     }
@@ -209,13 +213,7 @@ impl LoroProjection {
             return Err(diverged("attach synced JSON differs"));
         }
         let mut index = NodeIndex::default();
-        index.bind_tree(
-            doc,
-            state.view(),
-            NodeKey::ROOT,
-            &doc.get_map("root"),
-            policy,
-        )?;
+        index.bind_tree(state.view(), NodeKey::ROOT, &doc.get_map("root"), policy)?;
         let events = Arc::new(Mutex::new(Vec::new()));
         let buffer = events.clone();
         let subscription = doc.subscribe_root(Arc::new(move |event| {
@@ -289,6 +287,18 @@ impl LoroProjection {
                 let actual = self.index.map(doc, key).and_then(|map| {
                     if map.is_deleted() {
                         return Err(diverged("indexed map deleted"));
+                    }
+                    let slots = self
+                        .index
+                        .nodes
+                        .get(&key)
+                        .ok_or_else(|| diverged("missing index"))?;
+                    if slots.state != schema::slot_id(&map, "$")
+                        || slots.text != schema::slot_id(&map, "text")
+                        || slots.children != schema::slot_id(&map, "children")
+                        || slots.ids != schema::slot_id(&map, "ids")
+                    {
+                        return Err(diverged("cached slot identity changed"));
                     }
                     let mut json = schema::own_map(&map)?;
                     mask_local(&mut json, self.policy);
