@@ -1,0 +1,39 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/__tests__/unit/setDOMStyle.test.ts",
+    "test": [
+      "setDOMStyle",
+      "parses values with comments, semicolons and colons inside quotes and parentheses"
+    ],
+    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical.getStyleObjectFromCSS",
+      "args": [
+        "background-image: url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'></svg>\"); /* ignored */ content: \"semi;colon:value\"; color: red;"
+      ],
+      "ret": {
+        "background-image": "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'></svg>\")",
+        "content": "\"semi;colon:value\"",
+        "color": "red"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}
