@@ -1,5 +1,5 @@
-use anyhow::{Result, ensure};
-use messages::domain::annotations::AnnotationMutation;
+use super::{repository_error, stale_capability};
+use crate::domain::{annotations::AnnotationMutation, ports::MessageError};
 use model::annotations::{
     Anchor, PdfAnchor, PdfPlaceableCommentAnchor,
     edit::{
@@ -13,7 +13,7 @@ pub async fn edit_document_anchor(
     db: &Pool<Postgres>,
     access: AnnotationMutation,
     req: EditAnchorRequest,
-) -> Result<EditAnchorResponse> {
+) -> Result<EditAnchorResponse, MessageError> {
     match req {
         EditAnchorRequest::Pdf(EditPdfAnchorRequest::FreeComment(request)) => {
             let anchor = edit_pdf_free_comment_anchor(db, access, request).await?;
@@ -29,11 +29,10 @@ async fn edit_pdf_free_comment_anchor(
     db: &Pool<Postgres>,
     access: AnnotationMutation,
     request: EditPdfPlaceableCommentAnchorRequest,
-) -> Result<PdfPlaceableCommentAnchor> {
-    ensure!(
-        access.target().id == request.uuid,
-        "annotation capability mismatch"
-    );
+) -> Result<PdfPlaceableCommentAnchor, MessageError> {
+    if access.target().id != request.uuid {
+        return Err(stale_capability("annotation capability mismatch"));
+    }
     let anchor = sqlx::query_as!(
         PdfPlaceableCommentAnchor,
         r#"
@@ -85,7 +84,8 @@ async fn edit_pdf_free_comment_anchor(
         access.target().document_id,
     )
     .fetch_one(db)
-    .await?;
+    .await
+    .map_err(repository_error)?;
 
     Ok(anchor)
 }

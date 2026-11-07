@@ -10,9 +10,7 @@ default = ["account_merge_request", "team"]
 team = ["dep:models_team"]
 
 [dependencies]
-messages = { workspace = true, features = ["outbound", "annotations"] }
 anyhow = { workspace = true }
-rootcause = { workspace = true }
 cached = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
@@ -42,4 +40,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 chat_message = { workspace = true }
 
 [dev-dependencies]
-entity_access = { workspace = true, features = ["outbound"] }
+messages = { workspace = true, features = ["outbound", "annotations"] }

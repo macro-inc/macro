@@ -1,4 +1,4 @@
-use messages::domain::{
+use crate::domain::{
     annotations::{AnnotationMutation, AnnotationRepository, AnnotationTarget, DeletedAnnotation},
     ports::MessageError,
 };
@@ -9,6 +9,10 @@ use model::annotations::{
 use sqlx::PgPool;
 use uuid::Uuid;
 
+mod delete;
+mod edit;
+
+/// Authorized PDF geometry persistence for the annotation domain.
 pub struct PgAnnotationRepository(pub PgPool);
 
 impl AnnotationRepository for PgAnnotationRepository {
@@ -21,7 +25,7 @@ impl AnnotationRepository for PgAnnotationRepository {
             SELECT a.uuid, a."documentId", a.owner, a.root_id, t.user_id
             FROM "PdfPlaceableCommentAnchor" a JOIN comms_message_threads t ON t.root_id = a.root_id
             WHERE NOT $2 AND a.uuid = $1 AND t.deleted_at IS NULL
-        "#, id, highlight).fetch_optional(&self.0).await.map_err(|e| MessageError::Repository(e.into()))?.ok_or(MessageError::NotFound)?;
+        "#, id, highlight).fetch_optional(&self.0).await.map_err(repository_error)?.ok_or(MessageError::NotFound)?;
         Ok(AnnotationTarget {
             id: row.uuid,
             document_id: row.document_id,
@@ -35,17 +39,22 @@ impl AnnotationRepository for PgAnnotationRepository {
         access: AnnotationMutation,
         input: EditAnchorRequest,
     ) -> Result<EditAnchorResponse, MessageError> {
-        super::edit_anchor::edit_document_anchor(&self.0, access, input)
-            .await
-            .map_err(|e| MessageError::Repository(rootcause::report!("{e}")))
+        edit::edit_document_anchor(&self.0, access, input).await
     }
     async fn delete(
         &self,
         access: AnnotationMutation,
         input: DeleteUnthreadedAnchorRequest,
     ) -> Result<DeletedAnnotation, MessageError> {
-        super::delete_anchor::delete_document_anchor(&self.0, access, input)
-            .await
-            .map_err(|e| MessageError::Repository(rootcause::report!("{e}")))
+        delete::delete_document_anchor(&self.0, access, input).await
     }
+}
+
+fn repository_error(error: sqlx::Error) -> MessageError {
+    MessageError::Repository(rootcause::Report::new(error).into())
+}
+
+/// A capability that no longer matches the stored annotation.
+fn stale_capability(reason: &'static str) -> MessageError {
+    MessageError::Repository(rootcause::report!("{reason}"))
 }
