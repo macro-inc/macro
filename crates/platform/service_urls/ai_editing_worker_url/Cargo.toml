@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "ai_editing_worker_url"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+service_url = { path = "../service_url" }
+workspace-hack = { version = "0.1", path = "../../../workspace-hack" }

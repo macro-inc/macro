@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "service_url"
+publish = false
+version = "0.1.0"
+
+[features]
+# Lets tests in crates that define service URLs mock the override env vars.
+testing = []
+
+[dependencies]
+macro_env = { path = "../../../macro_env" }
+paste = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../../workspace-hack" }

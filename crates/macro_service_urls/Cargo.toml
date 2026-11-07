@@ -5,8 +5,36 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-macro_env = { path = "../macro_env" }
-paste = { workspace = true }
-thiserror = { workspace = true }
-url = { workspace = true }
+service_url = { path = "../platform/service_urls/service_url" }
+app_service_url = { path = "../platform/service_urls/app_service_url" }
+auth_service_url = { path = "../platform/service_urls/auth_service_url" }
+document_storage_service_url = { path = "../platform/service_urls/document_storage_service_url" }
+convert_service_url = { path = "../platform/service_urls/convert_service_url" }
+search_processing_service_url = { path = "../platform/service_urls/search_processing_service_url" }
+connection_gateway_url = { path = "../platform/service_urls/connection_gateway_url" }
+connection_gateway_websocket_url = { path = "../platform/service_urls/connection_gateway_websocket_url" }
+document_cognition_service_url = { path = "../platform/service_urls/document_cognition_service_url" }
+notification_service_url = { path = "../platform/service_urls/notification_service_url" }
+static_file_service_url = { path = "../platform/service_urls/static_file_service_url" }
+static_file_public_url = { path = "../platform/service_urls/static_file_public_url" }
+agent_harness_service_url = { path = "../platform/service_urls/agent_harness_service_url" }
+scheduled_action_service_url = { path = "../platform/service_urls/scheduled_action_service_url" }
+agent_harness_egress_url = { path = "../platform/service_urls/agent_harness_egress_url" }
+mcp_service_url = { path = "../platform/service_urls/mcp_service_url" }
+mcp_public_url = { path = "../platform/service_urls/mcp_public_url" }
+cognition_public_url = { path = "../platform/service_urls/cognition_public_url" }
+connect_api_url = { path = "../platform/service_urls/connect_api_url" }
+unfurl_service_url = { path = "../platform/service_urls/unfurl_service_url" }
+contacts_service_url = { path = "../platform/service_urls/contacts_service_url" }
+email_service_url = { path = "../platform/service_urls/email_service_url" }
+calendar_service_url = { path = "../platform/service_urls/calendar_service_url" }
+image_proxy_service_url = { path = "../platform/service_urls/image_proxy_service_url" }
+lexical_service_url = { path = "../platform/service_urls/lexical_service_url" }
+sync_service_url = { path = "../platform/service_urls/sync_service_url" }
+ai_editing_worker_url = { path = "../platform/service_urls/ai_editing_worker_url" }
+preview_gateway_url = { path = "../platform/service_urls/preview_gateway_url" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_env = { path = "../macro_env" }
+service_url = { path = "../platform/service_urls/service_url", features = ["testing"] }
