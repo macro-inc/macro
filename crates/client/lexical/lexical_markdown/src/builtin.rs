@@ -1,5 +1,7 @@
 //! Standard transformers used with the portable engine.
 pub mod block;
+pub mod code;
+pub use code::*;
 pub mod link;
 pub mod list;
 use crate::*;
@@ -92,3 +94,20 @@ pub fn text_format_transformers() -> Vec<Transformer> {
 pub fn text_match_transformers() -> Vec<Transformer> {
     vec![Transformer::TextMatch(Arc::new(Link))]
 }
+
+/// Upstream multiline group.
+pub fn multiline_element_transformers() -> Vec<Transformer> {
+    vec![Transformer::MultilineElement(Arc::new(Code))]
+}
+/// Complete upstream default ordering; checklists remain opt-in.
+pub fn transformers() -> Vec<Transformer> {
+    element_transformers()
+        .into_iter()
+        .chain(multiline_element_transformers())
+        .chain(text_format_transformers())
+        .chain(text_match_transformers())
+        .collect()
+}
+/// Reusable upstream default registry.
+pub static TRANSFORMERS: std::sync::LazyLock<Transformers> =
+    std::sync::LazyLock::new(|| Transformers::new(transformers()));

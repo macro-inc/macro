@@ -56,30 +56,15 @@ impl<'a> ExportCx<'a> {
         self.format_text(text_node, &text)
     }
     fn selected_text(&self, node: NodeKey) -> Result<String> {
-        let text = self.state.text_data(node)?;
-        if text.mode != TextMode::Normal || !self.selected(node) {
-            return Ok(text.text.as_str().into());
+        if let Some(selection) = self.selection {
+            Ok(
+                lexical_rich_nodes::selection::slice_selected_text_node_content(
+                    self.state, selection, node,
+                )?,
+            )
+        } else {
+            Ok(self.state.text_content(node).into_owned())
         }
-        let mut start = Utf16Offset::ZERO;
-        let mut end = self.state.text_content_size(node);
-        if let Some(Selection::Range(range)) = self.selection {
-            let (a, b) = if range.is_backward(self.state)? {
-                (range.focus, range.anchor)
-            } else {
-                (range.anchor, range.focus)
-            };
-            if let Point::Text { key, offset } = a
-                && key == node
-            {
-                start = offset;
-            }
-            if let Point::Text { key, offset } = b
-                && key == node
-            {
-                end = offset;
-            }
-        }
-        Ok(text.text.slice(start..end)?.into())
     }
     fn selected(&self, node: NodeKey) -> bool {
         self.selection
