@@ -11,12 +11,16 @@
 //!   transitive workspace dependency closure, consumed by flake.nix to build
 //!   pruned per-artifact deploy sources.
 //!
+//! It then prints the crate layer report (`.config/layers.toml`), which never
+//! fails the run on violations.
+//!
 //! They run from the hakari/guppy/toml_edit versions pinned in Cargo.lock, so
 //! local runs and CI cannot disagree about generator versions. `just hakari`
 //! wraps the regenerate mode; CI runs `--check` and fails on drift.
 
 mod closures;
 mod hakari_ops;
+mod layers;
 mod workspace_deps;
 
 use anyhow::{Result, bail};
@@ -53,6 +57,8 @@ fn run_deps(check: bool) -> Result<()> {
         graph
     };
     closures::run(&graph, check, &mut drift)?;
+    // Report-only until the baseline in .config/layers.toml is burned down.
+    layers::run(&graph)?;
 
     if !drift.is_empty() {
         bail!(

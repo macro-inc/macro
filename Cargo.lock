@@ -24403,6 +24403,7 @@ name = "xtask_deps"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "glob",
  "guppy",
  "hakari",
  "serde",
