@@ -30,7 +30,7 @@ export type ComposerContext = {
 
 const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
 const TOO_LARGE =
-  'That description is too long to draft. Shorten it and try again.';
+  'This routine is too large for AI to draft. Shorten it and try again.';
 const TIMED_OUT =
   'Drafting took too long. Try again, or describe the routine more simply.';
 

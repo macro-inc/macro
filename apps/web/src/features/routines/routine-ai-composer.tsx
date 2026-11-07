@@ -9,7 +9,7 @@ import {
   composeRoutine,
 } from './queries/compose-routine';
 
-/** What the drafter may write; it looks up names from the description itself. */
+/** What the composer tells AI when it drafts: what it may write. */
 export function useComposerContext(options: {
   defaultModel: Accessor<string>;
   decisionsEnabled: Accessor<boolean>;

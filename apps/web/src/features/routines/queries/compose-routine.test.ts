@@ -71,6 +71,10 @@ describe('composeRoutine', () => {
         conditions: true,
       },
     });
+    // A large workspace once made this request exceed the size limit.
+    expect(draftRoutine.mock.calls[0][0].context).not.toHaveProperty(
+      'workspace'
+    );
     if (typeof draft === 'string') throw new Error(draft);
     expect(draft.name).toBe('Inbox triage');
     expect(draft.triggers).toMatchObject([
@@ -118,8 +122,8 @@ describe('composeRoutine', () => {
     );
     const limited = await composeRoutine(BUG_REPORTS, context);
 
-    expect(tooLarge).toMatch(/too long/);
-    expect(timedOut).toMatch(/too long|took/);
+    expect(tooLarge).toMatch(/too large/);
+    expect(timedOut).toMatch(/took too long/);
     expect(new Set([tooLarge, timedOut, generic]).size).toBe(3);
     expect(limited).toBe('You’ve used this month’s free AI.');
   });
