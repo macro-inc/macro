@@ -1,0 +1,1317 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/notion-markdown.test.ts",
+    "test": [
+      "Notion markdown to Lexical",
+      "flattens toggles into their summary and content, with check lists"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/notion-markdown.notionMarkdownToSerializedEditorState",
+      "args": [
+        "<details color=\"gray\">\n<summary>Coming in Q2</summary>\n\t- [ ] Open task\n\t- [x] Closed task\n\tNote under the toggle\n</details>",
+        {
+          "pages": {
+            "3fb607323e2e80629886fc0c028d50a7": {
+              "documentId": "0e5b6a2c-7c39-4a63-9a0c-5c1f2f6c0001",
+              "name": "Roadmap"
+            }
+          },
+          "users": {
+            "12345678123412341234123456789abc": {
+              "userId": "macro|teo@acme.test",
+              "email": "teo@acme.test"
+            }
+          }
+        }
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Coming in Q2",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "kI0PCq-Q"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Open task",
+                      "type": "text",
+                      "version": 1,
+                      "$": {
+                        "id": "Yx_cOZYH"
+                      }
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "$": {
+                    "id": "wklMcq1D"
+                  },
+                  "checked": false,
+                  "value": 1
+                },
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Closed task",
+                      "type": "text",
+                      "version": 1,
+                      "$": {
+                        "id": "QTVUW3IJ"
+                      }
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "$": {
+                    "id": "TNo7zhn7"
+                  },
+                  "checked": true,
+                  "value": 2
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "task-list",
+              "version": 1,
+              "$": {
+                "id": "z5GQuaI5"
+              },
+              "listType": "check",
+              "start": 1,
+              "tag": "ul"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Note under the toggle",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "7NtSULiz"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "qFBj9tme"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        129,
+        180,
+        12,
+        94,
+        198,
+        142,
+        4,
+        163
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        64,
+        108,
+        151,
+        214,
+        60,
+        251,
+        220,
+        83
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        174,
+        136,
+        55,
+        26,
+        18,
+        81,
+        33,
+        181
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        149,
+        97,
+        67,
+        192,
+        238,
+        45,
+        85,
+        251
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        99,
+        140,
+        119,
+        254,
+        224,
+        182,
+        245,
+        249
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        39,
+        95,
+        175,
+        41,
+        126,
+        44,
+        151,
+        223
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        84,
+        4,
+        243,
+        59,
+        212,
+        6,
+        98,
+        11
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        88,
+        33,
+        207,
+        104,
+        37,
+        156,
+        203,
+        238
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        2,
+        7,
+        255,
+        205,
+        116,
+        100,
+        171,
+        247
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        187,
+        125,
+        106,
+        37,
+        230,
+        191,
+        162,
+        148
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Coming in Q2",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "kI0PCq-Q"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Open task",
+                      "type": "text",
+                      "version": 1,
+                      "$": {
+                        "id": "Yx_cOZYH"
+                      }
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "$": {
+                    "id": "wklMcq1D"
+                  },
+                  "checked": false,
+                  "value": 1
+                },
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "Closed task",
+                      "type": "text",
+                      "version": 1,
+                      "$": {
+                        "id": "QTVUW3IJ"
+                      }
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "$": {
+                    "id": "TNo7zhn7"
+                  },
+                  "checked": true,
+                  "value": 2
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "task-list",
+              "version": 1,
+              "$": {
+                "id": "z5GQuaI5"
+              },
+              "listType": "check",
+              "start": 1,
+              "tag": "ul"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Note under the toggle",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "7NtSULiz"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "qFBj9tme"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Coming in Q2",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "kI0PCq-Q"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Open task",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "Yx_cOZYH"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "wklMcq1D"
+                },
+                "checked": false,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Closed task",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "QTVUW3IJ"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "TNo7zhn7"
+                },
+                "checked": true,
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "z5GQuaI5"
+            },
+            "listType": "check",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Note under the toggle",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "7NtSULiz"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "qFBj9tme"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Coming in Q2",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "kI0PCq-Q"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Open task",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "Yx_cOZYH"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "wklMcq1D"
+                },
+                "checked": false,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Closed task",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "QTVUW3IJ"
+                    }
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "$": {
+                  "id": "TNo7zhn7"
+                },
+                "checked": true,
+                "value": 2
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "$": {
+              "id": "z5GQuaI5"
+            },
+            "listType": "check",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Note under the toggle",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "7NtSULiz"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "qFBj9tme"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Coming in Q2",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "kI0PCq-Q"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Open task",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "Yx_cOZYH"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "listitem",
+              "version": 1,
+              "$": {
+                "id": "wklMcq1D"
+              },
+              "checked": false,
+              "value": 1
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "Closed task",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "QTVUW3IJ"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "listitem",
+              "version": 1,
+              "$": {
+                "id": "TNo7zhn7"
+              },
+              "checked": true,
+              "value": 2
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "task-list",
+          "version": 1,
+          "$": {
+            "id": "z5GQuaI5"
+          },
+          "listType": "check",
+          "start": 1,
+          "tag": "ul"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Note under the toggle",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "7NtSULiz"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "qFBj9tme"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Coming in Q2",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "kI0PCq-Q"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Open task",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "Yx_cOZYH"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "wklMcq1D"
+            },
+            "checked": false,
+            "value": 1
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Closed task",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "QTVUW3IJ"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "TNo7zhn7"
+            },
+            "checked": true,
+            "value": 2
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "task-list",
+        "version": 1,
+        "$": {
+          "id": "z5GQuaI5"
+        },
+        "listType": "check",
+        "start": 1,
+        "tag": "ul"
+      },
+      "args": [],
+      "ret": "task-list"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Note under the toggle",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "7NtSULiz"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "qFBj9tme"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Coming in Q2",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "kI0PCq-Q"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Coming in Q2",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "kI0PCq-Q"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "detail": 0,
+          "format": 0,
+          "mode": "normal",
+          "style": "",
+          "text": "Coming in Q2",
+          "type": "text",
+          "version": 1,
+          "$": {
+            "id": "kI0PCq-Q"
+          }
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "detail": 0,
+        "format": 0,
+        "mode": "normal",
+        "style": "",
+        "text": "Coming in Q2",
+        "type": "text",
+        "version": 1,
+        "$": {
+          "id": "kI0PCq-Q"
+        }
+      },
+      "args": [],
+      "ret": "text"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "detail": 0,
+        "format": 0,
+        "mode": "normal",
+        "style": "",
+        "text": "Coming in Q2",
+        "type": "text",
+        "version": 1,
+        "$": {
+          "id": "kI0PCq-Q"
+        }
+      },
+      "args": [],
+      "ret": "Coming in Q2"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "detail": 0,
+        "format": 0,
+        "mode": "normal",
+        "style": "",
+        "text": "Coming in Q2",
+        "type": "text",
+        "version": 1,
+        "$": {
+          "id": "kI0PCq-Q"
+        }
+      },
+      "args": [],
+      "ret": "Coming in Q2"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Open task",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "Yx_cOZYH"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "wklMcq1D"
+            },
+            "checked": false,
+            "value": 1
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Closed task",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "QTVUW3IJ"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "TNo7zhn7"
+            },
+            "checked": true,
+            "value": 2
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "task-list",
+        "version": 1,
+        "$": {
+          "id": "z5GQuaI5"
+        },
+        "listType": "check",
+        "start": 1,
+        "tag": "ul"
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Open task",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "Yx_cOZYH"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "listitem",
+          "version": 1,
+          "$": {
+            "id": "wklMcq1D"
+          },
+          "checked": false,
+          "value": 1
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "Closed task",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "QTVUW3IJ"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "listitem",
+          "version": 1,
+          "$": {
+            "id": "TNo7zhn7"
+          },
+          "checked": true,
+          "value": 2
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:checked",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Open task",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "Yx_cOZYH"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "listitem",
+        "version": 1,
+        "$": {
+          "id": "wklMcq1D"
+        },
+        "checked": false,
+        "value": 1
+      },
+      "args": [],
+      "ret": false
+    },
+    {
+      "op": "call",
+      "fn": "get:checked",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "Closed task",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "QTVUW3IJ"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "listitem",
+        "version": 1,
+        "$": {
+          "id": "TNo7zhn7"
+        },
+        "checked": true,
+        "value": 2
+      },
+      "args": [],
+      "ret": true
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

@@ -1,0 +1,250 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/comment-mark-identity.test.ts",
+    "test": [
+      "comment mark identity",
+      "commits new marks without storing a thread ID"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "comment-mark"
+    ],
+    "nodeClasses": {
+      "comment-mark": {
+        "$fn": "@macro-inc/lexical-core/nodes/CommentNode.CommentNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": true,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "comment-mark"
+        ],
+        "nodeClasses": {
+          "comment-mark": {
+            "$fn": "@macro-inc/lexical-core/nodes/CommentNode.CommentNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": true,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@macro-inc/lexical-core/nodes/CommentNode.$createCommentNode",
+          "args": [
+            {
+              "ids": [
+                "01990000-0000-7000-8000-000000000002"
+              ],
+              "isDraft": true
+            }
+          ],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "comment-mark",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "CommentNode.getIsDraft",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "CommentNode.setIsDraft",
+          "args": [
+            false
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "CommentNode.getIDs",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": [
+            "01990000-0000-7000-8000-000000000002"
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "CommentNode.getThreadId",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "CommentNode.exportJSON",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "comment-mark",
+            "version": 1,
+            "ids": [
+              "01990000-0000-7000-8000-000000000002"
+            ],
+            "threadId": {
+              "$undef": true
+            },
+            "isDraft": false
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:threadId",
+          "this": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "comment-mark",
+            "version": 1,
+            "ids": [
+              "01990000-0000-7000-8000-000000000002"
+            ],
+            "threadId": {
+              "$undef": true
+            },
+            "isDraft": false
+          },
+          "args": [],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": []
+        },
+        "normalized": []
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "",
+    "nodeMapKeys": [
+      "root"
+    ]
+  }
+}

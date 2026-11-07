@@ -1,0 +1,66 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-announcement.test.ts",
+    "test": [
+      "composeAgentSessionAnnouncement",
+      "composes a session chip without a legacy dedicated channel"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-announcement.composeAgentSessionAnnouncement",
+      "args": [
+        {
+          "replyTarget": {
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "please look at this",
+            "senderId": "macro|user@example.com"
+          },
+          "chip": {
+            "agentSessionId": "session-2",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        }
+      ],
+      "ret": "<m-reply-target>{\"parent\":{\"type\":\"channel\",\"id\":\"channel-1\"},\"targetMessageId\":\"message-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"please look at this\",\"senderId\":\"macro|user@example.com\"}</m-reply-target>\n\n<m-magic-chip>{\"agentSessionId\":\"session-2\",\"promptedMessage\":{\"turn\":0,\"author\":\"user\"},\"status\":\"booting\"}</m-magic-chip>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    }
+  ],
+  "tapes": [],
+  "final": null
+}
