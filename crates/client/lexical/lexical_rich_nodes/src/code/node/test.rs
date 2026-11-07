@@ -105,3 +105,25 @@ fn empty_code_enter_keeps_an_element_point() -> Result<(), Error> {
     })?;
     Ok(())
 }
+
+#[test]
+fn paragraph_command_preserves_code_indentation_at_middle_and_end() -> Result<(), Error> {
+    for (offset, expected) in [(3, "  a\n  bc"), (5, "  abc\n  ")] {
+        let mut editor = crate::code::register_code_nodes(Editor::builder(EditorMode::Headless))
+            .build()
+            .unwrap();
+        editor.update(|tx| {
+            let code = tx.create(CodeNode::default())?;
+            let text = tx.create_text("  abc")?;
+            tx.append(code, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[code.key()])?;
+            tx.select_start(text)?;
+            tx.set_text_node_range(text, Utf16Offset(offset), text, Utf16Offset(offset))?;
+            assert_eq!(tx.insert_paragraph()?, None);
+            assert_eq!(tx.text_content(code), expected);
+            assert_eq!(tx.children_size(NodeKey::ROOT), 1);
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
