@@ -136,8 +136,8 @@ pub struct NetProfile {
     pub connect_latency: (Millis, Millis),
     /// Probability of an abrupt socket break per frame.
     pub break_per_frame: f64,
-    /// Duplicate idempotent messages with this probability.
-    pub duplicate: f64,
+    /// Adversarial message scheduling; each link direction still preserves FIFO.
+    pub hostile: Option<Hostile>,
 }
 impl NetProfile {
     /// Reliable, low-latency network.
@@ -146,9 +146,19 @@ impl NetProfile {
             latency: (Millis(5), Millis(20)),
             connect_latency: (Millis(10), Millis(30)),
             break_per_frame: 0.0,
-            duplicate: 0.0,
+            hostile: None,
         }
     }
+}
+/// Adversarial whole-message faults; these runs assert the S8 safety subset.
+#[derive(Clone, Debug, Default)]
+pub struct Hostile {
+    /// Chance of adding a whole-message delay, changing only inter-connection order.
+    pub reorder: f64,
+    /// Chance of duplicating a complete idempotent message.
+    pub duplicate: f64,
+    /// Chance of dropping one chunk of a fragmented logical message.
+    pub drop_frame: f64,
 }
 /// Browser write completion latency.
 #[derive(Clone, Debug)]

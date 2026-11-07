@@ -487,3 +487,59 @@ fn cached_reopen_adopts_and_replays_durable_wal_after_seed_choice() {
     );
     assert!(outcome.stats.adopted_rows > 0);
 }
+
+#[test]
+fn hostile_whole_message_delays_and_duplicates_preserve_ack_safety() {
+    let script = [
+        Step::Open(OpenSpec::form("a", "one")),
+        Step::Open(OpenSpec::form("b", "two")),
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 1,
+                value: 42,
+            },
+        },
+        Step::Edit {
+            client: ClientName("b".into()),
+            op: AbstractOp::FormMove { from: 1, to: 4 },
+        },
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 2,
+                value: 81,
+            },
+        },
+        Step::Settle,
+    ];
+    for seed in 0..12 {
+        let outcome = verify(
+            SimConfig {
+                net: NetProfile {
+                    hostile: Some(Hostile {
+                        reorder: 1.0,
+                        duplicate: 0.5,
+                        drop_frame: 0.5,
+                    }),
+                    ..NetProfile::calm()
+                },
+                ties: TieMode::Perturb,
+                ..SimConfig::calm(seed)
+            },
+            &script,
+        );
+        invariants::core_acks_after_writes(&outcome).unwrap();
+        invariants::gate_releases_after_durable(&outcome).unwrap();
+        // Every message in this story fits in one frame. drop_frame applies only
+        // to fragmented messages, whose real codec path is tested separately.
+        assert!(
+            !outcome
+                .events
+                .iter()
+                .any(|event| matches!(&event.fact, Fact::Frame { fate, .. } if fate == "Dropped"))
+        );
+    }
+}

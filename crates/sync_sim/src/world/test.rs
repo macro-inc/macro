@@ -6,7 +6,10 @@ use doc_sync_core::SyncDoc;
 fn duplicate_multi_frame_updates_are_two_complete_fifo_messages() {
     let mut sim = Sim::new(SimConfig {
         net: NetProfile {
-            duplicate: 1.0,
+            hostile: Some(Hostile {
+                duplicate: 1.0,
+                ..Hostile::default()
+            }),
             ..NetProfile::calm()
         },
         ties: TieMode::Perturb,
@@ -154,4 +157,51 @@ fn chatter_is_fifo_even_with_perturbed_equal_time_scheduling() {
         assert!(at > previous);
         previous = at;
     }
+}
+
+#[test]
+fn hostile_fragment_loss_reaches_the_real_client_protocol_error_path() {
+    let mut sim = Sim::new(SimConfig::calm(89));
+    sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
+    sim.advance(500);
+    let key = sim
+        .net
+        .links
+        .iter()
+        .find(|(_, link)| link.open)
+        .unwrap()
+        .0
+        .clone();
+    sim.net.profile.hostile = Some(Hostile {
+        drop_frame: 1.0,
+        ..Hostile::default()
+    });
+    let doc = crate::document::SimDoc::new(9_002).unwrap();
+    doc.loro.get_map("fields").insert("3", 91).unwrap();
+    doc.loro
+        .commit_with(loro::CommitOptions::default().timestamp(1));
+    let bytes = doc.loro.export(loro::ExportMode::all_updates()).unwrap();
+    let mut message = Vec::new();
+    sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&bytes),
+    }
+    .serialize(&mut message)
+    .unwrap();
+    let frames = sync_protocol::framing::into_frames(&message, 16);
+    assert!(frames.len() > 1);
+    for frame in frames {
+        sim.transmit(
+            key.clone(),
+            Direction::ToClient,
+            FrameKind::Unknown,
+            Packet::Binary(frame),
+        );
+    }
+    sim.advance(500);
+    assert!(sim.events.iter().any(|event| matches!(&event.fact,
+        Fact::Frame { direction: Direction::ToClient, fate, .. } if fate == "Dropped")));
+    assert!(sim.events.iter().any(|event| matches!(&event.fact,
+        Fact::SocketClose { connection, reason, .. } if *connection == key.2 && reason == "ProtocolError")), "{:?}", sim.events.iter().filter(|event| event.at.0 >= 500).map(|event| &event.fact).collect::<Vec<_>>());
+    assert!(!sim.events.iter().any(|event| matches!(&event.fact,
+        Fact::Telemetry { name, .. } if name == "doc.sync.reset")));
 }

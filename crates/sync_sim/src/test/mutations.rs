@@ -204,3 +204,37 @@ fn a_previous_session_crash_does_not_exempt_later_session_edits() {
         .clear();
     assert!(invariants::no_edit_lost_without_crash(&outcome).is_err());
 }
+
+#[test]
+fn hostile_registry_skips_liveness_but_keeps_durable_ack_safety() {
+    let mut outcome = baseline();
+    outcome.config.net.hostile = Some(Hostile::default());
+    outcome
+        .events
+        .retain(|event| !matches!(event.fact, Fact::Settled));
+    outcome.quiet_events.push(Event {
+        at: Millis(99_999),
+        fact: Fact::SocketClose {
+            client: ClientName("a".into()),
+            connection: 1,
+            code: 1000,
+            reason: "ProtocolError".into(),
+        },
+    });
+    assert!(invariants::settled(&outcome).is_err());
+    assert!(invariants::quiet(&outcome).is_err());
+    invariants::check_all(&outcome).unwrap();
+    outcome
+        .finals
+        .servers
+        .get_mut(&DocIx(0))
+        .unwrap()
+        .persisted_vv
+        .clear();
+    assert!(
+        invariants::check_all(&outcome)
+            .unwrap_err()
+            .iter()
+            .any(|failure| failure.invariant == "no_acked_edit_lost")
+    );
+}
