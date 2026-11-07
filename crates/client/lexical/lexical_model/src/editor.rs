@@ -11,6 +11,11 @@ pub enum EditorMode {
 }
 /// Owns the current immutable snapshot and a non-rollback key allocator.
 pub struct Editor {
+    pub(crate) extensions: crate::extension::Extensions,
+    pub(crate) plugins: Vec<Arc<dyn Plugin>>,
+    pub(crate) listeners: crate::plugin::Listeners,
+    pub(crate) listener_table: ListenerTable,
+    pub(crate) initial_commits: Vec<Commit>,
     pub(crate) state: EditorState,
     pub(crate) keys: SharedKeyCounter,
     mode: EditorMode,
@@ -26,6 +31,11 @@ impl Editor {
         view_host: ViewHost,
     ) -> Result<Self, Error> {
         Ok(Self {
+            extensions: Default::default(),
+            plugins: vec![],
+            listeners: Default::default(),
+            listener_table: Default::default(),
+            initial_commits: vec![],
             state: EditorState::empty(registry)?,
             keys: match source {
                 KeySource::PerEditor => SharedKeyCounter::new(),
@@ -81,13 +91,15 @@ impl Editor {
     ) -> Result<(ValueType, Commit), Error> {
         let mut tx = self.transaction_with(options);
         let value = body(&mut tx)?;
-        Ok((value, tx.commit()?))
+        let commit = tx.commit()?;
+        Ok((value, self.run_after_commit(commit)))
     }
     /// Install a snapshot from this registry without transforming its contents.
     pub fn set_editor_state(&mut self, state: EditorState, tags: TagSet) -> Result<Commit, Error> {
         let mut tx = self.transaction();
         tx.install_state(state, tags)?;
-        tx.commit()
+        let commit = tx.commit()?;
+        Ok(self.run_after_commit(commit))
     }
     /// Run an update using the caller's error type.
     pub fn try_update<ValueType, Failure: From<Error>>(
@@ -97,7 +109,8 @@ impl Editor {
     ) -> Result<(ValueType, Commit), Failure> {
         let mut tx = self.transaction_with(options);
         let value = body(&mut tx)?;
-        Ok((value, tx.commit()?))
+        let commit = tx.commit()?;
+        Ok((value, self.run_after_commit(commit)))
     }
     /// Run an atomic update and publish its state on success.
     /// s2: UPD-01, UPD-05
@@ -108,7 +121,7 @@ impl Editor {
         let mut tx = self.transaction();
         let value = body(&mut tx)?;
         let commit = tx.commit()?;
-        Ok((value, commit))
+        Ok((value, self.run_after_commit(commit)))
     }
 }
 /// Browser or native view engine used for platform-specific input policy.

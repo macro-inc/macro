@@ -55,3 +55,10 @@ pub use commit::*;
 
 mod caret;
 pub use caret::*;
+
+mod command;
+pub use command::*;
+mod extension;
+pub use extension::*;
+mod plugin;
+pub use plugin::*;

@@ -19,6 +19,9 @@ pub enum DirtyIntent {
 }
 /// Pending state, published only by commit. Allocated keys are never rewound.
 pub struct Transaction<'editor> {
+    pub(crate) extensions: crate::extension::Extensions,
+    pub(crate) events: Vec<PluginEvent>,
+    pub(crate) default_prevented: bool,
     pub(crate) editor: &'editor mut Editor,
     pub(crate) pending: EditorState,
     pub(crate) dirty_leaves: IndexSet<NodeKey>,
@@ -48,6 +51,9 @@ impl<'editor> Transaction<'editor> {
             ..UpdateOptions::default()
         };
         Self {
+            extensions: editor.extensions.clone(),
+            events: vec![],
+            default_prevented: false,
             editor,
             pending,
             dirty_leaves: IndexSet::default(),
