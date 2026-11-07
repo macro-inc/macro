@@ -35,7 +35,9 @@ buffers; it does not require a wasm runtime.
 compatibility alongside the model packages. `lexical_rich_nodes` adds rich/plain
 text command functions, heading/quote/hashtag/overflow nodes, text entities and
 selection plugins, list nodes and structural list editing, link/autolink nodes,
-shared UTF-16 matchers and the pinned linkify-it port. Conformance replay calls
+shared UTF-16 matchers, the pinned linkify-it port, and table nodes, span maps,
+restructuring, selection hooks and model interaction handlers. Table handlers take
+host layout facts and return observer effects. Conformance replay calls
 these package APIs. Markdown, HTML and projection packages belong here too.
 
 Dependencies come from the root workspace table. The existing
