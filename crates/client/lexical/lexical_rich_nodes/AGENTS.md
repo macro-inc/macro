@@ -3,13 +3,14 @@
 ## What it is
 
 Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow
-text-entity and list behavior. DOM events, clipboard access and layout stay in views.
+text-entity, list behavior and table node/span-map primitives. DOM events, clipboard access and layout stay in views.
 
 ## Boundaries
 
 - Depends on `lexical_model` and the patched `regress`; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.
+- Table span reads retain map-time writable identity; frozen cells use captured fields, live cells read current fields.
 - Use selection slots in hooks; detached selections must not read the active range.
 - List handlers read through ListNode/ListItemNode ancestry so application subclasses inherit restructuring and intrinsic transforms.
 - Route host Enter through `list::register::handle_registered_insert_paragraph` before the rich-text fallback; it consumes registered numbering options.
