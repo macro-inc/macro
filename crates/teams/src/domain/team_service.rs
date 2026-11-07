@@ -26,6 +26,7 @@ use macro_user_id::{
     user_id::MacroUserIdStr,
 };
 use roles_and_permissions::domain::{model::RoleId, port::UserRolesAndPermissionsService};
+use team_id::TeamId;
 
 #[cfg(feature = "ports")]
 use model_entity::EntityType;
@@ -2110,11 +2111,12 @@ where
         Ok(team_member)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, team_id), fields(team_id = %team_id), err)]
     async fn revoke_permissions_for_team_members(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
     ) -> Result<(), RevokePermissionsForTeamMembersError> {
+        let team_id = team_id.as_uuid();
         // Revocation must not race a renewed seat's tier-role update.
         let _billing = self
             .customer_repository
@@ -2147,12 +2149,13 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, team_id), fields(team_id = %team_id), err)]
     async fn restore_permissions_for_team_members(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
         started: Option<SubscriptionStart>,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
+        let team_id = team_id.as_uuid();
         let _billing = self.customer_repository.lock_team_billing(team_id).await?;
         self.reconcile_team_billing_locked(
             team_id,
@@ -2162,8 +2165,9 @@ where
         .await
     }
 
-    #[tracing::instrument(skip(self), err)]
-    async fn team_bills_per_seat(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+    #[tracing::instrument(skip(self, team_id), fields(team_id = %team_id), err)]
+    async fn team_bills_per_seat(&self, team_id: &TeamId) -> Result<bool, TeamError> {
+        let team_id = team_id.as_uuid();
         if self
             .team_repository
             .get_team_enterprise_status(team_id)
@@ -2397,12 +2401,13 @@ where
         Ok(TeamMember { plan, ..member })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, team_id), fields(team_id = %team_id), err)]
     async fn patch_team_subscription_id(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
         subscription_id: &stripe::SubscriptionId,
     ) -> Result<(), TeamError> {
+        let team_id = team_id.as_uuid();
         self.team_repository
             .update_team_subscription(team_id, subscription_id)
             .await?;
@@ -2410,12 +2415,13 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, team_id), fields(team_id = %team_id), err)]
     async fn patch_team_payment_status(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
         paying: bool,
     ) -> Result<(), TeamError> {
+        let team_id = team_id.as_uuid();
         self.team_repository
             .update_team_payment_status(team_id, paying)
             .await?;

@@ -30,6 +30,7 @@ use roles_and_permissions::domain::{
     model::{PermissionId, RoleId, UserRolesAndPermissionsError},
     port::UserRolesAndPermissionsService,
 };
+use team_id::TeamId;
 
 use super::invite_reminders::{InviteReminderReport, InviteReminderSender};
 use crate::domain::{
@@ -2407,7 +2408,7 @@ async fn team_payment_revoke_removes_exact_premium_roles_from_members() {
     );
 
     service
-        .revoke_permissions_for_team_members(&team_id)
+        .revoke_permissions_for_team_members(&TeamId::from_uuid(team_id))
         .await
         .unwrap();
 
@@ -2447,7 +2448,7 @@ async fn team_payment_restore_adds_exact_premium_roles_to_members() {
     );
 
     service
-        .restore_permissions_for_team_members(&team_id, None)
+        .restore_permissions_for_team_members(&TeamId::from_uuid(team_id), None)
         .await
         .unwrap();
 
@@ -2506,7 +2507,7 @@ async fn team_subscription_activation_passes_free_to_paid_upgrades_to_billing() 
         let at = chrono::Utc::now();
         service
             .restore_permissions_for_team_members(
-                &team_id,
+                &TeamId::from_uuid(team_id),
                 Some(SubscriptionStart {
                     at,
                     period_start: at - chrono::Duration::seconds(1),
@@ -2522,7 +2523,7 @@ async fn team_subscription_activation_passes_free_to_paid_upgrades_to_billing() 
         assert_eq!(upserts.lock().unwrap().len(), 1);
         // Restoring payment on a later renewal does not replenish usage.
         service
-            .restore_permissions_for_team_members(&team_id, None)
+            .restore_permissions_for_team_members(&TeamId::from_uuid(team_id), None)
             .await
             .unwrap();
         assert_eq!(billing.plan_changes.lock().unwrap().len(), 1);
@@ -2545,7 +2546,7 @@ async fn failed_initial_usage_reset_keeps_free_roles_for_webhook_retry() {
     let at = chrono::Utc::now();
     let error = service
         .restore_permissions_for_team_members(
-            &team_id,
+            &TeamId::from_uuid(team_id),
             Some(SubscriptionStart {
                 at,
                 period_start: at - chrono::Duration::seconds(1),
@@ -2860,11 +2861,11 @@ async fn team_payment_patch_payment_status_delegates_to_repository() {
     );
 
     service
-        .patch_team_payment_status(&team_id, false)
+        .patch_team_payment_status(&TeamId::from_uuid(team_id), false)
         .await
         .unwrap();
     service
-        .patch_team_payment_status(&team_id, true)
+        .patch_team_payment_status(&TeamId::from_uuid(team_id), true)
         .await
         .unwrap();
 
@@ -8423,7 +8424,7 @@ async fn renewed_downgrades_update_membership_and_roles_without_resetting_usage(
     let service =
         build_member_plan_service(team, customer, roles).with_open_seat_release(billing.clone());
     service
-        .restore_permissions_for_team_members(&team_id, None)
+        .restore_permissions_for_team_members(&TeamId::from_uuid(team_id), None)
         .await
         .unwrap();
     assert_eq!(
@@ -8467,7 +8468,7 @@ async fn concurrent_renewal_cannot_overwrite_a_completed_max_upgrade() {
     let webhook_service = service.clone();
     let webhook = tokio::spawn(async move {
         webhook_service
-            .restore_permissions_for_team_members(&team_id, None)
+            .restore_permissions_for_team_members(&TeamId::from_uuid(team_id), None)
             .await
     });
     read.notified().await;
@@ -8510,7 +8511,7 @@ async fn concurrent_renewal_cannot_overwrite_a_completed_max_upgrade() {
             .contains(&RoleId::SubMax)
     );
     service
-        .restore_permissions_for_team_members(&team_id, None)
+        .restore_permissions_for_team_members(&TeamId::from_uuid(team_id), None)
         .await
         .unwrap();
     assert_eq!(writes.lock().unwrap().last().unwrap().2, SeatPlan::Max);
@@ -8684,7 +8685,7 @@ async fn failed_renewal_revocation_waits_for_member_removal_reconciliation() {
     let revoke_service = service.clone();
     let mut revoke = tokio::spawn(async move {
         revoke_service
-            .revoke_permissions_for_team_members(&team_id)
+            .revoke_permissions_for_team_members(&TeamId::from_uuid(team_id))
             .await
     });
     assert!(
@@ -8785,7 +8786,7 @@ async fn failed_renewal_marks_nonpaying_before_releasing_plan_change_guard() {
     let revoke_service = service.clone();
     let revoke = tokio::spawn(async move {
         revoke_service
-            .revoke_permissions_for_team_members(&team_id)
+            .revoke_permissions_for_team_members(&TeamId::from_uuid(team_id))
             .await
     });
     entered.notified().await;

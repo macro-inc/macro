@@ -82,6 +82,7 @@ decode_jwt = { path = "../../crates/decode_jwt" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 models_sfs = { path = "../../crates/models_sfs" }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
+team_id = { path = "../../crates/types/team_id" }
 user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
 email = { path = "../../crates/email", features = ["http_client", "outbound"] }
 email_db_client = { path = "../../crates/email_db_client" }

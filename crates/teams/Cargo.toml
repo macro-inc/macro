@@ -87,6 +87,7 @@ schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
+team_id = { path = "../types/team_id" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
