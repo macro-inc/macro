@@ -1,0 +1,14 @@
+crates/email crates/email/email
+crates/email_db_client crates/email/email_db_client
+crates/email_formatting crates/email/email_formatting
+crates/email_utils crates/email/email_utils
+crates/email_validator crates/email/email_validator
+crates/generic_email_domains crates/email/generic_email_domains
+crates/invite_email crates/email/invite_email
+crates/reminders crates/email/reminders
+crates/google_token crates/email/google_token
+crates/cal crates/calendar/cal
+crates/calendar_events crates/calendar/calendar_events
+crates/calendar_scheduling crates/calendar/calendar_scheduling
+crates/email/email_api_client_core crates/email/email_api_client_core
+crates/email/email_api_client_outbound crates/email/email_api_client_outbound
