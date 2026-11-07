@@ -30,7 +30,7 @@ per-package pass/fail/ledger counts and blocking APIs.
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model packages. `lexical_rich_nodes` adds rich/plain
 text command functions, heading/quote/hashtag/overflow nodes, text entities and
-selection plugins. Markdown, HTML and projection packages belong here too.
+selection plugins, list nodes and structural list editing. Markdown, HTML and projection packages belong here too.
 
 Dependencies come from the root workspace table. The existing
 `crates/client/*` hakari prefix exclusion also covers these nested crates; do not

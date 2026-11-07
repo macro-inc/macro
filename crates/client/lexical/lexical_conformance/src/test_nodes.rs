@@ -175,6 +175,8 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> EditorBuil
             "overflow" => builder
                 .node::<OverflowNode>()
                 .transform::<OverflowNode>(remove_empty_overflow),
+            "list" => builder.node::<lexical_rich_nodes::list::ListNode>(),
+            "listitem" => builder.node::<lexical_rich_nodes::list::ListItemNode>(),
             "heading" => builder.node::<lexical_rich_nodes::heading::HeadingNode>(),
             "quote" => builder.node::<lexical_rich_nodes::quote::QuoteNode>(),
             "hashtag" => builder.node::<lexical_rich_nodes::hashtag::HashtagNode>(),
