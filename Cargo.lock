@@ -10829,6 +10829,7 @@ dependencies = [
  "indexmap 2.14.0",
  "lazy-regex",
  "macro_user_id",
+ "models_databases",
  "pipedream_mcp",
  "rand 0.9.4",
  "rootcause",
@@ -10837,6 +10838,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

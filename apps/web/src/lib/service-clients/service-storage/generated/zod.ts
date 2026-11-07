@@ -7555,6 +7555,12 @@ export const applyCrmPipelineOpsBody = zod
                   .union([
                     zod
                       .object({
+                        ids: zod
+                          .array(zod.uuid())
+                          .optional()
+                          .describe(
+                            "The new rows' ids, minted by the client (UUIDv7), one per row in\norder, so later ops of the request and a retry can name them;\nleft out, the server mints them."
+                          ),
                         kind: zod.enum(['insert']),
                         rows: zod
                           .array(
@@ -14294,6 +14300,12 @@ export const applyDatabaseOpsBody = zod
                   .union([
                     zod
                       .object({
+                        ids: zod
+                          .array(zod.uuid())
+                          .optional()
+                          .describe(
+                            "The new rows' ids, minted by the client (UUIDv7), one per row in\norder, so later ops of the request and a retry can name them;\nleft out, the server mints them."
+                          ),
                         kind: zod.enum(['insert']),
                         rows: zod
                           .array(

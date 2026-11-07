@@ -9762,9 +9762,11 @@
       "crates/macro_env_var",
       "crates/macro_tower_layers",
       "crates/macro_user_id",
+      "crates/macro_uuid",
       "crates/mcp_toolset",
       "crates/model-error-response",
       "crates/model_user",
+      "crates/models_databases",
       "crates/pipedream_mcp",
       "crates/remote_env_var",
       "crates/workspace-hack"

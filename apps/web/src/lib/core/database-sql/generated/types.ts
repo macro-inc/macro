@@ -1636,6 +1636,12 @@ export type RowsChange =
        *  start empty.
        */
       rows: CellWrite[][];
+      /**
+       *  The new rows' ids, minted by the client (UUIDv7), one per row in
+       *  order, so later ops of the request and a retry can name them;
+       *  left out, the server mints them.
+       */
+      ids?: RowId[] | null;
     }
   /**
    *  Write cells of existing rows. Last write wins: there is no version
