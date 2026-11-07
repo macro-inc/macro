@@ -31,7 +31,7 @@ pub use transaction::*;
 mod test;
 
 mod collections;
-mod json;
+pub mod json;
 pub use json::*;
 mod raw_text;
 pub use raw_text::*;

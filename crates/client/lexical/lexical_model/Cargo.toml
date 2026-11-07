@@ -17,3 +17,4 @@ thiserror = { workspace = true }
 bitflags = { workspace = true }
 strum = { workspace = true }
 nom = { workspace = true }
+ryu-js = { workspace = true }

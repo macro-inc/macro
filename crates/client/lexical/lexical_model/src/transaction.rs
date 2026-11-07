@@ -541,7 +541,12 @@ impl<'editor> Transaction<'editor> {
             .get("type")
             .and_then(serde_json::Value::as_str)
             .ok_or(Error::Invariant("node type missing"))?;
-        let index = self.pending.registry.get_or_err(name)?.index;
+        let index = self
+            .pending
+            .registry
+            .get(name)
+            .ok_or_else(|| Error::UnknownSerializedType(name.to_owned()))?
+            .index;
         let key = (self.pending.registry.vtable(index).import)(self, json)?;
         if self.kind(key) == Some(NodeKind::Element)
             && let Some(children) = json.get("children").and_then(serde_json::Value::as_array)
