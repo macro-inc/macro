@@ -34,9 +34,7 @@ fn token(sim: &Sim, name: &str) -> String {
 #[test]
 fn delayed_dial_keeps_issued_identity_and_rejects_a_wrong_document_token() {
     let mut sim = Sim::new(SimConfig {
-        routed: true,
-        documents: 2,
-        ..SimConfig::calm(167)
+        ..SimConfig::routed(167)
     });
     sim.step(Step::Open(OpenSpec::form("a", "browser")))
         .unwrap();
@@ -73,10 +71,8 @@ fn delayed_dial_keeps_issued_identity_and_rejects_a_wrong_document_token() {
 #[test]
 fn connect_initial_sync_is_recorded_before_pumping_queued_requests() {
     let mut sim = Sim::new(SimConfig {
-        routed: true,
-        documents: 2,
         server_storage_latency: Millis(0),
-        ..SimConfig::calm(173)
+        ..SimConfig::routed(173)
     });
     sim.step(Step::Open(OpenSpec::form("a", "browser")))
         .unwrap();

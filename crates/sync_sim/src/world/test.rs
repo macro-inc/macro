@@ -161,7 +161,7 @@ fn chatter_is_fifo_even_with_perturbed_equal_time_scheduling() {
 
 #[test]
 fn hostile_fragment_loss_reaches_the_real_client_protocol_error_path() {
-    let mut sim = Sim::new(SimConfig::calm(89));
+    let mut sim = Sim::new(SimConfig::calm(90));
     sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
     sim.advance(500);
     let key = sim

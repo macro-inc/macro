@@ -285,7 +285,7 @@ impl Sim {
         }
     }
 }
-pub(super) fn canonical(value: serde_json::Value) -> serde_json::Value {
+pub(crate) fn canonical(value: serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => {
             let ordered = map
@@ -300,7 +300,7 @@ pub(super) fn canonical(value: serde_json::Value) -> serde_json::Value {
         other => other,
     }
 }
-fn canonical_finals(finals: &Finals) -> serde_json::Value {
+pub(crate) fn canonical_finals(finals: &Finals) -> serde_json::Value {
     let clients = finals.clients.iter().map(|(name, state)| serde_json::json!({ "name": name, "alive": state.alive, "terminal": state.terminal, "session": state.session, "profile": state.profile, "user": state.user, "doc": state.doc, "access": state.access, "kind": state.kind, "peer": state.peer, "vv": state.oplog_vv, "value": state.deep_value, "wal": state.wal_undelivered, "total": state.wal_total, "parked": state.parked, "status": format!("{:?}", state.status), "storage_healthy": state.storage_healthy, "pending": state.pending_import, "selection": state.selection, "presence_key": state.presence_key, "skew": state.skew })).collect::<Vec<_>>();
     let profiles = finals.profiles.iter().map(|(name, store)| serde_json::json!({ "name": name, "rows": store.entries.iter().collect::<Vec<_>>(), "snapshots": store.snapshots })).collect::<Vec<_>>();
     canonical(

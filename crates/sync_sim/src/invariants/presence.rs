@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// At first quiescence every live form client sees exactly its document's selected peers.
 pub fn presence_converged(outcome: &Outcome) -> Result<(), Failure> {
-    if outcome.script.iter().any(|step| matches!(step, Step::ClockSkew { wall_offset_ms, .. } if wall_offset_ms.unsigned_abs() > 2_500)) { return Ok(()) }
+    if outcome.script.iter().any(|step| matches!(step, Step::ClockSkew { wall_offset_ms, .. } if wall_offset_ms.unsigned_abs() > outcome.config.session.presence_timeout.0.unsigned_abs() / 2)) { return Ok(()) }
     let views = outcome.finals.presence.as_ref().ok_or_else(|| {
         Failure::new(
             "presence_converged",
@@ -99,7 +99,8 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
         let deadline = event
             .at
             .0
-            .saturating_add(5_000)
+            .saturating_add(outcome.config.session.presence_timeout.0.unsigned_abs())
+            .saturating_add(1)
             .saturating_add(max_latency)
             .saturating_add(skew);
         if observed_until < deadline {

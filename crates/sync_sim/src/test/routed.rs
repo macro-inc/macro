@@ -4,9 +4,7 @@ use super::*;
 fn two_documents_share_one_physical_router_and_recover_together() {
     let outcome = verify(
         SimConfig {
-            routed: true,
-            documents: 2,
-            ..SimConfig::calm(127)
+            ..SimConfig::routed(127)
         },
         &[
             Step::Open(OpenSpec::form("a", "browser")),
@@ -74,9 +72,7 @@ fn two_documents_share_one_physical_router_and_recover_together() {
 fn joining_a_route_resubscribes_and_detaching_one_owner_keeps_other_routes() {
     let outcome = verify(
         SimConfig {
-            routed: true,
-            documents: 2,
-            ..SimConfig::calm(131)
+            ..SimConfig::routed(131)
         },
         &[
             Step::Open(OpenSpec::form("a", "browser")),
@@ -146,9 +142,7 @@ fn joining_a_route_resubscribes_and_detaching_one_owner_keeps_other_routes() {
 fn routed_graceful_close_reopens_to_recover_the_coalesce_window() {
     verify(
         SimConfig {
-            routed: true,
-            documents: 2,
-            ..SimConfig::calm(137)
+            ..SimConfig::routed(137)
         },
         &[
             Step::Open(OpenSpec::form("a", "browser")),
@@ -216,10 +210,9 @@ fn routed_partition_and_lost_ack_replay_across_profiles_and_ties() {
     for seed in 140..148 {
         verify(
             SimConfig {
-                routed: true,
                 documents: 2,
                 ties: TieMode::Perturb,
-                ..SimConfig::calm(seed)
+                ..SimConfig::routed(seed)
             },
             &script,
         );
@@ -230,9 +223,7 @@ fn routed_partition_and_lost_ack_replay_across_profiles_and_ties() {
 fn routed_corruption_uses_inner_payloads_and_recovery_preserves_other_routes() {
     let outcome = verify(
         SimConfig {
-            routed: true,
-            documents: 2,
-            ..SimConfig::calm(149)
+            ..SimConfig::routed(149)
         },
         &[
             Step::Open(OpenSpec::form("a", "one")),
@@ -279,9 +270,7 @@ fn routed_corruption_uses_inner_payloads_and_recovery_preserves_other_routes() {
 fn routed_process_death_and_offline_handshakes_recover() {
     verify(
         SimConfig {
-            routed: true,
-            documents: 2,
-            ..SimConfig::calm(151)
+            ..SimConfig::routed(151)
         },
         &[
             Step::Open(OpenSpec::form("a", "browser")),
@@ -328,9 +317,7 @@ fn routed_process_death_and_offline_handshakes_recover() {
 fn closing_every_route_releases_the_physical_socket_before_reopen() {
     let outcome = verify(
         SimConfig {
-            routed: true,
-            documents: 2,
-            ..SimConfig::calm(157)
+            ..SimConfig::routed(157)
         },
         &[
             Step::Open(OpenSpec::form("a", "browser")),
@@ -378,9 +365,7 @@ fn closing_every_route_releases_the_physical_socket_before_reopen() {
 fn routed_tabs_and_a_direct_ai_worker_share_the_real_room() {
     verify(
         SimConfig {
-            routed: true,
-            documents: 2,
-            ..SimConfig::calm(163)
+            ..SimConfig::routed(163)
         },
         &[
             Step::Open(OpenSpec::form("a", "browser")),

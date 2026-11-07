@@ -30,11 +30,11 @@ fn two_form_clients_run_the_real_cores_and_are_deterministic() {
         first.per_step_failures
     );
     invariants::check_all(&first).unwrap();
-    assert_eq!(first.event_bytes, second.event_bytes);
-    assert_eq!(first.trace_hash, second.trace_hash);
+    first.compare_replay(&second).unwrap();
 }
 
 mod mutations;
+mod replay;
 mod routed;
 mod stories;
 
@@ -49,7 +49,6 @@ fn verify(config: SimConfig, script: &[Step]) -> Outcome {
     if let Err(errors) = invariants::check_all(&first) {
         panic!("{errors:?}");
     }
-    assert_eq!(first.event_bytes, second.event_bytes);
-    assert_eq!(first.trace_hash, second.trace_hash);
+    first.compare_replay(&second).unwrap();
     first
 }

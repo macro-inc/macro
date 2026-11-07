@@ -19953,6 +19953,7 @@ dependencies = [
  "doc_sync_core",
  "futures",
  "loro",
+ "macro_env_var",
  "macro_sync_service_jwt",
  "postcard",
  "rand 0.9.4",

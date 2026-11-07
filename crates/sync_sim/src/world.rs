@@ -17,7 +17,7 @@ mod inputs;
 mod outputs;
 mod router;
 mod steps;
-mod validation;
+pub(crate) mod validation;
 
 /// A whole single-threaded world driven only by seed and literal script.
 pub struct Sim {
@@ -40,6 +40,7 @@ pub struct Sim {
     prefixes: BTreeMap<(ProfileName, String, doc_sync_core::WalOwner), doc_sync_core::WalSeq>,
     budget_hit: bool,
     prefix_event: usize,
+    current_step: Option<usize>,
     tokens: BTreeMap<String, model::TokenGrant>,
     chatter_tails: BTreeMap<(SessionId, SessionId), u64>,
 }
@@ -66,10 +67,11 @@ impl Sim {
             prefixes: BTreeMap::new(),
             budget_hit: false,
             prefix_event: 0,
+            current_step: None,
             tokens: BTreeMap::new(),
             chatter_tails: BTreeMap::new(),
         };
-        if sim.config.routed && sim.config.documents < 2 {
+        if sim.config.session.transport == TransportKind::Routed && sim.config.documents < 2 {
             sim.fail(Failure::new(
                 "router_configuration",
                 "routed worlds require at least two documents",
@@ -106,7 +108,8 @@ impl Sim {
     }
     /// Run every transition and retain failures instead of panicking; then observe quiet time.
     pub fn run(mut self, script: &[Step]) -> Outcome {
-        for step in script {
+        for (index, step) in script.iter().enumerate() {
+            self.current_step = Some(index);
             if let Err(error) = self.step(step.clone()) {
                 self.fail(error)
             }
@@ -114,6 +117,7 @@ impl Sim {
                 self.validate();
             }
         }
+        self.current_step = None;
         let finals = self.finals();
         let quiet_start = self.events.len();
         self.advance(self.config.budgets.quiet.0);
@@ -158,6 +162,9 @@ impl Sim {
     fn fail(&mut self, mut failure: Failure) {
         if failure.at.is_none() {
             failure.at = Some(self.clock.now())
+        }
+        if failure.step.is_none() {
+            failure.step = self.current_step;
         }
         self.failures.push(failure);
     }
