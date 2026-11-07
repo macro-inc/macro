@@ -31,12 +31,24 @@ pub struct RunEnvironment {
     pub session_id: Option<Uuid>,
     /// Current execution handle made available to the program.
     pub execution_id: Option<Uuid>,
-    /// Explicit Macro SDK service base URLs, also used for Deno's network allowlist.
-    pub hosts: std::collections::BTreeMap<String, String>,
+    /// Where the SDK sends requests and what its links point at.
+    #[serde(flatten)]
+    pub endpoints: SdkEndpoints,
     /// Set for a program that runs with nobody watching (a routine step)
     /// instead of an agent's or a person's call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
+}
+
+/// The deployment's Macro SDK targets, so a program's requests and links stay
+/// in the environment it runs in.
+#[derive(Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkEndpoints {
+    /// Service base URLs, also used for Deno's network allowlist.
+    pub hosts: std::collections::BTreeMap<String, String>,
+    /// The web app origin that `webUrl()` links start with.
+    pub web_app_url: String,
 }
 
 /// How an unattended program runs: its source is TypeScript, and `main`

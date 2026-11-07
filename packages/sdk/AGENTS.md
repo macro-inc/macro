@@ -14,6 +14,8 @@ enforced by the ordinary backend APIs.
   reads (`scene`), edits (`apply` code against a revision, `edit` by instructions) and
   renders the live scene over DSS `/documents/{id}/canvas/*`; `render` returns a
   `StaticImage` the server stored, since static file storage rejects API keys.
+  `Canvas.webUrl()` is `/app/canvas/<id>`; `Document.webUrl()` uses the loaded
+  native file type's route and falls back to `/app/md/` before detail loads.
 - `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
   `Spreadsheet` (`src/entities/documents/spreadsheet.ts`) whose `read`,
   `calculate` and `applyEdits` run the spreadsheet tools' engine, and whose
@@ -42,7 +44,11 @@ enforced by the ordinary backend APIs.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
-  included) that the `ListCodingAgents` tool serves.
+  included) that the `ListCodingAgents` tool serves. `routines.create` takes
+  either the single agent task or `steps` (generated `CodeStep`s, agent steps
+  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
+  restricts to an explicit user request; `routineBody` maps both onto the
+  scheduler's `RoutineTask`.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -74,7 +80,10 @@ enforced by the ordinary backend APIs.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
-  { images })` and `thread.reply` as `static/image` attachments.
+  { images })` and `thread.reply` as `static/image` attachments, and
+  `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
+  shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
+  (pinned in `lexical-core/tests/generated-image.test.ts`).
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /

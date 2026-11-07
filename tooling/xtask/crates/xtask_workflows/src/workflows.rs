@@ -533,3 +533,57 @@ fn workflows_dir() -> Result<PathBuf> {
     }
     Ok(dir)
 }
+
+#[cfg(test)]
+mod handoff_tests {
+    #[test]
+    fn every_handoff_has_a_runtime_bound_and_attempt_scoped_destination() {
+        for workflow in [
+            super::deploy_all_services::deploy_all_services(),
+            super::reusable_deploy_service::reusable_deploy_service(),
+        ] {
+            let workflow = serde_json::to_value(workflow).unwrap();
+            for job in ["build-service-binaries", "build-lambda-artifacts"] {
+                let steps = workflow["jobs"][job]["steps"].as_array().unwrap();
+                let upload_index = steps
+                    .iter()
+                    .position(|step| step["name"] == "Upload handoff artifact")
+                    .unwrap();
+                let upload = &steps[upload_index];
+                assert!(steps[..upload_index].iter().any(|step| {
+                    step["uses"] == "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6"
+                        && step["with"]["bun-version"] == "1.3.13"
+                }));
+                assert_eq!(upload["timeout-minutes"], 20);
+                assert!(upload.get("continue-on-error").is_none());
+                let command = upload["run"].as_str().unwrap();
+                assert!(command.starts_with("bun .github/scripts/upload-handoff-artifact.ts "));
+                assert!(command.ends_with("\"$DEST\""));
+                let destination = upload["env"]["DEST"].as_str().unwrap();
+                assert!(
+                    destination
+                        .starts_with("handoff/${{ github.run_id }}-${{ github.run_attempt }}/")
+                );
+                assert!(destination.ends_with(if job == "build-service-binaries" {
+                    "/prebuilt-binaries.tar.gz"
+                } else {
+                    "/lambda-artifacts.tar.gz"
+                }));
+            }
+        }
+    }
+
+    #[test]
+    fn upload_retry_contract_and_process_lifecycle() {
+        let output = std::process::Command::new("bun")
+            .args(["test", "./.github/scripts/upload-handoff-artifact.test.ts"])
+            .current_dir(xtask_paths::repo_root())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

@@ -1008,12 +1008,16 @@ export class Document
   }
 
   /**
-   * The document's URL in the Macro web app.
+   * The document's URL in the Macro web app. A native canvas or spreadsheet
+   * whose detail has loaded links to its own editor; use `canvas().webUrl()`
+   * or `documents.spreadsheet()` when it has not.
    *
    * @readonly
    */
   webUrl(): string {
-    return `${this.client.webAppUrl}/app/md/${this.id}`;
+    const fileType = this.detail.peek()?.fileType;
+    const route = fileType && NATIVE_FILE_TYPES.has(fileType) ? fileType : 'md';
+    return `${this.client.webAppUrl}/app/${route}/${this.id}`;
   }
 
   /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */

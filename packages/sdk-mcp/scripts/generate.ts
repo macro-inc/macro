@@ -511,8 +511,15 @@ function convertObject(type: ts.Type, failures: string[]): Schema {
       ? checker.getTypeOfSymbolAtLocation(property, declaration)
       : checker.getTypeOfSymbol(property);
     const optional = (property.flags & ts.SymbolFlags.Optional) !== 0;
-    // An optional `signal` or callback is simply never passed.
-    if (optional && isOpaque(withoutUndefined(propertyType))) continue;
+    // An optional `signal` or callback is simply never passed, and a
+    // `?: never` member of a union variant can never be set.
+    const present = withoutUndefined(propertyType);
+    if (
+      optional &&
+      (isOpaque(present) ||
+        present.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Never))
+    )
+      continue;
     const nested: string[] = [];
     const schema = convert(
       optional ? withoutUndefined(propertyType) : propertyType,

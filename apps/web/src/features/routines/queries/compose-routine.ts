@@ -10,7 +10,7 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import type { ScheduleDraft } from '../core/draft';
 import { createEmptyDraft } from '../core/routine-draft';
-import { stepsFromTask } from '../core/routine-steps';
+import { stepsFromWire } from '../core/routine-steps';
 import { parseRoutineTriggers } from './routine-trigger-mapping';
 
 /** What the drafter may write, and the user's workspace by name and id. */
@@ -84,7 +84,7 @@ export function draftFromRoutine(
   routine: DraftedRoutine,
   defaultModel: string
 ): ScheduleDraft | string {
-  const steps = stepsFromTask({ steps: routine.steps });
+  const steps = stepsFromWire(routine.steps);
   if (!steps) return 'The draft used steps Macro can’t run. Try rephrasing.';
   const drafted = steps.map((step, index) => {
     const problems = routine.problems.find(

@@ -210,7 +210,7 @@ export class Canvas {
    * @readonly
    */
   webUrl(): string {
-    return this.document.webUrl();
+    return `${this.client.webAppUrl}/app/canvas/${this.id}`;
   }
 
   /**
@@ -371,7 +371,8 @@ export class Canvas {
 
   /**
    * Render the canvas to a PNG with Macro's real canvas renderer, kept as a
-   * static image to attach to messages with `channel.send(text, { images })`.
+   * static image: show it in a reply with `toMarkdown()` (never a document
+   * mention of its id), or attach it with `channel.send(text, { images })`.
    *
    * Pass `items` to fit a selection or `crop` for exact world bounds. No UI,
    * cursors or selection is drawn; referenced media the renderer can't load
@@ -381,8 +382,15 @@ export class Canvas {
    *
    * @example Post a picture of the canvas to a channel.
    * ```js
-   * const image = await document.canvas().render();
-   * await channel.send(`Current plan: ${document.webUrl()}`, { images: [image] });
+   * const canvas = document.canvas();
+   * const image = await canvas.render();
+   * await channel.send(`Current plan: ${canvas.webUrl()}`, { images: [image] });
+   * ```
+   *
+   * @example Show the render in your reply.
+   * ```js
+   * const image = await canvas.render();
+   * return { data: { link: canvas.webUrl(), image: image.toMarkdown() } };
    * ```
    *
    * @write
