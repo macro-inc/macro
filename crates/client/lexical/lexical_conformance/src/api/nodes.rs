@@ -10,6 +10,10 @@ pub(crate) fn call(
     a: &[Value],
 ) -> Result<Value> {
     let key = node_key(receiver)?;
+    if let Some(value) = super::macro_edit::call(r, tx, key, method, a)? {
+        return Ok(value);
+    }
+
     // These public accessors call getLatest() in upstream. Raw get:__fields
     // resolve the receiver's captured version in properties.rs instead.
     let snapshot = r.read_state.clone().or_else(|| {

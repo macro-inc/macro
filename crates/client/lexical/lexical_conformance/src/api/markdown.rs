@@ -18,6 +18,15 @@ fn registry(value: Option<&Value>) -> Result<Transformers> {
     let mut out = Vec::new();
     for value in array {
         let name = string(&value["$transformer"])?;
+        if let Some(index) = name.strip_prefix(
+            "@macro-inc/lexical-core/transformers/transformers.HTML_ENTITY_TRANSFORMERS.",
+        ) {
+            out.push(macro_document_model::transformers::transformer(
+                &format!("HTML_ENTITY_{index}"),
+                &Default::default(),
+            )?);
+            continue;
+        }
         if name.starts_with("@macro-inc/lexical-core/transformers.") {
             out.push(macro_document_model::transformers::from_source_reference(
                 name,
@@ -43,7 +52,8 @@ fn registry(value: Option<&Value>) -> Result<Transformers> {
             "STRIKETHROUGH" => Transformer::TextFormat(STRIKETHROUGH.clone()),
             "ITALIC_STAR" => Transformer::TextFormat(ITALIC_STAR.clone()),
             "ITALIC_UNDERSCORE" => Transformer::TextFormat(ITALIC_UNDERSCORE.clone()),
-            _ => return Err(fail(format!("unmapped markdown transformer: {name}"))),
+            _ => macro_document_model::transformers::transformer(name, &Default::default())
+                .map_err(|_| fail(format!("unmapped markdown transformer: {name}")))?,
         });
     }
     Ok(Transformers::new(out))
