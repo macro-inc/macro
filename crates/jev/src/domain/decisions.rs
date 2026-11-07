@@ -3,7 +3,7 @@
 use super::{
     DecisionRequest, DecisionResponse, DecisionValidationError, JevError, YesNoClassifier,
 };
-use ai_billing::{AiAdmissionError, AiAdmissionService};
+use ai_admission::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageContext};
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
