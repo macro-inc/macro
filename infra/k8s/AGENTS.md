@@ -31,6 +31,8 @@ Compose and `run_local` remain independent.
 
 - Keep Secret values out of Nix arguments, derivations and rendered manifests;
   only the runtime Secret revision hash may enter Nix.
+- Gate bootstrap Jobs on the dependency Deployment rollout before testing TCP;
+  an old pod can still accept connections while its replacement is starting.
 - Keep all initialization in Jobs, ready.d hooks or init containers. The host
   controller must never provision services or forward their ports.
 - Preserve existing PVC names and the `app` Deployment selector when adopting

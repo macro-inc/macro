@@ -2,44 +2,38 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   labels:
-    app: search-indices
-    app.kubernetes.io/name: search-indices
+    app: kafka-topics
+    app.kubernetes.io/name: kafka-topics
     app.kubernetes.io/part-of: macro
     macro.com/instance: reference
-    macro.com/job: search-indices
+    macro.com/job: kafka-topics
     macro.com/tier: infra
     macro.local/managed: "true"
-  name: search-indices-2e66d41f77
+  name: kafka-topics-3499b6de8b
   namespace: macro-kube-reference
 spec:
   backoffLimit: 10
   template:
     metadata:
       labels:
-        app: search-indices
-        app.kubernetes.io/name: search-indices
+        app: kafka-topics
+        app.kubernetes.io/name: kafka-topics
         app.kubernetes.io/part-of: macro
         macro.com/instance: reference
-        macro.com/job: search-indices
+        macro.com/job: kafka-topics
         macro.com/tier: infra
         macro.local/managed: "true"
     spec:
       containers:
         - args: []
           command: []
-          env:
-            - name: DRY_RUN
-              value: "false"
-            - name: ENVIRONMENT
-              value: local
-            - name: OPENSEARCH_URL
-              value: http://search:9200
+          env: []
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/search-indices:build.jz976f4l0zhjmlcrwqy54bijdddph4q8
+          image: localhost:32550/macro/kafka-topics:build.hfjj6i8gyvmw4zdvh5ga3f5h50hpdyxl
           imagePullPolicy: IfNotPresent
-          name: search-indices
+          name: kafka-topics
           ports: []
           resources: {}
           volumeMounts:
@@ -50,8 +44,8 @@ spec:
         - command:
             - /bin/sh
             - -ec
-            - until nc -z -w 1 search 9200; do sleep 0.2; done
-          image: localhost:32550/macro/network-wait:build.za8l72vw7bi95wmxhbrb19bknlzbqcjf
+            - until kubectl rollout status deployment/kafka --timeout=600s; do sleep 0.2; done; until nc -z -w 1 kafka 29092; do sleep 0.2; done
+          image: localhost:32550/macro/readiness:build.smghxgld6q7kd9samdjm65jjgd5zm50c
           name: dependency
       restartPolicy: OnFailure
       securityContext: {}

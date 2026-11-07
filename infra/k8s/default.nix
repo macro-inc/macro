@@ -106,6 +106,15 @@ rec {
                   "watch"
                 ];
               }
+              {
+                apiGroups = [ "apps" ];
+                resources = [ "deployments" ];
+                verbs = [
+                  "get"
+                  "list"
+                  "watch"
+                ];
+              }
             ];
           };
           roleBindings.bootstrap-reader = {

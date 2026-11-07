@@ -13,8 +13,25 @@ let
     src = ../..;
     filter =
       path: type:
-      craneLib.filterCargoSources path type
-      || builtins.match ".*\\.(sql|pem|md|html|txt|json|sh|proto)$" path != null;
+      let
+        rel = pkgs.lib.removePrefix (toString ../.. + "/") (toString path);
+        unrelated = builtins.any (prefix: rel == prefix || pkgs.lib.hasPrefix (prefix + "/") rel) [
+          ".agents"
+          "docs"
+          "infra"
+        ];
+        guidance = builtins.elem (baseNameOf path) [
+          "AGENTS.md"
+          "CLAUDE.md"
+          "CODING.md"
+        ];
+      in
+      !unrelated
+      && !guidance
+      && (
+        craneLib.filterCargoSources path type
+        || builtins.match ".*\\.(sql|pem|md|html|txt|json|sh|proto)$" path != null
+      );
   };
 in
 craneLib.buildPackage {

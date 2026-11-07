@@ -17,11 +17,11 @@ let
     job = true;
     infra = true;
     initContainers.dependency = {
-      image = platformPkgs.utilityImages.network-wait.ref;
+      image = platformPkgs.utilityImages.readiness.ref;
       command = [
         "/bin/sh"
         "-ec"
-        "until nc -z -w 1 ${host} ${toString port}; do sleep 0.2; done"
+        "until kubectl rollout status deployment/${host} --timeout=600s; do sleep 0.2; done; until nc -z -w 1 ${host} ${toString port}; do sleep 0.2; done"
       ];
     };
   };

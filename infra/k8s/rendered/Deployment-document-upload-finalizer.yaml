@@ -66,14 +66,14 @@ spec:
             - /bin/sh
             - -ec
             - |
-              until kubectl get job kafka-topics-6b294d8b7c >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/kafka-topics-6b294d8b7c --timeout=600s
+              until kubectl get job kafka-topics-3499b6de8b >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-3499b6de8b --timeout=600s
 
-              until kubectl get job migrate-b1d851739c >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/migrate-b1d851739c --timeout=600s
+              until kubectl get job migrate-ac72207dc7 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/migrate-ac72207dc7 --timeout=600s
 
-              until kubectl get job search-indices-2e66d41f77 >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/search-indices-2e66d41f77 --timeout=600s
+              until kubectl get job search-indices-c2bd22515d >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/search-indices-c2bd22515d --timeout=600s
 
               for endpoint in fusionauth:9011 localstack:4566 redis:6379; do
                 until nc -z -w 1 "${endpoint%:*}" "${endpoint#*:}"; do sleep 0.2; done
