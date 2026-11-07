@@ -111,3 +111,12 @@ upstream row-major, reverse-descendant traversal and detached-range formatting.
 Observer actions return model outcomes to the view. The four application
 clear-text tests preserve one childless paragraph per cleared cell before
 normalization, including a key-allocation guard against an empty text child.
+
+`table::commands` implements insertion, select-all, triple-click and table paste.
+Clipboard tables unmerge/grow/fill the destination using upstream's captured
+intermediate maps. Shared caret-based root insertion also serves list lifting.
+`table::handlers` returns event-claiming and observer effects; `TableView` supplies
+only typeahead, cell-element presence and visual caret-edge facts. Clipboard I/O,
+pointer lifecycle, highlights and event cancellation remain in the host.
+Literal tests cover caret navigation, merged rectangles, edge paragraphs, Tab,
+cut/deletion, formatting, crossing ranges and touch/Firefox selection correction.
