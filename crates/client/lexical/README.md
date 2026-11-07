@@ -72,7 +72,7 @@ units. Its `find_from_utf16` API decodes surrogate pairs regardless of flags;
 that would skip individual surrogates which JavaScript without `u` can match.
 The conformance test covers this distinction over the complete BMP input.
 
-The rich-node package includes stored code/highlight preservation, plain code editing, inline marks, selection/tree/text/offset helpers and model clipboard strings. Its replayer executes all admitted code, mark and utility fixtures without package ledger entries. The recorder index still distinguishes unavailable B-only cases and view assertions; HTML export is the later `lexical_html` layer.
+The rich-node package includes stored code/highlight preservation, plain code editing, inline marks, selection/tree/text/offset helpers and model clipboard strings. Its replayer routes code, mark and utility calls through these APIs; expanded-corpus gaps remain explicit. The recorder index still distinguishes unavailable B-only cases and view assertions; Portable HTML export is provided by `lexical_html`.
 
 `lexical_markdown` provides portable markdown import/export, ordered transformer
 contracts, standard block/inline groups and sans-IO insertion/Enter shortcuts. The Tier A interpreter routes markdown
