@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "message_parent"
+publish = false
+version = "0.1.0"
+
+[features]
+json-schema = ["dep:schemars"]
+schema = ["dep:utoipa"]
+
+[dependencies]
+model-entity = { path = "../../model-entity" }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

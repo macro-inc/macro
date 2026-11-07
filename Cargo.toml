@@ -117,6 +117,7 @@ members = [
   "crates/memory",
   "crates/messages",
   "crates/model_owner",
+  "crates/types/message_parent",
   "crates/mcp_select",
   "crates/mcp_toolset",
   "crates/natural_time",

@@ -29,10 +29,10 @@ inbound = [
   "ports",
   "schema",
 ]
-json-schema = ["dep:schemars"]
+json-schema = ["dep:schemars", "message_parent/json-schema"]
 outbound = ["dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
-schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
+schema = ["channel_sender/schema", "dep:utoipa", "activity/schema", "message_parent/schema"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
@@ -55,6 +55,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
 macro_event_topics = { path = "../macro_event_topics", optional = true }
 macro_user_id = { path = "../macro_user_id" }
+message_parent = { path = "../types/message_parent" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 mockall = { workspace = true, optional = true }
 model = { path = "../model", optional = true }
