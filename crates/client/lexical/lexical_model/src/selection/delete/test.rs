@@ -427,3 +427,22 @@ fn collapsed_remove_reports_selection_update_without_dirty_nodes() -> Result<(),
     assert!(commit.changes.mutations.is_empty());
     Ok(())
 }
+
+#[test]
+fn removing_between_empty_paragraph_starts_merges_the_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(first, ChildIndex(0)),
+            Point::element(last, ChildIndex(0)),
+        ))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![first.key()]);
+        assert_eq!(tx.anchor()?, Point::element(first, ChildIndex(0)));
+        Ok(())
+    })?;
+    Ok(())
+}
