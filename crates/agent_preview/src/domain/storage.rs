@@ -1,6 +1,6 @@
 //! Shared preview records. A preview ID is also its generation fence.
 use super::{Preview, PreviewError, PreviewId, PreviewStatus};
-use agent_fold::domain::log::AgentSessionId;
+use agent_session_id::AgentSessionId;
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};

@@ -11,64 +11,9 @@
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
-/// The identity of an agent session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AgentSessionId(Uuid);
-
-impl AgentSessionId {
-    /// A fixed id for tests.
-    #[cfg(any(test, feature = "test-utils"))]
-    pub const TEST_A: Self = Self(Uuid::from_u128(0xA));
-
-    /// A second fixed id for tests that need two distinct sessions.
-    #[cfg(any(test, feature = "test-utils"))]
-    pub const TEST_B: Self = Self(Uuid::from_u128(0xB));
-
-    /// Mint a fresh session id, backed by a UUIDv7.
-    #[expect(clippy::new_without_default, reason = "each call mints a distinct id")]
-    #[must_use]
-    pub fn new() -> Self {
-        Self(macro_uuid::generate_uuid_v7())
-    }
-
-    /// Wrap an existing UUID as an agent session id.
-    #[must_use]
-    pub fn new_from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
-    /// The underlying UUID.
-    #[must_use]
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
-    }
-}
-
-/// A string that does not name an agent session.
-#[derive(Debug, thiserror::Error)]
-#[error("invalid agent session id")]
-pub struct InvalidAgentSessionId;
-
-impl std::str::FromStr for AgentSessionId {
-    type Err = InvalidAgentSessionId;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        value
-            .parse::<Uuid>()
-            .map(Self)
-            .map_err(|_| InvalidAgentSessionId)
-    }
-}
-
-impl std::fmt::Display for AgentSessionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
+pub use agent_session_id::{AgentSessionId, InvalidAgentSessionId};
 
 /// One protocol frame, tagged with the direction it travelled.
 ///

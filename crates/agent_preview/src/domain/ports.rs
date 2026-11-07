@@ -1,6 +1,6 @@
 //! Capabilities needed to expose an authenticated preview.
 use super::{AgentIdentity, Preview, PreviewError};
-use agent_fold::domain::log::AgentSessionId;
+use agent_session_id::AgentSessionId;
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::io::{AsyncRead, AsyncWrite};

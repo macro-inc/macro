@@ -3,7 +3,7 @@
 use crate::domain::acp_session::{SessionStore, StoredSession};
 use crate::domain::cloud::TurnId;
 use crate::domain::journal::{JournalEntry, JournalInput};
-use agent_session::domain::model::{AgentSessionId, ManagerFence, ReplicaId};
+use agent_session_id::{AgentSessionId, ManagerFence, ReplicaId};
 use sqlx::PgPool;
 use std::sync::{Arc, OnceLock};
 
