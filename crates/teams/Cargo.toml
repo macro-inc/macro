@@ -108,6 +108,7 @@ sqs_client = { workspace = true, features = [
 ], optional = true }
 url = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+team_id = { workspace = true }
 
 [dev-dependencies]
 roles_and_permissions = { workspace = true, features = [

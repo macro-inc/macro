@@ -386,14 +386,14 @@ impl TeamService for FakeTeamService {
 
     async fn revoke_permissions_for_team_members(
         &self,
-        _team_id: &uuid::Uuid,
+        _team_id: &team_id::TeamId,
     ) -> Result<(), RevokePermissionsForTeamMembersError> {
         panic!("unexpected revoke_permissions_for_team_members call")
     }
 
     async fn restore_permissions_for_team_members(
         &self,
-        _team_id: &uuid::Uuid,
+        _team_id: &team_id::TeamId,
         _started: Option<crate::domain::open_seat_release::SubscriptionStart>,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
         panic!("unexpected restore_permissions_for_team_members call")
@@ -401,7 +401,7 @@ impl TeamService for FakeTeamService {
 
     async fn patch_team_subscription_id(
         &self,
-        _team_id: &uuid::Uuid,
+        _team_id: &team_id::TeamId,
         _subscription_id: &stripe::SubscriptionId,
     ) -> Result<(), TeamError> {
         panic!("unexpected patch_team_subscription_id call")
@@ -409,7 +409,7 @@ impl TeamService for FakeTeamService {
 
     async fn patch_team_payment_status(
         &self,
-        _team_id: &uuid::Uuid,
+        _team_id: &team_id::TeamId,
         _paying: bool,
     ) -> Result<(), TeamError> {
         panic!("unexpected patch_team_payment_status call")
@@ -476,7 +476,7 @@ impl TeamService for FakeTeamService {
         panic!("unexpected set_team_member_plan call")
     }
 
-    async fn team_bills_per_seat(&self, _team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+    async fn team_bills_per_seat(&self, _team_id: &team_id::TeamId) -> Result<bool, TeamError> {
         panic!("unexpected team_bills_per_seat call")
     }
 

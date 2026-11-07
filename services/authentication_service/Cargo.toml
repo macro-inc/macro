@@ -210,6 +210,7 @@ email_service_url = { workspace = true }
 scheduled_action_service_url = { workspace = true }
 static_file_public_url = { workspace = true }
 static_file_service_url = { workspace = true }
+team_id = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"

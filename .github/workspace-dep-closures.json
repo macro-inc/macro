@@ -944,6 +944,7 @@
       "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/unfurl",
       "crates/universal_input",
       "crates/upstream_error",
@@ -1163,6 +1164,7 @@
       "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -1603,6 +1605,7 @@
       "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/unfurl",
       "crates/workspace-hack",
       "services/agent_trigger_service"
@@ -1720,6 +1723,8 @@
       "crates/types/bearer_token",
       "crates/types/chat_message",
       "crates/types/entity_basic_types",
+      "crates/types/id_newtype",
+      "crates/types/team_id",
       "crates/workspace-hack",
       "tooling/ai_billing_cli"
     ],
@@ -1964,6 +1969,7 @@
       "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/web_search",
@@ -2383,6 +2389,7 @@
       "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -2750,6 +2757,8 @@
       "crates/types/bearer_token",
       "crates/types/chat_message",
       "crates/types/entity_basic_types",
+      "crates/types/id_newtype",
+      "crates/types/team_id",
       "crates/workspace-hack"
     ],
     "calendar_service": [
@@ -2835,6 +2844,8 @@
       "crates/types/bearer_token",
       "crates/types/chat_message",
       "crates/types/entity_basic_types",
+      "crates/types/id_newtype",
+      "crates/types/team_id",
       "crates/workspace-hack",
       "services/calendar_service"
     ],
@@ -3127,6 +3138,7 @@
       "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/web_search",
@@ -4949,6 +4961,7 @@
       "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -6442,6 +6455,7 @@
       "crates/types/entity_basic_types",
       "crates/types/id_newtype",
       "crates/types/message_parent",
+      "crates/types/team_id",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -13007,6 +13021,11 @@
       "crates/types/message_parent",
       "crates/workspace-hack"
     ],
+    "team_id": [
+      "crates/macro_uuid",
+      "crates/types/id_newtype",
+      "crates/types/team_id"
+    ],
     "teammate_dm_backfill": [
       "crates/activity",
       "crates/agent_correlation",
@@ -13090,8 +13109,10 @@
       "crates/types/bearer_token",
       "crates/types/chat_message",
       "crates/types/entity_basic_types",
+      "crates/types/id_newtype",
       "crates/types/message_parent",
       "crates/types/soup_property",
+      "crates/types/team_id",
       "crates/workspace-hack",
       "tooling/teammate_dm_backfill"
     ],
@@ -13158,6 +13179,8 @@
       "crates/types/bearer_token",
       "crates/types/chat_message",
       "crates/types/entity_basic_types",
+      "crates/types/id_newtype",
+      "crates/types/team_id",
       "crates/workspace-hack"
     ],
     "trigger_context": [

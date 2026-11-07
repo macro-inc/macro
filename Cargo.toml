@@ -189,6 +189,7 @@ members = [
   "crates/types/id_newtype",
   "crates/types/message_parent",
   "crates/types/soup_property",
+  "crates/types/team_id",
   "crates/unfurl",
   "crates/universal_input",
   "crates/upstream_error",
@@ -887,6 +888,7 @@ system_properties = { path = "crates/system_properties" }
 system_skills = { path = "crates/system_skills" }
 system_status = { path = "crates/system_status" }
 task_dedup = { path = "crates/task_dedup" }
+team_id = { path = "crates/types/team_id" }
 teams = { path = "crates/teams", default-features = false }
 trigger_context = { path = "crates/trigger_context" }
 turso-opfs = { path = "crates/client/turso-opfs" }

@@ -6,6 +6,7 @@ use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
 };
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use team_id::TeamId;
 
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, DueInviteReminder,
@@ -483,7 +484,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn revoke_permissions_for_team_members(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
     ) -> impl Future<Output = Result<(), RevokePermissionsForTeamMembersError>> + Send;
 
     /// Restores permissions for all team members.
@@ -491,7 +492,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn restore_permissions_for_team_members(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
         started: Option<super::open_seat_release::SubscriptionStart>,
     ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
 
@@ -512,14 +513,14 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// every member pays for themself and seat plans do not apply.
     fn team_bills_per_seat(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
     /// Patches the team subscription id
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn patch_team_subscription_id(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
         subscription_id: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
@@ -527,7 +528,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn patch_team_payment_status(
         &self,
-        team_id: &uuid::Uuid,
+        team_id: &TeamId,
         paying: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
