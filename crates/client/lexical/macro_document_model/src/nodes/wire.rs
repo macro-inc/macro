@@ -222,10 +222,4 @@ pub(super) fn own_json(ty: &str, source: &SerializedNode) -> crate::Result<Seria
     }
     Ok(json)
 }
-pub(super) fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Null => "null".into(),
-        value => to_js_json_string(value),
-    }
-}
+pub(super) use lexical_model::js_string;

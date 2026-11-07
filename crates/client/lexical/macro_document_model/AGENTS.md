@@ -3,7 +3,7 @@
 ## What it is
 
 Portable Macro node payloads, model hooks and exact export/headless/web registries.
-Markdown transformers and routes are separate work packages.
+The transformer layer uses the shared lexical_markdown engine; route adapters are separate.
 
 ## Boundaries
 
@@ -19,6 +19,9 @@ Markdown transformers and routes are separate work packages.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.
+- Keep source object order and regex metadata in transformers/catalog.json generated from TS.
+- Match transformer constructor arguments independently of static JSON import policy.
+- Supply external document-link hostnames through MacroMarkdownOptions.
 - Keep this client crate excluded from workspace-hack.
 
 ## Checks
@@ -28,4 +31,6 @@ Markdown transformers and routes are separate work packages.
 - `TMPDIR=/home/wolf/tmp cargo check -p macro_document_model --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p macro_document_model --all-targets -j4 -- -D warnings`
 - `bun packages/lexical-conformance/corpus/synthetic.ts` regenerates fixed JSON oracles.
+- `bun packages/lexical-conformance/corpus/transformers.ts --check` checks source metadata.
+- `bun packages/lexical-conformance/corpus/macro-markdown.ts --check` checks the supplemental source conversion oracle.
 - `cargo x deps --check`, `cargo shear`, `just check`

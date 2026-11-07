@@ -18,6 +18,13 @@ fn registry(value: Option<&Value>) -> Result<Transformers> {
     let mut out = Vec::new();
     for value in array {
         let name = string(&value["$transformer"])?;
+        if name.starts_with("@macro-inc/lexical-core/transformers.") {
+            out.push(macro_document_model::transformers::from_source_reference(
+                name,
+                &macro_document_model::transformers::MacroMarkdownOptions::default(),
+            )?);
+            continue;
+        }
         let name = name.rsplit('.').next().unwrap_or(name);
         out.push(match name {
             "HEADING" => Transformer::Element(Arc::new(Heading)),
