@@ -49,7 +49,7 @@ Every direct edit tool has the same two layers:
 
 The sandbox (`crates/code_execution`) runs a fresh `deno` process per call:
 30 s, 128 MiB heap, `--deny-import --no-remote --no-npm`, and network limited
-to the hosts in `sdk_hosts()` (DSS, auth, cognition, email and others). Neither
+to the hosts in `sdk_endpoints()` (DSS, auth, cognition, email and others). Neither
 sync-service nor the ai-editing-worker is on that list. The SDK bundle
 (`sdk.mjs`, 375 KB) has no WASM.
 

@@ -452,6 +452,29 @@ const transcript = await routine.execute(); // Chat or AgentSession, if availabl
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
+A routine can instead run `steps` in order: `code` steps run TypeScript against
+this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
+hands the run to a model or agent. Code steps' writes are attributed to Macro's
+agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
+user explicitly asks for the routine to act, send or post as them:
+
+```ts
+await macro.routines.create({
+  name: 'Say hello',
+  trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+  steps: [
+    {
+      type: 'code',
+      title: 'Post hello',
+      source: `export async function main({ macro }: StepContext) {
+  await macro.channels.byId(channelId).send('Hello');
+}`,
+    },
+  ],
+  dangerouslyOperateAsUser: true,
+});
+```
+
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
