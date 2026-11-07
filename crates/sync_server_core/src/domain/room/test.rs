@@ -71,6 +71,7 @@ impl Connections for Runtime {
         Ok(())
     }
     fn close(&self, socket: &Self::Socket, _: CloseReason) -> io::Result<()> {
+        self.events.borrow_mut().push("close");
         self.closed.borrow_mut().push(socket.as_str().into());
         Ok(())
     }
@@ -85,6 +86,7 @@ impl AlarmScheduler for Runtime {
         Ok(())
     }
     async fn cancel(&self) -> io::Result<()> {
+        self.events.borrow_mut().push("cancel");
         Ok(())
     }
 }
@@ -153,7 +155,8 @@ impl PeerDirectory for Runtime {
         Ok(None)
     }
     async fn delete_document(&self, _document: &SessionKey) -> Result<(), Self::Error> {
-        panic!("unexpected peer call: delete_document")
+        self.events.borrow_mut().push("delete-peers");
+        Ok(())
     }
 }
 
@@ -273,6 +276,7 @@ fn update(peer: u64) -> Vec<u8> {
 mod alarm;
 mod atomic;
 mod connection;
+mod delete;
 mod frame;
 
 mod http;

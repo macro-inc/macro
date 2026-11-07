@@ -112,6 +112,7 @@ impl<Ports: RoomPorts> Room<Ports> {
 }
 
 mod connection;
+mod delete;
 mod error;
 pub use connection::{ConnectOutcome, SocketOf};
 pub use error::{PortName, RoomError};

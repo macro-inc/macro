@@ -46,3 +46,5 @@ frame dispatch, comment-gate policy and message telemetry live in `frame.rs`; ru
 remain callback arguments. Local rootcause reports retain non-Send port errors.
 
 Atomic document snapshot/update orchestration lives in `src/domain/room/atomic.rs`; HTTP method, streaming limits and JSON/base64 parsing remain in the Worker adapter.
+
+Session deletion order and volatile cleanup live in `src/domain/room/delete.rs`; snapshot adapters remove fallback storage before primary storage.

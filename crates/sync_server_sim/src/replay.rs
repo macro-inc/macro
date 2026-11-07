@@ -15,6 +15,7 @@ pub const ENABLED: &[&str] = &[
     "document_sync.test/document_sync_tests_should_be_able_to_load_initial_sync_into_loro.jsonl",
     "websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl",
     "transcript_boundaries.test/M12_echoes_the_exact_request_version_vector.jsonl",
+    "delete_endpoint.test/delete_endpoint_succeeds_for_a_document_that_never_had_a_session.jsonl",
     "raw_endpoint.test/raw_endpoint_tests_should_return_404_for_non-existent_document.jsonl",
     "awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl",
 ];

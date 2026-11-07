@@ -168,3 +168,9 @@ C12 retains R9 Worker fixtures and zero-diff re-recording. Room fake tests drive
 the real atomic use case: every active socket receives the update after durable
 archive, service writers map to system after broadcast, viewers fail before
 storage, and invalid deltas leave document and delivery state unchanged.
+
+C13 enables complete native replay of idempotent deletion for a never-created
+session. Ordered projection validates the attribution-delete SQL batch and
+fallback-before-primary deletion; status, headers, body and final storage match.
+The Room test pins close-before-delete and mapped-writing-peer retention. The
+full Worker R10 fixtures cover initialized rooms and external fallback cleanup.

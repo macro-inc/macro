@@ -135,6 +135,11 @@ impl RoomStorage for Store {
             .count())
     }
     async fn delete_all(&self) -> io::Result<()> {
+        self.events.borrow_mut().push("delete-all");
+        self.identity.borrow_mut().take();
+        self.metadata.borrow_mut().clear();
+        self.lifecycle.set(None);
+        self.saved.borrow_mut().take();
         self.pending.borrow_mut().clear();
         Ok(())
     }
@@ -182,6 +187,7 @@ impl SnapshotStore for Snapshots {
         Ok(())
     }
     async fn delete(&self, _: &SessionKey) -> io::Result<()> {
+        self.events.borrow_mut().push("delete-snapshot");
         *self.bytes.borrow_mut() = None;
         Ok(())
     }

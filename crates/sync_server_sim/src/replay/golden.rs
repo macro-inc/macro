@@ -87,6 +87,8 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                     effect("storage.delete_multiple", args[0].clone())
                 }
                 "storage.delete" => effect("storage.delete", args[0].clone()),
+                "storage.deleteAlarm" => effect("alarm.delete", Value::Null),
+                "storage.deleteAll" => effect("storage.delete_all", Value::Null),
                 "storage.getAlarm" => effect("alarm.get", Value::Null),
                 "storage.setAlarm" => {
                     let clock = records[..index]
@@ -125,6 +127,19 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                     let statements = record["statements"]
                         .as_array()
                         .ok_or_else(|| invalid("missing D1 batch"))?;
+                    if statements.len() == 2
+                        && statements[0]["sql"]
+                            == "DELETE FROM peer_user_map WHERE document_id = ?;"
+                        && statements[1]["sql"] == "DELETE FROM blame WHERE document_id = ?;"
+                    {
+                        if statements[0]["params"] != json!([key])
+                            || statements[1]["params"] != json!([key])
+                        {
+                            return Err(invalid("delete attribution identity differs"));
+                        }
+                        result.push(effect("peers.delete_document", json!(key)));
+                        continue;
+                    }
                     let first = statements
                         .first()
                         .ok_or_else(|| invalid("empty D1 batch"))?;
@@ -186,6 +201,17 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                             args[1].clone(),
                         )
                     } else if sql == "DELETE FROM kv_store WHERE id = ?1" {
+                        if records[..index]
+                            .iter()
+                            .rev()
+                            .find(|r| r.get("port").is_some())
+                            .is_some_and(|r| r["port"] == "SNAPSHOT_STORE_KV.delete")
+                        {
+                            if args[1] != key {
+                                return Err(invalid("snapshot delete identity differs"));
+                            }
+                            continue;
+                        }
                         let insert = records
                             .get(index + 1)
                             .ok_or_else(|| invalid("snapshot write missing chunk"))?;
@@ -224,6 +250,19 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                     } else {
                         return Err(ReplayError::Unsupported(format!("raw SQL: {sql}")));
                     }
+                }
+                "SNAPSHOT_STORE_KV.delete" => {
+                    if args != &json!([format!("{key}/{key}.snapshot")])
+                        || records[index + 1..]
+                            .iter()
+                            .find(|r| r.get("port").is_some())
+                            .is_none_or(|r| {
+                                r["args"] != json!(["DELETE FROM kv_store WHERE id = ?1", key])
+                            })
+                    {
+                        return Err(invalid("fallback must be deleted before primary"));
+                    }
+                    effect("snapshot.delete", json!(key))
                 }
                 "SNAPSHOT_STORE_KV.list" => {
                     if args != &json!([{"limit":1,"prefix":key}]) {
@@ -424,14 +463,25 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 effects.shrink_to_fit();
                 effects
             }
-            ServerInput::Http(req) if req.method == "GET" && req.path.ends_with("/raw") => {
+            ServerInput::Http(req)
+                if req.method == "GET"
+                    && (req.path.ends_with("/raw") || req.path.ends_with("/exists")) =>
+            {
                 ports.set_now(recorded.now);
                 let outcome = async {
                     use sync_server_core::domain::room::{RequestGate, RouteClass};
                     if room.room.gate_request(RouteClass::Document).await? != RequestGate::Allowed {
                         return Err(sync_server_core::domain::room::RoomError::MissingPeer);
                     }
-                    room.room.raw_json(&SessionKey::new(key.clone())).await
+                    if req.path.ends_with("/exists") {
+                        Ok(room
+                            .room
+                            .exists(&SessionKey::new(key.clone()))
+                            .await?
+                            .then(String::new))
+                    } else {
+                        room.room.raw_json(&SessionKey::new(key.clone())).await
+                    }
                 }
                 .now_or_never()
                 .ok_or_else(|| invalid("read blocked"))?
@@ -450,6 +500,31 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                     || response["headers"] != headers
                 {
                     return Err(ReplayError::Mismatch("raw HTTP response differs".into()));
+                }
+                ports.take_effects()
+            }
+            ServerInput::Http(req) if req.method == "DELETE" && req.path.ends_with("/delete") => {
+                ports.set_now(recorded.now);
+                let outcome = async {
+                    use sync_server_core::domain::room::{RequestGate, RouteClass};
+                    if room.room.gate_request(RouteClass::Document).await? != RequestGate::Allowed {
+                        return Err(sync_server_core::domain::room::RoomError::MissingPeer);
+                    }
+                    room.room.delete(&SessionKey::new(key.clone())).await
+                }
+                .now_or_never()
+                .ok_or_else(|| invalid("delete blocked"))?;
+                outcome.map_err(|e| ReplayError::Callback(e.to_string()))?;
+                let response = records
+                    .iter()
+                    .find(|r| r["out"] == "response")
+                    .ok_or_else(|| invalid("missing delete response"))?;
+                let headers = json!({"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"});
+                if response["status"] != 200
+                    || decode(&response["body_b64"])? != Vec::<u8>::new()
+                    || response["headers"] != headers
+                {
+                    return Err(ReplayError::Mismatch("delete HTTP response differs".into()));
                 }
                 ports.take_effects()
             }
