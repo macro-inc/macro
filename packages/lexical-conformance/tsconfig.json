@@ -7,7 +7,13 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["record/**/*.ts", "record/**/*.mts"]
+  "include": [
+    "record/**/*.ts",
+    "record/**/*.mts",
+    "vitest.config.ts"
+  ]
 }
