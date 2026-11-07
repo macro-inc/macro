@@ -161,7 +161,7 @@ fn upstream_clipboard_table_grows_grid_copies_background_and_moves_children() ->
         for (col, value) in values.iter().enumerate() {
             let c = template_grid.cell_at(col as i64, row as i64).expect("cell");
             let t = tx.first_descendant(c).expect("text");
-            tx.text(t)?.set_text_content(*value)?;
+            tx.text(t)?.set_text_content(value)?;
         }
     }
     tx.get_mut::<TableCellNode>(template_grid.cell_at(1, 1).expect("cell"))?

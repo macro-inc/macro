@@ -128,9 +128,7 @@ pub fn insert_node_to_nearest_root_at_caret(
     let mut insert = caret.in_direction(tx.view(), CaretDirection::Next);
     if let PointCaret::Text(text) = insert {
         if text.offset.0 == 0 {
-            insert = SiblingCaret::new(text.origin, CaretDirection::Previous)
-                .flipped(tx.view())
-                .into();
+            insert = SiblingCaret::new(text.origin, CaretDirection::Previous).flipped(tx.view());
         } else if text.offset.0 == tx.text_content_size(text.origin).0 {
             insert = SiblingCaret::new(text.origin, CaretDirection::Next).into();
         }
