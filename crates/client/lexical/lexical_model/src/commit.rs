@@ -47,8 +47,16 @@ pub struct WorkCounters {
     pub bytes_allocated: u64,
 }
 /// An atomically published state transition.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Commit {
+    /// Host default action was prevented.
+    pub default_prevented: bool,
+    /// Published follow-up transitions.
+    pub following: Vec<Commit>,
+    /// A failed follow-up round, leaving earlier commits intact.
+    pub follow_up_error: Option<FollowUpError>,
+    /// Typed host events in emission order.
+    pub events: Vec<PluginEvent>,
     /// Monotonic commit identity.
     pub id: CommitId,
     /// Previous state.
@@ -86,13 +94,18 @@ impl Commit {
     }
     /// Earlier published transitions followed by this one, in chronological order.
     pub fn chain(&self) -> impl Iterator<Item = &Commit> {
-        let mut chain = vec![self];
-        let mut preceding = self.preceding.as_deref();
-        while let Some(commit) = preceding {
+        fn append<'commit>(commit: &'commit Commit, chain: &mut Vec<&'commit Commit>) {
+            if let Some(preceding) = commit.preceding.as_deref() {
+                append(preceding, chain);
+            }
             chain.push(commit);
-            preceding = commit.preceding.as_deref();
+            for following in &commit.following {
+                append(following, chain);
+            }
         }
-        chain.into_iter().rev()
+        let mut chain = vec![];
+        append(self, &mut chain);
+        chain.into_iter()
     }
     /// Exact-type mutations, following the registered replacement chain.
     pub fn mutations_of<Node: NodeType>(&self) -> impl Iterator<Item = (NodeKey, Mutation)> + '_ {
@@ -203,6 +216,10 @@ impl Transaction<'_> {
         self.editor.composition_key = self.composition_key;
         self.editor.extensions = self.extensions.clone();
         Ok(Commit {
+            default_prevented: self.default_prevented,
+            following: vec![],
+            follow_up_error: None,
+            events: std::mem::take(&mut self.events),
             id: next_id,
             prev,
             next: self.editor.state.clone(),
@@ -263,5 +280,29 @@ impl Transaction<'_> {
         self.install_state(state, TagSet::default())?;
         self.preceding = Some(Box::new(preceding));
         Ok(())
+    }
+}
+
+impl Editor {
+    pub(crate) fn noop_commit(&self) -> Commit {
+        Commit {
+            id: CommitId(0),
+            prev: self.state.clone(),
+            next: self.state.clone(),
+            changes: Changes::default(),
+            tags: TagSet::default(),
+            normalized: IndexSet::default(),
+            selection_changed: false,
+            composition_key: self.composition_key,
+            composition_changed: false,
+            full_reconcile: false,
+            default_prevented: false,
+            preceding: None,
+            following: vec![],
+            follow_up_error: None,
+            events: vec![],
+            #[cfg(feature = "bench-counters")]
+            work: WorkCounters::default(),
+        }
     }
 }

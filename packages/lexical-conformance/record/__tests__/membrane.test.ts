@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import * as codeModule from '@lexical/code';
 import * as headlessModule from '@lexical/headless';
 import * as htmlModule from '@lexical/html';
 import * as listModule from '@lexical/list';
@@ -22,6 +23,7 @@ import {
 import { replay } from '../replay-js';
 
 const lexical = wrapModule(upstream, 'lexical');
+const code = wrapModule(codeModule, '@lexical/code');
 const html = wrapModule(htmlModule, '@lexical/html');
 const headless = wrapModule(headlessModule, '@lexical/headless');
 const list = wrapModule(listModule, '@lexical/list');
@@ -126,6 +128,17 @@ test('nested inline transformer hooks and headless selection replay without orig
   expect(recorder.reasons.size).toBe(0);
   await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
 });
+test('configured classes retain their source export without a direct API call', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  lexical.createEditor({ nodes: [code.CodeHighlightNode] });
+  const result = fixture(recorder, source);
+  expect(result.config.nodeClasses).toEqual({
+    'code-highlight': { $fn: '@lexical/code.CodeHighlightNode' },
+  });
+  await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
+});
+
 test('HTML-seeded markdown export restores a partial JSON state and key layout', async () => {
   const recorder = new Recorder(true);
   activate(recorder);
@@ -279,6 +292,51 @@ test('inline callbacks that clear the model require a hand port', () => {
     { discrete: true }
   );
   expect(recorder.reasons.has('A-hand:mutating-callback')).toBe(true);
+});
+
+test('caret iterators retain identity and replay their yielded model objects', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  editor.update(
+    () => {
+      const root = lexical.$getRoot();
+      root.append(
+        lexical
+          .$createParagraphNode()
+          .append(lexical.$createTextNode('iterator'))
+      );
+      const range = lexical.$caretRangeFromSelection(root.select(0, 1));
+      const iterator = range.iterNodeCarets();
+      expect([...iterator].length).toBeGreaterThan(0);
+    },
+    { discrete: true }
+  );
+  expect(recorder.reasons.size).toBe(0);
+  await replay(
+    JSON.parse(JSON.stringify(fixture(recorder, source))),
+    resetRandomKey
+  );
+});
+
+test('serialized snapshots omit undefined optional fields from code nodes', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor({
+    nodes: [codeModule.CodeNode, codeModule.CodeHighlightNode],
+  });
+  editor.update(
+    () => {
+      lexical
+        .$getRoot()
+        .append(
+          code.$createCodeNode().append(code.$createCodeHighlightNode('plain'))
+        );
+    },
+    { discrete: true }
+  );
+  const result = JSON.parse(JSON.stringify(fixture(recorder, source)));
+  await replay(result, resetRandomKey);
 });
 
 beforeEach(() => {

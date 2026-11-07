@@ -8,7 +8,7 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
     }
     // Reconciliation writes the root text cache through getWritable. Keep its
     // record identity distinct even though the cache itself lives on the state.
-    if tx.pending.root_text_content() != tx.editor.state.root_text_content()
+    if root_text_changed(tx)
         && let Some(root) = tx.pending.nodes.get_mut(&NodeKey::ROOT)
     {
         Arc::make_mut(root);
@@ -46,4 +46,49 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
             tx.dirty_elements.insert(key, DirtyIntent::Intentional);
         }
     }
+}
+
+// A single leaf replacement in an otherwise identical tree changes the root
+// string exactly when it changes that leaf's string. Leave the root cache lazy:
+// callers that request the whole document still pay for that read, once.
+fn root_text_changed(tx: &Transaction<'_>) -> bool {
+    let previous = &tx.editor.state;
+    let next = &tx.pending;
+    let unchanged_elements = !tx.full_reconcile
+        && previous.opaque_text_count == 0
+        && next.opaque_text_count == 0
+        && tx.dirty_leaves.len() <= 1
+        && next
+            .registry
+            .types()
+            .all(|node| node.kind != NodeKind::Element || node.flags.is_some())
+        && tx.dirty_elements.keys().all(|key| {
+            let (Some(a), Some(b)) = (previous.nodes.get(key), next.nodes.get(key)) else {
+                return false;
+            };
+            let (BaseData::Element(ae), BaseData::Element(be)) = (&a.base, &b.base) else {
+                return false;
+            };
+            a.type_index == b.type_index
+                && a.data.dyn_eq(b.data.as_ref())
+                && a.links.parent == b.links.parent
+                && a.links.prev == b.links.prev
+                && a.links.next == b.links.next
+                && ae.first == be.first
+                && ae.last == be.last
+                && ae.size == be.size
+        });
+    if unchanged_elements {
+        let Some(key) = tx.dirty_leaves.first() else {
+            return false;
+        };
+        if let (Some(a), Some(b)) = (previous.nodes.get(key), next.nodes.get(key))
+            && a.links.parent == b.links.parent
+            && a.links.prev == b.links.prev
+            && a.links.next == b.links.next
+        {
+            return previous.view().text_content(*key) != next.view().text_content(*key);
+        }
+    }
+    next.root_text_content() != previous.root_text_content()
 }

@@ -423,6 +423,20 @@ pub trait Read {
     fn export_json(&self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {
         self.view().export_json(key)
     }
+    /// Model insertion prevention policy with host DOM facts.
+    fn should_prevent_default_and_insert_text(
+        &self,
+        selection: &RangeSelection,
+        text: &str,
+        facts: InsertTextFacts,
+    ) -> Result<bool, Error> {
+        self.view()
+            .should_prevent_default_and_insert_text(selection, text, facts)
+    }
+    /// Whether deletion may cross the two text boundaries.
+    fn can_remove_text(&self, anchor: impl Into<NodeKey>, focus: impl Into<NodeKey>) -> bool {
+        self.view().can_remove_text(anchor, focus)
+    }
     /// Export node.
     fn export_node(&self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {
         self.view().export_node(key)
