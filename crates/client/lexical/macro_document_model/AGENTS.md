@@ -8,6 +8,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 ## Boundaries
 
 - Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
+- Preserve raw code language/theme when the parent afterCloneFrom hook restores them.
 - Keep named and full registration on the one source-ordered catalog in editor.rs.
 - Preserve caller object order in standalone JSON-to-markdown wire helpers.
 - Validate activity envelopes separately from lenient stored-node imports; keep unknown card objects.
@@ -17,6 +18,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Use ImportPolicy as the single state/base import mechanism; reproduce upstream loss.
 - Preserve the Export registry without code/list replacements; Headless applies both.
 - Inject NodeClock, NodeRandom and NodeHost through editor extension state; perform no I/O.
+- Supply DocumentContext to headless helpers and assign durable ids in depth-first document order.
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.

@@ -31,7 +31,8 @@ preserves the two RegExp-subclass matchers and each distinct list-image callback
 Route adapters remain separate.
 
 Block decorators keep alignment in memory and omit it from JSON. Their first
-write clones through the source constructor defaults. `MediaNode` exposes the
+write clones through the source constructor defaults. Custom code keeps the raw
+language and theme restored by the parent afterCloneFrom hook. `MediaNode` exposes the
 shared dimension calculation; authored constructors and imported fields retain
 their distinct nullish/falsy defaults. `TASK_LIST_VIEW` retains arbitrary object
 keys, and explicit watermark cleanup bypasses its ordinary removal guard.
@@ -46,3 +47,10 @@ Two explicit S3 section 4.1b open-item defaults remain outside exact parity:
 `divergence-magic-chip-status` rejects unknown status enum values, and
 `divergence-reply-target-parent-keys` drops unknown keys inside reply parents.
 Both have named regression tests; the valid-node oracle has no normalization.
+
+High-level document helpers take an explicit `DocumentContext` for clock, random
+bytes, hostnames and optional shared key allocation. Markdown conversion assigns
+node ids in document order; Notion import resolves supplied page/person mappings
+and recursively imports enhanced containers. Context and reply composers serialize
+real nodes through the ordered transformer lists. Pure projections live in
+`parsers` and `links`; ordered reader XML lives in `xml`.
