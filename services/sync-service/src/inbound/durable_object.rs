@@ -2,7 +2,7 @@
 //! as its whole-callback barrier; runtime handles never enter RoomMemory.
 use super::cors::{cors, is_origin_allowed};
 use crate::outbound::room_ports::WorkerPorts;
-use std::{collections::BTreeSet, rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc};
 use sync_protocol::time::WallDuration;
 use sync_server_core::domain::{
     operation_log::OperationLog,
@@ -19,11 +19,8 @@ use worker::{
 
 use crate::{
     auth::AuthToken,
-    constants::USER_PEER_D1_BINDING,
-    domain::document::DocumentAttribution,
     error::ResultExt,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
-    socket::Socket,
     state::DocumentState,
     storage::SessionStorage,
     tags::get_ws_id_from_tags,
@@ -45,7 +42,6 @@ const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 mod callbacks;
 pub(crate) mod document_api;
 mod document_delete;
-mod document_effects;
 mod surface_api;
 pub(crate) mod surface_migration;
 
@@ -81,28 +77,7 @@ pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
     get_ws_id_from_tags(&tags)
 }
 
-fn take_editors(editors: &mut BTreeSet<DocumentAttribution>) -> Vec<DocumentAttribution> {
-    std::mem::take(editors).into_iter().collect()
-}
-
 impl SyncSession<'_> {
-    pub(crate) fn socket_for(&self, ws: &WebSocket) -> Socket {
-        Socket::new(ws.clone())
-    }
-
-    pub(crate) fn get_sockets(&self) -> Vec<Socket> {
-        self.active_websockets()
-            .into_iter()
-            .map(|ws| self.socket_for(&ws))
-            .collect()
-    }
-
-    pub(crate) fn record_editor(&mut self, attribution: Option<&DocumentAttribution>) {
-        if let Some(attribution) = attribution {
-            self.pending_editors.insert(attribution.clone());
-        }
-    }
-
     pub(super) async fn debug_get(&mut self, key: &str) -> Result<Response> {
         Response::from_json(&self.session_storage().await?.debug_do_kv_get(key).await?)
     }
@@ -408,23 +383,6 @@ impl SyncSession<'_> {
         Ok(DocumentState::view(
             self.document.as_ref().expect("document loaded"),
         ))
-    }
-    pub(crate) async fn apply_update(
-        &mut self,
-        update: &[u8],
-        attribution: Option<&DocumentAttribution>,
-    ) -> Result<crate::state::ImportedUpdate> {
-        let storage = self.session_storage().await?;
-        self.document_state().await?;
-        let memory = self.room.memory_mut();
-        storage
-            .apply_with_attribution(
-                memory.operation_log.as_mut().expect("log initialized"),
-                memory.document.as_mut().expect("document loaded"),
-                update,
-                attribution,
-            )
-            .await
     }
 }
 

@@ -123,6 +123,7 @@ mod frame;
 pub use frame::InboundFrame;
 
 mod alarm;
+mod atomic;
 pub use alarm::AlarmOutcome;
 
 mod http;

@@ -8,7 +8,7 @@ use sync_server_core::domain::{
 use web_time::Instant;
 use worker::Result;
 
-pub use sync_server_core::domain::state::{ImportedUpdate, RootChange};
+pub use sync_server_core::domain::state::RootChange;
 
 thread_local! {
     static MONOTONIC_ORIGIN: Cell<Option<Instant>> = const { Cell::new(None) };
@@ -59,8 +59,5 @@ impl DocumentState {
 
     pub fn export_snapshot(&self, mode: Option<ExportMode>) -> Result<Vec<u8>> {
         into_worker(self.inner.export_snapshot(mode))
-    }
-    pub fn export_shallow_snapshot(&self) -> Result<Vec<u8>> {
-        into_worker(self.inner.export_shallow_snapshot())
     }
 }

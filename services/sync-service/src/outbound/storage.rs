@@ -1,12 +1,7 @@
-use crate::outbound::room_ports::WorkerClock;
-use crate::{
-    error::ResultExt, state::ImportedUpdate, storage::backends::durable_kv::DurableKVStorage,
-};
+use crate::storage::backends::durable_kv::DurableKVStorage;
 use backends::Storage;
 use std::rc::Rc;
 use sync_server_core::domain::{
-    document::DocumentAttribution,
-    operation_log::{OperationError, OperationLog},
     ports::{SnapshotReadError, SnapshotStore},
     types::SessionKey,
 };
@@ -22,19 +17,6 @@ pub struct SessionStorage {
     snapshots: WorkerSnapshots,
     storage: DurableKVStorage,
     key: SessionKey,
-}
-
-fn operation_error(error: OperationError<worker::Error>) -> worker::Error {
-    match error {
-        OperationError::Storage(error) => error,
-        OperationError::State(error) => Error::from(error.to_string()),
-        OperationError::PendingRead(error) => Err::<(), _>(error)
-            .context("get_pending_operations failed")
-            .unwrap_err(),
-        OperationError::Replay(error) => Err::<(), _>(Error::from(error.to_string()))
-            .context("failed applying pending ops")
-            .unwrap_err(),
-    }
 }
 
 fn snapshot_read_error(error: SnapshotReadError<worker::Error>) -> worker::Error {
@@ -73,19 +55,6 @@ impl SessionStorage {
             .get(&self.key)
             .await
             .map_err(snapshot_read_error)
-    }
-
-    pub async fn apply_with_attribution(
-        &self,
-        operations: &mut OperationLog,
-        state: &mut sync_server_core::domain::state::DocumentState,
-        update: &[u8],
-        attribution: Option<&DocumentAttribution>,
-    ) -> Result<ImportedUpdate> {
-        operations
-            .apply(&self.storage, state, update, attribution, &WorkerClock)
-            .await
-            .map_err(operation_error)
     }
 }
 

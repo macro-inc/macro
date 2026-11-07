@@ -271,6 +271,7 @@ fn update(peer: u64) -> Vec<u8> {
 }
 
 mod alarm;
+mod atomic;
 mod connection;
 mod frame;
 

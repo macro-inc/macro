@@ -79,7 +79,10 @@ fn persisted_storage_key_discriminates_effect_dispatch_after_eviction() {
     let id = "01952cbd-76ad-7a65-9c21-020304050607";
     for kind in [SessionKind::Surface, SessionKind::Document] {
         let identity = SessionIdentity::new(kind, id).unwrap();
-        assert_eq!(session_kind_from_storage_key(&identity.storage_key()), kind);
+        assert_eq!(
+            sync_server_core::domain::types::SessionKey::new(identity.storage_key()).kind(),
+            kind
+        );
     }
     let revoked = serde_json::to_vec(&SurfaceLifecycle::Revoked).unwrap();
     assert_eq!(

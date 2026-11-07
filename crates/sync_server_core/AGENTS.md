@@ -44,3 +44,5 @@ keep runtime handles and locks in the adapter. Presence uses `sync_protocol::pre
 heartbeat policy live in `src/domain/room/connection.rs`; inbound binary
 frame dispatch, comment-gate policy and message telemetry live in `frame.rs`; runtime socket handles
 remain callback arguments. Local rootcause reports retain non-Send port errors.
+
+Atomic document snapshot/update orchestration lives in `src/domain/room/atomic.rs`; HTTP method, streaming limits and JSON/base64 parsing remain in the Worker adapter.

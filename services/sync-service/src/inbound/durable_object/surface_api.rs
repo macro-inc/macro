@@ -17,16 +17,6 @@ mod test;
 
 pub(super) const LIFECYCLE_KEY: &str = "SURFACE_LIFECYCLE";
 
-/// The discriminant is part of the persisted DOCUMENT_ID key, not the current
-/// request URL. Legacy document keys are unchanged and cannot use this prefix.
-pub(super) fn session_kind_from_storage_key(key: &str) -> SessionKind {
-    if key.starts_with("surface:") {
-        SessionKind::Surface
-    } else {
-        SessionKind::Document
-    }
-}
-
 pub(super) use sync_server_core::domain::connection::SurfaceLifecycle;
 
 /// A pending session has no writers. Exact seed bytes identify a retry of the
@@ -209,9 +199,5 @@ impl SyncSession<'_> {
             .validate_surface_sockets(sender)
             .await
             .map_err(super::room_error)
-    }
-
-    pub(super) fn active_websockets(&self) -> Vec<WebSocket> {
-        self.room.active_sockets()
     }
 }
