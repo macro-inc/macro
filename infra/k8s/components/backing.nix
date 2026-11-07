@@ -13,9 +13,25 @@ let
     "-ec"
     text
   ];
-  opensearchHome = pkgs.runCommand "opensearch-with-icu" { nativeBuildInputs = [ pkgs.unzip ]; } ''
+  opensearchHome = pkgs.runCommand "opensearch-with-icu" {
+    nativeBuildInputs = [ pkgs.unzip ];
+    disallowedReferences = [ pkgs.opensearch ];
+  } ''
     cp -r ${pkgs.opensearch} $out
     chmod -R u+w $out
+    # Local mappings require ICU; omit unrelated bundled ML/SQL plugins.
+    rm -rf $out/plugins
+    # The original wrappers retain the full plugin distribution. Run the
+    # relocated launchers directly and keep their helper paths in this home.
+    for program in opensearch opensearch-plugin; do
+      rm "$out/bin/$program"
+      mv "$out/bin/.$program-wrapped" "$out/bin/$program"
+    done
+    for program in "$out"/bin/*; do
+      if grep -Iq . "$program"; then
+        substituteInPlace "$program" --replace-quiet '${pkgs.opensearch}' "$out"
+      fi
+    done
     mkdir -p $out/plugins/analysis-icu
     unzip -q ${
       pkgs.fetchurl {
@@ -235,9 +251,8 @@ in
         network.host: 0.0.0.0
         path.data: /usr/share/opensearch/data
         path.logs: /tmp/os/logs
-        plugins.security.disabled: true
         EOF
-        export OPENSEARCH_PATH_CONF=/tmp/os/config OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m -XX:ActiveProcessorCount=2"
+        export OPENSEARCH_HOME=${opensearchHome} OPENSEARCH_PATH_CONF=/tmp/os/config OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m -XX:ActiveProcessorCount=2"
         # jvm.options logs GC to a path relative to the working directory.
         mkdir -p /tmp/os/logs && cd /tmp/os
         exec ${opensearchHome}/bin/opensearch
