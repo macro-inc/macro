@@ -50,3 +50,6 @@ opt-in unknown types keep their structural kind through EditorCore.
 
 Snapshot ownership of affected child lists before initializing new subtrees;
 rebinding a moved descendant must not turn its old container into a foreign child.
+
+Local projection uses debug metrics without per-keystroke tracing spans; cold session
+flows own the parent spans.
