@@ -441,3 +441,27 @@ fn mixed_block_insertion_wraps_nodes_requiring_a_parent() -> Result<(), Error> {
     assert_eq!(tx.parent(block), Some(NodeKey::ROOT));
     Ok(())
 }
+
+#[test]
+fn root_range_paragraph_insertion_preserves_selected_block_contents() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let line = tx.create(LineBreak::default())?;
+        tx.append(paragraph, &[line.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))?;
+        tx.insert_paragraph()?;
+        assert_eq!(tx.children_size(NodeKey::ROOT), 2);
+        assert_eq!(tx.children_keys(paragraph)?, vec![line.key()]);
+        assert_eq!(
+            tx.anchor()?,
+            Point::element(tx.first_child(NodeKey::ROOT).unwrap(), ChildIndex(0))
+        );
+        Ok(())
+    })?;
+    Ok(())
+}

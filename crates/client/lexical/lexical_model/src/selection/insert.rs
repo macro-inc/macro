@@ -231,9 +231,8 @@ impl Transaction<'_> {
     }
     /// Split the containing block through its virtual paragraph hook.
     pub fn insert_paragraph_at(&mut self, slot: SelectionSlot) -> Result<Option<NodeKey>, Error> {
-        if !self.range_at(slot)?.is_collapsed() {
-            self.remove_text_at(slot)?;
-        }
+        // Root insertion is a splice at the anchor, even for a noncollapsed range.
+        // Upstream checks this before removing the selected block contents.
         let point = self.anchor_at(slot)?;
         if self.is_root_or_shadow_root(point.key()) {
             let p = self.create(Paragraph::default())?;
@@ -246,6 +245,9 @@ impl Transaction<'_> {
                 range.style,
             )?;
             return Ok(Some(p.key()));
+        }
+        if !self.range_at(slot)?.is_collapsed() {
+            self.remove_text_at(slot)?;
         }
         let (block, index) = self.split_selection_boundary(slot)?;
         let tail = self
