@@ -5,8 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { StepId } from './stepId';
 
-/**
- * The saved rewrite, or the rewrite that failed its checks.
- */
-export type CodeUpgradeTaskAnyOf = { [key: string]: unknown };
+export type CodeStepId = null | StepId;

@@ -6,4 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ActionConfigurationTask = { [key: string]: unknown };
+/**
+ * Required when no agent is selected; otherwise overrides the agent's default model.
+ */
+export type AgentStepModel = string | null;

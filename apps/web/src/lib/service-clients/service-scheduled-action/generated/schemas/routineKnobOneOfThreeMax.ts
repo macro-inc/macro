@@ -6,4 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type StarterRoutineStepsItem = { [key: string]: unknown };
+/**
+ * The largest value the owner may set.
+ */
+export type RoutineKnobOneOfThreeMax = number | null;

@@ -7,6 +7,7 @@
  */
 
 /**
- * The task before.
+ * Identifies the SDK API code was type-checked against: its version and a
+hash of its declarations, e.g. `0.2.2+18cc1c19c35c`.
  */
-export type CodeUpgradePreviousTask = { [key: string]: unknown };
+export type SdkFingerprint = string;

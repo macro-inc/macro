@@ -5,8 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { AgentTaskAgent } from './agentTaskAgent';
 
-/**
- * The step, in the shape a routine's task holds it.
- */
-export type DraftedStepStep = { [key: string]: unknown };
+export type AgentStepAgent = null | AgentTaskAgent;

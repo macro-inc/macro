@@ -44,7 +44,11 @@ enforced by the ordinary backend APIs.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
-  included) that the `ListCodingAgents` tool serves.
+  included) that the `ListCodingAgents` tool serves. `routines.create` takes
+  either the single agent task or `steps` (generated `CodeStep`s, agent steps
+  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
+  restricts to an explicit user request; `routineBody` maps both onto the
+  scheduler's `RoutineTask`.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.

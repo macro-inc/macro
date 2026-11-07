@@ -5,5 +5,8 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { RoutineStepOneOfAllOfType } from './routineStepOneOfAllOfType';
 
-export type RoutineSoFarStepsItem = { [key: string]: unknown };
+export type RoutineStepOneOfAllOf = {
+  type: RoutineStepOneOfAllOfType;
+};
