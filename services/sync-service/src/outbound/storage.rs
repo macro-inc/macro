@@ -6,7 +6,7 @@ use backends::Storage;
 use std::rc::Rc;
 use sync_server_core::domain::{
     document::DocumentAttribution,
-    operation_log::{OperationError, OperationLog, SnapshotError},
+    operation_log::{OperationError, OperationLog},
     ports::{SnapshotReadError, SnapshotStore},
     types::SessionKey,
 };
@@ -36,15 +36,7 @@ fn operation_error(error: OperationError<worker::Error>) -> worker::Error {
             .unwrap_err(),
     }
 }
-fn snapshot_error(error: SnapshotError<worker::Error, worker::Error>) -> worker::Error {
-    match error {
-        SnapshotError::Operation(error) => operation_error(error),
-        SnapshotError::Write(error) => error,
-        SnapshotError::Unavailable(error) => {
-            Error::from(format!("document snapshot not found: {error}"))
-        }
-    }
-}
+
 fn snapshot_read_error(error: SnapshotReadError<worker::Error>) -> worker::Error {
     match error {
         SnapshotReadError::Storage(error) => error,
@@ -82,16 +74,7 @@ impl SessionStorage {
             .await
             .map_err(snapshot_read_error)
     }
-    pub async fn store_snapshot(
-        &self,
-        operations: &OperationLog,
-        state: &sync_server_core::domain::state::DocumentState,
-    ) -> Result<()> {
-        operations
-            .store_snapshot(&self.storage, &self.snapshots, state)
-            .await
-            .map_err(snapshot_error)
-    }
+
     pub async fn apply_with_attribution(
         &self,
         operations: &mut OperationLog,
@@ -101,12 +84,6 @@ impl SessionStorage {
     ) -> Result<ImportedUpdate> {
         operations
             .apply(&self.storage, state, update, attribution, &WorkerClock)
-            .await
-            .map_err(operation_error)
-    }
-    pub async fn clear_applied_ops(&self, operations: &mut OperationLog) -> Result<()> {
-        operations
-            .clear_applied(&self.storage)
             .await
             .map_err(operation_error)
     }

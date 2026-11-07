@@ -243,7 +243,7 @@ fn all_golden_fixtures_load_and_enabled_callbacks_replay() {
 fn unsupported_callback_cannot_silently_replay_as_success() {
     let mut room = SimRoom::new(SimPorts::new());
     assert!(matches!(
-        room.step(SimNow::default(), ServerInput::AlarmFired),
+        room.step(SimNow::default(), ServerInput::SocketError(socket())),
         Err(ReplayError::Unsupported(_))
     ));
 }
@@ -473,4 +473,39 @@ fn golden_replay_rejects_reordered_writes_and_changed_final_storage() {
         .unwrap();
     dump["kv"][0][1] = serde_json::json!("another-document");
     assert!(matches!(replay(&changed), Err(ReplayError::Mismatch(_))));
+}
+
+#[test]
+fn room_step_preserves_synchronous_crash_effects() {
+    use sync_server_core::domain::permissions::{AccessLevel, AuthToken};
+    let ports = SimPorts::new();
+    ports.set_faults([(("connections.accept".into(), 0), Fault::Crash)].into());
+    let mut room = SimRoom::new(ports);
+    let result = room
+        .step(
+            SimNow::default(),
+            ServerInput::Connect {
+                grant: AuthToken::new(
+                    "document".into(),
+                    AccessLevel::Edit,
+                    SessionKind::Document,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+                key: key(),
+            },
+        )
+        .unwrap();
+    let StepResult::Crashed(effects) = result else {
+        panic!("crash reported as completion")
+    };
+    assert_eq!(effects.last().unwrap().operation, "connections.accept");
+    assert!(!effects.iter().any(|effect| {
+        effect.operation == "storage.put"
+            && effect.value["key"]
+                .as_str()
+                .is_some_and(|key| key.starts_with("ws_id"))
+    }));
 }

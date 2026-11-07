@@ -132,3 +132,13 @@ broadcast sender exclusion and continuation, and ping's identity requirement.
 Fixtures that also contain alarms or HTTP initialization remain disabled until
 those callbacks are extracted; their complete Worker re-records are compared
 after every commit.
+
+C10 enables `transcript_boundaries.test/M12_echoes_the_exact_request_version_vector.jsonl`
+through registration, update persistence, exact VV echo and alarm compaction.
+Replay consumes the recorded clock kinds/values in order, compares D1 claim and
+insert-missing effects, and checks the final attribution tables and alarm. The
+opaque isolate keepalive timer has no captured Worker port boundary; its native
+effect is checked by the core alarm tests and the real Worker recording.
+Alarm invariants, including `pending_import_not_compacted_quirk`, live in
+`sync_server_core::domain::room::test::alarm`. The room test modules now split
+connection, frame and alarm cases while sharing hand-written fake capabilities.
