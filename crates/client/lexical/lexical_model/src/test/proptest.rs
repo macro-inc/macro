@@ -644,7 +644,10 @@ fn range_only_generated_commands_respect_decorator_node_selection() -> Result<()
 // Upstream insertText treats a selected Tab as atomic even in normal text mode.
 #[test]
 fn replacing_selected_tab_before_empty_inline_creates_plain_text() -> Result<(), Error> {
-    let mut editor = Editor::builder(EditorMode::Headless).node::<Inline>().build().expect("registry");
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("registry");
     let mut tx = editor.transaction();
     let paragraph = tx.create(Paragraph::default())?;
     let tab = tx.create(Tab::default())?;
@@ -658,7 +661,9 @@ fn replacing_selected_tab_before_empty_inline_creates_plain_text() -> Result<(),
     tx.insert_text("é")?;
     assert_eq!(tx.text_content(NodeKey::ROOT), "é");
     assert!(!tx.is_attached(tab));
-    let Selection::Range(range) = tx.selection().expect("selection") else { panic!("range"); };
+    let Selection::Range(range) = tx.selection().expect("selection") else {
+        panic!("range");
+    };
     assert!(range.is_collapsed());
     assert!(!tx.is::<Tab>(range.anchor.key()));
     assert_eq!(range.anchor.offset(), 1);
