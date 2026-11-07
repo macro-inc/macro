@@ -19945,6 +19945,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_sim"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "doc_sync_core",
+ "futures",
+ "loro",
+ "macro_sync_service_jwt",
+ "postcard",
+ "rand 0.9.4",
+ "rand_chacha 0.9.0",
+ "serde",
+ "serde_json",
+ "sync_protocol",
+ "sync_server_core",
+ "sync_server_sim",
+ "thiserror 2.0.18",
+ "uuid",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
