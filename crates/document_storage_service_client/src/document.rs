@@ -485,7 +485,7 @@ impl DocumentStorageServiceClient {
             .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
             .send()
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(CreateDocumentInternalError::internal)?;
 
         let status_code = res.status();
 
@@ -503,14 +503,14 @@ impl DocumentStorageServiceClient {
                 document_name=%req.document_name,
                 "external API error when creating document"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body).into());
+            return Err(CreateDocumentInternalError::Internal(
+                rootcause::report!("HTTP {status_code}: {body}").into_dynamic(),
+            ));
         }
 
-        let response_data = res
-            .json::<CreateDocumentResponse>()
+        res.json::<CreateDocumentResponse>()
             .await
-            .map_err(anyhow::Error::from)?;
-        Ok(response_data)
+            .map_err(CreateDocumentInternalError::internal)
     }
 }
 
@@ -521,8 +521,15 @@ pub enum CreateDocumentInternalError {
     /// nothing to import. Retrying cannot succeed.
     #[error("email attachment not found")]
     EmailAttachmentNotFound,
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    /// The request failed or DSS answered with any other error.
+    #[error("{0}")]
+    Internal(rootcause::Report),
+}
+
+impl CreateDocumentInternalError {
+    fn internal(error: reqwest::Error) -> Self {
+        Self::Internal(rootcause::Report::new(error).into_dynamic())
+    }
 }
 
 #[derive(Deserialize)]

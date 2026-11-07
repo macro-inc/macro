@@ -534,7 +534,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(metadata)
     }
 
-    #[tracing::instrument(err, skip(self, args, share_permission))]
+    #[tracing::instrument(skip(self, args, share_permission))]
     async fn import_email_attachment_document(
         &self,
         args: ImportEmailAttachmentRepoArgs,

@@ -167,8 +167,23 @@ async fn upload_media_attachment(
 }
 
 /// Uploads a document attachment to DSS.
-#[tracing::instrument(skip(ctx, attachment_data), err)]
+#[tracing::instrument(skip(ctx, attachment_data))]
 async fn upload_document_attachment(
+    ctx: &AttachmentStorageContext<'_>,
+    args: &AttachmentUploadArgs,
+    attachment_data: Vec<u8>,
+) -> Result<String, UploadAttachmentError> {
+    // A deleted attachment is an expected outcome, not a failure.
+    store_document_attachment(ctx, args, attachment_data)
+        .await
+        .inspect_err(|error| {
+            if !matches!(error, UploadAttachmentError::AttachmentDeleted) {
+                tracing::error!(error = %error, "document attachment upload failed");
+            }
+        })
+}
+
+async fn store_document_attachment(
     ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,

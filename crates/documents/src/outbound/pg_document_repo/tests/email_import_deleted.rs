@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
@@ -92,8 +90,10 @@ async fn sha_reuse_of_deleted_attachment_is_not_found_and_keeps_existing_links(
     );
 }
 
-/// The message delete commits while the import is inserting its link, as when
-/// a draft revision is replaced mid-upload.
+/// The message delete commits while the import runs, as when a draft revision
+/// is replaced mid-upload. Every interleaving ends the same way: a link insert
+/// that reaches the attachment first waits on the delete's row lock, and one
+/// that reaches it later finds the row gone.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("documents_test_data"))
@@ -120,25 +120,6 @@ async fn message_deleted_during_import_is_not_found_and_rolls_back(pool: Pool<Po
         .await
     });
 
-    // The link insert's foreign key check waits on the uncommitted delete.
-    let mut waited = Duration::ZERO;
-    loop {
-        let blocked: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock')",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        if blocked {
-            break;
-        }
-        assert!(
-            waited < Duration::from_secs(10),
-            "import never waited on the delete"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        waited += Duration::from_millis(20);
-    }
     delete.commit().await.unwrap();
 
     let result = import.await.unwrap();

@@ -64,7 +64,7 @@ async fn any_other_not_found_stays_a_failure() {
     .await;
 
     assert!(
-        matches!(result, Err(CreateDocumentInternalError::Other(_))),
+        matches!(result, Err(CreateDocumentInternalError::Internal(_))),
         "got {result:?}"
     );
 }
