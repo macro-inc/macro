@@ -31,7 +31,6 @@ export function TimelineMenu(props: TimelineMenuItemProps) {
       <Dropdown.Trigger
         variant="secondary"
         size="icon-md"
-        class="bg-surface shadow-sm"
         aria-label="Timeline menu"
         tooltip="Timeline menu"
       >
