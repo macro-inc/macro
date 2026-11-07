@@ -43,6 +43,11 @@ impl SimDoc {
             .commit_with(loro::CommitOptions::default().timestamp(wall / 1_000));
         Ok(())
     }
+    pub fn snapshot(&self) -> Result<Vec<u8>, Failure> {
+        self.loro
+            .export(loro::ExportMode::snapshot())
+            .map_err(|error| Failure::new("seed_snapshot", error))
+    }
     pub fn value(&self) -> Result<serde_json::Value, Failure> {
         serde_json::from_str(&self.loro.get_deep_value().to_json())
             .map_err(|e| Failure::new("deep_value", e))
@@ -156,4 +161,74 @@ pub(crate) fn spans(bytes: &[u8]) -> Result<Vec<IdSpan>, Failure> {
         .collect::<std::collections::BTreeMap<_, _>>()
         .into_values()
         .collect())
+}
+
+pub(crate) struct SeedSnapshots {
+    pub server: Vec<u8>,
+    pub local: Option<Vec<u8>>,
+    pub s3: Option<(Vec<u8>, crate::Millis)>,
+    pub vv: Vv,
+}
+pub(crate) fn seed_snapshots(
+    peer: u64,
+    fields: u16,
+    wall: i64,
+    spec: &crate::SeedDocument,
+) -> Result<SeedSnapshots, Failure> {
+    let mut doc = SimDoc::new(peer)?;
+    for index in 0..fields.max(1) {
+        doc.loro
+            .get_movable_list("order")
+            .push(i64::from(index))
+            .map_err(|error| Failure::new("seed_document", error))?;
+    }
+    doc.loro
+        .commit_with(loro::CommitOptions::default().timestamp(wall / 1_000));
+    let mut local = None;
+    let mut s3 = None;
+    match spec {
+        crate::SeedDocument::Empty => {}
+        crate::SeedDocument::Form(writes) => {
+            seed_fields(&mut doc, writes, fields, wall)?;
+        }
+        crate::SeedDocument::Cached {
+            server,
+            s3: cached,
+            local: saved,
+        } => {
+            if let Some(writes) = saved {
+                seed_fields(&mut doc, writes, fields, wall)?;
+                local = Some(doc.snapshot()?);
+            }
+            if let Some((writes, after)) = cached {
+                seed_fields(&mut doc, writes, fields, wall)?;
+                s3 = Some((doc.snapshot()?, *after));
+            }
+            seed_fields(&mut doc, server, fields, wall)?;
+        }
+    }
+    Ok(SeedSnapshots {
+        server: doc.snapshot()?,
+        local,
+        s3,
+        vv: vv(&doc.loro.oplog_vv()),
+    })
+}
+fn seed_fields(
+    doc: &mut SimDoc,
+    writes: &[(u16, u16)],
+    fields: u16,
+    wall: i64,
+) -> Result<(), Failure> {
+    for (field, value) in writes {
+        doc.edit(
+            &AbstractOp::FormSet {
+                field: *field,
+                value: *value,
+            },
+            fields,
+            wall,
+        )?;
+    }
+    Ok(())
 }

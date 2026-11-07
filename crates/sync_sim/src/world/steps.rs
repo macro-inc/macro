@@ -271,22 +271,36 @@ impl Sim {
             user.clone(),
             now,
         )?;
-        let seed = self
+        let server = self
             .servers
             .get(&spec.doc)
-            .and_then(|server| {
-                server
-                    .ports
-                    .snapshot_dump()
-                    .get(server.key.as_str())
-                    .cloned()
-            })
+            .ok_or_else(|| Failure::new("open", "unknown server"))?;
+        let seed = server
+            .ports
+            .snapshot_dump()
+            .get(server.key.as_str())
+            .cloned()
             .ok_or_else(|| Failure::new("open", "no seed snapshot"))?;
-        self.profiles
+        let optimistic = server.optimistic_seed;
+        let cached_s3 = server.s3_seed.clone();
+        let cached_local = server.local_seed.clone();
+        let store = self
+            .profiles
             .get_mut(&spec.profile)
-            .ok_or_else(|| Failure::new("profile", "missing profile"))?
-            .leases
-            .insert((client.core_doc_id(), session));
+            .ok_or_else(|| Failure::new("profile", "missing profile"))?;
+        if store.seeded_docs.insert(client.core_doc_id())
+            && let Some(bytes) = cached_local
+        {
+            store
+                .durable
+                .snapshots
+                .entry(client.core_doc_id())
+                .or_insert(doc_sync_core::StoredSnapshot {
+                    bytes,
+                    covers: None,
+                });
+        }
+        store.leases.insert((client.core_doc_id(), session));
         let name = spec.client.clone();
         self.clients.insert(name.clone(), client);
         self.emit(Fact::Opened {
@@ -300,15 +314,32 @@ impl Sim {
             kind: spec.kind,
         });
         self.input(&name, session, SyncInput::Start)?;
-        self.input(
-            &name,
-            session,
-            SyncInput::Seed {
-                kind: doc_sync_core::SeedKind::Optimistic,
-                snapshot: seed,
-            },
-        )
+        if let Some((snapshot, after)) = cached_s3 {
+            self.schedule(
+                self.clock.now.saturating_add(after.0),
+                Pending::Input(
+                    name.clone(),
+                    session,
+                    SyncInput::Seed {
+                        kind: doc_sync_core::SeedKind::CachedS3,
+                        snapshot,
+                    },
+                ),
+            );
+        }
+        if optimistic {
+            self.input(
+                &name,
+                session,
+                SyncInput::Seed {
+                    kind: doc_sync_core::SeedKind::Optimistic,
+                    snapshot: seed,
+                },
+            )?;
+        }
+        Ok(())
     }
+
     fn break_client(&mut self, name: &ClientName, code: u16) -> Result<(), Failure> {
         let keys = self
             .net

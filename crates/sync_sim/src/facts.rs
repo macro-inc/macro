@@ -88,6 +88,17 @@ pub enum Fact {
         /// Lifecycle.
         kind: ClientKind,
     },
+    /// The real core selected exactly this source to initialize its host surface.
+    Seeded {
+        /// Client.
+        client: ClientName,
+        /// Owning session, distinct across reopens.
+        session: SessionId,
+        /// Real SeedKind diagnostic.
+        kind: String,
+        /// Own/orphan WAL rows replayed before the surface was initialized.
+        replayed_wal: u32,
+    },
     /// Every peer taken by a core, including reset/probe allocations.
     PeerAssigned {
         /// Client.
