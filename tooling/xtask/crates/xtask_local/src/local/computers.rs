@@ -38,8 +38,6 @@ pub const INCUS_HOST_NAME: &str = "runtime-dev-1";
 /// SHA-256 of the DER certificate `runtime-dev-1`'s Incus API serves.
 pub const INCUS_SERVER_FINGERPRINT: &str =
     "7628fcff44f2338383650c2489f38e89a59db5eb951a3de9bf0469f50387d84b";
-/// Default control-plane devbox on the development tailnet.
-pub const CONTROL_PLANE_ADDRESS: &str = "100.116.73.13";
 pub const INCUS_PORT: u16 = 8443;
 /// Label `hosted_runtimes::outbound::docker_fleet` puts on every computer.
 pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
@@ -190,7 +188,7 @@ impl Computers {
         credentials: &IncusCredentials,
         network: &IncusNetwork,
     ) -> Result<BTreeMap<String, String>> {
-        let overrides = MACROD_SERVICES
+        let mut overrides = MACROD_SERVICES
             .iter()
             .map(|(name, port)| {
                 let url = match port {
@@ -206,6 +204,19 @@ impl Computers {
                 Ok((name.to_string(), url))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
+        for (name, scheme) in [
+            ("OVERRIDE_CONNECTION_GATEWAY_URL", "http"),
+            ("OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL", "ws"),
+        ] {
+            overrides.insert(
+                name.into(),
+                format!(
+                    "{scheme}://{}:{}",
+                    network.control_plane,
+                    self.instance.port(Port::ConnGateway)
+                ),
+            );
+        }
         let mut settings = BTreeMap::from([
             ("COMPUTERS_FLEET".into(), "incus".into()),
             (
@@ -277,7 +288,7 @@ impl Computers {
             )),
             Fleet::Incus => stage.note(&format!(
                 "  computers: Incus on {INCUS_HOST_NAME} over Tailscale; \
-                 allow this stack's egress, harness, storage and auth host ports on the devbox \
+                 guests dial the devbox tailnet directly; allow this stack's service host ports \
                  (see nix/hosts/README.md)"
             )),
         }
@@ -308,15 +319,36 @@ impl IncusNetwork {
                 String::from_utf8(output.stdout).context("tailscale returned non-UTF-8 output")?
             }
         };
-        let control_plane = macro_env_var::maybe_read_env("COMPUTERS_CONTROL_PLANE_ADDRESS")
-            .unwrap_or_else(|| CONTROL_PLANE_ADDRESS.to_owned());
+        let output = Command::new("tailscale")
+            .args(["ip", "-4"])
+            .output()
+            .context("running tailscale ip -4; the devbox must join the tailnet")?;
+        if !output.status.success() {
+            bail!(
+                "devbox is unavailable on Tailscale: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        let control_plane =
+            String::from_utf8(output.stdout).context("tailscale returned non-UTF-8 output")?;
         Self::parse(&runtime, &control_plane)
     }
 
     fn parse(runtime: &str, control_plane: &str) -> Result<Self> {
+        let control_plane: Ipv4Addr = control_plane
+            .trim()
+            .parse()
+            .context("tailscale ip -4 must provide one devbox IPv4 address matching macro.computers.controlPlaneAddress")?;
+        let [first, second, _, _] = control_plane.octets();
+        if first != 100 || !(64..=127).contains(&second) {
+            bail!("tailscale ip -4 must provide a devbox address in 100.64.0.0/10");
+        }
         Ok(Self {
-            runtime: runtime.trim().parse().context("COMPUTERS_INCUS_ADDRESS / tailscale ip must provide one IPv4 address")?,
-            control_plane: control_plane.trim().parse().context("COMPUTERS_CONTROL_PLANE_ADDRESS must be an IPv4 address matching macro.computers.controlPlaneAddress")?,
+            runtime: runtime
+                .trim()
+                .parse()
+                .context("COMPUTERS_INCUS_ADDRESS / tailscale ip must provide one IPv4 address")?,
+            control_plane,
         })
     }
 

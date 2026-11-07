@@ -504,18 +504,18 @@ Enrollment stores the fleet-reachable egress URL in macrod’s config. Computer
 sessions use it for first-party MCP servers and the Anthropic gateway, while
 other paired runtimes keep the stack’s external egress URL.
 
-Boxes reach the stack at `http://100.116.73.13:<host port>`. Override the devbox
-IP with `COMPUTERS_CONTROL_PLANE_ADDRESS`, keeping it in sync with the runtime's
-`macro.computers.controlPlaneAddress`. The runtime allows only the four stack
-TCP host ports (agent egress, harness, document storage, auth) to that address
-and masquerades them to `tailscale0`; other tailnet destinations are dropped.
+Boxes reach the stack directly over the devbox tailnet address, resolved once
+at stack start with `tailscale ip -4`. Missing, ambiguous, or non-tailnet output
+fails startup. This address must match the runtime's
+`macro.computers.controlPlaneAddress` (`100.116.73.13` in the checked-in config).
+The runtime permits only the seven TCP host ports (agent egress, harness,
+document storage, auth, agent git, computer gateway, connection gateway) and
+masquerades them to `tailscale0`; other tailnet destinations are dropped.
 Custom `--port-base` values need a matching `controlPlanePorts` option update.
 The devbox firewall must accept those ports from the runtime's tailnet address;
 see the exact INPUT and Docker forwarding rules in the host README.
 
-The supervised [`computers-tunnels.sh`](../../nix/hosts/computers-tunnels.sh)
-remains a manual IAP recovery path, not a startup dependency. Existing VMs
-survive stack database replacement; handle their cleanup explicitly.
+Existing VMs survive stack database replacement; handle their cleanup explicitly.
 
 Check the generated wiring without starting anything:
 

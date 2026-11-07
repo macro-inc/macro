@@ -84,9 +84,11 @@ On the devbox, `tailscale ip -4 runtime-dev-1` must return exactly one IPv4
 address. xtask resolves this at stack start and emits
 `COMPUTERS_INCUS_URL=https://<runtime-tailnet-ip>:8443`, avoiding MagicDNS inside
 Compose. Override host-side discovery with `COMPUTERS_INCUS_ADDRESS=<IPv4>`.
-`COMPUTERS_CONTROL_PLANE_ADDRESS` defaults to `100.116.73.13` and must match the
-runtime's `macro.computers.controlPlaneAddress` option. These are xtask inputs,
-not service/Doppler secrets.
+xtask resolves the devbox address once with `tailscale ip -4` and fails startup
+if it does not return one tailnet IPv4 address. Guests dial service HTTP and
+WebSocket host ports directly at that address; it must match the runtime's
+`macro.computers.controlPlaneAddress` (`100.116.73.13` in this configuration).
+`COMPUTERS_INCUS_ADDRESS` is an xtask input, not a service/Doppler secret.
 
 Incus starts on `127.0.0.1:8443`; `incus-tailnet.service` binds it exclusively
 to the enrolled tailnet IPv4 address. Local tooling uses the Unix socket.
