@@ -173,3 +173,8 @@ pub fn insert_node_to_nearest_root_at_caret(
         _ => unreachable!(),
     }
 }
+
+/// Pinned linkify-it domain/email/protocol recognition.
+pub mod linkify;
+/// Shared UTF-16 match arrays and stateless regex/synthetic matching.
+pub mod matcher;

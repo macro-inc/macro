@@ -65,10 +65,10 @@ cases from ClickAfterLastBlock.test.ts: block decorator, rejected predicate,
 disabled registration and empty root. Shadow-root and stale-last-child cases are
 additional literal checks. Its read-only test is a DOM claim test and remains in
 the view. RichTextImportExtension tests are DOM import tests, outside this model
-package. The heading test involving an empty ListItem inside ListNode belongs to
-the list-node port; this package covers all its non-list heading/quote cases.
-Tier A rich-text/plain-text/hashtag fixture replay is a later conformance layer;
-these unit ports run directly against the model without a fixture replay DSL.
+package. The heading Backspace test involving an empty ListItem inside ListNode is also
+ported now that list nodes are available.
+Tier A rich-text/hashtag fixtures are replayed through `lexical_conformance`;
+these literal unit ports also exercise the model directly.
 
 
 `list` implements ListNode/ListItemNode, intrinsic numbering/merge/orphan repair,
@@ -120,3 +120,46 @@ only typeahead, cell-element presence and visual caret-edge facts. Clipboard I/O
 pointer lifecycle, highlights and event cancellation remain in the host.
 Literal tests cover caret navigation, merged rectangles, edge paragraphs, Tab,
 cut/deletion, formatting, crossing ranges and touch/Firefox selection correction.
+
+`link` ports LinkNode/AutoLinkNode JSON, inline hooks, URL formatting/sanitization,
+link splitting/toggling, caret-preserving block lifting and adjacent-link merging.
+Link commands distinguish absent, null and explicit attributes. Configured
+`LinkAttributes` use None for null; omit the config object to retain the toggle
+algorithm's defaults. Explicit command attributes replace the config defaults.
+The `url` dependency supplies the WHATWG parser used for HTML sanitization.
+
+`link::auto` ports creation across formatted siblings, edit and neighbor
+validation, explicit unlinking, per-editor matchers and separators. It stages
+`AUTO_LINK_CHANGED` events in the transaction; failed updates discard them and
+successful commits expose them in emission order. Register `link_extension`
+before `register_auto_link`. Matcher order follows upstream configuration order.
+Regex adapters are stateless and choose code-unit matching without u/v and
+code-point matching with u/v, preserving UTF-16 indices over astral text.
+
+Literal link tests port model assertions from LexicalLinkNode and
+LexicalAutoLinkExtension: serialization/inheritance, insertion, selected-span
+splitting, NodeSelection, command/paste validation, attribute precedence, lifting,
+merging, cross-node matches, neighbor invalidation and notification order.
+DOM rendering/import, clipboard events and mouse behavior remain view concerns.
+All 22 recorded lexical-link fixtures replay; the remaining fixture requires
+MarkNode from WP-20 and retains its exact unsupported-API ledger entry.
+
+`utils::matcher` holds the shared Match/Matcher/RegexMatcher contract for later
+markdown reuse: UTF-16 positions, undefined captures and synthetic mutable groups.
+`utils::linkify` ports linkify-it 5.0.2's default schemas, fuzzy URL/email/IP modes,
+custom TLD replacement/extension and triple-dash option. It implements both the
+shared Matcher and autolink LinkMatcher. Expanded regular expressions preserve
+uc.micro 2.1.0 classes. The pinned 5,018-case oracle checks match/test/pretest and
+matchAtStart, including overlaps, astral text, punctuation and option combinations.
+Custom JavaScript schema callbacks are host policy outside this model API.
+
+Regenerate patterns and oracle data with Node and unpacked linkify-it 5.0.2 plus
+uc.micro 2.1.0 installed beside it:
+
+```sh
+node crates/client/lexical/lexical_rich_nodes/src/utils/linkify/generate.mjs /path/to/linkify-it/index.mjs
+```
+
+The generator checks both dependency versions. Keep dependency versions pinned;
+MIT licenses are stored next to the generated patterns. Regex decoding and
+legacy case-folding use the workspace's vendored regress engine.

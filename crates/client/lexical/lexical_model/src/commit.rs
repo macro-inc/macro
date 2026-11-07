@@ -86,7 +86,7 @@ pub struct Commit {
 impl Commit {
     /// Nothing dirty and no selection change.
     pub fn is_noop(&self) -> bool {
-        self.changes.is_empty() && !self.selection_changed
+        self.changes.is_empty() && !self.selection_changed && self.events.is_empty()
     }
     /// Lazy, memoized root-text comparison.
     pub fn text_content_changed(&self) -> bool {
