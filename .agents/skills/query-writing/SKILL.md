@@ -42,7 +42,7 @@ The plan must show all four, judged against [table sizes](../query-review/table-
    tenant's data runs under `statement_timeout`: `SET LOCAL` in its
    transaction (`crates/notifications/notification/src/outbound/retention.rs`,
    `dynamic_email_thread_cursor` in `crates/email/email`) or a pool created with the
-   option (`crates/github/src/outbound/pg_github_repo.rs`). Most pools set no
+   option (`crates/integrations/github/src/outbound/pg_github_repo.rs`). Most pools set no
    default, so a slow query otherwise runs until it finishes, long after the
    client gave up and retried. A repository that is handed its pool does not
    know that pool's settings: find where the service builds it, and if it sets

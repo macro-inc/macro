@@ -19,7 +19,7 @@ third-party system, following the hexagonal architecture pattern.
 - Owns: the generic foreign-entity row (source id, owning entity, payload)
   and its listing/filter query.
 - Not here: what a specific foreign entity's payload means (e.g. pull request
-  fields) → `crates/github_pull_requests`, which stores its typed columns on
+  fields) → `crates/integrations/github_pull_requests`, which stores its typed columns on
   top of this crate's rows.
 
 ## Boundaries

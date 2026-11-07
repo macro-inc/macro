@@ -9,7 +9,7 @@ addressed to one account, such as the resolution of an agent's access request.
 
 - Owns: `PasswordTopicEvent` and its metadata, keyed by the addressed user.
 - Not here: the outbox and publishing (document_storage_service, from the
-  `passwords` outbox), webhook and SSE delivery → `crates/webhook`.
+  `passwords` outbox), webhook and SSE delivery → `crates/integrations/webhook`.
 
 ## Boundaries
 

@@ -14,7 +14,7 @@ client plumbing. For an AI or MCP tool, use the
 
 | Building | Copy |
 | --- | --- |
-| Read one entity by id, access-checked | `get_github_pull_request_handler` in `crates/github_pull_requests/src/inbound/axum_router.rs` |
+| Read one entity by id, access-checked | `get_github_pull_request_handler` in `crates/integrations/github_pull_requests/src/inbound/axum_router.rs` |
 | A new router in a domain crate: scoped CRUD, path and body types, mounted in DSS | `crates/comms/channel_labels/src/inbound/axum_router.rs` and its wiring in `services/document_storage_service/src/` |
 | A compatible change to an existing endpoint (optional query param, new response field) | `services/notification_service/src/api/unsubscribe/unsubscribe_item.rs` |
 | Web query module for it | `apps/web/src/lib/queries/channel-labels/` (`keys.ts` + query/mutation file) |
