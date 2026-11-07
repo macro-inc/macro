@@ -1,5 +1,5 @@
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
-import { stringToItemType } from '@service-storage/client';
+import { stringToItemType } from '@service-storage/itemType';
 import type { CreatedRoutineItem } from './core/draft';
 
 /**
