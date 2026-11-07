@@ -20,6 +20,7 @@ Read `README-MACRO.md` before refreshing it from upstream.
 
 ## Gotchas
 
+- UTF-16 consumers use `Regex::is_unicode` to choose the matching input decoder.
 - Legacy and Unicode case folding are different. Keep `u`/`v` behavior unchanged.
 - Generate `src/legacy_case.rs` with the consumer's recorder under Node 24 / ICU 77.
 - The crate is excluded from the root workspace. Do not commit its generated

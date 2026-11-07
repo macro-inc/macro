@@ -60,6 +60,17 @@ pub(crate) fn call(
         match value {
             CaretValue::Range(c) => {
                 return match name {
+                    "get:direction" => Ok(json!(c.direction.to_string())),
+                    "iter" => {
+                        let carets = c
+                            .node_carets(tx.view(), RootMode::Root)?
+                            .iter(tx.view())
+                            .collect::<std::result::Result<Vec<_>, _>>()?;
+                        carets
+                            .into_iter()
+                            .map(|caret| put(r, tx.view(), CaretValue::Point(caret.into())))
+                            .collect()
+                    }
                     "isCollapsed" => Ok(json!(c.is_collapsed())),
                     "get:anchor" => put(r, tx.view(), CaretValue::Point(c.anchor)),
                     "get:focus" => put(r, tx.view(), CaretValue::Point(c.focus)),
@@ -94,6 +105,25 @@ pub(crate) fn call(
             }
             CaretValue::Point(c) => {
                 let result = match name {
+                    "get:direction" => return Ok(json!(c.direction().to_string())),
+                    "get:origin" => return r.node(tx.view(), c.origin()),
+                    "iter" => {
+                        let node: NodeCaret = match c {
+                            PointCaret::Child(c) => c.into(),
+                            _ => c.sibling_caret().into(),
+                        };
+                        return node
+                            .adjacent_nodes(tx.view())
+                            .into_iter()
+                            .map(|key| {
+                                put(
+                                    r,
+                                    tx.view(),
+                                    CaretValue::Point(SiblingCaret::new(key, c.direction()).into()),
+                                )
+                            })
+                            .collect();
+                    }
                     "isSamePointCaret" => {
                         return Ok(json!(c.is_same_point_caret(&point(r, first()?)?)));
                     }
@@ -157,6 +187,21 @@ pub(crate) fn call(
         }
     }
     let result = match name {
+        "$isChildCaret" | "$isSiblingCaret" | "$isTextPointCaret" => {
+            let caret = get(r, first()?);
+            return Ok(json!(matches!(
+                (name, caret),
+                ("$isChildCaret", Ok(CaretValue::Point(PointCaret::Child(_))))
+                    | (
+                        "$isSiblingCaret",
+                        Ok(CaretValue::Point(PointCaret::Sibling(_)))
+                    )
+                    | (
+                        "$isTextPointCaret",
+                        Ok(CaretValue::Point(PointCaret::Text(_)))
+                    )
+            )));
+        }
         "$getSiblingCaret" => {
             if first()?.is_null() {
                 return Ok(Value::Null);

@@ -2,24 +2,27 @@
 
 ## What it is
 
-Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow
-text-entity, list, code, annotation, selection, tree, offset and clipboard behavior. DOM events, clipboard access and layout stay in views.
+Portable model halves of Lexical v0.45.0 rich/plain text, lists, links/autolinks,
+code, marks, selection, tree, offset and clipboard behavior. DOM and layout stay
+in views.
 
 ## Boundaries
 
 - `mark` wraps inline runs, splits at line breaks and retains annotations only in internal clones.
-- `code::line`, `code::plain` and `code::language` provide UTF-16 line navigation, LF/tab splitting and the ordered language catalog.
-- `code` keeps stored highlight nodes distinct, disables formatting and never tokenizes; new code content uses plain text.
-- Keep selection CSS parsing ordered and uncached; detached style arguments and active selected text are distinct upstream inputs.
-- Use `utils` cursors for mutation-safe child walks and collect DFS results before editing their snapshot.
-- `clipboard` consumes host MIME strings and serialized HTML nodes; supply the target namespace to `do_drop_in_namespace`. HTML export arrives with WP-24.
-- Depends on the portable model, ordered maps, static language tables, regex and tracing facades; no I/O or runtime.
+- `code` keeps stored highlights distinct and never tokenizes; new content uses plain text.
+- `code::line`, `code::plain` and `code::language` own line navigation, LF/tab splitting and language catalogs.
+- Keep selection CSS parsing ordered and uncached; detached style inputs differ from active selected text.
+- Use mutation-safe child cursors; collect snapshot DFS results before editing.
+- `clipboard` consumes host MIME strings and HTML nodes; HTML export belongs to WP-24.
+- Depends on model, regex, URL, ordered maps, language tables and tracing facades; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.
 - Use selection slots in hooks; detached selections must not read the active range.
 - List handlers read through ListNode/ListItemNode ancestry so application subclasses inherit restructuring and intrinsic transforms.
 - Route host Enter through `list::register::handle_registered_insert_paragraph` before the rich-text fallback; it consumes registered numbering options.
 - Use `text::entity` for every text entity; `text_entity` only re-exports it.
+- Register LinkNode before AutoLink; autolink changes are transactional `AUTO_LINK_CHANGED` events.
+- Keep shared Match/Matcher and pinned linkify-it patterns in `utils`; regenerate the oracle corpus with the documented script.
 - Legacy JS regexes match UTF-16 code units with `find_from_ucs2`.
 
 ## Checks
