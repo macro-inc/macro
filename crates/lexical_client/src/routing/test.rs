@@ -315,7 +315,6 @@ async fn shadow_trace_stays_under_request_and_contains_metadata_only() -> Result
 async fn local_tempo_route_trace() -> Result<()> {
     use opentelemetry::trace::{TraceContextExt, TracerProvider};
     use opentelemetry_otlp::WithExportConfig;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tracing::instrument::WithSubscriber;
     use tracing_opentelemetry::OpenTelemetrySpanExt;
     use tracing_subscriber::prelude::*;
@@ -338,19 +337,17 @@ async fn local_tempo_route_trace() -> Result<()> {
     let subscriber = tracing_subscriber::registry().with(
         tracing_opentelemetry::layer().with_tracer(provider.tracer("lexical-route-switch-probe")),
     );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-    let url = format!("http://{}", listener.local_addr()?);
-    let server = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await?;
-        let mut request = vec![0; 4096];
-        let count = socket.read(&mut request).await?;
-        let request = String::from_utf8_lossy(&request[..count]);
-        assert!(request.starts_with("GET /markdown/"));
-        assert!(request.contains("traceparent:"));
-        let body = r#"{"data":"probe"}"#;
-        socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await?;
-        Ok::<_, anyhow::Error>(())
-    });
+    let server = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("GET"))
+        .and(wiremock::matchers::path("/markdown/document-probe"))
+        .and(wiremock::matchers::header_exists("traceparent"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({"data":"probe"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let url = server.uri();
     let trace_id = async {
         let parent = tracing::info_span!("caller.request");
         let trace_id = parent
@@ -373,7 +370,7 @@ async fn local_tempo_route_trace() -> Result<()> {
     }
     .with_subscriber(subscriber)
     .await?;
-    server.await??;
+    server.verify().await;
     provider.force_flush()?;
     provider.shutdown()?;
     println!("local Tempo trace: {trace_id}");
