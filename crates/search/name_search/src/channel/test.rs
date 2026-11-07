@@ -22,6 +22,10 @@ const UNKNOWN_BOT_DM: &str = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 const MEMBER: &str = "macro|member@test.com";
 const GABRIEL: &str = "macro|gabriel@test.com";
 
+fn channel_names(pool: &Pool<Postgres>) -> channels_outbound::channel_name::PgChannelNames {
+    channels_outbound::channel_name::PgChannelNames::new(pool.clone())
+}
+
 fn user(id: &str) -> MacroUserId<Lowercase<'_>> {
     MacroUserId::parse_from_str(id).unwrap().lowercase()
 }
@@ -42,7 +46,7 @@ async fn member_sees_matching_channels_but_non_member_does_not(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let member_results = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "Macro".to_string(),
@@ -59,7 +63,7 @@ async fn member_sees_matching_channels_but_non_member_does_not(
     }));
 
     let non_member_results = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user("macro|nonmember@test.com"),
         ChannelNameSearchScope::default(),
         "Macro".to_string(),
@@ -81,7 +85,7 @@ async fn partial_matches_substrings_while_exact_requires_a_complete_token(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let prefix = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "Mac".to_string(),
@@ -93,7 +97,7 @@ async fn partial_matches_substrings_while_exact_requires_a_complete_token(
     assert_eq!(ids(&prefix), [MACARONI, MACRO_PLANNING, MACRO]);
 
     let infix = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "acro".to_string(),
@@ -105,7 +109,7 @@ async fn partial_matches_substrings_while_exact_requires_a_complete_token(
     assert_eq!(ids(&infix), [MACRO_PLANNING, MACRO]);
 
     let exact_prefix = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "Mac".to_string(),
@@ -117,7 +121,7 @@ async fn partial_matches_substrings_while_exact_requires_a_complete_token(
     assert!(exact_prefix.items.is_empty());
 
     let exact_token = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "Macro".to_string(),
@@ -136,7 +140,7 @@ async fn partial_matches_substrings_while_exact_requires_a_complete_token(
 )]
 async fn former_participant_cannot_find_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let results = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user("macro|former@test.com"),
         ChannelNameSearchScope::default(),
         "Macro".to_string(),
@@ -158,7 +162,7 @@ async fn direct_message_is_found_by_the_other_participants_name(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let by_first_name = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "Gab".to_string(),
@@ -174,7 +178,7 @@ async fn direct_message_is_found_by_the_other_participants_name(
     );
 
     let by_last_name = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "birman".to_string(),
@@ -199,7 +203,7 @@ async fn direct_message_falls_back_to_the_email_local_part(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let no_user_row = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "nameless".to_string(),
@@ -212,7 +216,7 @@ async fn direct_message_falls_back_to_the_email_local_part(
     assert_eq!(no_user_row.items[0].name, "<macro_em>nameless</macro_em>");
 
     let no_profile = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(GABRIEL),
         ChannelNameSearchScope::default(),
         "member".to_string(),
@@ -234,7 +238,7 @@ async fn viewer_is_never_part_of_their_own_direct_message_name(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let gabriel_searching_gabriel = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(GABRIEL),
         ChannelNameSearchScope::default(),
         "gab".to_string(),
@@ -246,7 +250,7 @@ async fn viewer_is_never_part_of_their_own_direct_message_name(
     assert!(gabriel_searching_gabriel.items.is_empty());
 
     let member_searching_member = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "member".to_string(),
@@ -265,7 +269,7 @@ async fn viewer_is_never_part_of_their_own_direct_message_name(
 )]
 async fn display_name_skips_not_available_parts(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let results = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "hollis".to_string(),
@@ -288,7 +292,7 @@ async fn unnamed_private_channel_is_found_by_any_other_participant(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let by_first_participant = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "peter".to_string(),
@@ -304,7 +308,7 @@ async fn unnamed_private_channel_is_found_by_any_other_participant(
     );
 
     let by_second_participant = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "nys".to_string(),
@@ -329,7 +333,7 @@ async fn every_term_must_match_the_stored_name_or_some_other_participant(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let two_participants = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "peter teo".to_string(),
@@ -345,7 +349,7 @@ async fn every_term_must_match_the_stored_name_or_some_other_participant(
     );
 
     let comma_separated = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "teo, peter".to_string(),
@@ -357,7 +361,7 @@ async fn every_term_must_match_the_stored_name_or_some_other_participant(
     assert_eq!(ids(&comma_separated), [PETER_TEO_GROUP]);
 
     let participants_of_different_channels = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "peter gabriel".to_string(),
@@ -369,7 +373,7 @@ async fn every_term_must_match_the_stored_name_or_some_other_participant(
     assert!(participants_of_different_channels.items.is_empty());
 
     let two_words_of_a_stored_name = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "Macro Plan".to_string(),
@@ -392,7 +396,7 @@ async fn every_term_must_match_the_stored_name_or_some_other_participant(
 )]
 async fn persona_direct_messages_are_found_by_bot_name(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let system_bot = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "codex".to_string(),
@@ -405,7 +409,7 @@ async fn persona_direct_messages_are_found_by_bot_name(pool: Pool<Postgres>) -> 
     assert_eq!(system_bot.items[0].name, "<macro_em>Codex</macro_em>");
 
     let owned_bot = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "deal".to_string(),
@@ -418,7 +422,7 @@ async fn persona_direct_messages_are_found_by_bot_name(pool: Pool<Postgres>) -> 
     assert_eq!(owned_bot.items[0].name, "<macro_em>Deal</macro_em> Desk");
 
     let bot_without_row = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "bot".to_string(),
@@ -438,7 +442,7 @@ async fn persona_direct_messages_are_found_by_bot_name(pool: Pool<Postgres>) -> 
 )]
 async fn channel_types_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let every_type = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "des".to_string(),
@@ -450,7 +454,7 @@ async fn channel_types_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result
     assert_eq!(ids(&every_type), [DESIGN_DECKS, DEAL_DESK_DM]);
 
     let direct_messages = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope {
             channel_ids: &[],
@@ -465,7 +469,7 @@ async fn channel_types_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result
     assert_eq!(ids(&direct_messages), [DEAL_DESK_DM]);
 
     let group_channels = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope {
             channel_ids: &[],
@@ -487,7 +491,7 @@ async fn channel_types_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result
 )]
 async fn channel_ids_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let results = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope {
             channel_ids: &[MACRO.parse()?],
@@ -512,7 +516,7 @@ async fn pages_through_mixed_named_and_direct_message_results(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let first_page = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "des".to_string(),
@@ -527,7 +531,7 @@ async fn pages_through_mixed_named_and_direct_message_results(
     };
 
     let second_page = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "des".to_string(),
@@ -547,7 +551,7 @@ async fn pages_through_mixed_named_and_direct_message_results(
 )]
 async fn blank_terms_and_thread_cursors_are_rejected(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let blank = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         " , ".to_string(),
@@ -559,7 +563,7 @@ async fn blank_terms_and_thread_cursors_are_rejected(pool: Pool<Postgres>) -> an
     assert!(matches!(blank, Err(NameSearchError::EmptySearchTerm)));
 
     let thread_cursor = search_channel_names(
-        &pool,
+        &channel_names(&pool),
         &user(MEMBER),
         ChannelNameSearchScope::default(),
         "Macro".to_string(),
@@ -592,8 +596,12 @@ async fn results_match_the_names_the_viewer_sees(pool: Pool<Postgres>) -> anyhow
     )
     .fetch_all(&pool)
     .await?;
-    let resolved_names =
-        batch_resolve_channel_names(&pool, &channel_ids, MacroUserIdStr(viewer.clone())).await?;
+    let resolved_names = channels_outbound::channel_name::batch_resolve_channel_names(
+        &pool,
+        &channel_ids,
+        MacroUserIdStr(viewer.clone()),
+    )
+    .await?;
     assert_eq!(resolved_names.len(), 11);
 
     for term in [
@@ -627,7 +635,7 @@ async fn results_match_the_names_the_viewer_sees(pool: Pool<Postgres>) -> anyhow
             .collect();
 
         let results = search_channel_names(
-            &pool,
+            &channel_names(&pool),
             &viewer,
             ChannelNameSearchScope::default(),
             term.to_string(),

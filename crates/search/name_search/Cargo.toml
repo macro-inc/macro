@@ -20,5 +20,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
+# The Postgres ChannelNames adapter, to run the search against seeded rows.
+channels_outbound = { workspace = true }
 anyhow = { workspace = true }
 macro_db_migrator = { workspace = true }

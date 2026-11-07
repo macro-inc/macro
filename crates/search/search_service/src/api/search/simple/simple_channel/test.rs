@@ -17,7 +17,7 @@ async fn org_filter_matches_no_channel_names() {
     };
 
     let (hits, cursor) = search_names(
-        &db,
+        &channels_outbound::channel_name::PgChannelNames::new(db),
         &user_id,
         &filters,
         "macro".to_string(),
