@@ -14,7 +14,7 @@ fn providers_come_from_the_key_before_the_path() {
     assert_eq!(
         default_providers(
             "gmail-ops:DeleteLabel",
-            "crates/models_email/src/gmail/gmail_ops.rs"
+            "crates/types/models_email/src/gmail/gmail_ops.rs"
         ),
         Providers::Gmail
     );

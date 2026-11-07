@@ -83,7 +83,7 @@ const replyTarget = z.discriminatedUnion('kind', [
 // End of the LEGACY conversation schemas.
 
 // The trigger: mirrors the Rust `TriggerContext` wire shape in
-// crates/trigger_context/src/lib.rs.
+// crates/types/trigger_context/src/lib.rs.
 
 const triggerPerson = z.object({
   id: z.string().min(1),

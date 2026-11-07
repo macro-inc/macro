@@ -494,7 +494,7 @@ fn saved_metadata_selects_what_live_metadata_selects() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("metadata.json");
     let root = xtask_paths::workspace_root();
-    let changed = [PathBuf::from("crates/macro_user_id/src/lib.rs")];
+    let changed = [PathBuf::from("crates/types/macro_user_id/src/lib.rs")];
     let rules = repository_rules().unwrap();
     let live = build_graph(true).expect("cargo metadata");
     let expected = select_by_paths(&live, &changed, &rules).unwrap();

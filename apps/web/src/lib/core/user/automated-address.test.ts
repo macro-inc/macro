@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import fixtures from '../../../../../../crates/subsequence_match/src/ranking/automated-recipient-fixtures.tsv?raw';
+import fixtures from '../../../../../../crates/types/subsequence_match/src/ranking/automated-recipient-fixtures.tsv?raw';
 import { isAutomatedAddress } from './automated-address';
 
 it('matches native automated mailbox eligibility without hiding ordinary addresses', () => {

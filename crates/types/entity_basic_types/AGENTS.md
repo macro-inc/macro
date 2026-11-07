@@ -9,7 +9,7 @@ extensions. Split out of `model` so `entity_access` does not depend on it.
 ## Scope
 
 - Owns: those three structs and `DocumentBasic::try_file_type`.
-- Not here: richer document/chat/project models → `crates/model`.
+- Not here: richer document/chat/project models → `crates/types/model`.
 
 ## Boundaries
 

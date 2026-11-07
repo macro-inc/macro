@@ -355,7 +355,7 @@ fn should_run_includes_fold_wasm_inputs() {
         "SQL engine wasm source must rebuild the web artifact: {should_run}"
     );
     assert!(
-        should_run.contains("crates/natural_time/**"),
+        should_run.contains("crates/types/natural_time/**"),
         "date phrase wasm source must rebuild the web artifact: {should_run}"
     );
 }

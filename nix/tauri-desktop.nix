@@ -209,7 +209,7 @@
         }
         {
           name = "natural_time";
-          crate = "crates/natural_time";
+          crate = "crates/types/natural_time";
           dir = "natural-time";
         }
         {

@@ -195,7 +195,7 @@ Keep value-level `EntityReference.entity_type` separate so this change does not 
 
 Likely files:
 
-- `crates/models_properties/src/api/**`
+- `crates/types/models_properties/src/api/**`
 - `crates/databases/properties_inbound/src/axum_router/extract.rs`
 - `crates/databases/properties_inbound/src/axum_router/entities.rs`
 - `crates/properties_service/**` and DSS OpenAPI composition as required

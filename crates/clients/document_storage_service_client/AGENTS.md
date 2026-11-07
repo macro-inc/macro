@@ -19,7 +19,7 @@ documents, projects, threads, notifications, and uploads.
 
 - Owns: typed request/response wrapping for DSS's HTTP API.
 - Not here: DSS's own domain logic → `services/document_storage_service`;
-  the request/response types themselves → `crates/model`.
+  the request/response types themselves → `crates/types/model`.
 
 ## Boundaries
 
@@ -35,7 +35,7 @@ documents, projects, threads, notifications, and uploads.
 
 - Add an endpoint: add a method in the matching resource module (or a new
   one) using `self.client` (internal auth) or `self.external_request` (JWT) →
-  add request/response types to `crates/model` if new → map the response to
+  add request/response types to `crates/types/model` if new → map the response to
   `DssClientError` on failure.
 
 ## Checks
