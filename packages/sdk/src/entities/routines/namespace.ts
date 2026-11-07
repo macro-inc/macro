@@ -1,6 +1,14 @@
+import type { RoutineCheck } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { MacroEntityType } from '../entity';
 import { Routine, type RoutineOptions, routineBody } from './routine';
+
+/** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
+export interface CreatedEntity {
+  readonly id: string;
+  readonly entityType: MacroEntityType;
+}
 
 /**
  * Scheduled and event-triggered routines.
@@ -82,6 +90,44 @@ export class RoutineNamespace {
           body: { ...routineBody(options), enabled: options.enabled ?? true },
         }),
       ),
+    );
+  }
+
+  /**
+   * Check a routine without saving it: the checks `create` makes, including
+   * type-checking its code steps, with nothing saved. Returns whether it
+   * would save (`ok`), what would stop it (`problems`), the code steps that
+   * don't type-check (`steps`, by place among the steps) and the routine as
+   * it would be stored. Check before creating, and fix what it reports.
+   * `created` names what you created for the routine to use, such as the
+   * database it writes to, so whoever reviews a drafted routine knows it
+   * exists.
+   *
+   * @example
+   * const check = await macro.routines.check({
+   *   name: 'Say hello',
+   *   trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+   *   steps: [{ type: 'code', title: 'Post hello', source }],
+   * });
+   * if (!check.ok) return { problems: check.problems, steps: check.steps };
+   */
+  async check(
+    options: RoutineOptions,
+    extra?: { created?: CreatedEntity[] },
+  ): Promise<RoutineCheck> {
+    return unwrap(
+      await this.client.scheduledAction.checkScheduledAction({
+        body: {
+          routine: {
+            ...routineBody(options),
+            enabled: options.enabled ?? true,
+          },
+          created: (extra?.created ?? []).map((item) => ({
+            entityType: item.entityType,
+            entityId: item.id,
+          })),
+        },
+      }),
     );
   }
 

@@ -99,6 +99,7 @@ export {
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
+export type { CreatedEntity } from './entities/routines/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,

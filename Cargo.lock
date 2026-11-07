@@ -17492,11 +17492,13 @@ name = "scheduled_action"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "ai_billing",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
  "bot_id",
  "bots",

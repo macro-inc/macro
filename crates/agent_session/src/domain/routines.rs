@@ -42,6 +42,26 @@ pub trait RoutineSessions: Send + Sync + 'static {
         &self,
         command: RoutineSessionAction,
     ) -> impl Future<Output = Result<(), RoutineSessionError>> + Send;
+
+    /// How much the session did so far: content-free counts.
+    fn activity(
+        &self,
+        command: RoutineSessionAction,
+    ) -> impl Future<Output = Result<RoutineActivity, RoutineSessionError>> + Send {
+        let _ = command;
+        async { Err(RoutineSessionError::OperationFailed) }
+    }
+
+    /// Delete a session the scheduler opened (source `routine`), such as a
+    /// routine draft's once its drafter is done with it. No other session can
+    /// be deleted this way.
+    fn delete(
+        &self,
+        command: RoutineSessionAction,
+    ) -> impl Future<Output = Result<(), RoutineSessionError>> + Send {
+        let _ = command;
+        async { Err(RoutineSessionError::OperationFailed) }
+    }
 }
 
 /// The Pipedream apps a user has connected and enabled for tool use, which

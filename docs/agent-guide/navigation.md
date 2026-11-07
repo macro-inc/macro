@@ -1170,8 +1170,11 @@ routine: it doesn't start the agent or notify anyone.
 routine** in the same popover host as task and project creation. It never edits
 a routine itself: a **Describe your routine** box with **Draft it** (AI fills in
 the name, triggers and steps from a sentence such as "When an invoice arrives,
-label it Finance and make a task to pay it", using the workspace's label, tag,
-channel, folder, people and agent names), **Templates** (with
+label it Finance and make a task to pay it", finding the labels, tags,
+channels, folders, people and agents it names with the user's access; one it
+can't find, or that matches several, is left for the user to pick, and
+anything it had to create for the routine, such as a new database, is listed
+on the review), **Templates** (with
 `enable-routine-starter-templates` on; Macro's cards: **Sort
 my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
 **Share updates** only where AI decisions are enabled, for its trigger

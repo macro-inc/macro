@@ -743,3 +743,100 @@ async fn an_external_agent_cannot_take_routine_apps() {
         RoutineSessionError::AppsUnsupported
     );
 }
+
+#[tokio::test]
+async fn only_a_session_the_scheduler_opened_can_be_deleted() {
+    let fx = Fixture::new(true);
+    // A session the owner opened stays.
+    assert_ne!(fx.session.source, SessionSource::Routine);
+    assert_eq!(
+        fx.service.delete(fx.action()).await.unwrap_err(),
+        RoutineSessionError::Forbidden
+    );
+    let mut draft = test_agent_session(AgentSessionId::new());
+    draft.owner_id = fx.session.owner_id.clone();
+    draft.bot_id = fx.session.bot_id;
+    draft.source = SessionSource::Routine;
+    fx.repo.insert_session(draft.clone());
+    let action = RoutineSessionAction {
+        session_id: draft.id,
+        ..fx.action()
+    };
+    assert_eq!(
+        fx.service
+            .delete(RoutineSessionAction {
+                owner: other_owner(),
+                ..action.clone()
+            })
+            .await
+            .unwrap_err(),
+        RoutineSessionError::Forbidden
+    );
+
+    fx.service.delete(action.clone()).await.unwrap();
+
+    assert!(
+        crate::domain::ports::AgentSessionRepo::get(&fx.repo, draft.id)
+            .await
+            .is_err()
+    );
+    assert!(
+        crate::domain::ports::AgentSessionRepo::get(&fx.repo, fx.session.id)
+            .await
+            .is_ok()
+    );
+}
+
+fn log_frame(
+    direction: &str,
+    mut content: serde_json::Value,
+) -> crate::domain::model::StoredAgentSessionLog {
+    content["type"] = serde_json::json!("acp");
+    content["jsonrpc"] = serde_json::json!("2.0");
+    crate::domain::model::StoredAgentSessionLog {
+        id: macro_uuid::generate_uuid_v7(),
+        created_at: chrono::Utc::now(),
+        entry: agent_fold::testing::parse_log(
+            &serde_json::json!({"direction": direction, "content": content}).to_string(),
+        )
+        .pop()
+        .unwrap(),
+    }
+}
+
+#[test]
+fn activity_counts_tool_calls_and_turns_without_reading_them() {
+    let action = AgentActionId::mint();
+    let tool_call = |id: &str| {
+        log_frame(
+            "to_server",
+            serde_json::json!({"method": "session/update", "params": {"sessionId": "s", "update": {
+                "sessionUpdate": "tool_call", "toolCallId": id, "title": "ExecuteCode",
+                "kind": "other", "status": "completed", "rawInput": {"source": "private"}
+            }}}),
+        )
+    };
+    let entries = vec![
+        log_frame(
+            "to_runtime",
+            serde_json::json!({"id": action, "method": "session/prompt", "params": {
+                "sessionId": "s", "prompt": [{"type": "text", "text": "draft a routine"}]
+            }}),
+        ),
+        tool_call("call-1"),
+        tool_call("call-2"),
+        tool_call("call-3"),
+        log_frame(
+            "to_server",
+            serde_json::json!({"id": action, "result": {"stopReason": "end_turn"}}),
+        ),
+    ];
+
+    assert_eq!(
+        activity(entries),
+        RoutineActivity {
+            tool_calls: 3,
+            turns: 1,
+        }
+    );
+}

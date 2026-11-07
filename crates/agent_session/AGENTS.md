@@ -133,6 +133,11 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
+- The scheduler's routine-session operations (`domain/routines.rs`,
+  `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
+  a session the scheduler opened (source `routine`) for its owner and refuses
+  any other; `activity` returns content-free counts (tool calls, turns).
+
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as
