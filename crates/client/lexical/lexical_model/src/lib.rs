@@ -80,3 +80,5 @@ pub use core::*;
 #[cfg(test)]
 #[path = "event/test.rs"]
 mod event_test;
+
+mod opaque;

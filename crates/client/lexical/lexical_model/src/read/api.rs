@@ -13,7 +13,7 @@ pub trait Read {
         self.view().contains(key)
     }
     /// Type name.
-    fn type_name(&self, key: impl Into<NodeKey>) -> Result<&'static str, Error> {
+    fn type_name(&self, key: impl Into<NodeKey>) -> Result<&str, Error> {
         self.view().type_name(key)
     }
     /// Get or err.

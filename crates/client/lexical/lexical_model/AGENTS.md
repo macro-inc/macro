@@ -90,3 +90,7 @@ snapshots can reconcile cached element defaults, as the upstream literal guard
 demonstrates. P14 awaits the markdown crate. Persist shrinking seeds in
 `proptest-regressions/`. Keep the decorator count in sync with record insertion
 and removal; opaque text hooks rule out the local root-text proof.
+
+Collaborative callers opt into `opaque_unknown_types(true)`; strict import stays
+the default. Opaque records keep original type/version and own JSON, while framework
+links own children. Own export stays flat and overlays changed framework fields.

@@ -51,7 +51,7 @@ pub enum Error {
     #[error("caret text point {key} has node type {type_name}")]
     CaretFromPointNotText {
         /// Actual type.
-        type_name: &'static str,
+        type_name: String,
         /// Origin key.
         key: NodeKey,
     },
@@ -59,7 +59,7 @@ pub enum Error {
     #[error("caret element point {key} has node type {type_name}")]
     CaretFromPointNotElement {
         /// Actual type.
-        type_name: &'static str,
+        type_name: String,
         /// Origin key.
         key: NodeKey,
     },

@@ -44,3 +44,6 @@ WP-49. Keep literal tests for each intentional S11 delta. Strict checks must
 report unrepresentable newer own fields while preserving them in Loro.
 Use saved event paths for unindexed filtered wrappers; reconcile final policy
 visibility before emitting updates or retaining their model bindings.
+
+Remote Create JSON retains an empty children marker for native elements so
+opt-in unknown types keep their structural kind through EditorCore.
