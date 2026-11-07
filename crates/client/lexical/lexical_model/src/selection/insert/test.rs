@@ -465,3 +465,22 @@ fn root_range_paragraph_insertion_preserves_selected_block_contents() -> Result<
     })?;
     Ok(())
 }
+
+#[test]
+fn element_start_transfers_before_resolving_the_end_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let old = tx.create_text("\t")?;
+        tx.append(p, &[old.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
+            Point::element(p, ChildIndex(1)),
+        ))))?;
+        tx.insert_text("\u{feff}")?;
+        Ok(())
+    })?;
+    assert_eq!(editor.state().root_text_content().as_ref(), "\u{feff}\t");
+    Ok(())
+}
