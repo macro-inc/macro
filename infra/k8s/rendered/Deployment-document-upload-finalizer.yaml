@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: document-upload-finalizer
+    app.kubernetes.io/name: document-upload-finalizer
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: document-upload-finalizer
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: document-upload-finalizer
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        macro.com/env-revision: reference
+      labels:
+        app: document-upload-finalizer
+        app.kubernetes.io/name: document-upload-finalizer
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: app
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: DD_SERVICE
+              value: document-upload-finalizer
+            - name: PORT
+              value: "8080"
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/document-upload-finalizer:build.nssb2nzvjjdib9c5w4wf02s1bvk8p1gn
+          imagePullPolicy: IfNotPresent
+          name: document-upload-finalizer
+          ports: []
+          readinessProbe:
+            exec:
+              command:
+                - /bin/true
+            failureThreshold: 3
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - |
+              until kubectl get job kafka-topics-6b294d8b7c >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-6b294d8b7c --timeout=600s
+
+              until kubectl get job migrate-b1d851739c >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/migrate-b1d851739c --timeout=600s
+
+              until kubectl get job search-indices-2e66d41f77 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/search-indices-2e66d41f77 --timeout=600s
+
+              for endpoint in fusionauth:9011 localstack:4566 redis:6379; do
+                until nc -z -w 1 "${endpoint%:*}" "${endpoint#*:}"; do sleep 0.2; done
+              done
+          image: localhost:32550/macro/readiness:build.smghxgld6q7kd9samdjm65jjgd5zm50c
+          name: dependencies
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - emptyDir: {}
+          name: tmp

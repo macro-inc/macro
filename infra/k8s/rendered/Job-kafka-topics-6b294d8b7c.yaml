@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: kafka-topics
+    app.kubernetes.io/name: kafka-topics
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/job: kafka-topics
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: kafka-topics-6b294d8b7c
+  namespace: macro-kube-reference
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: kafka-topics
+        app.kubernetes.io/name: kafka-topics
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/job: kafka-topics
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/kafka-topics:build.v52ix9idm1qrigmp0cb83np9873c7lw7
+          imagePullPolicy: IfNotPresent
+          name: kafka-topics
+          ports: []
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - until nc -z -w 1 kafka 29092; do sleep 0.2; done
+          image: localhost:32550/macro/network-wait:build.za8l72vw7bi95wmxhbrb19bknlzbqcjf
+          name: dependency
+      restartPolicy: OnFailure
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp

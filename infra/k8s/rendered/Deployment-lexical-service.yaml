@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: lexical-service
+    app.kubernetes.io/name: lexical-service
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: lexical-service
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: lexical-service
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        macro.com/env-revision: reference
+      labels:
+        app: lexical-service
+        app.kubernetes.io/name: lexical-service
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: app
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: INTERNAL_AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: INTERNAL_API_SECRET_KEY
+                  name: macro-env
+            - name: PORT
+              value: "8096"
+            - name: SYNC_SERVICE_AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: INTERNAL_API_SECRET_KEY
+                  name: macro-env
+            - name: SYNC_SERVICE_URL
+              value: http://sync-service:8787
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/lexical:build.gb776vv07gmmnhwj01x852inhg48dwb1
+          imagePullPolicy: IfNotPresent
+          name: lexical-service
+          ports:
+            - containerPort: 8096
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: 8096
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      enableServiceLinks: false
+      initContainers: []
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp

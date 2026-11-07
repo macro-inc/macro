@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: migrate
+    app.kubernetes.io/name: migrate
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/job: migrate
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: migrate-b1d851739c
+  namespace: macro-kube-reference
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: migrate
+        app.kubernetes.io/name: migrate
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/job: migrate
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/migrate:build.7zjflx88g6z0f26ylkdzdfxm0nsxjxdm
+          imagePullPolicy: IfNotPresent
+          name: migrate
+          ports: []
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      enableServiceLinks: false
+      initContainers:
+        - command:
+            - /bin/sh
+            - -ec
+            - until nc -z -w 1 postgres 5432; do sleep 0.2; done
+          image: localhost:32550/macro/network-wait:build.za8l72vw7bi95wmxhbrb19bknlzbqcjf
+          name: dependency
+      restartPolicy: OnFailure
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp

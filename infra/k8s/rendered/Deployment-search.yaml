@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: search
+    app.kubernetes.io/name: search
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: search
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: search
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: search
+        app.kubernetes.io/name: search
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom: []
+          image: localhost:32550/macro/opensearch:build.ganagiv2jp1rz0lbs5gbjlywd1dh58lg
+          imagePullPolicy: IfNotPresent
+          name: search
+          ports:
+            - containerPort: 9200
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /
+              port: 9200
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /usr/share/opensearch/data
+              name: vol-data
+      enableServiceLinks: false
+      initContainers: []
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-data
+          persistentVolumeClaim:
+            claimName: opensearch-data

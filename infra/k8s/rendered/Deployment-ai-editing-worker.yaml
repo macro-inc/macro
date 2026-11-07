@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ai-editing-worker
+    app.kubernetes.io/name: ai-editing-worker
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: ai-editing-worker
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: ai-editing-worker
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        macro.com/env-revision: reference
+      labels:
+        app: ai-editing-worker
+        app.kubernetes.io/name: ai-editing-worker
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: app
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/ai-editing-worker:build.49vj1bvkcpxj6n6z7j242z4yf442zl0b
+          imagePullPolicy: IfNotPresent
+          name: ai-editing-worker
+          ports:
+            - containerPort: 8933
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            periodSeconds: 1
+            tcpSocket:
+              port: 8933
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /state
+              name: vol-state
+      enableServiceLinks: false
+      initContainers: []
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: vol-state
+          persistentVolumeClaim:
+            claimName: ai-editing-worker-wrangler
