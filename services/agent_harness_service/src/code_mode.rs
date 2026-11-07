@@ -3,6 +3,8 @@ use agent_code_mode::domain::{
     CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
 };
 use agent_correlation::domain::CorrelationRepository;
+use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::ports::AgentSessionRepo;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
@@ -16,6 +18,41 @@ pub struct RunCredentials {
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub gate: Arc<dyn NativeToolGate>,
     pub endpoints: SdkEndpoints,
+    pub origins: Arc<dyn SessionOrigins>,
+}
+
+/// Whether a session may only read, from what opened it. Object-safe so the
+/// credentials hold it erased.
+#[async_trait]
+pub trait SessionOrigins: Send + Sync {
+    /// Whether every program `session` runs is a dry run.
+    async fn reads_only(&self, session: AgentSessionId) -> anyhow::Result<bool>;
+}
+
+/// Reads a session's stored origin.
+pub struct StoredOrigins<Repo>(pub Repo);
+
+#[async_trait]
+impl<Repo: AgentSessionRepo> SessionOrigins for StoredOrigins<Repo> {
+    async fn reads_only(&self, session: AgentSessionId) -> anyhow::Result<bool> {
+        let session = AgentSessionRepo::get(&self.0, session)
+            .await
+            .map_err(|error| anyhow::anyhow!("could not read the session: {error:?}"))?;
+        Ok(session.origin.drafts_routine())
+    }
+}
+
+/// Whether `session`'s programs run as dry runs: a routine draft's do,
+/// whichever replica runs its turn. A session that can't be read runs
+/// nothing.
+async fn dry_run_for(
+    origins: &dyn SessionOrigins,
+    session: AgentSessionId,
+) -> Result<bool, CodeModeError> {
+    origins.reads_only(session).await.map_err(|error| {
+        tracing::error!(?error, "could not tell whether a session may only read");
+        CodeModeError::Unavailable
+    })
 }
 
 #[async_trait]
@@ -27,6 +64,7 @@ impl ExecutionCredentials for RunCredentials {
         cancel: CancellationToken,
     ) -> Result<RunEnvironment, CodeModeError> {
         let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        let dry_run = dry_run_for(self.origins.as_ref(), identity.session).await?;
         let correlation = self
             .correlations
             .create(identity.session.as_uuid(), identity.agent_id.as_uuid())
@@ -59,7 +97,7 @@ impl ExecutionCredentials for RunCredentials {
             session_id: Some(identity.session.as_uuid()),
             execution_id: Some(identity.execution.as_uuid()),
             unattended: None,
-            dry_run: false,
+            dry_run,
         })
     }
 }

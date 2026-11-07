@@ -15,6 +15,7 @@ use agent_harness::domain::sandbox::SandboxResizeEffect;
 use agent_harness::outbound::containers::{HarnessContainer, HarnessContainers};
 use agent_harness::outbound::sidecar::SidecarSender;
 use agent_inmem::domain::engine::{AgentIdentity, ReplyDelivery};
+use agent_inmem::domain::engine::SessionRole;
 use agent_inmem::outbound::manager::{InMemAgentManager, SessionFacts};
 use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
@@ -130,12 +131,15 @@ where
                 .session_bot(row.bot_id)
                 .await
                 .map_err(HarnessError::Session)?;
+            let role = SessionRole::of(&row.origin);
             return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
+                role,
                 // A thread's reply is one message, rewritten only as each
                 // passage finishes; an opening line lands with what follows it.
-                delivery: if row.thread_id.is_some() {
+                // Nobody reads a routine draft's replies as they stream.
+                delivery: if row.thread_id.is_some() || role == SessionRole::RoutineDraft {
                     ReplyDelivery::Whole
                 } else {
                     ReplyDelivery::Streamed

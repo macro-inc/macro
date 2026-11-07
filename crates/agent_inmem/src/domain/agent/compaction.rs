@@ -580,6 +580,7 @@ async fn complete(
     let call = cancel.child_token();
     let _stop = call.clone().drop_guard();
     let mut parts = state.engine.run_turn(TurnRequest {
+        role: state.role,
         purpose: TurnPurpose::Summary,
         delivery: state.delivery,
         session_id: state.session_id,

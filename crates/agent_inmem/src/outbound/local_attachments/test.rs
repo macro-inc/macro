@@ -145,6 +145,7 @@ fn message(uri: &str) -> ChatMessage {
 
 fn request(messages: Vec<ChatMessage>) -> TurnRequest {
     TurnRequest {
+        role: crate::domain::engine::SessionRole::Conversation,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: crate::domain::engine::TurnPurpose::Conversation,
         session_id: agent_session::domain::model::AgentSessionId::new(),

@@ -33,10 +33,47 @@ pub struct AgentIdentity {
     pub handle: String,
 }
 
+/// What a session's turns are for, which decides their tools and who pays.
+/// It comes from the session's stored origin, so every replica that runs
+/// the session reads the same answer.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SessionRole {
+    /// A conversation: the agent's tools, billed as agent session usage.
+    #[default]
+    Conversation,
+    /// Drafting a routine for its drafter: only code mode's tools, every
+    /// program a dry run, its answer handed in through the session's submit
+    /// tool, billed as automation usage.
+    RoutineDraft,
+}
+
+impl SessionRole {
+    /// The role a session with `origin` plays.
+    #[must_use]
+    pub fn of(origin: &trigger_context::TriggerOrigin) -> Self {
+        if origin.drafts_routine() {
+            Self::RoutineDraft
+        } else {
+            Self::Conversation
+        }
+    }
+
+    /// What the session's turns are billed as.
+    #[must_use]
+    pub fn feature(self) -> ai_usage::AiFeature {
+        match self {
+            Self::Conversation => ai_usage::AiFeature::AgentSession,
+            Self::RoutineDraft => ai_usage::AiFeature::Automation,
+        }
+    }
+}
+
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
     /// Whether the turn answers the user or condenses their conversation.
     pub purpose: TurnPurpose,
+    /// What the session is for, which decides the turn's tools and billing.
+    pub role: SessionRole,
     /// How the session's reader receives the reply.
     pub delivery: ReplyDelivery,
     /// The session the turn belongs to.

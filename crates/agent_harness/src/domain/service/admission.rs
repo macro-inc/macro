@@ -60,7 +60,7 @@ where
         }
         // Never use the actor or a system fallback for a missing user owner.
         self.admission
-            .admit(session.owner_user()?, AiFeature::AgentSession)
+            .admit(session.owner_user()?, billed_as(&session.origin))
             .await?;
         Ok(())
     }
@@ -198,11 +198,22 @@ where
         bot: BotId,
         harness: &str,
         owner: &MacroUserIdStr<'static>,
+        feature: AiFeature,
     ) -> Result<()> {
         if macro_funded(AgentKind::for_session(bot, harness)) {
-            self.admission.admit(owner, AiFeature::AgentSession).await?;
+            self.admission.admit(owner, feature).await?;
         }
         Ok(())
+    }
+}
+
+/// What a session's turns are billed as: a routine draft's as the
+/// automation work it is, every other session's as agent session usage.
+pub(super) fn billed_as(origin: &trigger_context::TriggerOrigin) -> AiFeature {
+    if origin.drafts_routine() {
+        AiFeature::Automation
+    } else {
+        AiFeature::AgentSession
     }
 }
 

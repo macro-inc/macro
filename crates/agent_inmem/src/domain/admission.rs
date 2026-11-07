@@ -1,7 +1,6 @@
 //! Admission for provider-backed turns, independent of the ACP transport.
 
 use ai_billing::domain::{AiAdmissionError, AiAdmissionService};
-use ai_usage::AiFeature;
 use model_owner::Owner;
 
 #[cfg(test)]
@@ -13,7 +12,8 @@ mod test;
 pub async fn admit_turn(
     admission: &dyn AiAdmissionService,
     owner: &Owner,
+    role: crate::domain::engine::SessionRole,
 ) -> Result<(), AiAdmissionError> {
     let user = owner.as_user().ok_or(AiAdmissionError::Unavailable)?;
-    admission.admit(user, AiFeature::AgentSession).await
+    admission.admit(user, role.feature()).await
 }

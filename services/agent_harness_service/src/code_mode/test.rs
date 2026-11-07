@@ -85,3 +85,23 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
         requester
     );
 }
+
+struct Origins(Result<bool, &'static str>);
+
+#[async_trait]
+impl SessionOrigins for Origins {
+    async fn reads_only(&self, _: AgentSessionId) -> anyhow::Result<bool> {
+        self.0.map_err(|error| anyhow::anyhow!(error))
+    }
+}
+
+#[tokio::test]
+async fn a_routine_drafts_programs_run_as_dry_runs_and_an_unreadable_session_runs_none() {
+    let session = AgentSessionId::new();
+    assert!(dry_run_for(&Origins(Ok(true)), session).await.unwrap());
+    assert!(!dry_run_for(&Origins(Ok(false)), session).await.unwrap());
+    assert!(matches!(
+        dry_run_for(&Origins(Err("database down")), session).await,
+        Err(CodeModeError::Unavailable)
+    ));
+}

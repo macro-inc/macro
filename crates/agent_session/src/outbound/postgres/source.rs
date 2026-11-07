@@ -87,6 +87,9 @@ impl SourceRow {
             "dispatched" => TriggerOrigin::Dispatched {
                 on_behalf_of: self.on_behalf_of_user_id.clone()?,
             },
+            "routine_draft" => TriggerOrigin::RoutineDraft {
+                by: self.actor_user_id.clone()?,
+            },
             "routine" => TriggerOrigin::Routine {
                 routine: self.routine_id?,
                 firing: match self.routine_firing.as_deref()? {
@@ -199,6 +202,13 @@ fn source_columns(origin: &TriggerOrigin) -> Option<(&'static str, SourceColumns
             "dispatched",
             SourceColumns {
                 on_behalf_of_user_id: Some(on_behalf_of.as_ref().to_owned()),
+                ..columns
+            },
+        ),
+        TriggerOrigin::RoutineDraft { by } => (
+            "routine_draft",
+            SourceColumns {
+                actor_user_id: Some(by.as_ref().to_owned()),
                 ..columns
             },
         ),

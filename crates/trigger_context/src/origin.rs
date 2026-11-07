@@ -68,6 +68,13 @@ pub enum TriggerOrigin {
         /// What made it fire.
         firing: RoutineCause,
     },
+    /// Macro drafts a routine from a person's words. Such a session only
+    /// reads, answers its drafter rather than a person, and is deleted once
+    /// the draft is back.
+    RoutineDraft {
+        /// Who asked for the draft.
+        by: MacroUserIdStr<'static>,
+    },
     /// Not known: an unclaimed warm session, a producer that predates this
     /// record, or a kind this build does not know.
     #[default]
@@ -80,6 +87,12 @@ impl TriggerOrigin {
     #[must_use]
     pub fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown)
+    }
+
+    /// Whether the session drafts a routine, and so may only read.
+    #[must_use]
+    pub fn drafts_routine(&self) -> bool {
+        matches!(self, Self::RoutineDraft { .. })
     }
 }
 
