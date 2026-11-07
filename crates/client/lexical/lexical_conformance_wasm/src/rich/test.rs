@@ -61,3 +61,16 @@ fn rich_noop_updates_preserve_typing_history_merge() -> Result<(), BoundaryError
     assert_eq!(output["text"], "ab");
     Ok(())
 }
+
+#[test]
+fn rich_host_deletion_sorts_dom_points_before_restoring_direction() -> Result<(), BoundaryError> {
+    let mut core = RichHandle::create()?;
+    core.execute(
+        r#"{"kind":"Core","command":{"kind":"InsertText","text":"é"}}"#,
+        HistoryTime(100),
+    )?;
+    let output: Value = serde_json::from_str(&core.execute(r#"{"kind":"Delete","unit":"character","backward":true,"target":{"path":[0,0],"offset":0,"type":"text"}}"#, HistoryTime(200))?)?;
+    assert_eq!(output["text"], "e");
+    assert_eq!(output["selection"]["anchor"]["offset"], 1);
+    Ok(())
+}
