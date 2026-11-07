@@ -219,7 +219,7 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
             Arc::clone(&programs) as Arc<dyn ProgramExecutor>,
             Arc::new(NoChecks),
             RecordedTokens::default(),
-            BTreeMap::new(),
+            code_execution::domain::SdkEndpoints::default(),
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
             Arc::new(NoTimeZones),
@@ -340,14 +340,17 @@ mod real_deno {
         let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
             .await
             .unwrap();
-        let hosts = ["cognition", "email", "storage"]
-            .map(|name| (name.to_owned(), host.to_owned()))
-            .into();
+        let endpoints = code_execution::domain::SdkEndpoints {
+            hosts: ["cognition", "email", "storage"]
+                .map(|name| (name.to_owned(), host.to_owned()))
+                .into(),
+            ..Default::default()
+        };
         let code = SdkRoutineCode::new(
             Arc::new(executor),
             Arc::new(checker),
             FixedToken,
-            hosts,
+            endpoints,
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
             Arc::new(NoTimeZones),
