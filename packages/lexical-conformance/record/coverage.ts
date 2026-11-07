@@ -2,12 +2,16 @@ import { readFileSync } from 'node:fs';
 import { Session } from 'node:inspector/promises';
 import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { eachMapping, TraceMap } from '@jridgewell/trace-mapping';
+import { FunctionCoverage, PatchLines } from './coverage-map';
 
 type Range = { startOffset: number; endOffset: number; count: number };
 type Point = { offset: number; file: string; line: number };
 type Location = { file: string; start: number; end: number; id: string };
 const locations: Location[] = JSON.parse(
   readFileSync(new NodeURL('./s2-ranges.json', import.meta.url), 'utf8')
+);
+const patchLines = new PatchLines(
+  readFileSync(new NodeURL('./hooks.patch', import.meta.url), 'utf8')
 );
 
 /** Select the most specific V8 range, retaining zero-count branch exclusions. */
@@ -72,7 +76,7 @@ export class SourceCoverage {
     string,
     { sourceMapURL?: string; startLine: number; startColumn: number }
   >();
-  private sources = new Map<string, Point[]>();
+  private sources = new Map<string, FunctionCoverage<Point>>();
 
   async start(): Promise<void> {
     this.session.connect();
@@ -122,8 +126,7 @@ export class SourceCoverage {
         const offsets = [0];
         for (let i = 0; i < scriptSource.length; i++)
           if (scriptSource[i] === '\n') offsets.push(i + 1);
-        source = [];
-        const points = source;
+        const points: Point[] = [];
         eachMapping(map, (mapping) => {
           if (!mapping.source || mapping.originalLine === null) return;
           let file = mapping.source;
@@ -132,21 +135,22 @@ export class SourceCoverage {
           if (file.startsWith('file:')) file = fileURLToPath(file);
           const index = file.indexOf('packages/');
           if (index < 0) return;
+          file = file.slice(index);
+          const line = patchLines.original(file, mapping.originalLine);
+          if (line === undefined) return;
           points.push({
             offset:
               (offsets[mapping.generatedLine - 1] ?? 0) +
               mapping.generatedColumn,
-            file: file.slice(index),
-            line: mapping.originalLine,
+            file,
+            line,
           });
         });
-        source.sort((a, b) => a.offset - b.offset);
+        points.sort((a, b) => a.offset - b.offset);
+        source = new FunctionCoverage(scriptSource, points);
         this.sources.set(script.scriptId, source);
       }
-      for (const point of coveredPoints(
-        source,
-        script.functions.flatMap((fn) => fn.ranges)
-      )) {
+      for (const point of source.covered(script.functions, coveredPoints)) {
         const hit = lines.get(point.file) ?? new Set<number>();
         hit.add(point.line);
         lines.set(point.file, hit);
