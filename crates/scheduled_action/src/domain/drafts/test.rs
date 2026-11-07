@@ -116,6 +116,8 @@ struct Sessions {
     prompts: Mutex<Vec<String>>,
     cancelled: Mutex<Vec<AgentSessionId>>,
     deleted: Mutex<Vec<AgentSessionId>>,
+    /// Signalled on each delete.
+    deletes: tokio::sync::Notify,
 }
 
 impl Sessions {
@@ -130,6 +132,7 @@ impl Sessions {
             prompts: Mutex::new(Vec::new()),
             cancelled: Mutex::new(Vec::new()),
             deleted: Mutex::new(Vec::new()),
+            deletes: tokio::sync::Notify::new(),
         }
     }
 }
@@ -195,6 +198,7 @@ impl RoutineSessions for Sessions {
 
     async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.deleted.lock().unwrap().push(command.session_id);
+        self.deletes.notify_one();
         Ok(())
     }
 }
@@ -907,4 +911,29 @@ async fn a_weekly_task_draft_creates_no_task() {
 
     assert!(drafted.created.is_empty());
     assert_eq!(drafted.steps[0]["title"], "Make the task");
+}
+
+/// A request dropped mid-draft still stops and deletes its session.
+#[tokio::test(start_paused = true)]
+async fn a_dropped_draft_request_still_cleans_up_its_session() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| Vec::new()));
+    sessions.hangs = true;
+    let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions);
+
+    let request = drafts.draft(owner(), routine("label mail"), context());
+    // The person leaves after ten seconds.
+    assert!(
+        tokio::time::timeout(Duration::from_secs(10), request)
+            .await
+            .is_err()
+    );
+    // The cleanup runs on its own task.
+    sessions.deletes.notified().await;
+
+    let session = sessions.prepared.lock().unwrap()[0].session_id;
+    assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    assert!(rows.drafts.lock().unwrap().is_empty());
 }

@@ -33,6 +33,7 @@ use super::code_check::MAX_TASK_CHARS;
 use super::event_trigger::{ActionTrigger, EventName};
 use super::models::{CreatedItem, RoutineCheck};
 use super::ports::{DraftHandBacks, RoutineCode, RoutineDraftService};
+use tracing::Instrument as _;
 
 #[cfg(test)]
 mod test;
@@ -378,6 +379,13 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             tracing::error!(error = ?error, "could not start a routine draft");
             return Ok(failed(request.failed()));
         }
+        // A request dropped mid-draft (the person left, or the connection
+        // went) still stops and deletes its session.
+        let mut cleanup = Cleanup {
+            sessions: Arc::clone(&self.sessions),
+            hand_backs: Arc::clone(&self.hand_backs),
+            action: Some(action.clone()),
+        };
         let ending = tokio::time::timeout(DRAFT_TIMEOUT, self.run(&action, brief)).await;
         let handed_back = self
             .hand_backs
@@ -392,7 +400,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             span.record("routine.draft.tool_calls", activity.tool_calls);
             span.record("routine.draft.turns", activity.turns);
         }
-        self.clean_up(&action).await;
+        cleanup.now().await;
         let ending = match ending {
             Ok(Ok(ending)) => ending,
             Ok(Err(RoutineSessionError::Admission(error))) => return Err(error.into()),
@@ -486,20 +494,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             .is_ok_and(|handed_back| handed_back.check.is_some_and(|check| check.ok))
     }
 
-    /// Stop the session, delete it and forget the draft. Each part is tried
-    /// whatever became of the one before; the sweep catches what fails.
-    async fn clean_up(&self, action: &RoutineSessionAction) {
-        if let Err(error) = self.sessions.cancel(action.clone()).await {
-            tracing::warn!(error = ?error, "could not stop a routine draft's session");
-        }
-        if let Err(error) = self.sessions.delete(action.clone()).await {
-            tracing::warn!(error = ?error, "could not delete a routine draft's session");
-        }
-        if let Err(error) = self.hand_backs.finish(action.session_id.as_uuid()).await {
-            tracing::warn!(error = ?error, "could not forget a routine draft");
-        }
-    }
-
     /// Delete the sessions and rows of drafts left behind by a process that
     /// stopped mid-draft, oldest first. How many it cleaned up.
     #[tracing::instrument(name = "routine.draft.sweep", skip_all, fields(
@@ -509,16 +503,68 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         let before = Utc::now() - chrono::Duration::from_std(STALE_DRAFT)?;
         let stale = self.hand_backs.stale(before, SWEEP_BATCH).await?;
         for draft in &stale {
-            self.clean_up(&RoutineSessionAction {
-                owner: draft.owner.clone(),
-                bot_id: draft.agent,
-                session_id: AgentSessionId::new_from_uuid(draft.session),
-                action_id: AgentActionId::mint(),
-            })
+            clean_up(
+                self.sessions.as_ref(),
+                self.hand_backs.as_ref(),
+                &RoutineSessionAction {
+                    owner: draft.owner.clone(),
+                    bot_id: draft.agent,
+                    session_id: AgentSessionId::new_from_uuid(draft.session),
+                    action_id: AgentActionId::mint(),
+                },
+            )
             .await;
         }
         tracing::Span::current().record("routine.draft.swept", stale.len());
         Ok(stale.len())
+    }
+}
+
+/// Stop a draft's session, delete it and forget the draft. Each part is
+/// tried whatever became of the one before; the sweep catches what fails.
+async fn clean_up(
+    sessions: &impl RoutineSessions,
+    hand_backs: &dyn DraftHandBacks,
+    action: &RoutineSessionAction,
+) {
+    if let Err(error) = sessions.cancel(action.clone()).await {
+        tracing::warn!(error = ?error, "could not stop a routine draft's session");
+    }
+    if let Err(error) = sessions.delete(action.clone()).await {
+        tracing::warn!(error = ?error, "could not delete a routine draft's session");
+    }
+    if let Err(error) = hand_backs.finish(action.session_id.as_uuid()).await {
+        tracing::warn!(error = ?error, "could not forget a routine draft");
+    }
+}
+
+/// Cleans up a draft's session: now, when the draft is done, or on drop,
+/// when its request was dropped first.
+struct Cleanup<Sessions: RoutineSessions> {
+    sessions: Arc<Sessions>,
+    hand_backs: Arc<dyn DraftHandBacks>,
+    action: Option<RoutineSessionAction>,
+}
+
+impl<Sessions: RoutineSessions> Cleanup<Sessions> {
+    async fn now(&mut self) {
+        if let Some(action) = self.action.take() {
+            clean_up(self.sessions.as_ref(), self.hand_backs.as_ref(), &action).await;
+        }
+    }
+}
+
+impl<Sessions: RoutineSessions> Drop for Cleanup<Sessions> {
+    fn drop(&mut self) {
+        let Some(action) = self.action.take() else {
+            return;
+        };
+        let (sessions, hand_backs) = (Arc::clone(&self.sessions), Arc::clone(&self.hand_backs));
+        tracing::info!("a routine draft's request was dropped; cleaning up its session");
+        tokio::spawn(
+            async move { clean_up(sessions.as_ref(), hand_backs.as_ref(), &action).await }
+                .instrument(tracing::Span::current()),
+        );
     }
 }
 
@@ -666,7 +712,7 @@ You are setting up this routine for {owner}, with their access; they review the 
 
 3. Never do the routine's own work now. It does its work each time it runs. \"Every Monday make a task\" makes no task today; \"when an email arrives, reply\" sends nothing; \"post the weekly summary\" posts nothing. Don't run, test or create the routine itself.
 
-4. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first. Triggers: `{{type: 'events', filters: [{{events, ids?}}]}}` for events, `{{type: 'cron', schedule, timezone: '{timezone}'}}` for a repeating schedule (six fields: second minute hour day month weekday), `{{type: 'once', at}}` for a single run. {conditions} Events:
+4. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}` for events, where `entities` holds the watched items as references such as `{{type: 'channel', entity: channel}}` (a handle, not an id; read `RoutineEventFilter`), `{{type: 'cron', schedule, timezone: '{timezone}'}}` for a repeating schedule (six fields: second minute hour day month weekday), `{{type: 'once', at}}` for a single run. {conditions} Events:
 {events}
 
 {steps}
