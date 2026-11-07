@@ -1,0 +1,15 @@
+[package]
+name = "lexical_model"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rustc-hash = { workspace = true }
+indexmap = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+thiserror = { workspace = true }
+bitflags = { workspace = true }
+strum = { workspace = true }
+nom = { workspace = true }

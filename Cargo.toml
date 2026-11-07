@@ -4,6 +4,7 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_workspace_tests",
   "crates/access_requests",
   "crates/agent_api_keys",
@@ -216,7 +217,7 @@ members = [
 # WP-00 reserves these dependencies for the following Lexical work packages.
 # Remove each exception when its first consumer lands (model, replay, XML, HTML).
 [workspace.metadata.cargo-shear]
-ignored = ["bitflags", "imbl", "libtest-mimic", "quick-xml", "rand_chacha", "rustc-hash", "ryu-js", "smallvec"]
+ignored = ["imbl", "libtest-mimic", "quick-xml", "rand_chacha", "ryu-js", "smallvec"]
 
 [workspace.dependencies]
 # Shared dependencies for the portable Lexical model and its conformance suites.
