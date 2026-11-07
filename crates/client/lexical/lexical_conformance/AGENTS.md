@@ -8,7 +8,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 
 - `src/fixture.rs`: recorder wire schema.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
-- `src/api/`: explicit dispatch to model APIs.
+- `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay.rs`: one libtest-mimic trial per recorded fixture.
 

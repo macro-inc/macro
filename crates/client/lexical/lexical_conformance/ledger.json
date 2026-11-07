@@ -836,16 +836,6 @@
       "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
     },
     {
-      "file": "packages/lexical/src/__tests__/unit/LexicalSelection.test.ts",
-      "test": "Regression #3181 > Point.isBefore edge case with mixed TextNode & ElementNode and matching descendants",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$caretRangeFromSelection. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 17: unmapped API: lexical.$caretRangeFromSelection"
-    },
-    {
       "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
       "test": "LexicalUtils tests > $onUpdate > adding fn throws outside update",
       "status": "xfail",
@@ -877,36 +867,6 @@
     },
     {
       "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "$splitAtPointCaretNext > Does not split a TextNode at the beginning",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 6: unmapped API: lexical.$getTextPointCaret"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "$splitAtPointCaretNext > Splits a ParagraphNode",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$getSiblingCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 7: unmapped API: lexical.$getSiblingCaret"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "$splitAtPointCaretNext > Splits a TextNode in the middle",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 6: unmapped API: lexical.$getTextPointCaret"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
       "test": "LexicalCaret > $removeTextFromCaretRange > ported File e2e tests > $selectAll() with nesting and a trailing decorator",
       "status": "xfail",
       "reason": "not-ported",
@@ -927,16 +887,6 @@
     },
     {
       "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "LexicalCaret > $removeTextFromCaretRange > ported LexicalSelection tests > remove partial initial TextNode and partial segmented TextNode",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$caretRangeFromSelection. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 16: unmapped API: lexical.$caretRangeFromSelection"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
       "test": "LexicalCaret > $removeTextFromCaretRange > ported Table e2e tests > Can delete all with range selection anchored in table",
       "status": "xfail",
       "reason": "not-ported",
@@ -944,16 +894,6 @@
       "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
       "note": "Missing capability: @lexical/table.$createTableNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
       "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableNode"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "LexicalCaret > $removeTextFromCaretRange > single block > remove first TextNode with second in token mode",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$caretRangeFromSelection. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 8: call 12: unmapped API: lexical.$caretRangeFromSelection"
     },
     {
       "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
@@ -1134,46 +1074,6 @@
       "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
       "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
-    },
-    {
-      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
-      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"xy\" at 1 (next)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
-    },
-    {
-      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
-      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"xy\" at 1 (previous)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
-    },
-    {
-      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
-      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"yx\" at 0 (next)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
-    },
-    {
-      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
-      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"yx\" at 0 (previous)",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
-      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
     }
   ]
 }
