@@ -145,8 +145,15 @@ pub(crate) trait AnyNodeData: Any + fmt::Debug + Send + Sync {
     fn clone_arc(&self) -> Arc<dyn AnyNodeData>;
     fn after_clone(&self) -> Option<Arc<dyn AnyNodeData>>;
     fn to_json(&self) -> Result<SerializedNode, Error>;
+    fn dyn_eq(&self, other: &dyn AnyNodeData) -> bool;
 }
 impl<Node: NodeType> AnyNodeData for Node {
+    fn dyn_eq(&self, other: &dyn AnyNodeData) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Node>()
+            .is_some_and(|other| self == other)
+    }
     fn as_any(&self) -> &dyn Any {
         self
     }

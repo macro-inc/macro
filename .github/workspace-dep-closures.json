@@ -10164,6 +10164,15 @@
       "crates/client/lexical/lexical_model",
       "crates/client/lexical/lexical_rich_nodes"
     ],
+    "lexical_conformance_wasm": [
+      "crates/client/lexical/lexical_conformance_wasm",
+      "crates/client/lexical/lexical_model"
+    ],
+    "lexical_markdown": [
+      "crates/client/lexical/lexical_markdown",
+      "crates/client/lexical/lexical_model",
+      "crates/client/lexical/lexical_rich_nodes"
+    ],
     "lexical_mention_extractor": [
       "crates/activity",
       "crates/agent",

@@ -71,6 +71,7 @@ pub(in crate::node) fn decorator<Node: DecoratorNode>() -> NodeVTable {
         project_mut: project_decorator_mut::<Node>,
         probe: || Node::flag_probe().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),
         default_data: || Node::default_node().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),
+        import_exact: |tx, json| tx.create_exact(Node::import_json(json)?).map(|id| id.key()),
         import: Node::import,
         update: |data, json| {
             data.downcast_mut::<Node>()

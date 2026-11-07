@@ -181,7 +181,11 @@ function apiCalls(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(apiCalls);
   const object = value as Record<string, unknown>;
   const own = [
-    object.op === 'call' ? object.fn : undefined,
+    object.op === 'call'
+      ? object.fn
+      : object.op === 'plugin'
+        ? object.name
+        : undefined,
     object.$fn,
     object.$transformer,
   ].filter((name): name is string => typeof name === 'string');
@@ -252,7 +256,13 @@ for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
   index.push({
     id,
     tier,
-    reasons: [...new Set(reasons)],
+    reasons: [
+      ...new Set(
+        reasons.map((reason) =>
+          reason.replaceAll(`file://${root}/`, '').replaceAll(`${root}/`, '')
+        )
+      ),
+    ],
     file: tier === 'A-rec' ? filename : null,
     calls: apiCalls(dev.fixture.trace).length,
     apis: [...new Set(apiCalls([dev.fixture.trace, dev.fixture.tapes]))].sort(),

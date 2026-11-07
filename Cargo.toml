@@ -8,6 +8,7 @@ members = [
   "crates/client/lexical/lexical_conformance",
   "crates/client/lexical/lexical_rich_nodes",
   "crates/client/lexical/lexical_markdown",
+  "crates/client/lexical/lexical_conformance_wasm",
   "crates/client/lexical/lexical_workspace_tests",
   "crates/access_requests",
   "crates/agent_api_keys",
@@ -220,9 +221,10 @@ members = [
 # WP-00 reserves these dependencies for the following Lexical work packages.
 # Remove each exception when its first consumer lands (model, replay, XML, HTML).
 [workspace.metadata.cargo-shear]
-ignored = [ "quick-xml", "rand_chacha", "smallvec"]
+ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
+phf = { version = "0.13.1", features = ["macros"] }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
 lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }

@@ -239,6 +239,11 @@ impl Transaction<'_> {
         } else {
             let backward = range.is_backward(self.view())?;
             let nodes = range.nodes(self.view())?;
+            let (start, end) = if backward {
+                (range.focus, range.anchor)
+            } else {
+                (range.anchor, range.focus)
+            };
             let mut formats = None;
             for (i, key) in nodes.iter().enumerate() {
                 if let Some(text) = self.view().text(*key) {
@@ -253,8 +258,8 @@ impl Transaction<'_> {
                         context.dom_focus_offset
                     };
                     if text.text.utf16_len() == Utf16Offset::ZERO
-                        || (i == 0 && from == text.text.utf16_len().get())
-                        || (i + 1 == nodes.len() && to == 0)
+                        || (i == 0 && *key == start.key() && from == text.text.utf16_len().get())
+                        || (i + 1 == nodes.len() && *key == end.key() && to == 0)
                     {
                         continue;
                     }
@@ -265,7 +270,16 @@ impl Transaction<'_> {
             }
             range.format = formats.unwrap_or_default();
         }
-        self.install_selection_at(SelectionSlot::Active, Selection::Range(range))
+        if self
+            .try_range_at(SelectionSlot::Active)
+            .is_none_or(|before| *before != range)
+        {
+            range.dirty = true;
+        }
+        // Reading an unchanged DOM range must not manufacture a selection-only commit.
+        self.pending.selection = Some(Selection::Range(range));
+        self.dirty_since_flush = true;
+        Ok(())
     }
     /// Host context is available only while command dispatch processes it.
     pub fn selection_change_context(&self) -> Option<&SelectionChangeContext> {

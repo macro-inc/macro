@@ -20,11 +20,11 @@ pub(super) fn collect(tx: &mut Transaction<'_>) {
         }
     }
     for key in deleted {
-        tx.pending.nodes.remove(&key);
+        tx.pending.remove_record(key);
     }
     for key in tx.dirty_leaves.clone() {
         if tx.pending.nodes.contains_key(&key) && !tx.is_attached(key) {
-            tx.pending.nodes.remove(&key);
+            tx.pending.remove_record(key);
             if !tx.editor.state.nodes.contains_key(&key) {
                 tx.dirty_leaves.shift_remove(&key);
             }

@@ -106,8 +106,19 @@ impl Transaction<'_> {
                 !(*key == start.key() && start.offset() == data.text.utf16_len().get())
             })
             .map(|(_, data)| data.format.toggled(format, align_with));
+        if has_text && first_flags.is_none() {
+            return Ok(());
+        }
         let alignment = first_flags.or(align_with);
-        let mut last_flags = None;
+        let last_text = nodes.iter().rev().copied().find(|key| self.is_text(*key));
+        let last_flags = last_text
+            .and_then(|key| self.view().text(key))
+            .map(|data| data.format.toggled(format, alignment));
+        let tail_partial = last_text.is_some_and(|key| {
+            end.key() == key && end.offset() < self.text_content_size(key).get()
+        });
+        let mut first_target = None;
+        let mut last_target = None;
         for node in &nodes {
             if self.is_element(*node) {
                 let current = self.view().element_data(*node)?.text_format;
@@ -146,13 +157,14 @@ impl Transaction<'_> {
                     .get(index)
                     .ok_or(Error::Invariant("formatted text slice missing"))?
             };
+            first_target.get_or_insert(target);
+            last_target = Some((target, to - from));
             let flags = self
                 .view()
                 .text(target)
                 .ok_or(Error::NotAText(target))?
                 .format
                 .toggled(format, alignment);
-            last_flags = Some(flags);
             self.text(target)?.set_format(flags)?;
             // Detached endpoints are not moved by split_text's active-selection adjustment.
             if node == start.key() && !unsplit {
@@ -178,7 +190,53 @@ impl Transaction<'_> {
                 )?;
             }
         }
+        if let Some(first) = first_target {
+            let current = self.range_at(slot)?;
+            let current_start = if backward {
+                current.focus
+            } else {
+                current.anchor
+            };
+            let converted = start.point_type() == PointType::Element
+                && current_start.point_type() == PointType::Text;
+            if converted
+                || start.point_type() == PointType::Text
+                    && first != start.key()
+                    && (Some(first) != last_text || tail_partial)
+            {
+                self.set_point_at(
+                    slot,
+                    if backward {
+                        PointRole::Focus
+                    } else {
+                        PointRole::Anchor
+                    },
+                    Point::text(first, Utf16Offset::ZERO),
+                )?;
+            }
+        }
+        let current = self.range_at(slot)?;
+        let current_end = if backward {
+            current.anchor
+        } else {
+            current.focus
+        };
+        if end.point_type() == PointType::Element
+            && current_end.point_type() == PointType::Text
+            && let Some((last, offset)) = last_target
+        {
+            self.set_point_at(
+                slot,
+                if backward {
+                    PointRole::Anchor
+                } else {
+                    PointRole::Focus
+                },
+                Point::text(last, offset),
+            )?;
+        }
         if let Some(flags) = first_flags
+            .filter(|_| first_target.is_some())
             .zip(last_flags)
             .map(|(first, last)| first | last)
         {

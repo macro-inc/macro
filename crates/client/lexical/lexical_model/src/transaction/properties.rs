@@ -377,6 +377,24 @@ impl TextMut<'_, '_> {
             return Ok(vec![self.key]);
         }
         let original = self.key;
+        let parent = self.tx.parent(original);
+        let insertion_index = self.tx.index_within_parent(original);
+        let original_selection = self.tx.pending.selection.clone();
+        let backward = original_selection
+            .as_ref()
+            .and_then(Selection::as_range)
+            .map(|range| range.is_backward(self.tx.view()))
+            .transpose()?
+            .unwrap_or(false);
+        for sibling in [
+            self.tx.prev_sibling(original),
+            self.tx.next_sibling(original),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            self.tx.writable(sibling)?;
+        }
         let state = self
             .tx
             .view()
@@ -418,23 +436,91 @@ impl TextMut<'_, '_> {
             };
             parts.push(part);
         }
-        let map_point = |point: &mut Point| -> Result<(), Error> {
-            if let Point::Text { key, offset } = point
-                && *key == original
-            {
-                let i = bounds
-                    .windows(2)
-                    .position(|window| window.get(1).is_some_and(|end| *offset <= *end))
-                    .unwrap_or(parts.len() - 1);
-                let start = *bounds.get(i).ok_or(Error::Invariant("split point bound"))?;
-                *key = *parts.get(i).ok_or(Error::Invariant("split point node"))?;
-                *offset = *offset - start;
+        if let (Some(Selection::Range(previous)), Some(Selection::Range(mut range))) =
+            (&original_selection, self.tx.pending.selection.clone())
+        {
+            let (start, end, old_start, old_end) = if backward {
+                (
+                    &mut range.focus,
+                    &mut range.anchor,
+                    previous.focus,
+                    previous.anchor,
+                )
+            } else {
+                (
+                    &mut range.anchor,
+                    &mut range.focus,
+                    previous.anchor,
+                    previous.focus,
+                )
+            };
+            let mut start_pending =
+                old_start.point_type() == PointType::Text && old_start.key() == original;
+            let end_pending = old_end.point_type() == PointType::Text && old_end.key() == original;
+            for ((from, to), part) in bounds.iter().zip(bounds.iter().skip(1)).zip(&parts) {
+                if start_pending
+                    && old_start.offset() >= from.get()
+                    && old_start.offset() <= to.get()
+                {
+                    *start = Point::text(*part, Utf16Offset(old_start.offset() - from.get()));
+                    if old_start.offset() < to.get() {
+                        start_pending = false;
+                    }
+                }
+                if end_pending && old_end.offset() >= from.get() && old_end.offset() <= to.get() {
+                    *end = Point::text(*part, Utf16Offset(old_end.offset() - from.get()));
+                    break;
+                }
             }
-            Ok(())
-        };
-        if let Some(Selection::Range(range)) = &mut self.tx.pending.selection {
-            map_point(&mut range.anchor)?;
-            map_point(&mut range.focus)?;
+            self.tx.pending.selection = Some(Selection::Range(range));
+        }
+        if let (
+            Some(parent),
+            Some(index),
+            Some(Selection::Range(previous)),
+            Some(Selection::Range(mut range)),
+        ) = (
+            parent,
+            insertion_index,
+            original_selection,
+            self.tx.pending.selection.clone(),
+        ) {
+            for (point, old) in [
+                (&mut range.anchor, previous.anchor),
+                (&mut range.focus, previous.focus),
+            ] {
+                if let Point::Element { key, offset } = old
+                    && key == parent
+                {
+                    let added = u32::try_from(parts.len())
+                        .ok()
+                        .and_then(|len| len.checked_sub(1))
+                        .ok_or(Error::Invariant("split part count exceeds child offsets"))?;
+                    let offset = offset
+                        .0
+                        .checked_add(if offset.0 >= index.0 { added } else { 0 })
+                        .ok_or(Error::SpliceOutOfRange)?;
+                    let children = self.tx.children_keys(parent)?;
+                    let at_end = offset as usize >= children.len();
+                    let child = if at_end {
+                        children.last()
+                    } else {
+                        children.get(offset as usize)
+                    };
+                    *point = match child.copied().filter(|key| self.tx.is_text(*key)) {
+                        Some(key) => Point::text(
+                            key,
+                            if at_end {
+                                self.tx.text_content_size(key)
+                            } else {
+                                Utf16Offset::ZERO
+                            },
+                        ),
+                        None => Point::element(parent, ChildIndex(offset)),
+                    };
+                }
+            }
+            self.tx.pending.selection = Some(Selection::Range(range));
         }
         Ok(parts)
     }

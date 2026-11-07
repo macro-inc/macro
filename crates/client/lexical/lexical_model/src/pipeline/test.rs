@@ -768,3 +768,21 @@ fn explicit_selection_replacement_reports_an_object_identity_boundary() -> Resul
     assert_eq!(tx.selection(), before.as_ref());
     Ok(())
 }
+#[test]
+fn installing_a_snapshot_reconciles_existing_element_typing_attributes() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::ViewAttached).build().unwrap();
+    let (p, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("plain")?;
+        tx.element(p)?.set_text_format(TextFormat::BOLD)?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(p.key())
+    })?;
+    editor.set_editor_state(editor.state().clone(), TagSet::default())?;
+    assert_eq!(
+        editor.state().view().element_data(p)?.text_format,
+        TextFormat::empty()
+    );
+    Ok(())
+}

@@ -27,10 +27,6 @@ pub use registry::*;
 pub use selection::*;
 pub use state::*;
 pub use transaction::*;
-mod extension;
-pub use extension::ExtensionState;
-mod command;
-pub use command::*;
 #[cfg(test)]
 mod test;
 
@@ -47,6 +43,11 @@ const _: () = {
     assert_send_sync::<Registry>();
     assert_send_sync::<Commit>();
     assert_send_sync::<Selection>();
+    assert_send_sync::<EditorCore>();
+    assert_send_sync::<Diff>();
+    assert_send_sync::<Command>();
+    assert_send_sync::<Input>();
+    assert_send_sync::<Output>();
 };
 
 mod tags;
@@ -60,5 +61,21 @@ pub use commit::*;
 mod caret;
 pub use caret::*;
 
+mod command;
+pub use command::*;
+mod extension;
+pub use extension::*;
+mod plugin;
+pub use plugin::*;
+
+mod history;
+pub use history::*;
+
+mod diff;
+pub use diff::*;
+
+mod core;
+pub use core::*;
+
+#[cfg(test)]
 mod event;
-pub use event::*;

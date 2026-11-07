@@ -1,5 +1,13 @@
 //! Shared block utilities needed by rich-text and tab indentation.
 use lexical_model::*;
+mod dfs;
+pub use dfs::*;
+mod tree;
+pub use tree::*;
+mod insert;
+pub use insert::*;
+mod nested;
+pub use nested::*;
 /// Nearest non-inline element, including the starting node; root is not a block.
 pub fn get_nearest_block_element_ancestor_or_throw(
     view: StateRef<'_>,
@@ -68,3 +76,5 @@ pub(crate) fn lift_to_nearest_root(
 pub mod linkify;
 /// Shared UTF-16 match arrays and stateless regex/synthetic matching.
 pub mod matcher;
+#[cfg(test)]
+mod test;
