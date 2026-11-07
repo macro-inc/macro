@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
+use soup_realtime_core::{models::Patch, ports::SoupRealtimeSubscriptionService};
 use tokio::sync::mpsc::Receiver;
 
 /// Reads of work registrations, object-safe so request data can carry them

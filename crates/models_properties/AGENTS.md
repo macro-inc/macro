@@ -34,7 +34,7 @@ split into three layers plus a `shared` layer used by all of them.
   `forms`, `github`, `graphql_common`, `graphql_crm`, `graphql_initiative`,
   `graphql_properties`, `graphql_soup`, `import`, `initiative`, `messages`,
   `models_soup`, `properties`, `properties_service`, `scheduled_action`,
-  `search_service`, `soup`, `soup_realtime`, `system_properties`.
+  `search_service`, `soup`, `soup_realtime_inbound`, `system_properties`.
 
 ## Recipes
 

@@ -22,7 +22,7 @@ use soup::domain::{
     models::{SoupPropertiesField, grouping::build_grouped_response},
     ports::SoupService,
 };
-use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
+use soup_realtime_core::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},

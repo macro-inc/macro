@@ -9,7 +9,7 @@ use model_notifications::NotifEvent;
 use notification::domain::{
     models::NotificationSubscriptionUpdate, ports::WebSocketNotificationSubscriptionService,
 };
-use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
+use soup_realtime_core::{models::Patch, ports::SoupRealtimeSubscriptionService};
 use tokio::sync::mpsc;
 
 use crate::domain::{

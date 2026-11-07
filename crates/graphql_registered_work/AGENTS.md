@@ -23,12 +23,12 @@ viewer and the `registeredWorkUpdates` subscription. Not Home's work feed
 - Not here: registering, ending, and viewer filtering →
   `agent_session::domain::work_registration`; HTTP routes →
   `agent_session::inbound::axum_router::work_registration`; publishing session
-  changes → `soup_realtime::outbound::agent_sessions`.
+  changes → `soup_realtime_outbound::agent_sessions`.
 
 ## Boundaries
 
 - Depends on: `agent_session` (domain only), `attention_feed` (coalescing),
-  `graphql_soup`, `graphql_common`, `soup_realtime` (ports only).
+  `graphql_soup`, `graphql_common`, `soup_realtime_core`.
 - Used by: `complete_graph` (schema composition).
 
 ## Recipes

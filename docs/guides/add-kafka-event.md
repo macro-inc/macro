@@ -110,7 +110,7 @@ rg -l 'declare_topics!' crates services | xargs rg -l '<XMacroEvent>'
 | Consumer | What to add | Silent-drop behavior if you don't |
 | --- | --- | --- |
 | Webhook ingestion and SSE, `crates/webhook/src/domain/ingestion.rs` + `ingestion/stream.rs`, topic list in `crates/webhook/src/topics.rs` | A normalization arm and audience, a case in `ingestion/test.rs`, a row in the README event table | An agent-trigger shape with no arm is rejected as `InvalidEntityId` ("unrecognized agent-trigger event shape") and committed; the error is logged in DSS, not by the producer, so the producer looks healthy while nothing reaches the daemon |
-| Realtime Soup, `crates/soup_realtime/src/inbound/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
+| Realtime Soup, `crates/search/soup_realtime_inbound/src/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
 | Activity, `services/document_storage_service/src/service/activity.rs` and the owning domain's activity mapping | Map the variant to an activity row | No activity entry |
 | Search, `services/search_processing_service/src/inbound/kafka_consumer.rs` | Index or delete | Stale search results |
 | Routines and scheduled actions, `crates/scheduled_action/src/inbound/kafka_consumer.rs` | Trigger filter support | Routine never fires |

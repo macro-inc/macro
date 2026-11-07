@@ -160,9 +160,8 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
-use soup_realtime::{
-    domain::service::SoupRealtimeConsumerService, outbound::soup_consumer::SoupTopicConsumer,
-};
+use soup_realtime_core::service::SoupRealtimeConsumerService;
+use soup_realtime_outbound::soup_consumer::SoupTopicConsumer;
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
