@@ -18,6 +18,12 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         .map(EditorState::view)
         .unwrap_or(tx.view());
     let short = name.rsplit('.').next().unwrap_or(name);
+    if receiver.get("$caretValue").is_some()
+        || short.contains("Caret")
+        || short == "$caretRangeFromSelection"
+    {
+        return super::caret::call(r, tx, &receiver, short, a);
+    }
     if let Some(property) = name.strip_prefix("get:") {
         return super::properties::get(r, tx, &receiver, property);
     }

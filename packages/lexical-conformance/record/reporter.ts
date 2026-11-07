@@ -42,6 +42,17 @@ export default class FixtureReporter implements Reporter {
         id,
         state: test.result().state,
         errors: test.result().errors?.map((error) => error.message),
+        failures: test.result().errors?.map((error) => {
+          const frame = error.stacks?.find((frame) =>
+            frame.file.includes('/lexical-upstream/packages/')
+          );
+          const location = frame
+            ? `${frame.file.replace(process.env.LEXICAL_UPSTREAM + '/', '')}:${frame.line}`
+            : error.message
+                .split('\n')[0]
+                .replaceAll(process.env.LEXICAL_UPSTREAM + '/', '');
+          return `${error.name ?? 'Error'}: ${location}`;
+        }),
         ...value,
       })
     );
@@ -64,7 +75,15 @@ export default class FixtureReporter implements Reporter {
         state: 'failed',
         assertions: 0,
         calls: 0,
-        reasons: ['upstream-module-load-failed'],
+        reasons: [
+          'upstream-module-load-failed',
+          ...module
+            .errors()
+            .map(
+              (error) =>
+                `module-load: ${error.message.split('\n')[0].replaceAll(process.env.LEXICAL_UPSTREAM + '/', '')}`
+            ),
+        ],
         fixture: {},
         s2Hits: [],
         transformersFired: [],

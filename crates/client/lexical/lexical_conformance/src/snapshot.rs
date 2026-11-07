@@ -172,6 +172,17 @@ pub(crate) fn compare(
                     .collect::<Vec<_>>()
             ),
         )?;
+        let expected_normalized = expected["normalized"]
+            .as_array()
+            .ok_or_else(|| fail("normalized array"))?;
+        if expected_normalized.len() != commit.normalized.len() {
+            return Err(fail("normalized count mismatch"));
+        }
+        for (expected, actual) in expected_normalized.iter().zip(commit.normalized.iter()) {
+            if expected.is_string() {
+                replay.bind_key(string(expected)?, *actual)?;
+            }
+        }
         let normalized = expected["normalized"]
             .as_array()
             .ok_or_else(|| fail("missing normalized"))?
