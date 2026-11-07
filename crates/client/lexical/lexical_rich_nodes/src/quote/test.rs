@@ -38,3 +38,15 @@ fn collapse_quote_moves_children_into_paragraph() -> crate::Result<()> {
     assert_eq!(tx.export_json(p)?["type"], "paragraph");
     Ok(())
 }
+#[test]
+fn quote_merges_when_empty_and_exports_plain_element_fields() -> crate::Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<QuoteNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let quote = create_quote_node(&mut tx)?;
+    assert!(tx.can_merge_when_empty(quote));
+    assert_eq!(tx.export_json(quote)?["type"], "quote");
+    Ok(())
+}

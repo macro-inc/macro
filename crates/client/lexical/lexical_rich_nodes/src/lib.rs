@@ -30,3 +30,8 @@ pub mod text_entity {
     pub use crate::text::entity::*;
 }
 pub mod hashtag;
+pub mod plain_text;
+pub mod rich_text;
+pub mod selection;
+pub mod tab;
+pub mod utils;
