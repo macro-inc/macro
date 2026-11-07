@@ -10,6 +10,7 @@ use crate::domain::models::{
     UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
     UserProvider,
 };
+use email_thread_id::EmailThreadId;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
@@ -725,7 +726,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn change_thread_mailbox_state(
         &self,
         _macro_id: MacroUserIdStr<'static>,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
         _action: crate::domain::models::mailbox_action::MailboxAction,
     ) -> impl Future<Output = Result<usize, EmailErr>> + Send {
         async { Err(no_op_email_err()) }
@@ -781,7 +782,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn get_owned_link_for_thread(
         &self,
         macro_id: MacroUserIdStr<'_>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 
     /// Follow an empty thread's canonical alias only within the user's inboxes.
@@ -789,7 +790,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn resolve_thread_read_id(
         &self,
         macro_id: MacroUserIdStr<'_>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
 
     /// Fetch a thread with paginated messages, verifying access via the provided receipt.
@@ -868,7 +869,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn update_thread_labels(
         &self,
         link: &Link,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         label_id: Uuid,
         add: bool,
     ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send;
@@ -877,7 +878,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn mark_thread_seen(
         &self,
         _macro_id: MacroUserIdStr<'static>,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send {
         async { Err(no_op_email_err()) }
     }
@@ -887,7 +888,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn mark_thread_unread(
         &self,
         macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
     /// Archive or unarchive a caller-owned/delegated thread. The service
@@ -895,7 +896,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn set_thread_archived(
         &self,
         macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         archived: bool,
     ) -> impl Future<Output = Result<(), EmailErr>> + Send;
 
@@ -917,7 +918,7 @@ pub trait EmailService: Send + Sync + 'static {
     fn update_thread_labels_for_user(
         &self,
         _macro_id: MacroUserIdStr<'static>,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
         _label_id: Uuid,
         _add: bool,
     ) -> impl Future<Output = Result<UpdateThreadLabelsResult, EmailErr>> + Send {
@@ -1295,8 +1296,9 @@ impl EmailService for NoOpEmailService {
     async fn resolve_thread_read_id(
         &self,
         _macro_id: MacroUserIdStr<'_>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<Uuid, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         Ok(thread_id)
     }
 
@@ -1319,7 +1321,7 @@ impl EmailService for NoOpEmailService {
     async fn set_thread_archived(
         &self,
         _macro_id: MacroUserIdStr<'static>,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
         _archived: bool,
     ) -> Result<(), EmailErr> {
         Err(no_op_email_err())
@@ -1359,7 +1361,7 @@ impl EmailService for NoOpEmailService {
     async fn get_owned_link_for_thread(
         &self,
         _macro_id: MacroUserIdStr<'_>,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
     ) -> Result<Option<Link>, EmailErr> {
         Err(no_op_email_err())
     }
@@ -1426,7 +1428,7 @@ impl EmailService for NoOpEmailService {
     async fn update_thread_labels(
         &self,
         _link: &Link,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
         _label_id: Uuid,
         _add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
@@ -1436,7 +1438,7 @@ impl EmailService for NoOpEmailService {
     async fn mark_thread_unread(
         &self,
         _macro_id: MacroUserIdStr<'static>,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
     ) -> Result<(), EmailErr> {
         Err(no_op_email_err())
     }

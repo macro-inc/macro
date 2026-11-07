@@ -57,6 +57,7 @@ crm = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 either = { workspace = true }
 email = { workspace = true, features = ["ports"] }
+email_thread_id = { workspace = true }
 entity_access = { workspace = true }
 favorites = { workspace = true, features = ["ports"] }
 filter_ast = { workspace = true }

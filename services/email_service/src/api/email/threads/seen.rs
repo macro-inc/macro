@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use email::domain::{models::EmailErr, ports::EmailService};
+use email_thread_id::EmailThreadId;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use uuid::Uuid;
@@ -65,7 +66,7 @@ pub async fn seen_handler(
         .service()
         .mark_thread_seen(
             authorization.authorization.user.macro_user_id.clone(),
-            thread_id,
+            EmailThreadId::from_uuid(thread_id),
         )
         .await
         .map_err(SeenThreadError)?;

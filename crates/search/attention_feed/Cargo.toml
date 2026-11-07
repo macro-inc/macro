@@ -27,6 +27,7 @@ base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 cowlike = { workspace = true, optional = true }
 email = { workspace = true, features = ["ports"], optional = true }
+email_thread_id = { workspace = true }
 entity_access = { workspace = true, features = ["ports"] }
 futures = { workspace = true }
 item_filters = { workspace = true, default-features = true }

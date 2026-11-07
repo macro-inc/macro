@@ -7,6 +7,7 @@ use crate::domain::{
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
+use email_thread_id::EmailThreadId;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -124,7 +125,7 @@ where
                 .service
                 .get_owned_link_for_thread(
                     MacroUserIdStr((*request_context.user_id).clone()),
-                    thread_id,
+                    EmailThreadId::from_uuid(thread_id),
                 )
                 .await
                 .map_err(|e| ToolCallError {

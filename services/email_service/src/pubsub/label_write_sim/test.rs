@@ -7,6 +7,7 @@ use super::wiring;
 use super::world::{
     INBOX, MESSAGES, STARRED, THREADS, UNREAD, WORK, World, on_worker_stacks, owner,
 };
+use email_thread_id::EmailThreadId;
 use sqlx::PgPool;
 
 const T1: usize = 0;
@@ -389,14 +390,22 @@ scenario!(
             let owner = owner.clone();
             tokio::spawn(async move {
                 email
-                    .change_thread_mailbox_state(owner, thread, MailboxAction::Read(false))
+                    .change_thread_mailbox_state(
+                        owner,
+                        EmailThreadId::from_uuid(thread),
+                        MailboxAction::Read(false),
+                    )
                     .await
             })
         };
         arrived.await.unwrap();
         // Meanwhile the user marks t1 read; this write is queued normally.
         let second = email
-            .change_thread_mailbox_state(owner, thread, MailboxAction::Read(true))
+            .change_thread_mailbox_state(
+                owner,
+                EmailThreadId::from_uuid(thread),
+                MailboxAction::Read(true),
+            )
             .await;
         sim.world.sqs.set_outage(true);
         let _ = release.send(());
@@ -698,7 +707,11 @@ fn label_writes_and_a_label_sync_fit_on_small_worker_stacks(
             world.reset().await;
             world
                 .email
-                .set_thread_archived(owner(), world.thread_ids[THREADS[T1]], true)
+                .set_thread_archived(
+                    owner(),
+                    EmailThreadId::from_uuid(world.thread_ids[THREADS[T1]]),
+                    true,
+                )
                 .await
                 .unwrap();
             let (sent, _) = world.sqs.take();

@@ -1,3 +1,4 @@
+use email_thread_id::EmailThreadId;
 use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
 use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object, OutputType};
@@ -150,7 +151,7 @@ where
         thread_id: Uuid,
         action: email::domain::models::mailbox_action::MailboxAction,
     ) -> Result<(), EmailErr> {
-        self.change_thread_mailbox_state(user_id, thread_id, action)
+        self.change_thread_mailbox_state(user_id, EmailThreadId::from_uuid(thread_id), action)
             .await
             .map(|_| ())
     }
@@ -168,7 +169,8 @@ where
         user_id: MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
-        self.mark_thread_seen(user_id, thread_id).await
+        self.mark_thread_seen(user_id, EmailThreadId::from_uuid(thread_id))
+            .await
     }
 
     async fn mark_email_thread_unread(
@@ -176,7 +178,8 @@ where
         user_id: MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
-        self.mark_thread_unread(user_id, thread_id).await
+        self.mark_thread_unread(user_id, EmailThreadId::from_uuid(thread_id))
+            .await
     }
 
     async fn set_email_thread_archived(
@@ -185,7 +188,8 @@ where
         thread_id: Uuid,
         archived: bool,
     ) -> Result<(), EmailErr> {
-        self.set_thread_archived(user_id, thread_id, archived).await
+        self.set_thread_archived(user_id, EmailThreadId::from_uuid(thread_id), archived)
+            .await
     }
 
     async fn set_email_threads_archived(
@@ -205,8 +209,13 @@ where
         label_id: Uuid,
         value: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
-        self.update_thread_labels_for_user(user_id, thread_id, label_id, value)
-            .await
+        self.update_thread_labels_for_user(
+            user_id,
+            EmailThreadId::from_uuid(thread_id),
+            label_id,
+            value,
+        )
+        .await
     }
 
     async fn save_email_draft(
