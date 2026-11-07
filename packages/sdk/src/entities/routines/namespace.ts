@@ -21,6 +21,30 @@ export interface CreatedEntity {
  * - "Remind me", "every Monday", "tomorrow at 9" and "whenever something happens" ask for a routine: work that runs later, as the user, after this conversation ends. A meeting with other people is a calendar event, not a routine.
  * - A routine's run never sees this conversation. Write its instructions to stand alone: what to do, the items involved by id or link, absolute dates, and where to report the result.
  * - Before creating one, look for a routine of the user's that already does this, and update it instead of adding a second.
+ *
+ * ### Writing one
+ *
+ * - Find each item the request names (a channel, person, folder, project, label, tag, agent, database or document) with SDK search, as the user would, paging and refining the search until you find the item itself. The item is the one whose name is exactly the name used, ignoring case and a leading # or @, not one whose name only contains it: "bug-reports" is the channel named bug-reports, never bug-reports-archive. When no item has that name, or several do, ask which one rather than guess.
+ * - In code, a trigger watches items through its event filter's `entities`, as references holding the handles the SDK returned, such as `{ type: 'channel', entity: channel }`: never an id, and never an `ids` key. A code step uses an item by its id, in a knob.
+ * - Create beforehand only what the routine needs to exist before it runs: when the request asks for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it with the name given and use its id. Create nothing else.
+ * - Never do the routine's own work while setting it up; it does its work each time it runs. "Every Monday make a task" makes no task today; "when an email arrives, reply" sends nothing; "post the weekly summary" posts nothing.
+ * - In a cron `schedule` (six fields: second minute hour day-of-month month day-of-week), name weekdays MON to SUN: weekday numbers start at 1 = Sunday, so Monday to Friday is `MON-FRI`, never `1-5`.
+ * - In code, check the whole routine with `macro.routines.check` before creating it, naming in `created` what you created for it, and fix what it reports until `ok` is true.
+ *
+ * Events an `events` trigger starts on (`EventName` lists every one):
+ *
+ * - `channel.created`: a channel you can access is created.
+ * - `channel.message_posted`: someone sends a message in a selected channel.
+ * - `channel.mentioned`: you are @ mentioned in a selected channel.
+ * - `document.created`: a document you can access is created. Tasks have their own trigger.
+ * - `document.deleted`: a selected document is deleted.
+ * - `task.created`: a task you can access is created.
+ * - `task.status_changed`: a task's status changes.
+ * - `task.priority_changed`: a task's priority changes.
+ * - `task.property_changed`: any property on a task changes, such as its assignees, due date, project or effort, including status and priority.
+ * - `email.message_received`: new mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.
+ * - `call.started`: a call you start begins. The routine gets the call and who has joined so far.
+ * - `call.ended`: a call you joined ends. The routine gets the call's participants and transcript.
  */
 export class RoutineNamespace {
   constructor(private readonly client: MacroClient) {}

@@ -286,6 +286,7 @@ async fn a_check_made_on_one_replica_answers_a_draft_waiting_on_another(pool: Pg
         Arc::new(PgDraftHandBacks::new(pool.clone())) as Arc<dyn DraftHandBacks>,
         DraftAgent {
             bot: bot_id::MACRO_NEW_BOT_ID,
+            guide: "",
         },
     );
 

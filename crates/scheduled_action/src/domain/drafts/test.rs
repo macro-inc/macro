@@ -228,9 +228,13 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     }
 }
 
+/// Stands in for the SDK's routines guide, which `agent_code_mode` tests.
+const GUIDE: &str = "Find the item whose name is exactly the name used.";
+
 fn agent() -> DraftAgent {
     DraftAgent {
         bot: bot_id::MACRO_NEW_BOT_ID,
+        guide: GUIDE,
     }
 }
 
@@ -380,7 +384,8 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         panic!("one session per draft");
     };
     assert_eq!(prepared.visibility, SessionVisibility::Hidden);
-    assert_eq!(prepared.source, SessionSource::Routine);
+    // The person's own session, never a routine's run.
+    assert_eq!(prepared.source, SessionSource::User);
     assert_eq!(
         prepared.origin,
         trigger_context::TriggerOrigin::Requested { by: owner() }
@@ -395,14 +400,12 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
     assert!(prompt.contains(BUG_REPORTS), "{prompt}");
     assert!(prompt.contains("macro.routines.check"), "{prompt}");
+    // The rules every session follows, read from one place, plus drafting's.
     assert!(
-        prompt.contains("Never do the routine's own work now"),
+        prompt.contains(&format!("<routines-guide>\n{GUIDE}\n</routines-guide>")),
         "{prompt}"
     );
-    assert!(
-        prompt.contains("Create only what the routine needs"),
-        "{prompt}"
-    );
+    assert!(prompt.contains("You can't ask them anything"), "{prompt}");
     assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
@@ -478,12 +481,8 @@ async fn a_large_workspace_drafts_the_channel_the_description_names() {
         !prompt.contains("channel-0001"),
         "the prompt carries no workspace"
     );
-    // The SDK's event filter takes item handles under `entities`; a raw
-    // `ids` key there is dropped when the SDK builds the routine.
-    assert!(
-        prompt.contains("filter's `entities`") && prompt.contains("never write an `ids` key"),
-        "{prompt}"
-    );
+    // An item no name matches exactly is left for them to pick.
+    assert!(prompt.contains("leave it out (no `entities`"), "{prompt}");
 }
 
 /// Search ranks loose matches before the exact name, so the channel isn't
@@ -913,9 +912,8 @@ async fn a_weekly_task_draft_creates_no_task() {
     let sessions = Arc::new(Sessions::new(
         &rows,
         Box::new(|prompt| {
-            assert!(prompt.contains("makes no task today"), "{prompt}");
-            // Weekday numbers start at 1 = Sunday; names can't be misread.
-            assert!(prompt.contains("name weekdays MON-SUN"), "{prompt}");
+            // The guide says so; the brief carries it.
+            assert!(prompt.contains(GUIDE), "{prompt}");
             vec![plain(configuration(
                 "Monday task",
                 json!({ "type": "cron", "schedule": "0 0 9 * * MON", "timezone": "America/New_York" }),

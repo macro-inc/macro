@@ -30,7 +30,7 @@ use serde_json::{Value, json};
 use utoipa::ToSchema;
 
 use super::code_check::MAX_TASK_CHARS;
-use super::event_trigger::{ActionTrigger, EventName};
+use super::event_trigger::ActionTrigger;
 use super::models::{CreatedItem, RoutineCheck};
 use super::ports::{
     DraftHandBacks, NoSessionCreations, RoutineCode, RoutineDraftService, SessionCreations,
@@ -65,48 +65,6 @@ const TIMED_OUT: &str = "Drafting took too long. Try again, or describe the rout
 const HAS_AGENT: &str = "This routine already has its Ask AI step. Change that one instead.";
 const NO_CODE: &str = "Code steps can’t be written here right now.";
 
-/// The events a drafted trigger may start on, as the model reads them.
-const EVENTS: &[(EventName, &str)] = &[
-    (
-        EventName::ChannelCreated,
-        "A channel you can access is created.",
-    ),
-    (
-        EventName::ChannelMessagePosted,
-        "Someone sends a message in a selected channel.",
-    ),
-    (
-        EventName::ChannelMentioned,
-        "You are @ mentioned in a selected channel.",
-    ),
-    (
-        EventName::DocumentCreated,
-        "A document you can access is created. Tasks have their own trigger.",
-    ),
-    (
-        EventName::DocumentDeleted,
-        "A selected document is deleted.",
-    ),
-    (EventName::TaskCreated, "A task you can access is created."),
-    (EventName::TaskStatusChanged, "A task’s status changes."),
-    (EventName::TaskPriorityChanged, "A task’s priority changes."),
-    (
-        EventName::TaskPropertyChanged,
-        "Any property on a task changes, such as its assignees, due date, project or effort, including status and priority.",
-    ),
-    (
-        EventName::EmailMessageReceived,
-        "New mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.",
-    ),
-    (
-        EventName::CallStarted,
-        "A call you start begins. The routine gets the call and who has joined so far.",
-    ),
-    (
-        EventName::CallEnded,
-        "A call you joined ends. The routine gets the call’s participants and transcript.",
-    ),
-];
 /// What to draft.
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -259,6 +217,10 @@ pub struct InvalidDraft(pub String);
 pub struct DraftAgent {
     /// The in-process Macro agent.
     pub bot: BotId,
+    /// How to write a routine: the SDK's routines guide, the same text every
+    /// code-mode session reads (`agent_code_mode::entity_guide("routines")`).
+    /// The brief adds only what is particular to drafting.
+    pub guide: &'static str,
 }
 
 /// Drafts routines in hidden sessions of `agent`, checking code with `Code`.
@@ -364,7 +326,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         let code = context.code && self.code.sdk().is_some()
             || matches!(request, DraftRequest::ChangeStep { .. }) && self.code.sdk().is_some();
         span.record("routine.draft.code_available", code);
-        let brief = match brief(&request, &program, &context, code, &owner) {
+        let brief = match brief(&request, &program, &context, code, &owner, self.agent.guide) {
             Ok(brief) => brief,
             Err(message) => return Ok(finish(failed(message))),
         };
@@ -495,10 +457,11 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                     mcp_servers: Vec::new(),
                 },
                 session_id: action.session_id,
-                // A routine's session notifies nobody when it finishes.
-                source: SessionSource::Routine,
+                // The person asked for the draft, and reads it in the
+                // editor: a background session of theirs, never a routine's
+                // run. It is hidden and notifies nobody.
+                source: SessionSource::User,
                 visibility: SessionVisibility::Hidden,
-                // The person asked for the draft.
                 origin: trigger_context::TriggerOrigin::Requested {
                     by: action.owner.clone(),
                 },
@@ -762,6 +725,7 @@ fn brief(
     context: &DraftContext,
     code: bool,
     owner: &MacroUserIdStr<'static>,
+    guide: &str,
 ) -> Result<String, &'static str> {
     let task = match request {
         DraftRequest::Routine { description } => format!(
@@ -806,11 +770,6 @@ fn brief(
             )
         }
     };
-    let events = EVENTS
-        .iter()
-        .map(|(event, description)| format!("- {}: {description}", event.as_str()))
-        .collect::<Vec<_>>()
-        .join("\n");
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
     let timezone = &context.timezone;
     let model = &context.agent_model;
@@ -828,23 +787,28 @@ fn brief(
     } else {
         "Never give a trigger a `condition`."
     };
+    let guide = guide.trim();
     Ok(format!(
         "{task}
 
 You are setting up this routine for {owner}, with their access; they review the draft before it is saved. Now is {now}; their time zone is {timezone}. Work in code mode: read the SDK methods you use with ReadCodeDocs, and do the whole job in as few ExecuteCode programs as you can.
 
-1. Find the items the words name. For each channel, person, folder, project, label, tag, agent, database or document the words name, search for it with the SDK as they would, page through the results and refine the search until you find the item itself. The item they named is the one whose name is exactly the name they used (ignoring case and a leading # or @), not one whose name only contains it: \"bug-reports\" is the channel named bug-reports, never bug-reports-archive. A trigger watches an item through its filter's `entities`, as a reference holding the handle the SDK returned for it, such as `{{type: 'channel', entity: channel}}`; never put an id there, and never write an `ids` key. A step uses an item by its id in a knob. When no item has that name, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
+Follow the routines guide, which every session follows when it sets up a routine:
+<routines-guide>
+{guide}
+</routines-guide>
 
-2. Create only what the routine needs to exist before it runs. When the words ask for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it now with the name the words give and use its id in the routine. Create nothing else.
+For this draft:
 
-3. Never do the routine's own work now. It does its work each time it runs. \"Every Monday make a task\" makes no task today; \"when an email arrives, reply\" sends nothing; \"post the weekly summary\" posts nothing. Don't run, test or create the routine itself.
+1. You can't ask them anything. When no item has the name the words use, or several do, leave it out (no `entities`, or an empty knob) and they will pick it before saving.
 
-4. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}` for events, where `entities` holds the watched items as references such as `{{type: 'channel', entity: channel}}` (a handle, not an id; read `RoutineEventFilter`), `{{type: 'cron', schedule, timezone: '{timezone}'}}` for a repeating schedule (six fields: second minute hour day month weekday; name weekdays MON-SUN, since weekday numbers start at 1 = Sunday), `{{type: 'once', at}}` for a single run. {conditions} Events:
-{events}
+2. Don't create the routine itself, run it or test it: you hand it back for them to review.
+
+3. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first, and follow them exactly, since the check type-checks code steps but not your options. Triggers: `{{type: 'events', filters: [{{events, entities?}}]}}`, `{{type: 'cron', schedule, timezone: '{timezone}'}}` or `{{type: 'once', at}}`. {conditions}
 
 {steps}
 
-5. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created in step 2 (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
+4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
 }
 

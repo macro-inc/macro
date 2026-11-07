@@ -38,14 +38,17 @@ each run.
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step
   boxes in the web editor). It runs the draft in an ordinary hidden agent
-  session (`RoutineSessions`, source `routine` so it notifies nobody, origin
-  `requested`) of the in-process Macro agent, as the person, with its usual
+  session (`RoutineSessions`) of the in-process Macro agent: the person's own
+  (source `user`, origin `requested`) but hidden, a background session
+  (`AgentSession::is_background`) that notifies nobody and only the scheduler
+  may delete, never counted as a routine's run. It runs as the person, with its usual
   tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
   the session admits and bills its turns as agent session usage. One
-  prompt, the brief (`brief`, with the code-step guide): find the items the
-  words name with SDK search, create only what the routine must reference
-  (such as the database it writes to), never do the routine's own work now,
-  and hand the routine back by checking it with `macro.routines.check`
+  prompt, the brief (`brief`): the SDK's routines guide (`DraftAgent::guide`,
+  the `@agent` text on `RoutineNamespace` every code-mode session reads, so
+  the rules for writing a routine live there, not here), the code-step guide,
+  and only what is particular to drafting: leave out an item it can't
+  match exactly, and hand the routine back by checking it with `macro.routines.check`
   (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
   saved), naming what it created. The draft's `created` merges what its
   checks named with what its recorded activity shows (`SessionCreations`,

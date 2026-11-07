@@ -366,6 +366,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::clone(&hand_backs),
             DraftAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
+                // Generated from the SDK at build time, so it is always there.
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
             },
         )
         .with_session_creations(Arc::new(ActivityCreations(
