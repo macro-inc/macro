@@ -304,7 +304,7 @@ class GitleaksMergeTest(unittest.TestCase):
         self.assertEqual(self.run_tool([], code=7), 7)
 
     def test_transcript_jwts_require_staged_local_signatures(self):
-        path = "services/sync-service/tests/transcripts/example.test/scenario.jsonl"
+        path = "crates/sync_server_sim/tests/transcripts/example.test/scenario.jsonl"
         file = self.root / path
         file.parent.mkdir(parents=True)
 
@@ -336,6 +336,17 @@ class GitleaksMergeTest(unittest.TestCase):
         outside.write_text(file.read_text())
         self.git("add", "ordinary.jsonl")
         self.assertEqual(self.run_tool([{**finding, "File": "ordinary.jsonl"}]), 1)
+        for outside_path in (
+            "services/sync-service/tests/transcripts/example.test/scenario.jsonl",
+            "crates/sync_server_sim/tests/transcripts/scenario.jsonl",
+            "crates/sync_server_sim/tests/transcripts/example.test/nested/scenario.jsonl",
+            "crates/sync_server_sim/tests/transcripts-copy/example.test/scenario.jsonl",
+        ):
+            outside = self.root / outside_path
+            outside.parent.mkdir(parents=True, exist_ok=True)
+            outside.write_text(file.read_text())
+            self.git("add", outside_path)
+            self.assertEqual(self.run_tool([{**finding, "File": outside_path}]), 1)
         (self.root / ".git/MERGE_HEAD").unlink()
         self.assertEqual(self.run_tool([finding]), 0)
 

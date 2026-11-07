@@ -19,7 +19,7 @@ the Durable Object adapter and native simulation.
 ## Boundaries
 
 - Depends on pure domain types and Loro; no Worker, Tokio, sockets or environment.
-- Used by `services/sync-service`; authentication stays in that adapter.
+- Used by `services/sync-service` and `crates/sync_server_sim`; authentication stays in that adapter.
 - Keep persisted serde shapes and error text compatible with the golden corpus.
 
 ## Checks

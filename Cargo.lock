@@ -19812,6 +19812,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_server_sim"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bebop",
+ "futures",
+ "loro",
+ "macro_sync_service_jwt",
+ "serde",
+ "serde_json",
+ "sync_protocol",
+ "sync_server_core",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
