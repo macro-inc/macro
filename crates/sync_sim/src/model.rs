@@ -1,6 +1,6 @@
 //! Script inputs, immutable observations and deterministic configuration.
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Virtual milliseconds from the world's origin.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -220,6 +220,8 @@ pub struct SimConfig {
     pub fields: u16,
     /// Number of independent documents (at least one).
     pub documents: u8,
+    /// Rooms using isolated collaborative-surface identity and lifecycle.
+    pub surfaces: BTreeSet<DocIx>,
     /// Per-document seed histories; omitted documents start empty.
     pub seeds: BTreeMap<DocIx, SeedDocument>,
     /// Network conditions.
@@ -243,6 +245,7 @@ impl SimConfig {
             fields: 8,
             documents: 1,
             seeds: BTreeMap::new(),
+            surfaces: BTreeSet::new(),
             net: NetProfile::calm(),
             storage: StorageProfile::fast(),
             budgets: Budgets::default(),
@@ -395,6 +398,8 @@ pub enum ServerStep {
         /// Put count.
         n: u8,
     },
+    /// Permanently revoke configured collaborative-surface rooms.
+    SurfaceRevoke,
     /// Freeze the document through the real source-migration use case.
     FreezeSource,
     /// An AI-range fork changes a GenericSurface field through the atomic HTTP use case.

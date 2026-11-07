@@ -655,3 +655,115 @@ fn frozen_source_gate_blocks_new_legacy_requests() {
             .is_none()
     );
 }
+
+#[test]
+fn collaborative_surface_uses_real_initialization_and_cold_recovery() {
+    let outcome = verify(
+        SimConfig {
+            surfaces: [DocIx(0)].into(),
+            ..SimConfig::calm(107)
+        },
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 42,
+                },
+            },
+            Step::Run(Millis(200)),
+            Step::Server(ServerStep::Hibernate),
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::FormSet {
+                    field: 2,
+                    value: 81,
+                },
+            },
+            Step::Settle,
+        ],
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        81
+    );
+    assert!(outcome.finals.profiles.values().all(|store| {
+        store
+            .snapshots
+            .keys()
+            .all(|key| key.as_str().starts_with("surface:"))
+    }));
+    assert!(
+        outcome
+            .server_ports
+            .iter()
+            .any(|port| port.effect.operation == "storage.put"
+                && port.effect.value["key"] == "SURFACE_LIFECYCLE")
+    );
+}
+
+#[test]
+fn surface_revocation_is_permanent_and_leaves_document_rooms_live() {
+    let mut config = SimConfig {
+        documents: 2,
+        surfaces: [DocIx(0)].into(),
+        ..SimConfig::calm(109)
+    };
+    config.budgets.quiet = Millis(0);
+    let script = [
+        Step::Open(OpenSpec::form("a", "one")),
+        Step::Open(OpenSpec {
+            doc: DocIx(1),
+            ..OpenSpec::form("b", "two")
+        }),
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 1,
+                value: 42,
+            },
+        },
+        Step::Run(Millis(200)),
+        Step::Server(ServerStep::SurfaceRevoke),
+        Step::Run(Millis(200)),
+        Step::Server(ServerStep::Hibernate),
+        Step::Net(NetStep::Break(ClientName("b".into()))),
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("b".into()),
+            op: AbstractOp::FormSet {
+                field: 2,
+                value: 81,
+            },
+        },
+        Step::Open(OpenSpec::form("c", "three")),
+        Step::Run(Millis(1000)),
+    ];
+    let outcome = Sim::new(config.clone()).run(&script);
+    let repeated = Sim::new(config).run(&script);
+    assert_eq!(outcome.event_bytes, repeated.event_bytes);
+    assert_eq!(outcome.trace_hash, repeated.trace_hash);
+    invariants::per_step(&outcome).unwrap();
+    invariants::no_acked_edit_lost(&outcome).unwrap();
+    invariants::no_persisted_edit_lost(&outcome).unwrap();
+    assert!(outcome.events.iter().any(|event|
+        matches!(&event.fact, Fact::RequestBlocked { doc: DocIx(0), route } if route == "surface_connect")));
+    assert!(outcome.server_ports.iter().any(|port| port.doc == DocIx(0)
+        && port.effect.operation == "connections.close"
+        && port.effect.value["code"] == 1008));
+    assert!(!outcome.server_ports.iter().any(|port| port.doc == DocIx(1)
+        && port.effect.operation == "storage.put"
+        && port.effect.value["key"] == "SURFACE_LIFECYCLE"));
+    assert_eq!(
+        outcome.finals.servers[&DocIx(1)].deep_value["fields"]["2"],
+        81
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+        42
+    );
+}

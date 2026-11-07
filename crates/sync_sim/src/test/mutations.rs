@@ -238,3 +238,42 @@ fn hostile_registry_skips_liveness_but_keeps_durable_ack_safety() {
             .any(|failure| failure.invariant == "no_acked_edit_lost")
     );
 }
+
+#[test]
+fn wal_query_rejects_an_undrained_surface_orphan_with_a_recovery_session() {
+    let mut outcome = verify(
+        SimConfig {
+            surfaces: [DocIx(0)].into(),
+            ..SimConfig::calm(113)
+        },
+        &[Step::Open(OpenSpec::form("a", "one")), Step::Settle],
+    );
+    let client = &outcome.finals.clients[&ClientName("a".into())];
+    outcome
+        .finals
+        .profiles
+        .get_mut(&ProfileName("one".into()))
+        .unwrap()
+        .entries
+        .insert(
+            (
+                "surface:00000000-0000-7000-8000-000000000001"
+                    .parse()
+                    .unwrap(),
+                doc_sync_core::WalOwner::Legacy,
+                doc_sync_core::WalSeq(1),
+            ),
+            doc_sync_core::StoredWalRecord {
+                delivered: false,
+                record: doc_sync_core::WalRecord {
+                    seq: doc_sync_core::WalSeq(1),
+                    created_at: doc_sync_core::UnixMillis(100),
+                    user: doc_sync_core::UserKey(client.user.clone()),
+                    foreign: true,
+                    quarantined: false,
+                    bytes: vec![1],
+                },
+            },
+        );
+    assert!(invariants::all_wals_drained(&outcome).is_err());
+}

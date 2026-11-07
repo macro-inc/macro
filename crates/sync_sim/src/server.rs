@@ -29,6 +29,7 @@ pub(crate) enum Input {
     },
     Exists,
     FreezeSource(Vec<u8>),
+    SurfaceRevoke,
     HttpFormUpdate {
         peer: u64,
         field: u16,
@@ -71,14 +72,13 @@ impl SimServer {
     pub(crate) fn new(
         doc: DocIx,
         fields: u16,
+        surface: bool,
         seed_spec: &SeedDocument,
         storage_latency: Millis,
         now: SimNow,
     ) -> Result<(Self, Vec<Effect>, Vv), Failure> {
-        let key = SessionKey::new(format!(
-            "00000000-0000-7000-8000-{:012x}",
-            u64::from(doc.0) + 1
-        ));
+        let id = format!("00000000-0000-7000-8000-{:012x}", u64::from(doc.0) + 1);
+        let key = SessionKey::new(if surface { format!("surface:{id}") } else { id });
         let ports = SimPorts::new();
         ports.set_now(now);
         let mut room = SimRoom::new(ports.clone());
@@ -92,11 +92,47 @@ impl SimServer {
         request
             .serialize(&mut body)
             .map_err(|e| Failure::new("seed_document", e))?;
-        room.room_mut()
-            .initialize(key.clone(), &body)
-            .now_or_never()
-            .ok_or_else(|| Failure::new("server_stalled", "initialization stalled"))?
-            .map_err(|e| Failure::new("server_initialize", e))?;
+        let initialized = async {
+            use sync_server_core::domain::room::{
+                FaultPlan, SurfacePreparation, SurfaceRequest, SurfaceStatus,
+            };
+            if surface {
+                let prepared = room
+                    .room_mut()
+                    .prepare_surface(&key, SurfaceRequest::Initialize)
+                    .await
+                    .map_err(|error| Failure::new("server_initialize", error))?;
+                if prepared != SurfacePreparation::Proceed {
+                    return Err(Failure::new(
+                        "server_initialize",
+                        "new surface rejected initialization",
+                    ));
+                }
+                let status = room
+                    .room_mut()
+                    .initialize_surface(&key, snapshot, FaultPlan::None)
+                    .await
+                    .map_err(|error| Failure::new("server_initialize", error))?;
+                if status != SurfaceStatus::Ok {
+                    return Err(Failure::new(
+                        "server_initialize",
+                        "new surface was not initialized",
+                    ));
+                }
+                room.room_mut()
+                    .load_document()
+                    .await
+                    .map_err(|error| Failure::new("server_initialize", error))?;
+            } else {
+                room.room_mut()
+                    .initialize(key.clone(), &body)
+                    .await
+                    .map_err(|error| Failure::new("server_initialize", error))?;
+            }
+            Ok(())
+        }
+        .now_or_never();
+        initialized.ok_or_else(|| Failure::new("server_stalled", "initialization stalled"))??;
         let effects = ports.take_effects();
         ports.set_gate(GateMode::Held);
         Ok((
@@ -130,7 +166,7 @@ impl SimServer {
             monotonic: Duration::from_millis(mono),
         }
     }
-    pub(crate) fn grant(&self, user: String, access: Access) -> AuthToken {
+    pub(crate) fn grant(&self, user: String, access: Access, wall: i64) -> AuthToken {
         AuthToken::new(
             self.key.as_str().into(),
             match access {
@@ -138,11 +174,13 @@ impl SimServer {
                 Access::CommentOnly => AccessLevel::Comment,
                 Access::Read => AccessLevel::View,
             },
-            macro_sync_service_jwt::session::SessionKind::Document,
+            self.key.kind(),
             Some(user),
             None,
             None,
-            None,
+            (self.key.kind() == macro_sync_service_jwt::session::SessionKind::Surface).then(|| {
+                usize::try_from(wall.saturating_div(1000).saturating_add(3600)).unwrap_or(0)
+            }),
         )
     }
     pub(crate) fn step(&mut self, now: SimNow, input: Input) -> Callback {
@@ -180,7 +218,13 @@ impl SimServer {
                     if self
                         .room
                         .room_mut()
-                        .gate_request(RouteClass::Document)
+                        .gate_request(
+                            if key.kind() == macro_sync_service_jwt::session::SessionKind::Surface {
+                                RouteClass::Surface
+                            } else {
+                                RouteClass::Document
+                            },
+                        )
                         .await?
                         == RequestGate::SourceBlocked
                     {
@@ -189,6 +233,22 @@ impl SimServer {
                             route: "connect".into(),
                         });
                         return Ok::<(), sync_server_core::domain::room::RoomError>(());
+                    }
+                    if key.kind() == macro_sync_service_jwt::session::SessionKind::Surface {
+                        use sync_server_core::domain::room::{SurfacePreparation, SurfaceRequest};
+                        if self
+                            .room
+                            .room_mut()
+                            .prepare_surface(&key, SurfaceRequest::Read)
+                            .await?
+                            != SurfacePreparation::Proceed
+                        {
+                            facts.push(Fact::RequestBlocked {
+                                doc: self.doc,
+                                route: "surface_connect".into(),
+                            });
+                            return Ok(());
+                        }
                     }
                     // Complete the fallible identity restore before enqueueing entropy.
                     // connect's repeated cache hit emits no extra port effects.
@@ -202,9 +262,38 @@ impl SimServer {
             }
             Input::Exists => {
                 self.ports.set_now(now);
+                let result = async {
+                    if self.key.kind() == macro_sync_service_jwt::session::SessionKind::Surface {
+                        use sync_server_core::domain::room::{SurfacePreparation, SurfaceRequest};
+                        if self
+                            .room
+                            .room_mut()
+                            .prepare_surface(&self.key, SurfaceRequest::Read)
+                            .await?
+                            != SurfacePreparation::Proceed
+                        {
+                            facts.push(Fact::RequestBlocked {
+                                doc: self.doc,
+                                route: "surface_exists".into(),
+                            });
+                        }
+                    } else {
+                        self.room.room_mut().exists(&self.key).await?;
+                    }
+                    Ok::<(), sync_server_core::domain::room::RoomError>(())
+                }
+                .now_or_never();
+                finish_direct(&self.ports, result)
+            }
+            Input::SurfaceRevoke => {
+                self.ports.set_now(now);
+                use sync_server_core::domain::room::SurfaceRequest;
                 finish_direct(
                     &self.ports,
-                    self.room.room_mut().exists(&self.key).now_or_never(),
+                    self.room
+                        .room_mut()
+                        .prepare_surface(&self.key, SurfaceRequest::Revoke)
+                        .now_or_never(),
                 )
             }
             Input::FreezeSource(body) => {
@@ -349,6 +438,14 @@ impl SimServer {
         facts: &mut Vec<Fact>,
     ) -> Result<(), Failure> {
         use sync_server_core::domain::room::{RequestGate, RouteClass};
+        // The surface front door has no legacy atomic-update route.
+        if self.key.kind() == macro_sync_service_jwt::session::SessionKind::Surface {
+            facts.push(Fact::RequestBlocked {
+                doc: self.doc,
+                route: "surface_update_not_found".into(),
+            });
+            return Ok(());
+        }
         if self
             .room
             .room_mut()
@@ -363,7 +460,7 @@ impl SimServer {
             });
             return Ok(());
         }
-        let mut claims = self.grant("user-0".into(), Access::Edit);
+        let mut claims = self.grant("user-0".into(), Access::Edit, wall);
         claims.actor = Some("agent|simulation".into());
         let access = claims
             .document_access(self.key.as_str())

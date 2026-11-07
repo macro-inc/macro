@@ -562,7 +562,16 @@ impl Sim {
                         server.ports.set_faults(faults);
                     }
                 }
+                ServerStep::SurfaceRevoke => {
+                    if self.config.surfaces.contains(&doc) {
+                        self.server_input(doc, Input::SurfaceRevoke)?;
+                    }
+                }
                 ServerStep::FreezeSource => {
+                    // Source migration belongs to the legacy document route group.
+                    if self.config.surfaces.contains(&doc) {
+                        continue;
+                    }
                     let operation = self.uuid();
                     let body =
                         serde_json::to_vec(&serde_json::json!({ "operation_id": operation }))

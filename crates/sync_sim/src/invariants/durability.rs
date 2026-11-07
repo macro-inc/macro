@@ -329,7 +329,7 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
                     && client.profile == *profile
                     && client.user == row.record.user.0
                     && client.access == Access::Edit
-                    && document_key(client.doc) == doc.to_string()
+                    && document_key(client.doc, &outcome.config) == doc.to_string()
             });
             if writable && !row.delivered && !row.record.quarantined {
                 return Err(Failure::new(
@@ -341,6 +341,11 @@ pub fn all_wals_drained(outcome: &Outcome) -> Result<(), Failure> {
     }
     Ok(())
 }
-pub(super) fn document_key(doc: DocIx) -> String {
-    format!("00000000-0000-7000-8000-{:012x}", u64::from(doc.0) + 1)
+fn document_key(doc: DocIx, config: &SimConfig) -> String {
+    let id = format!("00000000-0000-7000-8000-{:012x}", u64::from(doc.0) + 1);
+    if config.surfaces.contains(&doc) {
+        format!("surface:{id}")
+    } else {
+        id
+    }
 }
