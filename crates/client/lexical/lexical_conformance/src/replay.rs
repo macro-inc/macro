@@ -185,6 +185,9 @@ impl Replayer {
                     }
                 }
                 "update" | "commit" => {
+                    if kind == "commit" && self.version != 0 {
+                        return Err(fail("commit without a pending update"));
+                    }
                     let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
                     self.version += 1;
                     let mut tx = ed.transaction();
