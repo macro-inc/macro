@@ -14,6 +14,7 @@ import {
 import type { SplitId } from '@components/app/split-layout/layoutManager';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { NO_SPLITS_TAB_HOST } from '../DesktopTabsController';
 import {
   createTabManager,
   MAX_PARKED_TABS,
@@ -210,6 +211,31 @@ describe('desktop tab manager', () => {
       kind: 'url',
       url: '/mail/t1',
     });
+  });
+
+  it('keeps the tabs on a page outside the app layout, such as a call', async () => {
+    const { router, tabManager, userId } = track(setup('/mail/t1'));
+    tabManager.newTab();
+    await flush(router);
+
+    // Entering a call swaps the app shell, and its tab owner, for the
+    // meeting shell, which owns tabs over the same router without splits.
+    const meeting = createRoot((dispose) => ({
+      tabManager: createTabManager({
+        router,
+        manager: NO_SPLITS_TAB_HOST,
+        userId,
+      }),
+      dispose,
+    }));
+    await router.navigate('/login');
+    await flush(router);
+    expect(meeting.tabManager.tabs()).toHaveLength(2);
+
+    meeting.tabManager.activateTab(meeting.tabManager.tabs()[0]!.id);
+    await flush(router);
+    expect(routeIds(router)).toEqual([['mail', 'mail-thread']]);
+    meeting.dispose();
   });
 
   it('parks the tab it leaves, so switching back shows the same panes without remounting', async () => {
