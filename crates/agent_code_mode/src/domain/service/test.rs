@@ -81,7 +81,7 @@ impl ExecutionCredentials for Credentials {
             .unwrap()
             .push((identity.owner.to_string(), identity.agent_id));
         Ok(IssuedRun {
-            environment: code_execution::domain::RunEnvironment {
+            environment: code_execution_core::RunEnvironment {
                 token: "run-only-secret".into(),
                 ..Default::default()
             },
@@ -119,7 +119,7 @@ impl ProgramExecutor for Executor {
     async fn execute_program(
         &self,
         _: ExecuteRequest,
-        environment: code_execution::domain::RunEnvironment,
+        environment: code_execution_core::RunEnvironment,
         _: CancellationToken,
     ) -> Outcome {
         assert_eq!(environment.token, "run-only-secret");
@@ -360,7 +360,7 @@ impl ProgramExecutor for ValueExecutor {
     async fn execute_program(
         &self,
         _: ExecuteRequest,
-        _: code_execution::domain::RunEnvironment,
+        _: code_execution_core::RunEnvironment,
         _: CancellationToken,
     ) -> Outcome {
         Outcome::Succeeded {
@@ -438,7 +438,7 @@ impl ProgramExecutor for ActivityExecutor {
     async fn execute_program(
         &self,
         _: ExecuteRequest,
-        _: code_execution::domain::RunEnvironment,
+        _: code_execution_core::RunEnvironment,
         _: CancellationToken,
     ) -> Outcome {
         unreachable!("the service should observe progress")
@@ -446,7 +446,7 @@ impl ProgramExecutor for ActivityExecutor {
     async fn execute_program_with_progress(
         &self,
         _: ExecuteRequest,
-        _: code_execution::domain::RunEnvironment,
+        _: code_execution_core::RunEnvironment,
         _: CancellationToken,
         progress: tokio::sync::mpsc::Sender<serde_json::Value>,
     ) -> Outcome {
@@ -592,7 +592,7 @@ impl ProgramExecutor for CancelActivityExecutor {
     async fn execute_program(
         &self,
         _: ExecuteRequest,
-        _: code_execution::domain::RunEnvironment,
+        _: code_execution_core::RunEnvironment,
         _: CancellationToken,
     ) -> Outcome {
         unreachable!()
@@ -600,7 +600,7 @@ impl ProgramExecutor for CancelActivityExecutor {
     async fn execute_program_with_progress(
         &self,
         _: ExecuteRequest,
-        _: code_execution::domain::RunEnvironment,
+        _: code_execution_core::RunEnvironment,
         cancel: CancellationToken,
         progress: tokio::sync::mpsc::Sender<serde_json::Value>,
     ) -> Outcome {

@@ -1,6 +1,6 @@
 //! Bounded, advisory activity derived from the generated SDK operation catalog.
 use super::{ExecutionActivity, RecordedCallStatus};
-use code_execution::domain::operations;
+use code_execution_core::operations;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

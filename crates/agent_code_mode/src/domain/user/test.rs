@@ -1,5 +1,5 @@
 use super::*;
-use code_execution::domain::Outcome;
+use code_execution_core::Outcome;
 use serde_json::json;
 use std::sync::Mutex;
 

@@ -233,7 +233,7 @@ deny = [
     "calendar_events",           # Calendar refresh span tests only (dev-dependency)
     "calendar_service",          # HTTP server span export tests only (dev-dependency)
     "channels",                  # Dev logging only
-    "code_execution",            # Deno exit span field tests only (dev-dependency)
+    "code_execution_outbound",   # Deno exit span field tests only (dev-dependency)
     "coding_agent_worker",       # Standalone daemon logging setup
     "convert_service",           # process_message span status tests only (dev-dependency)
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it

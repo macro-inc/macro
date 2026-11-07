@@ -77,7 +77,6 @@ channels = { workspace = true, features = ["attachment", "outbound", "ports"] }
 chat = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "outbound"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-code_execution = { workspace = true }
 codex_cloud_agents = { workspace = true }
 codex_connection = { workspace = true }
 cognition = { workspace = true }
@@ -242,6 +241,8 @@ sync_service_url = { workspace = true }
 mcp_chatgpt_service_url = { workspace = true }
 agent_git_service_url = { workspace = true }
 chat_id = { workspace = true }
+code_execution_core = { workspace = true }
+code_execution_outbound = { workspace = true }
 
 [dev-dependencies]
 agent = { workspace = true }

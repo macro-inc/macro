@@ -1,24 +1,32 @@
-# JavaScript execution
+# JavaScript execution: Deno runner
 
 ## Scope
 
 Runs a bounded JavaScript program in a fresh Deno process inside the calling
-service. Session authentication, token issuance and execution storage belong to
-`crates/agent_code_mode` and its composition root.
+service. It implements the `CodeRunner` and `ProgramChecker` ports of
+`crates/agents/code_execution_core`, which owns admission, cancellation and the
+protocol types. Session authentication, token issuance and execution storage
+belong to `crates/agent_code_mode` and its composition root.
 
 ## Start here
 
 - `README.md`: permissions, limits and the program contract.
-- `src/domain/service.rs`: admission and cancellation.
-- `src/outbound/deno.rs`: process lifecycle, restricted permissions and the
-  import map (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
+- `src/deno.rs`: process lifecycle, restricted permissions and the import map
+  (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
   `deno/unavailable.mjs`).
-- `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
+- `src/deno/bootstrap.mjs`: program loading, unattended dry runs
   (a routine's entity knobs, marked `$entity`, reach `main` as SDK handles),
   removing every way to the network but `fetch`, and final JSON protocol.
-- `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
-- `src/domain/operations.rs`: the generated operation catalog (labels, routes,
+- `src/deno/check.rs`: type-checking TypeScript against the SDK.
+- `../code_execution_core/src/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
+
+## Boundaries
+
+- Depends on: `code_execution_core` (ports and models), `code_mode_assets`.
+- Used by: the composition root in `services/agent_harness_service` only.
+  Everything else depends on `code_execution_core`, so a runner edit rebuilds
+  only this crate and the harness.
 
 ## Gotchas
 
@@ -47,7 +55,7 @@ A program reads Macro's own sign-in emails redacted (email and storage-service r
 
 A run whose `RunEnvironment::egress` is `Egress::Proxied` reaches the hosts
 only through a loopback forwarder the runner starts for it
-(`src/outbound/deno/egress.rs`): `--allow-net` names only that listener.
+(`src/deno/egress.rs`): `--allow-net` names only that listener.
 The child keeps the real hosts, which the links it builds need, and its
 fetch sends a request to a host's base to that service under the forwarder
 (`forwarder` in the child's context, `http://127.0.0.1:<port>/<service>`).
@@ -80,7 +88,7 @@ one over the limit fails the run with a message saying so.
 
 Every Deno child's `code_execution.process` span records how it ended:
 `process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
-and `process.peak_rss_kib` (`outbound/deno/exit.rs`). Peak memory is `VmHWM`
+and `process.peak_rss_kib` (`src/deno/exit.rs`). Peak memory is `VmHWM`
 sampled from procfs every 250 ms while the child runs, since it is gone
 before the child's pipes close (a child that dies within one interval
 shows only its startup peak); CPU time is read once more after they close.
@@ -91,5 +99,7 @@ frame logs one `Deno child ended abnormally` warning with the same fields.
 
 ## Checks
 
-- `cargo test -p code_execution --lib -- --include-ignored` from the repository
-  root with Deno available; real-process tests exercise permissions and cleanup.
+- `cargo test -p code_execution_outbound --lib -- --include-ignored` from the
+  repository root with Deno available; real-process tests exercise permissions
+  and cleanup.
+- `cargo test -p code_execution_core` for admission and cancellation.

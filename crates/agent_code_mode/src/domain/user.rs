@@ -5,7 +5,7 @@ use super::{
 };
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, ProgramExecutor, RunEnvironment};
+use code_execution_core::{ExecuteRequest, ProgramExecutor, RunEnvironment};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

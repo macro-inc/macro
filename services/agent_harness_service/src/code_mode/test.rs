@@ -245,7 +245,7 @@ fn the_generation_scope_matches_the_sdk_catalog() {
         "cognition.structuredCompletion",
     ];
     let scope = SessionScope::Generation;
-    for (key, operation) in code_execution::domain::operations() {
+    for (key, operation) in code_execution_core::operations() {
         let allowed = scope.allows(&operation.method, &concrete(&operation.path));
         if !operation.write {
             assert!(
@@ -460,7 +460,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         .any(|word| text.contains(word))
     };
     let scope = SessionScope::NoSend;
-    let operations = code_execution::domain::operations();
+    let operations = code_execution_core::operations();
     // A reviewed entry names an operation the scope still allows, so a
     // renamed or newly refused one doesn't linger.
     let stale: Vec<&str> = reviewed
@@ -492,7 +492,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
 /// bot, which acts later.
 #[test]
 fn a_run_that_sends_nothing_starts_no_work_with_the_persons_access() {
-    let operations = code_execution::domain::operations();
+    let operations = code_execution_core::operations();
     for key in [
         "agent-harness.createAgentSession",
         "agent-harness.controlAgentSession",
@@ -605,7 +605,7 @@ fn every_sdk_host_holds_a_scoped_credential_to_its_scope() {
             }
         }
     }
-    for (key, operation) in code_execution::domain::operations() {
+    for (key, operation) in code_execution_core::operations() {
         let (service, _) = key.split_once('.').unwrap();
         if let ScopeEnforcement::NoMacroCredential = enforcement(host(service)) {
             for scope in [

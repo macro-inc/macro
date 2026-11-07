@@ -325,7 +325,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   every call; the update, invite-guests and delete routes check every program
   run (`macro_authorization::is_program_run`: a token signed for an agent or a
   routine, owner routine steps included, or a request carrying
-  `x-macro-code-execution`, which `code_execution`'s bootstrap sets on every
+  `x-macro-code-execution`, which `code_execution_outbound`'s bootstrap sets on every
   code-mode program's SDK requests) and any request naming `inbox` through
   `CalendarCopyConfirmation`, answering 409 `copy_choice_required`. The create
   route refuses only agent runs (`is_agent_run`), so an owner routine step

@@ -4,10 +4,8 @@ use agent_code_mode::{
     outbound::postgres::PgExecutionStore,
 };
 use async_trait::async_trait;
-use code_execution::{
-    domain::{ExecutionService, Limits},
-    outbound::deno::DenoRunner,
-};
+use code_execution_core::{ExecutionService, Limits};
+use code_execution_outbound::deno::DenoRunner;
 use serde_json::json;
 
 /// Programs here return no images.
@@ -48,7 +46,7 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         _: tokio_util::sync::CancellationToken,
     ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
         Ok(agent_code_mode::domain::IssuedRun {
-            environment: code_execution::domain::RunEnvironment::default(),
+            environment: code_execution_core::RunEnvironment::default(),
             acting_user: identity.owner.clone(),
         })
     }

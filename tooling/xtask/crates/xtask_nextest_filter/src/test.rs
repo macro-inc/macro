@@ -119,7 +119,8 @@ fn sdk_sources_select_code_mode_asset_consumers() {
     let set = selected_packages(&selection);
     for expected in [
         "code_mode_assets",
-        "code_execution",
+        "code_execution_core",
+        "code_execution_outbound",
         "agent_code_mode",
         "agent_harness_service",
     ] {
