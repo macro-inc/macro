@@ -1,0 +1,1118 @@
+[
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalEditor.test.tsx",
+    "cases": 78,
+    "aRec": 13
+  },
+  {
+    "package": "lexical",
+    "file": "nodes/__tests__/unit/LexicalTextNode.test.tsx",
+    "cases": 101,
+    "aRec": 70
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalNode.test.ts",
+    "cases": 66,
+    "aRec": 28
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalSelection.test.ts",
+    "cases": 53,
+    "aRec": 42
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalReconciler.test.ts",
+    "cases": 38,
+    "aRec": 17
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalUtils.test.ts",
+    "cases": 32,
+    "aRec": 14
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalDOMSlot.test.tsx",
+    "cases": 31,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "caret/__tests__/unit/LexicalCaret.test.ts",
+    "cases": 54,
+    "aRec": 53
+  },
+  {
+    "package": "lexical",
+    "file": "nodes/__tests__/unit/LexicalElementNode.test.tsx",
+    "cases": 25,
+    "aRec": 17
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalNodeState.test.ts",
+    "cases": 18,
+    "aRec": 5
+  },
+  {
+    "package": "lexical",
+    "file": "nodes/__tests__/unit/LexicalRootNode.test.ts",
+    "cases": 15,
+    "aRec": 13
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalGenMap.test.ts",
+    "cases": 12,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "nodes/__tests__/unit/LexicalTabNode.test.tsx",
+    "cases": 12,
+    "aRec": 2
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/HandleTextDrop.test.ts",
+    "cases": 11,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "caret/__tests__/unit/docs-traversals.test.ts",
+    "cases": 8,
+    "aRec": 8
+  },
+  {
+    "package": "lexical",
+    "file": "nodes/__tests__/unit/LexicalParagraphNode.test.ts",
+    "cases": 8,
+    "aRec": 4
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalExtensionCore.test.ts",
+    "cases": 7,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalEditorListener.test.ts",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalUpdateTags.test.ts",
+    "cases": 6,
+    "aRec": 5
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/setDOMStyle.test.ts",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "nodes/__tests__/unit/LexicalLineBreakNode.test.ts",
+    "cases": 5,
+    "aRec": 3
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalElementHelpers.test.ts",
+    "cases": 5,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalIosKoreanIME.test.ts",
+    "cases": 5,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalNormalization.test.tsx",
+    "cases": 5,
+    "aRec": 5
+  },
+  {
+    "package": "lexical",
+    "file": "nodes/__tests__/unit/LexicalGC.test.tsx",
+    "cases": 4,
+    "aRec": 4
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalEditorState.test.ts",
+    "cases": 4,
+    "aRec": 4
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/Issue7729Repro.test.ts",
+    "cases": 4,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalListPlugin.test.tsx",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalSelectionResolveLeafPosition.test.ts",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/FastPathCrossParentTextCache.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/HTMLCopyAndPaste.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/mergeRegister.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/CodeBlock.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/FastPathCrossParent.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/Issue8563Repro.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalReconcilerStaleDecorator.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical",
+    "file": "__tests__/unit/LexicalSerialization.test.ts",
+    "cases": 1,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-markdown",
+    "file": "LexicalMarkdown.test.ts",
+    "cases": 383,
+    "aRec": 375
+  },
+  {
+    "package": "lexical-markdown",
+    "file": "MarkdownTransformers.test.ts",
+    "cases": 10,
+    "aRec": 10
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTableNode.test.tsx",
+    "cases": 38,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTableExtension.test.ts",
+    "cases": 15,
+    "aRec": 6
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTableCellNode.test.ts",
+    "cases": 13,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTableUtils.test.ts",
+    "cases": 12,
+    "aRec": 12
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTableMobileSelection.test.tsx",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-table",
+    "file": "TableImportExtension.test.ts",
+    "cases": 4,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTableSelection.test.tsx",
+    "cases": 3,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTablePlugin.test.tsx",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-table",
+    "file": "LexicalTableRowNode.test.ts",
+    "cases": 2,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-list",
+    "file": "LexicalListItemNode.test.ts",
+    "cases": 39,
+    "aRec": 13
+  },
+  {
+    "package": "lexical-list",
+    "file": "LexicalListNode.test.ts",
+    "cases": 18,
+    "aRec": 11
+  },
+  {
+    "package": "lexical-list",
+    "file": "formatList.test.ts",
+    "cases": 12,
+    "aRec": 10
+  },
+  {
+    "package": "lexical-list",
+    "file": "utils.test.ts",
+    "cases": 10,
+    "aRec": 10
+  },
+  {
+    "package": "lexical-list",
+    "file": "ListImportExtension.test.ts",
+    "cases": 10,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-list",
+    "file": "ListExtension.test.ts",
+    "cases": 3,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-list",
+    "file": "checkList.test.tsx",
+    "cases": 4,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-list",
+    "file": "registerListStrictIndentTransform.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-link",
+    "file": "LexicalLinkNode.test.ts",
+    "cases": 53,
+    "aRec": 40
+  },
+  {
+    "package": "lexical-link",
+    "file": "LexicalAutoLinkNode.test.ts",
+    "cases": 28,
+    "aRec": 20
+  },
+  {
+    "package": "lexical-link",
+    "file": "LinkExtension.test.ts",
+    "cases": 9,
+    "aRec": 9
+  },
+  {
+    "package": "lexical-link",
+    "file": "LexicalAutoLinkExtension.test.ts",
+    "cases": 6,
+    "aRec": 5
+  },
+  {
+    "package": "lexical-link",
+    "file": "LinkImportExtension.test.ts",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-code",
+    "file": "LexicalCodeNode.test.ts",
+    "cases": 22,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-code-core",
+    "file": "CodeImportExtension.test.ts",
+    "cases": 10,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-code-core",
+    "file": "CodeExtension.test.ts",
+    "cases": 4,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-code-core",
+    "file": "CodeNode.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-code-prism",
+    "file": "LexicalCodeNodeTabs.test.ts",
+    "cases": 84,
+    "aRec": 84
+  },
+  {
+    "package": "lexical-code-prism",
+    "file": "CodePrismNullDefaultLanguage.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-code-shiki",
+    "file": "LexicalCodeNodeTabs.test.ts",
+    "cases": 84,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-code-shiki",
+    "file": "CodeShikiNullDefaultLanguage.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-mark",
+    "file": "LexicalMarkNode.test.ts",
+    "cases": 7,
+    "aRec": 6
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "EscapeFormatTriggers.test.ts",
+    "cases": 17,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "LexicalHeadingNode.test.ts",
+    "cases": 14,
+    "aRec": 7
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "RichTextInlineDecoratorMoveToEnd.test.ts",
+    "cases": 9,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "RichTextInlineDecoratorMoveToStart.test.ts",
+    "cases": 8,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "RichTextImportExtension.test.ts",
+    "cases": 8,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "LexicalQuoteNode.test.ts",
+    "cases": 5,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "LexicalTabNode.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-rich-text",
+    "file": "RichTextNodeSelectionEnter.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-selection",
+    "file": "LexicalSelection.test.tsx",
+    "cases": 185,
+    "aRec": 74
+  },
+  {
+    "package": "lexical-selection",
+    "file": "LexicalSelectionHelpers.test.ts",
+    "cases": 49,
+    "aRec": 8
+  },
+  {
+    "package": "lexical-selection",
+    "file": "$sliceSelectedTextNodeContent.test.ts",
+    "cases": 4,
+    "aRec": 4
+  },
+  {
+    "package": "lexical-utils",
+    "file": "LexicalNodeHelpers.test.ts",
+    "cases": 12,
+    "aRec": 12
+  },
+  {
+    "package": "lexical-utils",
+    "file": "iterators.test.tsx",
+    "cases": 7,
+    "aRec": 7
+  },
+  {
+    "package": "lexical-utils",
+    "file": "markSelection.test.tsx",
+    "cases": 4,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-utils",
+    "file": "LexicalEventHelpers.test.tsx",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-utils",
+    "file": "LexicalRootHelpers.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-utils",
+    "file": "LexicalUtilsSplitNode.test.tsx",
+    "cases": 2,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-utils",
+    "file": "unwrapAndFilterDescendants.test.tsx",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-utils",
+    "file": "descendantsMatching.test.tsx",
+    "cases": 1,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-utils",
+    "file": "LexicalUtilsInsertNodeToNearestRootAtCaret.test.ts",
+    "cases": 1,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-utils",
+    "file": "LexicalUtilsInsertNodeToNearestRoot.test.tsx",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-utils",
+    "file": "LexicalUtilsKlassEqual.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-history",
+    "file": "LexicalHistory.test.tsx",
+    "cases": 18,
+    "aRec": 14
+  },
+  {
+    "package": "lexical-html",
+    "file": "DOMImportExtension.test.ts",
+    "cases": 22,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "CoreImportExtension.test.ts",
+    "cases": 15,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "LexicalHtml.test.ts",
+    "cases": 15,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "DOMRenderExtension.test.ts",
+    "cases": 10,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "DOMPreprocess.test.ts",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "DOMRenderConditionalOverrides.test.ts",
+    "cases": 5,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "compileDOMRenderConfigOverrides.test.ts",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "Issue8391WhitespaceAroundUnknownInline.test.ts",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-html",
+    "file": "HorizontalRuleImportExtension.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-clipboard",
+    "file": "GetClipboardDataExtension.test.ts",
+    "cases": 10,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-clipboard",
+    "file": "ClipboardImportExtension.test.ts",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-headless",
+    "file": "LexicalHeadlessEditor.test.ts",
+    "cases": 8,
+    "aRec": 4
+  },
+  {
+    "package": "lexical-extension",
+    "file": "LexicalBuilder.test.ts",
+    "cases": 8,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-extension",
+    "file": "NestedEditorExtension.test.ts",
+    "cases": 8,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-extension",
+    "file": "ClickAfterLastBlock.test.ts",
+    "cases": 5,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-extension",
+    "file": "NormalizeInlineElements.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-extension",
+    "file": "deepThemeMergeInPlace.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-hashtag",
+    "file": "LexicalHashtagNode.test.ts",
+    "cases": 1,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-react",
+    "file": "Collaboration.test.ts",
+    "cases": 15,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "CollaborationWithCollisions.test.ts",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "CollaborationSnapshot.test.ts",
+    "cases": 7,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalNestedComposer.test.tsx",
+    "cases": 8,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "useLexicalCharacterLimit.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-react",
+    "file": "useLexicalIsTextContentEmpty.test.tsx",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "ReactExtension.test.tsx",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalExtensionEditorComposer.test.tsx",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "PlainRichTextPlugin.test.tsx",
+    "cases": 6,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalMenu.test.tsx",
+    "cases": 17,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalContentEditableElement.test.tsx",
+    "cases": 13,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "useExtensionSignalValue.test.tsx",
+    "cases": 11,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "ExtensionComponent.test.tsx",
+    "cases": 9,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalTypeaheadMenuPlugin.test.tsx",
+    "cases": 8,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalNodeMenuPlugin.test.tsx",
+    "cases": 7,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalExtensionComposer.test.tsx",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "React19.test.tsx",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalComposer.test.tsx",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "ReactPluginHostExtension.test.tsx",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "useMenuAnchorRef.test.tsx",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-react",
+    "file": "LexicalCollaborationPlugin.test.tsx",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-playground",
+    "file": "ToolbarPluginFormatCode.test.ts",
+    "cases": 9,
+    "aRec": 9
+  },
+  {
+    "package": "lexical-playground",
+    "file": "CollapsibleContainerNode.test.ts",
+    "cases": 9,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-playground",
+    "file": "LayoutContainerNode.test.ts",
+    "cases": 5,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-playground",
+    "file": "docSerialization.test.ts",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-playground",
+    "file": "ImageHTML.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-tailwind",
+    "file": "LexicalTailwind.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-eslint-plugin",
+    "file": "rules-of-lexical.test.ts",
+    "cases": 7,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-eslint-plugin",
+    "file": "buildMatcher.test.ts",
+    "cases": 4,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-core",
+    "file": "mentions.test.ts",
+    "cases": 65,
+    "aRec": 65
+  },
+  {
+    "package": "lexical-core",
+    "file": "agent-context.test.ts",
+    "cases": 51,
+    "aRec": 50
+  },
+  {
+    "package": "lexical-core",
+    "file": "database-query.test.ts",
+    "cases": 34,
+    "aRec": 34
+  },
+  {
+    "package": "lexical-core",
+    "file": "auto-link.test.ts",
+    "cases": 31,
+    "aRec": 31
+  },
+  {
+    "package": "lexical-core",
+    "file": "internal-transformer-fallbacks.test.ts",
+    "cases": 30,
+    "aRec": 30
+  },
+  {
+    "package": "lexical-core",
+    "file": "tables.test.ts",
+    "cases": 26,
+    "aRec": 26
+  },
+  {
+    "package": "lexical-core",
+    "file": "notion-markdown.test.ts",
+    "cases": 20,
+    "aRec": 20
+  },
+  {
+    "package": "lexical-core",
+    "file": "slack-import-links.test.ts",
+    "cases": 20,
+    "aRec": 20
+  },
+  {
+    "package": "lexical-core",
+    "file": "agent-trigger-context.test.ts",
+    "cases": 19,
+    "aRec": 19
+  },
+  {
+    "package": "lexical-core",
+    "file": "xml-serialize.test.ts",
+    "cases": 16,
+    "aRec": 16
+  },
+  {
+    "package": "lexical-core",
+    "file": "reply-target-node.test.ts",
+    "cases": 14,
+    "aRec": 14
+  },
+  {
+    "package": "lexical-core",
+    "file": "channel-mentions.test.ts",
+    "cases": 13,
+    "aRec": 12
+  },
+  {
+    "package": "lexical-core",
+    "file": "pr-mention.test.ts",
+    "cases": 12,
+    "aRec": 12
+  },
+  {
+    "package": "lexical-core",
+    "file": "agent-announcement.test.ts",
+    "cases": 10,
+    "aRec": 10
+  },
+  {
+    "package": "lexical-core",
+    "file": "agent-chat-reply.test.ts",
+    "cases": 10,
+    "aRec": 10
+  },
+  {
+    "package": "lexical-core",
+    "file": "preserve-lines.test.ts",
+    "cases": 10,
+    "aRec": 10
+  },
+  {
+    "package": "lexical-core",
+    "file": "comment-mark-text.test.ts",
+    "cases": 9,
+    "aRec": 9
+  },
+  {
+    "package": "lexical-core",
+    "file": "cursor-system-notification.test.ts",
+    "cases": 9,
+    "aRec": 9
+  },
+  {
+    "package": "lexical-core",
+    "file": "paste.test.ts",
+    "cases": 9,
+    "aRec": 9
+  },
+  {
+    "package": "lexical-core",
+    "file": "agent-session-mention.test.ts",
+    "cases": 8,
+    "aRec": 6
+  },
+  {
+    "package": "lexical-core",
+    "file": "date-mention-import.test.ts",
+    "cases": 8,
+    "aRec": 8
+  },
+  {
+    "package": "lexical-core",
+    "file": "html-text-formats.test.ts",
+    "cases": 8,
+    "aRec": 8
+  },
+  {
+    "package": "lexical-core",
+    "file": "xml.test.ts",
+    "cases": 8,
+    "aRec": 8
+  },
+  {
+    "package": "lexical-core",
+    "file": "classedBlock.test.ts",
+    "cases": 7,
+    "aRec": 7
+  },
+  {
+    "package": "lexical-core",
+    "file": "connect-app.test.ts",
+    "cases": 7,
+    "aRec": 7
+  },
+  {
+    "package": "lexical-core",
+    "file": "katex.test.ts",
+    "cases": 7,
+    "aRec": 7
+  },
+  {
+    "package": "lexical-core",
+    "file": "explicit-reply.test.ts",
+    "cases": 6,
+    "aRec": 6
+  },
+  {
+    "package": "lexical-core",
+    "file": "form-references.test.ts",
+    "cases": 5,
+    "aRec": 5
+  },
+  {
+    "package": "lexical-core",
+    "file": "list-transformers.test.ts",
+    "cases": 5,
+    "aRec": 5
+  },
+  {
+    "package": "lexical-core",
+    "file": "account-manager-request.test.ts",
+    "cases": 3,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-core",
+    "file": "agent-activity-markdown.test.ts",
+    "cases": 3,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-core",
+    "file": "document-card-conversion.test.ts",
+    "cases": 3,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-core",
+    "file": "list-images.test.ts",
+    "cases": 3,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-core",
+    "file": "magic-chip.test.ts",
+    "cases": 3,
+    "aRec": 3
+  },
+  {
+    "package": "lexical-core",
+    "file": "mediaWrapperImport.test.ts",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-core",
+    "file": "document-reference-decorator-stability.test.ts",
+    "cases": 3,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-core",
+    "file": "agent-connection-prompt.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-core",
+    "file": "comment-mark-identity.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-core",
+    "file": "document-mention-without-name.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-core",
+    "file": "external-chat-references.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-core",
+    "file": "generated-image.test.ts",
+    "cases": 2,
+    "aRec": 2
+  },
+  {
+    "package": "lexical-core",
+    "file": "session-decorator-stability.test.ts",
+    "cases": 2,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-core",
+    "file": "golden.test.ts",
+    "cases": 1,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-core",
+    "file": "htmlRender.test.ts",
+    "cases": 1,
+    "aRec": 1
+  },
+  {
+    "package": "lexical-core",
+    "file": "node-id-plugin.test.ts",
+    "cases": 1,
+    "aRec": 0
+  },
+  {
+    "package": "lexical-core",
+    "file": "routine-mention.test.ts",
+    "cases": 1,
+    "aRec": 1
+  }
+]

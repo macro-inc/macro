@@ -11,7 +11,33 @@ const upstream = (await import(path.join(upstreamPath, 'vitest.config.mts')))
   .default;
 export default defineConfig({
   plugins: process.env.LEXICAL_REPLAY_ONLY ? [membranePlugin()] : [],
-  resolve: upstream.resolve,
+  resolve: {
+    ...upstream.resolve,
+    alias: [
+      ...upstream.resolve.alias,
+      {
+        find: /^loro-crdt$/,
+        replacement: path.resolve(
+          upstreamPath,
+          '../../packages/lexical-conformance/node_modules/loro-crdt/nodejs/index.js'
+        ),
+      },
+      {
+        find: '@loro-mirror/core',
+        replacement: path.resolve(
+          upstreamPath,
+          'packages/loro-mirror/src/index.ts'
+        ),
+      },
+      {
+        find: /^nanoid$/,
+        replacement: path.resolve(
+          upstreamPath,
+          '../../packages/lexical-conformance/node_modules/nanoid/index.browser.js'
+        ),
+      },
+    ],
+  },
   test: {
     include: process.env.LEXICAL_REPLAY_ONLY
       ? ['record/replay.test.ts']
