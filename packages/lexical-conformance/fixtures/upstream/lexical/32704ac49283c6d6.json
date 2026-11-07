@@ -1,0 +1,473 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+    "test": [
+      "LexicalUtils tests",
+      "$nodesOfType"
+    ],
+    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "3",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 5,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$key": 3,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$nodesOfType",
+          "args": [
+            {
+              "$klass": "paragraph"
+            }
+          ],
+          "ret": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$key": 3,
+            "raw": "2"
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              },
+              {
+                "children": [],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "\n\n",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 6
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$nodesOfType",
+          "args": [
+            {
+              "$klass": "paragraph"
+            }
+          ],
+          "ret": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "1"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$key": 3,
+            "raw": "2"
+          }
+        }
+      ],
+      "state": {
+        "$state": 6
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "\n\n",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2"
+    ]
+  }
+}

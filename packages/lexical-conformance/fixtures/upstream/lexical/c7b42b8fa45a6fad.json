@@ -1,0 +1,576 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+    "test": [
+      "LexicalSelectionHelpers",
+      "with a fully-selected text node preceded by an inline element",
+      "a single text node"
+    ],
+    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 3,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$createLinkNode",
+          "args": [
+            "https://"
+          ],
+          "ret": {
+            "$h": 4,
+            "key": "2",
+            "type": "link",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "link"
+          ],
+          "ret": {
+            "$h": 5,
+            "key": "3",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.append",
+          "args": [
+            {
+              "$h": 5
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Existing text..."
+          ],
+          "ret": {
+            "$h": 6,
+            "key": "4",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getTextPointCaret",
+          "args": [
+            {
+              "$h": 6
+            },
+            "next",
+            0
+          ],
+          "ret": {
+            "$caret": 7,
+            "origin": {
+              "$h": 6
+            },
+            "direction": "next",
+            "type": "text"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getTextPointCaret",
+          "args": [
+            {
+              "$h": 6
+            },
+            "next",
+            "next"
+          ],
+          "ret": {
+            "$caret": 8,
+            "origin": {
+              "$h": 6
+            },
+            "direction": "next",
+            "type": "text"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCaretRange",
+          "args": [
+            {
+              "$caret": 7
+            },
+            {
+              "$caret": 8
+            }
+          ],
+          "ret": {
+            "$sel": 9,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$removeTextFromCaretRange",
+          "args": [
+            {
+              "$sel": 9
+            }
+          ],
+          "ret": {
+            "$sel": 10,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:focus",
+          "this": {
+            "$sel": 10
+          },
+          "args": [],
+          "ret": {
+            "$caret": 11,
+            "origin": {
+              "$h": 4
+            },
+            "direction": "next",
+            "type": "sibling"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "foo"
+          ],
+          "ret": {
+            "$h": 12,
+            "key": "5",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "SiblingCaretNext.insert",
+          "args": [
+            {
+              "$h": 12
+            }
+          ],
+          "this": {
+            "$caret": 11
+          },
+          "ret": {
+            "$caret": 11
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "link",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": null,
+                    "url": "https://"
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "foo",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "linkfoo",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "5"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            5,
+            12
+          ],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              4,
+              true
+            ],
+            [
+              3,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "link",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": null,
+                "url": "https://"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "foo",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "linkfoo",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "5"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "normalizeMarkdown - shouldMergeAdjacentLines = true",
+      "should combine lines separated by a single \n unless they are in a codeblock"
+    ],
+    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@lexical/markdown/MarkdownTransformers.normalizeMarkdown",
+      "args": [
+        "\nA1\nA2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1\nC2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1\nE2\n\nE3\n",
+        true
+      ],
+      "ret": "\nA1 A2\n\nA3\n\n```md\nB1\nB2\n\nB3\n```\n\nC1 C2\n\nC3\n\n```js\nD1\nD2\n\nD3\n```\n\n```single line code```\n\nE1 E2\n\nE3\n"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

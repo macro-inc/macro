@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "normalizeMarkdown - shouldMergeAdjacentLines = true",
+      "merges adjacent plain text lines with a single space"
+    ],
+    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@lexical/markdown/MarkdownTransformers.normalizeMarkdown",
+      "args": [
+        "Hello\nworld",
+        true
+      ],
+      "ret": "Hello world"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

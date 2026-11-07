@@ -175,3 +175,8 @@ setup:
 destroy:
   just infra/stacks/fusionauth-instance/destroy
   {{ compose }} down -v
+
+# Record pinned upstream Lexical tests; --check regenerates and compares every fixture.
+lexical-fixtures *ARGS:
+  bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+  bun packages/lexical-conformance/record/run.ts {{ARGS}}
