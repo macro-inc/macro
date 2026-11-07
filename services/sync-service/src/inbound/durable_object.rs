@@ -10,7 +10,6 @@ use sync_protocol::InitializeFromSnapshotRequest;
 use bebop::Record;
 use loro::{ExportMode, awareness::EphemeralStore};
 use macro_sync_service_jwt::session::SessionKind;
-use serde::{Deserialize, Serialize};
 use tracing::{Instrument, debug, error, info, instrument, trace, warn};
 use worker::{
     Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody, ResponseBuilder,
@@ -19,7 +18,7 @@ use worker::{
 };
 
 use crate::{
-    auth::{AccessLevel, AuthToken, WriteAccess},
+    auth::{AuthToken, WriteAccess},
     constants::{SYSTEM_AUTHOR_ID, USER_PEER_D1_BINDING},
     d1::{get_user_id_from_peer_id, insert_missing_user_mappings, insert_user_mapping},
     domain::document::{DocumentAttribution, writing_peers},
@@ -82,21 +81,7 @@ macro_rules! maybe_404 {
     };
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WebSocketMetadata {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_correlation_id: Option<uuid::Uuid>,
-    pub user_id: Option<String>,
-    pub access_level: AccessLevel,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub actor: Option<String>,
-    #[serde(with = "u64_serde_strings")]
-    pub peer_ids: BTreeSet<u64>,
-    #[serde(default = "surface_api::document_kind")]
-    pub session_kind: SessionKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<usize>,
-}
+pub use sync_server_core::domain::connection::ConnectionMetadata as WebSocketMetadata;
 
 pub type WsMetaMap = BTreeMap<String, WebSocketMetadata>;
 
@@ -127,8 +112,6 @@ pub struct SyncSession {
     // drain every in-flight mutation before it exports or closes writers.
     mutation_barrier: futures::lock::Mutex<()>,
 }
-
-mod u64_serde_strings;
 
 pub struct Wsm<'a> {
     dss: &'a SyncSession,
@@ -207,7 +190,7 @@ impl<'a> Wsm<'a> {
             .lock("Wsm::write_access get")
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
-            .write_access())
+            .write_access(surface_api::now_seconds()))
     }
 
     pub async fn add_new_peerid(&mut self, peerid: u64, document_id: &str) -> Result<()> {

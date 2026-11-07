@@ -26,8 +26,9 @@ updates over WebSocket.
 
 - `src/inbound/router.rs` + `src/inbound/worker.rs`: Axum document/surface
   routing and worker proxy/copy orchestration.
-- `src/domain/permissions.rs` + `src/domain/document.rs`: session permission
-  policy and content-agnostic atomic update use cases.
+- `../../crates/sync_server_core/src/domain/`: shared session permission policy,
+  atomic update use cases, connection metadata and migration state.
+- `src/domain.rs`: compatibility re-exports of the shared core.
 
 ## Scope
 
@@ -49,7 +50,7 @@ updates over WebSocket.
   `src/inbound/durable_object/surface_migration.rs` if it changes stored shape.
 
 Active-peer queries with `include_ai=false` exclude signed agent actors and the
-reserved AI peer blocks (`ai_peer.rs`); Canvas workers use random full-width
+reserved AI peer blocks (`sync_server_core::domain::ai_peer`); Canvas workers use random full-width
 peer IDs. `peer_user_map` records each peer's user and agent actor; history and
 blame attribute edits from it, so never reuse an AI peer id.
 

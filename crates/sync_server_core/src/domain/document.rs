@@ -2,31 +2,43 @@
 //!
 //! This module has no HTTP or storage dependencies. The durable-object adapter
 //! supplies verified JWT claims and persists accepted updates through its oplog.
-use std::borrow::Cow;
+//! Port futures intentionally omit `Send` (CS-60): the single-threaded Worker
+//! adapter awaits JavaScript futures which cannot cross threads.
+use std::{borrow::Cow, future::Future};
 
 use loro::{ExportMode, LoroDoc, VersionVector};
 
+/// Maximum accepted snapshot or update size.
 pub const MAX_BINARY_BYTES: usize = 4 * 1024 * 1024;
+/// Maximum encoded revision size.
 pub const MAX_REVISION_BYTES: usize = 64 * 1024;
 const MAX_UPDATE_OPERATIONS: u64 = 100_000;
 
 #[derive(Debug, thiserror::Error)]
+/// A document policy, validation or persistence failure.
 pub enum DocumentError {
     #[error("The document token does not grant access to this document.")]
+    /// The grant does not authorize the requested document.
     Unauthorized,
     #[error("Editing this document requires edit access.")]
+    /// The grant lacks edit capability.
     Forbidden,
     #[error("The document changed. Read a fresh snapshot before editing.")]
+    /// The expected revision is stale.
     Conflict,
     #[error("The document request exceeds the size limit.")]
+    /// The supplied document data exceeds its limit.
     TooLarge,
     #[error("{0}")]
+    /// The document request is invalid.
     Invalid(&'static str),
     #[error("The document update could not be persisted.")]
+    /// The accepted update could not be stored.
     Persistence,
     #[error(
         "The document was saved, but its update notifications could not be completed. Read the document before retrying."
     )]
+    /// A persisted update could not be published.
     Notification,
 }
 
@@ -36,6 +48,7 @@ pub struct DocumentAccess {
 }
 
 impl DocumentAccess {
+    /// Authorize an exact document identity and retain its write capability.
     pub fn authorize(
         requested_document: &str,
         token_document: &str,
@@ -47,6 +60,7 @@ impl DocumentAccess {
         Ok(Self { writable })
     }
 
+    /// Require write capability for this document.
     pub fn require_edit(&self) -> Result<(), DocumentError> {
         if !self.writable {
             return Err(DocumentError::Forbidden);
@@ -55,10 +69,13 @@ impl DocumentAccess {
     }
 }
 
+/// A validated update and the resulting revision.
 pub struct PreparedUpdate {
     /// Only new, validated operations, ready for the existing persistence path.
     pub update: Vec<u8>,
+    /// The current editable revision, encoded as a version vector.
     pub revision: Vec<u8>,
+    /// Whether validation found new operations to apply.
     pub applied: bool,
 }
 
@@ -66,8 +83,11 @@ pub struct PreparedUpdate {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct DocumentAttribution {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub agent_correlation_id: Option<uuid::Uuid>,
+    /// The optional signed agent invocation identifier.
+    pub agent_correlation_id: Option<uuid_types::Uuid>,
+    /// The signed editing actor.
     pub actor: String,
+    /// The user represented by the signed actor, when present.
     pub on_behalf_of: Option<String>,
 }
 
@@ -77,7 +97,7 @@ impl DocumentAttribution {
     pub fn from_session_claims(
         actor: Option<String>,
         user_id: Option<String>,
-        agent_correlation_id: Option<uuid::Uuid>,
+        agent_correlation_id: Option<uuid_types::Uuid>,
     ) -> Result<Option<Self>, DocumentError> {
         match (actor, user_id) {
             (Some(actor), user_id) => {
@@ -99,10 +119,11 @@ impl DocumentAttribution {
         }
     }
 
+    /// Validate attribution supplied by a verified grant.
     pub fn from_signed_claims(
         actor: String,
         on_behalf_of: Option<String>,
-        agent_correlation_id: Option<uuid::Uuid>,
+        agent_correlation_id: Option<uuid_types::Uuid>,
     ) -> Result<Self, DocumentError> {
         if actor.len() > 256 || on_behalf_of.as_ref().is_some_and(|user| user.len() > 1024) {
             return Err(DocumentError::Invalid("Invalid signed attribution."));
@@ -117,19 +138,25 @@ impl DocumentAttribution {
 
 /// Persistence port: applying the update must happen before the first await.
 pub trait DocumentUpdatePort {
+    /// The current document that preflight validation reads.
     fn document(&self) -> &LoroDoc;
-    async fn apply_and_persist(&self, update: &[u8]) -> Result<(), DocumentError>;
+    /// Import and durably store the accepted update.
+    fn apply_and_persist(&self, update: &[u8]) -> impl Future<Output = Result<(), DocumentError>>;
 }
 
 /// Side effects after a durable write; the use case owns their order and whether
 /// a newly applied edit needs document publication. Implementations own only the
 /// notification transport and scheduling mechanisms.
 pub trait DocumentUpdateEffects {
+    /// Send the accepted update to peers.
     fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError>;
+    /// Publish the changed document after persistence.
     fn publish_changed_document(&self) -> Result<(), DocumentError>;
-    async fn keep_alive(&self) -> Result<(), DocumentError>;
+    /// Extend the runtime lifetime for pending work.
+    fn keep_alive(&self) -> impl Future<Output = Result<(), DocumentError>>;
 }
 
+/// Validate and persist an atomic update, then publish its effects in order.
 pub async fn update(
     access: &DocumentAccess,
     port: &impl DocumentUpdatePort,
@@ -149,6 +176,7 @@ pub async fn update(
     Ok(prepared)
 }
 
+/// Export the full document and its editable revision.
 pub fn snapshot(
     _access: &DocumentAccess,
     doc: &LoroDoc,

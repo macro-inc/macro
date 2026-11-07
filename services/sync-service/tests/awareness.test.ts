@@ -4,13 +4,17 @@ import {
     FromRemote,
     RemoteAwareness,
 } from "../../../crates/sync_protocol/bebop/generated/schema";
-import { expect, test, describe, beforeAll } from "vitest";
+import { expect, test, describe, beforeAll, afterAll } from "vitest";
 import { createTestUser, setupMiniflare } from "./utils";
 
 let mf: Miniflare;
 
 beforeAll(async () => {
   mf = await setupMiniflare();
+});
+
+afterAll(async () => {
+  await mf.dispose();
 });
 
 describe("awareness sync tests", () => {

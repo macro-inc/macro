@@ -8,11 +8,14 @@
 //! peers stay in document history, so they are still recognized.
 //! Keep in sync with the TS definition (`isAiPeer` / `AI_PEER_BASE`).
 
+/// Number of peer IDs reserved for agent editors.
 pub const AI_PEER_COUNT: u64 = 1 << 40;
+/// First peer ID in the reserved agent range.
 pub const AI_PEER_BASE: u64 = 0xA1A1_A100_0000_0000;
 const LEGACY_AI_PEER_COUNT: u64 = 1000;
 const LEGACY_AI_PEER_BASE: u64 = 999_999_999_999_999_000;
 
+/// Whether a peer belongs to a current or legacy agent range.
 pub fn is_ai_peer(peer: u64) -> bool {
     (AI_PEER_BASE..AI_PEER_BASE + AI_PEER_COUNT).contains(&peer)
         || (LEGACY_AI_PEER_BASE..LEGACY_AI_PEER_BASE + LEGACY_AI_PEER_COUNT).contains(&peer)

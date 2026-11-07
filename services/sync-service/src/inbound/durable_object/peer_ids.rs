@@ -1,22 +1,7 @@
 use worker::{Error, Result};
 
-use super::{WebSocketMetadata, Wsm};
-use crate::{
-    ai_peer::is_ai_peer, constants::USER_PEER_D1_BINDING, d1::insert_missing_user_mappings,
-};
-
-impl WebSocketMetadata {
-    pub(super) fn active_peer_ids(&self, include_ai: bool) -> Vec<u64> {
-        if !include_ai && self.actor.is_some() {
-            return Vec::new();
-        }
-        self.peer_ids
-            .iter()
-            .copied()
-            .filter(|peer| include_ai || !is_ai_peer(*peer))
-            .collect()
-    }
-}
+use super::Wsm;
+use crate::{constants::USER_PEER_D1_BINDING, d1::insert_missing_user_mappings};
 
 impl Wsm<'_> {
     /// Map peers that wrote through this socket without registering first (a
@@ -60,6 +45,3 @@ impl Wsm<'_> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod test;

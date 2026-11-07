@@ -2,13 +2,11 @@
 
 use bebop::Record;
 use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
-use serde::{Deserialize, Serialize};
 use sync_protocol::InitializeFromSnapshotRequest;
 use worker::{Date, Method, Request, Response, Result, WebSocket};
 
-use super::{SyncSession, WebSocketMetadata, Wsm, response, status_codes};
+use super::{SyncSession, Wsm, response, status_codes};
 use crate::{
-    auth::WriteAccess,
     error::ResultExt,
     state::DocumentState,
     storage::{get_snapshot_storage, snapshot::SnapshotStorage},
@@ -29,37 +27,7 @@ pub(super) fn session_kind_from_storage_key(key: &str) -> SessionKind {
     }
 }
 
-pub(super) fn document_kind() -> SessionKind {
-    SessionKind::Document
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum SurfaceLifecycle {
-    #[default]
-    Pending,
-    /// In-flight initialization; only kept in memory, never considered ready.
-    Initializing,
-    Ready,
-    Revoked,
-}
-
-impl WebSocketMetadata {
-    pub(super) fn grant_active(&self, kind: SessionKind, now: usize) -> bool {
-        self.session_kind == kind
-            && match kind {
-                SessionKind::Document => true,
-                SessionKind::Surface => self.expires_at.is_some_and(|expiry| expiry > now),
-            }
-    }
-
-    pub(super) fn write_access(&self) -> WriteAccess {
-        if !self.grant_active(self.session_kind, now_seconds()) {
-            return WriteAccess::None;
-        }
-        self.access_level.write_access_for(self.session_kind)
-    }
-}
+pub(super) use sync_server_core::domain::connection::SurfaceLifecycle;
 
 /// A pending session has no writers. Exact seed bytes identify a retry of the
 /// binary initializer, which has no separate operation ID. Unknown seeds must
@@ -76,11 +44,12 @@ async fn prepare_surface_snapshot(storage: &impl SnapshotStorage, snapshot: &[u8
     Ok(true)
 }
 
-fn now_seconds() -> usize {
+pub(super) fn now_seconds() -> u64 {
     let now = Date::now().as_millis();
     #[cfg(feature = "transcript")]
     crate::transcript::clock("surface_expiry_ms", now);
-    (now / 1000) as usize
+    // Preserve the adapter's original target-width conversion before widening.
+    ((now / 1000) as usize) as u64
 }
 
 impl SyncSession {

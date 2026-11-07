@@ -198,6 +198,7 @@ members = [
   "crates/sync_router",
   "services/sync-service",
   "crates/sync_protocol",
+  "crates/sync_server_core",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
@@ -213,6 +214,8 @@ members = [
 ]
 
 [workspace.dependencies]
+macro_sync_service_jwt = { path = "crates/macro_sync_service_jwt" }
+sync_server_core = { path = "crates/sync_server_core" }
 sync_protocol = { path = "crates/sync_protocol" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
@@ -484,6 +487,8 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# Pure domains receive UUID values from their adapters; no ambient RNG backend.
+uuid-types = { package = "uuid", version = "1.15.1", default-features = false, features = ["std", "serde"] }
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"

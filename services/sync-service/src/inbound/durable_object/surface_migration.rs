@@ -27,15 +27,9 @@ use crate::{
 const SOURCE_KEY: &str = "SURFACE_MIGRATION_SOURCE";
 const TARGET_KEY: &str = "SURFACE_MIGRATION_TARGET";
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct SnapshotProof {
-    pub operation_id: Uuid,
-    pub source_id: Option<Uuid>,
-    pub digest: String,
-    pub content_digest: String,
-    pub revision: Vec<(String, i32)>,
-    pub oplog_revision: Vec<(String, i32)>,
-}
+pub(crate) use sync_server_core::domain::migration::{
+    SnapshotProof, SourceState, TargetPhase, TargetState,
+};
 
 #[derive(Serialize, Deserialize)]
 struct SnapshotExport {
@@ -54,32 +48,6 @@ struct InitializeRequest {
     snapshot: Vec<u8>,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
-#[serde(tag = "phase", content = "proof", rename_all = "snake_case")]
-pub(super) enum SourceState {
-    #[default]
-    Live,
-    Freezing(Uuid),
-    Frozen(SnapshotProof),
-    Sealed(SnapshotProof),
-    Retired(SnapshotProof),
-    Thawed(SnapshotProof),
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum TargetPhase {
-    Claimed,
-    Verified,
-    Active,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TargetState {
-    proof: SnapshotProof,
-    phase: TargetPhase,
-}
-
 fn revision(frontiers: Frontiers) -> Vec<(String, i32)> {
     let mut ids: Vec<_> = frontiers
         .iter()
@@ -93,7 +61,12 @@ fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-impl SnapshotProof {
+trait SnapshotProofExt: Sized {
+    fn from_snapshot(operation_id: Uuid, source_id: Option<Uuid>, snapshot: &[u8]) -> Result<Self>;
+    fn verifies(&self, snapshot: &[u8]) -> Result<bool>;
+}
+
+impl SnapshotProofExt for SnapshotProof {
     fn from_snapshot(operation_id: Uuid, source_id: Option<Uuid>, snapshot: &[u8]) -> Result<Self> {
         let state = DocumentState::try_from_snapshot(snapshot)?;
         // Canonical JSON key order, independent of CRDT map iteration order.
