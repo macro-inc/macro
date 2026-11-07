@@ -3,7 +3,7 @@
 Macro computers can run as Firecracker microVMs instead of Incus VMs, per
 host. The control plane (`crates/hosted_runtimes`, `FirecrackerFleet`) drives
 one agent per Firecracker host, `services/firecracker_host`, over mTLS REST:
-the contract is `crates/firecracker_host_api`. Incus stays the default; see
+the contract is `crates/clients/firecracker_host_api`. Incus stays the default; see
 [Macro computers](macro-computers.md) for the lifecycle above the fleet. The
 isolation model and its threat analysis are in
 [Firecracker computers: security](firecracker-computers-security.md).

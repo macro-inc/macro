@@ -30,7 +30,7 @@ read it before changing behaviour.
   `PgComputerAgents`, which implements harnesses' `ComputerTeamAgents` so
   harness listings mark an agent teammate's computer.
 - `src/outbound/`: Postgres repo, `FirecrackerFleet` (the Firecracker host
-  agent, `crates/firecracker_host_api`), dev-only `DockerFleet`,
+  agent, `crates/clients/firecracker_host_api`), dev-only `DockerFleet`,
   `ConfiguredFleet` (one host's fleet) and `HostFleets` (the `ports::Fleets`
   the operator drives: a `FirecrackerFleet` per host row with an endpoint,
   or the local Docker home host).

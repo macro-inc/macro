@@ -19,12 +19,12 @@ defining the sync service's domain ports and an axum router shim, used by
 - Owns: the port contract for document sync state used by
   `services/document_storage_service`'s in-process sync integration.
 - Not here: the deployed Cloudflare Durable Object sync service itself →
-  `services/sync-service`; calling it over HTTP → `crates/sync_service_client`.
+  `services/sync-service`; calling it over HTTP → `crates/clients/sync_service_client`.
 
 ## Boundaries
 
 - Depends on: `macro_authorization` (feature `inbound`).
-- Used by: `services/document_storage_service`, `crates/sync_service_client`.
+- Used by: `services/document_storage_service`, `crates/clients/sync_service_client`.
 
 ## Checks
 

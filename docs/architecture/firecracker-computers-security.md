@@ -2,7 +2,7 @@
 
 The threat model and isolation design of Macro computers: Firecracker microVMs
 run by the host agent (`services/firecracker_host`,
-`crates/firecracker_host_api`) from the `nix/macro-box` image. How computers
+`crates/clients/firecracker_host_api`) from the `nix/macro-box` image. How computers
 work is in [Macro computers](macro-computers.md) and
 [Firecracker computers: the host agent](firecracker-computers.md). The checks
 behind each claim, and the hardening items still open, are in the

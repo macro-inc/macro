@@ -1,0 +1,128 @@
+# opensearch_client
+
+## What it is
+
+Part of the Search feature. Typed client for Macro's search index:
+per-entity-type upsert/delete and search for documents, emails, channel
+messages, chats, agent sessions, calendar events, call records, and
+projects.
+
+## Start here
+
+- `src/lib.rs`: `OpensearchClient` construction (URL + basic auth).
+- `src/upsert/<entity>.rs` + `src/delete/<entity>.rs`: one pair per indexed
+  entity type — the shape each indexer must produce.
+- `src/search/builder.rs` + `src/search/unified.rs`: the cross-entity search
+  request builder and the unified result model.
+- `examples/`: runnable usage beyond the README.
+
+## Scope
+
+- Owns: index document shapes, OpenSearch request/response mapping, and the
+  unified search query across entity types.
+- Not here: the generic query DSL used to build those requests →
+  `opensearch_query_builder`; deciding what gets (re)indexed and when →
+  `search_service`, `services/search_processing_service`.
+
+## Boundaries
+
+- Depends on: `opensearch_query_builder`, `models_opensearch`,
+  `models_search_cursor`.
+- Used by: `models_search`, `search_service`,
+  `services/document_storage_service`, `services/search_processing_service`.
+
+## Recipes
+
+- Index a new entity type: add `src/<entity>.rs` (doc shape) →
+  `src/upsert/<entity>.rs` + `src/delete/<entity>.rs` → a `src/search/<entity>.rs`
+  query if it needs its own search endpoint → wire into
+  `services/search_processing_service`.
+- Property DATE filters use the existing nested `properties.date_value` epoch-millisecond projection; emit only supplied inclusive/exclusive bounds and use a negated nested exists query for missing dates.
+
+## Checks
+
+- `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
+  OpenSearch — see `crates/clients/opensearch_query_builder/docker-compose.yml`).
+
+## Gotchas
+
+- Map a failed `.send()` with `OpensearchClientError::request_failed` and a
+  failed body read with `deserialization_failed`. Both take an
+  `OpensearchOperation`: add a variant for a new request rather than passing a
+  name. `request_failed` classifies the cause as a `TransportFailure` (timeout,
+  connect, connection closed, other) and keeps the full source chain in
+  `details`; reqwest's `Display` alone drops the cause. A body cut off by a
+  transport failure also becomes `RequestFailed`, not `DeserializationFailed`.
+- Workspace feature unification enables reqwest's HTTP/2, so every request
+  from one process multiplexes over one connection, and a recycled connection
+  fails them all at once. Wrap each public `OpensearchClient` method's request
+  in `retry::resend_on_lost_connection`, which resends twice on a connection
+  closed or refused before a complete response, never on a timeout or an
+  error status. Every resent request must be safe to resend: a read, or a
+  write by explicit id or by query. Starting a background task is not, so
+  `start_email_link_delete` sends it once and, when the connection drops,
+  looks for the task by its `X-Opaque-Id` instead.
+- Put `instrument(err)` on the public method, not the inner function it
+  retries, so a recovered attempt does not record an error span.
+- Requests time out after five minutes (`REQUEST_TIMEOUT`). A delete that can
+  run that long, such as a whole mailbox, starts a background task
+  (`start_email_link_delete`) and reads its progress from `_tasks`
+  (`email_delete_task`, a raw request because the typed tasks API is behind
+  the `opensearch` crate's `experimental-apis` feature). The task's throttle
+  applies to that task alone; callers bound how many run at once.
+- A single-message email delete forces no refresh: it deletes the event
+  thread's document by id, then delete-by-queries the message's copies under
+  other threads with that thread left out, since the query sees only
+  refreshed documents and would count the one just deleted as a conflict. A forced
+  refresh per event refreshes every shard of the index, and a run of such
+  events stalls their partition. A delete-by-query that only met conflicts
+  deleted nothing and so forces no refresh either: refresh before failing on
+  them, or the caller's retry meets the same stale documents.
+- OpenSearch answers `_bulk` with 200 while failing items, for a full write
+  queue (429) as for a mapping error. Classify every bulk answer item by item
+  (`upsert::classify_bulk_response`): any failed item fails the call with
+  `BulkItemsFailed`. `OpensearchClientError::refusal()` tells a caller to back
+  off; it also reads the status and `error.type` from the body an `Unknown`
+  error keeps.
+- Agent-session writes never wait for a refresh. A search sees only refreshed
+  documents, so delete what you know by id first and leave those ids out of
+  the sweep's search, which finds the leftovers to delete by id. The parent's
+  `indexed_messages` record (child id to content hash) and `pending_messages`
+  (children being changed, not yet confirmed) are read with a real-time GET,
+  so they are current without a refresh. Never trust a record
+  without first naming the children you change as pending. Every agent-session
+  write and delete carries `ReconcileAgentSessionArgs::version` as an
+  `external_gte` version (a session delete carries its own lease's). A 409
+  means the document holds a later version, not that the later reconcile
+  finished: the request fails; a live event's retry runs under a new lease,
+  and a backfill stops and is rerun. A delete creates a missing index even with `require_alias`, so
+  the reconcile and the session delete first read the parent, which fails on a
+  missing index or alias.
+- Chat messages and call segments carry their own id in `entity_id` and no
+  parent fields such as `channel_id`; only their join field names the
+  parent. A delete or update of a chat or call reaches its children with
+  `parent_id` (or `has_parent` on a parent field), never a term on the
+  parent's `entity_id`. The ignored tests in `delete/chat/test.rs` and
+  `delete/call_record/test.rs` check this on a scratch copy of the live
+  `chats` and `call_records` mappings.
+- The request-level `_source` filter does not reach `has_child` inner hits:
+  each one returns the child's whole document unless its `InnerHits` names
+  `source_fields`. Every join query names the fields its hit's `_source`
+  struct decodes; do the same for a new one, or each child comes back with
+  its full `content`.
+- Fetch time and response size follow the number of inner hits returned,
+  because the plain highlighter re-analyses each one. The content clauses
+  of a document, chat, agent session or call share one budget per result
+  (`INNER_HITS_PER_RESULT`, divided by `split_inner_hits_budget`), so a
+  result carries at most that many matches, not every match; do not give
+  each term its own.
+- Document content has two matching shapes (`DocumentTermMatching`). `All`
+  is one `has_child` per term: every term somewhere in the document, each a
+  prefix. `Dynamic` is one `has_child` for queries of three or more terms:
+  most non-stopword terms in the same chunk, only the last term a prefix.
+  It both adds and removes matches (terms scattered over several chunks no
+  longer match), so callers opt in per request.
+
+## Related
+
+- Docs: `README.md`, `examples/`

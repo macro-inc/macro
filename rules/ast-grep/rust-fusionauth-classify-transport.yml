@@ -10,16 +10,16 @@ note: |-
   `.map_err(FusionAuthClientError::transport)`, and unexpected statuses with
   `FusionAuthClientError::unexpected_response` (see crates/upstream_error).
 files:
-  - crates/fusionauth/src/**
+  - crates/clients/fusionauth/src/**
 ignores:
   - '**/test.rs'
   - '**/test/**'
   # These call Google and Microsoft directly, not FusionAuth. Their failures
   # name the provider (`FusionAuthClientError::provider_transport`) or use the
   # provider's own classified error (`MicrosoftRuntimeError`).
-  - 'crates/fusionauth/src/google/oauth.rs'
-  - 'crates/fusionauth/src/microsoft/oauth.rs'
-  - 'crates/fusionauth/src/microsoft/runtime.rs'
+  - 'crates/clients/fusionauth/src/google/oauth.rs'
+  - 'crates/clients/fusionauth/src/microsoft/oauth.rs'
+  - 'crates/clients/fusionauth/src/microsoft/runtime.rs'
 rule:
   any:
     - pattern: $REQUEST.send().await.map_err($MAP)

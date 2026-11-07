@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn public_mcp_client_callback_is_in_the_slack_manifest() {
     let manifest: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../crates/mcp_client/src/domain/provider_registry/slack/manifest.json"
+        "../../../../../crates/clients/mcp_client/src/domain/provider_registry/slack/manifest.json"
     ))
     .unwrap();
     let registered: Vec<&str> = manifest["oauth_config"]["redirect_urls"]
