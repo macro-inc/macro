@@ -11775,6 +11775,7 @@ name = "lexical_rich_nodes"
 version = "0.1.0"
 dependencies = [
  "lexical_model",
+ "regress",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

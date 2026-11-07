@@ -23,3 +23,10 @@ pub fn register_rich_text_nodes(builder: EditorBuilder) -> EditorBuilder {
         .node::<heading::HeadingNode>()
         .node::<quote::QuoteNode>()
 }
+
+pub mod text;
+/// Compatibility module name from the rich-node package map; one implementation lives in `text::entity`.
+pub mod text_entity {
+    pub use crate::text::entity::*;
+}
+pub mod hashtag;
