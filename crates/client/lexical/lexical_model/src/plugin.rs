@@ -210,6 +210,16 @@ impl Editor {
             .collect::<Vec<_>>();
         let mut rounds = 0;
         while !previous.is_empty() {
+            let state = self.state.clone();
+            let extensions = self.extensions.clone();
+            let tags = self.carried_tags.clone();
+            let composition = self.composition_key;
+            let rollback = |editor: &mut Editor| {
+                editor.state = state.clone();
+                editor.extensions = extensions.clone();
+                editor.carried_tags = tags.clone();
+                editor.composition_key = composition;
+            };
             let mut tx = self.transaction();
             let mut failed = None;
             for prior in &previous {
@@ -227,6 +237,8 @@ impl Editor {
                 }
             }
             if let Some(error) = failed {
+                drop(tx);
+                rollback(self);
                 commit.follow_up_error = Some(error);
                 break;
             }
@@ -237,6 +249,8 @@ impl Editor {
                     || tx.selection_dirty
                     || !tx.events.is_empty())
             {
+                drop(tx);
+                rollback(self);
                 commit.follow_up_error = Some(FollowUpError {
                     plugin: "follow-up",
                     error: Arc::new(Error::EndlessFollowUps),
@@ -246,6 +260,7 @@ impl Editor {
             let following = match tx.commit() {
                 Ok(next) => next,
                 Err(error) => {
+                    rollback(self);
                     commit.follow_up_error = Some(FollowUpError {
                         plugin: "pipeline",
                         error: Arc::new(error),
