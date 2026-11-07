@@ -1,4 +1,6 @@
 use super::*;
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 fn destination() -> Uuid {
     Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap()
@@ -65,9 +67,12 @@ async fn offline_inbox_change_moves_uploaded_attachments_with_admission(
     assert_eq!(row.attachment_id, attachment);
     assert_eq!(row.s3_key, "approved-bytes");
     assert_eq!(
-        EmailPgRepo::new(pool.clone())
-            .message_id_for_client_draft_id(message(), &[destination()])
-            .await?,
+        EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone()))
+        )
+        .message_id_for_client_draft_id(message(), &[destination()])
+        .await?,
         Some(message())
     );
     // Cancellation restores an editable draft in the selected inbox. A later
@@ -294,7 +299,7 @@ async fn deferred_moved_send_keeps_the_source_inbox_autosave_fence(
         .await?;
     email_db_client::messages::delete::delete_db_message(&pool, message()).await?;
     let stale = prepared();
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     assert!(
         repo.insert_message(&stale.message, &stale.contacts, link(), None, true)
             .await?

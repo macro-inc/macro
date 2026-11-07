@@ -388,7 +388,10 @@ fn event_content(
 > {
     Ok(EventContentAdapter::new(
         email::domain::service::EmailServiceImpl::new(
-            email::outbound::EmailPgRepo::new(db.clone()),
+            email::outbound::EmailPgRepo::new(
+                db.clone(),
+                Arc::new(PgAccessRepository::new(db.clone())),
+            ),
             frecency::domain::services::FrecencyQueryServiceImpl::new(
                 frecency::outbound::postgres::FrecencyPgStorage::new(db.clone()),
             ),

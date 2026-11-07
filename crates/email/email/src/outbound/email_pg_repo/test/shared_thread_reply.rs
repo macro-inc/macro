@@ -6,8 +6,10 @@ use crate::domain::shared_thread_replies::{
     NoSharedThreadReplies, ReplyTargetInboxFuture, SharedThreadReplyAccess,
 };
 use crm::domain::service::NoOpCrmService;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_event_broker::NoopMacroEventBroker;
+use std::sync::Arc;
 
 /// Grants a reply into `inbox` for any message, as an edit share would.
 struct GrantsInbox(Uuid);
@@ -36,7 +38,10 @@ fn service(
     EmailServiceImpl {
         sender_provider: Arc::new(crate::domain::senders::UnavailableEmailSenderProvider),
         shared_thread_replies: Arc::new(shared_thread_replies),
-        email_repo: EmailPgRepo::new(pool.clone()),
+        email_repo: EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
         frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool)),
         enqueuer: NoOpEnqueuer,
         crm_service: NoOpCrmService,

@@ -16,6 +16,7 @@ use axum::Router;
 use axum::response::IntoResponse;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
+use entity_access_outbound::PgAccessRepository;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -306,7 +307,7 @@ impl World {
             retry_worker,
         };
         let email = EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm::domain::service::CrmServiceImpl::new(

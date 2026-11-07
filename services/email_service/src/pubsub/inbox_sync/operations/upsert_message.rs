@@ -25,6 +25,7 @@ use email_db_client::attachments::provider::upload_filters::{
 use email_db_client::messages::insert::ResyncSnapshot;
 use email_db_client::threads;
 use email_utils::{dedupe_emails, is_macro_notification_sender};
+use entity_access_outbound::PgAccessRepository;
 use filter_ast::Expr;
 use item_filters::{SharedEmailFilter, ast::email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -944,15 +945,18 @@ async fn thread_in_inbox(
         team_id: None,
     };
 
-    let previews = EmailPgRepo::new(ctx.db.clone())
-        .previews_for_view_cursor(query, link.macro_id.clone())
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::new(e).context("Failed to evaluate inbox membership"),
-            })
-        })?;
+    let previews = EmailPgRepo::new(
+        ctx.db.clone(),
+        Arc::new(PgAccessRepository::new(ctx.db.clone())),
+    )
+    .previews_for_view_cursor(query, link.macro_id.clone())
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: anyhow::Error::new(e).context("Failed to evaluate inbox membership"),
+        })
+    })?;
 
     Ok(!previews.is_empty())
 }

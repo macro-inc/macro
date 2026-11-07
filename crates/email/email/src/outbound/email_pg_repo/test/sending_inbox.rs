@@ -11,8 +11,10 @@ use crate::domain::{
     service::EmailServiceImpl,
 };
 use crm::domain::service::NoOpCrmService;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_event_broker::NoopMacroEventBroker;
+use std::sync::Arc;
 
 const PRIMARY_INBOX: Uuid = Uuid::from_u128(0xa1111111_1111_1111_1111_111111111111);
 const ALT_INBOX: Uuid = Uuid::from_u128(0xa2222222_2222_2222_2222_222222222222);
@@ -30,7 +32,10 @@ fn service(
     (),
 > {
     EmailServiceImpl {
-        email_repo: EmailPgRepo::new(pool.clone()),
+        email_repo: EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
         frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool)),
         enqueuer: NoOpEnqueuer,
         crm_service: NoOpCrmService,

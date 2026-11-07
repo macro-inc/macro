@@ -2,7 +2,9 @@ use super::*;
 use crate::domain::scheduled::{EmailSchedulingRepo, EmailSchedulingService, ScheduleChange};
 use crate::domain::service::EmailServiceImpl;
 use email_db_client::messages::scheduled::get::get_and_start_processing_scheduled_message;
+use entity_access_outbound::PgAccessRepository;
 use macro_event_broker::NoopMacroEventBroker;
+use std::sync::Arc;
 
 fn identity() -> (Uuid, Uuid) {
     (
@@ -42,7 +44,10 @@ async fn wait_for_transaction_waiter(pool: &Pool<Postgres>, blocker: i32) -> any
 async fn schedule_update_cancel_is_atomic_and_idempotent(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     assert!(
         repo.change_schedule(link, message, &actor(), future(), None, 0)
@@ -96,7 +101,10 @@ async fn schedule_update_cancel_is_atomic_and_idempotent(
 async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
@@ -158,7 +166,7 @@ async fn service_authorizes_actor_and_validates_future_time(
         shared_thread_replies: std::sync::Arc::new(
             crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
-        email_repo: EmailPgRepo::new(pool),
+        email_repo: EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool))),
         frecency_service: (),
         enqueuer: (),
         crm_service: (),
@@ -217,7 +225,10 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
         shared_thread_replies: std::sync::Arc::new(
             crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
-        email_repo: EmailPgRepo::new(pool.clone()),
+        email_repo: EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
         frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
         enqueuer: NoOpEnqueuer,
         crm_service: NoOpCrmService,
@@ -286,7 +297,10 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn waiting_transition_observes_committed_claim(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
@@ -349,7 +363,10 @@ fn stale_input(message: Uuid) -> ResolvedDraftInput {
 async fn stale_autosave_cannot_mutate_confirmed_claimed_or_sent_message(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     let input = stale_input(message);
     let contacts = UpsertedContacts {
@@ -416,7 +433,10 @@ async fn stale_autosave_cannot_mutate_confirmed_claimed_or_sent_message(
 async fn first_save_waiting_on_insert_cannot_overwrite_newly_confirmed_message(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, _) = identity();
     let message = Uuid::new_v4();
     let input = stale_input(message);
@@ -468,7 +488,10 @@ async fn first_save_waiting_on_insert_cannot_overwrite_newly_confirmed_message(
 async fn update_or_cancel_before_claim_prevents_stale_queue_delivery(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
@@ -524,7 +547,10 @@ async fn initial_schedule_prepares_signature_but_time_updates_preserve_content(
         shared_thread_replies: std::sync::Arc::new(
             crate::domain::shared_thread_replies::NoSharedThreadReplies,
         ),
-        email_repo: EmailPgRepo::new(pool.clone()),
+        email_repo: EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
         frecency_service: (),
         enqueuer: (),
         crm_service: (),
@@ -666,7 +692,10 @@ async fn pending_provider_holds_no_locks_and_duplicate_cannot_release_claim(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     use crate::domain::scheduled_delivery::deliver_scheduled;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     repo.change_schedule(link, message, &actor(), future(), None, 0)
         .await?;
@@ -711,7 +740,10 @@ async fn pending_provider_holds_no_locks_and_duplicate_cannot_release_claim(
 async fn legacy_cancel_cannot_change_durable_or_historical_delivery_facts(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     let actor = actor();
     repo.change_schedule(link, message, &actor, future(), None, 0)
@@ -755,7 +787,10 @@ async fn late_provider_upload_cannot_change_a_committed_schedule(
         .fetch_one(&mut *admission)
         .await?
         .unwrap();
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let upload = tokio::spawn(async move {
         repo.commit_attachment_change(
             actor().as_ref(),
@@ -802,7 +837,10 @@ async fn late_provider_upload_cannot_change_a_committed_schedule(
 async fn scheduled_delivery_keeps_the_latest_invocation_after_request_completion(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let (link, message) = identity();
     let first = Uuid::now_v7();
     let second = Uuid::now_v7();

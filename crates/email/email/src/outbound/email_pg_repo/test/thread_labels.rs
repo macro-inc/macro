@@ -1,5 +1,7 @@
 use super::*;
 use crate::domain::models::{LabelListVisibility, LabelType, MessageListVisibility};
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 // ── get_label_by_id ─────────────────────────────────────────────────
 
@@ -8,7 +10,7 @@ use crate::domain::models::{LabelListVisibility, LabelType, MessageListVisibilit
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_get_label_by_id_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let label_id = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
 
@@ -32,7 +34,7 @@ async fn test_get_label_by_id_found(pool: Pool<Postgres>) -> anyhow::Result<()> 
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_get_label_by_id_user_label(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let label_id = Uuid::parse_str("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")?;
 
@@ -52,7 +54,7 @@ async fn test_get_label_by_id_user_label(pool: Pool<Postgres>) -> anyhow::Result
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_get_label_by_id_wrong_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     // Label belongs to link aaa..., but we look it up with link bbb...
     let label_id = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
     let wrong_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
@@ -68,7 +70,7 @@ async fn test_get_label_by_id_wrong_link(pool: Pool<Postgres>) -> anyhow::Result
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_get_label_by_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let nonexistent = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
 
@@ -85,7 +87,7 @@ async fn test_get_label_by_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_get_thread_label_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
 
@@ -110,7 +112,7 @@ async fn test_get_thread_label_messages(pool: Pool<Postgres>) -> anyhow::Result<
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_get_thread_label_messages_empty_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     // Thread 2 exists but has no messages
     let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
@@ -129,7 +131,7 @@ async fn test_get_thread_label_messages_empty_thread(pool: Pool<Postgres>) -> an
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_get_thread_label_messages_wrong_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let wrong_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
 
@@ -152,7 +154,10 @@ async fn test_get_thread_label_messages_wrong_link(pool: Pool<Postgres>) -> anyh
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_insert_message_labels_batch(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
     let msg1b = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-111111111111")?;
@@ -180,7 +185,10 @@ async fn test_insert_message_labels_batch(pool: Pool<Postgres>) -> anyhow::Resul
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_insert_message_labels_batch_idempotent(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
 
@@ -208,7 +216,7 @@ async fn test_insert_message_labels_batch_idempotent(pool: Pool<Postgres>) -> an
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_insert_message_labels_batch_empty(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     // Should be a no-op, not an error
@@ -226,7 +234,10 @@ async fn test_insert_message_labels_batch_empty(pool: Pool<Postgres>) -> anyhow:
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_delete_message_labels_batch(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
     let msg1b = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-111111111111")?;
@@ -253,7 +264,7 @@ async fn test_delete_message_labels_batch(pool: Pool<Postgres>) -> anyhow::Resul
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_delete_message_labels_batch_nonexistent(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
 
@@ -269,7 +280,7 @@ async fn test_delete_message_labels_batch_nonexistent(pool: Pool<Postgres>) -> a
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_delete_message_labels_batch_empty(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     repo.delete_message_labels_batch(&[], "INBOX", link_id)
@@ -288,7 +299,10 @@ async fn test_delete_message_labels_batch_empty(pool: Pool<Postgres>) -> anyhow:
 async fn test_update_message_read_status_batch_mark_read(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
     let msg1b = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-111111111111")?;
@@ -318,7 +332,10 @@ async fn test_update_message_read_status_batch_mark_read(
 async fn test_update_message_read_status_batch_wrong_link(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let wrong_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
 
@@ -340,7 +357,7 @@ async fn test_update_message_read_status_batch_wrong_link(
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_update_message_read_status_batch_empty(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     repo.update_message_read_status_batch(&[], link_id, true)
@@ -357,7 +374,10 @@ async fn test_update_message_read_status_batch_empty(pool: Pool<Postgres>) -> an
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_thread_read_status_mark_read(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
 
@@ -389,7 +409,10 @@ async fn test_update_thread_read_status_mark_read(pool: Pool<Postgres>) -> anyho
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_thread_read_status_wrong_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let wrong_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
 
@@ -414,7 +437,10 @@ async fn test_update_thread_read_status_wrong_link(pool: Pool<Postgres>) -> anyh
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_update_message_starred_status_batch_star(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
     let msg1b = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-111111111111")?;
@@ -441,7 +467,10 @@ async fn test_update_message_starred_status_batch_star(pool: Pool<Postgres>) -> 
 async fn test_update_message_starred_status_batch_unstar(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
 
@@ -469,7 +498,10 @@ async fn test_update_message_starred_status_batch_unstar(
 async fn test_update_message_starred_status_batch_wrong_link(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let wrong_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
     let msg1a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
 
@@ -496,7 +528,7 @@ async fn test_update_message_starred_status_batch_wrong_link(
 async fn test_update_message_starred_status_batch_empty(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     repo.update_message_starred_status_batch(&[], link_id, true)

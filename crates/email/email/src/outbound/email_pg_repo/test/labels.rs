@@ -1,5 +1,7 @@
 use super::*;
 use crate::domain::models::{LabelListVisibility, LabelType, MessageListVisibility};
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 // ── list_labels_by_link_id ──────────────────────────────────────────
 
@@ -10,7 +12,7 @@ use crate::domain::models::{LabelListVisibility, LabelType, MessageListVisibilit
 async fn test_list_labels_by_link_id_returns_all_labels(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let labels = repo.list_labels_by_link_id(link_id).await?;
@@ -30,7 +32,7 @@ async fn test_list_labels_by_link_id_returns_all_labels(
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_list_labels_by_link_id_field_mapping(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let labels = repo.list_labels_by_link_id(link_id).await?;
@@ -58,7 +60,7 @@ async fn test_list_labels_by_link_id_field_mapping(pool: Pool<Postgres>) -> anyh
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_list_labels_by_link_id_isolates_by_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let other_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
 
     let labels = repo.list_labels_by_link_id(other_link_id).await?;
@@ -76,7 +78,7 @@ async fn test_list_labels_by_link_id_isolates_by_link(pool: Pool<Postgres>) -> a
     fixtures(path = "../../../../fixtures", scripts("email_thread_labels"))
 )]
 async fn test_list_labels_by_link_id_nonexistent_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let fake_link_id = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
 
     let labels = repo.list_labels_by_link_id(fake_link_id).await?;
@@ -94,7 +96,7 @@ async fn test_list_labels_by_link_id_nonexistent_link(pool: Pool<Postgres>) -> a
 )]
 async fn test_labels_by_thread_ids_single_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_ids = vec![Uuid::parse_str("11111111-1111-1111-1111-111111111111")?];
     let labels = repo.labels_by_thread_ids(&thread_ids).await?;
@@ -115,7 +117,7 @@ async fn test_labels_by_thread_ids_single_thread(pool: Pool<Postgres>) -> anyhow
     fixtures(path = "../../../../fixtures", scripts("email_labels"))
 )]
 async fn test_labels_by_thread_ids_multiple_threads(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_ids = vec![
         Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
@@ -142,7 +144,7 @@ async fn test_labels_by_thread_ids_multiple_threads(pool: Pool<Postgres>) -> any
 async fn test_labels_by_thread_ids_no_duplicate_labels_same_thread(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     // Thread 3 has multiple messages with the same label
     let thread_ids = vec![Uuid::parse_str("33333333-3333-3333-3333-333333333333")?];
@@ -165,7 +167,7 @@ async fn test_labels_by_thread_ids_no_duplicate_labels_same_thread(
 async fn test_labels_by_thread_ids_thread_with_no_labels(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_ids = vec![Uuid::parse_str("44444444-4444-4444-4444-444444444444")?];
     let labels = repo.labels_by_thread_ids(&thread_ids).await?;
@@ -184,7 +186,7 @@ async fn test_labels_by_thread_ids_thread_with_no_labels(
     fixtures(path = "../../../../fixtures", scripts("email_labels"))
 )]
 async fn test_labels_by_thread_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_ids: Vec<Uuid> = vec![];
     let labels = repo.labels_by_thread_ids(&thread_ids).await?;
@@ -201,7 +203,7 @@ async fn test_labels_by_thread_ids_empty_input(pool: Pool<Postgres>) -> anyhow::
 async fn test_labels_by_thread_ids_different_label_types(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_ids = vec![Uuid::parse_str("55555555-5555-5555-5555-555555555555")?];
     let labels = repo.labels_by_thread_ids(&thread_ids).await?;
@@ -229,7 +231,7 @@ async fn test_labels_by_thread_ids_different_label_types(
 async fn test_labels_by_thread_ids_overlays_pending_tags(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let first = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let second = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
 
@@ -264,7 +266,7 @@ async fn test_labels_by_thread_ids_overlays_pending_tags(
 async fn test_labels_by_message_ids_overlays_pending_tags(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let first = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
     let second = Uuid::parse_str("22222222-aaaa-aaaa-aaaa-222222222222")?;
 
@@ -331,7 +333,7 @@ async fn test_user_label_preview_includes_pending_tags(pool: Pool<Postgres>) -> 
 async fn test_labels_by_thread_ids_hides_queued_label_deletes(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let first = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let second = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
     let fifth = Uuid::parse_str("55555555-5555-5555-5555-555555555555")?;
@@ -368,7 +370,7 @@ async fn test_labels_by_thread_ids_hides_queued_label_deletes(
 async fn test_labels_by_message_ids_hides_queued_label_deletes(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let first = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
     let second = Uuid::parse_str("22222222-aaaa-aaaa-aaaa-222222222222")?;
     let fifth = Uuid::parse_str("55555555-aaaa-aaaa-aaaa-555555555555")?;

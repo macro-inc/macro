@@ -1,5 +1,7 @@
 use super::*;
+use entity_access_outbound::PgAccessRepository;
 use macro_user_id::cowlike::CowLike;
+use std::sync::Arc;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -140,7 +142,10 @@ async fn gmail_folder_restore_refreshes_all_mail_before_provider_sync(
 async fn provider_folders_match_messages_before_pagination(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
     for (link, prefix) in [
         (uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), 100u128),
@@ -235,7 +240,10 @@ async fn folder_candidates_respect_pending_moves_and_provider_absence(
         let message = Uuid::parse_str(&format!("0c000000-0000-0000-0000-{message:012}"))?;
         sqlx::query!("INSERT INTO email_pending_mailbox_state (message_id,attribute,command_id,desired) VALUES ($1,'in_trash',$2,$3)", message, command, serde_json::json!(desired)).execute(&pool).await?;
     }
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
     let query = || PreviewCursorQuery {
         view: PreviewView::StandardLabel(PreviewViewStandardLabel::Trash),
@@ -277,7 +285,10 @@ async fn folder_dates_and_shared_scope_use_the_selected_folder(
 ) -> anyhow::Result<()> {
     let thread = uuid::uuid!("0b000000-0000-0000-0000-000000000202");
     let viewer = MacroUserIdStr::parse_from_str("macro|user1@example.com")?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let filter = Arc::new(Expr::and(
         Expr::val(EmailLiteral::Shared(item_filters::SharedEmailFilter::Only)),
         Expr::and(

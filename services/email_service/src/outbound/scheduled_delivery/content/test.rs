@@ -8,8 +8,10 @@ use email::domain::{
 };
 use email::outbound::EmailPgRepo;
 use email_db_client::messages::scheduled::delivery::claim_delivery;
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 fn link() -> Uuid {
@@ -76,7 +78,8 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
         restore_body_macro: None,
     };
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
-    EmailPgRepo::new(pool.clone())
+    let source_ids = Arc::new(PgAccessRepository::new(pool.clone()));
+    EmailPgRepo::new(pool.clone(), source_ids)
         .admit_send(
             &MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
             link(),

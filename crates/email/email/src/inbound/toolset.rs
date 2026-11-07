@@ -87,13 +87,7 @@ pub fn resolve_inbox_selector<'a>(
 }
 
 /// Service context for email AI tools.
-pub struct EmailToolContext<
-    T: EmailService,
-    G: GmailTokenProvider = crate::domain::ports::NoOpGmailTokenProvider,
-    E: EntityAccessService = entity_access::domain::service::EntityAccessServiceImpl<
-        entity_access_outbound::PgAccessRepository,
-    >,
-> {
+pub struct EmailToolContext<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> {
     /// The email service instance.
     pub service: Arc<T>,
     /// The Gmail token provider for resolving OAuth access tokens.

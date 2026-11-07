@@ -1,3 +1,5 @@
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 use std::time::Duration;
 
 use super::*;
@@ -7,7 +9,7 @@ use super::*;
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
 async fn mail_projection_excludes_trashed_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let draft = uuid::uuid!("20000008-0000-0000-0000-000000000008");
     let trash = uuid::uuid!("20000009-0000-0000-0000-000000000009");
     let rows = repo
@@ -40,7 +42,7 @@ async fn mail_projection_excludes_trashed_messages(pool: Pool<Postgres>) -> anyh
     fixtures(path = "../../../../fixtures", scripts("email_thread"))
 )]
 async fn test_thread_by_id_exists(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let thread = repo.thread_by_id(thread_id).await?;
@@ -67,7 +69,7 @@ async fn test_thread_by_id_exists(pool: Pool<Postgres>) -> anyhow::Result<()> {
     fixtures(path = "../../../../fixtures", scripts("email_thread"))
 )]
 async fn test_thread_by_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
     let thread = repo.thread_by_id(thread_id).await?;
@@ -82,7 +84,7 @@ async fn test_thread_by_id_not_found(pool: Pool<Postgres>) -> anyhow::Result<()>
     fixtures(path = "../../../../fixtures", scripts("email_thread"))
 )]
 async fn thread_metadata_by_ids_returns_canonical_rows(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let first_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let second_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
     let missing_id = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
@@ -154,7 +156,7 @@ async fn moving_thread_to_project_advances_thread_timestamp(
 ) -> anyhow::Result<()> {
     let thread_id = Uuid::parse_str("20000001-0000-0000-0000-000000000001")?;
     let new_project_id = "proj-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let original_updated_at = repo.thread_by_id(thread_id).await?.unwrap().updated_at;
 
     tokio::time::sleep(Duration::from_millis(10)).await;
@@ -175,7 +177,7 @@ async fn moving_thread_to_project_advances_thread_timestamp(
     fixtures(path = "../../../../fixtures", scripts("email_thread"))
 )]
 async fn test_thread_by_id_nullable_timestamps(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
     let thread = repo.thread_by_id(thread_id).await?.unwrap();
@@ -198,7 +200,7 @@ async fn test_thread_by_id_nullable_timestamps(pool: Pool<Postgres>) -> anyhow::
 async fn test_messages_by_thread_id_paginated_returns_all(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let messages = repo
@@ -217,7 +219,7 @@ async fn test_messages_by_thread_id_paginated_returns_all(
 async fn test_messages_by_thread_id_paginated_ordered_by_date_desc(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let messages = repo
@@ -251,7 +253,7 @@ async fn test_messages_by_thread_id_paginated_ordered_by_date_desc(
 async fn test_messages_by_thread_id_paginated_with_offset_and_limit(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
 
@@ -280,7 +282,7 @@ async fn test_messages_by_thread_id_paginated_with_offset_and_limit(
 async fn test_messages_by_thread_id_paginated_empty_thread(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
     let messages = repo
@@ -299,7 +301,7 @@ async fn test_messages_by_thread_id_paginated_empty_thread(
 async fn test_messages_by_thread_id_paginated_fields_populated(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let messages = repo
@@ -334,7 +336,7 @@ async fn test_messages_by_thread_id_paginated_dateless_message_not_page_head(
     // Thread 4 has a real dated message carrying the subject and an earlier dateless,
     // subjectless one. A single-row fetch must return the subject-bearing message, not
     // the dateless one that a bare `internal_date_ts DESC` floats to the top on NULL.
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444")?;
 
@@ -383,7 +385,7 @@ async fn test_latest_content_messages_are_batched_and_exclude_drafts(
     .execute(&pool)
     .await?;
 
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let rows = repo
         .latest_content_message_rows(&[thread_1, thread_2])
         .await?;
@@ -426,7 +428,7 @@ async fn test_latest_content_message_uses_id_as_timestamp_tiebreaker(
         .await?;
     }
 
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let rows = repo.latest_content_message_rows(&[thread_id]).await?;
 
     assert_eq!(rows.len(), 1);
@@ -467,7 +469,7 @@ async fn test_insert_thread_new(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(returned_id, new_id);
 
     // Verify it exists
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let fetched = repo
         .thread_by_id(new_id)
         .await?
@@ -605,7 +607,7 @@ async fn draft_aggregate_inbox_state_matches_canonical_metadata(
     )
     .fetch_one(&pool)
     .await?;
-    let projections = EmailPgRepo::new(pool)
+    let projections = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)))
         .thread_mail_projections_by_ids(
             macro_user_id::user_id::MacroUserIdStr::parse_from_str(&owner)?,
             &ids,

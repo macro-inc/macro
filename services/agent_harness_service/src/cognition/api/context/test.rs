@@ -2,6 +2,7 @@ use super::*;
 use connection_gateway::model::connection::StoredConnectionEntity;
 use connection_gateway::model::tracking::{EntityConnection, UserEntityConnection};
 use connection_gateway::service::connection::ConnectionRepo;
+use entity_access_outbound::PgAccessRepository;
 use std::sync::Arc;
 use stream::domain::{
     ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
@@ -244,7 +245,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(pool.clone()),
+        EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -395,7 +399,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let user_email_service = Arc::new(
         email::domain::service::EmailServiceImpl::new(
-            email::outbound::EmailPgRepo::new(pool.clone()),
+            email::outbound::EmailPgRepo::new(
+                pool.clone(),
+                Arc::new(PgAccessRepository::new(pool.clone())),
+            ),
             frecency::domain::services::FrecencyQueryServiceImpl::new(
                 frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
             ),

@@ -35,6 +35,20 @@ impl PgAccessRepository {
     }
 }
 
+impl entity_access::domain::ports::UserSourceIds for PgAccessRepository {
+    fn user_source_ids<'a>(
+        &'a self,
+        user_id: &'a MacroUserIdStr<'a>,
+    ) -> futures::future::BoxFuture<'a, Result<Vec<String>, rootcause::Report>> {
+        Box::pin(async move {
+            get_user_source_ids(&self.pool, Some(user_id))
+                .await
+                .map(|source_ids| source_ids.0)
+                .map_err(|e| rootcause::report!(e).into_dynamic())
+        })
+    }
+}
+
 fn foreign_entity_source_pairs(
     user_id: &MacroUserId<Lowercase<'_>>,
     user_team: Option<UserTeamInfo>,

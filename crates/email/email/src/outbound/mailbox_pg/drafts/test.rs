@@ -10,7 +10,9 @@ use crate::{
     },
 };
 use email_api_client_core::models::{MailboxState, SendRequest};
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use std::sync::Arc;
 
 mod delivery_status;
 mod sent_view;
@@ -343,7 +345,7 @@ async fn setup(
         sqlx::query!("INSERT INTO email_messages (id,link_id,thread_id,provider_id,provider_thread_id,provider_version,is_draft,body_text) VALUES ($1,$2,$3,'a','conversation','v1',true,'Original')",id,link,thread).execute(db).await.unwrap();
     }
     let input:ResolvedDraftInput=serde_json::from_value(serde_json::json!({"db_id":id,"thread_db_id":thread,"subject":"Local subject","body_text":"Local body","body_macro":"Local editor document","to":[],"cc":[],"bcc":[],"actor_id":ACTOR})).unwrap();
-    let repo = EmailPgRepo::new(db.clone());
+    let repo = EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone())));
     repo.insert_message(
         &input,
         &UpsertedContacts {

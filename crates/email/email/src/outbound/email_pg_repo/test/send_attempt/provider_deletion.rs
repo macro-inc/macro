@@ -3,6 +3,8 @@ use email_db_client::messages::{
     delete::{MessageDeletion, delete_message_with_tx, reconcile_deferred_deletion},
     get_simple_messages::get_simple_message_by_provider_and_link_for_update,
 };
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -11,7 +13,10 @@ use email_db_client::messages::{
 async fn provider_delete_lookup_locks_the_snapshot_until_deletion_is_deferred(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -75,7 +80,10 @@ async fn provider_delete_lookup_locks_the_snapshot_until_deletion_is_deferred(
 async fn provider_delete_lookup_does_not_adopt_a_replacement_sent_identity(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
