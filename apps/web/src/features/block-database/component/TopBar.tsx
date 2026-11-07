@@ -181,7 +181,7 @@ export function TopBar(props: {
                 entityActions={entityActions(detail())}
                 onRename={() => editTitle?.()}
                 onDelete={props.onDelete}
-                onImported={props.onSelectTable}
+                onTableAdded={props.onSelectTable}
               />
               <div class="ml-2 min-w-0 max-w-xl shrink">
                 <TableTabs

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectData, CompletePipedreamMcpConnectErrors, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreateConfirmedCalendarEventData, CreateConfirmedCalendarEventErrors, CreateConfirmedCalendarEventResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, FetchWebPageData, FetchWebPageErrors, FetchWebPageResponses, GenerateDatabaseQueryData, GenerateDatabaseQueryErrors, GenerateDatabaseQueryResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, ListPipedreamMcpOverlaysData, ListPipedreamMcpOverlaysErrors, ListPipedreamMcpOverlaysResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RecoverPipedreamMcpConnectionData, RecoverPipedreamMcpConnectionErrors, RecoverPipedreamMcpConnectionResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SearchWebData, SearchWebErrors, SearchWebResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SendConfirmedEmailData, SendConfirmedEmailErrors, SendConfirmedEmailResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
+import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectData, CompletePipedreamMcpConnectErrors, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CompletePipedreamMcpConnectResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreateConfirmedCalendarEventData, CreateConfirmedCalendarEventErrors, CreateConfirmedCalendarEventResponses, CreateDatabaseSyncData, CreateDatabaseSyncErrors, CreateDatabaseSyncResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, CreateSyncedDatabaseData, CreateSyncedDatabaseErrors, CreateSyncedDatabaseResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteDatabaseSyncData, DeleteDatabaseSyncErrors, DeleteDatabaseSyncResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, FetchWebPageData, FetchWebPageErrors, FetchWebPageResponses, GenerateDatabaseQueryData, GenerateDatabaseQueryErrors, GenerateDatabaseQueryResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListDatabaseSyncsData, ListDatabaseSyncsErrors, ListDatabaseSyncSourcesData, ListDatabaseSyncSourcesErrors, ListDatabaseSyncSourcesResponses, ListDatabaseSyncsResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, ListPipedreamMcpOverlaysData, ListPipedreamMcpOverlaysErrors, ListPipedreamMcpOverlaysResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RecoverPipedreamMcpConnectionData, RecoverPipedreamMcpConnectionErrors, RecoverPipedreamMcpConnectionResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunDatabaseSyncData, RunDatabaseSyncErrors, RunDatabaseSyncResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SearchWebData, SearchWebErrors, SearchWebResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SendConfirmedEmailData, SendConfirmedEmailErrors, SendConfirmedEmailResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -278,6 +278,66 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * Create a database, named after the source, whose one table is synced
+     * with it. Retrying with the same `id` answers the first attempt's sync.
+     */
+    public createSyncedDatabase<ThrowOnError extends boolean = false>(options: Options<CreateSyncedDatabaseData, ThrowOnError>): RequestResult<CreateSyncedDatabaseResponses, CreateSyncedDatabaseErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateSyncedDatabaseResponses, CreateSyncedDatabaseErrors, ThrowOnError>({
+            url: '/databases/syncs',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * What the caller can sync a table from: whether Granola is connected,
+     * and the Notion data sources their connection can read.
+     */
+    public listDatabaseSyncSources<ThrowOnError extends boolean = false>(options?: Options<ListDatabaseSyncSourcesData, ThrowOnError>): RequestResult<ListDatabaseSyncSourcesResponses, ListDatabaseSyncSourcesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListDatabaseSyncSourcesResponses, ListDatabaseSyncSourcesErrors, ThrowOnError>({ url: '/databases/syncs/sources', ...options });
+    }
+
+    /**
+     * The database's syncs.
+     */
+    public listDatabaseSyncs<ThrowOnError extends boolean = false>(options: Options<ListDatabaseSyncsData, ThrowOnError>): RequestResult<ListDatabaseSyncsResponses, ListDatabaseSyncsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListDatabaseSyncsResponses, ListDatabaseSyncsErrors, ThrowOnError>({ url: '/databases/{id}/syncs', ...options });
+    }
+
+    /**
+     * Add a table synced with a source to the database. Its writes act with
+     * the caller's access. Retrying with the same `id` answers the first
+     * attempt's sync.
+     */
+    public createDatabaseSync<ThrowOnError extends boolean = false>(options: Options<CreateDatabaseSyncData, ThrowOnError>): RequestResult<CreateDatabaseSyncResponses, CreateDatabaseSyncErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateDatabaseSyncResponses, CreateDatabaseSyncErrors, ThrowOnError>({
+            url: '/databases/{id}/syncs',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Stop a sync. Its table and rows stay as they are.
+     */
+    public deleteDatabaseSync<ThrowOnError extends boolean = false>(options: Options<DeleteDatabaseSyncData, ThrowOnError>): RequestResult<DeleteDatabaseSyncResponses, DeleteDatabaseSyncErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteDatabaseSyncResponses, DeleteDatabaseSyncErrors, ThrowOnError>({ url: '/databases/{id}/syncs/{sync_id}', ...options });
+    }
+
+    /**
+     * Run a sync as soon as a worker is free.
+     */
+    public runDatabaseSync<ThrowOnError extends boolean = false>(options: Options<RunDatabaseSyncData, ThrowOnError>): RequestResult<RunDatabaseSyncResponses, RunDatabaseSyncErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RunDatabaseSyncResponses, RunDatabaseSyncErrors, ThrowOnError>({ url: '/databases/{id}/syncs/{sync_id}/run', ...options });
     }
 
     public decisions<ThrowOnError extends boolean = false>(options: Options<DecisionsData, ThrowOnError>): RequestResult<DecisionsResponses, DecisionsErrors, ThrowOnError> {

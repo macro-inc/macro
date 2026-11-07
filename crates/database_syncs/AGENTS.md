@@ -39,7 +39,7 @@ minutes and Notion every 30.
   `CreatorAccess`), `import_notion` (`NotionConnections`, `macro_cells`),
   `call` (`CallImportService`), `granola_sync` (`Accounts`), `teams`.
 - Used by: `services/agent_harness_service` (`cognition/server.rs` wiring and
-  worker, `cognition/api.rs` routes).
+  worker, `cognition/api.rs` routes); `packages/sdk` (`DatabaseSync`).
 
 ## Checks
 

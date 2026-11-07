@@ -1,3 +1,4 @@
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Database } from './database';
 import {
@@ -5,6 +6,12 @@ import {
   type DatabaseQueryResult,
   queryDatabases,
 } from './query';
+import {
+  type DatabaseSync,
+  type DatabaseSyncSource,
+  type DatabaseSyncSources,
+  NotionDataSource,
+} from './sync';
 
 /**
  * Macro databases: named collections of tables, owned and shared as one
@@ -90,5 +97,35 @@ export class DatabaseNamespace {
   /** The databases the caller can see. */
   list(): Promise<Database[]> {
     return Database.list(this.client);
+  }
+
+  /**
+   * What the caller can sync a table from: whether Granola is connected, and
+   * the Notion data sources their Notion connection can read. Pass one to
+   * {@link createSynced} or {@link Database.addSync}.
+   */
+  async syncSources(): Promise<DatabaseSyncSources> {
+    const { granola, notion } = unwrap(
+      await this.client.cognition.listDatabaseSyncSources(),
+    );
+    return {
+      granola,
+      notion: {
+        connected: notion.connected,
+        dataSources: notion.dataSources.map(({ id, title }) =>
+          NotionDataSource.of(id, title),
+        ),
+      },
+    };
+  }
+
+  /**
+   * Create a database, named after `source`, whose one table is kept in sync
+   * with it (rows upserted from the source on a schedule, acting as the
+   * caller), and run its first sync at once. The sync's `database` is the
+   * new database.
+   */
+  createSynced(source: DatabaseSyncSource): Promise<DatabaseSync> {
+    return Database.createSynced(this.client, source);
   }
 }

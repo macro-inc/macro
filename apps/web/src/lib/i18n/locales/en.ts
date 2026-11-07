@@ -11,6 +11,7 @@ import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
 import crm from './en/crm';
+import databaseSyncs from './en/database-syncs';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
@@ -42,6 +43,7 @@ export default {
   common,
   create,
   crm,
+  databaseSyncs,
   entityActions,
   localRuntime,
   mobile,

@@ -78,6 +78,14 @@ export {
   type OpResultOf,
 } from './entities/databases/database';
 export {
+  DatabaseSync,
+  type DatabaseSyncColumn,
+  type DatabaseSyncDetachedColumn,
+  type DatabaseSyncSource,
+  type DatabaseSyncSources,
+  NotionDataSource,
+} from './entities/databases/sync';
+export {
   Form,
   type FormAnswer,
   type FormAnswerValue,

@@ -36,6 +36,9 @@ enforced by the ordinary backend APIs.
   contact sets are 404, but authorization/service errors must propagate.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
+- `src/entities/databases/sync.ts`: synced tables (`DatabaseSync`) over cognition
+  `/databases/syncs` (served by the agent harness); sources come from
+  `databases.syncSources()` as `NotionDataSource` handles, never raw ids.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
