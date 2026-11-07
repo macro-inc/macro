@@ -28,6 +28,8 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
 - Partial recordings restore and validate the complete initial JSON, selection, key layout and next allocation counter before replay; no import transforms or synthetic commits run.
+- Decode inline markdown transformer objects with their real regexes and checked callback tapes; nullable import matchers disable import matching.
+- Route TabIndentation registration through rich-node tab handlers and preserve critical indent priority over rich text; live Prism registration remains an explicit gap.
 - Generated namespace metadata consumes two host draws; explicit namespaces consume one. Macro recordings pass their declared list indentation to markdown conversions.
 
 - Link fixtures use real link transforms and captured raw parent/attribute records; code and mark factories use their package implementations.

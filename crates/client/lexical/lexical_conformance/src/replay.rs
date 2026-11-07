@@ -55,6 +55,7 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 #[derive(Default)]
 pub struct Replayer {
     pub(crate) rich_text_registered: bool,
+    pub(crate) tab_indent: Option<Option<u32>>,
     pub(crate) code_highlight: bool,
     pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
@@ -330,6 +331,12 @@ impl Replayer {
                     self.pending_install = Some(tx.commit()?);
                     self.pending_command = true;
                     Ok(())
+                }
+                "plugin"
+                    if op["name"]
+                        == "@lexical/react/LexicalTabIndentationPlugin.registerTabIndentation" =>
+                {
+                    crate::api::tab::register(self, &op["args"])
                 }
                 "plugin" => {
                     if op["name"] != "@lexical/rich-text.registerRichText"
