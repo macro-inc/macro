@@ -14,7 +14,6 @@ WITH candidates AS (
            ) AS email_rank
     FROM crm_contacts ct
     LEFT JOIN crm_companies co ON co.id = ct.company_id
-    JOIN team_crm_settings tcs ON tcs.team_id = ct.team_id AND tcs.crm_enabled
     LEFT JOIN LATERAL (
         SELECT d.domain FROM crm_domains d
         WHERE d.company_id = co.id

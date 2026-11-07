@@ -342,6 +342,13 @@ async fn run_server() -> anyhow::Result<()> {
                 ),
             }),
         )),
+        recent_inbox: Arc::new(email::domain::recent_inbox::RecentInboxService::new(
+            crate::outbound::recent_inbox::PgRecentInboxes(db.clone()),
+            crate::outbound::recent_inbox::ProviderRecentInbox {
+                gmail: email_api.clone(),
+                outlook: outlook_api.clone(),
+            },
+        )),
         message_sources: Arc::new(email::domain::message_source::MessageSourceService {
             repository: EmailPgRepo::new(db.clone()),
             provider: crate::outbound::message_source::ProviderMessageSource {

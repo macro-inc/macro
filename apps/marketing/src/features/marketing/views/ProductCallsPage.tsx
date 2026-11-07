@@ -99,6 +99,7 @@ export function RouteCalls() {
       <div class="calls-page">
         <ProductHero
           cta="calls_hero_get_started"
+          tutorial="calls"
           product="Calls"
           title={['Call from anywhere in Macro', 'with every call recorded.']}
           description={[

@@ -8,7 +8,7 @@ use rootcause::Report;
 use tracing::Level;
 
 use super::{
-    models::{MacroAuthorizationError, ResolvedApiKeyUser},
+    models::{AuthorizedUserApiKey, MacroAuthorizationError, ResolvedApiKeyUser},
     ports::{UserApiKeyAuthorizationRepo, UserApiKeyAuthorizer},
 };
 
@@ -29,11 +29,15 @@ impl<R> UserApiKeyAuthorizer for UserApiKeyAuthorizerService<R>
 where
     R: UserApiKeyAuthorizationRepo,
 {
-    #[tracing::instrument(err(level = Level::DEBUG), skip_all)]
+    #[tracing::instrument(
+        err(level = Level::DEBUG),
+        skip_all,
+        fields(account_manager_grant_id = tracing::field::Empty)
+    )]
     async fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
         let owner = self
             .repo
             .find_key_owner(api_key)
@@ -41,7 +45,21 @@ where
             .map_err(|error| repository_error(error, "find key owner"))?
             .ok_or_else(|| Report::new(MacroAuthorizationError::InvalidCredentials))?;
 
-        Ok(user_context(owner))
+        if let Some(manager) = &owner.account_manager {
+            tracing::Span::current().record(
+                "account_manager_grant_id",
+                tracing::field::display(manager.grant_id),
+            );
+            self.repo
+                .mark_account_manager_grant_used(manager.grant_id)
+                .await
+                .map_err(|error| repository_error(error, "mark account manager grant used"))?;
+        }
+
+        Ok(AuthorizedUserApiKey {
+            account_manager: owner.account_manager.clone(),
+            user_context: user_context(owner),
+        })
     }
 }
 

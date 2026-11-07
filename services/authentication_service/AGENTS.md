@@ -85,7 +85,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 ## Agent accounts
 
 - An agent can do everything a person can, including inviting other agents. Do
-  not gate actions on `isAgent`; it only changes signup and labeling.
+  not gate actions on `isAgent`; it only changes signup and labeling. The one
+  exception: only an agent can be an account manager, and an agent can't be
+  managed (`crates/account_manager`).
+- Routes that mint credentials, link a sign-in, merge accounts, or delete the
+  account use `AccountHolderOrInternal`, so an account manager's credential can't
+  outlast its own revocation or lock the account's owner out.
 - `User."isAgent"` is set in the FusionAuth `user.create` webhook, from
   `is_agent` on `/login/passwordless` (carried as FusionAuth user data) or a
   pending agent `team_invite`. Those agents skip the seeded content, Loops, and
@@ -179,3 +184,5 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - Rules: `.agents/rules/config-and-service-urls.md`,
   `.agents/rules/rust/security.md` · Skill: `new-service`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

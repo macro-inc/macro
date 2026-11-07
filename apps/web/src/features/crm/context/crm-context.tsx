@@ -9,6 +9,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
+import type { CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
   groups: Accessor<ListFilterGroup<string, string>[]>;
@@ -56,6 +57,15 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  createEmailPrivacy(): {
+    query: import('./crm-sources').CrmQuery<
+      import('../core/email-privacy').EmailPrivacy
+    >;
+    update: CrmMutation<
+      import('../core/email-privacy').EmailPrivacyChange,
+      import('../core/email-privacy').EmailPrivacy
+    >;
+  };
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
@@ -206,6 +216,14 @@ export type CrmContext = {
     companyId?: string | null;
     name: string;
   }>;
+  editContactEmail(): CrmMutation<
+    { contact: CrmContact; email: string },
+    CrmContact
+  >;
+  editContactCompany(): CrmMutation<
+    { contact: CrmContact; companyId: string },
+    CrmContact
+  >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

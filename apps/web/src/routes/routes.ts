@@ -136,6 +136,14 @@ export const agentSetupDoneRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** The one-time link in an account manager approval message. */
+export const accountManagerRoute = defineRoute({
+  id: 'account-manager',
+  path: 'account-manager/:grantId',
+  params: z.object({ grantId: z.string().uuid() }),
+  externalSearch: '*',
+});
+
 export const emailSignupCallbackRoute = defineRoute({
   id: 'email-signup-callback',
   path: EMAIL_SIGNUP_CALLBACK_PATH,
@@ -508,6 +516,15 @@ export const notificationsRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'notifications' }),
 });
 
+/** The Calendar view inline in Notifications, at the Calendar route's own period path and search. */
+export const notificationsCalendarRoute = defineRoute({
+  id: 'notifications-calendar',
+  path: 'calendar/:period',
+  params: calendarPeriodParams,
+  serializeParams: ({ period }) => ({ period: calendarPeriodPath(period) }),
+  search: [CALENDAR_SEARCH_NAMESPACE],
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',
@@ -518,7 +535,7 @@ export const routineCreateRoute = defineRoute({
   id: ROUTINE_CREATE_ROUTE_ID,
   path: 'routines/new',
   aliases: ['routine/new', 'automation/new'],
-  claim: () => ({ namespace: 'component', id: 'routine-compose' }),
+  claim: () => ({ namespace: 'component', id: 'routines' }),
 });
 
 export const routineDetailRoute = defineRoute({

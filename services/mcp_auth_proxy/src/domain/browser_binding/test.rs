@@ -35,15 +35,15 @@ fn consent_token_is_accepted_only_for_its_own_secret() {
     let binding = BrowserBinding::generate();
     let other = BrowserBinding::generate();
 
-    assert!(binding.accepts_consent_token(&binding.consent_token()));
-    assert!(!other.accepts_consent_token(&binding.consent_token()));
-    assert!(!binding.accepts_consent_token(""));
+    assert!(binding.accepts_form_token(&binding.form_token()));
+    assert!(!other.accepts_form_token(&binding.form_token()));
+    assert!(!binding.accepts_form_token(""));
 }
 
 #[test]
 fn consent_token_is_not_the_stored_digest() {
     let binding = BrowserBinding::generate();
 
-    assert!(!binding.accepts_consent_token(&binding.digest()));
-    assert!(!binding.matches_digest(&binding.consent_token()));
+    assert!(!binding.accepts_form_token(&binding.digest()));
+    assert!(!binding.matches_digest(&binding.form_token()));
 }

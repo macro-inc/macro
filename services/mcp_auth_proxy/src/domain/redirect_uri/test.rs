@@ -105,3 +105,28 @@ fn empty_allowlist_trusts_only_loopback() {
         Some(RedirectTrust::RequiresConsent)
     );
 }
+
+#[test]
+fn manual_delivery_is_for_loopback_uris_safe_to_put_in_a_command() {
+    let policy = policy();
+
+    for allowed in [
+        "http://127.0.0.1:51000/oauth/callback",
+        "http://localhost:6274/callback?client=a%20b",
+        "http://[::1]:51000/callback",
+    ] {
+        assert!(policy.allows_manual_delivery(allowed), "{allowed}");
+    }
+
+    for refused in [
+        "https://claude.ai/api/mcp/auth_callback",
+        "http://example.com/callback",
+        "http://127.0.0.1:51000/a'b",
+        "http://127.0.0.1:51000/$(id)",
+        "http://127.0.0.1:51000/a b",
+        "http://127.0.0.1:51000\\@example.com/",
+        "http://user@127.0.0.1:51000/",
+    ] {
+        assert!(!policy.allows_manual_delivery(refused), "{refused}");
+    }
+}

@@ -64,7 +64,10 @@ import {
 } from '../queries/columns';
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
-import { useDatabaseSubscription } from '../queries/database-subscription';
+import {
+  type DatabaseSchemaSource,
+  useDatabaseSubscription,
+} from '../queries/database-subscription';
 import { createMacroDatabaseApi, editorTable } from '../queries/editor-api';
 import { useFormsAskingColumns } from '../queries/forms-usage';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
@@ -76,6 +79,8 @@ export type DatabaseGridProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
   databaseId: string;
+  /** Whether the host read this database's schema as it opened. */
+  schema: DatabaseSchemaSource;
   /** Where the grid is shown, for analytics. */
   host: DatabaseGridHost;
   table: TableDetail;
@@ -259,7 +264,11 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   usePending('database.rows', source.loading);
   // Embedded grids have no database BlockContainer to subscribe for them.
   // Tracking is reference-counted across grids and full database blocks.
-  useDatabaseSubscription(databaseId, () => refreshInBackground(source));
+  useDatabaseSubscription(
+    databaseId,
+    () => refreshInBackground(source),
+    props.schema
+  );
   const boardPositions = useDatabaseBoardPositions(
     databaseId,
     () => props.view,

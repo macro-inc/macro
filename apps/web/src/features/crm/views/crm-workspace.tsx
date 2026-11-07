@@ -79,6 +79,7 @@ import { createCrmExportLoader } from '../primitives/export-source';
 import { CrmActivityView } from './activity';
 import { useApplyCrmView } from './apply-view';
 import { Crm as CrmSettings } from './crm-settings';
+import { CrmEmailOptInBanner } from './email-privacy';
 import { CrmExport } from './export-companies';
 import { CrmImport } from './import-companies';
 import { CrmItemDetail } from './item-detail';
@@ -106,10 +107,10 @@ function NavigationToggle(props: {
         <Show
           when={shell.breakpoints.narrow?.()}
           fallback={
-            <Tooltip label="Expand CRM sidebar">
+            <Tooltip label={t('crm.expandSidebar')}>
               <Button
-                aria-label="Expand CRM sidebar"
-                tooltip="Expand CRM sidebar"
+                aria-label={t('crm.expandSidebar')}
+                tooltip={t('crm.expandSidebar')}
                 variant="ghost"
                 size="icon-sm"
                 ref={toggleTarget}
@@ -125,11 +126,11 @@ function NavigationToggle(props: {
             onOpenChange={setOpen}
             placement="bottom-start"
           >
-            <Tooltip label="Show CRM navigation">
+            <Tooltip label={t('crm.showNavigation')}>
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Show CRM navigation"
+                aria-label={t('crm.showNavigation')}
                 ref={toggleTarget}
               >
                 <ListIcon class="size-4" />
@@ -338,7 +339,8 @@ export function CrmWorkspaceView(props: {
   const teamId = () => team()?.id;
   const pipelinesEnabled = useCrmContext().pipelinesEnabled();
   const crmEnabled = () => team()?.crm_enabled === true;
-  const canCreatePipeline = () => pipelinesEnabled() && crmEnabled();
+  const canCreatePipeline = () =>
+    pipelinesEnabled() && teamQuery.isSuccess && !!teamQuery.data;
   const pipelines = useCrmContext().createPipelines(() =>
     pipelinesEnabled() ? teamId() : undefined
   );
@@ -603,6 +605,9 @@ export function CrmWorkspaceView(props: {
         </Suspense>
       </ViewShell.Aside>
       <ViewShell.Main>
+        <Suspense>
+          <CrmEmailOptInBanner />
+        </Suspense>
         <Show
           when={!settings.isOpen()}
           fallback={
