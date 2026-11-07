@@ -25,7 +25,7 @@ bot_id = { path = "../bot_id", features = ["schema"] }
 chrono = { workspace = true }
 constant_time_eq = { workspace = true }
 harness_id = { path = "../harness_id", features = ["schema", "sqlx"] }
-harness_token = { path = "../harness_token" }
+bearer_token = { path = "../types/bearer_token" }
 hex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 macro_user_id = { path = "../macro_user_id" }

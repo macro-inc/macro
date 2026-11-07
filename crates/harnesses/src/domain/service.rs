@@ -3,10 +3,10 @@
 #[cfg(test)]
 mod test;
 
+use bearer_token::HashedHarnessToken;
 use chrono::{Duration, Utc};
 use constant_time_eq::constant_time_eq;
 use harness_id::HarnessId;
-use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -118,7 +118,7 @@ where
         }
 
         let device_secret = tokens::generate_device_secret();
-        let device_secret_hash = harness_token::hash_token(&device_secret);
+        let device_secret_hash = bearer_token::hash_token(&device_secret);
         let expires_at = Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES);
         let pairing_id = Uuid::new_v4();
 
@@ -243,7 +243,7 @@ where
             .map_err(Into::into)?
             .ok_or_else(|| HarnessError::NotFound("unknown pairing".to_owned()))?;
 
-        let presented = harness_token::hash_token(&req.device_secret);
+        let presented = bearer_token::hash_token(&req.device_secret);
         if !constant_time_eq(&presented, &facts.device_secret_hash) {
             return Err(HarnessError::Unauthorized);
         }

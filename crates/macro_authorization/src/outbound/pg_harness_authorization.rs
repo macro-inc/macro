@@ -100,7 +100,7 @@ impl HarnessAuthorizationRepo for PgHarnessAuthorizationRepo {
         &self,
         token: &str,
     ) -> Result<Option<HarnessTokenAuthorization>, Self::Err> {
-        let token_hash = harness_token::hash_token(token);
+        let token_hash = bearer_token::hash_token(token);
         let row = sqlx::query_as!(
             HarnessTokenAuthorizationRow,
             r#"

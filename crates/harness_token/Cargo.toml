@@ -5,5 +5,5 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-sha2 = { workspace = true }
+bearer_token = { path = "../types/bearer_token" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

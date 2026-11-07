@@ -24,7 +24,7 @@ daemon reconciles its webhook feed from.
 
 ## Boundaries
 
-- Depends on: `harness_id`, `harness_token`, `bot_id`, `macro_authorization`.
+- Depends on: `harness_id`, `bearer_token`, `bot_id`, `macro_authorization`.
 - Used by: `coding_agent_worker`.
 
 ## Recipes

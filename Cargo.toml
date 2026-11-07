@@ -26,6 +26,7 @@ members = [
   "crates/attention_feed",
   "crates/bot_id",
   "crates/bot_token",
+  "crates/types/bearer_token",
   "crates/bots",
   "crates/broadcast",
   "crates/calendar_events",
