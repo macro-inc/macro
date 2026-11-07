@@ -111,12 +111,12 @@ pub enum ChatMessageRole {
     System,
 }
 
-impl From<agent::types::Role> for ChatMessageRole {
-    fn from(role: agent::types::Role) -> Self {
+impl From<chat_message::Role> for ChatMessageRole {
+    fn from(role: chat_message::Role) -> Self {
         match role {
-            agent::types::Role::User => Self::User,
-            agent::types::Role::Assistant => Self::Assistant,
-            agent::types::Role::System => Self::System,
+            chat_message::Role::User => Self::User,
+            chat_message::Role::Assistant => Self::Assistant,
+            chat_message::Role::System => Self::System,
         }
     }
 }

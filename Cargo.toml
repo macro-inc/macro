@@ -152,6 +152,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/trigger_context",
+  "crates/types/chat_message",
   "crates/unfurl",
   "crates/universal_input",
   "crates/upstream_error",
@@ -581,6 +582,7 @@ channel_labels = { path = "crates/channel_labels" }
 channel_sender = { path = "crates/channel_sender" }
 channels = { path = "crates/channels" }
 chat = { path = "crates/chat", default-features = false }
+chat_message = { path = "crates/types/chat_message" }
 claude_fold = { path = "crates/folds/claude_fold" }
 code_execution = { path = "crates/code_execution" }
 code_mode_assets = { path = "crates/code_mode_assets" }

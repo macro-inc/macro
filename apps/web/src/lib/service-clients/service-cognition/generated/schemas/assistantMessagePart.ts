@@ -15,8 +15,8 @@ import type { AssistantMessagePartOneOfThree } from './assistantMessagePartOneOf
  * A structured part within an assistant message.
 
 When the model responds with tool calls the full turn is persisted as a
-flat sequence of these parts.  [`crate::convert::to_rig_messages`]
-reconstructs the turn boundaries that providers expect.
+flat sequence of these parts. `agent`'s `to_rig_messages` reconstructs the
+turn boundaries that providers expect.
  */
 export type AssistantMessagePart =
   | AssistantMessagePartOneOf

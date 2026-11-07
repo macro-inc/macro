@@ -11,7 +11,6 @@ team = ["dep:models_team"]
 
 [dependencies]
 messages = { workspace = true, features = ["outbound", "annotations"] }
-agent = { workspace = true }
 anyhow = { workspace = true }
 rootcause = { workspace = true }
 cached = { workspace = true }
@@ -40,6 +39,7 @@ tracing = { workspace = true }
 user_quota = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+chat_message = { workspace = true }
 
 [dev-dependencies]
 entity_access = { workspace = true, features = ["outbound"] }

@@ -283,15 +283,15 @@ fn message_roles_serialize_lowercase() {
 #[test]
 fn message_roles_convert_from_agent_roles() {
     assert_eq!(
-        ChatMessageRole::from(agent::types::Role::User),
+        ChatMessageRole::from(chat_message::Role::User),
         ChatMessageRole::User
     );
     assert_eq!(
-        ChatMessageRole::from(agent::types::Role::Assistant),
+        ChatMessageRole::from(chat_message::Role::Assistant),
         ChatMessageRole::Assistant
     );
     assert_eq!(
-        ChatMessageRole::from(agent::types::Role::System),
+        ChatMessageRole::from(chat_message::Role::System),
         ChatMessageRole::System
     );
 }

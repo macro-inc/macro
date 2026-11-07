@@ -33,8 +33,6 @@ ports = []
 
 [dependencies]
 activity = { workspace = true }
-# Domain (always included)
-agent = { workspace = true }
 ai_toolset = { workspace = true }
 anyhow = { workspace = true }
 bot_id = { workspace = true }
@@ -89,6 +87,8 @@ sqlx = { workspace = true, optional = true }
 
 macro_uuid = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+# Domain (always included)
+chat_message = { workspace = true, features = ["schema"] }
 
 [dev-dependencies]
 bot_id = { workspace = true, features = ["test-utils"] }
