@@ -40,6 +40,21 @@ export function sendRecordedInput(socket: WebSocket, send: () => void, ping: boo
   });
 }
 
+/** Close one recorded input at a time, waiting for its server callback to start. */
+export async function closeRecordedInput(socket: WebSocket) {
+  const capture = socketCaptures.get(socket);
+  if (!capture) { socket.close(); return; }
+  await capture.queue;
+  const fence = capture.sockets.get(socket);
+  if (!fence) return;
+  const id = socketId(capture, fence);
+  socket.close();
+  for (let attempt = 0; !capture.closed.has(id); attempt += 1) {
+    if (attempt === 1000) throw new Error(`Missing recorded close callback for ${String(id)}`);
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+}
+
 /** Wait for actual alarm completions rather than racing a wall-clock sleep. */
 export async function recordedAlarms(mf: Miniflare, documentId: string, count: number) {
   const capture = captures.get(mf)!;
@@ -201,9 +216,18 @@ export function runtimeCapture(disposeAfterTest: boolean, historyKey?: string) {
       const dispose = mf.dispose.bind(mf);
       mf.dispose = async () => {
         if (capture.disposed) return;
-        await dump(mf, capture);
-        capture.disposed = true;
-        await dispose();
+        let failure: { error: unknown } | undefined;
+        try { await dump(mf, capture); }
+        catch (error) { failure = { error }; }
+        finally {
+          capture.disposed = true;
+          try { await dispose(); }
+          catch (error) {
+            if (failure) throw new AggregateError([failure.error, error], 'Capture and runtime disposal failed');
+            throw error;
+          }
+        }
+        if (failure) throw failure.error;
       };
     },
     stdio(stdout: Readable, stderr: Readable) {

@@ -9,6 +9,7 @@ the Durable Object adapter and native simulation.
 
 - `src/domain/document.rs`: atomic update and snapshot policy.
 - `src/domain/permissions.rs`: verified grants and permission checks.
+- `src/domain/state.rs`: imported document state with explicit monotonic time.
 - `src/domain/connection.rs`: persisted metadata and explicit-time grant policy.
 - `src/domain/migration.rs`: persisted migration states.
 

@@ -29,6 +29,7 @@ updates over WebSocket.
 - `../../crates/sync_server_core/src/domain/`: shared session permission policy,
   atomic update use cases, connection metadata and migration state.
 - `src/domain.rs`: compatibility re-exports of the shared core.
+- `src/state.rs`: temporary RefCell adapter for core state while callers share Arc handles.
 
 ## Scope
 
@@ -65,6 +66,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   from this directory.
 - `just test-no-alarm` to verify the legacy feature selection; alarms now run
   regardless of the retained `alarm-keep-alive` compatibility flag.
+- `setupMiniflare` tracks runtimes and awaits disposal at suite teardown; explicit
+  disposal remains safe and is shared with transcript finalization.
 - Use Node.js 22.12+/24.x/26+ for Vitest 5; install JS deps with `npm ci`
   (`package-lock.json` is authoritative, not `bun.lock`).
 
