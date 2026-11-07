@@ -210,13 +210,7 @@ pub struct SpreadsheetStyle {
 pub struct SpreadsheetCellInput {
     /// A1 address, from A1 through XFD100000.
     pub address: String,
-    /// Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
-    /// For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
-    /// or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
-    /// A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
-    /// Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
-    /// Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
-    /// Numbers and true/false may also be given as JSON numbers and booleans; null empties the cell.
+    /// The new input: text or a formula, a number, true/false, or null to empty the cell.
     pub value: SpreadsheetCellValue,
 }
 
@@ -230,7 +224,12 @@ pub enum SpreadsheetCellValue {
     /// A number, passed to the engine exactly as written.
     #[cfg_attr(feature = "axum", schema(value_type = f64))]
     Number(serde_json::Number),
-    /// Text, or a formula starting with =.
+    /// Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.
+    /// For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
+    /// or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
+    /// A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
+    /// Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
+    /// Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
     Text(String),
     /// Empties the cell's input; formatting stays.
     Empty,

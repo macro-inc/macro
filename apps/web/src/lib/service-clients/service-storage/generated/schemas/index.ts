@@ -2652,6 +2652,7 @@ export * from './spreadsheetAiEdited';
 export * from './spreadsheetAiEditRequest';
 export * from './spreadsheetBorderStyle';
 export * from './spreadsheetCellInput';
+export * from './spreadsheetCellValue';
 export * from './spreadsheetChange';
 export * from './spreadsheetChangeRange';
 export * from './spreadsheetColumnType';
