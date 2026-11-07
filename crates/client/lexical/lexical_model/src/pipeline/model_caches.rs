@@ -2,7 +2,7 @@ use crate::*;
 use std::sync::Arc;
 /// Cache writes happen after mutation reporting and never mark a record dirty.
 pub(crate) fn apply(tx: &mut Transaction<'_>) {
-    if tx.editor.mode() != EditorMode::ViewAttached {
+    if tx.editor.mode() != EditorMode::ViewAttached || tx.sealed {
         return;
     }
     let keys = if tx.full_reconcile {
