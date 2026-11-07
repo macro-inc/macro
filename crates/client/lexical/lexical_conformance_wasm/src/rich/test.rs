@@ -108,3 +108,19 @@ fn rich_backspace_after_a_table_preserves_following_code() -> Result<(), Boundar
     assert_eq!(output["state"]["root"]["children"][2]["language"], "js");
     Ok(())
 }
+
+#[test]
+fn rich_paste_at_a_cleared_cell_boundary_requires_a_leaf_block() -> Result<(), BoundaryError> {
+    let mut core = RichHandle::create()?;
+    core.execute(r#"{"kind":"Table","rows":1,"columns":1}"#, HistoryTime(100))?;
+    core.execute(r#"{"kind":"Core","command":{"kind":"Select","anchor":{"path":[1,0,0,0],"offset":0,"type":"element"},"focus":{"path":[1,0,0,0],"offset":0,"type":"element"}}}"#, HistoryTime(200))?;
+    let previous: Value = serde_json::from_str(&core.execute(
+        r#"{"kind":"TableClear","cells":[{"path":[1,0,0],"offset":0,"type":"element"}]}"#,
+        HistoryTime(300),
+    )?)?;
+    let output: Value = serde_json::from_str(&core.execute(r#"{"kind":"Paste","nodes":[{"type":"code","version":1,"children":[{"type":"code-highlight","version":1,"text":"a","detail":0,"format":0,"mode":"normal","style":"","highlightType":"keyword"}],"direction":null,"format":"","indent":0,"language":"javascript"}]}"#, HistoryTime(400))?)?;
+    assert!(output["error"].is_string());
+    assert_eq!(output["state"], previous["state"]);
+    assert_eq!(output["selection"], previous["selection"]);
+    Ok(())
+}
