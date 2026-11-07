@@ -26,6 +26,8 @@ pub use connection::{Connection, Heartbeat};
 mod peers;
 pub use peers::*;
 
+mod core;
+pub use core::{BusyReason, Phase, SyncCore};
 
 mod presence;
 pub use presence::*;
