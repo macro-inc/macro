@@ -403,3 +403,41 @@ fn explicit_slot_raw_text_line_break_and_extract() -> Result<(), Error> {
     assert_eq!(tx.anchor()?, Point::text(inserted, Utf16Offset(1)));
     Ok(())
 }
+
+#[derive(Clone, Default, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct ParentRequired {}
+impl NodeType for ParentRequired {
+    const TYPE: &'static str = "parent-required";
+    type Kind = ElementKind;
+    impl_default_node!();
+}
+impl ElementNode for ParentRequired {
+    element_node_base!();
+    fn is_parent_required(&self, _: ElementView<'_>) -> bool {
+        true
+    }
+}
+
+#[test]
+fn mixed_block_insertion_wraps_nodes_requiring_a_parent() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<ParentRequired>()
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let initial = tx.create(Paragraph::default())?;
+    tx.append(NodeKey::ROOT, &[initial.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::element(initial, ChildIndex(0)),
+    ))))?;
+    let required = tx.create(ParentRequired::default())?;
+    let block = tx.create(Paragraph::default())?;
+    let text = tx.create_text("last")?;
+    tx.append(block, &[text.key()])?;
+    tx.insert_nodes(&[required.key(), block.key()])?;
+    let parent = tx.parent_or_err(required)?;
+    assert_ne!(parent, NodeKey::ROOT);
+    assert!(tx.is::<Paragraph>(parent));
+    assert_eq!(tx.parent(block), Some(NodeKey::ROOT));
+    Ok(())
+}

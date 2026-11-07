@@ -388,3 +388,27 @@ fn cross_block_deletion_merges_below_the_common_ancestor() -> Result<(), Error> 
     assert_eq!(tx.anchor()?, Point::text(a, Utf16Offset(2)));
     Ok(())
 }
+
+#[test]
+fn deletion_stops_before_an_unentered_block() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let q = tx.create(Paragraph::default())?;
+    let a = tx.create_text("first")?;
+    let b = tx.create_text("second")?;
+    tx.append(p, &[a.key()])?;
+    tx.append(q, &[b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key(), q.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::text(a, Utf16Offset(2)),
+        Point::element(q, ChildIndex(0)),
+    ))))?;
+    tx.remove_text()?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![p.key(), q.key()]);
+    assert_eq!(tx.text_content(p), "fi");
+    assert_eq!(tx.text_content(q), "second");
+    Ok(())
+}

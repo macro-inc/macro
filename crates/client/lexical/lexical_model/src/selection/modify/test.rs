@@ -393,3 +393,49 @@ fn explicit_slot_word_and_line_deletion_use_host_ranges() -> Result<(), Error> {
     assert_eq!(tx.text_content(t), "ree");
     Ok(())
 }
+
+#[derive(Clone, Default, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct InlineDecorator {}
+impl NodeType for InlineDecorator {
+    const TYPE: &'static str = "inline-decorator";
+    type Kind = DecoratorKind;
+    impl_default_node!();
+}
+impl DecoratorNode for InlineDecorator {
+    decorator_node_base!();
+    fn is_inline(&self, _: NodeView<'_>) -> bool {
+        true
+    }
+}
+
+#[test]
+fn line_boundary_continues_to_host_after_an_inline_decorator() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<InlineDecorator>()
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let a = tx.create_text("a")?;
+    let decorator = tx.create(InlineDecorator::default())?;
+    let b = tx.create_text("b")?;
+    tx.append(p, &[a.key(), decorator.key(), b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::text(a, Utf16Offset(1)),
+    ))))?;
+    tx.modify_selection(
+        Alter::Move,
+        EditDirection::Forward,
+        Granularity::LineBoundary,
+        ModifyTarget::View {
+            anchor: Point::text(b, Utf16Offset(1)),
+            focus: Point::text(b, Utf16Offset(1)),
+            resolution_dirty: false,
+            is_backward_in_dom: false,
+        },
+    )?;
+    assert_eq!(tx.anchor()?, Point::text(b, Utf16Offset(1)));
+    assert_eq!(tx.focus()?, Point::text(b, Utf16Offset(1)));
+    Ok(())
+}

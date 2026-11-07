@@ -87,7 +87,15 @@ impl Transaction<'_> {
                 if alter == Alter::Move {
                     self.set_point_at(slot, PointRole::Anchor, point)?;
                 }
-                return Ok(());
+                let focus_parent = if self.is_element(range.focus.key()) {
+                    Some(range.focus.key())
+                } else {
+                    self.parent(range.focus.key())
+                };
+                if granularity != Granularity::LineBoundary || focus_parent != Some(parent) {
+                    return Ok(());
+                }
+                self.adjust_line_decorators(slot, alter, direction)?;
             }
             if self.is_element(adjacent)
                 && !self.is_inline(adjacent)
