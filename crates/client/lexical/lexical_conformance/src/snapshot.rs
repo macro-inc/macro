@@ -176,6 +176,7 @@ pub(crate) fn compare(
         .compare(&expected["text"], &json!(state.root_text_content()))
         .map_err(|e| fail(format!("snapshot text: {e}")))?;
     if let Some(commit) = commit {
+        bind_transient_keys(replay, expected, commit)?;
         replay.compare(
             &expected["tags"],
             &json!(
@@ -257,6 +258,70 @@ pub(crate) fn compare(
         if expected.get(extra).is_some() {
             return Err(fail(format!("unmapped snapshot observable: {extra}")));
         }
+    }
+    Ok(())
+}
+
+// Records created and normalized away in one update have no live node-map row
+// or returned handle. They still participate in the exact key bijection.
+fn bind_transient_keys(replay: &mut Replayer, expected: &Value, commit: &Commit) -> Result<()> {
+    let mut raw = std::collections::BTreeSet::new();
+    for value in expected["dirty"]["leaves"]
+        .as_array()
+        .ok_or_else(|| fail("dirty leaves"))?
+        .iter()
+        .chain(
+            expected["normalized"]
+                .as_array()
+                .ok_or_else(|| fail("normalized"))?,
+        )
+        .chain(
+            expected["dirty"]["elements"]
+                .as_array()
+                .ok_or_else(|| fail("dirty elements"))?
+                .iter()
+                .map(|entry| &entry[0]),
+        )
+    {
+        if value.is_number() {
+            expected_key(replay, value)?;
+            continue;
+        }
+        let key = if value.get("$key").is_some() {
+            string(&value["raw"])?
+        } else {
+            string(value)?
+        };
+        if !replay.keys.contains_key(key) {
+            raw.insert(key.to_owned());
+        }
+    }
+    let mut actual = std::collections::BTreeSet::new();
+    for key in commit
+        .changes
+        .dirty_leaves
+        .iter()
+        .chain(commit.changes.dirty_elements.keys())
+        .chain(&commit.normalized)
+    {
+        if !replay.keys.values().any(|known| known == key) {
+            actual.insert(*key);
+        }
+    }
+    if raw.len() != actual.len() {
+        return Err(fail("transient key count mismatch"));
+    }
+    let mut raw = raw
+        .into_iter()
+        .map(|raw| {
+            raw.parse::<u32>()
+                .map(|number| (number, raw))
+                .map_err(|_| fail("transient numeric key"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    raw.sort_by_key(|(number, _)| *number);
+    for ((_, raw), key) in raw.into_iter().zip(actual) {
+        replay.bind_key(&raw, key)?;
     }
     Ok(())
 }

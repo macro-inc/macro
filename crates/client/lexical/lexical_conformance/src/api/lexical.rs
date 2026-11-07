@@ -51,6 +51,27 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         return super::rich::call(r, tx, name, a);
     }
     match name {
+        "@lexical/utils.$firstToLastIterator" | "@lexical/utils.$lastToFirstIterator" => {
+            let parent = node_key(a.first().ok_or_else(|| fail("iterator parent"))?)?;
+            let cursor = if name.ends_with("$firstToLastIterator") {
+                lexical_rich_nodes::utils::first_to_last(&view, parent)
+            } else {
+                lexical_rich_nodes::utils::last_to_first(&view, parent)
+            };
+            let id = r.iterators.len();
+            r.iterators.push(None);
+            r.child_iterators.insert(id, cursor);
+            Ok(json!({"$iteratorValue":id}))
+        }
+        "@lexical/list/formatList.$handleIndent" => {
+            let key = node_key(a.first().ok_or_else(|| fail("list item"))?)?;
+            let item = tx
+                .cast::<lexical_rich_nodes::list::ListItemNode>(key)
+                .ok_or_else(|| fail("list item"))?;
+            lexical_rich_nodes::list::format::handle_indent(tx, item)?;
+            Ok(undefined())
+        }
+
         "@lexical/overflow.$createOverflowNode" => {
             let key = tx.create(crate::test_nodes::OverflowNode::default())?.key();
             r.node(tx.view(), key)
