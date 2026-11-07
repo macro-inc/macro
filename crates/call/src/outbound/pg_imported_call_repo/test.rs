@@ -4,7 +4,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
-    MacroUserIdStr::parse_from_str(&format!("macro|{email}@example.com"))
+    MacroUserIdStr::parse_from_str(&format!("macro|{email}@test.com"))
         .unwrap()
         .into_owned()
 }
@@ -17,7 +17,7 @@ fn snapshot(owner: &str, revision: chrono::DateTime<Utc>) -> ImportedCall {
             id: macro_uuid::generate_uuid_v7(),
             user_id: None,
             display_name: Some("Guest".into()),
-            email: Some("guest@example.com".into()),
+            email: Some("guest@test.com".into()),
             phone: None,
             external_id: None,
             attendance: vec![],
