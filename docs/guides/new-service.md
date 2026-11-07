@@ -26,11 +26,12 @@ cautionary example.
 ## 1. The crate
 
 - Create `services/<snake_name>/` and add it to `members` in the root
-  `Cargo.toml`. Third-party dependencies use `{ workspace = true }`; add
+  `Cargo.toml`. Workspace crates and third-party dependencies both use
+  `{ workspace = true }`; add
   `workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }`.
-- Run `just hakari` (`cargo x deps`) and commit the regenerated
-  `crates/workspace-hack` and `.github/workspace-dep-closures.json`. CI and nix both
-  fail without it.
+- Run `just hakari` (`cargo x deps`) and commit what it regenerates: manifests,
+  `crates/workspace-hack` and
+  `.github/workspace-dep-closures.json`. CI and nix both fail without it.
 - The binary is a composition root. Domain logic goes in `crates/<domain>` with
   `inbound/`, `domain/`, and `outbound/` (see the
   [hexagonal architecture skill](../../.agents/skills/cloud-storage-hexagonal-architecture/SKILL.md)).
