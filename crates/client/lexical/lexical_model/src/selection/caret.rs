@@ -16,7 +16,10 @@ struct Caret {
 impl Caret {
     fn from_point(view: StateRef<'_>, point: Point) -> Result<Self, Error> {
         let (key, kind) = match point {
-            Point::Text { key, offset } => { view.text_data(key)?; (key, Kind::Text(offset)) }
+            Point::Text { key, offset } => {
+                if offset > view.text_data(key)?.text.utf16_len() { return Err(Error::Utf16OffsetOutOfRange(offset)); }
+                (key, Kind::Text(offset))
+            }
             Point::Element { key, offset: ChildIndex(0) } => { view.element_data(key)?; (key, Kind::Child) }
             Point::Element { key, offset } => {
                 let child = view.child_at_index(key, ChildIndex(offset.0 - 1)).ok_or(Error::SpliceOutOfRange)?;
@@ -94,7 +97,10 @@ impl Transaction<'_> {
     pub(super) fn remove_caret_range(&mut self, slot: SelectionSlot, preserve_first: bool) -> Result<(), Error> {
         self.guard_write()?;
         let range = self.range_at(slot)?.clone();
-        if range.is_collapsed() { return self.collapsed_selection_at(slot, range.anchor, range.format, range.style); }
+        if range.is_collapsed() {
+            let point = Caret::from_point(self.view(), range.anchor)?.point(self.view())?;
+            return self.collapsed_selection_at(slot, point, range.format, range.style);
+        }
         let backward = self.view().point_is_before(range.focus, range.anchor)?;
         let (start, end) = if backward { (range.focus, range.anchor) } else { (range.anchor, range.focus) };
         let anchor = Caret::from_point(self.view(), start)?;

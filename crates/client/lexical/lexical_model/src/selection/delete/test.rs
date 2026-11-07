@@ -683,3 +683,20 @@ fn caret_deletion_does_not_enter_a_block_beyond_its_root_end() -> Result<(), Err
     })?;
     Ok(())
 }
+
+#[test]
+fn collapsed_element_removal_uses_its_raw_caret_text_origin() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("a")?;
+        let line = tx.create(LineBreak::default())?;
+        tx.append(p, &[text.key(), line.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(Point::element(p, ChildIndex(1))))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.anchor()?, Point::text(text, Utf16Offset(1)));
+        Ok(())
+    })?;
+    Ok(())
+}
