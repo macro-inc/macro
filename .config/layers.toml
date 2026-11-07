@@ -121,11 +121,9 @@ paths = [
   "crates/codex_connection",
   "crates/coding_agent_worker",
   "crates/cognition",
-  "crates/collab_surface",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
   "crates/dictation",
-  "crates/documents",
   "crates/dynamic_ui",
   "crates/embedding",
   "crates/folds/agent_fold",
@@ -137,7 +135,6 @@ paths = [
   "crates/hosted_runtimes",
   "crates/image_generation",
   "crates/jev",
-  "crates/lexical_mention_extractor",
   "crates/mcp_select",
   "crates/mcp_toolset",
   "crates/memory",
@@ -149,13 +146,10 @@ paths = [
   "crates/scheduled_action",
   "crates/shown_text",
   "crates/skills",
-  "crates/static_file",
   "crates/stripe_inbox",
   "crates/suggestion_generation",
   "crates/suggestions",
   "crates/suggestions_db_utils",
-  "crates/sync_router",
-  "crates/sync_service",
   "crates/system_skills",
   "crates/team_agents",
   "crates/universal_input",
@@ -306,12 +300,12 @@ reason = "uses SoupProjectionHydration and SoupDocumentServerFacts; move them to
 [[allow]]
 from = "sync_router"
 to = "sync_service_bebop_schema"
-reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/documents/"
 
 [[allow]]
 from = "sync_service"
 to = "sync_service_bebop_schema"
-reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/documents/"
 
 [[allow]]
 from = "sync_service_client"
