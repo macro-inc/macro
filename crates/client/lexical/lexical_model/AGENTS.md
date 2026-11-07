@@ -41,10 +41,13 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Tests
 
 - Cover every public function with an explicit literal behavior test before adding table-driven or generated cases; do not hide fixture construction behind a helper DSL.
-- Test pipeline order, rollback, JSON bytes and boundary cases locally; Tier A fixtures are not yet available.
+- Test pipeline order, rollback, JSON bytes and boundary cases locally; replay the admitted Tier A core subset with `cargo test -p lexical_conformance --test replay -j4`.
 
 The sibling test modules cover values, reads, node dispatch, tree edits and NodeState.
 `pipeline/test.rs` covers ordering and transaction boundaries; `json/test.rs` checks
 literal exported bytes. `selection/*/test.rs` and `selection/test.rs` port explicit
 upstream selection examples, including the §18.5 `remove_text` fixture, detached-slot
 side effects, UTF-16 boundaries, formatting, block deletion and host movement.
+
+Root text-cache reconciliation clones its record after mutation reporting and retains
+the intentional root dirty mark; cache-only writes do not add mutations.
