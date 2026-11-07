@@ -1,47 +1,22 @@
 # frecency
 
+Status: legacy — do not extend; depend on `frecency_core`, `frecency_outbound`
+or `frecency_inbound` directly
+
 ## What it is
 
-Shared infrastructure for Search/Soup ranking and other item lists (used by
-soup, ai_tools, memory, channels, email, scheduled actions): frecency
-(frequency + recency) scoring, following the hexagonal architecture pattern.
-
-## Start here
-
-- `src/domain/models.rs`: the score model and decay parameters.
-- `src/domain/services.rs`: the scoring/ranking logic.
-- `src/outbound/postgres.rs`: the SQL-side scoring adapter (recursive CTEs via
-  the `recursion` crate).
-- `src/inbound/polling_aggregator.rs`: the polling path that aggregates and
-  persists scores.
-
-## Scope
-
-- Owns: frecency computation and its Postgres persistence/query adapter.
-- Not here: what gets ranked or how it's displayed — callers combine this
-  with their own entity filters.
+A facade that re-exports the split frecency crates under their old module
+paths (`frecency::domain` = `frecency_core`, `frecency::outbound` =
+`frecency_outbound`, `frecency::inbound` = `frecency_inbound`), so existing
+imports keep working. Any crate that depends on it rebuilds whenever any layer
+changes, so new code should name the layer crate it needs.
 
 ## Boundaries
 
-- Depends on: `filter_ast`, `item_filters`, `model-entity`.
-- Used by: `soup`, `ai_tools`, `memory`, `channels`, `email`,
-  `document_storage_service`, `connection_gateway`, `document_cognition_service`,
-  `scheduled_action`, `mcp_service`, `email_service`.
-
-## Recipes
-
-- Add a new signal to the score: `src/domain/models.rs` → `src/domain/services.rs`
-  → `src/outbound/postgres.rs`.
+- Used by: the composition roots (`document_storage_service`,
+  `agent_harness_service`, `email_service`, `connection_gateway`),
+  `ai_tools`, and the test builds of `email`, `soup` and `reminders`.
 
 ## Checks
 
-- `cargo test -p frecency --all-features` (`SQLX_OFFLINE` unset).
-- `just integration_test` (DynamoDB-backed cases, from this directory).
-
-## Gotchas
-
-- Treat DATE property literals as non-matches; keep DATE filtering on Soup or OpenSearch instead of frecency.
-
-## Related
-
-- Rules: `.agents/rules/rust/db.md`
+- `cargo check -p frecency --all-features`

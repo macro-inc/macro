@@ -1,12 +1,12 @@
 //! This module provides the implementation for storing frecency data in postgres
-use crate::domain::{
+use chrono::{DateTime, Utc};
+use frecency_core::{
     models::{
         AggregateFrecency, AggregateId, EventRecord, EventRecordWithId, FrecencyAction,
         FrecencyData, FrecencyEntity, FrecencyEvent, FrecencyPageRequest, TimestampWeight,
     },
     ports::{AggregateFrecencyStorage, EventRecordStorage, UnprocessedEventsRepo},
 };
-use chrono::{DateTime, Utc};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};
@@ -147,8 +147,8 @@ impl<'a> EventRow<'a, i64> {
         } = self;
 
         Ok(EventRecordWithId {
-            event_record: EventRecord {
-                event: FrecencyEvent {
+            event_record: EventRecord::from_stored(
+                FrecencyEvent {
                     entity: FrecencyEntity {
                         user_id,
                         entity: EntityType::from_str(&entity_type)?
@@ -157,7 +157,7 @@ impl<'a> EventRow<'a, i64> {
                     action: FrecencyAction::from_str(&event_type)?,
                 },
                 timestamp,
-            },
+            ),
             id,
         })
     }
@@ -231,18 +231,13 @@ impl AggregateRow {
             recent_events,
         } = self;
 
-        Ok(AggregateFrecency {
-            id: AggregateId {
+        Ok(AggregateFrecency::from_stored(
+            AggregateId {
                 entity: entity_type.with_entity_string(entity_id.to_string()),
                 user_id: MacroUserIdStr::parse_from_str(&user_id).map(CowLike::into_owned)?,
             },
-            data: FrecencyData {
-                event_count,
-                frecency_score,
-                first_event,
-                recent_events: recent_events.0,
-            },
-        })
+            FrecencyData::from_stored(event_count, frecency_score, first_event, recent_events.0),
+        ))
     }
 }
 
@@ -280,7 +275,7 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
 
     async fn set_aggregate(
         &self,
-        frecency: crate::domain::models::AggregateFrecency,
+        frecency: frecency_core::models::AggregateFrecency,
     ) -> Result<(), Self::Err> {
         let entity_type = frecency.id.entity.entity_type.to_string();
         let entity_id = frecency.id.entity.entity_id;
@@ -325,7 +320,7 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
         &self,
         user_id: MacroUserIdStr<'a>,
         entities: &'a [Entity<'a>],
-    ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err> {
+    ) -> Result<Vec<frecency_core::models::AggregateFrecency>, Self::Err> {
         // Build the WHERE conditions for each entity
         let mut conditions = Vec::new();
         let mut params = Vec::new();

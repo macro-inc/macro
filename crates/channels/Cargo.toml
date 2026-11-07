@@ -43,13 +43,13 @@ kafka_consumer = [
 list = [
   "dep:filter_ast",
   "dep:models_soup",
-  "dep:frecency",
   "dep:model-entity",
   "dep:recursion",
   "dep:rootcause",
   "dep:serde_json",
-  "frecency/ports",
   "ports",
+  "dep:frecency_core",
+  "frecency_core/ports",
 ]
 outbound = [
   "item_filters/native",
@@ -113,7 +113,6 @@ contacts = { workspace = true, features = [
 entity_access = { workspace = true, optional = true }
 entity_access_db_utils = { workspace = true, optional = true }
 filter_ast = { workspace = true, optional = true }
-frecency = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 item_filters = { workspace = true }
@@ -157,6 +156,7 @@ async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 models_soup = { workspace = true, optional = true }
+frecency_core = { workspace = true, optional = true }
 
 [dev-dependencies]
 bot_id = { workspace = true, features = ["test-utils"] }

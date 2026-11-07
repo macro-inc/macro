@@ -62,6 +62,9 @@ members = [
   "crates/email/email_api_client_core",
   "crates/email/email_api_client_outbound",
   "crates/embedding",
+  "crates/entities/frecency_core",
+  "crates/entities/frecency_inbound",
+  "crates/entities/frecency_outbound",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
@@ -719,6 +722,9 @@ filter_ast = { path = "crates/filter_ast" }
 foreign_entity = { path = "crates/foreign_entity", default-features = false }
 forms = { path = "crates/forms" }
 frecency = { path = "crates/frecency" }
+frecency_core = { path = "crates/entities/frecency_core" }
+frecency_inbound = { path = "crates/entities/frecency_inbound" }
+frecency_outbound = { path = "crates/entities/frecency_outbound" }
 fusionauth = { path = "crates/fusionauth" }
 genai_telemetry = { path = "crates/genai_telemetry" }
 generic_email_domains = { path = "crates/generic_email_domains" }

@@ -84,7 +84,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/sha_cleanup_worker/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/roles_and_permissions/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/teams/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/frecency/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/frecency_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/favorites/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/reminders/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/slack_integration/.env

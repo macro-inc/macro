@@ -276,23 +276,19 @@ async fn attachment_mismatch_rolls_back_admission(pool: Pool<Postgres>) -> anyho
 }
 
 struct UnusedFrecency;
-impl frecency::domain::ports::FrecencyQueryService for UnusedFrecency {
+impl frecency_core::ports::FrecencyQueryService for UnusedFrecency {
     async fn get_frecency_page<'a>(
         &self,
-        _: frecency::domain::models::FrecencyPageRequest<'a>,
-    ) -> Result<
-        frecency::domain::models::FrecencyPageResponse,
-        frecency::domain::models::FrecencyQueryErr,
-    > {
+        _: frecency_core::models::FrecencyPageRequest<'a>,
+    ) -> Result<frecency_core::models::FrecencyPageResponse, frecency_core::models::FrecencyQueryErr>
+    {
         panic!("send does not query frecency")
     }
     async fn get_frecencies_by_ids<'a>(
         &self,
-        _: frecency::domain::models::FrecencyByIdsRequest<'a>,
-    ) -> Result<
-        frecency::domain::models::FrecencyPageResponse,
-        frecency::domain::models::FrecencyQueryErr,
-    > {
+        _: frecency_core::models::FrecencyByIdsRequest<'a>,
+    ) -> Result<frecency_core::models::FrecencyPageResponse, frecency_core::models::FrecencyQueryErr>
+    {
         panic!("send does not query frecency")
     }
 }

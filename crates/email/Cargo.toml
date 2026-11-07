@@ -46,7 +46,7 @@ http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
 outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
 sqs = ["dep:models_email", "dep:sqs_client", "ports"]
-ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency_core/ports"]
 # The S3 adapter for staged draft attachments.
 s3 = ["dep:aws-sdk-s3", "ports"]
 
@@ -81,7 +81,6 @@ either = { workspace = true }
 email_utils = { workspace = true }
 email_db_client = { workspace = true }
 filter_ast = { workspace = true }
-frecency = { workspace = true }
 gmail_client = { workspace = true, optional = true }
 google_token = { workspace = true, optional = true }
 item_filters = { workspace = true, default-features = true }
@@ -120,6 +119,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 models_soup = { workspace = true }
 email_api_client_core = { workspace = true, optional = true, features = ["ports"] }
+frecency_core = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

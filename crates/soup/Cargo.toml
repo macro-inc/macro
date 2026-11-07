@@ -12,8 +12,6 @@ ai_tools = [
   "email/ai_tools",
   "email/inbound",
   "email/outbound",
-  "frecency/outbound",
-  "frecency/postgres",
   "models_soup/schema",
   "outbound",
   "ports",
@@ -39,7 +37,7 @@ outbound = [
   "ports",
   "properties/outbound",
 ]
-ports = ["crm/ports", "dep:tokio", "frecency/ports"]
+ports = ["crm/ports", "dep:tokio", "frecency_core/ports"]
 
 
 [dependencies]
@@ -65,7 +63,6 @@ filter_ast = { workspace = true }
 foreign_entity = { workspace = true, features = [
   "ports",
 ] }
-frecency = { workspace = true }
 github_pull_requests = { workspace = true, features = ["ports"] }
 indexmap = { workspace = true }
 item_filters = { workspace = true, default-features = true }
@@ -94,6 +91,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+frecency_core = { workspace = true }
 
 [dev-dependencies]
 ai_toolset = { workspace = true }

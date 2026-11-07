@@ -9,7 +9,7 @@ use crate::domain::{
 use entity_access::domain::models::{
     AccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
-use frecency::domain::ports::FrecencyQueryService;
+use frecency_core::ports::FrecencyQueryService;
 use std::collections::HashMap;
 use uuid::Uuid;
 

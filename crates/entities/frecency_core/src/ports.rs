@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use crate::domain::models::{
+use crate::models::{
     AggregateFrecency, AggregateId, EventAggregationStats, EventRecord, EventRecordWithId,
     FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse, FrecencyQueryErr,
 };

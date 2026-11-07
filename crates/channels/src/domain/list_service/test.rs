@@ -1,5 +1,5 @@
 use super::*;
-use frecency::domain::models::{AggregateFrecency, FrecencyPageRequest};
+use frecency_core::models::{AggregateFrecency, FrecencyPageRequest};
 
 struct PanicFrecencyStorage;
 
