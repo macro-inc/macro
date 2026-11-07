@@ -474,3 +474,21 @@ fn formatting_past_a_text_end_does_not_change_empty_block_flags() -> Result<(), 
     assert_eq!(editor.state().view().element_data(last)?.text_format, TextFormat::ITALIC);
     Ok(())
 }
+
+#[test]
+fn insertion_at_a_resolved_element_start_preserves_the_text_tail() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("old")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset::ZERO), Point::element(p, ChildIndex(0)),
+        ))))?;
+        tx.insert_text("x")?;
+        assert_eq!(tx.text_content(text).as_ref(), "xold");
+        Ok(())
+    })?;
+    Ok(())
+}
