@@ -40,7 +40,9 @@ model trace while the original test assertions still run in all three lanes.
 HTML-seeded exports begin a partial fixture at the first model read. The initial
 JSON, selection, allocation keys, node-map ordering and next key counter are
 restored explicitly; replay never runs the HTML setup.
-Unsupported callback or plugin state remains an indexed exclusion. Passing
+Unsupported callback or plugin state remains an indexed exclusion. Shiki loader
+calls also remain excluded: their warm-cache return values cannot initialize a
+fresh replay without an explicit asynchronous bootstrap phase. Passing
 regeneration checks proves the admitted corpus is stable; it does not claim that
 every upstream test is recordable.
 

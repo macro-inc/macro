@@ -21,6 +21,15 @@ async function load(name: string): Promise<Record<string, unknown>> {
       .find((file) => existsSync(path.join(root, file)));
   }
   if (!relative) {
+    const canonical = name.match(/^@lexical\/([^/]+)\/(.+)$/);
+    if (canonical) {
+      const prefix = `packages/lexical-${canonical[1]}/src/${canonical[2]}`;
+      relative = ['.ts', '.tsx', '/index.ts', '/index.tsx']
+        .map((suffix) => prefix + suffix)
+        .find((file) => existsSync(path.join(root, file)));
+    }
+  }
+  if (!relative) {
     const parent = Object.keys(aliases)
       .filter((alias) => name.startsWith(`${alias}/`))
       .sort((a, b) => b.length - a.length)[0];
