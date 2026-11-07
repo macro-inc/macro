@@ -24,7 +24,8 @@ gateway `/calendar` prefix.
 
 - Depends on: `calendar_events`, `calendar_scheduling` (domain crates owning
   the Postgres/Google adapters), `connection_gateway_client`,
-  `authentication_service_client`, `macro_authorization`, `macro_service_urls`.
+  `authentication_service_client`, `macro_authorization`, the service URL
+  crates.
 - Used by: the web app and SDK calendar clients, through the gateway.
 
 ## Recipes

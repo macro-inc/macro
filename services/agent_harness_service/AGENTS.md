@@ -150,7 +150,7 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 
 All feature configs read the same harness `APP_SECRETS_JSON`; the harness
 Doppler validation binary validates each config. Stable public origins resolve
-once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
+once at startup through the service URL crates: `McpPublicUrl` preserves the
 `mcp-server[-dev].macro.com` OAuth identity, `CognitionPublicUrl` preserves
 `document-cognition[-dev].macro.com` integration callbacks, and `AppServiceUrl`
 supplies browser links and preview form origin. Preview control accepts the

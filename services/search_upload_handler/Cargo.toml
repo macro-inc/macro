@@ -11,7 +11,7 @@ document_storage_service_client = { path = "../../crates/document_storage_servic
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env_var = { path = "../../crates/macro_env_var" }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+document_storage_service_url = { path = "../../crates/platform/service_urls/document_storage_service_url" }
 s3_key = { path = "../../crates/s3_key" }
 tokio = { workspace = true }
 tracing = { workspace = true }

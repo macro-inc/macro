@@ -66,13 +66,13 @@ pub async fn router(
     cancellation: tokio_util::sync::CancellationToken,
     code_mode: Option<PublicCodeMode>,
 ) -> anyhow::Result<axum::Router> {
-    let public_url = macro_service_urls::McpPublicUrl::new()?;
+    let public_url = mcp_public_url::McpPublicUrl::new()?;
     let (auth_proxy, backfill) =
         build_auth_proxy(config, secrets, &public_url, db.clone(), kms).await?;
     let analytics = build_analytics(config, db);
-    let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
+    let item_base_url = app_service_url::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
-        url::Url::parse(macro_service_urls::StaticFileServiceUrl::new()?.as_ref())?;
+        url::Url::parse(static_file_service_url::StaticFileServiceUrl::new()?.as_ref())?;
     let mcp_public_host = public_url
         .parse_url()?
         .host_str()
@@ -158,7 +158,7 @@ pub async fn router(
 async fn build_auth_proxy(
     config: &Config,
     secretsmanager_client: &secretsmanager_client::SecretsManager,
-    public_url: &macro_service_urls::McpPublicUrl,
+    public_url: &mcp_public_url::McpPublicUrl,
     db: sqlx::PgPool,
     kms: aws_sdk_kms::Client,
 ) -> anyhow::Result<(
@@ -168,7 +168,7 @@ async fn build_auth_proxy(
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
     let email_codes = AuthServiceEmailCodes::new(
-        &macro_service_urls::AuthServiceUrl::new()?,
+        &auth_service_url::AuthServiceUrl::new()?,
         mcp_oauth_redirect_uri.clone(),
     )
     .context("failed to initialize MCP email sign-in")?;

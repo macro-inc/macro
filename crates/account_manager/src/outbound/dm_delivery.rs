@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
+use app_service_url::AppServiceUrl;
 use channels::domain::{
     models::{ChannelSender, GetOrCreateDmRequest},
     ports::ChannelService,
 };
 use entity_access::domain::{models::EntityType, ports::EntityAccessService};
-use macro_service_urls::AppServiceUrl;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MessageCommands,

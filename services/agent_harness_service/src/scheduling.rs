@@ -4,17 +4,18 @@ use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use github::outbound::pg_installation_claims::PgGithubInstallationClaims;
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;

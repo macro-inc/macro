@@ -479,10 +479,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let calendar_tool_context = ai_tools::build_calendar_tool_context(
         pool.clone(),
-        macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+        service_url::ServiceUrl::owned("http://localhost:0").into(),
         "test-internal-api-key".to_string(),
         call_tool_context.service.clone(),
-        macro_service_urls::AppServiceUrl::local(),
+        app_service_url::AppServiceUrl::local(),
         true,
     );
     let forms_tool_context = ai_tools::build_forms_tool_context(
@@ -527,7 +527,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         booking_management_tool_context: ai_tools::build_booking_management_tool_context(
-            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
             macro_env::Environment::Local,
         ),
@@ -537,10 +537,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             pool.clone(),
-            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
             call_tool_context.service.clone(),
-            macro_service_urls::AppServiceUrl::local(),
+            app_service_url::AppServiceUrl::local(),
             true,
         ),
         team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(pool.clone(), true),
@@ -570,7 +570,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access_service.clone(),
         ),
         coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
-            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         )
         .expect("valid test coding agent context"),

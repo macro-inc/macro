@@ -111,7 +111,7 @@
         "crates/messages/**",
         "crates/import/**",
         "crates/macro_queues/**",
-        "crates/macro_service_urls/**",
+        "crates/platform/service_urls/**",
         "crates/teams/**",
         "crates/invite_email/**",
         "crates/notification/**",

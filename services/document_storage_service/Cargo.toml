@@ -200,7 +200,14 @@ macro_middleware = { path = "../../crates/macro_middleware", default-features = 
   "cloud_storage",
 ] }
 macro_queues = { path = "../../crates/macro_queues" }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+ai_editing_worker_url = { path = "../../crates/platform/service_urls/ai_editing_worker_url" }
+app_service_url = { path = "../../crates/platform/service_urls/app_service_url" }
+auth_service_url = { path = "../../crates/platform/service_urls/auth_service_url" }
+calendar_service_url = { path = "../../crates/platform/service_urls/calendar_service_url" }
+connection_gateway_url = { path = "../../crates/platform/service_urls/connection_gateway_url" }
+lexical_service_url = { path = "../../crates/platform/service_urls/lexical_service_url" }
+static_file_service_url = { path = "../../crates/platform/service_urls/static_file_service_url" }
+sync_service_url = { path = "../../crates/platform/service_urls/sync_service_url" }
 macro_sha_count_client = { path = "../../crates/macro_sha_count_client" }
 macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
 opentelemetry = { workspace = true }

@@ -78,7 +78,8 @@ utoipa = { workspace = true, features = ["chrono"] }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+connection_gateway_url = { path = "../../crates/platform/service_urls/connection_gateway_url" }
+notification_service_url = { path = "../../crates/platform/service_urls/notification_service_url" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]

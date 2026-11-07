@@ -127,7 +127,29 @@ macro_event_broker = { path = "../../crates/macro_event_broker", features = ["ou
 soup_realtime = { path = "../../crates/soup_realtime", default-features = false, features = ["outbound"] }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = ["cloud_storage"] }
 macro_queues = { path = "../../crates/macro_queues" }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+contacts_service_url = { path = "../../crates/platform/service_urls/contacts_service_url" }
+document_cognition_service_url = { path = "../../crates/platform/service_urls/document_cognition_service_url" }
+notification_service_url = { path = "../../crates/platform/service_urls/notification_service_url" }
+scheduled_action_service_url = { path = "../../crates/platform/service_urls/scheduled_action_service_url" }
+unfurl_service_url = { path = "../../crates/platform/service_urls/unfurl_service_url" }
+agent_harness_egress_url = { path = "../../crates/platform/service_urls/agent_harness_egress_url" }
+agent_harness_service_url = { path = "../../crates/platform/service_urls/agent_harness_service_url" }
+ai_editing_worker_url = { path = "../../crates/platform/service_urls/ai_editing_worker_url" }
+app_service_url = { path = "../../crates/platform/service_urls/app_service_url" }
+auth_service_url = { path = "../../crates/platform/service_urls/auth_service_url" }
+calendar_service_url = { path = "../../crates/platform/service_urls/calendar_service_url" }
+cognition_public_url = { path = "../../crates/platform/service_urls/cognition_public_url" }
+connection_gateway_url = { path = "../../crates/platform/service_urls/connection_gateway_url" }
+document_storage_service_url = { path = "../../crates/platform/service_urls/document_storage_service_url" }
+email_service_url = { path = "../../crates/platform/service_urls/email_service_url" }
+lexical_service_url = { path = "../../crates/platform/service_urls/lexical_service_url" }
+mcp_public_url = { path = "../../crates/platform/service_urls/mcp_public_url" }
+mcp_service_url = { path = "../../crates/platform/service_urls/mcp_service_url" }
+preview_gateway_url = { path = "../../crates/platform/service_urls/preview_gateway_url" }
+service_url = { path = "../../crates/platform/service_urls/service_url" }
+static_file_public_url = { path = "../../crates/platform/service_urls/static_file_public_url" }
+static_file_service_url = { path = "../../crates/platform/service_urls/static_file_service_url" }
+sync_service_url = { path = "../../crates/platform/service_urls/sync_service_url" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }

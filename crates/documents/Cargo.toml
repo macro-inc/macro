@@ -67,7 +67,8 @@ axum = [
 backfill_binary = [
   "dep:clap",
   "dep:macro_entrypoint",
-  "dep:macro_service_urls",
+  "dep:lexical_service_url",
+  "dep:sync_service_url",
   "markdown_init",
   "outbound",
   "ports",
@@ -145,7 +146,8 @@ macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
-macro_service_urls = { path = "../macro_service_urls", optional = true }
+lexical_service_url = { path = "../platform/service_urls/lexical_service_url", optional = true }
+sync_service_url = { path = "../platform/service_urls/sync_service_url", optional = true }
 macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }

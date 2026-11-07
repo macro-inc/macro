@@ -16,5 +16,5 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_service_urls = { path = "../macro_service_urls" }
+static_file_service_url = { path = "../platform/service_urls/static_file_service_url" }
 tokio = { workspace = true }

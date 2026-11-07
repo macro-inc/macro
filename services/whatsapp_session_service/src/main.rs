@@ -44,11 +44,10 @@ async fn run() -> Result<(), rootcause::Report> {
         .connect(config.database_url.as_ref())
         .await?;
     let lock_options: PgConnectOptions = config.database_url.as_ref().parse()?;
-    let dialer: Arc<dyn Dialer> =
-        match macro_service_urls::read_override_env(WEBSOCKET_URL_OVERRIDE)? {
-            Some(url) => Arc::new(WebSocketDialer { url }),
-            None => Arc::new(WebSocketDialer::default()),
-        };
+    let dialer: Arc<dyn Dialer> = match service_url::read_override_env(WEBSOCKET_URL_OVERRIDE)? {
+        Some(url) => Arc::new(WebSocketDialer { url }),
+        None => Arc::new(WebSocketDialer::default()),
+    };
     let kms = AwsWhatsAppKms::new(
         aws_sdk_kms::Client::new(&macro_aws_config::get_macro_aws_config().await),
         SessionKmsKey::for_environment(environment).to_owned(),
@@ -81,7 +80,7 @@ async fn run() -> Result<(), rootcause::Report> {
             kms,
             signal: whatsmeow_signal::libsignal(),
             dialer,
-            media_base_url: macro_service_urls::read_override_env(MEDIA_HOST_OVERRIDE)?,
+            media_base_url: service_url::read_override_env(MEDIA_HOST_OVERRIDE)?,
             max_accounts: MAX_ACCOUNTS,
             drain_batch: DRAIN_BATCH,
             timings: Timings::production(),

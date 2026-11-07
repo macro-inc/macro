@@ -194,7 +194,11 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+auth_service_url = { path = "../../crates/platform/service_urls/auth_service_url" }
+connection_gateway_url = { path = "../../crates/platform/service_urls/connection_gateway_url" }
+document_storage_service_url = { path = "../../crates/platform/service_urls/document_storage_service_url" }
+email_service_url = { path = "../../crates/platform/service_urls/email_service_url" }
+static_file_service_url = { path = "../../crates/platform/service_urls/static_file_service_url" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]

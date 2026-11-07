@@ -12,6 +12,7 @@ use crate::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use anyhow::Context;
+use auth_service_url::AuthServiceUrl;
 use calendar_events::{
     domain::{
         invitations::CalendarInvitationResolver, mutations::CalendarMutationServiceImpl,
@@ -19,7 +20,9 @@ use calendar_events::{
     },
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
 };
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use email::{
     domain::service::EmailServiceImpl,
     inbound::axum::{
@@ -38,11 +41,9 @@ use macro_authorization::{
 };
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
-};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use std::{sync::Arc, time::Duration};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use tokio_util::task::TaskTracker;

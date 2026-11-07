@@ -8,12 +8,17 @@ use crate::tool_context::{
     ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
     NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
+use ai_editing_worker_url::AiEditingWorkerUrl;
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
+use app_service_url::AppServiceUrl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use calendar_service_url::CalendarServiceUrl;
 use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
@@ -23,6 +28,7 @@ use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
+use email_service_url::EmailServiceUrl;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
@@ -40,12 +46,9 @@ use github_pull_requests::{
 use image_generation::domain::ports::{ImageGenerator, UnconfiguredImageGenerator};
 use image_generation::outbound::gemini::GeminiImageGenerator;
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
-use macro_service_urls::{
-    AiEditingWorkerUrl, AppServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
-};
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
@@ -57,6 +60,7 @@ use soup::domain::service::SoupImpl;
 use soup::outbound::pg_soup_repo::PgSoupRepo;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+use sync_service_url::SyncServiceUrl;
 use tokio_util::task::TaskTracker;
 
 env_var! {
@@ -109,7 +113,7 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// The cognition service owns admission, model access, and usage recording.
 pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionToolContext> {
     let client = cognition::outbound::CognitionClient::new(
-        macro_service_urls::DocumentCognitionServiceUrl::new()?.as_ref(),
+        document_cognition_service_url::DocumentCognitionServiceUrl::new()?.as_ref(),
         &macro_auth::InternalApiKey::new()?,
         chat::domain::models::FREE_MODEL,
     )
@@ -139,9 +143,10 @@ pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionTool
 /// `MCP_CREDENTIALS_KEY_SECRET_NAME` enables import tools on hosts with access
 /// to the shared connector encryption key; hosts without it remain unwired.
 ///
-/// Service URLs are resolved through the `macro_service_urls` crate, and queue
-/// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
-/// vars before environment defaults).
+/// Service URLs are resolved through the per-URL crates in
+/// `crates/platform/service_urls`, and queue names through the `macro_queues`
+/// crate (both using optional `OVERRIDE_*` env vars before environment
+/// defaults).
 ///
 /// Queue wiring is opt-in via boolean flags (default `false`); the queue name
 /// itself comes from `macro_queues` when enabled:
@@ -565,11 +570,11 @@ pub async fn build_tool_service_context_from_env(
         Some(side_effect_clients.connection_gateway.as_ref().clone()),
         crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
         crate::tool_context::FormsToolConfig {
-            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+            app_origin: app_service_url::AppServiceUrl::new()?.to_string(),
             editing_worker_url: ai_editing_worker_url,
             static_files: static_file_service_client::StaticFileServiceClient::new(
                 macro_auth::InternalApiKey::new()?.to_string(),
-                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                static_file_service_url::StaticFileServiceUrl::new()?.to_string(),
             ),
         },
     );
@@ -746,7 +751,7 @@ pub async fn build_tool_service_context_from_env(
             entity_access_service.clone(),
         ),
         coding_agent_tool_context: crate::build_coding_agent_tool_context(
-            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            agent_harness_service_url::AgentHarnessServiceUrl::new()?,
             env.internal_api_key.to_string(),
         )?,
         project_tool_context,

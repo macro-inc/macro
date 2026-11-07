@@ -27,7 +27,8 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 model = { path = "../../crates/model" }
 model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+lexical_service_url = { path = "../../crates/platform/service_urls/lexical_service_url" }
+sync_service_url = { path = "../../crates/platform/service_urls/sync_service_url" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

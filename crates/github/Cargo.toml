@@ -71,7 +71,7 @@ macro_env_var = { path = "../macro_env_var" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
-macro_service_urls = { path = "../macro_service_urls" }
+app_service_url = { path = "../platform/service_urls/app_service_url" }
 model-entity = { path = "../model-entity", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
 notification = { path = "../notification", optional = true }

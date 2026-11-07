@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use axum::Router;
 use config::{Config, Environment};
+use connection_gateway_url::ConnectionGatewayUrl;
 use contacts::domain::service::{ContactsDomainService, ContactsOutboxServiceImpl};
 use contacts::inbound::http::{ApiDoc, ContactsRouterState, contacts_router};
 use contacts::inbound::worker::{ContactsWorker, OutboxWorker};
@@ -16,7 +17,6 @@ use macro_authorization::{
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use sqlx::postgres::PgPoolOptions;
 use sqs_worker::SQSWorker;

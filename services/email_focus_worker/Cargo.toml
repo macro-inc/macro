@@ -28,7 +28,8 @@ macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+agent_harness_service_url = { path = "../../crates/platform/service_urls/agent_harness_service_url" }
+connection_gateway_url = { path = "../../crates/platform/service_urls/connection_gateway_url" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 memory = { path = "../../crates/memory" }

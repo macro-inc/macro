@@ -35,7 +35,7 @@ them unless the schedule quotes the user's approval
 (`macro_authorization::is_agent_run`).
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
-host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
+host fills both from the service URL crates. Leaving `webAppUrl` out of
 `new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and
 local would point at macro.com.
 

@@ -55,7 +55,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 ], optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
-macro_service_urls = { path = "../macro_service_urls" }
+notification_service_url = { path = "../platform/service_urls/notification_service_url" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model-entity = { path = "../model-entity" }

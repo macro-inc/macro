@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use aws_lambda_events::{event::sqs::SqsEvent, sqs::SqsMessage};
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
 use dynamodb_client::DynamodbClient;
 use futures::{
@@ -14,7 +15,6 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use macro_service_urls::ConnectionGatewayUrl;
 use model::{
     document::{FileType, FileTypeExt},
     folder::{FileSystemNodeWithIds, FolderItem, S3Destination, S3DestinationMap},

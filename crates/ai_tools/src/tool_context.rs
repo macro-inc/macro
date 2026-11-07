@@ -509,10 +509,10 @@ pub fn build_team_calendar_tool_context(
 /// `shared_event_copies` lets the agent add copies of channel-shared events.
 pub fn build_calendar_tool_context(
     pool: sqlx::PgPool,
-    calendar_service_url: macro_service_urls::CalendarServiceUrl,
+    calendar_service_url: calendar_service_url::CalendarServiceUrl,
     internal_api_key: String,
     call_service: Arc<ToolCallService>,
-    app_url: macro_service_urls::AppServiceUrl,
+    app_url: app_service_url::AppServiceUrl,
     shared_event_copies: bool,
 ) -> ToolCalendarToolContext {
     CalendarToolContext::new(
@@ -573,7 +573,7 @@ pub type ToolBookingManagementToolContext =
     >;
 /// Construct the authenticated scheduling client at the host composition root.
 pub fn build_booking_management_tool_context(
-    calendar_url: macro_service_urls::CalendarServiceUrl,
+    calendar_url: calendar_service_url::CalendarServiceUrl,
     internal_api_key: String,
     environment: macro_env::Environment,
 ) -> ToolBookingManagementToolContext {
@@ -2077,7 +2077,7 @@ pub use routines::inbound::RoutineToolContext;
 pub fn build_routine_tool_context() -> anyhow::Result<RoutineToolContext> {
     Ok(RoutineToolContext {
         service: Some(routines::outbound::RoutineClient::new(
-            macro_service_urls::ScheduledActionServiceUrl::new()?.as_ref(),
+            scheduled_action_service_url::ScheduledActionServiceUrl::new()?.as_ref(),
             &macro_auth::InternalApiKey::new()?,
         )?),
     })

@@ -32,8 +32,10 @@ startup loudly.
 
 ## Service URLs
 
-- Stable service URLs and public OAuth/callback/app origins are typed in
-  `crates/macro_service_urls` (`service_url!` with `local`/`dev`/`prod`), chosen by `ENVIRONMENT`. Call
+- Stable service URLs and public OAuth/callback/app origins are typed, one
+  crate per URL, in `crates/platform/service_urls/` (`service_url!` with
+  `local`/`dev`/`prod`), chosen by `ENVIRONMENT`. Depend on the URL's own crate
+  (`app_service_url`), not the `macro_service_urls` re-export, and call
   `XServiceUrl::new()`. Never declare a `FOO_SERVICE_URL` env var or match on
   `Environment` to build a URL. Queue names follow the same pattern in
   `crates/macro_queues`.
@@ -42,7 +44,7 @@ startup loudly.
   `xtask_local`'s `local_env.rs`; `local` defaults are host ports and do not
   work inside Docker.
 - The URL table is hand-copied. A new or changed service URL updates every copy:
-  `macro_service_urls` and `infra/packages/shared/src/service_urls.ts`, plus each
+  the URL's crate and `infra/packages/shared/src/service_urls.ts`, plus each
   consuming runtime (`apps/web/src/lib/core/constant/servers.ts`,
   `packages/sdk/src/config.ts`, and worker `[env.*.vars]`). Do not add unused
   public OAuth identities to API transport maps.

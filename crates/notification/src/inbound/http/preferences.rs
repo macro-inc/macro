@@ -7,9 +7,9 @@ use axum::{
     response::Html,
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use macro_service_urls::NotificationServiceUrl;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
+use notification_service_url::NotificationServiceUrl;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

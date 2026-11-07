@@ -16,7 +16,7 @@ fn public_mcp_client_callback_is_in_the_slack_manifest() {
     for environment in [Environment::Production, Environment::Develop] {
         let callback = format!(
             "{}/mcp/servers/auth/callback",
-            macro_service_urls::CognitionPublicUrl::default_for_environment(environment)
+            cognition_public_url::CognitionPublicUrl::default_for_environment(environment)
         );
         assert!(
             registered.contains(&callback.as_str()),
