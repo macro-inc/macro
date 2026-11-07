@@ -823,9 +823,28 @@ impl<'state> StateRef<'state> {
             "version".into(),
             serde_json::json!((v.json_version)(slot.data.as_any())),
         );
-        json.extend(slot.data.to_json()?);
         if let Some(state) = &slot.state {
             state.export(&registration.state_layout, &mut json);
+        }
+        if let BaseData::Element(data) = &slot.base {
+            if !self.is_root_or_shadow_root(key)
+                && !self
+                    .children(key)
+                    .any(|child| self.kind(child) == Some(NodeKind::Text))
+            {
+                if !data.text_format.is_empty() {
+                    json.insert(
+                        "textFormat".into(),
+                        serde_json::json!(data.text_format.bits()),
+                    );
+                }
+                if !data.text_style.is_empty() {
+                    json.insert("textStyle".into(), serde_json::json!(data.text_style));
+                }
+            }
+        }
+        if slot.base.kind() != NodeKind::LineBreak {
+            json.extend(slot.data.to_json()?);
         }
         (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;
         Ok(json)

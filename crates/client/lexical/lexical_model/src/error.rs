@@ -4,6 +4,12 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A document must have a root node at its top level.
+    #[error("serialized editor state must contain a root node")]
+    ExpectedSerializedRoot,
+    /// A JSON node names an unregistered type.
+    #[error("parseEditorState: type \"{0}\" + not found")]
+    UnknownSerializedType(String),
     /// A transform keeps writing without reaching a fixpoint.
     #[error(
         "One or more transforms are endlessly triggering additional transforms. May have encountered infinite recursion caused by transforms not having loose enough preconditions and/or postconditions."
@@ -206,6 +212,8 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::ExpectedSerializedRoot => "ExpectedSerializedRoot",
+            Self::UnknownSerializedType(..) => "UnknownSerializedType",
             Self::InfiniteTransforms => "InfiniteTransforms",
             Self::SelectionLost => "SelectionLost",
             Self::PointNodeNotFound(..) => "PointNodeNotFound",

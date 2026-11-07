@@ -35,7 +35,7 @@ impl StateValue for Option<String> {
 }
 impl StateValue for f64 {
     fn to_json(&self) -> Value {
-        Value::from(*self)
+        crate::js_number(*self)
     }
     fn js_equal(&self, other: &Self) -> bool {
         self.to_bits() == other.to_bits() || (self.is_nan() && other.is_nan())
