@@ -107,7 +107,7 @@ Selection utilities port ordered CSS parsing, selected-run splitting, style quer
 
 `offset` retains the deprecated upstream arena and its first-child parent-link, inclusive boundary and diff-adjustment quirks.
 
-`clipboard` exports sliced JSON through ephemeral clone/export hooks without mutating snapshots, hoists excluded wrappers, imports fresh keys and routes generated nodes through the command bus. Rich paste uses lexical/HTML/plain/URI priority, catches failed importers and accepts HTML nodes supplied by the view. `do_drop_in_namespace` preserves the target editor namespace for internal payloads; `do_drop` uses the empty default namespace. The crate does not own browser clipboard access or HTML conversion. Enable `html` for portable selection HTML, default clipboard HTML entries and all rich-node export implementations through `html::register_rich_nodes_html`. The pinned export oracle covers 2,076 full and selected exports, including all text format combinations. Invalid clipboard warnings contain only byte lengths.
+`clipboard` exports sliced JSON through ephemeral clone/export hooks without mutating snapshots, hoists excluded wrappers, imports fresh keys and routes generated nodes through the command bus. Rich paste uses lexical/HTML/plain/URI priority, catches failed importers and accepts HTML nodes supplied by the view. `do_drop_in_namespace` preserves the target editor namespace for internal payloads; `do_drop` uses the empty default namespace. The crate does not own browser clipboard access or HTML conversion. Enable `html` for portable selection HTML, default clipboard HTML entries and all rich-node export implementations through `html::register_rich_nodes_html`. The pinned export oracle covers 2,082 full and selected exports, including all text format combinations. Invalid clipboard warnings contain only byte lengths.
 `table::nodes` ports TableNode, TableRowNode and TableCellNode payloads, shadow-root
 flags and JSON coercions. `table::map` preserves ragged rows, holes, truncated
 bottom overflow, rectangle expansion and map-time writable identity. Table row
@@ -161,6 +161,8 @@ All 23 recorded lexical-link fixtures replay, including the MarkNode case.
 
 `utils::matcher` holds the shared Match/Matcher/RegexMatcher contract for later
 markdown reuse: UTF-16 positions, undefined captures and synthetic mutable groups.
+`exec_from` and `find_all` keep anchors on the original input and advance empty
+matches by a code unit or Unicode scalar according to the regex mode.
 `utils::linkify` ports linkify-it 5.0.2's default schemas, fuzzy URL/email/IP modes,
 custom TLD replacement/extension and triple-dash option. It implements both the
 shared Matcher and autolink LinkMatcher. Expanded regular expressions preserve

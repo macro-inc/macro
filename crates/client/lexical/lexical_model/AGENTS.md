@@ -32,9 +32,12 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Direct splice/append moves preserve source element offsets for explicit package remapping; insert-before/after and replace adjust source offsets.
 - Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
+- Text replacement uses upstream node-based removal across every block type; caret deletion has different shadow-root semantics.
+- Node removal relocates affected points to adjacent sibling element boundaries without descending into their text.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
+- Borrow committed leaf identities through DirtyLeaves; selected tabs remain atomic during range replacement.
 - Stage plugin notifications with `emit`; consume typed events from a successful Commit, never call host callbacks inside transforms.
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
@@ -42,6 +45,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
 - `StateRef::export_text_slice` exports changed clipboard text through ephemeral clone and export hooks without mutating snapshots.
 - `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
+- Publish event-only commits without advancing the history merge clock; history records only document or selection changes.
 - History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
@@ -84,10 +88,12 @@ Element text-cache changes retain intentional dirty marks after mutation reporti
 Root text-cache reconciliation clones its record after mutation reporting and retains
 the intentional root dirty mark; cache-only writes do not add mutations.
 
+Generate command scripts with inline paragraph contents and block decorators at root; malformed nested paragraphs can legitimately reject insertion upstream. Check range-only command preconditions after decorator deletion enters NodeSelection, and validate selected node keys too.
+
 Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 §8.6
 cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
 Exact history JSON identity (P11) uses headless mode: restoring view-attached
 snapshots can reconcile cached element defaults, as the upstream literal guard
-demonstrates. P14 awaits the markdown crate. Persist shrinking seeds in
+demonstrates. Place P14 markdown round-trip properties in lexical_markdown. Persist shrinking seeds in
 `proptest-regressions/`. Keep the decorator count in sync with record insertion
 and removal; opaque text hooks rule out the local root-text proof.

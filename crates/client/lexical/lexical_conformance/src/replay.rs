@@ -16,6 +16,9 @@ pub enum ReplayError {
     /// A rich-node operation failed.
     #[error(transparent)]
     Rich(#[from] lexical_rich_nodes::Error),
+    /// A markdown operation failed.
+    #[error(transparent)]
+    Markdown(#[from] lexical_markdown::Error),
     /// An operation requires the upstream ambient editor callback.
     #[error(
         "Unable to find an active editor. This method can only be used synchronously during the callback of editor.update(), editor.read(), or editor.getEditorState().read(..., {{editor}}). Detected on the page: 1 compatible editor(s) with version \"0.45.0+git\""
