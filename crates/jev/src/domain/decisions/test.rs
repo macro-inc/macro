@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{Evaluation, JevClassifier, JevProvider, Probability, YesNoQuestion};
-use ai_billing::{DenyReason, domain::admission::AdmissionFuture};
+use ai_admission::{AdmissionFuture, DenyReason};
 use ai_usage::{UsageAmount, UsageEvent, UsageRecorder};
 use serde_json::{Value, json};
 use std::sync::{

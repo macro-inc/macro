@@ -628,51 +628,7 @@ pub enum CreditReloadStatus {
     Failed,
 }
 
-/// Why a request was refused.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, strum::Display)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum DenyReason {
-    /// The plan's included AI is used up and no credits or overage remain.
-    AllowanceExhausted,
-    /// The free plan's monthly AI is used up. Free has no credits or overage;
-    /// only an upgrade (or the next month) lifts it.
-    FreeAllowanceExhausted,
-    /// Overage is on but the payer's per-period cap has been reached.
-    OverageLimitReached,
-    /// An overage charge failed; overage is paused until the payer re-enables it.
-    OveragePaymentFailed,
-}
-
-impl DenyReason {
-    /// A stable machine-readable code for API error bodies.
-    pub fn code(self) -> &'static str {
-        match self {
-            DenyReason::AllowanceExhausted => "ai_allowance_exhausted",
-            DenyReason::FreeAllowanceExhausted => "ai_free_allowance_exhausted",
-            DenyReason::OverageLimitReached => "ai_overage_limit_reached",
-            DenyReason::OveragePaymentFailed => "ai_overage_payment_failed",
-        }
-    }
-
-    /// A short human-readable explanation.
-    pub fn message(self) -> &'static str {
-        match self {
-            DenyReason::AllowanceExhausted => {
-                "You've used this period's included AI. Add credits or turn on automatic reload to keep going."
-            }
-            DenyReason::FreeAllowanceExhausted => {
-                "You've used this month's free AI. Upgrade to a paid plan to keep going."
-            }
-            DenyReason::OverageLimitReached => {
-                "You've reached your AI spending limit for this period. Raise the limit or add credits to keep going."
-            }
-            DenyReason::OveragePaymentFailed => {
-                "Your last automatic credit reload didn't go through. Update your payment method and re-enable automatic reload."
-            }
-        }
-    }
-}
+pub use ai_admission::DenyReason;
 
 /// The gate's verdict for one request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
