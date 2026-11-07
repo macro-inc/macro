@@ -721,3 +721,33 @@ fn conformance_peer_shares_registry_and_keys_but_owns_its_snapshot() -> Result<(
     assert_eq!(peer.state().view().children_size(NodeKey::ROOT), 2);
     Ok(())
 }
+
+#[test]
+fn identical_text_splice_still_publishes_updated_leaf() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    let ((paragraph, text), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abc")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok((paragraph, text))
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        tx.text(text)?
+            .splice_text(Utf16Offset(2)..Utf16Offset(3), "c", false)?;
+        Ok(())
+    })?;
+    assert_eq!(editor.state().text_content(text).as_ref(), "abc");
+    assert!(commit.changes.dirty_leaves.contains(&text.key()));
+    assert_eq!(
+        commit.changes.dirty_elements.get(&paragraph.key()),
+        Some(&DirtyIntent::AncestorOfDirty)
+    );
+    assert_eq!(
+        commit.changes.mutations.get(&text.key()),
+        Some(&Mutation::Updated)
+    );
+    Ok(())
+}
