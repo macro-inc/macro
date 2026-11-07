@@ -1,6 +1,5 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckIcon from '@icon/system/regular/check.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
@@ -143,10 +142,11 @@ export function VaultView(props: {
               onInput={(event) => vault.setSearch(event.currentTarget.value)}
             />
           </div>
-          <div class="grid grid-cols-[1fr_5rem_5rem] gap-2 px-5 py-2 text-xs text-ink-muted max-md:hidden">
+          <div class="mx-1 grid grid-cols-[1fr_5rem_5rem_1rem] gap-2 border-x border-transparent px-3 py-2 text-xs text-ink-muted max-md:hidden">
             <span>{t('passwords.name')}</span>
             <span>{t('passwords.sharedWith')}</span>
             <span class="text-right">{t('passwords.lastUsed')}</span>
+            <span aria-hidden="true" />
           </div>
           <div class="flex-1 overflow-auto p-1 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]">
             <Switch>
@@ -214,9 +214,11 @@ export function VaultView(props: {
                           }).format(new Date(item.lastUsedAt))
                         : t('passwords.neverUsed')}
                     </span>
-                    <Show when={item.favorite}>
-                      <span aria-label={t('passwords.favorite')}>☆</span>
-                    </Show>
+                    <span class="w-4 shrink-0 text-center">
+                      <Show when={item.favorite}>
+                        <span aria-label={t('passwords.favorite')}>☆</span>
+                      </Show>
+                    </span>
                   </Button>
                 </div>
               )}
@@ -281,29 +283,31 @@ export function VaultView(props: {
               when={vault.draft()}
               fallback={
                 <Show when={vault.selected()}>
-                  <div class="ml-auto flex shrink-0 items-center gap-1">
-                    <HeaderActionGroup label={t('passwords.itemActions')}>
-                      <Button
-                        variant="secondary"
-                        onClick={async () => {
-                          setDeletePending(false);
-                          await vault.edit();
-                        }}
-                      >
-                        {t('passwords.edit')}
-                      </Button>
-                      <ShareMenu
-                        recipients={recipients()}
-                        recipientsLoading={recipientsLoading()}
-                        recipientsError={recipientsError()}
-                        onShare={vault.share}
-                        loadGrants={() =>
-                          vault.selected()
-                            ? source.grants(vault.selected()?.id ?? '')
-                            : Promise.resolve(err('failed' as const))
-                        }
-                      />
-                    </HeaderActionGroup>
+                  <div
+                    role="group"
+                    aria-label={t('passwords.itemActions')}
+                    class="ml-auto flex shrink-0 items-center gap-2"
+                  >
+                    <Button
+                      variant="secondary"
+                      onClick={async () => {
+                        setDeletePending(false);
+                        await vault.edit();
+                      }}
+                    >
+                      {t('passwords.edit')}
+                    </Button>
+                    <ShareMenu
+                      recipients={recipients()}
+                      recipientsLoading={recipientsLoading()}
+                      recipientsError={recipientsError()}
+                      onShare={vault.share}
+                      loadGrants={() =>
+                        vault.selected()
+                          ? source.grants(vault.selected()?.id ?? '')
+                          : Promise.resolve(err('failed' as const))
+                      }
+                    />
                   </div>
                 </Show>
               }
