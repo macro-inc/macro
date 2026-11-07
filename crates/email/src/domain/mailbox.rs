@@ -7,7 +7,10 @@ use email_api_client::domain::models::{
 use progress::{ImportCompleted, ImportTally};
 use std::future::Future;
 use std::time::Instant;
-use telemetry::{claim_failed, elapsed_ms, record_deferred, record_done, record_failed, span_int};
+use telemetry::{
+    claim_failed, elapsed_ms, record_abandoned, record_deferred, record_done, record_failed,
+    span_int,
+};
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
@@ -49,6 +52,10 @@ pub enum MailboxError {
     /// attempt either finds it or settles that it is gone.
     #[error("mailbox message location has not settled")]
     LocationUnsettled,
+    /// The message reads as an invitation, but the provider would not return
+    /// its MIME source; a later attempt imports it without calendar parts.
+    #[error("the invitation's calendar parts are unavailable")]
+    CalendarPartsUnavailable,
 }
 
 /// What failed underneath a database call. The database's own message is
@@ -188,8 +195,20 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn release_message(
         &self,
         lease: &MessageLease,
-        retry_after_seconds: u32,
+        retry: MessageRetry,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+}
+
+/// How a message whose reconciliation failed is released.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageRetry {
+    /// Claim it again after `seconds`. A mailbox-wide refusal (throttling, no
+    /// token) is not `counted`, so it gives the claim back to `attempts`.
+    After { seconds: u32, counted: bool },
+    /// Stop claiming the leased revision. It stays queued and is counted as
+    /// abandoned until a provider change, a resync or a reconnect queues the
+    /// message again with fresh attempts.
+    Abandon,
 }
 
 pub trait MailboxGateway: Send + Sync + 'static {
@@ -423,6 +442,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.attempts = lease.attempts,
             outlook.graph_calls = tracing::field::Empty,
             outlook.attachments = tracing::field::Empty,
+            outlook.calendar_parts_unavailable = tracing::field::Empty,
             outlook.db_write_ms = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
@@ -449,6 +469,17 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                         "outlook.attachments",
                         span_int(snapshot.content.message.attachments.len()),
                     );
+                    if snapshot.calendar_parts_unavailable {
+                        if lease.attempts < CALENDAR_PARTS_ATTEMPTS {
+                            return Err(MailboxError::CalendarPartsUnavailable);
+                        }
+                        span.record("outlook.calendar_parts_unavailable", true);
+                        tracing::warn!(
+                            link_id = %lease.mailbox.link_id,
+                            attempts = lease.attempts,
+                            "outlook invitation imported without calendar parts"
+                        );
+                    }
                     self.ingest.ingest(lease, snapshot).await?;
                     "imported"
                 }
@@ -477,20 +508,23 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             }
             Err(error) => error,
         };
-        let delay = match &error {
-            MailboxError::Provider(error) => retry_seconds(error),
-            _ => 30,
-        };
+        let retry = message_retry(&error, lease.attempts);
         self.repo
-            .release_message(lease, delay)
+            .release_message(lease, retry)
             .await
             .inspect_err(|release| {
                 record_failed(&span, lease.mailbox.link_id, release);
             })?;
-        if matches!(error, MailboxError::Stale) {
-            record_failed(&span, lease.mailbox.link_id, &error);
-        } else {
-            record_deferred(&span, lease.mailbox.link_id, &error, delay);
+        match retry {
+            _ if matches!(error, MailboxError::Stale) => {
+                record_failed(&span, lease.mailbox.link_id, &error);
+            }
+            MessageRetry::After { seconds, .. } => {
+                record_deferred(&span, lease.mailbox.link_id, &error, seconds);
+            }
+            MessageRetry::Abandon => {
+                record_abandoned(&span, lease.mailbox.link_id, &error, lease.attempts);
+            }
         }
         Err(error)
     }
@@ -518,6 +552,58 @@ where
             result = &mut operation => return result,
             _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => renew().await?,
         }
+    }
+}
+
+/// Claims after which a message the provider keeps refusing outright
+/// (malformed, forbidden) is abandoned: 3 tries, 10 minutes apart.
+const PERMANENT_FAILURE_ATTEMPTS: i32 = 3;
+
+/// Claims after which a message that keeps failing for any other reason of
+/// its own is abandoned. With the backoff below that is about a day.
+const MESSAGE_FAILURE_ATTEMPTS: i32 = 50;
+
+/// The longest backoff. The `outlook-message-parked-too-long` monitor alerts
+/// above 30 minutes, which only a Graph `Retry-After` should reach.
+const MAX_BACKOFF_SECONDS: u32 = 1800;
+
+/// Claims an invitation waits for its MIME source before it is imported
+/// without calendar parts.
+const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
+
+/// How a failed reconciliation is retried. `attempts` counts this claim.
+/// Throttling and credential failures belong to the mailbox, not the message,
+/// so they keep their own delays and never move it closer to abandonment.
+fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
+    match error {
+        MailboxError::Provider(
+            error @ (EmailApiError::RateLimited { .. }
+            | EmailApiError::CredentialsUnavailable { .. }
+            | EmailApiError::AuthRequired),
+        ) => MessageRetry::After {
+            seconds: retry_seconds(error),
+            counted: false,
+        },
+        MailboxError::Provider(EmailApiError::Permanent { .. } | EmailApiError::Forbidden) => {
+            if attempts >= PERMANENT_FAILURE_ATTEMPTS {
+                MessageRetry::Abandon
+            } else {
+                MessageRetry::After {
+                    seconds: 600,
+                    counted: true,
+                }
+            }
+        }
+        MailboxError::Stale => MessageRetry::After {
+            seconds: 30,
+            counted: true,
+        },
+        _ if attempts >= MESSAGE_FAILURE_ATTEMPTS => MessageRetry::Abandon,
+        // 30 s doubling to 30 minutes: 30, 60, 120, ... 960, then 1800.
+        _ => MessageRetry::After {
+            seconds: (30_u32 << attempts.clamp(1, 7).saturating_sub(1)).min(MAX_BACKOFF_SECONDS),
+            counted: true,
+        },
     }
 }
 

@@ -325,12 +325,33 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(import_completed)
     }
 
-    async fn release_message(&self, lease: &MessageLease, delay: u32) -> Result<(), MailboxError> {
-        sqlx::query!(r#"
-            UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $5)
-            WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4
-        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,f64::from(delay))
-            .execute(&self.db).await.map_err(db_error)?;
+    async fn release_message(
+        &self,
+        lease: &MessageLease,
+        retry: MessageRetry,
+    ) -> Result<(), MailboxError> {
+        match retry {
+            MessageRetry::After { seconds, counted } => {
+                sqlx::query!(r#"
+                    UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $5),
+                        attempts = attempts - CASE WHEN $6 THEN 0 ELSE 1 END
+                    WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4
+                "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,f64::from(seconds),counted)
+                    .execute(&self.db).await.map_err(db_error)?;
+            }
+            // `available_at = 'infinity'` is the abandoned state: claims stop at
+            // their index's `available_at <= now()` bound, and every enqueue sets
+            // `available_at = now()`, which revives the row with fresh attempts.
+            // A revision that arrived during the lease is retried instead.
+            MessageRetry::Abandon => {
+                sqlx::query!(r#"
+                    UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,attempts = 0,
+                        available_at = CASE WHEN revision = $5 THEN 'infinity'::timestamptz ELSE now() END
+                    WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4
+                "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,lease.revision)
+                    .execute(&self.db).await.map_err(db_error)?;
+            }
+        }
         Ok(())
     }
 }
@@ -386,8 +407,8 @@ impl PgMailboxSync {
             EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='folder_catalog' AND import_completed_at IS NULL) AS "import_open!",
             EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind='mail_folder' AND NOT attachments_rechecked) AS "recheck_pending!",
             EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id=$1 AND generation=$2 AND kind IN ('mail_folder','folder_catalog') AND NOT initial_complete) AS "streams_incomplete!",
-            EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id=$1 AND generation=$2) AS "queued!",
-            EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id=$1 AND generation=$2 AND is_import) AS "imports_queued!"
+            EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id=$1 AND generation=$2 AND available_at <> 'infinity') AS "queued!",
+            EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id=$1 AND generation=$2 AND is_import AND available_at <> 'infinity') AS "imports_queued!"
         "#,mailbox.link_id,mailbox.sync_generation).fetch_one(&mut *tx).await.map_err(db_error)?;
         let enumerated = state.catalog_complete && !state.streams_incomplete;
         // All correspondence is now ingested, regardless of folder/page delivery order.
@@ -402,7 +423,7 @@ impl PgMailboxSync {
                 .execute(&mut *tx).await.map_err(db_error)?;
         }
         // The import run is done once every folder is enumerated and no import
-        // row is left; live changes may still be queued.
+        // row is left but abandoned ones; live changes may still be queued.
         if !(enumerated && state.import_open && !state.imports_queued) {
             return Ok(None);
         }
