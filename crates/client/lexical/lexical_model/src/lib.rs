@@ -27,6 +27,8 @@ pub use registry::*;
 pub use selection::*;
 pub use state::*;
 pub use transaction::*;
+#[cfg(test)]
+mod test;
 
 mod collections;
 mod json;
