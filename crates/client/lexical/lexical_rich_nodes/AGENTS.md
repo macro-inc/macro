@@ -7,6 +7,7 @@ text-entity, list and code-node behavior. DOM events, clipboard access and layou
 
 ## Boundaries
 
+- `mark` wraps inline runs, splits at line breaks and retains annotations only in internal clones.
 - `code::line`, `code::plain` and `code::language` provide UTF-16 line navigation, LF/tab splitting and the ordered language catalog.
 - `code` keeps stored highlight nodes distinct, disables formatting and never tokenizes; new code content uses plain text.
 - Depends on `lexical_model` and the patched `regress`; no I/O or runtime.
