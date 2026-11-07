@@ -54,7 +54,7 @@ list = [
 outbound = [
   "item_filters/native",
   "dep:connection_gateway_client",
-  "dep:contacts",
+  "dep:contacts_core",
   "dep:entity_access",
   "dep:entity_access_db_utils",
   "dep:indexmap",
@@ -107,9 +107,6 @@ channel_sender = { workspace = true }
 entity_mutation = { workspace = true, optional = true }
 chrono = { workspace = true }
 connection_gateway_client = { workspace = true, optional = true }
-contacts = { workspace = true, features = [
-  "outbound",
-], optional = true }
 entity_access = { workspace = true, optional = true }
 entity_access_db_utils = { workspace = true, optional = true }
 filter_ast = { workspace = true, optional = true }
@@ -157,6 +154,7 @@ schemars = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 models_soup = { workspace = true, optional = true }
 frecency_core = { workspace = true, optional = true }
+contacts_core = { workspace = true, optional = true }
 
 [dev-dependencies]
 bot_id = { workspace = true, features = ["test-utils"] }

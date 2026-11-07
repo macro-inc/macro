@@ -7,7 +7,7 @@ mod test;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use contacts::domain::ports::ContactsService;
+use contacts_core::ports::ContactsService;
 use database_sql::catalog::{Catalog, ColumnKind, PEOPLE_EMAIL, PEOPLE_ID, PEOPLE_NAME};
 use database_sql::fold::{Bin, Cell, Row};
 use database_sql::run::{Page, RowSource};

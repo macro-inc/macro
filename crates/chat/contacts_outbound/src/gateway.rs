@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::ports::ContactsNotifier;
+use contacts_core::ports::ContactsNotifier;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 
@@ -56,20 +56,6 @@ impl ContactsNotifier for ConnectionGatewayNotifier {
                     tracing::error!(user_id = %user_id.as_ref(), error = ?e, "Failed to invalidate contacts")
                 })
                 .ok();
-        }
-        Ok(())
-    }
-}
-
-/// Implements [`ContactsNotifier`] for `Option<ConnectionGatewayNotifier>`,
-/// acting as a no-op when `None`.
-impl ContactsNotifier for Option<ConnectionGatewayNotifier> {
-    async fn invalidate_contacts_for_users(
-        &self,
-        user_ids: Vec<MacroUserIdStr<'_>>,
-    ) -> Result<(), Report> {
-        if let Some(notifier) = self {
-            notifier.invalidate_contacts_for_users(user_ids).await?;
         }
         Ok(())
     }

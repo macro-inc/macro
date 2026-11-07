@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use crate::domain::models::messages::ContactsMessage;
-use crate::domain::ports::{ContactsNotifier, ContactsOutboxService, ContactsRepository};
-use crate::domain::service::ContactsDomainService;
+use contacts_core::models::messages::ContactsMessage;
+use contacts_core::ports::{ContactsNotifier, ContactsOutboxService, ContactsRepository};
+use contacts_core::service::ContactsDomainService;
 use rootcause::report;
 use sqs_worker::SQSWorker;
 use tracing::instrument;
@@ -125,3 +125,6 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod test;

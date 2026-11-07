@@ -1,11 +1,11 @@
-use crate::domain::models::messages::ContactsNodes;
-use crate::domain::ports::ContactsService;
 use axum::extract::{FromRef, FromRequestParts, Json, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{RequestPartsExt, Router};
 use axum_extra::extract::Cached;
+use contacts_core::models::messages::ContactsNodes;
+use contacts_core::ports::ContactsService;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
@@ -249,6 +249,9 @@ where
 #[derive(OpenApi)]
 #[openapi(
         info(
+            // utoipa defaults the title to the package name; keep the
+            // published one from before the crate split.
+            title = "contacts",
             terms_of_service = "https://macro.com/terms",
         ),
         paths(

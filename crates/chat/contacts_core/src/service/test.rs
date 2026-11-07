@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::messages::ContactConnection;
+use crate::models::messages::ContactConnection;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -45,7 +45,7 @@ fn user(email: &str) -> MacroUserIdStr<'static> {
 
 #[test]
 fn test_deserialize_connections_message() {
-    let input_json = include_str!("../../../tests/fixtures/add_connection.json");
+    let input_json = include_str!("../../tests/fixtures/add_connection.json");
     let msg: Option<ContactsNodes> = serde_json::from_str(input_json).ok();
     assert!(msg.is_some());
     assert_eq!(msg.unwrap().users.len(), 3);
@@ -75,21 +75,4 @@ async fn explicit_connections_do_not_create_a_complete_graph() {
     assert!(connections.contains(&(owner, second.clone())));
     assert!(!connections.contains(&(first.clone(), second.clone())));
     assert!(!connections.contains(&(second, first)));
-}
-
-fn generate_sqs_message() -> aws_sdk_sqs::types::Message {
-    let input_json = include_str!("../../../tests/fixtures/add_connection.json");
-    aws_sdk_sqs::types::Message::builder()
-        .set_body(Some(input_json.to_string()))
-        .build()
-}
-
-#[test]
-fn test_message_from_aws_sqs() {
-    let sqs_message = generate_sqs_message();
-    let message = crate::inbound::worker::message_from_sqs(&sqs_message);
-    let Some(ContactsMessage::Nodes(message)) = message else {
-        panic!("Could not parse body as a contacts-nodes message");
-    };
-    assert_eq!(message.users.len(), 3);
 }

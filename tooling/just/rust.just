@@ -67,7 +67,7 @@ build_lambdas compiler="":
 
 # Copies over necessary .env files for sqlx tests
 setup_test_envs:
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/contacts/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/chat/contacts_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/delete_chat_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_sfs_delete_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/scheduled_action/.env

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::ports::{
+use contacts_core::ports::{
     ContactsBackfillOutboxMessage, ContactsBackfillOutboxRepo, ContactsRepository,
 };
 use macro_user_id::user_id::MacroUserIdStr;

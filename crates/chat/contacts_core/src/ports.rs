@@ -1,4 +1,4 @@
-use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
+use crate::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
@@ -26,6 +26,20 @@ pub trait ContactsNotifier: Send + Sync + 'static {
         &self,
         user_ids: Vec<MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// A missing notifier, as when the connection gateway is not configured,
+/// notifies nobody.
+impl<Notifier: ContactsNotifier> ContactsNotifier for Option<Notifier> {
+    async fn invalidate_contacts_for_users(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'_>>,
+    ) -> Result<(), Report> {
+        if let Some(notifier) = self {
+            notifier.invalidate_contacts_for_users(user_ids).await?;
+        }
+        Ok(())
+    }
 }
 
 /// Port trait for publishing a contacts message to the ingress queue.
@@ -79,18 +93,24 @@ pub trait ContactsOutboxService: Send + Sync + 'static {
     fn poll_outbox(&self) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
-pub(crate) struct ContactsBackfillOutboxMessage {
-    pub(crate) id: u64,
-    #[allow(dead_code)]
-    pub(crate) channel_id: Uuid,
-    pub(crate) channel_participants: HashSet<MacroUserIdStr<'static>>,
+/// A channel's participants waiting in the contacts backfill outbox.
+pub struct ContactsBackfillOutboxMessage {
+    /// The outbox row id.
+    pub id: u64,
+    /// The channel whose participants should know each other.
+    pub channel_id: Uuid,
+    /// The channel's participants.
+    pub channel_participants: HashSet<MacroUserIdStr<'static>>,
 }
 
-pub(crate) trait ContactsBackfillOutboxRepo: Send + Sync + 'static {
+/// Storage for the contacts backfill outbox.
+pub trait ContactsBackfillOutboxRepo: Send + Sync + 'static {
+    /// Reads the outbox messages that have not been applied yet.
     fn get_unapplied_messages(
         &self,
     ) -> impl Future<Output = Result<Vec<ContactsBackfillOutboxMessage>, rootcause::Report>> + Send;
 
+    /// Marks an outbox message as applied.
     fn mark_message_applied(
         &self,
         id: u64,

@@ -12,7 +12,7 @@ mod test;
 
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use bot_id::BotId;
-use contacts::domain::ports::ContactsService;
+use contacts_core::ports::ContactsService;
 use databases::domain::models::Viewer;
 use databases::domain::ports::DatabasesService;
 use entity_access::domain::ports::EntityAccessService;

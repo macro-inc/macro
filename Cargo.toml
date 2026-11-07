@@ -36,6 +36,9 @@ members = [
   "crates/calendar_scheduling",
   "crates/channel_bots",
   "crates/channel_labels",
+  "crates/chat/contacts_core",
+  "crates/chat/contacts_inbound",
+  "crates/chat/contacts_outbound",
   "crates/client/cache-core",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
@@ -674,6 +677,9 @@ connection_gateway_models = { path = "crates/connection_gateway_models" }
 connection_gateway_url = { path = "crates/platform/service_urls/connection_gateway_url" }
 connection_gateway_websocket_url = { path = "crates/platform/service_urls/connection_gateway_websocket_url" }
 contacts = { path = "crates/contacts", default-features = false }
+contacts_core = { path = "crates/chat/contacts_core" }
+contacts_inbound = { path = "crates/chat/contacts_inbound", default-features = false }
+contacts_outbound = { path = "crates/chat/contacts_outbound" }
 contacts_service_url = { path = "crates/platform/service_urls/contacts_service_url" }
 convert_service_url = { path = "crates/platform/service_urls/convert_service_url" }
 cowlike = { path = "crates/cowlike" }
@@ -934,6 +940,7 @@ work_feed = { path = "crates/work_feed" }
 worker-rs-otel = { path = "crates/worker-rs-otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }
+
 
 
 
