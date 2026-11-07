@@ -458,6 +458,7 @@ fn raw_text_and_paragraph_export_match_upstream() -> Result<(), Error> {
         .expect("valid");
     editor.update(|tx| {
         let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
         let nodes = tx.nodes_from_raw_text("a\t\nb")?;
         tx.append(paragraph, &nodes)?;
         tx.text(nodes[0])?
@@ -506,6 +507,9 @@ fn node_state_defaults_identity_and_unknown_values() -> Result<(), Error> {
         tx.update_from_json(left,json.as_object().expect("object"))?;
         assert!(tx.node(left).and_then(NodeRef::node_state).is_some());
         assert_eq!(tx.get_state(left,&NOTE)?,"");
+        let p = tx.create(Paragraph::default())?;
+        tx.append(p, &[left.key(), right.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
         Ok((left,right))
     })?;
     let before = editor.state().clone();

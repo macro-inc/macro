@@ -15,7 +15,7 @@ node types, immutable snapshots and transactional tree editing.
 
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
-- Selection editing, normalization and the commit pipeline build on this layer.
+- Selection editing and view diffs build on the transaction and commit pipeline.
 
 ## Checks
 
@@ -30,3 +30,8 @@ node types, immutable snapshots and transactional tree editing.
 - Text positions are UTF-16 code units; reject surrogate-splitting offsets.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
+
+## Tests
+
+- Cover every public function with an explicit literal behavior test before adding table-driven or generated cases; do not hide fixture construction behind a helper DSL.
+- Test pipeline order, rollback, JSON bytes and boundary cases locally; Tier A fixtures are not yet available.

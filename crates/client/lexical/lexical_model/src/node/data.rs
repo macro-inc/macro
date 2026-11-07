@@ -174,6 +174,9 @@ bitflags::bitflags! {
     }
 }
 impl AbsentKeys {
+    pub(crate) fn contains_field(self, field: &str) -> bool {
+        self.contains(Self::field(field))
+    }
     pub(crate) fn from_json(json: &SerializedNode, names: &[&str]) -> Self {
         let mut absent = Self::empty();
         for name in names {
