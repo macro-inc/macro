@@ -22,6 +22,7 @@ Markdown transformers and routes are separate work packages.
 ## Checks
 
 - `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model -j4`
+- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test replay -j4 -- upstream::lexical-core`; the full source corpus is acceptance, and synthetic JSON oracles supplement it.
 - `TMPDIR=/home/wolf/tmp cargo check -p macro_document_model --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p macro_document_model --all-targets -j4 -- -D warnings`
 - `bun packages/lexical-conformance/corpus/synthetic.ts` regenerates fixed JSON oracles.
