@@ -307,7 +307,7 @@ queue	link-manager:Refresh	both	/operation=Refresh	crates/models_email/src/email
 queue	reminder-dispatch:Deliver	both	/operation/deliver	crates/reminders/src/domain/models.rs:87
 queue	reminder-dispatch:Sweep	both	/operation=sweep	crates/reminders/src/domain/models.rs:85
 queue	scheduled:ScheduledPubsubMessage	both	*	crates/models_email/src/email/service/pubsub.rs:107
-queue	sfs-delete:SFSDeleteMessage	both	*	crates/sqs_client/src/email.rs:358
+queue	sfs-delete:SFSDeleteMessage	both	*	crates/aws/sqs_client/src/email.rs:358
 queue	sfs-uploader:SFSUploaderMessage	gmail	*	crates/models_email/src/email/service/pubsub.rs:114
 tool	GetThread	both		crates/email/src/inbound/toolset/get_thread.rs:109
 tool	ListInboxes	both		crates/email/src/inbound/toolset/list_inboxes.rs:55

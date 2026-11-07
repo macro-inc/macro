@@ -105,7 +105,7 @@ at = ""
 [[queue]]
 name = "sfs-delete"
 consumes = ["SfsDeleteQueue"]
-type = "crates/sqs_client/src/email.rs::SFSDeleteMessage"
+type = "crates/aws/sqs_client/src/email.rs::SFSDeleteMessage"
 at = ""
 
 # Email follow-up reminders. document_storage_service consumes this queue, not

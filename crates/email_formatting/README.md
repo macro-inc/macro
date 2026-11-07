@@ -9,7 +9,7 @@ use presentation tables so the emails do not depend on web fonts or modern CSS.
 
 - `templates/digest.html`: notification digest (Askama).
 - `../invite_email/templates/`: personal, channel, and team invitations (Askama).
-- `../ses_client/templates/invite_user.html`: organization invitation (Rust replacements).
+- `../aws/ses_client/templates/invite_user.html`: organization invitation (Rust replacements).
 - `../../services/authentication_service/src/api/email/_verify_email_template.html`:
   email verification (Rust replacements).
 - `../../services/authentication_service/src/api/merge/_merge_request_template.html`:
