@@ -671,3 +671,21 @@ fn a_single_text_replacement_stops_at_the_selected_root_child() -> Result<(), Er
     })?;
     Ok(())
 }
+
+#[test]
+fn formatting_a_structural_range_without_characters_preserves_typing_flags() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abc")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(0)), Point::text(text, Utf16Offset(0)),
+        ))))?;
+        tx.format_text(TextFormatType::Lowercase, None)?;
+        assert_eq!(tx.range_selection()?.format, TextFormat::empty());
+        Ok(())
+    })?;
+    Ok(())
+}

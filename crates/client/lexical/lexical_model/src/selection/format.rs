@@ -204,6 +204,7 @@ impl Transaction<'_> {
             }
         }
         if let Some(flags) = first_flags
+            .filter(|_| first_target.is_some())
             .zip(last_flags)
             .map(|(first, last)| first | last)
         {
