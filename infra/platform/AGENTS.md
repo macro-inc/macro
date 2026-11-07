@@ -100,6 +100,11 @@ deploy repo, which Argo CD syncs.
   thresholds misfire on a shared pool. big-pickle sets absolute ones.
 - CI jobs reach the forge at its in-cluster address (`http://gitea-http:3000`, the
   runner's instance URL), so they need no route to `git.localhost` or the dev CA.
+- The cluster shares big-pickle's ZFS pool with every other workload on the host. When
+  the pool fills, the kubelet evicts everything, whoever filled it; check `zfs list data`
+  before blaming a deploy. A busy host also slows forge jobs: tests that spawn processes
+  under a 5s limit time out, and jobs share the host's ports. Re-run those jobs; GitHub
+  is the gate.
 - Forge runners keep Docker images and the jobs' Nix store on their volumes; the
   `janitor` container prunes them, or the shared pool fills and the kubelet evicts
   every workload on the node. A failed CronJob run marks its instance Degraded until

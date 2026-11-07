@@ -390,6 +390,10 @@ Built and exercised on the local cluster (`infra/platform`, `cargo x platform`):
   fails on the instance also fails on compose, so those come from the tests or the shared
   harness, not the platform; four channel tests pass on the instance and fail on compose.
   No workflow runs this suite.
+- **Shared host:** on big-pickle the cluster shares one ZFS pool with every other
+  workload. Twice the pool filled, from all of its users, and the kubelet evicted every
+  pod on the node; the instance recovered without help, and the forge runners now prune
+  their own disk. A dedicated volume or node would remove the dependency.
 - **Bucket events:** a document written to `doc-storage` reaches `search_upload_handler`
   through the bridge, scaling it from zero, and it relays the upload for indexing; a file
   in bulk-upload staging reaches its trigger. The hourly cleanup CronJob runs to
