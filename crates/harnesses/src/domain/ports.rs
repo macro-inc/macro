@@ -4,9 +4,9 @@ use computer_id::ComputerId;
 use pairing_id::PairingId;
 use std::future::Future;
 
+use bearer_token::HashedHarnessToken;
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
-use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 

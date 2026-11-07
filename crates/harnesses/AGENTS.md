@@ -69,7 +69,7 @@ before acting"); paired machines keep it off until their owner turns it on.
 
 ## Boundaries
 
-- Depends on: `harness_id`, `harness_token`, `bot_id`, `macro_authorization`,
+- Depends on: `harness_id`, `bearer_token`, `bot_id`, `macro_authorization`,
   `entity_access_db_utils`, `models_permissions`.
 - Used by: `coding_agent_worker`, `bots` (`HarnessTeamAgents`).
 

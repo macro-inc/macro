@@ -472,7 +472,7 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     assert_eq!(inserted.code, created.code);
     assert_eq!(
         inserted.device_secret_hash,
-        harness_token::hash_token(&created.device_secret)
+        bearer_token::hash_token(&created.device_secret)
     );
 }
 
@@ -671,7 +671,7 @@ async fn approval_race_reports_gone() {
 
 fn claim_facts(status: PairingStatus, secret: &str) -> PairingClaimFacts {
     PairingClaimFacts {
-        device_secret_hash: harness_token::hash_token(secret),
+        device_secret_hash: bearer_token::hash_token(secret),
         status,
         expires_at: Utc::now() + Duration::minutes(10),
         harness_id: Some(HarnessId::TEST_A),
@@ -1187,7 +1187,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
     assert_eq!(pairing.code, format!("hosted:{}", hosted.pairing_id));
     assert_eq!(
         pairing.device_secret_hash,
-        harness_token::hash_token(hosted.device_secret.expose())
+        bearer_token::hash_token(hosted.device_secret.expose())
     );
     assert_eq!(pairing.requested_name, "Standard computer");
     assert_eq!(pairing.host, None);
@@ -1218,7 +1218,7 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         let calls = repo.calls.lock().unwrap();
         assert_eq!(
             calls.hosted_upserts[0].0.device_secret_hash,
-            harness_token::hash_token(hosted.device_secret.expose())
+            bearer_token::hash_token(hosted.device_secret.expose())
         );
     }
 
@@ -1235,13 +1235,13 @@ async fn hosted_pairing_rotates_before_claim_and_returns_fresh_pairing_after_rek
         assert_eq!(hosted.pairing_id, calls.hosted_upserts[0].0.id);
         assert_eq!(
             calls.hosted_upserts[0].0.device_secret_hash,
-            harness_token::hash_token(hosted.device_secret.expose())
+            bearer_token::hash_token(hosted.device_secret.expose())
         );
     }
     let mut existing_harness = harness(user_owner(OWNER_ID));
     existing_harness.computer_id = Some(COMPUTER_ID);
     repo.claim_facts = Some(PairingClaimFacts {
-        device_secret_hash: harness_token::hash_token(hosted.device_secret.expose()),
+        device_secret_hash: bearer_token::hash_token(hosted.device_secret.expose()),
         status: PairingStatus::Approved,
         expires_at: Utc::now() + Duration::minutes(15),
         harness_id: Some(existing_harness.id),

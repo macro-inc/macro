@@ -6,7 +6,6 @@ version = "0.1.0"
 
 [dev-dependencies]
 anyhow = { workspace = true }
-bot_token = { workspace = true }
 futures = { workspace = true }
 local_e2e_test_support = { workspace = true }
 reqwest = { workspace = true }
@@ -17,6 +16,7 @@ tokio = { workspace = true, features = ["time"] }
 tokio-tungstenite = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
+bearer_token = { workspace = true }
 
 [dependencies]
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

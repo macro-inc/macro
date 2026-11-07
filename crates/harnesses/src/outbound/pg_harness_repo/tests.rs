@@ -48,7 +48,7 @@ fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
         id: PairingId::new_from_uuid(Uuid::new_v4()),
         code: code.to_owned(),
-        device_secret_hash: harness_token::hash_token(secret),
+        device_secret_hash: bearer_token::hash_token(secret),
         requested_name: "erics-macbook".to_owned(),
         host: Some("eric@macbook / darwin".to_owned()),
         expires_at: Utc::now() + Duration::minutes(15),
@@ -108,16 +108,13 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
         .expect("facts exist");
     assert_eq!(facts.status, PairingStatus::Approved);
     assert_eq!(facts.harness_id, Some(harness.id));
-    assert_eq!(
-        facts.device_secret_hash,
-        harness_token::hash_token("secret")
-    );
+    assert_eq!(facts.device_secret_hash, bearer_token::hash_token("secret"));
 
     let token = tokens::generate_harness_token();
     let claimed = repo
         .claim_pairing(
             pairing.id,
-            harness_token::hash_token("secret"),
+            bearer_token::hash_token("secret"),
             Uuid::new_v4(),
             HashedHarnessToken::from_raw(&token),
         )
@@ -130,7 +127,7 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
     assert!(
         repo.claim_pairing(
             pairing.id,
-            harness_token::hash_token("secret"),
+            bearer_token::hash_token("secret"),
             Uuid::new_v4(),
             HashedHarnessToken::from_raw(&token)
         )
@@ -652,7 +649,7 @@ fn hosted_pairing(pairing_id: PairingId, secret: &str) -> NewPairing {
     NewPairing {
         id: pairing_id,
         code: format!("hosted:{pairing_id}"),
-        device_secret_hash: harness_token::hash_token(secret),
+        device_secret_hash: bearer_token::hash_token(secret),
         requested_name: "Standard computer".to_owned(),
         host: None,
         // Already past expiry: an approved pairing stays claimable.
@@ -761,7 +758,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     assert_eq!(facts.harness_id, Some(harness_id));
     assert_eq!(
         facts.device_secret_hash,
-        harness_token::hash_token("second-secret")
+        bearer_token::hash_token("second-secret")
     );
 
     // Expiry cleanup never touches an approved pairing.
@@ -771,7 +768,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     assert!(
         repo.claim_pairing(
             pairing_id,
-            harness_token::hash_token("first-secret"),
+            bearer_token::hash_token("first-secret"),
             Uuid::now_v7(),
             HashedHarnessToken::from_raw(&token)
         )
@@ -782,7 +779,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     let claimed = repo
         .claim_pairing(
             pairing_id,
-            harness_token::hash_token("second-secret"),
+            bearer_token::hash_token("second-secret"),
             Uuid::new_v4(),
             HashedHarnessToken::from_raw(&token),
         )
@@ -832,7 +829,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     assert!(
         repo.claim_pairing(
             pairing_id,
-            harness_token::hash_token("second-secret"),
+            bearer_token::hash_token("second-secret"),
             Uuid::now_v7(),
             HashedHarnessToken::from_raw(&token)
         )
@@ -857,13 +854,13 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
     assert_eq!(facts.harness_id, Some(harness_id));
     assert_eq!(
         facts.device_secret_hash,
-        harness_token::hash_token("third-secret")
+        bearer_token::hash_token("third-secret")
     );
     let new_token = tokens::generate_harness_token();
     let reclaimed = repo
         .claim_pairing(
             replacement_id,
-            harness_token::hash_token("third-secret"),
+            bearer_token::hash_token("third-secret"),
             Uuid::now_v7(),
             HashedHarnessToken::from_raw(&new_token),
         )

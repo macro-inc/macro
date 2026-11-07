@@ -9,7 +9,7 @@ async fn hosted_claim_lookup_distinguishes_approved_claimed_and_missing() {
     ] {
         let service = service(FakeRepo {
             claim_facts: Some(PairingClaimFacts {
-                device_secret_hash: harness_token::hash_token("fixture-device-value"),
+                device_secret_hash: bearer_token::hash_token("fixture-device-value"),
                 status,
                 expires_at: Utc::now() - Duration::hours(1),
                 harness_id: None,
