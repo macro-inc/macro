@@ -1,6 +1,6 @@
 //! Temporary shared-state adapter while session memory moves into the core.
 use loro::{ExportMode, Frontiers, LoroDoc, VersionVector};
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::time::Duration;
 use sync_server_core::domain::{
     state::DocumentState as CoreDocumentState, state_error::StateError,
@@ -38,7 +38,13 @@ pub struct DocumentState {
 }
 
 impl DocumentState {
-    fn wrap(inner: CoreDocumentState) -> Self {
+    pub(crate) fn core(&self) -> Ref<'_, CoreDocumentState> {
+        self.inner.borrow()
+    }
+    pub(crate) fn core_mut(&self) -> RefMut<'_, CoreDocumentState> {
+        self.inner.borrow_mut()
+    }
+    pub(crate) fn from_core(inner: CoreDocumentState) -> Self {
         Self {
             loro_doc: inner.loro_doc.clone(),
             inner: RefCell::new(inner),
@@ -46,10 +52,10 @@ impl DocumentState {
     }
 
     pub fn new() -> Self {
-        Self::wrap(CoreDocumentState::new())
+        Self::from_core(CoreDocumentState::new())
     }
     pub fn try_from_snapshot(snapshot: &[u8]) -> Result<Self> {
-        into_worker(CoreDocumentState::try_from_snapshot(snapshot)).map(Self::wrap)
+        into_worker(CoreDocumentState::try_from_snapshot(snapshot)).map(Self::from_core)
     }
     pub fn frontiers(&self) -> (Frontiers, Frontiers) {
         self.inner.borrow().frontiers()
