@@ -40,15 +40,61 @@ pub enum MailboxError {
     #[error("mailbox persistence is unavailable: {0}")]
     Database(DatabaseFailure),
     /// A projection's downstream effect (event publishing, a queue, another
-    /// service) failed or is not ready; the effect logs its own cause.
-    #[error("a mailbox projection effect is unavailable")]
-    Effect,
+    /// service) failed or is not ready.
+    #[error("a mailbox projection effect is unavailable: {0}")]
+    Effect(EffectFailure),
     #[error("mailbox generation or worker lease changed")]
     Stale,
     /// The provider no longer reports the message where it was; a later
     /// attempt either finds it or settles that it is gone.
     #[error("mailbox message location has not settled")]
     LocationUnsettled,
+}
+
+/// Which projection effect deferred the work (`outlook.effect`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectFailure {
+    /// A broker, queue or service call failed; the effect logs its error.
+    Downstream,
+    /// Downloading or storing this attachment failed.
+    AttachmentUpload { attachment_id: Uuid },
+    /// Another worker still holds this attachment's upload claim. A claim
+    /// older than three minutes is taken back on the next attempt.
+    AttachmentUploadPending {
+        attachment_id: Uuid,
+        claim_age_seconds: i64,
+    },
+}
+
+impl EffectFailure {
+    /// The `outlook.effect` span value.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Downstream => "downstream",
+            Self::AttachmentUpload { .. } => "attachment_upload",
+            Self::AttachmentUploadPending { .. } => "attachment_upload_pending",
+        }
+    }
+
+    pub fn attachment_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Downstream => None,
+            Self::AttachmentUpload { attachment_id }
+            | Self::AttachmentUploadPending { attachment_id, .. } => Some(*attachment_id),
+        }
+    }
+}
+
+impl std::fmt::Display for EffectFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Downstream => f.write_str("downstream call failed"),
+            Self::AttachmentUpload { .. } => f.write_str("attachment upload failed"),
+            Self::AttachmentUploadPending {
+                claim_age_seconds, ..
+            } => write!(f, "attachment upload claimed {claim_age_seconds} s ago"),
+        }
+    }
 }
 
 /// What failed underneath a database call. The database's own message is
