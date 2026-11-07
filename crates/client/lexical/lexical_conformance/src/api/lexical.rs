@@ -43,6 +43,79 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         return super::nodes::call(r, tx, &receiver, short, a);
     }
     match name {
+        "@lexical/utils.$insertNodeIntoLeaf" => {
+            lexical_rich_nodes::utils::insert_node_into_leaf(
+                tx,
+                node_key(a.first().ok_or_else(|| fail("node"))?)?,
+            )?;
+            Ok(undefined())
+        }
+        "@lexical/mark.$wrapSelectionInMarkNode" => {
+            let range = tx
+                .range_at(slot_arg(r, a.first().ok_or_else(|| fail("selection"))?)?)?
+                .clone();
+            let backward = a.get(1).and_then(Value::as_bool).unwrap_or(false);
+            let id = str_arg(a, 2)?;
+            lexical_rich_nodes::mark::wrap_selection_in_mark_node::<
+                fn(
+                    &mut Transaction<'_>,
+                    Vec<String>,
+                ) -> std::result::Result<NodeKey, lexical_model::Error>,
+            >(tx, &range, backward, id, None)?;
+            Ok(undefined())
+        }
+        "@lexical/utils.$dfs" | "@lexical/utils.$reverseDfs" => {
+            let start = a
+                .first()
+                .filter(|value| !value.is_null() && value.get("$undef").is_none())
+                .map(node_key)
+                .transpose()?;
+            let end = a
+                .get(1)
+                .filter(|value| !value.is_null() && value.get("$undef").is_none())
+                .map(node_key)
+                .transpose()?;
+            let nodes = if name.ends_with(".$dfs") {
+                lexical_rich_nodes::utils::dfs(view, start, end)
+            } else {
+                lexical_rich_nodes::utils::reverse_dfs(view, start, end)
+            };
+            let values = nodes
+                .into_iter()
+                .map(|node| -> Result<Value> {
+                    Ok(json!({"depth":node.depth,"node":r.node(view,node.node)?}))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(Value::Array(values))
+        }
+        "@lexical/code.$createCodeNode" => {
+            let key = lexical_rich_nodes::code::create_code_node(
+                tx,
+                a.first().and_then(Value::as_str),
+                a.get(1).and_then(Value::as_str),
+            )?
+            .key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/code.$isCodeNode" => Ok(json!(a.first().is_some_and(|value| {
+            node_key(value).is_ok_and(|key| lexical_rich_nodes::code::is_code_node(&view, key))
+        }))),
+        "@lexical/mark.$createMarkNode" => {
+            let ids = serde_json::from_value(a.first().cloned().unwrap_or(json!([])))?;
+            let key = lexical_rich_nodes::mark::create_mark_node(tx, ids)?;
+            r.node(tx.view(), key)
+        }
+        "@lexical/mark.$isMarkNode" => Ok(json!(a.first().is_some_and(|value| {
+            node_key(value).is_ok_and(|key| lexical_rich_nodes::mark::is_mark_node(&view, key))
+        }))),
+        "@lexical/mark.$unwrapMarkNode" => {
+            lexical_rich_nodes::mark::unwrap_mark_node(
+                tx,
+                node_key(a.first().ok_or_else(|| fail("mark"))?)?,
+            )?;
+            Ok(Value::Null)
+        }
+
         "@lexical/list.$createListNode" => {
             let kind = match a.first().and_then(Value::as_str).unwrap_or("number") {
                 "number" | "ol" => lexical_rich_nodes::list::ListType::Number,

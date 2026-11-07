@@ -18,9 +18,40 @@ pub(crate) fn call(
         .map(EditorState::view)
         .unwrap_or(tx.view());
     match method {
-        "getFirstDescendant" => {
-            return view
-                .first_descendant(key)
+        "getLanguage" => {
+            return Ok(view
+                .get::<lexical_rich_nodes::code::CodeNode>(key)
+                .and_then(|code| code.language.as_deref())
+                .map(|language| json!(language))
+                .unwrap_or_else(undefined));
+        }
+        "getTheme" => {
+            return Ok(view
+                .get::<lexical_rich_nodes::code::CodeNode>(key)
+                .and_then(|code| code.theme.as_deref())
+                .map(|theme| json!(theme))
+                .unwrap_or_else(undefined));
+        }
+        "getIDs" => {
+            return Ok(json!(
+                view.get_or_err::<lexical_rich_nodes::mark::MarkNode>(key)?
+                    .ids
+            ));
+        }
+        "hasID" => {
+            return Ok(json!(
+                view.get_or_err::<lexical_rich_nodes::mark::MarkNode>(key)?
+                    .has_id(str_arg(a, 0)?)
+            ));
+        }
+
+        "getFirstDescendant" | "getLastDescendant" => {
+            let descendant = if method == "getFirstDescendant" {
+                view.first_descendant(key)
+            } else {
+                view.last_descendant(key)
+            };
+            return descendant
                 .map(|key| r.node(view, key))
                 .unwrap_or(Ok(Value::Null));
         }
@@ -86,6 +117,13 @@ pub(crate) fn call(
                 json.insert("checked".into(), undefined());
                 if let Some(value) = value {
                     json.insert("value".into(), value);
+                }
+            }
+            if view.is::<lexical_rich_nodes::code::CodeNode>(key) {
+                for field in ["language", "theme"] {
+                    if !json.contains_key(field) {
+                        json.insert(field.into(), undefined());
+                    }
                 }
             }
             return Ok(Value::Object(json));

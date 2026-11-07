@@ -62,3 +62,5 @@ For legacy JavaScript regexes, use regress's `find_from_ucs2` over UTF-16 code
 units. Its `find_from_utf16` API decodes surrogate pairs regardless of flags;
 that would skip individual surrogates which JavaScript without `u` can match.
 The conformance test covers this distinction over the complete BMP input.
+
+The rich-node package includes stored code/highlight preservation, plain code editing, inline marks, selection/tree/text/offset helpers and model clipboard strings. Its replayer executes all admitted code, mark and utility fixtures without package ledger entries. The recorder index still distinguishes unavailable B-only cases and view assertions; HTML export is the later `lexical_html` layer.

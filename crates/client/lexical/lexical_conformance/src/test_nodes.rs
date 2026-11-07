@@ -179,6 +179,9 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> EditorBuil
             "listitem" => builder.node::<lexical_rich_nodes::list::ListItemNode>(),
             "heading" => builder.node::<lexical_rich_nodes::heading::HeadingNode>(),
             "quote" => builder.node::<lexical_rich_nodes::quote::QuoteNode>(),
+            "code" => builder.node::<lexical_rich_nodes::code::CodeNode>(),
+            "code-highlight" => builder.node::<lexical_rich_nodes::code::CodeHighlightNode>(),
+            "mark" => builder.node::<lexical_rich_nodes::mark::MarkNode>(),
             "hashtag" => builder.node::<lexical_rich_nodes::hashtag::HashtagNode>(),
             _ => builder,
         };
