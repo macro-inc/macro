@@ -165,3 +165,25 @@ fn untouched_explicit_empty_opaque_fields_roundtrip() -> Result<(), Error> {
     assert_eq!(editor.state().to_json()?.root["children"][0], original);
     Ok(())
 }
+
+#[test]
+fn opaque_future_framework_enums_roundtrip_without_relaxing_known_node_validation()
+-> Result<(), Error> {
+    let unknown = json!({"type":"future-panel","version":8,"format":"future-layout","direction":"future-direction","children":[
+        {"type":"future-text","version":3,"text":"a😀b","mode":"future-mode","format":17,"style":""}
+    ]});
+    let editor = Editor::builder(EditorMode::Headless)
+        .opaque_unknown_types(true)
+        .initial_state(serde_json::from_value(
+            json!({"root":{"type":"root","version":1,"children":[unknown.clone()]}}),
+        )?)
+        .build()
+        .expect("future enums are opaque JSON");
+    assert_eq!(editor.state().to_json()?.root["children"][0], unknown);
+    let mut strict = Editor::builder(EditorMode::Headless)
+        .opaque_unknown_types(true)
+        .build()
+        .expect("editor");
+    assert!(strict.parse_editor_state(&serde_json::from_value(json!({"root":{"type":"root","version":1,"children":[{"type":"text","version":1,"text":"known","mode":"future-mode"}]}}))?).is_err());
+    Ok(())
+}
