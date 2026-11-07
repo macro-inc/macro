@@ -12,3 +12,8 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
+libtest-mimic = { workspace = true }
+
+[[test]]
+name = "conversions"
+harness = false
