@@ -377,6 +377,12 @@ impl TextMut<'_, '_> {
             return Ok(vec![self.key]);
         }
         let original = self.key;
+        let parent = self.tx.parent(original);
+        let insertion_index = self.tx.index_within_parent(original);
+        let original_selection = self.tx.pending.selection.clone();
+        for sibling in [self.tx.prev_sibling(original), self.tx.next_sibling(original)].into_iter().flatten() {
+            self.tx.writable(sibling)?;
+        }
         let state = self
             .tx
             .view()
@@ -435,6 +441,25 @@ impl TextMut<'_, '_> {
         if let Some(Selection::Range(range)) = &mut self.tx.pending.selection {
             map_point(&mut range.anchor)?;
             map_point(&mut range.focus)?;
+        }
+        if let (Some(parent), Some(index), Some(Selection::Range(previous)), Some(Selection::Range(mut range))) =
+            (parent, insertion_index, original_selection, self.tx.pending.selection.clone())
+        {
+            for (point, old) in [(&mut range.anchor, previous.anchor), (&mut range.focus, previous.focus)] {
+                if let Point::Element { key, offset } = old {
+                    if key == parent {
+                        let offset = offset.0 + if offset.0 >= index.0 { parts.len() as u32 - 1 } else { 0 };
+                        let children = self.tx.children_keys(parent)?;
+                        let at_end = offset as usize >= children.len();
+                        let child = if at_end { children.last() } else { children.get(offset as usize) };
+                        *point = match child.copied().filter(|key| self.tx.is_text(*key)) {
+                            Some(key) => Point::text(key, if at_end { self.tx.text_content_size(key) } else { Utf16Offset::ZERO }),
+                            None => Point::element(parent, ChildIndex(offset)),
+                        };
+                    }
+                }
+            }
+            self.tx.pending.selection = Some(Selection::Range(range));
         }
         Ok(parts)
     }
