@@ -43,7 +43,6 @@ ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 
 [dependencies]
-agent_changes = { workspace = true }
 activity = { workspace = true }
 ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true }

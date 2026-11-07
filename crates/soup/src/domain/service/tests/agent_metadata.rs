@@ -1,26 +1,23 @@
 use super::*;
-use agent_changes::domain::{
-    model::{AgentSessionId, CapturedBranch},
-    ports::{SessionBranchReader, SessionBranchesFuture},
-};
+use crate::domain::ports::{AgentWorkingBranch, AgentWorkingBranches, AgentWorkingBranchesFuture};
 use models_soup::agent_session::{AgentPullRequestState, SoupAgentSession};
 
 #[derive(Default)]
 struct Branches {
-    calls: Mutex<Vec<Vec<AgentSessionId>>>,
-    branches: HashMap<AgentSessionId, CapturedBranch>,
+    calls: Mutex<Vec<Vec<Uuid>>>,
+    branches: HashMap<Uuid, AgentWorkingBranch>,
 }
 
-impl SessionBranchReader for Branches {
-    fn working_branches<'a>(&'a self, sessions: &'a [AgentSessionId]) -> SessionBranchesFuture<'a> {
+impl AgentWorkingBranches for Branches {
+    fn working_branches<'a>(&'a self, sessions: &'a [Uuid]) -> AgentWorkingBranchesFuture<'a> {
         self.calls.lock().unwrap().push(sessions.to_vec());
         Box::pin(async { Ok(self.branches.clone()) })
     }
 }
 
-fn agent(id: AgentSessionId, pull_request: Option<&str>) -> SoupCandidate {
+fn agent(id: Uuid, pull_request: Option<&str>) -> SoupCandidate {
     SoupCandidate::plain(SoupItem::AgentSession(SoupAgentSession {
-        id: id.as_uuid(),
+        id,
         name: "Agent".to_owned(),
         archived_by: None,
         archived_at: None,
@@ -61,13 +58,13 @@ fn pull_request(id: &str, user: &str, status: &str) -> ForeignEntity {
 #[tokio::test]
 async fn metadata_is_batched_and_only_uses_visible_prs_and_captured_branches() {
     let user = "macro|owner@example.com";
-    let first = AgentSessionId::new();
-    let second = AgentSessionId::new();
-    let third = AgentSessionId::new();
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    let third = Uuid::now_v7();
     let branches = Branches {
         branches: HashMap::from([(
             first,
-            CapturedBranch {
+            AgentWorkingBranch {
                 repository_url: "https://github.com/macro/macro".to_owned(),
                 branch: "agent/fix-icons".to_owned(),
             },
@@ -135,7 +132,7 @@ async fn metadata_is_batched_and_only_uses_visible_prs_and_captured_branches() {
 async fn no_pr_links_skip_foreign_entity_lookup() {
     let branches = Branches::default();
     let foreign = RecordingPullRequestListing::new(Vec::new());
-    let mut items = vec![agent(AgentSessionId::new(), None)];
+    let mut items = vec![agent(Uuid::now_v7(), None)];
     super::super::agent_metadata::enrich(
         &foreign,
         Some(&branches),
@@ -151,11 +148,11 @@ async fn no_pr_links_skip_foreign_entity_lookup() {
 
 #[tokio::test]
 async fn runtime_branch_without_pr_survives_enrichment_and_takes_precedence() {
-    let session = AgentSessionId::new();
+    let session = Uuid::now_v7();
     let branches = Branches {
         branches: HashMap::from([(
             session,
-            CapturedBranch {
+            AgentWorkingBranch {
                 repository_url: "https://github.com/macro/macro".to_owned(),
                 branch: "old-pr-branch".to_owned(),
             },
@@ -190,11 +187,11 @@ async fn runtime_branch_without_pr_survives_enrichment_and_takes_precedence() {
 #[tokio::test]
 async fn changed_or_missing_repository_does_not_restore_an_old_captured_branch() {
     for repository in [Some("https://github.com/macro/replacement"), None] {
-        let session = AgentSessionId::new();
+        let session = Uuid::now_v7();
         let branches = Branches {
             branches: HashMap::from([(
                 session,
-                CapturedBranch {
+                AgentWorkingBranch {
                     repository_url: "https://github.com/macro/macro".to_owned(),
                     branch: "old-pr-branch".to_owned(),
                 },
