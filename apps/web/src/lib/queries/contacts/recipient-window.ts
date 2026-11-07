@@ -7,6 +7,7 @@ import type {
 import { createMemo } from 'solid-js';
 import { readContactDirectory } from './directory';
 import { createContactDirectoryWindow } from './directory-query';
+import { createContactExclusions } from './exclusions';
 
 /** A selector's query, exclusions and domain reach the ranker before its limit. */
 export function createContactRecipientSource(
@@ -15,29 +16,43 @@ export function createContactRecipientSource(
   isSecondaryInbox: (id: string) => boolean,
   reader: typeof readContactDirectory = readContactDirectory
 ): RecipientSource<'user'> {
+  const exclusions = createContactExclusions(
+    () => input.excludedIds?.() ?? [],
+    () => (input.includeSelf() ? undefined : input.selfId())
+  );
   const directory = createContactDirectoryWindow(scope, reader, input.enabled, {
     search: input.search,
-    policy: () => {
-      const self = input.selfId();
-      return {
-        mode: 'recipient',
-        excluded: self && !input.includeSelf() ? [self] : [],
-        senderDomain: input.senderDomain(),
-      };
-    },
+    resetKey: exclusions.key,
+    policy: () => ({
+      mode: 'recipient',
+      excluded: exclusions.native(),
+      senderDomain: input.senderDomain(),
+    }),
   });
   return {
     items: createMemo(() =>
       (directory.data()?.users ?? [])
-        // The native policy excludes these before limiting. Server fallback is
-        // source-ordered and can leave a short/empty window with a continuation.
+        // Normal rosters are excluded before native limiting. A roster larger
+        // than the IPC budget, like server fallback, can yield a short/empty
+        // window; retain its continuation rather than accumulating more rows.
         .filter(
           (user) =>
+            !exclusions.ids().has(user.id) &&
             !isSecondaryInbox(user.id) &&
             (!isAutomatedAddress(user.email) ||
               input.search().trim().toLowerCase() === user.email.toLowerCase())
         )
-        .map(recipientEntityMapper('user'))
+        // Selected chips outlive this query window: retain scalar display data,
+        // not the query-store objects from which it was materialized.
+        .map((user) =>
+          recipientEntityMapper('user')({
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            photoUrl: user.photoUrl,
+            lastInteraction: user.lastInteraction,
+          })
+        )
     ),
     loading: directory.loading,
     error: directory.error,

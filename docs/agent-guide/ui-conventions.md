@@ -146,6 +146,17 @@ Explicit participant/agent/thread choices remain scoped extras. Matching address
 are deduplicated while keeping the caller's selected representation. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
+## Property people pickers
+
+Personal user rows and calendar guest pickers use replaceable windows with Next
+options/PageDown. Selections and scoped extras stay independent of the page; names
+from a chosen row survive later searches. A returned person page is not capped a
+second time, and broader native/server matches are kept. Search changes immediately
+remove stale person results from keyboard selection while the source debounces its
+read. Explicit team/participant pools remain scoped rather than becoming directory
+search. Custom calendar addresses are added only by choosing their Add row; a
+complete address never resolves through another person's display-name alias.
+
 ## Multiselect dropdowns
 
 Use `Dropdown.MultiSelectItem` for filter options, not independent settings.

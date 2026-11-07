@@ -42,10 +42,15 @@ vi.mock('@queries/contacts/use-directory', () => ({
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     isLoading: () => false,
-    useList: (options: { buckets: string[] }) => ({
+    useList: (options: { buckets: string[]; searchTerm?: () => string }) => ({
       isLoading: () => false,
+      isLoadingMore: () => false,
+      hasMore: () => false,
+      error: () => undefined,
+      windowKey: () => undefined,
+      loadMore: async () => {},
       items: () =>
-        options.buckets.includes('initiative')
+        (options.buckets.includes('initiative')
           ? [
               {
                 kind: 'initiative',
@@ -76,7 +81,12 @@ vi.mock('@core/context/quickAccess', () => ({
                   email: 'outside@example.com',
                 },
               },
-            ],
+            ]
+        ).filter((item) =>
+          item.data.name
+            .toLowerCase()
+            .includes(options.searchTerm?.().toLowerCase() ?? '')
+        ),
     }),
   }),
 }));

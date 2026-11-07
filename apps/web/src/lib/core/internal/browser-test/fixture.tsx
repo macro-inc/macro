@@ -10,13 +10,20 @@ import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ContactDirectoryInspector } from '../ContactDirectoryInspector';
 import { CalendarFilterFixture } from './calendar-fixture';
+import { CalendarGuestsFixture } from './calendar-guests-fixture';
+import { ChannelRecipientFixture } from './channel-recipient-fixture';
+import { LinearImportFixture } from './linear-import-fixture';
 import {
   DriveListFilterFixture,
   NotesListFilterFixture,
 } from './list-filter-fixture';
 import { changeViewer, fetchContactDirectoryPage } from './network';
+import { OnboardingContactsFixture } from './onboarding-contacts-fixture';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
+import { SoupFilterFixture } from './soup-filter-fixture';
+import { TaskFilterFixture } from './task-filter-fixture';
+import { TaskListLabelFixture } from './task-list-label-fixture';
 
 const client = new QueryClient();
 function App() {
@@ -139,6 +146,35 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match when={new URLSearchParams(location.search).has('linear-import')}>
+          <LinearImportFixture />
+        </Match>
+        <Match
+          when={new URLSearchParams(location.search).has('onboarding-contacts')}
+        >
+          <OnboardingContactsFixture />
+        </Match>
+        <Match
+          when={new URLSearchParams(location.search).has('task-list-labels')}
+        >
+          <TaskListLabelFixture />
+        </Match>
+        <Match when={new URLSearchParams(location.search).has('task-filters')}>
+          <TaskFilterFixture />
+        </Match>
+        <Match
+          when={new URLSearchParams(location.search).has('calendar-guests')}
+        >
+          <CalendarGuestsFixture />
+        </Match>
+        <Match
+          when={new URLSearchParams(location.search).has('channel-recipients')}
+        >
+          <ChannelRecipientFixture />
+        </Match>
+        <Match when={new URLSearchParams(location.search).has('soup-filters')}>
+          <SoupFilterFixture />
+        </Match>
         <Match
           when={new URLSearchParams(location.search).has('recipient-directory')}
         >

@@ -3,8 +3,18 @@ import { Avatar } from '@ui';
 import type { JSX } from 'solid-js';
 
 export { recipientEntityMapper } from '@core/user/combinedRecipient';
+export {
+  useContactDirectoryScope,
+  useContactIdFilterSource,
+  usePinnedContactUsers,
+} from '../../../queries/contacts/use-directory';
+export const getGraphqlSoupCacheHost = () => undefined;
+export { useQueryAccount } from './test-account';
 export const emailToId = (email: string) => `macro|${email}`;
+export const idToEmail = (id: string) => id.replace(/^macro\|/, '');
 export const useUserId = () => () => 'macro|viewer@example.com';
+export const useIsAuthenticated = () => () => true;
+export const useUserContext = () => ({ userId: useUserId() });
 export const useEmail = () => () => 'viewer@example.com';
 export const useAugmentUserWithDmActivity = () => (user: IUser) => user;
 export const UserTooltip = (props: { children?: JSX.Element }) =>

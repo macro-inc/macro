@@ -81,6 +81,8 @@ export function createContactDirectoryWindow(
   options: {
     search?: Accessor<string>;
     policy?: Accessor<ContactPeoplePolicy>;
+    /** Local eligibility changes also restart paging, without entering IPC. */
+    resetKey?: Accessor<string>;
   } = {}
 ) {
   const owner = createUniqueId();
@@ -103,7 +105,7 @@ export function createContactDirectoryWindow(
       return {
         query: search(),
         policy,
-        policyKey: hashKey([policy]),
+        policyKey: hashKey([policy, options.resetKey?.()]),
         active: enabled(),
       };
     },
@@ -227,6 +229,9 @@ export function createContactDirectoryWindow(
     return true;
   };
   return {
+    /** Stable across pages, but changes with eligibility, scope and activation. */
+    inputKey: () =>
+      hashKey([generation(), input().query, input().policyKey, input().active]),
     search,
     setSearch: (value: string) => {
       setCursor(undefined);

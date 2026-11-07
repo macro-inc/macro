@@ -21,7 +21,7 @@ import type {
   TaskEntity,
 } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, untrack } from 'solid-js';
 import { match, P } from 'ts-pattern';
 
 export type EntityTypeItemMap = {
@@ -71,30 +71,57 @@ function entityTypeToBuckets(entityType: EntityType): readonly Bucket[] {
 export function useQuickAccessEntities<T extends EntityType>(
   entityType: Accessor<T | T[] | null | undefined>,
   searchTerm: Accessor<string> = () => '',
-  enabled: Accessor<boolean> = () => true
-): { items: Accessor<EntityTypeItemMap[T][]>; isLoading: Accessor<boolean> } {
+  enabled: Accessor<boolean> = () => true,
+  excludedPeople?: Accessor<ReadonlySet<string>>
+) {
   const quickAccess = useQuickAccess();
 
-  const buckets = () => {
-    const entityType_ = entityType();
-    if (!entityType_) return null;
-    if (Array.isArray(entityType_))
-      return entityType_.flatMap(entityTypeToBuckets);
-    return entityTypeToBuckets(entityType_);
-  };
+  const buckets = createMemo(
+    () => {
+      const entityType_ = entityType();
+      if (!entityType_) return null;
+      if (Array.isArray(entityType_))
+        return entityType_.flatMap(entityTypeToBuckets);
+      return entityTypeToBuckets(entityType_);
+    },
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous === next ||
+        (!!previous &&
+          !!next &&
+          previous.length === next.length &&
+          previous.every((bucket, index) => bucket === next[index])),
+    }
+  );
   const list = createMemo(() => {
     const b = buckets();
     if (b?.length === 0) return;
-    return quickAccess.useList({
-      buckets: b ?? BUCKET_COMBINATIONS.all,
-      searchTerm,
-      enabled,
-      peopleMode: 'property',
-    });
+    // Factory setup may read query state. Only a bucket change should replace
+    // its owner; pagination/loading must not recreate the list at page one.
+    return untrack(() =>
+      quickAccess.useList({
+        buckets: b ?? BUCKET_COMBINATIONS.all,
+        searchTerm,
+        enabled,
+        peopleMode: 'property',
+        excludedPeople,
+      })
+    );
   });
   const items = (): EntityTypeItemMap[T][] =>
     (list()?.items() ?? []) as EntityTypeItemMap[T][];
-  return { items, isLoading: () => list()?.isLoading() ?? false };
+  return {
+    items,
+    isLoading: () => enabled() && (list()?.isLoading() ?? false),
+    isLoadingMore: () => enabled() && (list()?.isLoadingMore() ?? false),
+    hasMore: () => enabled() && (list()?.hasMore() ?? false),
+    error: () => (enabled() ? list()?.error() : undefined),
+    windowKey: () => (enabled() ? list()?.windowKey?.() : undefined),
+    loadMore: async () => {
+      if (enabled()) await list()?.loadMore();
+    },
+  };
 }
 
 /** Combined entity type for unified handling across entity selectors */

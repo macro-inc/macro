@@ -6,10 +6,14 @@ import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import { filterQuickAccessItems } from '@core/context/quickAccess/entity-search';
+import { contactUserItem } from '@core/context/quickAccess/person-items';
 import type {
   Bucket,
   EntityItem,
+  ItemForBucket,
+  ItemsForBuckets,
   QuickAccessContextValue,
+  QuickAccessList,
   QuickAccessListOptions,
 } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
@@ -17,6 +21,7 @@ import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
 import { DocumentMentionNode } from '@macro-inc/lexical-core';
 import { setDecorator } from '@macro-inc/lexical-core/decoratorRegistry';
+import { createContactDirectoryWindow } from '@queries/contacts/directory-query';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -83,32 +88,98 @@ const ITEMS: EntityItem[] = CRM_SCENARIO
       },
     ];
 
-// Reproduce the production merge: cached tasks first, the project appended.
-// Query filtering stays source-owned; the real menu owns all ranking/selection.
-const QUICK_ACCESS: QuickAccessContextValue = {
-  useList: ((...args: Bucket[] | [QuickAccessListOptions]) => {
-    const first = args[0];
-    const options = typeof first === 'object' ? first : undefined;
-    const buckets =
-      options?.buckets ??
-      args.filter((bucket): bucket is Bucket => typeof bucket === 'string');
-    const items = () =>
-      filterQuickAccessItems(
-        ITEMS.filter(
-          (item) => !buckets.length || buckets.includes(item.bucket)
-        ),
-        options?.searchTerm?.() ?? ''
+const [peopleReads, setPeopleReads] = createSignal(0);
+const [lastPeopleRead, setLastPeopleRead] = createSignal('');
+function useList(): QuickAccessList;
+function useList<B extends Bucket>(
+  bucket: B
+): QuickAccessList<ItemForBucket<B>>;
+function useList<B extends Bucket[]>(
+  ...buckets: B
+): QuickAccessList<ItemsForBuckets<B>>;
+function useList<const B extends readonly Bucket[]>(
+  options: QuickAccessListOptions<B>
+): QuickAccessList<ItemForBucket<B[number]>>;
+function useList(
+  ...args: (Bucket | QuickAccessListOptions)[]
+): QuickAccessList {
+  const first = args[0];
+  const options = typeof first === 'object' ? first : undefined;
+  const buckets =
+    options?.buckets ??
+    args.filter((bucket): bucket is Bucket => typeof bucket === 'string');
+  const people = createContactDirectoryWindow(
+    () => ({ userId: 'macro|viewer@example.com' }),
+    async (viewer, _host, request) => {
+      setPeopleReads((count) => count + 1);
+      setLastPeopleRead(
+        JSON.stringify({ query: request.query, cursor: request.cursor })
       );
-    return {
-      items,
-      totalCount: () => items().length,
-      hasMore: () => false,
-      isLoading: () => false,
-      isLoadingMore: () => false,
-      error: () => undefined,
-      loadMore: async () => {},
-    };
-  }) as QuickAccessContextValue['useList'],
+      const start =
+        request.query === 'late'
+          ? 99_999
+          : request.cursor?.source === 'server'
+            ? Number(request.cursor.after)
+            : 0;
+      const ids =
+        !request.query || ['directory', 'late'].includes(request.query)
+          ? Array.from(
+              { length: Math.min(50, 100_000 - start) },
+              (_, i) => start + i
+            )
+          : [];
+      return {
+        source: 'server',
+        sync: 'unavailable',
+        offline: false,
+        query: request.query,
+        users: ids.map((i) => ({
+          id: `macro|person${i}@example.com`,
+          email: `person${i}@example.com`,
+          name:
+            i === 99_999
+              ? 'Late person'
+              : `Directory person ${String(i).padStart(6, '0')}`,
+        })),
+        nextCursor:
+          ids.length && start + ids.length < 100_000
+            ? {
+                source: 'server',
+                userId: viewer,
+                query: request.query,
+                after: String(start + ids.length),
+              }
+            : null,
+      };
+    },
+    () =>
+      (!buckets.length || buckets.includes('person')) &&
+      options?.enabled?.() !== false,
+    { search: options?.searchTerm }
+  );
+  const items = () => [
+    ...filterQuickAccessItems(
+      ITEMS.filter((item) => !buckets.length || buckets.includes(item.bucket)),
+      options?.searchTerm?.() ?? ''
+    ),
+    ...(people.data()?.users ?? []).map(contactUserItem),
+  ];
+  return {
+    items,
+    totalCount: () => items().length,
+    windowKey: people.windowKey,
+    hasMore: () => !!people.data()?.nextCursor,
+    isLoading: people.loading,
+    isLoadingMore: people.loading,
+    error: people.error,
+    loadMore: async () => {
+      await people.loadNext();
+    },
+  };
+}
+// Real bounded people windows, cached entity items and real menu ranking.
+const QUICK_ACCESS: QuickAccessContextValue = {
+  useList,
   usesRecordSelection: () => false,
   usesSearchProjection: () => true,
   isLoading: () => false,
@@ -121,6 +192,8 @@ const QUICK_ACCESS: QuickAccessContextValue = {
 function Fixture() {
   useHotKeyRoot();
   const [draft, setDraft] = createSignal('');
+  const discussion = new URLSearchParams(location.search).has('discussion');
+  const scoped = new URLSearchParams(location.search).has('scoped');
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -143,7 +216,21 @@ function Fixture() {
                       <output data-testid="draft" hidden>
                         {draft()}
                       </output>
+                      <output data-testid="people-reads">
+                        {peopleReads()}
+                      </output>
+                      <output data-testid="last-people-read">
+                        {lastPeopleRead()}
+                      </output>
                       <ChannelInput
+                        parent={
+                          discussion
+                            ? {
+                                type: 'document',
+                                id: '00000000-0000-4000-8000-000000000001',
+                              }
+                            : undefined
+                        }
                         onChange={(snapshot) => {
                           setDraft(snapshot.value);
                         }}
@@ -152,20 +239,24 @@ function Fixture() {
                           id: `channel-input-${CHANNEL_ID}`,
                           placeholder: 'Message #planning',
                         }}
-                        participants={() =>
-                          CRM_SCENARIO
-                            ? [
-                                {
-                                  id: 'macro|member@example.com',
-                                  email: 'member@example.com',
-                                  name: 'Acme member',
-                                },
-                              ]
-                            : []
+                        participants={
+                          discussion && !scoped
+                            ? undefined
+                            : () => {
+                                if (CRM_SCENARIO)
+                                  return [
+                                    {
+                                      id: 'macro|member@example.com',
+                                      email: 'member@example.com',
+                                      name: 'Acme member',
+                                    },
+                                  ];
+                                return [];
+                              }
                         }
                         bots={() => []}
                         persistenceKey={makeInputValuePersistenceKey({
-                          channelId: CHANNEL_ID,
+                          channelId: `${CHANNEL_ID}-${discussion ? (scoped ? 'scoped' : 'directory') : 'channel'}`,
                         })}
                       />
                     </main>

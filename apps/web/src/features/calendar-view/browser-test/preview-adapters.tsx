@@ -1,3 +1,4 @@
+import type { IUser } from '@core/user/types';
 import { Avatar } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
@@ -187,7 +188,9 @@ const names: Record<string, string> = {
     'Rowan Field',
   'you@example.com': 'You',
 };
-export const useContacts = () => contacts;
+export function useContacts(): never {
+  throw new Error('Unexpected full-directory read');
+}
 export const useOpenEventEmail = () => () =>
   announce('Email guests · Preview only');
 export const copyGuestEmails = () =>
@@ -201,15 +204,25 @@ export const copyGuestEmails = () =>
 export function PropertyEntitySelector(props: {
   config: {
     placeholder?: string;
-    users?: () => { id: string; email: string; name?: string }[];
+    users?: () => IUser[];
+    additionalUsers?: () => IUser[];
     excludedIds?: () => ReadonlySet<string>;
   };
   selectedOptions: () => Set<string>;
   setSelectedOptions: (options: Set<string>) => void;
+  onUserSelected?: (user: IUser, custom: boolean) => void;
 }) {
   const [query, setQuery] = createSignal('');
   const matches = createMemo(() =>
-    (props.config.users?.() ?? []).filter(
+    (
+      props.config.users?.() ?? [
+        ...new Map(
+          [...contacts(), ...(props.config.additionalUsers?.() ?? [])].map(
+            (user) => [user.id, user]
+          )
+        ).values(),
+      ]
+    ).filter(
       (user) =>
         !props.config.excludedIds?.().has(user.id) &&
         `${user.name ?? ''} ${user.email}`
@@ -242,11 +255,12 @@ export function PropertyEntitySelector(props: {
                   role="option"
                   aria-selected={false}
                   class="flex w-full min-w-0 items-center rounded-lg p-1.5 px-2 text-left text-ink"
-                  onClick={() =>
+                  onClick={() => {
+                    props.onUserSelected?.(user, false);
                     props.setSelectedOptions(
                       new Set([...props.selectedOptions(), user.id])
-                    )
-                  }
+                    );
+                  }}
                 >
                   <span class="truncate">{user.name ?? user.email}</span>
                 </button>

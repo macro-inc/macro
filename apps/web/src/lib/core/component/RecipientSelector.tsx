@@ -175,6 +175,9 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
       )}
       onMouseEnter={props.disabled ? handleMouseEnter : undefined}
       onMouseLeave={props.disabled ? handleMouseLeave : undefined}
+      // Kobalte still selects on pointerup, but synchronously detaches this
+      // popup. Cancel outside-dismiss handling of that same event in a drawer.
+      onPointerUp={(event) => event.preventDefault()}
     >
       <Switch>
         <Match
@@ -297,6 +300,8 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   hideBorder?: boolean;
   noPadding?: boolean;
   includeSelf?: boolean;
+  /** Existing participants excluded by the personal suggestion source. */
+  excludedIds?: Accessor<ReadonlySet<string>>;
   selfEmail?: string;
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
@@ -459,6 +464,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     selfId,
     senderDomain: selfDomain,
     includeSelf: () => props.includeSelf ?? false,
+    excludedIds: props.excludedIds,
   });
 
   const baseRecipientSearchConfig =

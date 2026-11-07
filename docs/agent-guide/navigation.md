@@ -824,13 +824,27 @@ status, assignees, project, and other supported task properties populate their
 pills rather than remaining as metadata lines in the description. For example,
 “notification click not going to target … priority urgent” displays **Urgent**.
 Unresolved or ambiguous values require a choice; manual property edits survive
-later predictions. Task fields stay in sync as typing continues.
+later predictions. Task assignees resolve against the directory independently of
+the visible suggestion page. A name matching multiple people remains
+unresolved, including a full name that is another person's first name. Incomplete
+offline evidence cannot select an assignee; reconnecting can resolve the same draft.
+A manual selection or clearing the assignee overrides that inference. Task fields
+stay in sync as typing continues; submission retains the resolved identities while
+creation metadata loads and rechecks the account before starting task creation.
 Select **Auto** to resume detection; manually edited fields remain yours.
 
 **Enter** inserts a newline. **Cmd/Ctrl+Enter** or the labeled action button
 submits only the currently displayed, complete action. There is no queued send
 while inference is pending. Email and message modes show their outgoing body
-and resolved recipients. Email uses the Email Composer's inbox picker, recipient
+and resolved recipients. Recipient, guest and search names resolve against complete
+per-label directory evidence, not just the first suggestion page. They prefer an
+exact full name before a unique first name; a comma-bearing model name remains
+one person rather than turning into multiple recipients. Ambiguous or incomplete
+offline names require a specific choice; reconnecting can resolve the same draft. A complete
+email address never resolves through another person's display-name alias. Email,
+message and guest pickers have independent bounded windows, and chosen labels stay
+visible while explicit identity lookup finishes. Changing a field invalidates its
+previous choice snapshot; unresolved search constraints cannot broaden a search. Email uses the Email Composer's inbox picker, recipient
 chips with address completion, separate Cc/Bcc controls, subject control, rich Markdown editor, and HTML
 preparation for delivery. Task creation uses the task composer's rich title,
 Markdown description, and editable property pills, including Due date, and the
@@ -1068,6 +1082,11 @@ and actions reachable. Fullscreen takeovers retain their fullscreen layout.
 Filter sheets have a visible heading and Close filters button. Sort and filter
 options use rounded rows with trailing checkmarks; accordion sections retain
 their selection counts. Clear all resets selections without dismissing the sheet.
+In Soup-based list toolbars, Assignee and Created by menus and filter chips load
+suggestions only while open. Next options replaces the page; selected and unavailable
+saved IDs remain selected across searches. Me remains available, Assignee also has
+Unassigned, and Only changes its own filter group. Clearing a creator refinement on Owned
+restores the Owned constraint. Chip labels resolve separately while menus are closed.
 Calendar settings and the month picker use the same translucent groups and
 rounded selection highlights. Calendar visibility and Show weekends are checkbox
 rows; period, week start, time format, and month choices show trailing checkmarks.
@@ -1505,6 +1524,12 @@ would omit them. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
 preview rows and stay near the top in **View all**. Select it with Enter or a
 phone tap and confirm a project mention is inserted.
+
+Document, project and call discussion composers (including replies and edits)
+use the same paged personal directory. Channel people remain participant-scoped,
+and CRM discussions remain team-scoped; an empty or loading roster never opens
+personal-directory search. Available agents are added to the current window or
+scope with the existing rollout rules. Group mentions remain channel-only.
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue

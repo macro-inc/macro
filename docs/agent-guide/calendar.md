@@ -587,6 +587,16 @@ title as its subject (as `Forward by email` fills it in) — in a split
 beside the calendar on desktop, as the full-screen composer on touch devices, in its own
 composer even when another one is open. Deleting an event asks first, and says guests will be
 notified only when someone besides you is on it.
+Guest pickers in event creation/editing, invitations/forwarding and AI drafts use
+paged personal suggestions. Type to find contacts outside the first window; Next
+options or PageDown replaces the page. Selected guests, their supplied/chosen
+names and custom addresses survive searches and paging. Known event guests are
+scoped extras, not personal-directory membership. Add-only editors exclude current
+and newly added guests case-insensitively without changing their stored address
+representation. Typing a complete custom address and pressing Enter selects its
+Add row, never a stale result or another person's display-name alias. Existing read-only, hidden
+list, optional-attendee and recurring-event permissions are unchanged.
+
 With the `enable-calendar-guest-invites` flag on, a third icon button, `Add guests`, shows
 whenever the event's `viewerCan.inviteGuests` allows it, including for a guest whose
 organizer lets guests invite. It opens an editor anchored to the button (on phones, a bottom

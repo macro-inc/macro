@@ -36,6 +36,7 @@ it('keeps off-page selections and self without reordering clicked rows or retain
     const input: ContactIdFilterSource = {
       viewer: () => me.id,
       suggestions: {
+        inputKey: query,
         windowKey: () => 'window',
         data: page,
         search: query,

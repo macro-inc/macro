@@ -39,6 +39,7 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
+import { createContactExclusions } from '@queries/contacts/exclusions';
 import { useContactDirectoryScope } from '@queries/contacts/use-directory';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
 import {
@@ -1083,8 +1084,19 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           (bucket !== 'initiative' || projectsFlag().enabled)
       )
     );
+    const personExclusions = createContactExclusions(
+      function* () {
+        yield* options?.excludedPeople?.() ?? [];
+        for (const link of emailLinks()) {
+          if (!link.is_primary)
+            yield `macro|${link.email_address.toLowerCase()}`;
+        }
+      },
+      () => (options?.excludeSelf ? directoryScope().userId : undefined)
+    );
     const personList = createPersonList({
       scope: directoryScope,
+      resetKey: personExclusions.key,
       search: () => options?.searchTerm?.() ?? '',
       enabled: () =>
         projectedBuckets().includes('person') && options?.enabled?.() !== false,
@@ -1096,16 +1108,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             options?.peopleMode === 'property'
               ? viewer?.split('@')[1]
               : undefined,
-          excluded: [
-            ...(options?.excludeSelf && viewer ? [viewer] : []),
-            ...emailLinks()
-              .filter((link) => !link.is_primary)
-              .map((link) => `macro|${link.email_address.toLowerCase()}`),
-          ],
+          excluded: personExclusions.native(),
         };
       },
       activity: dmActivityByUserId,
-      excluded: isConnectedSecondaryInbox,
+      excluded: (id) =>
+        personExclusions.ids().has(id) || isConnectedSecondaryInbox(id),
       conversation: (id) => {
         channelEntries();
         const item = itemCache.get(id)?.item;

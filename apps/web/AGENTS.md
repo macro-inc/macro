@@ -59,7 +59,14 @@ Quick Access person lists are per-observer windows, never global item-cache rows
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for their current window. Reset virtual focus/scroll on window
 replacement, not label updates. Keep explicit participant/team pools scoped and
-selected IDs/self independent of suggestion pages. `RecipientSelector.createSource`
+selected IDs/self independent of suggestion pages. Discussion mentions on documents,
+projects and calls delegate to the same bounded directory. In mention configuration,
+`users()` returning undefined selects that directory; [] remains an explicit empty
+scope, including while channel/CRM rosters load. `transformUsers` applies agent
+policy only to the current window or scoped roster, never a full personal pool.
+Keep native row timestamps and forwarding through both editor configuration and
+`MarkdownShell`; the channel mention browser suite exercises the real composition.
+`RecipientSelector.createSource`
 constructs a per-picker source from live query/open/self/domain inputs; use
 `useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
 and keep `options` for explicit scoped extras. Closing releases the page and reopening
@@ -70,9 +77,63 @@ can advance empty windows. Main email To/Cc/Bcc inputs receive the factory throu
 preserving the selected representation. Keep selection/outside dismissal synchronous;
 a delayed combobox close must not cancel a new query after refocus. Pass supplied
 names to option/chip avatars instead of filling the global name store. The internal
-recipient and email app-browser fixtures cover desktop/touch.
-Universal task inference still uses the existing shared-recipient pool until its
-planner resolver migrates; never substitute a suggestion page for that catalog.
+recipient and email app-browser fixtures cover desktop/touch. Channel invitation
+and participant pickers use the same source with explicit roster exclusions; keep
+whole-team selection separate. Exclude up to the native IPC budget before ranking,
+filter any oversized roster remainder within each replaceable window, and retain
+empty continuations. Bind paging to the complete roster's reset key, including
+changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
+cancel a recipient option's pointerup default so synchronous popup removal cannot
+be interpreted as an outside press that dismisses the containing drawer.
+Soup's general Assignee/Created by submenus, mobile accordion sections and
+consolidated chips use lazy contact sources too. Resolve closed-chip labels with
+`useContactFilterLabels`, never by constructing a browse window or a directory map.
+Keep Unassigned outside contact lookups and restore the Owned preset when clearing
+its creator refinement. A query-driven combobox takes search edits from native input
+events; Kobalte's programmatic resets on option replacement must not clear a pending
+query. `internal/browser-test/soup-filters.browser.e2e.ts` covers both surfaces.
+CRM Owner chips use `CollectionSelectFilter.createChipSource`, with selected labels
+resolved separately; their header menu remains team-only. Keep No owner/Unassigned
+out of contact lookups through the shared empty-value adapter. Wait for the virtual
+list's initial viewport measurement before focus scrolling; otherwise the pending
+correction can snap a user's scroll back to the first selected row.
+Calendar guest editors (including event invitations and AI drafts) keep event-owned
+addresses/names as scoped extras and use bounded personal property windows.
+`PropertyEntitySelector.onUserSelected` carries UI-only chosen metadata separately
+from persisted entity-reference payloads. Preserve guest ID/address representations
+while comparing eligibility case-insensitively. A complete guest address is an
+identity, never another person's display-name alias. Do not re-cap or locally discard
+already matched person pages; expose continuation even for an empty window. Keep
+Quick Access list factory setup untracked so loading/paging cannot reconstruct its
+owner at page one. An in-flight multi-window advance stops when `inputKey` changes.
+Universal Input resolves only current person references through `useContactReferences`:
+task properties use `anyName`; recipients, guests and search use `preferFullName`.
+Keep incomplete/ambiguous evidence unresolved, preserve structured term boundaries,
+and never substitute a suggestion window for name proof. Use `recipientTerms` and
+`formatRecipientTerms` for recipient string fields so delimiter-bearing model names
+retain their boundaries while legacy manual separators remain supported. Explicit
+addresses cannot resolve through display-name aliases; channel IDs remain scoped choices.
+Picker factories and personal mentions use their own windows. Field-owned choice
+snapshots preserve selected labels without becoming inference evidence or reviving
+on a later return to the same text. Capture submission identities before async
+work and recheck the account before dependent writes. The `task-references` and
+`input-references` browser cases cover the real adapters/composers on desktop/phone.
+Tasks filters also use lazy desktop/mobile sources; their planner extracts references
+without a people catalog, then resolves complete per-label evidence before applying
+any constraints. Preserve semantic Me separately from fixed self and resolve saved
+summary labels from their own IDs. Inline checklist labels resolve only referenced
+task assignees, in lookup-sized batches whose owners disappear with those references;
+never populate a personal-directory map or the global display-name store for them.
+Onboarding team prefill searches only the server-approved domain, follows bounded
+continuations until six distinct non-self emails or exhaustion, and retains only
+that seed. No approved domain means no contact reads. Scope the source by account,
+session and cache generation; preserve the form's first settled seed through refreshes.
+Linear import resolves only current CSV assignees, serially in 500-label exact-reference
+batches, and uses the shared single-user property picker for manual mapping. Keep
+manual Unassigned distinct from no override; incomplete evidence requires retry or
+an explicit choice. Reset file-owned mappings on upload/account changes, snapshot
+assignments before creation, and use `createTaskForAccount` to fence dispatch and
+local publication. Imported-row state may scale with the file, never the directory.
 `CacheHost.people.resolveReferences` exposes the core's bounded full-directory
 ambiguity evidence. It needs a bound viewer and ready context only for inbox
 exclusions; callers must also check directory completeness. Missing reference

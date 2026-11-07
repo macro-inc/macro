@@ -22,6 +22,8 @@ export type RecipientSourceInput = {
   selfId: Accessor<string | undefined>;
   senderDomain: Accessor<string | undefined>;
   includeSelf: Accessor<boolean>;
+  /** An explicit scoped roster, not the personal contact directory. */
+  excludedIds?: Accessor<ReadonlySet<string>>;
 };
 
 /** Construct under the selector's owner so closing/disposal releases its page. */

@@ -1276,14 +1276,44 @@ with existing DM peers/inboxes; full channel sources are still in memory.
 Quick Access now reads a replaceable person window rather than `useContacts()` or
 its global item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
-pickers preserve selections separately. Native policy version 4 retains mention
-scoring and property self/domain boosts, and excludes automated recipient mailboxes
+pickers preserve selections separately. General Soup assignee/creator menus and
+chips also use lazy windows; closed-chip labels resolve explicit IDs independently,
+without directory-sized maps. Unassigned is a local value, not membership.
+Query-driven comboboxes retain typed input across page/metadata replacement.
+CRM Owner chips use the same lazy source/selected-label separation, while header
+options stay team-scoped. Local empty values never enter membership lookup.
+Native policy version 4 retains mention
+scoring and property self/domain boosts. Document/project/call discussion mentions
+also delegate to that window; channel/CRM/explicit rosters stay scoped even while
+empty. Agent transforms decorate only current rows, keeping original native
+metadata for unchanged people. Recipient policy excludes automated mailboxes
 before the result limit unless a full address was typed. The policy floor is generated
 from Rust alongside the transport schemas; older replies use bounded server fallback.
 Creation/sharing and main email recipient controls now own paged sources; email
-threads retain scoped addresses, not an address book. Remaining invitation/AI planner
-pools retain legacy sources; whole-app memory completion and bounded shared
-name storage remain pending.
+threads retain scoped addresses, not an address book. Channel invitations and
+participant pickers also use those sources, with existing roster IDs excluded and
+empty continuations retained when a roster exceeds the native exclusion budget.
+Universal Input recipient/search/guest references now use complete per-label evidence
+and independent picker/mention windows. Tasks filters use lazy windows too; their
+planner extracts references without a personal catalog and resolves complete evidence
+before applying any constraints. Inline checklist labels resolve only task-referenced
+IDs in bounded batches, not a directory map. Onboarding searches only its approved
+domain and retains at most six non-self emails, with zero-history scoped queries.
+Linear import resolves only uploaded assignee labels in serial bounded exact batches;
+manual mapping uses personal property windows and keeps explicit choices separate.
+Its retained names scale with the uploaded file, not the personal directory.
+Calendar create/edit, event-detail guest actions and AI-draft
+composers now use bounded property windows with event-owned guest extras. Chosen
+names stay in selection metadata rather than a directory map, and person pages
+are not truncated again by the property UI. Shared scoped exclusions bind the
+full roster while capping native IPC; continuations retain oversized-roster gaps.
+Universal task-property inference now uses complete
+per-label reference evidence instead of the shared pool, with ambiguous/incomplete
+names unresolved and manual properties taking precedence. Other Universal Input
+modes prefer a unique full name before first-name matching; explicit addresses
+never match another person's display-name alias. Chosen display metadata stays
+separate from automatic name evidence. Whole-app memory completion and bounded
+shared name storage remain pending.
 
 ## Cached email Quick Access
 

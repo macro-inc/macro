@@ -16,6 +16,7 @@ export function createPersonList(options: {
   search: Accessor<string>;
   enabled: Accessor<boolean>;
   policy: Accessor<ContactPeoplePolicy>;
+  resetKey?: Accessor<string>;
   activity: Accessor<ReadonlyMap<string, DateValue>>;
   conversation: (id: string) => EntityItem<ChannelEntity> | undefined;
   excluded: (id: string) => boolean;
@@ -24,7 +25,11 @@ export function createPersonList(options: {
     options.scope,
     undefined,
     options.enabled,
-    { search: options.search, policy: options.policy }
+    {
+      search: options.search,
+      policy: options.policy,
+      resetKey: options.resetKey,
+    }
   );
   const [loadingMore, setLoadingMore] = createSignal(false);
   const items = createMemo(() => {
@@ -62,14 +67,12 @@ export function createPersonList(options: {
     loadMore: async () => {
       if (loadingMore() || !window.data()?.nextCursor) return;
       setLoadingMore(true);
-      const query = options.search();
-      const viewer = options.scope().userId;
+      const input = window.inputKey();
       try {
         for (let page = 0; page < 4; page++) {
           await window.loadNext();
           if (
-            query !== options.search() ||
-            viewer !== options.scope().userId ||
+            input !== window.inputKey() ||
             items().length ||
             !window.data()?.nextCursor
           )

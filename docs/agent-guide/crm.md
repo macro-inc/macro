@@ -115,6 +115,11 @@ on, or hide Owner or Revenue, under **Display options**. Its single-row desktop
 header matches Tasks: title, filter group, view-options group (sort, group,
 display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
+The header Owner menu remains team-scoped. An active Owner chip can search paged
+personal contacts on desktop or phone, with No owner and unavailable saved IDs
+preserved across window changes. Next options replaces its page; Only changes
+Owner without clearing Stage. Closed chips resolve only their selected labels,
+not the full personal directory.
 
 People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
