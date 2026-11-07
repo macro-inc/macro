@@ -302,3 +302,79 @@ fn rich_command_registration_is_required_and_snapshots_stay_strict() -> Result<(
     );
     Ok(())
 }
+
+#[test]
+fn provenance_metadata_is_validated_literally() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(ORACLE)?;
+    crate::config::validate_config(&fixture.config)?;
+    let mut alias = fixture.config.clone();
+    alias["nodeClasses"]["heading"] =
+        json!({"$fn":"@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"});
+    crate::config::validate_config(&alias)?;
+    alias["nodeClasses"]["heading"] =
+        json!({"$fn":"@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"});
+    assert!(crate::config::validate_config(&alias).is_err());
+    let mut config = fixture.config.clone();
+    config["namespaceGenerated"] = json!("true");
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config.clone();
+    config["nodeClasses"]["paragraph"] = json!({"$fn":"@other.ParagraphNode"});
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config.clone();
+    config["nodeClasses"]["paragraph"] = json!({"$fn":"lexical.TextNode"});
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config.clone();
+    config["nodeClasses"]["paragraph"] = json!({"$fn":"lexical.ParagraphNode","extra":true});
+    assert!(crate::config::validate_config(&config).is_err());
+    let mut config = fixture.config;
+    config["headless"] = json!(true);
+    config["rootElement"] = json!(true);
+    assert!(crate::config::validate_config(&config).is_err());
+    Ok(())
+}
+
+#[test]
+fn changing_only_recorded_slice_distance_fails() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical/41395bd854ee320c.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    fixture.trace[8]["calls"][14]["ret"][0]["distance"] = json!(9);
+    assert!(
+        Replayer::default()
+            .replay(&fixture)
+            .expect_err("distance is observable")
+            .to_string()
+            .contains("value mismatch")
+    );
+    Ok(())
+}
+
+#[test]
+fn nondiscrete_noop_keeps_metadata_across_clock_and_log_until_next_update() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(ORACLE)?;
+    let index = fixture
+        .trace
+        .iter()
+        .position(|op| op["op"] == "update")
+        .expect("update");
+    fixture.trace.splice(index..index, [
+        json!({"op":"update","editor":0,"id":900,"cause":"test","calls":[],"opts":{"tag":"batch-only"}}),
+        json!({"op":"clock","src":"perf","t":0}),
+        json!({"op":"log","level":"warn","message":"batch observation"}),
+    ]);
+    let commit = fixture.trace[index + 3..]
+        .iter_mut()
+        .find(|op| op["op"] == "commit")
+        .expect("commit");
+    commit["updates"]
+        .as_array_mut()
+        .expect("updates")
+        .insert(0, json!(900));
+    commit["snapshot"]["tags"]
+        .as_array_mut()
+        .expect("tags")
+        .insert(0, json!("batch-only"));
+    Replayer::default().replay(&fixture)?;
+    Ok(())
+}

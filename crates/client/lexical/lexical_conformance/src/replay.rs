@@ -1,4 +1,5 @@
 //! Strict interpreter: every operation, return value and snapshot is checked.
+use crate::config::validate_config;
 use crate::{fixture::Fixture, snapshot, test_nodes};
 use lexical_model::*;
 use serde_json::{Value, json};
@@ -52,12 +53,18 @@ pub struct Replayer {
     pub(crate) rich_text_registered: bool,
     pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
+    pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
+    pub(crate) caret_origins: HashMap<usize, Value>,
+    pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
     pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
     pub(crate) version: u64,
     pub(crate) states: HashMap<u64, EditorState>,
     pub(crate) saved_states: Vec<EditorState>,
+    pub(crate) committed_version: u64,
+    pub(crate) published_snapshot: Option<(u64, usize)>,
+    pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
     pub(crate) read_state: Option<EditorState>,
     pub(crate) selections: Vec<SelectionSlot>,
     pub(crate) selection_values: Vec<Option<Selection>>,
@@ -66,7 +73,7 @@ pub struct Replayer {
     pub(crate) tape_positions: Vec<usize>,
     pub(crate) updates: Vec<Value>,
     pub(crate) causes: Vec<Value>,
-    pub(crate) pending_editor_random: Option<f64>,
+    pub(crate) pending_editor_random: Vec<f64>,
     pub(crate) clock: f64,
     pub(crate) tick: u64,
     pub(crate) attached: bool,
@@ -142,9 +149,15 @@ impl Replayer {
                     }
                     validate_config(&op["config"])?;
                     self.attached = op["config"]["rootElement"] == true;
-                    if self.pending_editor_random.take().is_none() {
-                        return Err(fail("missing editor-id random draw"));
+                    let expected_draws = if op["config"]["namespaceGenerated"] == true {
+                        2
+                    } else {
+                        1
+                    };
+                    if self.pending_editor_random.len() != expected_draws {
+                        return Err(fail("editor-id/namespace random draw count"));
                     }
+                    self.pending_editor_random.clear();
                     let nodes = op["config"]["nodes"]
                         .as_array()
                         .ok_or_else(|| fail("configured nodes"))?
@@ -181,7 +194,9 @@ impl Replayer {
                             return Err(fail("unexpected state-install update"));
                         }
                         self.updates.push(op["id"].clone());
-                        self.causes.push(op["cause"].clone());
+                        if !self.causes.contains(&op["cause"]) {
+                            self.causes.push(op["cause"].clone());
+                        }
                         Ok(())
                     } else {
                         let commit = self
@@ -195,6 +210,7 @@ impl Replayer {
                         if op["index"] != self.version {
                             return Err(fail("state install commit index"));
                         }
+                        self.committed_version = self.version;
                         self.states.insert(self.version, commit.next.clone());
                         snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
                         self.updates.clear();
@@ -225,6 +241,7 @@ impl Replayer {
                             if pending["index"] != self.version {
                                 return Err(fail("commit index mismatch"));
                             }
+                            self.committed_version = self.version;
                             self.states.insert(self.version, commit.next.clone());
                             snapshot::compare(
                                 self,
@@ -251,7 +268,19 @@ impl Replayer {
                                 ));
                             }
                         }
-                        if pending["op"] == "update" && !self.pending_writes {
+                        let next_update = fixture
+                            .trace
+                            .get(i + 1..)
+                            .and_then(|tail| {
+                                tail.iter().find(|next| {
+                                    !matches!(next["op"].as_str(), Some("clock" | "log"))
+                                })
+                            })
+                            .is_some_and(|next| next["op"] == "update");
+                        if pending["op"] == "update"
+                            && !self.pending_writes
+                            && (pending["opts"]["discrete"] == true || !next_update)
+                        {
                             self.capture_slots(&tx)?;
                             let commit = tx.commit()?;
                             if !commit.is_noop() {
@@ -319,7 +348,7 @@ impl Replayer {
         if !self.microtasks.is_empty() {
             return Err(fail("unconsumed microtask callback"));
         }
-        if self.pending_editor_random.is_some() {
+        if !self.pending_editor_random.is_empty() {
             return Err(fail("unconsumed editor entropy"));
         }
         for (position, tape) in self.tape_positions.iter().zip(&self.tapes) {
@@ -335,14 +364,14 @@ impl Replayer {
     fn host_input(&mut self, op: &Value) -> Result<()> {
         match string(&op["op"])? {
             "entropy" => {
-                if op["src"] != "random" || self.pending_editor_random.is_some() {
+                if op["src"] != "random" || self.pending_editor_random.len() >= 2 {
                     return Err(fail("unsupported entropy draw"));
                 }
                 let value = op["v"]
                     .as_f64()
                     .filter(|v| *v >= 0.0 && *v < 1.0)
                     .ok_or_else(|| fail("invalid editor random draw"))?;
-                self.pending_editor_random = Some(value);
+                self.pending_editor_random.push(value);
             }
             "clock" => {
                 if op["src"] != "perf" {
@@ -395,6 +424,9 @@ impl Replayer {
                 tags.insert(tag.parse().map_err(|_| fail("tag"))?);
             }
             self.pending_install = Some(editor.set_editor_state(state, tags)?);
+            if !self.causes.iter().any(|cause| cause == "setEditorState") {
+                self.causes.push(json!("setEditorState"));
+            }
             self.active_selection = None;
             undefined()
         };
@@ -580,7 +612,7 @@ impl Replayer {
     }
     pub(crate) fn decode(&self, value: &Value) -> Result<Value> {
         if let Some(object) = value.as_object() {
-            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret"] {
+            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret", "$iterator"] {
                 if let Some(id) = object.get(tag) {
                     return self
                         .handles
@@ -617,6 +649,7 @@ impl Replayer {
                 ("$sel", "$selection"),
                 ("$pt", "$point"),
                 ("$caret", "$caretValue"),
+                ("$iterator", "$iteratorValue"),
             ] {
                 if let Some(id) = object.get(tag) {
                     if actual.get(actual_tag).is_none() {
@@ -638,6 +671,11 @@ impl Replayer {
                             }
                             if let Some(origin) = object.get("origin") {
                                 self.compare(origin, &actual["origin"])?;
+                            }
+                            for field in ["caret", "distance"] {
+                                if let Some(expected) = object.get(field) {
+                                    self.compare(expected, &actual[field])?;
+                                }
                             }
                         }
                         if tag == "$sel" && object.get("kind") != actual.get("kind") {
@@ -788,77 +826,6 @@ pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {
 }
 pub(crate) fn node_key(value: &Value) -> Result<NodeKey> {
     key_index(&value["$node"])
-}
-
-fn validate_config(config: &Value) -> Result<()> {
-    let object = config
-        .as_object()
-        .ok_or_else(|| fail("missing editor config"))?;
-    for key in object.keys() {
-        if ![
-            "namespace",
-            "nodes",
-            "replacements",
-            "plugins",
-            "theme",
-            "editable",
-            "rootElement",
-        ]
-        .contains(&key.as_str())
-        {
-            return Err(fail(format!("unsupported config field {key}")));
-        }
-    }
-    string(&config["namespace"])?;
-    if !config["editable"].is_boolean() || !config["rootElement"].is_boolean() {
-        return Err(fail("invalid editor host config"));
-    }
-    if !config["replacements"].as_array().is_some_and(Vec::is_empty)
-        || !config["plugins"].as_array().is_some_and(Vec::is_empty)
-    {
-        return Err(fail("unimplemented configured replacement/plugin"));
-    }
-    for node in config["nodes"]
-        .as_array()
-        .ok_or_else(|| fail("missing configured nodes"))?
-    {
-        if ![
-            "root",
-            "text",
-            "linebreak",
-            "tab",
-            "paragraph",
-            "artificial",
-            "heading",
-            "list",
-            "listitem",
-            "quote",
-            "code",
-            "table",
-            "tablecell",
-            "tablerow",
-            "hashtag",
-            "code-highlight",
-            "autolink",
-            "link",
-            "overflow",
-            "test_block",
-            "test_segmented",
-            "test_exclude_from_copy_block",
-            "test_decorator",
-            "test_inline_block",
-            "test_shadow_root",
-            "test_text",
-            "mark",
-        ]
-        .contains(&string(node)?)
-        {
-            return Err(fail(format!("unimplemented configured class {node}")));
-        }
-    }
-    // Theme, namespace, editability and root attachment are host inputs. The
-    // interpreter executes no DOM path; view APIs fail rather than using a fake.
-    Ok(())
 }
 
 #[cfg(test)]

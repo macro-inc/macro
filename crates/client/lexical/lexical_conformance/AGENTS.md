@@ -7,6 +7,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Start here
 
 - `src/fixture.rs`: recorder wire schema.
+- `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/snapshot.rs`: full observable-state comparison.
@@ -20,8 +21,10 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Route rich-node constructors and handlers through `lexical_rich_nodes`; replay editor-level command transactions at the recorded enqueue/commit boundary.
 - Fix model divergences in `lexical_model` or `lexical_rich_nodes`; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
-- Link fixtures use real link transforms; the sole remaining link ledger case requires WP-20 MarkNode.
-- Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
+- Link fixtures use real link transforms and captured raw parent/attribute records; code and mark factories use their package implementations.
+- Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail. Macro policy and live Prism tokenization use the S4 `macro-patch` and `d6-highlight` reasons. Keep interpreter coverage gaps distinct from native incompatibilities.
+- Preserve caret range/point/slice object identities, slice distances, lazy iterator consumption and post-commit snapshot identities. Never synthesize a private cache from computed content.
+- Keep nondiscrete updates batched across intervening clock/log observations; only recorded boundaries publish transitions.
 - Native loading lives in `source.rs`; the interpreter itself has no filesystem dependency.
 
 ## Checks

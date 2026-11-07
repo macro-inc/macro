@@ -67,6 +67,42 @@ pub(crate) fn call(
                     .tag,
             )?);
         }
+        "getFormatFlags" => {
+            let kind: TextFormatType = str_arg(a, 0)?.parse().map_err(|_| fail("format kind"))?;
+            let align = a
+                .get(1)
+                .filter(|v| !v.is_null())
+                .map(|v| integer(v).map(|v| TextFormat::from_bits_retain(v as u32)))
+                .transpose()?;
+            return Ok(json!(view.text_data(key)?.format_flags(kind, align).bits()));
+        }
+        "is" => {
+            return Ok(json!(
+                key == node_key(a.first().ok_or_else(|| fail("other node"))?)?
+            ));
+        }
+        "isBefore" => {
+            return Ok(json!(view.is_before(
+                key,
+                node_key(a.first().ok_or_else(|| fail("other node"))?)?
+            )?));
+        }
+        "splice" => {
+            let nodes = a
+                .get(2)
+                .and_then(Value::as_array)
+                .ok_or_else(|| fail("splice nodes"))?
+                .iter()
+                .map(node_key)
+                .collect::<Result<Vec<_>>>()?;
+            tx.splice(
+                key,
+                ChildIndex(u32_arg(a, 0, 0)?),
+                u32_arg(a, 1, 0)?,
+                &nodes,
+            )?;
+            return r.node(tx.view(), key);
+        }
         "getType" => return Ok(json!(view.type_name(key)?)),
         "getKey" => return Ok(json!({"$nodeKey":key.index()})),
         "getTextContent" => return Ok(json!(view.text_content(key))),
@@ -78,6 +114,30 @@ pub(crate) fn call(
             return Ok(json!(
                 view.index_within_parent(key).map_or(-1, |i| i.0 as i64)
             ));
+        }
+        "markDirty" => {
+            tx.mark_dirty(key)?;
+            return Ok(undefined());
+        }
+        "isSimpleText" => return Ok(json!(view.is_simple_text(key))),
+        "mergeWithSibling" => {
+            let other = node_key(a.first().ok_or_else(|| fail("sibling"))?)?;
+            let key = tx.text(key)?.merge_with_sibling(other)?;
+            return r.node(tx.view(), key);
+        }
+        "selectPrevious" | "selectNext" => {
+            let offset = |i: usize| {
+                a.get(i)
+                    .filter(|v| !v.is_null() && v.get("$undef").is_none())
+                    .map(|v| integer(v).map(|n| Utf16Offset(n as u32)))
+                    .transpose()
+            };
+            if method == "selectPrevious" {
+                tx.select_previous(key, offset(0)?, offset(1)?)?;
+            } else {
+                tx.select_next(key, offset(0)?, offset(1)?)?;
+            }
+            return Ok(r.selection(tx));
         }
         "isEmpty" => return Ok(json!(view.is_empty(key))),
         "isInline" => return Ok(json!(view.is_inline(key))),
@@ -240,6 +300,9 @@ pub(crate) fn call(
                 tx.select_end(key)?;
             }
             return Ok(r.selection(tx));
+        }
+        "setTextStyle" => {
+            tx.element(key)?.set_text_style(str_arg(a, 0)?)?;
         }
         "setTextContent" => {
             tx.text(key)?.set_text_content(str_arg(a, 0)?)?;
