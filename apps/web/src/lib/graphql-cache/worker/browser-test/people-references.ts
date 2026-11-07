@@ -3,8 +3,8 @@ import { contactRecordKey } from '@queries/contacts/contact-key';
 import { createRetirableCacheHost } from '../../host/retirable-host';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import type { PeopleReferenceRequest } from '../../people/protocol';
-import { isStaleHydrationScopeError } from '../../protocol';
 import { captureContactWriteScope } from '../../people/sync';
+import { isStaleHydrationScopeError } from '../../protocol';
 
 const output = document.querySelector<HTMLPreElement>('#result');
 if (!output) throw new Error('Missing reference result element');
