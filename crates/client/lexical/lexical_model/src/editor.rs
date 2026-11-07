@@ -14,6 +14,8 @@ pub struct Editor {
     pub(crate) state: EditorState,
     pub(crate) keys: SharedKeyCounter,
     mode: EditorMode,
+    pub(crate) carried_tags: TagSet,
+    pub(crate) commit_counter: u64,
     pub(crate) view_host: ViewHost,
     pub(crate) composition_key: Option<NodeKey>,
 }
@@ -33,6 +35,8 @@ impl Editor {
             mode,
             view_host,
             composition_key: None,
+            carried_tags: TagSet::default(),
+            commit_counter: 0,
         })
     }
     /// Configure an editor with an explicit mode.
@@ -62,6 +66,25 @@ impl Editor {
     pub fn transaction(&mut self) -> Transaction<'_> {
         Transaction::new(self)
     }
+    /// Begin an update with explicit options.
+    pub fn transaction_with(&mut self, options: UpdateOptions) -> Transaction<'_> {
+        let mut tx = self.transaction();
+        for tag in options.tags.iter() {
+            tx.add_tag(tag.clone());
+        }
+        tx.options.skip_transforms = options.skip_transforms;
+        tx
+    }
+    /// Run an update with explicit processing options.
+    pub fn update_with<ValueType>(
+        &mut self,
+        options: UpdateOptions,
+        body: impl FnOnce(&mut Transaction<'_>) -> Result<ValueType, Error>,
+    ) -> Result<(ValueType, Commit), Error> {
+        let mut tx = self.transaction_with(options);
+        let value = body(&mut tx)?;
+        Ok((value, tx.commit()?))
+    }
     /// Run an atomic update and publish its state on success.
     /// s2: UPD-01, UPD-05
     pub fn update<ValueType>(
@@ -74,21 +97,6 @@ impl Editor {
         Ok((value, commit))
     }
 }
-/// Published state transition; the pipeline layer adds mutations and normalization.
-pub struct Commit {
-    /// Snapshot before the update.
-    pub previous: EditorState,
-    /// Snapshot after the update.
-    pub current: EditorState,
-}
-impl Commit {
-    /// Whether the update retained exactly the previous node map and selection.
-    pub fn is_noop(&self) -> bool {
-        self.previous.same_snapshot(&self.current)
-            && self.previous.selection() == self.current.selection()
-    }
-}
-
 /// Browser or native view engine used for platform-specific input policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ViewEngine {

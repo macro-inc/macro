@@ -153,11 +153,45 @@ impl Registry {
         None
     }
 }
-type TransformRegistrations = Vec<(
-    TypeId,
-    &'static str,
-    fn(&mut Transaction<'_>, NodeKey) -> Result<(), Error>,
-)>;
+/// Transform shared across registered node types.
+pub type AnyTransformFn = fn(&mut Transaction<'_>, NodeKey) -> Result<(), Error>;
+/// Types covered by a shared transform.
+#[derive(Clone, Copy, Debug)]
+pub enum TransformScope {
+    /// All registered types.
+    All,
+    /// All types except root.
+    AllExceptRoot,
+    /// Named types and their direct replacements.
+    Types(&'static [&'static str]),
+}
+pub(crate) trait ErasedTransform: Send + Sync {
+    fn run(&self, tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error>;
+}
+struct TypedTransform<Node: NodeType>(TransformFn<Node>);
+impl<Node: NodeType> ErasedTransform for TypedTransform<Node> {
+    fn run(&self, tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
+        (self.0)(tx, Id::new_unchecked(key))
+    }
+}
+#[derive(Clone)]
+pub(crate) enum RegisteredTransform {
+    Plain(AnyTransformFn),
+    Typed(Arc<dyn ErasedTransform>),
+}
+impl RegisteredTransform {
+    pub(crate) fn run(&self, tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
+        match self {
+            Self::Plain(f) => f(tx, key),
+            Self::Typed(f) => f.run(tx, key),
+        }
+    }
+}
+enum TransformTarget {
+    Type(TypeId, &'static str),
+    Scope(TransformScope),
+}
+type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
     vtables: Vec<NodeVTable>,
@@ -190,6 +224,22 @@ impl EditorBuilder {
     /// Register a node type in builder order.
     pub fn node<Node: NodeType>(mut self) -> Self {
         self.vtables.push(Node::Kind::vtable());
+        self
+    }
+    /// Run a typed transform for this type and its direct replacement.
+    pub fn transform<Node: NodeType>(mut self, transform: TransformFn<Node>) -> Self {
+        self.transforms.push((
+            TransformTarget::Type(TypeId::of::<Node>(), Node::TYPE),
+            RegisteredTransform::Typed(Arc::new(TypedTransform(transform))),
+        ));
+        self
+    }
+    /// Run one transform across a scope resolved after all registrations.
+    pub fn transform_each(mut self, transform: AnyTransformFn, scope: TransformScope) -> Self {
+        self.transforms.push((
+            TransformTarget::Scope(scope),
+            RegisteredTransform::Plain(transform),
+        ));
         self
     }
     /// Register a subtype replacement and its conversion.
@@ -314,14 +364,49 @@ impl EditorBuilder {
             registry.nodes[usize::from(a.0)].replaced_by = Some(b);
             registry.replacements.insert(a, with);
         }
-        for (id, name, transform) in self.transforms {
-            let index = *registry
-                .by_type
-                .get(&id)
-                .ok_or(BuildError::TransformForUnregisteredType { type_name: name })?;
-            registry.vtables[usize::from(index.0)]
-                .transforms
-                .push(transform);
+        let mut registrations: Vec<(Vec<NodeTypeIndex>, RegisteredTransform)> = vec![];
+        for (target, transform) in self.transforms {
+            let indices = match target {
+                TransformTarget::Type(id, name) => vec![
+                    *registry
+                        .by_type
+                        .get(&id)
+                        .ok_or(BuildError::TransformForUnregisteredType { type_name: name })?,
+                ],
+                TransformTarget::Scope(TransformScope::Types(names)) => names
+                    .iter()
+                    .map(|name| {
+                        registry
+                            .get(name)
+                            .map(|node| node.index)
+                            .ok_or(BuildError::TransformForUnregisteredType { type_name: name })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                TransformTarget::Scope(scope) => registry
+                    .types()
+                    .filter(|node| matches!(scope, TransformScope::All) || node.type_name != "root")
+                    .map(|node| node.index)
+                    .collect(),
+            };
+            registrations.push((indices, transform));
+        }
+        for i in 0..registry.nodes.len() {
+            let index = registry.nodes[i].index;
+            // Exact registrations precede registrations inherited from a direct replacement.
+            for (indices, transform) in &registrations {
+                if indices.contains(&index) {
+                    registry.vtables[i].transforms.push(transform.clone());
+                }
+            }
+            for (indices, transform) in &registrations {
+                if !indices.contains(&index)
+                    && indices
+                        .iter()
+                        .any(|original| registry.registered(*original).replaced_by == Some(index))
+                {
+                    registry.vtables[i].transforms.push(transform.clone());
+                }
+            }
         }
         let mut registry = Arc::new(registry);
         let mut rows = vec![];

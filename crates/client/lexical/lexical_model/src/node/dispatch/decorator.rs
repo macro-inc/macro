@@ -43,14 +43,14 @@ pub(in crate::node) fn decorator<Node: DecoratorNode>() -> NodeVTable {
         required.extend(parent.required);
         if let Some(transform) = Node::static_transform() {
             let _ = transform;
-            transforms.push(
+            transforms.push(crate::registry::RegisteredTransform::Plain(
                 (|tx, key| {
                     Node::static_transform().ok_or(Error::Invariant("missing static transform"))?(
                         tx,
                         Id::new_unchecked(key),
                     )
                 }) as fn(&mut Transaction<'_>, NodeKey) -> Result<(), Error>,
-            );
+            ));
         }
         transforms.extend(parent.transforms);
         language |= parent.language;
@@ -89,6 +89,7 @@ pub(in crate::node) fn decorator<Node: DecoratorNode>() -> NodeVTable {
             Some(payload) => payload.adjust_export_json(node, json),
             None => Err(Error::Invariant("payload type mismatch")),
         },
+        selection_transform: |_, _| Ok(()),
         is_parent_required: |data, node| match data.downcast_ref::<Node>() {
             Some(payload) => payload.is_parent_required(DecoratorView {
                 key: node.key,

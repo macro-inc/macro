@@ -24,18 +24,36 @@ pub struct Transaction<'editor> {
     pub(crate) dirty_leaves: IndexSet<NodeKey>,
     pub(crate) dirty_elements: IndexMap<NodeKey, DirtyIntent>,
     pub(crate) composition_key: Option<NodeKey>,
+    pub(crate) options: UpdateOptions,
+    pub(crate) normalized: IndexSet<NodeKey>,
+    pub(crate) nested: std::collections::VecDeque<(NestedUpdateFn, UpdateOptions)>,
+    pub(crate) transform_iterations: u16,
+    pub(crate) dirty_since_flush: bool,
+    #[cfg(feature = "bench-counters")]
+    pub(crate) work: WorkCounters,
     pub(crate) detached: Vec<Option<Selection>>,
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
         let pending = editor.state.pending();
         let composition_key = editor.composition_key;
+        let options = UpdateOptions {
+            tags: editor.carried_tags.clone(),
+            ..UpdateOptions::default()
+        };
         Self {
             editor,
             pending,
             dirty_leaves: IndexSet::default(),
             dirty_elements: IndexMap::default(),
             composition_key,
+            options,
+            normalized: IndexSet::default(),
+            nested: crate::pipeline::nested_queue(),
+            transform_iterations: 0,
+            dirty_since_flush: true,
+            #[cfg(feature = "bench-counters")]
+            work: WorkCounters::default(),
             detached: vec![],
         }
     }
@@ -50,21 +68,6 @@ impl<'editor> Transaction<'editor> {
     /// The state committed before this update began.
     pub fn committed_state(&self) -> &EditorState {
         &self.editor.state
-    }
-    /// Publish this pending snapshot atomically.
-    pub fn commit(self) -> Result<Commit, Error> {
-        let previous = self.editor.state.clone();
-        self.editor.composition_key = self.composition_key;
-        if !self.dirty_leaves.is_empty()
-            || !self.dirty_elements.is_empty()
-            || self.pending.selection != previous.selection
-        {
-            self.editor.state = self.pending;
-        }
-        Ok(Commit {
-            previous,
-            current: self.editor.state.clone(),
-        })
     }
     pub(crate) fn writable(&mut self, key: NodeKey) -> Result<&mut NodeSlot, Error> {
         self.mark_dirty(key)?;
@@ -85,6 +88,8 @@ impl<'editor> Transaction<'editor> {
     /// Mark a record and its ancestors without cloning ancestor records.
     /// s2: ID-02, ID-03
     pub fn mark_dirty(&mut self, key: impl Into<NodeKey>) -> Result<(), Error> {
+        self.guard_write()?;
+        self.dirty_since_flush = true;
         let key = key.into();
         let kind = self.kind(key).ok_or(Error::NodeNotFound(key))?;
         if kind == NodeKind::Element {
@@ -107,6 +112,11 @@ impl<'editor> Transaction<'editor> {
             .get_mut(&key)
             .ok_or(Error::NodeNotFound(key))?;
         if Arc::strong_count(slot) > 1 {
+            #[cfg(feature = "bench-counters")]
+            {
+                self.work.nodes_cloned += 1;
+                self.work.bytes_allocated += std::mem::size_of::<NodeSlot>() as u64;
+            }
             let normalized = slot.data.after_clone();
             if let Some(data) = normalized {
                 Arc::make_mut(slot).data = data;
@@ -248,6 +258,7 @@ impl<'editor> Transaction<'editor> {
         if self.pending.registry.registered(index).type_name == Root::TYPE {
             return Err(Error::Invariant("root already exists"));
         }
+        self.guard_write()?;
         let key = self.editor.keys.next()?;
         self.pending.nodes.insert(
             key,
@@ -537,6 +548,7 @@ impl<'editor> Transaction<'editor> {
     }
     /// Replace the active selection.
     pub fn set_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
+        self.dirty_since_flush = true;
         self.pending.selection = selection;
         Ok(())
     }

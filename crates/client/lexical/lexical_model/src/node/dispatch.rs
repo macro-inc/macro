@@ -7,7 +7,7 @@ use std::{
     ops::Range,
     sync::Arc,
 };
-type TransformsHook = Vec<fn(&mut Transaction<'_>, NodeKey) -> Result<(), Error>>;
+type TransformsHook = Vec<crate::registry::RegisteredTransform>;
 type SpliceHook = fn(
     tx: &mut Transaction<'_>,
     this: NodeKey,
@@ -68,6 +68,7 @@ pub struct NodeVTable {
     pub(crate) json_version: fn(data: &dyn Any) -> u32,
     pub(crate) adjust_export_json:
         fn(data: &dyn Any, node: NodeView<'_>, json: &mut SerializedNode) -> Result<(), Error>,
+    pub(crate) selection_transform: AnyTransformFn,
     pub(crate) is_parent_required: fn(data: &dyn Any, node: NodeView<'_>) -> bool,
     pub(crate) reset_on_copy:
         fn(tx: &mut Transaction<'_>, this: NodeKey, original: NodeKey) -> Result<(), Error>,

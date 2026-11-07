@@ -44,3 +44,11 @@ const _: () = {
     assert_send_sync::<Commit>();
     assert_send_sync::<Selection>();
 };
+
+mod tags;
+pub use tags::*;
+
+mod pipeline;
+pub use pipeline::*;
+mod commit;
+pub use commit::*;

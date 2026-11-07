@@ -4,6 +4,23 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A transform keeps writing without reaching a fixpoint.
+    #[error(
+        "One or more transforms are endlessly triggering additional transforms. May have encountered infinite recursion caused by transforms not having loose enough preconditions and/or postconditions."
+    )]
+    InfiniteTransforms,
+    /// A range endpoint disappeared during the update.
+    #[error(
+        "updateEditor: selection has been lost because the previously selected nodes have been removed and selection wasn't moved to another node. Ensure selection changes after removing/replacing a selected node."
+    )]
+    SelectionLost,
+    /// Selection transforms found a missing text endpoint.
+    #[error("Point.getNode: node not found")]
+    PointNodeNotFound(NodeKey),
+    /// A static flag probe disagrees with an actual instance.
+    #[error("type table flags differ for {0}: set FLAGS_PER_INSTANCE")]
+    TypeFlagsMismatch(&'static str),
+
     /// A table selection requires registered table behavior.
     #[error("unsupported selection without table hooks")]
     UnsupportedSelection,
@@ -189,6 +206,10 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::InfiniteTransforms => "InfiniteTransforms",
+            Self::SelectionLost => "SelectionLost",
+            Self::PointNodeNotFound(..) => "PointNodeNotFound",
+            Self::TypeFlagsMismatch(..) => "TypeFlagsMismatch",
             Self::UnsupportedSelection => "UnsupportedSelection",
             Self::RootNotTopLevel => "RootNotTopLevel",
             Self::RootChildNotBlock => "RootChildNotBlock",
