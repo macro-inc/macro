@@ -620,3 +620,23 @@ fn removing_a_root_child_range_collapses_inside_the_following_paragraph() -> Res
     })?;
     Ok(())
 }
+
+#[test]
+fn root_start_of_partial_text_removal_retains_its_container_coordinate() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abc")?;
+        tx.append(last, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(1)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.anchor()?, Point::element(NodeKey::ROOT, ChildIndex(1)));
+        assert_eq!(tx.text_content(last), "bc");
+        Ok(())
+    })?;
+    Ok(())
+}

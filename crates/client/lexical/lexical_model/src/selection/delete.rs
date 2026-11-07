@@ -37,8 +37,7 @@ impl Transaction<'_> {
         }
         if let (Point::Element { key: a, offset: ao }, Point::Element { key: f, offset: fo }) =
             (range.anchor, range.focus)
-        {
-            if a == NodeKey::ROOT && f == NodeKey::ROOT {
+            && a == NodeKey::ROOT && f == NodeKey::ROOT {
                 let start = ao.0.min(fo.0);
                 let end = ao.0.max(fo.0);
                 let children = self.children_keys(NodeKey::ROOT)?;
@@ -63,7 +62,8 @@ impl Transaction<'_> {
                     range.style,
                 );
             }
-        }
+        let original_start = if range.is_backward(self.view())? { range.focus } else { range.anchor };
+        let root_start = (original_start.key() == NodeKey::ROOT).then_some(original_start);
         // Caret conversion descends noncollapsed element boundaries before removal.
         normalize_range_selection(self.view(), &mut range)?;
         if range.is_collapsed() {
@@ -233,17 +233,21 @@ impl Transaction<'_> {
         if let Point::Element { key, offset } = point {
             point = Point::element(key, ChildIndex(offset.0.min(self.children_size(key))));
         }
+        if let Some(Point::Element { key, offset }) = root_start {
+            let offset = ChildIndex(offset.0.min(self.children_size(key)));
+            let point = self.child_at_index(key, offset).filter(|key| offset.0 == 0 && self.is_element(*key) && self.is_empty(*key))
+                .map_or(Point::element(key, offset), |key| Point::element(key, ChildIndex(0)));
+            return self.collapsed_selection_at(slot, point, range.format, range.style);
+        }
         let mut collapsed = RangeSelection::collapsed(point);
         normalize_range_selection(self.view(), &mut collapsed)?;
         if let Point::Text {
             key,
             offset: Utf16Offset(0),
         } = collapsed.anchor
-        {
-            if let Some(previous) = self.prev_sibling(key).filter(|key| self.is_text(*key)) {
+            && let Some(previous) = self.prev_sibling(key).filter(|key| self.is_text(*key)) {
                 collapsed.anchor = Point::text(previous, self.text_content_size(previous));
             }
-        }
         self.collapsed_selection_at(slot, collapsed.anchor, range.format, range.style)
     }
     /// Delete the nodes in the active node selection.
