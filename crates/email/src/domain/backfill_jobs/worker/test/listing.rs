@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::{EmailApiError, ThreadListPage};
+use email_api_client_core::models::{EmailApiError, ThreadListPage};
 use models_email::service::thread::{ListThreadsPayload, ThreadSummary};
 
 fn listing(priority: bool) -> BackfillPubsubMessage {
@@ -340,7 +340,7 @@ async fn priority_provider_rate_limit_keeps_the_original_cooldown() {
         .pages
         .push_back(Err(EmailApiError::RateLimited {
             retry_after: Some(Duration::from_secs(77)),
-            origin: email_api_client::domain::models::RateLimitOrigin::Local,
+            origin: email_api_client_core::models::RateLimitOrigin::Local,
         }));
     let BackfillDisposition::Defer { retry_after, .. } = svc.process(&listing(true)).await else {
         panic!("deferred")

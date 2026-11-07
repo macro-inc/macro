@@ -1,6 +1,6 @@
 use authentication_service_client::error::AuthServiceClientError;
-use email_api_client::domain::models::{TokenError, TokenFreshness};
-use email_api_client::domain::ports::ProviderTokenSource;
+use email_api_client_core::models::{TokenError, TokenFreshness};
+use email_api_client_core::ports::ProviderTokenSource;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;

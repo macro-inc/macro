@@ -29,12 +29,12 @@ snapshots:
       start: 13
       end: 38
   ? |
-    fn other() { email_api_client::OutlookApiClientRepository::new(); }
+    fn other() { email_api_client_outbound::OutlookApiClientRepository::new(); }
   : labels:
-    - source: email_api_client::OutlookApiClientRepository::new
+    - source: email_api_client_outbound::OutlookApiClientRepository::new
       style: primary
       start: 13
-      end: 62
+      end: 71
   ? |
     fn process(p: &str) { std::fs::read(p); }
   : labels:
@@ -76,12 +76,12 @@ snapshots:
       start: 60
       end: 73
   ? |
-    use email_api_client::GmailApiClientRepository;
+    use email_api_client_outbound::GmailApiClientRepository;
   : labels:
-    - source: email_api_client::GmailApiClientRepository
+    - source: email_api_client_outbound::GmailApiClientRepository
       style: primary
       start: 4
-      end: 46
+      end: 55
   ? |
     use redis::Client;
   : labels:

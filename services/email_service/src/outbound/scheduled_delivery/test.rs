@@ -1,5 +1,5 @@
 use email::domain::scheduled_delivery::{PreparationError, SubmissionError};
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin, SentIds};
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin, SentIds};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::service::message::MessageToSend;
 use uuid::Uuid;

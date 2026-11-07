@@ -13,7 +13,7 @@ mod transaction;
 use crate::outbound::email_api::GmailApi;
 use crate::outbound::persistence_error::InboxPersistenceError;
 use email::domain::backfill_jobs::worker::*;
-use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
+use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
 use models_email::service::backfill::BackfillPubsubMessage;
 use uuid::Uuid;
@@ -71,8 +71,7 @@ impl BackfillGmail for GmailBackfill {
         limit: u32,
         next: Option<&'a str>,
         labels: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<email_api_client::domain::models::ThreadListPage, EmailApiError>>
-    {
+    ) -> BoxFuture<'a, Result<email_api_client_core::models::ThreadListPage, EmailApiError>> {
         Box::pin(self.0.list_threads(link, limit, next, labels))
     }
     fn list_messages<'a>(

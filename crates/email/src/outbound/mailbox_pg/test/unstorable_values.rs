@@ -4,7 +4,7 @@
 use super::retries::{Provider, outcomes, queue, row, sync};
 use super::{fixture, snapshot};
 use crate::telemetry_capture::Telemetry;
-use email_api_client::domain::models::{Attention, MailboxState};
+use email_api_client_core::models::{Attention, MailboxState};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::attachment::Attachment;

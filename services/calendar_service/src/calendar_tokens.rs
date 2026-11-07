@@ -97,23 +97,23 @@ impl CalendarAccessTokenProvider for CalendarTokenProviderAdapter {
     }
 }
 
-impl email_api_client::domain::ports::MailboxRejectedTokenRefresh for CalendarTokenProviderAdapter {
+impl email_api_client_core::ports::MailboxRejectedTokenRefresh for CalendarTokenProviderAdapter {
     fn refresh(
         &self,
-        mailbox: email_api_client::domain::models::MailboxAccess,
+        mailbox: email_api_client_core::models::MailboxAccess,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
                     Output = Result<
-                        email_api_client::domain::models::AccessToken,
-                        email_api_client::domain::models::EmailApiError,
+                        email_api_client_core::models::AccessToken,
+                        email_api_client_core::models::EmailApiError,
                     >,
                 > + Send
                 + '_,
         >,
     > {
         Box::pin(async move {
-            use email_api_client::domain::models::{AccessToken, EmailApiError};
+            use email_api_client_core::models::{AccessToken, EmailApiError};
             let token = self
                 .auth_service_client
                 .get_microsoft_access_token(

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::{credentials::*, projection::ProjectionEvent};
-use email_api_client::domain::models::{MailboxAccess, TokenError};
+use email_api_client_core::models::{MailboxAccess, TokenError};
 
 #[cfg(test)]
 mod test;

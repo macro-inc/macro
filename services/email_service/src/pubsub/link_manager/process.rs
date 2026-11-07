@@ -7,7 +7,7 @@ use sqs_worker::cleanup_message;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
-use email_api_client::domain::models::{AccessToken, EmailApiError};
+use email_api_client_core::models::{AccessToken, EmailApiError};
 
 /// Decode one delivery and perform the acknowledgement selected by the domain.
 #[tracing::instrument(skip(ctx, message), err)]

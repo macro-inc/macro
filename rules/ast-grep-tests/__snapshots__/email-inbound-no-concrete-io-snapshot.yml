@@ -260,50 +260,26 @@ snapshots:
       start: 12
       end: 33
   ? |
-    use email_api_client::*;
+    use email_api_client_outbound::*;
   : labels:
-    - source: email_api_client::*
+    - source: email_api_client_outbound::*
       style: primary
       start: 4
-      end: 23
+      end: 32
   ? |
-    use email_api_client::{OutlookApiClientRepository};
+    use email_api_client_outbound::{OutlookApiClientRepository};
   : labels:
-    - source: email_api_client::{OutlookApiClientRepository}
+    - source: email_api_client_outbound::{OutlookApiClientRepository}
       style: primary
       start: 4
-      end: 50
-    - source: email_api_client
-      style: secondary
-      start: 4
-      end: 20
-    - source: OutlookApiClientRepository
-      style: secondary
-      start: 23
-      end: 49
-    - source: OutlookApiClientRepository
-      style: secondary
-      start: 23
-      end: 49
+      end: 59
   ? |
-    use email_api_client::{domain::models::EmailApiError, GmailApiClientRepository as Provider};
+    use email_api_client_outbound::{gmail, GmailApiClientRepository as Provider};
   : labels:
-    - source: email_api_client::{domain::models::EmailApiError, GmailApiClientRepository as Provider}
+    - source: email_api_client_outbound::{gmail, GmailApiClientRepository as Provider}
       style: primary
       start: 4
-      end: 91
-    - source: email_api_client
-      style: secondary
-      start: 4
-      end: 20
-    - source: GmailApiClientRepository as Provider
-      style: secondary
-      start: 54
-      end: 90
-    - source: GmailApiClientRepository as Provider
-      style: secondary
-      start: 54
-      end: 90
+      end: 76
   ? |
     use email_db_client::Client;
   : labels:

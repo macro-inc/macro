@@ -13,7 +13,7 @@ use calendar_events::domain::models::{
 };
 use calendar_events::domain::outlook::{OutlookCalendarReader, OutlookEventRefresh};
 use chrono::{DateTime, TimeZone, Utc};
-use email_api_client::OutlookApiClientRepository;
+use email_api_client_outbound::OutlookApiClientRepository;
 use serde_json::Value;
 use uuid::Uuid;
 

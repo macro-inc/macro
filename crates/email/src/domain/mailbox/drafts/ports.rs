@@ -2,7 +2,7 @@ use super::{
     super::{MailboxError, MailboxKey},
     models::*,
 };
-use email_api_client::domain::models::*;
+use email_api_client_core::models::*;
 use std::future::Future;
 use uuid::Uuid;
 

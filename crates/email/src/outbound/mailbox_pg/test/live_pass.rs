@@ -7,7 +7,7 @@ use crate::domain::mailbox::live_pass::LiveImportPass;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
     StreamPosition, StreamToken,
 };

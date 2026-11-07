@@ -4,7 +4,7 @@ use email::domain::{
     draft_attachments::AttachmentError,
     mailbox::{MailboxError, drafts::content::DraftContentBytes},
 };
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 
 pub struct MailboxDraftContent<P> {
     pub provider: P,

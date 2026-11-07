@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use email_api_client::domain::models::{EmailApiError, SyncCursor};
-use email_api_client::domain::ports::MailboxSyncClient;
+use email_api_client_core::models::{EmailApiError, SyncCursor};
+use email_api_client_core::ports::MailboxSyncClient;
 
 use super::*;
 

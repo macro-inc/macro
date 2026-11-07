@@ -4,7 +4,7 @@
 use super::{fixture, snapshot};
 use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::*;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     MailboxChangePage, MailboxState, ProviderId, StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;

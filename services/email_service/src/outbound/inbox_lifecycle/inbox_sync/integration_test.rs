@@ -4,7 +4,7 @@ use email::domain::mailbox::inbox_sync::{
     ensure_recovery_backfill_job, process_and_insert_message, repair_stale_cursor,
     upload_claimed_attachments,
 };
-use email_api_client::domain::models::{CalendarPart, RateLimitOrigin};
+use email_api_client_core::models::{CalendarPart, RateLimitOrigin};
 use email_db_client::attachments::provider::upload::new_email_media_atts;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};

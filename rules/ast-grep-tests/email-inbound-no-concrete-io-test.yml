@@ -28,7 +28,7 @@ valid:
   - |
     use crate::outbound::persistence_error::InboxPersistenceError;
   - |
-    use email_api_client::domain::models::EmailApiError;
+    use email_api_client_core::models::EmailApiError;
   - |
     async fn process(ctx: Context) { ctx.service.process().await; }
   - |
@@ -81,15 +81,15 @@ invalid:
   - |
     use sqlx::*;
   - |
-    use email_api_client::*;
+    use email_api_client_outbound::*;
   - |
     use {redis, std::sync::Arc};
   - |
     use ::email_db_client::messages;
   - |
-    use email_api_client::{domain::models::EmailApiError, GmailApiClientRepository as Provider};
+    use email_api_client_outbound::{gmail, GmailApiClientRepository as Provider};
   - |
-    use email_api_client::{OutlookApiClientRepository};
+    use email_api_client_outbound::{OutlookApiClientRepository};
   - |
     use sqlx::{types::Uuid, PgPool};
   - |

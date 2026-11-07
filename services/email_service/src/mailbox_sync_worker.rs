@@ -7,7 +7,7 @@ use email::domain::mailbox::telemetry::defer_reason;
 use email::domain::mailbox::{
     MailboxError, MailboxGateway, MailboxIngest, MailboxSyncRepository, MailboxSyncService,
 };
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
 use feature_flags::{ServiceContext, ServiceFeatureFlags};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;

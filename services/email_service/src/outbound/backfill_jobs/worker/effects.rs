@@ -229,7 +229,7 @@ impl email::domain::mailbox::inbox_sync::InboxSyncPreparation for BackfillWorker
         link: Uuid,
         provider: &'a str,
         message: Uuid,
-        parts: &'a [email_api_client::domain::models::CalendarPart],
+        parts: &'a [email_api_client_core::models::CalendarPart],
     ) -> BoxFuture<'a, ()> {
         Box::pin(crate::outbound::invitation_extraction::save_discovered(
             &self.invitation_extractor,

@@ -1,11 +1,11 @@
 //! Gmail and public HTTP reads for the signature image policy.
 use crate::util::process_pre_insert::sfs_map::{ImageSource, PublicImages};
 use email::domain::signature_settings::gmail_images::SignatureImageReader;
-use email_api_client::domain::models::EmailApiError;
-use email_api_client::domain::ports::{
+use email_api_client_core::models::EmailApiError;
+use email_api_client_core::ports::{
     MailboxAttachmentClient, MailboxMessageClient, ProviderRequestGate, ProviderTokenSource,
 };
-use email_api_client::domain::service::EmailApiClientServiceImpl;
+use email_api_client_core::service::EmailApiClientServiceImpl;
 use models_email::email::service::message::Message;
 use uuid::Uuid;
 

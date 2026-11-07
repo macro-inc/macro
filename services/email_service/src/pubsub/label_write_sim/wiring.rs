@@ -6,7 +6,7 @@ use crate::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use email::domain::ports::EmailService;
-use email_api_client::GmailApiClientRepository;
+use email_api_client_outbound::GmailApiClientRepository;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
 use sqlx::PgPool;

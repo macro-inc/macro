@@ -9,7 +9,7 @@ use crate::domain::mailbox::{MailboxError, MailboxKey};
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
 use chrono::{DateTime, Utc};
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, MailboxSubscription, MailboxWatchDetails, ProviderId,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;

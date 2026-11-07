@@ -4,7 +4,7 @@
 
 Test support for the Email and Calendar features: a stateful fake of the
 Microsoft Graph mail and calendar APIs and the Microsoft identity platform our
-email, calendar and sign-in code call. The real `email_api_client` Outlook
+email, calendar and sign-in code call. The real `email_api_client_outbound` Outlook
 adapter, `email_service` and its workers, `calendar_service`, FusionAuth's
 `microsoft` identity provider and the authentication service's Outlook link
 run against it, in a `cargo test`, as a standalone process or as part of a
@@ -107,7 +107,7 @@ local stack, without Microsoft accounts.
 
 - Owns: the Graph mail endpoints the email code calls, plus `$batch` and the
   send-at-once reply and forward actions, which it does not call yet; the
-  Graph calendar endpoints `email_api_client`'s `outlook/calendar.rs` calls
+  Graph calendar endpoints `email_api_client_outbound`'s `outlook/calendar.rs` calls
   (`mailboxSettings`, `calendars`, `calendarView` and its delta, `events`,
   `instances`, create, patch, delete, `accept`, `tentativelyAccept`,
   `decline`); and what the sign-in and Outlook link code use of the Microsoft
@@ -269,4 +269,4 @@ local stack, without Microsoft accounts.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md` ·
-  `crates/email_api_client/AGENTS.md`
+  `crates/email/email_api_client_outbound/AGENTS.md`

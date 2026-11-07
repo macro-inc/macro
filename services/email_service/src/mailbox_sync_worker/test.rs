@@ -1,7 +1,7 @@
 use super::*;
 use email::domain::mailbox::MailboxKey;
 use email::outbound::mailbox_pg::PgMailboxSync;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart, StreamPosition,
     StreamToken,
 };

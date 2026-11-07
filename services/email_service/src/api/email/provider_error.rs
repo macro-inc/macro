@@ -1,6 +1,6 @@
 use axum::http::header::RETRY_AFTER;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 
 #[cfg(test)]
 mod test;

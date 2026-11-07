@@ -1,5 +1,5 @@
 use email::domain::mailbox::settings::*;
-use email_api_client::domain::{models::*, ports::*, service::mailbox::MailboxApiService};
+use email_api_client_core::{models::*, ports::*, service::mailbox::MailboxApiService};
 use models_email::service::{label::Label, link::UserProvider};
 use uuid::Uuid;
 

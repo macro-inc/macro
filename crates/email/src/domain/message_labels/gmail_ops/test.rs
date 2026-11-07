@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
 use models_email::gmail::gmail_ops::{
     BlockSenderPayload, DeleteLabelPayload, GmailMessageRef, ModifyMessageLabelsBatchPayload,
     ModifyMessageLabelsPayload, UnblockSenderPayload,

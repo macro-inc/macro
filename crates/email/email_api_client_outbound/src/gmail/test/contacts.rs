@@ -1,0 +1,94 @@
+use uuid::Uuid;
+use wiremock::matchers::{method, path, query_param, query_param_is_missing};
+use wiremock::{Mock, ResponseTemplate};
+
+use super::repository;
+use email_api_client_core::models::AccessToken;
+use email_api_client_core::ports::MailboxContactsClient;
+
+#[tokio::test]
+async fn reads_contacts_one_page_at_a_time() {
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/people/me/connections"))
+        .and(query_param("requestSyncToken", "true"))
+        .and(query_param_is_missing("pageToken"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            include_str!("fixtures/contacts_page_1.json"),
+            "application/json",
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/people/me/connections"))
+        .and(query_param("pageToken", "contacts-next"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            include_str!("fixtures/contacts_page_2.json"),
+            "application/json",
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let token = AccessToken::new("token");
+    let link_id = Uuid::now_v7();
+
+    let first = repository
+        .list_contacts_page(&token, link_id, None, None)
+        .await
+        .unwrap();
+    assert_eq!(first.contacts.len(), 1);
+    assert_eq!(first.next_page_token.as_deref(), Some("contacts-next"));
+    assert_eq!(first.next_sync_token, None);
+
+    let last = repository
+        .list_contacts_page(&token, link_id, None, Some("contacts-next"))
+        .await
+        .unwrap();
+    assert_eq!(last.next_page_token, None);
+    assert_eq!(last.next_sync_token.as_deref(), Some("contacts-sync-final"));
+    assert_eq!(
+        last.contacts[0].original_photo_url.as_deref(),
+        Some("https://lh3.googleusercontent.test/second=s128")
+    );
+}
+
+#[tokio::test]
+async fn normalizes_self_and_other_contacts() {
+    let (server, repository) = repository().await;
+    Mock::given(method("GET"))
+        .and(path("/people/me"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(include_str!("fixtures/person.json"), "application/json"),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/otherContacts"))
+        .and(query_param("syncToken", "previous"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            include_str!("fixtures/other_contacts.json"),
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let link_id = Uuid::now_v7();
+    let own = repository
+        .get_self_contact(&AccessToken::new("token"), link_id)
+        .await
+        .unwrap();
+    assert_eq!(own.name.as_deref(), Some("Mailbox User"));
+    assert_eq!(
+        own.original_photo_url.as_deref(),
+        Some("https://lh3.googleusercontent.test/photo=s128")
+    );
+
+    let other = repository
+        .list_other_contacts_page(&AccessToken::new("token"), link_id, Some("previous"), None)
+        .await
+        .unwrap();
+    assert_eq!(other.next_sync_token.as_deref(), Some("other-sync-final"));
+    assert_eq!(other.contacts[0].link_id, link_id);
+}

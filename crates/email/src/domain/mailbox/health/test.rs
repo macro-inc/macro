@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::RateLimitOrigin;
+use email_api_client_core::models::RateLimitOrigin;
 use macro_user_id::email::EmailStr;
 use std::sync::{Arc, Mutex};
 

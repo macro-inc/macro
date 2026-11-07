@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::link_manager::test::events::{Output, assert_event};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use fakes::*;
 use tracing::instrument::WithSubscriber;
 

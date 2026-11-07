@@ -1,8 +1,8 @@
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, FolderRole, MailboxChangePage, ProviderId, RoundStart, StreamPosition,
     StreamToken,
 };
-use email_api_client::domain::ports::{FolderChangeReader, MailboxContentReader};
+use email_api_client_core::ports::{FolderChangeReader, MailboxContentReader};
 use uuid::Uuid;
 
 use super::{ADA, id, message_id, start, token};
@@ -21,7 +21,7 @@ fn seed_with_inbox(count: usize) -> String {
 /// Reads a delta round to its checkpoint.
 async fn round(
     api: &impl FolderChangeReader,
-    token: &email_api_client::domain::models::AccessToken,
+    token: &email_api_client_core::models::AccessToken,
     folder: &ProviderId,
     mut position: Option<StreamToken>,
 ) -> (Vec<MailboxChangePage>, StreamToken) {

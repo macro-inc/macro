@@ -1,6 +1,6 @@
 use super::*;
 use crm::domain::model::CrmError;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use models_email::service::{cache::TokenCacheKey, link::UserProvider};

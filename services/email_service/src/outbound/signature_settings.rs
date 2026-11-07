@@ -3,7 +3,7 @@
 use email::domain::signature_settings::{
     SettingsWriter, SignatureAlias, SignatureImages, SignatureProvider,
 };
-use email_api_client::domain::models::{AccessToken, EmailApiError, TokenFreshness};
+use email_api_client_core::models::{AccessToken, EmailApiError, TokenFreshness};
 use models_email::service::settings::{Settings, SettingsPatch};
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;

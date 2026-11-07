@@ -36,7 +36,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 calendar_events = { workspace = true, features = ["google"] }
-email_api_client = { workspace = true, features = ["outbound-gmail"] }
+email_api_client_core = { workspace = true, features = ["ports"] }
+email_api_client_outbound = { workspace = true, features = ["outbound-gmail"] }
 fusionauth = { workspace = true }
 gmail_client = { workspace = true }
 models_email = { workspace = true }

@@ -8,12 +8,12 @@ snapshots:
       start: 28
       end: 43
   ? |
-    fn process() { let _ = email_api_client::GmailApiClientRepository::new(); }
+    fn process() { let _ = email_api_client_outbound::GmailApiClientRepository::new(); }
   : labels:
-    - source: email_api_client::GmailApiClientRepository::new
+    - source: email_api_client_outbound::GmailApiClientRepository::new
       style: primary
       start: 23
-      end: 70
+      end: 79
   ? |
     fn process() { let _ = sqlx::query!("SELECT 1"); }
   : labels:
@@ -43,12 +43,12 @@ snapshots:
       start: 12
       end: 24
   ? |
-    use ::email_api_client::OutlookApiClientRepository;
+    use ::email_api_client_outbound::OutlookApiClientRepository;
   : labels:
-    - source: ::email_api_client::OutlookApiClientRepository
+    - source: ::email_api_client_outbound::OutlookApiClientRepository
       style: primary
       start: 4
-      end: 50
+      end: 59
   ? |
     use ::redis::Client;
   : labels:
@@ -198,95 +198,47 @@ snapshots:
       start: 12
       end: 33
   ? |
-    use email_api_client as provider;
+    use email_api_client_outbound as provider;
   : labels:
-    - source: email_api_client as provider
+    - source: email_api_client_outbound as provider
+      style: primary
+      start: 4
+      end: 41
+  ? |
+    use email_api_client_outbound::*;
+  : labels:
+    - source: email_api_client_outbound::*
       style: primary
       start: 4
       end: 32
   ? |
-    use email_api_client::*;
+    use email_api_client_outbound::{OutlookApiClientRepository as Provider};
   : labels:
-    - source: email_api_client::*
-      style: primary
-      start: 4
-      end: 23
-  ? |
-    use email_api_client::{OutlookApiClientRepository as Provider};
-  : labels:
-    - source: email_api_client::{OutlookApiClientRepository as Provider}
-      style: primary
-      start: 4
-      end: 62
-    - source: email_api_client
-      style: secondary
-      start: 4
-      end: 20
-    - source: OutlookApiClientRepository as Provider
-      style: secondary
-      start: 23
-      end: 61
-    - source: OutlookApiClientRepository as Provider
-      style: secondary
-      start: 23
-      end: 61
-  ? |
-    use email_api_client::{domain::models::EmailApiError, GmailApiClientRepository};
-  : labels:
-    - source: email_api_client::{domain::models::EmailApiError, GmailApiClientRepository}
-      style: primary
-      start: 4
-      end: 79
-    - source: email_api_client
-      style: secondary
-      start: 4
-      end: 20
-    - source: GmailApiClientRepository
-      style: secondary
-      start: 54
-      end: 78
-    - source: GmailApiClientRepository
-      style: secondary
-      start: 54
-      end: 78
-  ? |
-    use email_api_client::{outbound::{GmailApiClientRepository}};
-  : labels:
-    - source: email_api_client::{outbound::{GmailApiClientRepository}}
-      style: primary
-      start: 4
-      end: 60
-    - source: email_api_client
-      style: secondary
-      start: 4
-      end: 20
-    - source: outbound::{GmailApiClientRepository}
-      style: secondary
-      start: 23
-      end: 59
-    - source: outbound::{GmailApiClientRepository}
-      style: secondary
-      start: 23
-      end: 59
-  ? |
-    use email_api_client::{self as provider, domain::models::EmailApiError};
-  : labels:
-    - source: email_api_client::{self as provider, domain::models::EmailApiError}
+    - source: email_api_client_outbound::{OutlookApiClientRepository as Provider}
       style: primary
       start: 4
       end: 71
-    - source: email_api_client
-      style: secondary
+  ? |
+    use email_api_client_outbound::{gmail, GmailApiClientRepository};
+  : labels:
+    - source: email_api_client_outbound::{gmail, GmailApiClientRepository}
+      style: primary
       start: 4
-      end: 20
-    - source: self as provider
-      style: secondary
-      start: 23
-      end: 39
-    - source: self as provider
-      style: secondary
-      start: 23
-      end: 39
+      end: 64
+  ? |
+    use email_api_client_outbound::{gmail::{GmailApiClientRepository}};
+  : labels:
+    - source: email_api_client_outbound::{gmail::{GmailApiClientRepository}}
+      style: primary
+      start: 4
+      end: 66
+  ? |
+    use email_api_client_outbound::{self as provider, OutlookApiClientRepository};
+  : labels:
+    - source: email_api_client_outbound::{self as provider, OutlookApiClientRepository}
+      style: primary
+      start: 4
+      end: 77
   ? |
     use email_db_client::Client;
   : labels:
@@ -478,16 +430,16 @@ snapshots:
       start: 12
       end: 14
   ? |
-    use {email_api_client};
+    use {email_api_client_outbound};
   : labels:
-    - source: email_api_client
+    - source: email_api_client_outbound
       style: primary
       start: 5
-      end: 21
-    - source: '{email_api_client}'
+      end: 30
+    - source: '{email_api_client_outbound}'
       style: secondary
       start: 4
-      end: 22
+      end: 31
   ? |
     use {email_db_client, std::sync::Arc};
   : labels:

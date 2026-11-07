@@ -10,11 +10,11 @@ use uuid::Uuid;
 
 pub(crate) mod inbox_sync;
 
-use email_api_client::domain::models::{AccessToken, EmailApiError, MailboxAccess, ProviderId};
-use email_api_client::domain::ports::{MailboxWatchClient, ScopedMailboxRepository};
+use email_api_client_core::models::{AccessToken, EmailApiError, MailboxAccess, ProviderId};
+use email_api_client_core::ports::{MailboxWatchClient, ScopedMailboxRepository};
 
 pub struct InboxLifecycleClients {
-    pub outlook: email_api_client::OutlookApiClientRepository,
+    pub outlook: email_api_client_outbound::OutlookApiClientRepository,
     pub auth: authentication_service_client::AuthServiceClient,
     pub queue: sqs_client::SQS,
     pub gateway: connection_gateway_client::client::ConnectionGatewayClient,

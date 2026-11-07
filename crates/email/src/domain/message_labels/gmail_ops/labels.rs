@@ -6,7 +6,7 @@ use super::{
     LabelWriteRevert, LabelWriteTurn, RevertedMessageFlag,
 };
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use email_api_client::domain::{models::EmailApiError, service::SEPARATE_LABEL_WRITES_BELOW};
+use email_api_client_core::{models::EmailApiError, service::SEPARATE_LABEL_WRITES_BELOW};
 use futures::future::BoxFuture;
 use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
 use models_email::service::{self, link::Link};

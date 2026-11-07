@@ -1,4 +1,4 @@
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 

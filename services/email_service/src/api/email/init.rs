@@ -9,7 +9,7 @@ use email::domain::mailbox::connection::{
     ConnectionError, ConnectionFailureObserver, ConnectionRequest,
 };
 use email::domain::mailbox::initialization::InitializationError;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use thiserror::Error;

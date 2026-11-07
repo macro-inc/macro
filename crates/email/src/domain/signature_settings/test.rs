@@ -416,9 +416,7 @@ impl SignatureImageReader for Fake {
         }
         Err(EmailApiError::RateLimited {
             retry_after: Some(std::time::Duration::from_secs(60)),
-            origin: email_api_client::domain::models::RateLimitOrigin::Provider {
-                concurrency: false,
-            },
+            origin: email_api_client_core::models::RateLimitOrigin::Provider { concurrency: false },
         })
     }
     async fn get_thread(

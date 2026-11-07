@@ -28,7 +28,7 @@ pub async fn save_discovered<R, P>(
     link_id: Uuid,
     provider_id: &str,
     message_id: Uuid,
-    parts: &[email_api_client::domain::models::CalendarPart],
+    parts: &[email_api_client_core::models::CalendarPart],
 ) where
     R: email::domain::invitation_extraction::InvitationExtractionRepository,
     P: InvitationAttachmentProvider,

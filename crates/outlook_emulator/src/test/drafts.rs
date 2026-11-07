@@ -1,9 +1,7 @@
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     AttachmentContent, DraftRequest, SendRequest, SubmissionOutcome, UploadProgress,
 };
-use email_api_client::domain::ports::{
-    MailboxActionWriter, MailboxContentReader, MailboxDraftClient,
-};
+use email_api_client_core::ports::{MailboxActionWriter, MailboxContentReader, MailboxDraftClient};
 use models_email::email::service::address::ContactInfo;
 use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

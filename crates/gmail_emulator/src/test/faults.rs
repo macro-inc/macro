@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
-use email_api_client::domain::ports::{MailboxLabelClient, MailboxSyncClient};
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
+use email_api_client_core::ports::{MailboxLabelClient, MailboxSyncClient};
 use uuid::Uuid;
 
 use super::*;

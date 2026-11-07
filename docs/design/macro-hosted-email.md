@@ -44,14 +44,14 @@ deletion become our job instead of Google's.
 The email stack currently runs two provider architectures side by side:
 
 - **Gmail** uses the older path: numeric history cursors (`SyncCursor::Gmail`,
-  `crates/email_api_client/src/domain/models/changes.rs`), labels as the source
+  `crates/email/email_api_client_core/src/models/changes.rs`), labels as the source
   of mailbox state, and `ScheduledDeliveryAdapter` for sending
   (`services/email_service/src/outbound/scheduled_delivery.rs`).
 - **Outlook** uses the provider-neutral path that #7461 introduced:
   `MailboxGateway`, `MailboxCommandGateway` and `DraftGateway`
   (`crates/email/src/domain/mailbox.rs`, `mailbox/commands.rs`,
   `mailbox/drafts/ports.rs`), normalized `MailboxState`
-  (`crates/email_api_client/src/domain/models/provider.rs`) stored in
+  (`crates/email/email_api_client_core/src/models/provider.rs`) stored in
   `email_messages.mailbox_state`, `email_mailbox_folders` with a `FolderRole`,
   and the durable command and send ledgers.
 
@@ -133,7 +133,7 @@ flowchart LR
   Spam `FAIL` or DMARC quarantine → deliver with `in_junk`. Store the verdicts on
   the message so the UI can show why something was junked and so a later
   rspamd pass can be added without reprocessing.
-- **Parsing** uses `mailparse`, already in tree (`crates/email_api_client`), and
+- **Parsing** uses `mailparse`, already in tree (`crates/email/email_api_client_outbound`), and
   feeds the same normalized message the Gmail and Outlook converters produce.
   Attachments are written to the existing `email-attachments-bucket` layout so
   `attachment_access.rs` serves them unchanged.

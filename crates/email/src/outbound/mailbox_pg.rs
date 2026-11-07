@@ -3,7 +3,7 @@
 use crate::domain::mailbox::live_pass::{FolderPass, StreamKind};
 use crate::domain::mailbox::progress::ImportCompleted;
 use crate::domain::mailbox::*;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     MailFolder, MailboxChangePage, ProviderId, StreamPosition, StreamToken,
 };
 use sqlx::PgPool;

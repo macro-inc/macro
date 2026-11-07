@@ -90,7 +90,7 @@ tools — hexagonal, heavily feature-gated.
   (`domain/event_forward.rs`): that same file, or, for an organizer outside
   Google, a real invitation (`METHOD:REQUEST`) sent as the message's calendar
   body to the recipients and the organizer, whichever the calendar decides.
-- Provider protocol implementations live in `email_api_client`; HTTP/queue
+- Provider protocol implementations live in `email_api_client_outbound`, behind the `email_api_client_core` ports; HTTP/queue
   hosting lives in `services/email_service`; HTML parsing/sanitization lives in
   `email_utils`. PostgreSQL adapters in this crate and `email_db_client` perform
   database I/O; domain modules call their ports.
@@ -434,7 +434,7 @@ tools — hexagonal, heavily feature-gated.
   the bytes, such as an event forward's `.ics`, uses `send_with_files`. A
   `SourcedAttachment` with `is_inline` (no Content-ID) is staged inline and
   becomes the message's `text/calendar` body at delivery (see
-  `email_api_client`'s `SendRequest::build_mime`); use it only for an
+  `email_api_client_core`'s `SendRequest::build_mime`); use it only for an
   invitation's calendar part.
 - Saved invitation snapshots are JSONB and never re-extracted. `recurrence`
   is `None` on snapshots saved before it was recorded, where a series looks

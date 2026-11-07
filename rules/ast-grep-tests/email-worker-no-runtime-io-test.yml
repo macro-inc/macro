@@ -48,7 +48,7 @@ invalid:
   - |
     fn run_worker() { PgGmailOps(pool); }
   - |
-    fn other() { email_api_client::OutlookApiClientRepository::new(); }
+    fn other() { email_api_client_outbound::OutlookApiClientRepository::new(); }
   - |
     fn other() { GoogleCalendarClient::new(); }
   - |
@@ -62,7 +62,7 @@ invalid:
   - |
     use crate::outbound::Repo;
   - |
-    use email_api_client::GmailApiClientRepository;
+    use email_api_client_outbound::GmailApiClientRepository;
   - |
     fn process(p: &str) { std::fs::read(p); }
   - |

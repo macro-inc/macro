@@ -45,7 +45,7 @@ pub(super) struct State {
     pub message: Option<service::message::SimpleMessage>,
     pub labels: Vec<db::label::Label>,
     pub pending: VecDeque<Vec<String>>,
-    pub provider: Result<Option<Vec<String>>, email_api_client::domain::models::EmailApiError>,
+    pub provider: Result<Option<Vec<String>>, email_api_client_core::models::EmailApiError>,
     pub sender: Option<db::contact::Contact>,
     pub recipients: Vec<(db::contact::Contact, db::address::EmailRecipientType)>,
     pub deletion: MessageDeletion,
@@ -356,7 +356,7 @@ impl InboxSyncGmail for Fake {
         id: &'a str,
     ) -> futures::future::BoxFuture<
         'a,
-        Result<Option<Vec<String>>, email_api_client::domain::models::EmailApiError>,
+        Result<Option<Vec<String>>, email_api_client_core::models::EmailApiError>,
     > {
         assert_eq!((link, id), (LINK, "message-1"));
         Box::pin(async move {

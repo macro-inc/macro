@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::drafts::{models::*, ports::DraftRepository};
-use email_api_client::domain::models::ProviderDraft;
+use email_api_client_core::models::ProviderDraft;
 use sqlx::{Postgres, Transaction};
 
 #[cfg(test)]

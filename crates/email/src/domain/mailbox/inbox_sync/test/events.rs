@@ -1,6 +1,6 @@
 use super::fakes::{Call, LINK, MESSAGE, THREAD, input, label, make_service};
 use super::*;
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tracing::field::{Field, Visit};
@@ -395,7 +395,7 @@ async fn own_sender_filter_keeps_its_debug_event_and_thread_identity() {
         let mut state = fake.0.lock().unwrap();
         state.message = None;
         state.import.fetched = Ok(Some(
-            email_api_client::domain::models::MessageWithCalendarParts {
+            email_api_client_core::models::MessageWithCalendarParts {
                 message: super::import_fakes::received_message(LINK, THREAD),
                 calendar_parts: vec![],
             },
