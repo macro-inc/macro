@@ -1,4 +1,4 @@
-/** The `/forms` routes of `crates/forms`, mounted by the document storage service. */
+/** The `/forms` routes of `crates/databases/forms`, mounted by the document storage service. */
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   type FetchWithTokenErrorCode,

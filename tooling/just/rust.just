@@ -92,11 +92,11 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/accounts/user_api_key/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/search/soup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/email/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/system_properties/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/properties/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/databases/system_properties/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/databases/properties/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/search/name_search/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_scheduled_handler/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/saved_views/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/databases/saved_views/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/channels/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/documents/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/projects/.env
@@ -118,7 +118,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/clients/mcp_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_storage_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/task_dedup/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/crm/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/databases/crm/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/bots/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/call_recording_preview_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/share_permission_db_utils/.env

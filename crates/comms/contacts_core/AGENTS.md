@@ -17,7 +17,7 @@ adapters are `crates/comms/contacts_outbound`.
 ## Scope
 
 - Owns: the contact graph and its use cases.
-- Not here: CRM companies/contacts (external organizations) → `crates/crm`;
+- Not here: CRM companies/contacts (external organizations) → `crates/databases/crm`;
   connection-level presence/relay → `crates/clients/connection_gateway_client`.
 
 ## Boundaries

@@ -53,14 +53,16 @@ members = [
   "crates/comms/external_chat",
   "crates/comms/messages",
   "crates/comms/slack_integration",
-  "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
-  "crates/database_sql",
-  "crates/database_webhooks",
-  "crates/databases",
+  "crates/databases/crm",
+  "crates/databases/database_sql",
+  "crates/databases/database_webhooks",
+  "crates/databases/databases",
+  "crates/databases/databases_sql",
+  "crates/databases/forms",
   "crates/databases/properties_inbound",
-  "crates/databases_sql",
+  "crates/databases/properties_service",
   "crates/dictation",
   "crates/docx_engine",
   "crates/dynamic_ui",
@@ -84,7 +86,6 @@ members = [
   "crates/folds/agent_fold",
   "crates/folds/claude_fold",
   "crates/folds/codex_fold",
-  "crates/forms",
   "crates/graphql/complete_graph",
   "crates/graphql/graphql_activity",
   "crates/graphql/graphql_calendar",
@@ -169,7 +170,6 @@ members = [
   "crates/projects/initiative_description",
   "crates/projects/task_dedup",
   "crates/prompt",
-  "crates/properties_service",
   "crates/psd_engine",
   "crates/routine_program",
   "crates/routines",
@@ -684,14 +684,14 @@ contacts_outbound = { path = "crates/comms/contacts_outbound" }
 contacts_service_url = { path = "crates/platform/service_urls/contacts_service_url" }
 convert_service_url = { path = "crates/platform/service_urls/convert_service_url" }
 cowlike = { path = "crates/types/cowlike" }
-crm = { path = "crates/crm", default-features = false }
+crm = { path = "crates/databases/crm", default-features = false }
 cursor_api_key = { path = "crates/cursor_api_key" }
 cursor_cloud_agents = { path = "crates/cursor_cloud_agents" }
 database_env_vars = { path = "crates/platform/database_env_vars" }
-database_sql = { path = "crates/database_sql" }
-database_webhooks = { path = "crates/database_webhooks" }
-databases = { path = "crates/databases" }
-databases_sql = { path = "crates/databases_sql" }
+database_sql = { path = "crates/databases/database_sql" }
+database_webhooks = { path = "crates/databases/database_webhooks" }
+databases = { path = "crates/databases/databases" }
+databases_sql = { path = "crates/databases/databases_sql" }
 decode_jwt = { path = "crates/platform/decode_jwt" }
 dictation = { path = "crates/dictation" }
 document_cognition_service_url = { path = "crates/platform/service_urls/document_cognition_service_url" }
@@ -727,7 +727,7 @@ feature_flags = { path = "crates/platform/feature_flags" }
 fig_engine = { path = "crates/fig_engine", default-features = false }
 filter_ast = { path = "crates/types/filter_ast" }
 foreign_entity = { path = "crates/entities/foreign_entity", default-features = false }
-forms = { path = "crates/forms" }
+forms = { path = "crates/databases/forms" }
 frecency = { path = "crates/entities/frecency" }
 frecency_core = { path = "crates/entities/frecency_core" }
 frecency_inbound = { path = "crates/entities/frecency_inbound" }
@@ -865,7 +865,7 @@ project_id = { path = "crates/types/project_id" }
 projects = { path = "crates/projects/projects", default-features = false }
 projects_hex = { package = "projects", path = "crates/projects/projects" }
 prompt = { path = "crates/prompt" }
-properties = { path = "crates/properties", default-features = false }
+properties = { path = "crates/databases/properties", default-features = false }
 properties_inbound = { path = "crates/databases/properties_inbound", default-features = false }
 psd_engine = { path = "crates/psd_engine" }
 rate_limit = { path = "crates/platform/rate_limit" }
@@ -878,7 +878,7 @@ routine_program = { path = "crates/routine_program" }
 routines = { path = "crates/routines" }
 s3_client = { path = "crates/aws/s3_client" }
 s3_key = { path = "crates/types/s3_key" }
-saved_views = { path = "crates/saved_views" }
+saved_views = { path = "crates/databases/saved_views" }
 scheduled_action = { path = "crates/scheduled_action" }
 scheduled_action_service_url = { path = "crates/platform/service_urls/scheduled_action_service_url" }
 search_processing_service_url = { path = "crates/platform/service_urls/search_processing_service_url" }
@@ -912,7 +912,7 @@ sync_service_bebop_schema = { path = "services/sync-service/bebop-schema" }
 sync_service_client = { path = "crates/clients/sync_service_client" }
 sync_service_hex = { path = "crates/sync_service" }
 sync_service_url = { path = "crates/platform/service_urls/sync_service_url" }
-system_properties = { path = "crates/system_properties" }
+system_properties = { path = "crates/databases/system_properties" }
 system_skills = { path = "crates/system_skills" }
 system_status = { path = "crates/accounts/system_status" }
 task_dedup = { path = "crates/projects/task_dedup" }

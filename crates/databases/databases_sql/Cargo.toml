@@ -1,0 +1,52 @@
+[package]
+edition = "2024"
+name = "databases_sql"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Authenticated HTTP query adapter.
+inbound = ["dep:axum", "dep:macro_authorization", "dep:model_error_response", "dep:utoipa", "database_sql/openapi"]
+# The SQL agent tools: QueryDatabase and SaveDatabaseQuery.
+ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, features = ["axum"], optional = true }
+model_error_response = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+base64 = { workspace = true }
+bot_id = { workspace = true }
+chrono = { workspace = true }
+database_sql = { workspace = true, features = ["schema"] }
+databases = { workspace = true, features = ["ports", "view_rows"] }
+email = { workspace = true }
+entity_access = { workspace = true, features = ["ports"] }
+filter_ast = { workspace = true }
+item_filters = { workspace = true }
+macro_user_id = { workspace = true }
+models_databases = { workspace = true }
+models_grouping = { workspace = true }
+models_pagination = { workspace = true }
+models_properties = { workspace = true }
+models_soup = { workspace = true }
+rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+soup = { workspace = true, features = ["ports"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+contacts_core = { workspace = true }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+model_owner = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

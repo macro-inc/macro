@@ -123,7 +123,7 @@ UI and AI adapters should call that same authorized host service. An API endpoin
 or a shared database engine does not automatically make a host available to AI;
 wire host discovery/read/write tools explicitly without bypassing its permissions.
 
-Read the [storage boundary](../../../crates/databases/README.md#storage-and-app-entities)
-and [domain ports](../../../crates/databases/src/domain/ports.rs) before wiring a
+Read the [storage boundary](../../../crates/databases/databases/README.md#storage-and-app-entities)
+and [domain ports](../../../crates/databases/databases/src/domain/ports.rs) before wiring a
 consumer. Follow the [database guide](../../../docs/development/database.md) for
 schema and migration work.

@@ -29,7 +29,7 @@ entity kind generically.
 
 - Depends on: `entity_access` (for `EntityAccessReceipt`/`RequiredPermission`),
   `model_entity`, `models_permissions`.
-- Used by: `crates/comms/channels`, `crates/email/email`, `crates/forms`, `crates/databases`,
+- Used by: `crates/comms/channels`, `crates/email/email`, `crates/databases/forms`, `crates/databases/databases`,
   `crates/projects/projects`, `crates/comms/call`, `crates/comms/chat`, `crates/documents`,
   `crates/graphql/graphql_entity_mutation`, `crates/graphql/graphql_favorite`,
   `services/document_storage_service`.

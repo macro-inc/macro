@@ -349,7 +349,7 @@ ensure-agent-fold-wasm:
 # Build the database-sql wasm module (the SQL engine's staged `Query`) into
 # src/lib/core/database-sql/wasm (gitignored).
 build-database-sql-wasm:
-    scripts/cached-wasm-build.sh database_sql {{justfile_directory()}}/src/lib/core/database-sql/wasm -- env CARGO_TARGET_DIR="{{database_sql_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/database_sql --target web --release --out-dir {{justfile_directory()}}/src/lib/core/database-sql/wasm
+    scripts/cached-wasm-build.sh database_sql {{justfile_directory()}}/src/lib/core/database-sql/wasm -- env CARGO_TARGET_DIR="{{database_sql_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/databases/database_sql --target web --release --out-dir {{justfile_directory()}}/src/lib/core/database-sql/wasm
 
 # Dev fast path: build the database-sql wasm pkg only when it is missing or
 # any source it is compiled from is newer than the built artifact: the
@@ -490,7 +490,7 @@ gen-dynamic-ui-types:
 
 # Regenerate src/lib/core/database-sql/generated/types.ts from the
 # database_sql engine's wire types with specta. Run after changing any type
-# that crosses the wasm boundary (see crates/database_sql/src/wasm.rs); biome
+# that crosses the wasm boundary (see crates/databases/database_sql/src/wasm.rs); biome
 # reformats specta's output for the same reason as gen-agent-fold-types.
 gen-database-sql-types:
     cargo run -p database_sql --features cli --bin database_sql_types
