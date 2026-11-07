@@ -10,7 +10,7 @@ mod test;
 
 use super::MailboxError;
 use chrono::{Duration, Utc};
-use email_api_client::domain::models::*;
+use email_api_client_core::models::*;
 use models::*;
 use ports::*;
 use sha2::{Digest, Sha256};

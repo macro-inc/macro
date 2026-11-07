@@ -4,7 +4,7 @@ use auth_service_url::AuthServiceUrl;
 use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_storage_service_url::DocumentStorageServiceUrl;
-use email_api_client::GmailApiClientRepository;
+use email_api_client_outbound::GmailApiClientRepository;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
@@ -296,10 +296,10 @@ async fn main() -> anyhow::Result<()> {
         sqs_client.clone(),
         RateBudget::Live,
     );
-    let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
-    ))?;
-    let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
+    let outlook_repository = email_api_client_outbound::OutlookApiClientRepository::with_gate(
+        Arc::new(email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone())),
+    )?;
+    let outlook_api = email_api_client_core::service::mailbox::MailboxApiService::new(
         outlook_repository.clone(),
         email::domain::mailbox::credentials::MailboxCredentials::new(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
@@ -308,7 +308,7 @@ async fn main() -> anyhow::Result<()> {
             ),
         ),
         // Admission is applied to each actual Graph request by the injected gate.
-        email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        email_api_client_core::ports::AlwaysAllowRateLimiter,
     );
     let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
     if config.outlook_sync_enabled {

@@ -2,7 +2,7 @@
 
 use super::*;
 use chrono::{DateTime, Duration, Utc};
-use email_api_client::domain::models::{MailboxSubscription, MailboxWatchDetails};
+use email_api_client_core::models::{MailboxSubscription, MailboxWatchDetails};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 

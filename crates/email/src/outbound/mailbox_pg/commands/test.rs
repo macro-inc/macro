@@ -211,7 +211,7 @@ async fn acceptance_rechecks_access_and_expired_worker_cannot_confirm(db: PgPool
 
 #[derive(Clone)]
 struct UncertainProvider {
-    state: std::sync::Arc<std::sync::Mutex<email_api_client::domain::models::MailboxOrganization>>,
+    state: std::sync::Arc<std::sync::Mutex<email_api_client_core::models::MailboxOrganization>>,
     writes: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     reads: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
@@ -219,7 +219,7 @@ impl MailboxGateway for UncertainProvider {
     async fn folders(
         &self,
         _: MailboxKey,
-    ) -> Result<Vec<MailFolder>, email_api_client::domain::models::EmailApiError> {
+    ) -> Result<Vec<MailFolder>, email_api_client_core::models::EmailApiError> {
         unreachable!()
     }
     async fn changes(
@@ -227,7 +227,7 @@ impl MailboxGateway for UncertainProvider {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
-    ) -> Result<MailboxChangePage, email_api_client::domain::models::EmailApiError> {
+    ) -> Result<MailboxChangePage, email_api_client_core::models::EmailApiError> {
         unreachable!()
     }
     async fn message(
@@ -236,8 +236,8 @@ impl MailboxGateway for UncertainProvider {
         _: &ProviderId,
         _: &[MailFolder],
     ) -> Result<
-        Option<email_api_client::domain::models::MailboxMessage>,
-        email_api_client::domain::models::EmailApiError,
+        Option<email_api_client_core::models::MailboxMessage>,
+        email_api_client_core::models::EmailApiError,
     > {
         unreachable!("commands must not fetch bodies or attachments")
     }
@@ -252,8 +252,8 @@ impl MailboxCommandGateway for UncertainProvider {
         _: &ProviderId,
         _: &[MailFolder],
     ) -> Result<
-        Option<email_api_client::domain::models::MailboxOrganization>,
-        email_api_client::domain::models::EmailApiError,
+        Option<email_api_client_core::models::MailboxOrganization>,
+        email_api_client_core::models::EmailApiError,
     > {
         self.reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(Some(self.state.lock().unwrap().clone()))
@@ -262,19 +262,19 @@ impl MailboxCommandGateway for UncertainProvider {
         &self,
         _: MailboxKey,
         _: &ProviderId,
-        action: &email_api_client::domain::models::MessageAction,
+        action: &email_api_client_core::models::MessageAction,
         _: Option<&str>,
     ) -> Result<
-        email_api_client::domain::models::MessageWriteReceipt,
-        email_api_client::domain::models::EmailApiError,
+        email_api_client_core::models::MessageWriteReceipt,
+        email_api_client_core::models::EmailApiError,
     > {
         self.writes
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let email_api_client::domain::models::MessageAction::SetRead(value) = action else {
+        let email_api_client_core::models::MessageAction::SetRead(value) = action else {
             panic!("unexpected action")
         };
         self.state.lock().unwrap().state.is_read = *value;
-        Err(email_api_client::domain::models::EmailApiError::Transient {
+        Err(email_api_client_core::models::EmailApiError::Transient {
             message: "response lost after the provider applied the write".into(),
         })
     }

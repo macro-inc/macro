@@ -289,7 +289,7 @@ mod outlook {
             ports::DraftMaterializer,
         },
     };
-    use email_api_client::domain::models::SendRequest;
+    use email_api_client_core::models::SendRequest;
 
     struct Content;
 

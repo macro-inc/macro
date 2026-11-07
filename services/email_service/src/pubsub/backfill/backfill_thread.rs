@@ -8,7 +8,7 @@ use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::backfill::write_slot;
 use crate::pubsub::context::PubSubContext;
 use crate::util::process_pre_insert::process_message_pre_insert;
-use email_api_client::domain::models::{CalendarPart, MessageWithCalendarParts};
+use email_api_client_core::models::{CalendarPart, MessageWithCalendarParts};
 use email_db_client::messages::insert::SkippedMessage;
 use models_email::email::service::backfill::{BackfillThreadPayload, JobScopedPayload};
 use models_email::email::service::link;

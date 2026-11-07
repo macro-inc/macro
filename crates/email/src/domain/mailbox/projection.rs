@@ -6,7 +6,7 @@ use super::telemetry::{
 use super::{MailboxError, MailboxKey};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
-use email_api_client::domain::models::CalendarPart;
+use email_api_client_core::models::CalendarPart;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{link::Link, message::Message};
 use serde::{Deserialize, Serialize};

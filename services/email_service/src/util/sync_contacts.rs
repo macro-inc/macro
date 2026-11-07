@@ -5,7 +5,7 @@ use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngre
 use email::domain::events::{
     EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
 };
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use futures::{StreamExt, stream};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;

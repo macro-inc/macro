@@ -243,7 +243,6 @@ paths = [
   "crates/documents",
   "crates/dynamic_ui",
   "crates/email",
-  "crates/email_api_client",
   "crates/email_db_client",
   "crates/email_formatting",
   "crates/email_utils",

@@ -4,7 +4,7 @@ use crate::domain::{
     attachment_access::{AttachmentReadRecord, AttachmentReadRepository},
     mailbox::MailboxError,
 };
-use email_api_client::domain::models::{EmailApiError, ProviderId, SendRequest};
+use email_api_client_core::models::{EmailApiError, ProviderId, SendRequest};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;

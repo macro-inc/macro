@@ -83,11 +83,11 @@ pub async fn run_worker_with_cancellation(
                 .inner
                 .get_multiplexed_async_connection()
                 .await?;
-            Ok::<_, anyhow::Error>(email_api_client::OutlookApiClientRepository::with_gate(
-                Arc::new(crate::outbound::email_api::RedisMicrosoftRequestGate(
-                    connection,
-                )),
-            )?)
+            Ok::<_, anyhow::Error>(
+                email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
+                    crate::outbound::email_api::RedisMicrosoftRequestGate(connection),
+                ))?,
+            )
         }
         .await;
         match result {

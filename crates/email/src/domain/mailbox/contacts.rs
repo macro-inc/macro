@@ -2,7 +2,7 @@
 //! must never stop mail delivery, and only a completed scan can retire records.
 
 use super::*;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     AddressBookContact, AddressBookPage, ContactFolderCatalog, ContactPhoto,
 };
 use sha2::{Digest, Sha256};

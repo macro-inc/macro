@@ -26,7 +26,7 @@ contacts, watch) behind a single public facade; most modules are
 ## Boundaries
 
 - Depends on: `models_email` (response/request types).
-- Used by: `email_service`, `email_api_client`.
+- Used by: `email_service`, `email_api_client_outbound`.
 
 ## Recipes
 

@@ -31,7 +31,7 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
-use email_api_client::GmailApiClientRepository;
+use email_api_client_outbound::GmailApiClientRepository;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -229,11 +229,13 @@ async fn run_server() -> anyhow::Result<()> {
         CalendarMutationServiceImpl::new(
             PgCalendarRepository::new(db.clone()),
             calendar_events::domain::providers::CalendarProviders {
-                outlook: email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-                    email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(
-                        redis_conn.clone(),
+                outlook: email_api_client_outbound::OutlookApiClientRepository::with_gate(
+                    Arc::new(
+                        email_api_client_outbound::microsoft_gate::RedisMicrosoftRequestGate(
+                            redis_conn.clone(),
+                        ),
                     ),
-                ))?
+                )?
                 .with_rejected_token_refresh(Arc::new(
                     CalendarTokenProviderAdapter::new(
                         redis_conn.clone(),
@@ -255,8 +257,8 @@ async fn run_server() -> anyhow::Result<()> {
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );
     let outlook_api: crate::api::context::OutlookApi =
-        email_api_client::domain::service::mailbox::MailboxApiService::new(
-            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+        email_api_client_core::service::mailbox::MailboxApiService::new(
+            email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
                 crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
             ))?,
             crate::api::context::MicrosoftTokens::new(
@@ -265,7 +267,7 @@ async fn run_server() -> anyhow::Result<()> {
                     auth_service_client.as_ref().clone(),
                 ),
             ),
-            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+            email_api_client_core::ports::AlwaysAllowRateLimiter,
         );
     let transfer_bytes = Arc::new(
         email::domain::mailbox::drafts::content::DraftContentService {
@@ -295,7 +297,7 @@ async fn run_server() -> anyhow::Result<()> {
             },
         }),
         inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
-            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+            email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
                 crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
             ))?,
             db.clone(),

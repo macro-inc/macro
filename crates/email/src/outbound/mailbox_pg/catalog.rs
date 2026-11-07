@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::FolderRole;
+use email_api_client_core::models::FolderRole;
 
 impl PgMailboxSync {
     pub(super) async fn claim_catalog_lease(

@@ -22,7 +22,7 @@ thread/message API types, DB row types, and Gmail API response shapes.
 ## Boundaries
 
 - Depends on: `email_utils`, `macro_user_id`, `models_pagination`.
-- Used by: `ai_tools`, `calendar_service`, `email_api_client`, `email_db_client`,
+- Used by: `ai_tools`, `calendar_service`, `email_api_client_core`, `email_api_client_outbound`, `email_db_client`,
   `email_refresh_handler`, `email_scheduled_handler`, `email_service(_client)`,
   `gmail_client`, `search_processing_service`, `search_service`, `sqs_client`,
   `teams`.

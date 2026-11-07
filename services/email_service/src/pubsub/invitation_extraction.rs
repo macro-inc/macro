@@ -3,7 +3,7 @@ use super::context::PubSubContext;
 use crate::outbound::{email_api::GmailApi, invitation_extraction::InvitationProvider};
 use email::domain::invitation_extraction::{InvitationExtractionService, InvitationPart};
 use email::outbound::invitation_pg::InvitationPgRepository;
-use email_api_client::domain::models::CalendarPart;
+use email_api_client_core::models::CalendarPart;
 use uuid::Uuid;
 
 /// Worker composition of the email-owned extraction service.

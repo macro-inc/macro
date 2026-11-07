@@ -111,7 +111,6 @@ ego-tree = { workspace = true }
 email = { workspace = true, features = ["axum", "calendar_invitations", "gmail_token", "inbound", "outbound", "mailbox", "sqs"] }
 entity_access = { workspace = true, features = ["outbound"] }
 entity_access_management = { workspace = true, default-features = true }
-email_api_client = { workspace = true, features = ["ports", "outbound-gmail", "outbound-outlook", "microsoft-gate"] }
 email_db_client = { workspace = true }
 email_utils = { workspace = true }
 filter_ast = { workspace = true }
@@ -200,6 +199,8 @@ connection_gateway_url = { workspace = true }
 document_storage_service_url = { workspace = true }
 email_service_url = { workspace = true }
 static_file_service_url = { workspace = true }
+email_api_client_core = { workspace = true, features = ["ports"] }
+email_api_client_outbound = { workspace = true, features = ["outbound-gmail", "outbound-outlook", "microsoft-gate"] }
 
 [dev-dependencies]
 opentelemetry = { workspace = true, features = ["trace"] }

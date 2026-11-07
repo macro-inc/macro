@@ -70,7 +70,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (`guest_list_hidden`) while the organizer hides the guest list, since their
   copy lacks the guests it would drop. Microsoft Graph has no attendee-side
   write either: an Outlook organizer adds guests with the same full-list write
-  (`email_api_client`'s `outlook/calendar/invite.rs`), and an Outlook guest may
+  (`email_api_client_outbound`'s `outlook/calendar/invite.rs`), and an Outlook guest may
   only answer (`guests_cannot_invite`). An Outlook organizer may not answer:
   Graph fixes the organizer's response, so `ViewerCapabilities::rsvp` is false
   and the adapter refuses an answer with `NotAttendee`.

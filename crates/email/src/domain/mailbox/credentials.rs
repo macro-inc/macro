@@ -1,7 +1,7 @@
 //! Mailbox health is part of credential acquisition, so background sync and
 //! interactive requests observe the same reconnect state.
 
-use email_api_client::domain::{
+use email_api_client_core::{
     models::{AccessToken, MailboxAccess, TokenError, TokenFreshness},
     ports::MailboxTokenSource,
 };

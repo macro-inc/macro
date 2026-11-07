@@ -17,7 +17,7 @@ pub type InboxLifecycle = email::domain::mailbox::lifecycle::InboxLifecycleServi
     crate::outbound::inbox_lifecycle::InboxLifecycleClients,
 >;
 pub fn inbox_lifecycle(
-    outlook: email_api_client::OutlookApiClientRepository,
+    outlook: email_api_client_outbound::OutlookApiClientRepository,
     db: sqlx::PgPool,
     auth: authentication_service_client::AuthServiceClient,
     queue: sqs_client::SQS,

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::{contacts::*, projection::ProjectionEvent};
-use email_api_client::domain::models::{AddressBookContact, AddressBookPage, ContactFolderCatalog};
+use email_api_client_core::models::{AddressBookContact, AddressBookPage, ContactFolderCatalog};
 use sqlx::{Postgres, Transaction};
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use super::super::MailboxKey;
 use crate::domain::models::ResolvedDraftInput;
 use chrono::{DateTime, Utc};
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     AttachmentUploadSession, ProviderDraft, ProviderId, SendRequest,
 };
 use serde::{Deserialize, Serialize};

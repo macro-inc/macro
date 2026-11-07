@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::credentials::{CredentialHealth, MailboxCredentialHealthRepository};
-use email_api_client::domain::models::{MailboxAccess, TokenError};
+use email_api_client_core::models::{MailboxAccess, TokenError};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 

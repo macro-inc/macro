@@ -14,7 +14,7 @@ use email::domain::mailbox::initialization::{InitializationError, InitializeMail
 use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
-use email_api_client::domain::models::{EmailApiError, TokenFreshness};
+use email_api_client_core::models::{EmailApiError, TokenFreshness};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::in_progress_user_link::InProgressUserLink;
 use macro_user_id::email::EmailStr;

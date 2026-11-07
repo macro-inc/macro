@@ -59,7 +59,8 @@ members = [
   "crates/dictation",
   "crates/docx_engine",
   "crates/dynamic_ui",
-  "crates/email_api_client",
+  "crates/email/email_api_client_core",
+  "crates/email/email_api_client_outbound",
   "crates/embedding",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
@@ -691,7 +692,8 @@ docx_engine = { path = "crates/docx_engine" }
 dynamic_ui = { path = "crates/dynamic_ui" }
 dynamodb_client = { path = "crates/dynamodb_client" }
 email = { path = "crates/email" }
-email_api_client = { path = "crates/email_api_client" }
+email_api_client_core = { path = "crates/email/email_api_client_core" }
+email_api_client_outbound = { path = "crates/email/email_api_client_outbound" }
 email_db_client = { path = "crates/email_db_client" }
 email_formatting = { path = "crates/email_formatting" }
 email_service_client = { path = "crates/email_service_client" }
@@ -922,6 +924,7 @@ work_feed = { path = "crates/work_feed" }
 worker-rs-otel = { path = "crates/worker-rs-otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }
+
 
 
 [patch.crates-io]

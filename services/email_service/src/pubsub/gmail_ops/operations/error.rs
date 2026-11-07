@@ -1,4 +1,4 @@
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 
 /// Why a gmail_ops operation did not finish.
 #[derive(Debug)]

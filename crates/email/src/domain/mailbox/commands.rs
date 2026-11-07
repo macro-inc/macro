@@ -2,7 +2,7 @@
 
 use super::{MailboxError, MailboxGateway, MailboxKey};
 use crate::domain::models::mailbox_action::{MailboxAction, PendingMailboxState};
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, FolderRole, MailFolder, MailboxOrganization, MessageAction, ProviderId,
 };
 use std::future::Future;
@@ -104,7 +104,7 @@ pub trait MailboxCommandGateway: MailboxGateway {
         action: &MessageAction,
         expected_version: Option<&str>,
     ) -> impl Future<
-        Output = Result<email_api_client::domain::models::MessageWriteReceipt, EmailApiError>,
+        Output = Result<email_api_client_core::models::MessageWriteReceipt, EmailApiError>,
     > + Send;
 }
 

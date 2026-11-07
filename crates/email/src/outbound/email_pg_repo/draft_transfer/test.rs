@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{models::mailbox_operation::*, ports::EmailRepo};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;

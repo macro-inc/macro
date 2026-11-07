@@ -19,13 +19,13 @@ sender/generic-address checks.
 ## Scope
 
 - Owns: provider-neutral email text transforms with no I/O.
-- Not here: provider API calls → `email_api_client`; DB storage →
+- Not here: provider API calls → `email_api_client_outbound`; DB storage →
   `email_db_client`; domain logic → `crates/email`.
 
 ## Boundaries
 
 - Depends on: `ammonia`, `scraper` (no Macro crates).
-- Used by: `crates/email`, `crates/email_db_client`, `crates/email_api_client`,
+- Used by: `crates/email`, `crates/email_db_client`, `crates/email/email_api_client_outbound`,
   `crates/graphql_email`, `crates/google_token`, `crates/models_email`,
   `services/calendar_service`, `services/email_service`.
 

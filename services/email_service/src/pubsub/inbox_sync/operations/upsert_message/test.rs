@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::RateLimitOrigin;
+use email_api_client_core::models::RateLimitOrigin;
 use email_db_client::attachments::provider::upload::new_email_media_atts;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::time::Duration;
