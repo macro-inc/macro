@@ -848,6 +848,31 @@ impl<'state> StateRef<'state> {
         (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;
         Ok(json)
     }
+    /// Export a text slice through an ephemeral clone and its custom export hooks.
+    /// The containing snapshot, node key and all other framework fields remain unchanged.
+    pub fn export_text_slice(
+        self,
+        key: impl Into<NodeKey>,
+        text: &str,
+    ) -> Result<SerializedNode, Error> {
+        let key = key.into();
+        if self.text_data(key)?.text.as_str() == text {
+            return self.export_json(key);
+        }
+        let mut record = self.node_or_err(key)?.to_owned();
+        let BaseData::Text(data) = &mut record.slot.base else {
+            return Err(Error::NodeTypeMismatch(key));
+        };
+        data.text = TextBuffer::new(text);
+        let mut snapshot = self.state.clone();
+        snapshot.nodes.insert(key, std::sync::Arc::new(record.slot));
+        StateRef {
+            state: &snapshot,
+            previous_selection: self.previous_selection,
+            composition_key: self.composition_key,
+        }
+        .export_json(key)
+    }
     /// Export node.
     pub fn export_node(self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {
         let key = key.into();

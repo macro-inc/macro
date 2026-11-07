@@ -11818,6 +11818,7 @@ version = "0.1.0"
 dependencies = [
  "indexmap 2.14.0",
  "lexical_model",
+ "nom 8.0.0",
  "phf 0.13.1",
  "regress",
  "serde",

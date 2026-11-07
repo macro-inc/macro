@@ -9,8 +9,7 @@ fn append(
     let mut include = selection.is_none() || state.is_selected(node, selection);
     let exclude =
         state.is_element(node) && state.exclude_from_copy(node, Some(CopyDestination::Html));
-    let mut serialized = state.export_json(node)?;
-    if state.is_text(node) {
+    let mut serialized = if state.is_text(node) {
         let text = if let Some(selection) = selection {
             crate::selection::slice_selected_text_node_content(state, selection, node)?
         } else {
@@ -19,8 +18,10 @@ fn append(
         if text.is_empty() {
             include = false;
         }
-        serialized.insert("text".to_owned(), Value::String(text));
-    }
+        state.export_text_slice(node, &text)?
+    } else {
+        state.export_json(node)?
+    };
     let mut children = Vec::new();
     if state.is_element(node) {
         if !serialized.get("children").is_some_and(Value::is_array) {
