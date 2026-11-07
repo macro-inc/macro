@@ -8,7 +8,14 @@ impl Sim {
         match step {
             Step::Open(spec) => self.open(spec)?,
             Step::Run(duration) => self.advance(duration.0),
-            Step::Settle => self.settle()?,
+            Step::Settle => {
+                let start = self.clock.now;
+                self.settle()?;
+                self.stats.settle_ms = self
+                    .stats
+                    .settle_ms
+                    .saturating_add(self.clock.now.saturating_sub(start));
+            }
             Step::Edit { client: name, op } => {
                 let Some(client) = self.clients.get_mut(&name) else {
                     self.emit(Fact::OpSkipped {
@@ -32,6 +39,11 @@ impl Sim {
                 if let AbstractOp::Select(selection) = op {
                     client.selection = selection.map(|field| field % self.config.fields.max(1));
                     let value = client.selection.map(loro::LoroValue::from);
+                    self.emit(Fact::LocalOp {
+                        client: name.clone(),
+                        op: AbstractOp::Select(selection),
+                        spans: Vec::new(),
+                    });
                     self.input(&name, session, SyncInput::SetPresence(value))?;
                 } else {
                     let before = client.doc.loro.oplog_vv();
@@ -487,6 +499,16 @@ impl Sim {
         }
         let session = client.session;
         let ai = client.spec.kind == ClientKind::AiWorker;
+        let opened = self.events.iter().rposition(|event| matches!(&event.fact, Fact::Opened { client, session: owner, .. } if client == name && *owner == session)).unwrap_or(self.events.len());
+        let session_events = &self.events[opened..];
+        let in_window = session_events.iter().rev().find_map(|event| match &event.fact {
+            Fact::LocalOp { client, spans, .. } if client == name && !spans.is_empty() => Some((event.at, spans)),
+            _ => None,
+        }).is_some_and(|(at, spans)| self.clock.now.saturating_sub(at.0) < self.config.session.wal.coalesce.0 &&
+            !session_events.iter().any(|event| matches!(&event.fact, Fact::WalAppendIssued { session: owner, spans: stored, .. } if *owner == session && spans.iter().all(|span| crate::invariants::ranges_cover(stored, span)))));
+        if in_window {
+            self.stats.close_in_window += 1;
+        }
         if ai {
             let request = client.request();
             self.input(name, session, SyncInput::Flush(request))?;

@@ -65,6 +65,8 @@ fn close_inside_the_coalesce_window_appends_before_stopped() {
         .iter()
         .position(|event| matches!(event.fact, Fact::Closed { .. }))
         .unwrap();
+    assert_eq!(outcome.stats.close_in_window, 1);
+    assert!(outcome.stats.wal_max_depth > 0);
     assert!(durable < closed);
     assert_eq!(
         outcome.finals.servers[&DocIx(0)].deep_value["fields"]["4"],
@@ -839,4 +841,74 @@ fn settle_waits_for_delayed_cached_input_before_the_heartbeat_hold() {
         outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
         42
     );
+}
+
+#[test]
+fn coverage_close_window_does_not_join_an_older_session_edit() {
+    let outcome = verify(
+        SimConfig::calm(269),
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 42,
+                },
+            },
+            Step::Crash {
+                client: ClientName("a".into()),
+            },
+            Step::Reopen {
+                client: ClientName("a".into()),
+            },
+            Step::Close {
+                client: ClientName("a".into()),
+            },
+            Step::Settle,
+        ],
+    );
+    assert_eq!(outcome.stats.close_in_window, 0);
+}
+#[test]
+fn coverage_observes_granted_multi_edit_exposure_but_not_unused_outages() {
+    let outcome = verify(
+        SimConfig::calm(271),
+        &[
+            Step::Open(OpenSpec::form("b", "one")),
+            Step::Grant {
+                client: ClientName("b".into()),
+                access: Access::Read,
+                force_reconnect: false,
+            },
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Run(Millis(500)),
+            Step::Grant {
+                client: ClientName("b".into()),
+                access: Access::Edit,
+                force_reconnect: false,
+            },
+            Step::Settle,
+            Step::Server(ServerStep::D1Outage { ms: Millis(10) }),
+            Step::Server(ServerStep::StorageErrors { n: 2 }),
+            Step::Server(ServerStep::Heal),
+            Step::Settle,
+        ],
+    );
+    assert_eq!(
+        outcome.stats.multi_edit_tab_profiles,
+        1,
+        "accesses={:?}",
+        outcome
+            .events
+            .iter()
+            .filter(|event| matches!(
+                event.fact,
+                Fact::Opened { .. } | Fact::AccessChanged { .. } | Fact::SocketClose { .. }
+            ))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(outcome.stats.d1_outages, 0);
+    assert_eq!(outcome.stats.storage_outages, 0);
 }

@@ -15,6 +15,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   real client RouterCore instances to physical profile sockets and real room routes.
 - `src/defaults.rs`: host-supplied production session policies.
 - `src/replay.rs`: exact replay and first-differing-event/port/final diagnostics.
+- `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
 ## Boundaries
@@ -39,6 +40,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - GenericSurface/Loro clients are available before editor/session siblings.
   Editor projection, undo and comment-gate parity remain pending integration;
   never claim a skipped editor check establishes an editor safety property.
+- Preserve desired front-door grants across old-connection AccessChanged events;
+  track effective access separately in finals and coverage.
 - Use immutable issued token claims through delayed dials. Send RouterSubscribed
   before upstream frames, record the connect callback before pumping queued inputs,
   and discard stale socket generations and route epochs. Router parity uses real
@@ -72,6 +75,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   Real browser database identity/async Web Lock conformance belongs to S8 §9.2.
 - `cargo clippy -p sync_sim --all-targets -- -D warnings`
 - `just check`, `cargo x deps --check`
+- Count reached paths from completed facts; requested faults alone cannot satisfy a
+  generator coverage floor. Preserve actual fragment counts across network delivery.
 - Same seed/script must yield byte-identical canonical event logs.
 - `SIM_SEED=197 cargo test -p sync_sim --test replay -- --nocapture` runs the
   explicit replay story; only this CLI test host reads SIM_SEED. Use Outcome::replay

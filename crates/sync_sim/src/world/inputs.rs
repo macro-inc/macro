@@ -261,7 +261,14 @@ impl Sim {
             && !self.net.partitions.contains(&key.0)
             && !self.net.offline.contains(&key.0);
         if !valid {
-            self.frame_fact(&key, direction, delivery.kind, &delivery.packet, "Lost");
+            self.frame_fact(
+                &key,
+                direction,
+                delivery.kind,
+                &delivery.packet,
+                "Lost",
+                delivery.frames,
+            );
             return Ok(());
         }
         self.frame_fact(
@@ -274,6 +281,7 @@ impl Sim {
             } else {
                 "Delivered"
             },
+            delivery.frames,
         );
         if let Some(profile) = self.router_profile(&key) {
             return self.router_deliver(&profile, key, direction, delivery);
