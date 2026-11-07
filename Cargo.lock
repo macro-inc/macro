@@ -11806,6 +11806,7 @@ name = "lexical_rich_nodes"
 version = "0.1.0"
 dependencies = [
  "lexical_model",
+ "phf 0.13.1",
  "regress",
  "serde",
  "serde_json",

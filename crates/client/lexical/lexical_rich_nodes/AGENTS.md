@@ -7,6 +7,7 @@ text-entity, list and code-node behavior. DOM events, clipboard access and layou
 
 ## Boundaries
 
+- `code::line`, `code::plain` and `code::language` provide UTF-16 line navigation, LF/tab splitting and the ordered language catalog.
 - `code` keeps stored highlight nodes distinct, disables formatting and never tokenizes; new code content uses plain text.
 - Depends on `lexical_model` and the patched `regress`; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
