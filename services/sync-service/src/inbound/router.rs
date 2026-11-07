@@ -1,4 +1,5 @@
-//! HTTP routing and route-specific access requirements for sessions.
+//! HTTP routing and request serialization. CS-61: the futures mutex guard
+//! remains held across the request gate and complete routed callback.
 #![expect(
     clippy::await_holding_refcell_ref,
     reason = "single-threaded DO; the guard is the barrier"
@@ -29,7 +30,7 @@ use super::{
         AdminAccess, EditAccess, InternalAccess, SignedDocumentAccess, SocketAccess, SurfaceAccess,
         ViewAccess,
     },
-    durable_object::SyncSession,
+    durable_object::HttpHandlers,
 };
 use crate::secrets::Secrets;
 
@@ -37,9 +38,7 @@ use crate::secrets::Secrets;
 /// bounds require Send/Sync. Secrets are extracted once per request.
 #[derive(Clone)]
 pub struct RouterState {
-    pub session: SendWrapper<Rc<RefCell<OwnedMutexGuard<Room<WorkerPorts>>>>>,
-    pub runtime: SendWrapper<Rc<worker::State>>,
-    pub env: SendWrapper<worker::Env>,
+    pub room: SendWrapper<Rc<RefCell<OwnedMutexGuard<Room<WorkerPorts>>>>>,
     pub secrets: Secrets,
 }
 
@@ -60,11 +59,7 @@ impl IntoResponse for AppError {
 
 pub type HandlerResult = Result<Response, AppError>;
 
-pub fn document_router(
-    room: OwnedMutexGuard<Room<WorkerPorts>>,
-    runtime: Rc<worker::State>,
-    env: worker::Env,
-) -> Router {
+pub fn document_router(room: OwnedMutexGuard<Room<WorkerPorts>>, env: worker::Env) -> Router {
     let secrets = Secrets::from(&env);
     Router::new()
         .route("/document/{document_id}/connect", get(connect))
@@ -114,17 +109,15 @@ pub fn document_router(
         .route("/surface/{surface_id}/verify", post(surface_manage))
         .route("/surface/{surface_id}/activate", post(surface_manage))
         .with_state(RouterState {
-            session: SendWrapper::new(Rc::new(RefCell::new(room))),
-            runtime: SendWrapper::new(runtime),
-            env: SendWrapper::new(env),
+            room: SendWrapper::new(Rc::new(RefCell::new(room))),
             secrets,
         })
 }
 
 #[worker::send]
 async fn connect(State(state): State<RouterState>, access: SocketAccess) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .connect(access.claims, &access.document_id)
         .await?
@@ -141,8 +134,8 @@ pub(crate) async fn exists(
     State(state): State<RouterState>,
     Path(id): Path<String>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.exists_handler(&id).await?.into())
 }
 
@@ -157,8 +150,8 @@ pub(crate) async fn peer(
     State(state): State<RouterState>,
     Path((id, peer)): Path<(String, String)>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.peer_handler(&id, Some(&peer)).await?.into())
 }
 
@@ -172,8 +165,8 @@ pub(crate) async fn wakeup(
     State(state): State<RouterState>,
     Path(id): Path<String>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.wakeup(&id).await?.into())
 }
 
@@ -188,8 +181,8 @@ pub(crate) async fn metadata(
     State(state): State<RouterState>,
     access: ViewAccess,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.metadata_handler(&access.document_id).await?.into())
 }
 
@@ -206,8 +199,8 @@ pub(crate) async fn blame(
     _: ViewAccess,
     Path((_, node)): Path<(String, String)>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.blame_handler(Some(&node)).await?.into())
 }
 
@@ -219,8 +212,8 @@ pub(crate) async fn blame(
 ))]
 #[worker::send]
 pub(crate) async fn raw(State(state): State<RouterState>, access: ViewAccess) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.raw_handler(&access.document_id).await?.into())
 }
 
@@ -237,8 +230,8 @@ pub(crate) async fn snapshot(
     access: ViewAccess,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .snapshot_handler(worker::Request::try_from(req)?, &access.document_id)
         .await?
@@ -261,8 +254,8 @@ pub(crate) async fn active_peers(
     _: ViewAccess,
     Query(params): Query<HashMap<String, String>>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     let include_ai = !matches!(
         params.get("include_ai").map(String::as_str),
         Some("false" | "0")
@@ -283,8 +276,8 @@ pub(crate) async fn initialize(
     access: EditAccess,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .initialize_handler(worker::Request::try_from(req)?, &access.document_id)
         .await?
@@ -303,8 +296,8 @@ pub(crate) async fn document_state(
     access: SignedDocumentAccess,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .document_handler(
             worker::Request::try_from(req)?,
@@ -330,8 +323,8 @@ pub(crate) async fn document_update(
     access: SignedDocumentAccess,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .document_handler(
             worker::Request::try_from(req)?,
@@ -356,15 +349,15 @@ pub(crate) async fn delete_document(
     _: InternalAccess,
     Path(id): Path<String>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.delete_handler(&id).await?.into())
 }
 
 #[worker::send]
 async fn dump_operations(State(state): State<RouterState>, access: AdminAccess) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.dump_operations(&access.document_id).await?.into())
 }
 
@@ -374,8 +367,8 @@ async fn debug_get(
     _: AdminAccess,
     Path((_, key)): Path<(String, String)>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.debug_get(&key).await?.into())
 }
 
@@ -385,8 +378,8 @@ async fn debug_list(
     _: AdminAccess,
     Path((_, prefix)): Path<(String, String)>,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session.debug_list(&prefix).await?.into())
 }
 
@@ -402,8 +395,8 @@ async fn surface_connect(
     access: SurfaceAccess<true>,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .surface_handler(worker::Request::try_from(req)?, Some(access.claims))
         .await?
@@ -416,8 +409,8 @@ async fn surface_read(
     access: SurfaceAccess<false>,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .surface_handler(worker::Request::try_from(req)?, Some(access.claims))
         .await?
@@ -430,8 +423,8 @@ async fn surface_manage(
     _: InternalAccess,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .surface_handler(worker::Request::try_from(req)?, None)
         .await?
@@ -445,8 +438,8 @@ async fn source_migration(
     Path((id, operation)): Path<(String, String)>,
     req: Request,
 ) -> HandlerResult {
-    let mut guard = state.session.borrow_mut();
-    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    let mut guard = state.room.borrow_mut();
+    let mut session = HttpHandlers::new(&mut guard);
     Ok(session
         .source_migration_handler(worker::Request::try_from(req)?, &id, &operation)
         .await?
@@ -456,12 +449,11 @@ async fn source_migration(
 /// Dispatch with the same owned guard used for the request gate.
 pub(crate) async fn dispatch(
     room: OwnedMutexGuard<Room<WorkerPorts>>,
-    runtime: Rc<worker::State>,
     env: worker::Env,
     req: worker::Request,
 ) -> worker::Result<worker::Response> {
     use tower_service::Service;
-    let mut router = document_router(room, runtime, env);
+    let mut router = document_router(room, env);
     let response = router.call(worker::HttpRequest::try_from(req)?).await;
     worker::Response::try_from(
         response.unwrap_or_else(|error: std::convert::Infallible| match error {}),

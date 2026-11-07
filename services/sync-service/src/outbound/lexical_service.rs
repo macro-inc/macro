@@ -1,10 +1,10 @@
 use serde::Deserialize;
+use sync_server_core::domain::state::RootChange;
 use worker::{Env, Fetch, Method, Request, RequestInit};
 
 use crate::{
     constants::header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY,
     error::ResultExt,
-    state::RootChange,
     timeout::{DEFAULT_TIMEOUT_MS, timeout},
 };
 

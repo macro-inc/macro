@@ -146,7 +146,7 @@ test('H8 loads the snapshot and replays pending operations', async () => {
   expect(await content(id)).toBe('pending first then second');
 });
 
-test('H9 preserves the exists reset and surviving applied-key quirk', async () => {
+test('H9 keeps applied keys across exists and compacts them', async () => {
   const id = 'hibernate-h9';
   const user = await createTestUser(mf, id);
   user.makeChange('survives replay');
@@ -161,7 +161,7 @@ test('H9 preserves the exists reset and surviving applied-key quirk', async () =
   const compacted = await target.fetch('http://sync-test/__sync_test_alarm');
   expect(await compacted.text()).toBe('ok');
   const dump = await (await target.fetch('http://sync-test/__sync_test_dump')).json() as { kv: [string, unknown][] };
-  expect(dump.kv.some(([key]) => key.startsWith('o/'))).toBe(true);
+  expect(dump.kv.some(([key]) => key.startsWith('o/'))).toBe(false);
   expect(await content(id)).toBe('survives replay after restore');
 });
 

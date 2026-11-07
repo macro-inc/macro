@@ -91,10 +91,12 @@ struct State {
     faults: FaultSchedule,
     crashed: bool,
     sockets: Vec<WebSocketId>,
+    enumeration: VecDeque<Vec<WebSocketId>>,
     closing: BTreeSet<WebSocketId>,
     tags: BTreeMap<WebSocketId, Vec<String>>,
     now: SimNow,
     clocks: VecDeque<(String, u128)>,
+    presence_clocks: VecDeque<i64>,
     entropy: VecDeque<uuid_types::Uuid>,
     next_uuid: u128,
     verdicts: VecDeque<Result<bool, SimError>>,
@@ -165,6 +167,14 @@ impl SimPorts {
         let mut s = self.0.borrow_mut();
         s.now = now;
         s.busy_for = Duration::ZERO;
+    }
+    /// Queue runtime enumeration order; membership is still checked against live sockets.
+    pub fn seed_enumeration(&self, lists: impl IntoIterator<Item = Vec<WebSocketId>>) {
+        self.0.borrow_mut().enumeration = lists.into_iter().collect();
+    }
+    /// Supply previously unobservable local-delete timestamps from C0 wire data.
+    pub fn seed_presence_clocks(&self, values: impl IntoIterator<Item = i64>) {
+        self.0.borrow_mut().presence_clocks = values.into_iter().collect();
     }
     /// Queue exact clock readings, in port-call order, for native replay.
     pub fn seed_clocks(&self, values: impl IntoIterator<Item = (String, u128)>) {
@@ -244,6 +254,27 @@ impl SimPorts {
     pub fn runtime_closes(&self, socket: &WebSocketId) {
         self.0.borrow_mut().sockets.retain(|item| item != socket);
     }
+    /// The runtime consumes the current alarm before invoking its callback.
+    pub fn fire_alarm(&self) {
+        let mut s = self.0.borrow_mut();
+        s.data.alarm = None;
+        s.durable.alarm = None;
+    }
+    /// Inspect the durable wakeup deadline without a port call.
+    pub fn alarm_dump(&self) -> Option<i64> {
+        self.0.borrow().data.alarm.map(|time| time.0)
+    }
+    /// Inspect attribution tables without emitting query effects.
+    pub fn directory_dump(&self) -> Value {
+        let s = self.0.borrow();
+        json!({
+            "peer_user_map": s.data.peers.iter().map(|((document, peer), (user, actor))| json!({"document_id":document,"peer_id":peer,"user_id":user,"actor":actor})).collect::<Vec<_>>(),
+            "blame": s.data.blame.iter().map(|((document,node),(peer,time))|json!({"document_id":document,"node_id":node,"peer_id":peer.to_string(),"timestamp_ms":time})).collect::<Vec<_>>()
+        })
+    }
+    pub(crate) fn transport_effect(&self, effect: Effect) {
+        self.0.borrow_mut().effects.push(effect);
+    }
     /// Drain the ordered port log.
     pub fn take_effects(&self) -> Vec<Effect> {
         std::mem::take(&mut self.0.borrow_mut().effects)
@@ -255,6 +286,10 @@ impl SimPorts {
     /// Read the logical structured-clone store without causing a port call.
     pub fn storage_dump(&self) -> BTreeMap<String, Value> {
         self.0.borrow().data.values.clone()
+    }
+    /// Inspect logical snapshot bytes without emitting a simulated port call.
+    pub fn snapshot_dump(&self) -> BTreeMap<String, Vec<u8>> {
+        self.0.borrow().data.snapshots.clone()
     }
     async fn enter(&self, operation: &str, value: Value) -> Result<(), SimError> {
         let result = self.0.borrow_mut().call(operation, value);
@@ -286,7 +321,14 @@ impl SimPorts {
         if s.crashed {
             return fallback(&s);
         }
-        let value = match s.clocks.pop_front() {
+        // C0 did not observe Loro's internal clock. Only presence may use the
+        // callback's explicit simulated time when an older fixture has no read.
+        let seeded = if kind == "presence" && s.clocks.front().is_some_and(|(k, _)| k != kind) {
+            None
+        } else {
+            s.clocks.pop_front()
+        };
+        let value = match seeded {
             Some((expected, value)) => {
                 assert_eq!(expected, kind, "clock-read order mismatch");
                 value
@@ -307,10 +349,23 @@ impl Clock for SimPorts {
         )
     }
     fn unix_time(&self) -> UnixMillis {
-        UnixMillis(self.clock("unix_ms", |s| {
+        let presence = self.0.borrow_mut().presence_clocks.pop_front();
+        if let Some(now) = presence {
+            self.0.borrow_mut().effects.push(Effect {
+                operation: "clock".into(),
+                value: json!({"kind":"presence","value":now.to_string()}),
+            });
+            return UnixMillis(now);
+        }
+        UnixMillis(self.clock("presence", |s| {
             (s.now.unix_ms
                 + i64::try_from(s.busy_for.as_millis()).expect("simulation latency fits"))
                 as u128
+        }) as i64)
+    }
+    fn unix_time_for(&self, purpose: WallClock) -> UnixMillis {
+        UnixMillis(self.clock(purpose.tag(), |s| {
+            (s.now.unix_ms + s.busy_for.as_millis() as i64) as u128
         }) as i64)
     }
     fn unix_nanos(&self) -> u128 {
@@ -352,6 +407,16 @@ impl Connections for SimPorts {
         if s.crashed {
             return sockets;
         }
+        let sockets = if let Some(ordered) = s.enumeration.pop_front() {
+            assert_eq!(
+                ordered.iter().collect::<BTreeSet<_>>(),
+                sockets.iter().collect::<BTreeSet<_>>(),
+                "runtime socket membership differs"
+            );
+            ordered
+        } else {
+            sockets
+        };
         s.effects.push(Effect {
             operation: "connections.all".into(),
             value: json!(sockets.iter().map(WebSocketId::as_str).collect::<Vec<_>>()),
@@ -581,6 +646,11 @@ impl RoomStorage for SimPorts {
 }
 impl SnapshotStore for SimPorts {
     type Error = SimError;
+    fn prepare(&self, key: &SessionKey) -> Result<(), SimError> {
+        self.0
+            .borrow_mut()
+            .call("snapshot.prepare", json!(key.as_str()))
+    }
     async fn has(&self, key: &SessionKey) -> Result<bool, SimError> {
         self.enter("snapshot.has", json!(key.as_str())).await?;
         Ok(self.0.borrow().data.snapshots.contains_key(key.as_str()))
@@ -618,20 +688,18 @@ impl SnapshotStore for SimPorts {
         &self,
         operation: uuid_types::Uuid,
     ) -> Result<Vec<u8>, SnapshotReadError<SimError>> {
-        self.get(&SessionKey::new(format!("migration-export:{operation}")))
-            .await
+        let key = SessionKey::new(format!("migration-export:{operation}"));
+        self.prepare(&key).map_err(SnapshotReadError::Storage)?;
+        self.get(&key).await
     }
     async fn put_export(
         &self,
         operation: uuid_types::Uuid,
         snapshot: &[u8],
     ) -> Result<(), SimError> {
-        SnapshotStore::put(
-            self,
-            &SessionKey::new(format!("migration-export:{operation}")),
-            snapshot,
-        )
-        .await
+        let key = SessionKey::new(format!("migration-export:{operation}"));
+        self.prepare(&key)?;
+        SnapshotStore::put(self, &key, snapshot).await
     }
 }
 impl AlarmScheduler for SimPorts {
@@ -641,12 +709,13 @@ impl AlarmScheduler for SimPorts {
         Ok(self.0.borrow().data.alarm)
     }
     async fn schedule_in(&self, delay: Duration) -> Result<(), SimError> {
+        let now = self.clock("alarm_set_ms", |s| {
+            (s.now.unix_ms + s.busy_for.as_millis() as i64) as u128
+        }) as i64;
         self.enter("alarm.set", json!({"delay_ms":delay.as_millis()}))
             .await?;
         let mut s = self.0.borrow_mut();
-        s.data.alarm = Some(UnixMillis(
-            s.now.unix_ms + (s.busy_for + delay).as_millis() as i64,
-        ));
+        s.data.alarm = Some(UnixMillis(now + delay.as_millis() as i64));
         s.write();
         Ok(())
     }
@@ -689,6 +758,9 @@ impl PeerDirectory for SimPorts {
         actor: Option<&str>,
         peers: &[PeerId],
     ) -> Result<(), SimError> {
+        if peers.is_empty() {
+            return Ok(());
+        }
         self.enter("peers.map_unowned",json!({"document":document.as_str(),"user":user,"actor":actor,"peers":peers.iter().map(|p|p.0.to_string()).collect::<Vec<_>>()})).await?;
         let mut s = self.0.borrow_mut();
         for peer in peers {
@@ -800,6 +872,7 @@ impl BackgroundEffects for SimPorts {
             return;
         }
         let value = match publication {
+            DocumentPublication::Noop => json!({"noop":true}),
             DocumentPublication::Snapshot {
                 document,
                 snapshot,

@@ -37,10 +37,6 @@ impl DocumentKey {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
-    /// The underlying session identity.
-    pub fn session_key(&self) -> &SessionKey {
-        &self.0
-    }
 }
 
 /// An operation-log ID without its adapter-owned storage namespace.
@@ -112,3 +108,6 @@ impl std::borrow::Borrow<u64> for PeerId {
         &self.0
     }
 }
+
+/// Attribution used for document writes without a user identity.
+pub const SYSTEM_AUTHOR_ID: &str = "system";

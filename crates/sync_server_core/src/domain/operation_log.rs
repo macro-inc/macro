@@ -3,12 +3,16 @@ use super::{
     document::DocumentAttribution,
     ports::{Clock, RoomStorage, SnapshotReadError, SnapshotStore},
     state::{DocumentState, ImportedUpdate},
-    state_error::StateError,
+    state_error::{ResultExt, StateError},
     types::{OperationId, SessionKey},
 };
 use loro::VersionVector;
 use macro_sync_service_jwt::session::SessionKind;
-use std::{collections::BTreeSet, error::Error, future::Future};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    error::Error,
+    future::Future,
+};
 use tracing::{error, trace, warn};
 
 /// Failure while updating the operation log.
@@ -63,21 +67,23 @@ pub struct OperationLog {
     kind: SessionKind,
     ids: OrderedIds,
     applied: BTreeSet<OperationId>,
+    unresolved: BTreeMap<OperationId, VersionVector>,
 }
 impl OperationLog {
-    /// Start a fresh log, including the legacy exists/initialize reset behavior.
+    /// Start a fresh log for a session identity.
     pub fn new(key: SessionKey, kind: SessionKind) -> Self {
         Self {
             key,
             kind,
             ids: OrderedIds::default(),
             applied: BTreeSet::new(),
+            unresolved: BTreeMap::new(),
         }
     }
 
-    /// Identity of the document or surface whose operations this log owns.
-    pub fn key(&self) -> &SessionKey {
-        &self.key
+    /// Whether this activation log belongs to the requested session.
+    pub(crate) fn is_for(&self, key: &SessionKey) -> bool {
+        self.key == *key
     }
 
     /// Import synchronously, then persist pending bytes, archive and attribution
@@ -91,15 +97,29 @@ impl OperationLog {
         clock: &C,
     ) -> impl Future<Output = Result<ImportedUpdate, OperationError<S::Error>>> + use<'a, S, C>
     {
-        let id = self.ids.next(clock.unix_nanos());
+        let nanos = clock.unix_nanos();
+        // A cold replay may retain a pending key at this exact timestamp.
+        // Never overwrite it before its missing dependencies become durable.
+        let id = loop {
+            let candidate = self.ids.next(nanos);
+            if !self.applied.contains(&candidate) && !self.unresolved.contains_key(&candidate) {
+                break candidate;
+            }
+        };
         let imported = document.import_with_clock(update, || clock.monotonic());
+        let required = loro::LoroDoc::decode_import_blob_meta(update, false)
+            .context("failed to read update metadata")
+            .map(|meta| meta.partial_end_vv);
+        let known = document.loro_doc.oplog_vv();
         async move {
             let imported = imported.map_err(OperationError::State)?;
+            let required = required.map_err(OperationError::State)?;
             storage
                 .put_pending_operation(&id, update)
                 .await
                 .map_err(OperationError::Storage)?;
-            self.applied.insert(id.clone());
+            self.unresolved.insert(id.clone(), required);
+            self.mark_resolved(&known);
             storage
                 .put_archived_operation(&id, update)
                 .await
@@ -114,7 +134,21 @@ impl OperationLog {
         }
     }
 
-    /// Replay every readable pending entry together, retaining all applied IDs.
+    fn mark_resolved(&mut self, known: &VersionVector) {
+        self.unresolved.retain(|id, required| {
+            if matches!(
+                known.partial_cmp(required),
+                Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+            ) {
+                self.applied.insert(id.clone());
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    /// Replay readable entries together; compact only entries covered by the oplog.
     pub async fn replay_pending<S: RoomStorage>(
         &mut self,
         storage: &S,
@@ -147,7 +181,14 @@ impl OperationLog {
         document
             .replay_pending_operations(&updates)
             .map_err(OperationError::Replay)?;
-        self.applied.extend(ids);
+        for (id, update) in ids.into_iter().zip(&updates) {
+            let required = loro::LoroDoc::decode_import_blob_meta(update, false)
+                .context("failed to read pending update metadata")
+                .map_err(OperationError::Replay)?
+                .partial_end_vv;
+            self.unresolved.insert(id, required);
+        }
+        self.mark_resolved(&document.loro_doc.oplog_vv());
         Ok(())
     }
 
