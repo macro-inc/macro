@@ -9,6 +9,9 @@ use crm::domain::{
     association::{CrmAssociation, CrmRecordAssociation},
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
+    email_privacy::{
+        EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyService, EmailPrivacySettings,
+    },
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
         CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
@@ -27,6 +30,31 @@ const CHANNEL: Uuid = Uuid::from_u128(0xc4a);
 /// Resolves the company to its two contacts; any other record is not visible.
 #[derive(Clone)]
 struct FakeCrm;
+
+impl EmailPrivacyService for FakeCrm {
+    async fn contribution_mailbox(
+        &self,
+        _: Uuid,
+        _: &str,
+    ) -> Result<Option<EmailContributionMailbox>, CrmError> {
+        panic!("unexpected contribution_mailbox call")
+    }
+
+    async fn email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailPrivacySettings, CrmError> {
+        panic!("unexpected email_privacy call")
+    }
+
+    async fn change_email_privacy(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+        _: EmailPrivacyChange,
+    ) -> Result<EmailPrivacySettings, CrmError> {
+        panic!("unexpected change_email_privacy call")
+    }
+}
 
 impl CrmService for FakeCrm {
     async fn resolve_association(
