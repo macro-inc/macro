@@ -1,0 +1,12 @@
+crates/github crates/integrations/github
+crates/github_pull_requests crates/integrations/github_pull_requests
+crates/git_patch crates/integrations/git_patch
+crates/webhook crates/integrations/webhook
+crates/webhook_signature crates/integrations/webhook_signature
+crates/import crates/integrations/import
+crates/import_jira crates/integrations/import_jira
+crates/import_linear crates/integrations/import_linear
+crates/import_notion crates/integrations/import_notion
+crates/import_tracker crates/integrations/import_tracker
+crates/granola_sync crates/integrations/granola_sync
+crates/unfurl crates/integrations/unfurl

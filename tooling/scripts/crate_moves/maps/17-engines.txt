@@ -1,0 +1,5 @@
+crates/docx_engine crates/engines/docx_engine
+crates/pptx_engine crates/engines/pptx_engine
+crates/psd_engine crates/engines/psd_engine
+crates/fig_engine crates/engines/fig_engine
+crates/ai_engine crates/engines/ai_engine

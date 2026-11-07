@@ -1,0 +1,6 @@
+crates/gmail_emulator crates/testing/gmail_emulator
+crates/integration_tests/local_e2e crates/testing/local_e2e
+crates/local_e2e_test_support crates/testing/local_e2e_test_support
+crates/outlook_emulator crates/testing/outlook_emulator
+crates/email_e2e crates/testing/email_e2e
+crates/model_emulator crates/testing/model_emulator
