@@ -10,8 +10,9 @@ pub fn copy_block_format_indent(
     if tx.element_data(dest)?.format != source.format {
         tx.element(dest)?.set_format(source.format)?;
     }
-    if tx.element_data(dest)?.indent != source.indent {
-        tx.set_indent(dest, source.indent)?;
+    let indent = tx.indent(src);
+    if tx.indent(dest) != indent {
+        tx.set_indent(dest, indent)?;
     }
     Ok(())
 }
