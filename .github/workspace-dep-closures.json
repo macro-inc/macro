@@ -5203,6 +5203,17 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "doc_sync_core": [
+      "crates/client/doc_sync_core",
+      "crates/cowlike",
+      "crates/document_id",
+      "crates/macro_user_id",
+      "crates/sync_doc_id",
+      "crates/sync_protocol"
+    ],
+    "document_id": [
+      "crates/document_id"
+    ],
     "document_storage_service": [
       "crates/access_requests",
       "crates/account_manager",
@@ -5422,6 +5433,7 @@
       "crates/sqs_worker",
       "crates/static_file",
       "crates/static_file_service_client",
+      "crates/sync_protocol",
       "crates/sync_router",
       "crates/sync_service",
       "crates/sync_service_client",
@@ -5440,8 +5452,7 @@
       "crates/whatsapp_linked",
       "crates/work_feed",
       "crates/workspace-hack",
-      "services/document_storage_service",
-      "services/sync-service/bebop-schema"
+      "services/document_storage_service"
     ],
     "document_storage_service_client": [
       "crates/agent",
@@ -10247,6 +10258,9 @@
     "lexical_model": [
       "crates/client/lexical/lexical_model"
     ],
+    "lexical_node_id": [
+      "crates/lexical_node_id"
+    ],
     "lexical_rich_nodes": [
       "crates/client/lexical/lexical_model",
       "crates/client/lexical/lexical_rich_nodes"
@@ -14175,19 +14189,35 @@
       "crates/stream",
       "crates/workspace-hack"
     ],
+    "sync_doc_id": [
+      "crates/document_id",
+      "crates/sync_doc_id"
+    ],
+    "sync_protocol": [
+      "crates/sync_protocol"
+    ],
     "sync_router": [
+      "crates/sync_protocol",
       "crates/sync_router",
-      "crates/workspace-hack",
-      "services/sync-service/bebop-schema"
+      "crates/workspace-hack"
+    ],
+    "sync_server_core": [
+      "crates/macro_sync_service_jwt",
+      "crates/sync_protocol",
+      "crates/sync_server_core"
+    ],
+    "sync_server_sim": [
+      "crates/macro_sync_service_jwt",
+      "crates/sync_protocol",
+      "crates/sync_server_core",
+      "crates/sync_server_sim"
     ],
     "sync_service": [
       "crates/macro_sync_service_jwt",
+      "crates/sync_protocol",
+      "crates/sync_server_core",
       "crates/worker-rs-otel",
-      "services/sync-service",
-      "services/sync-service/bebop-schema"
-    ],
-    "sync_service_bebop_schema": [
-      "services/sync-service/bebop-schema"
+      "services/sync-service"
     ],
     "sync_service_client": [
       "crates/agent",
@@ -14240,6 +14270,18 @@
       "crates/remote_env_var",
       "crates/sync_service",
       "crates/workspace-hack"
+    ],
+    "sync_sim": [
+      "crates/client/doc_sync_core",
+      "crates/cowlike",
+      "crates/document_id",
+      "crates/macro_sync_service_jwt",
+      "crates/macro_user_id",
+      "crates/sync_doc_id",
+      "crates/sync_protocol",
+      "crates/sync_server_core",
+      "crates/sync_server_sim",
+      "crates/sync_sim"
     ],
     "system_properties": [
       "crates/cowlike",

@@ -1,5 +1,5 @@
 use super::*;
-use sync_service_bebop_schema::ToRouter;
+use sync_protocol::ToRouter;
 
 #[test]
 fn subscribe_round_trips() {

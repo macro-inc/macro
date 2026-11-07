@@ -8,6 +8,8 @@ free text.
 
 The optional Gitleaks pass conservatively excludes only entire staged files
 identical to the same path in an incoming parent; modified files stay scanned.
+Sync transcript JWT findings are accepted only after their staged signatures
+verify against the public local test key; all other secret rules still apply.
 
 Only humans should add `tooling/pii/exceptions` entries, unless they ask an
 agent to.
@@ -16,6 +18,9 @@ agent to.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -322,6 +327,43 @@ def unchanged_import(path: str, parents: list[str]) -> bool:
     return False
 
 
+def local_transcript_jwt(finding: dict, staged: dict[str, list[str]]) -> bool:
+    """Recognize only staged sync fixture tokens signed by the public test key."""
+    path = finding["File"]
+    if (finding["RuleID"] != "jwt" or finding.get("Tags")
+            or not re.fullmatch(r"crates/sync_server_sim/tests/transcripts/[^/]+/[^/]+\.jsonl", path)):
+        return False
+    line = finding["StartLine"]
+    if finding.get("EndLine") != line or line < 1:
+        return False
+    if path not in staged:
+        result = git("show", f":0:{path}")
+        result.check_returncode()
+        staged[path] = result.stdout.splitlines()
+    if line > len(staged[path]):
+        return False
+    tokens = re.findall(
+        r"(?<![A-Za-z0-9_-])ey[A-Za-z0-9_-]*\.[A-Za-z0-9_/\\-]*\.[A-Za-z0-9_/\\=-]*",
+        staged[path][line - 1],
+    )
+    if not tokens:
+        return False
+    for token in tokens:
+        header, payload, signature = token.split(".")
+        try:
+            decoded_header = json.loads(base64.b64decode(header + "=" * (-len(header) % 4), altchars=b"-_", validate=True))
+            decoded_payload = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4), altchars=b"-_", validate=True))
+        except (ValueError, UnicodeDecodeError):
+            return False
+        if not isinstance(decoded_header, dict) or decoded_header.get("alg") != "HS256" or not isinstance(decoded_payload, dict):
+            return False
+        digest = hmac.new(b"local", f"{header}.{payload}".encode(), hashlib.sha256).digest()
+        expected = base64.urlsafe_b64encode(digest).decode().rstrip("=")
+        if not hmac.compare_digest(signature, expected):
+            return False
+    return True
+
+
 def run_gitleaks() -> int:
     gitleaks = shutil.which("gitleaks")
     if not gitleaks:
@@ -329,8 +371,6 @@ def run_gitleaks() -> int:
     command = [gitleaks, "protect", "--staged", "--redact", "--no-banner"]
     try:
         parents = merge_parents()
-        if not parents:
-            return subprocess.run(command, cwd=ROOT, check=False).returncode
         with tempfile.TemporaryDirectory(prefix="macro-pii-") as directory:
             report_path = Path(directory) / "gitleaks.json"
             result = subprocess.run(
@@ -344,21 +384,28 @@ def run_gitleaks() -> int:
         if not isinstance(findings, list) or bool(findings) != (result.returncode == 42):
             raise ValueError("Invalid Gitleaks report")
         blocked = 0
+        local_tokens = 0
+        staged: dict[str, list[str]] = {}
         for finding in findings:
             if (not isinstance(finding, dict)
                     or not isinstance(finding.get("File"), str)
                     or not isinstance(finding.get("RuleID"), str)
                     or type(finding.get("StartLine")) is not int):
                 raise ValueError("Invalid Gitleaks finding")
-            if unchanged_import(finding["File"], parents):
+            if local_transcript_jwt(finding, staged):
+                local_tokens += 1
+                continue
+            if parents and unchanged_import(finding["File"], parents):
                 continue
             print(f'{finding["File"]}:{finding["StartLine"]}: {finding["RuleID"]} [redacted]', file=sys.stderr)
             blocked += 1
-        if not blocked and findings:
+        if local_tokens:
+            print(f"Verified {local_tokens} sync transcript JWTs against the public local test key.", file=sys.stderr)
+        if not blocked and len(findings) > local_tokens:
             print("Gitleaks findings are in unchanged files imported from a merge parent.", file=sys.stderr)
         return int(blocked != 0)
     except (OSError, ValueError, subprocess.CalledProcessError):
-        print("Gitleaks merge scan failed; commit remains blocked.", file=sys.stderr)
+        print("Gitleaks scan failed; commit remains blocked.", file=sys.stderr)
         return 2
 
 
