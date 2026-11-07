@@ -272,6 +272,9 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
 enum Ending {
     /// Its turn ended, well or not.
     Finished,
+    /// It handed back a routine that passes its check; whatever it does
+    /// next can't make the draft better, so it is stopped.
+    Checked,
     /// It ran past [`DRAFT_TIMEOUT`].
     TimedOut,
     /// It couldn't start or be followed.
@@ -293,6 +296,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         routine.draft.tool_calls = tracing::field::Empty,
         routine.draft.turns = tracing::field::Empty,
         routine.draft.status_reads = tracing::field::Empty,
+        routine.draft.ended = tracing::field::Empty,
         routine.draft.code_failing = tracing::field::Empty,
         routine.draft.steps = tracing::field::Empty,
         routine.draft.step = tracing::field::Empty,
@@ -395,11 +399,12 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         Ok(match (handed_back.check, ending) {
             (Some(check), _) => drafted(request, program, check, handed_back.created),
             (None, Ending::TimedOut) => failed(TIMED_OUT),
-            (None, Ending::Finished | Ending::Failed) => failed(request.failed()),
+            (None, Ending::Finished | Ending::Checked | Ending::Failed) => failed(request.failed()),
         })
     }
 
-    /// Open the hidden session, prompt it once and wait for its turn to end.
+    /// Open the hidden session, prompt it once and wait for its turn to end
+    /// or for a check that passes, whichever comes first.
     async fn run(
         &self,
         action: &RoutineSessionAction,
@@ -441,9 +446,16 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             span.record("routine.draft.status_reads", reads);
             match self.sessions.status(action.clone()).await {
                 Ok(RoutineActionStatus::Succeeded | RoutineActionStatus::Failed(_)) => {
+                    span.record("routine.draft.ended", "turn_ended");
                     return Ok(Ending::Finished);
                 }
-                Ok(RoutineActionStatus::Pending(_)) => failures = 0,
+                Ok(RoutineActionStatus::Pending(_)) => {
+                    failures = 0;
+                    if self.checked_clean(action).await {
+                        span.record("routine.draft.ended", "checked");
+                        return Ok(Ending::Checked);
+                    }
+                }
                 Err(error) => {
                     failures += 1;
                     if failures >= MAX_STATUS_FAILURES {
@@ -452,6 +464,14 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 }
             }
         }
+    }
+
+    /// Whether the session has handed back a routine that passes its check.
+    async fn checked_clean(&self, action: &RoutineSessionAction) -> bool {
+        self.hand_backs
+            .handed_back(action.session_id.as_uuid())
+            .await
+            .is_ok_and(|handed_back| handed_back.check.is_some_and(|check| check.ok))
     }
 
     /// Stop the session, delete it and forget the draft. Each part is tried

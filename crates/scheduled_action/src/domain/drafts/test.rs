@@ -556,8 +556,10 @@ async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     assert!(rows.drafts.lock().unwrap().is_empty());
 }
 
+/// The free model now and then keeps going after a clean check; the draft
+/// doesn't wait for it.
 #[tokio::test(start_paused = true)]
-async fn a_check_handed_back_before_the_time_runs_out_is_kept() {
+async fn a_draft_stops_waiting_once_a_check_passes() {
     let rows = Arc::new(Rows::default());
     let mut sessions = Sessions::new(
         &rows,
@@ -572,9 +574,41 @@ async fn a_check_handed_back_before_the_time_runs_out_is_kept() {
     sessions.hangs = true;
     let sessions = Arc::new(sessions);
 
+    let started = tokio::time::Instant::now();
     let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
 
     assert_eq!(drafted.name, "Bug tasks");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(sessions.cancelled.lock().unwrap().len(), 1);
+}
+
+/// A check that still fails isn't the end: the session goes on fixing it.
+#[tokio::test(start_paused = true)]
+async fn a_failing_check_keeps_the_draft_waiting_for_the_turn() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "bad")]),
+            ))]
+        }),
+    );
+    sessions.hangs = true;
+    let sessions = Arc::new(sessions);
+
+    let started = tokio::time::Instant::now();
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    // Its last check comes back with its problems once the time runs out.
+    assert!(started.elapsed() >= DRAFT_TIMEOUT);
+    assert_eq!(drafted.problems.len(), 1);
 }
 
 #[tokio::test]

@@ -51,7 +51,8 @@ each run.
   session, found from the request's code-mode invocation (`RequestSessions`),
   is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
   session and the drafter may run on different replicas. The drafter reads
-  the session's turn status until it ends (bounded by `DRAFT_TIMEOUT`), turns
+  the session's turn status until it ends or a check passes (bounded by
+  `DRAFT_TIMEOUT`), turns
   the last check into the draft, then stops and deletes the session and the
   row; `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
