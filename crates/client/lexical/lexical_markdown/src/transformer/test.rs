@@ -56,3 +56,19 @@ fn reusable_trigger_indexes_preserve_transformer_order() {
     assert_eq!(t.composition_end_triggers(), &[32, 96, 42, 95, 61, 126, 41]);
     assert_eq!(Transformers::default().composition_end_triggers(), &[32]);
 }
+#[test]
+fn complete_default_registry_has_upstream_order_and_registered_dependencies() -> Result<()> {
+    let mut builder =
+        lexical_rich_nodes::register_rich_text_nodes(Editor::builder(EditorMode::Headless));
+    builder = lexical_rich_nodes::list::register::register_list_nodes(builder);
+    builder = lexical_rich_nodes::code::register_code_nodes(builder);
+    builder = lexical_rich_nodes::link::transform::link_extension(builder);
+    let editor = builder.build().expect("editor");
+    let t = &*crate::builtin::TRANSFORMERS;
+    t.check_dependencies(&editor)?;
+    assert_eq!(t.element().len(), 4);
+    assert_eq!(t.multiline_element().len(), 1);
+    assert_eq!(t.text_format().len(), 9);
+    assert_eq!(t.text_match().len(), 1);
+    Ok(())
+}

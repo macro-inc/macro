@@ -76,3 +76,49 @@ fn checklist_is_opt_in_and_uppercase_x_preserves_upstream_check_rule() -> Result
     );
     Ok(())
 }
+#[test]
+fn ordered_list_start_outside_model_range_is_rejected_instead_of_truncated() -> Result<()> {
+    let t = Transformers::new(crate::builtin::element_transformers());
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let original = editor.state().clone();
+    let mut tx = editor.transaction();
+    assert!(matches!(
+        convert_from_markdown_string(
+            &mut tx,
+            "2147483648. item",
+            &t,
+            None,
+            &MarkdownOptions::default()
+        ),
+        Err(crate::Error::InvalidArgument(_))
+    ));
+    drop(tx);
+    assert!(editor.state().same_snapshot(&original));
+    Ok(())
+}
+/// upstream: list partial selection only includes selected items.
+#[test]
+fn list_partial_selection_excludes_other_items() -> Result<()> {
+    let t = Transformers::new(crate::builtin::element_transformers());
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = create_list_node(&mut tx, ListType::Bullet, 1)?;
+    let a = create_list_item_node(&mut tx, None)?;
+    let b = create_list_item_node(&mut tx, None)?;
+    let first = tx.create_text("Item 1")?;
+    let second = tx.create_text("Item 2")?;
+    tx.append(a, &[first.key()])?;
+    tx.append(b, &[second.key()])?;
+    tx.append(list, &[a.key(), b.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.text(second)?.select(Some(Utf16Offset::ZERO), None)?;
+    assert_eq!(
+        convert_selection_to_markdown_string(&tx, &t, tx.selection(), &MarkdownOptions::default())?,
+        "- Item 2"
+    );
+    Ok(())
+}

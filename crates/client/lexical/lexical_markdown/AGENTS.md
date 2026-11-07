@@ -10,6 +10,7 @@ No I/O, DOM, clipboard or application runtime.
 - `transformer.rs`: ordered callbacks and indexes.
 - `import.rs`, `import/`: block and recursive inline import.
 - `export.rs`: traversal and shared format stacks.
+- `builtin/`: standard block, code, list, link and inline format transformers.
 - `matcher.rs`: reuses rich-node Match/Matcher without a second regex wrapper.
 
 ## Boundaries
@@ -18,6 +19,7 @@ No I/O, DOM, clipboard or application runtime.
 - Keep offsets in UTF-16 and whitespace in the JavaScript set.
 - Preserve transformer order, explicit NotHandled and None export semantics.
 - Default list indentation is upstream 4; Macro callers explicitly pass 2.
+- Inventory every static RegexMatcher recursively under src in build.rs; regenerate the pinned Node 24 oracle when expressions change.
 - Shortcuts registration belongs to WP-23.
 
 ## Checks

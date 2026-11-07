@@ -65,10 +65,9 @@ fn replace_list(
         tx.remove(parent, false)?;
     } else {
         let start = if kind == ListType::Number {
-            m.get(2)
-                .and_then(|s| s.parse::<f64>().ok())
-                .map(|n| n as i32)
-                .unwrap_or(1)
+            m.get(2).unwrap_or("1").parse::<i32>().map_err(|_| {
+                crate::Error::InvalidArgument("ordered list start exceeds the model i32 range")
+            })?
         } else {
             1
         };

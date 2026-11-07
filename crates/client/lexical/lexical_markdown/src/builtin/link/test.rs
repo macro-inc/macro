@@ -58,3 +58,26 @@ fn unmatched_opening_bracket_stays_outside_an_imported_link() -> Result<()> {
     assert_eq!(tx.text_content(link), "text");
     Ok(())
 }
+/// upstream: partially selected link text keeps the link wrapper.
+#[test]
+fn partial_link_selection_keeps_link_attributes() -> Result<()> {
+    let t = Transformers::new(crate::builtin::text_match_transformers());
+    let mut editor =
+        lexical_rich_nodes::link::transform::link_extension(Editor::builder(EditorMode::Headless))
+            .build()
+            .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let link = create_link_node(&mut tx, "https://example.com", LinkAttributes::default())?;
+    let text = tx.create_text("click here")?;
+    tx.append(link, &[text.key()])?;
+    tx.append(p, &[link.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.text(text)?
+        .select(Some(Utf16Offset::ZERO), Some(Utf16Offset(5)))?;
+    assert_eq!(
+        convert_selection_to_markdown_string(&tx, &t, tx.selection(), &MarkdownOptions::default())?,
+        "[click](https://example.com)"
+    );
+    Ok(())
+}
