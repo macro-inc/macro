@@ -2296,6 +2296,7 @@ dependencies = [
  "chrono",
  "cowlike",
  "email",
+ "email_thread_id",
  "entity_access",
  "futures",
  "item_filters",
@@ -5059,6 +5060,7 @@ dependencies = [
  "databases",
  "databases_sql",
  "email",
+ "email_thread_id",
  "entity_access",
  "entity_mutation",
  "favorites",
@@ -7637,6 +7639,7 @@ dependencies = [
  "either",
  "email_api_client_core",
  "email_db_client",
+ "email_thread_id",
  "email_utils",
  "email_validator",
  "entity_access",
@@ -7922,6 +7925,7 @@ dependencies = [
  "email_api_client_outbound",
  "email_db_client",
  "email_service_url",
+ "email_thread_id",
  "email_utils",
  "entity_access",
  "entity_access_management",
@@ -8062,6 +8066,18 @@ dependencies = [
  "tokio",
  "tracing",
  "workspace-hack",
+]
+
+[[package]]
+name = "email_thread_id"
+version = "0.1.0"
+dependencies = [
+ "id_newtype",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -9711,6 +9727,7 @@ dependencies = [
  "async-graphql",
  "chrono",
  "email",
+ "email_thread_id",
  "email_utils",
  "entity_access",
  "futures",
@@ -9922,6 +9939,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "email",
+ "email_thread_id",
  "entity_access",
  "filter_ast",
  "futures",
@@ -19488,6 +19506,7 @@ dependencies = [
  "document_sub_type",
  "either",
  "email",
+ "email_thread_id",
  "entity_access",
  "favorites",
  "filter_ast",

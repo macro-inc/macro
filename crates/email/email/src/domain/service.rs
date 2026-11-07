@@ -31,6 +31,7 @@ use crate::domain::{
     },
 };
 use crm::domain::service::CrmService;
+use email_thread_id::EmailThreadId;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
 };
@@ -239,8 +240,9 @@ where
     async fn resolve_thread_read_id(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<Uuid, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.resolve_thread_read_id_impl(macro_id, thread_id).await
     }
 
@@ -299,8 +301,9 @@ where
     async fn get_owned_link_for_thread(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        thread_id: uuid::Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<Option<crate::domain::models::Link>, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.email_repo
             .owned_link_for_thread(thread_id, macro_id)
             .await
@@ -387,10 +390,11 @@ where
     async fn update_thread_labels(
         &self,
         link: &Link,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         label_id: Uuid,
         add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.update_thread_labels_impl(link, thread_id, label_id, add)
             .await
     }
@@ -415,9 +419,10 @@ where
     async fn change_thread_mailbox_state(
         &self,
         macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         action: crate::domain::models::mailbox_action::MailboxAction,
     ) -> Result<usize, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.change_thread_mailbox_state_impl(macro_id, thread_id, action)
             .await
     }
@@ -425,8 +430,9 @@ where
     async fn mark_thread_seen(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<(), EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.mark_thread_seen_impl(macro_id, thread_id)
             .await
             .map(|_| ())
@@ -435,9 +441,10 @@ where
     async fn set_thread_archived(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         archived: bool,
     ) -> Result<(), EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.set_thread_archived_impl(macro_id, thread_id, archived)
             .await
             .map(|_| ())
@@ -456,8 +463,9 @@ where
     async fn mark_thread_unread(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<(), EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.mark_thread_unread_impl(macro_id, thread_id)
             .await
             .map(|_| ())
@@ -466,10 +474,11 @@ where
     async fn update_thread_labels_for_user(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         label_id: Uuid,
         add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.update_thread_labels_for_user_impl(macro_id, thread_id, label_id, add)
             .await
     }

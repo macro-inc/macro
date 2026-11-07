@@ -92,6 +92,7 @@ agent_correlation = { workspace = true, features = ["http", "postgres"] }
 calendar_events = { workspace = true, features = ["google", "inbound", "postgres", "schema"] }
 anyhow = { workspace = true }
 authentication_service_client = { workspace = true }
+email_thread_id = { workspace = true }
 macro_aws_config = { workspace = true, features = ["s3", "sqs"] }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }

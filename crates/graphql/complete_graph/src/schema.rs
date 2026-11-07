@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod test;
 
+use email_thread_id::EmailThreadId;
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::edges::GraphqlAgentSessionLogEntry;
@@ -976,7 +977,7 @@ where
         let state = ctx.data::<St>()?;
         let service = EmailRouterState::<E>::from_ref(state).service();
         let thread_id = service
-            .resolve_thread_read_id(self.user_id.clone(), thread_id)
+            .resolve_thread_read_id(self.user_id.clone(), EmailThreadId::from_uuid(thread_id))
             .await
             .map_err(|error| {
                 tracing::error!(error = ?error, %thread_id, user_id = %self.user_id, "failed to resolve email thread");

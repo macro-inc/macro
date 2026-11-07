@@ -204,6 +204,7 @@ members = [
   "crates/types/chat_id",
   "crates/types/chat_message",
   "crates/types/cowlike",
+  "crates/types/email_thread_id",
   "crates/types/entity_basic_types",
   "crates/types/harness_id",
   "crates/types/harness_token",
@@ -717,6 +718,7 @@ email_db_client = { path = "crates/email/email_db_client" }
 email_formatting = { path = "crates/email/email_formatting" }
 email_service_client = { path = "crates/clients/email_service_client" }
 email_service_url = { path = "crates/platform/service_urls/email_service_url" }
+email_thread_id = { path = "crates/types/email_thread_id" }
 email_utils = { path = "crates/email/email_utils" }
 email_validator = { path = "crates/email/email_validator" }
 embedding = { path = "crates/ai/embedding" }

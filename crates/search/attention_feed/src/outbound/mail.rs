@@ -1,5 +1,6 @@
 //! Email archive through the email domain service.
 
+use email_thread_id::EmailThreadId;
 use std::sync::Arc;
 
 use email::domain::ports::EmailService;
@@ -32,7 +33,7 @@ where
         archived: bool,
     ) -> Result<(), Report> {
         self.email
-            .set_thread_archived(user, thread_id, archived)
+            .set_thread_archived(user, EmailThreadId::from_uuid(thread_id), archived)
             .await
             .map_err(|error| rootcause::report!("failed to set thread archive state: {error}"))
     }

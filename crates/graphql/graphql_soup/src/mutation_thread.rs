@@ -1,5 +1,6 @@
 //! Read-after-write email snapshots, separate from replica-backed Soup lists.
 
+use email_thread_id::EmailThreadId;
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use email::domain::{
@@ -71,7 +72,7 @@ impl<E: EmailService> EmailMutationThreadReader for PrimaryEmailReader<E> {
         // an arbitrary thread by ID through a repository at this boundary.
         let Some(link) = self
             .0
-            .get_owned_link_for_thread(user_id.clone(), thread_id)
+            .get_owned_link_for_thread(user_id.clone(), EmailThreadId::from_uuid(thread_id))
             .await?
         else {
             return Ok(None);

@@ -9,6 +9,7 @@ anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
+email_thread_id = { workspace = true }
 futures = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }

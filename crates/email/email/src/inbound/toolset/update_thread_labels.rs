@@ -5,6 +5,7 @@ use crate::domain::ports::{EmailService, GmailTokenProvider};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
+use email_thread_id::EmailThreadId;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -164,7 +165,7 @@ where
             .service
             .get_owned_link_for_thread(
                 MacroUserIdStr((*request_context.user_id).clone()),
-                self.thread_id,
+                EmailThreadId::from_uuid(self.thread_id),
             )
             .await
             .map_err(|e| ToolCallError {
@@ -187,7 +188,7 @@ where
                 .service
                 .change_thread_mailbox_state(
                     MacroUserIdStr((*request_context.user_id).clone()),
-                    self.thread_id,
+                    EmailThreadId::from_uuid(self.thread_id),
                     action,
                 )
                 .await
@@ -227,7 +228,12 @@ where
 
         let result = service_context
             .service
-            .update_thread_labels(&link, self.thread_id, label_id, self.add)
+            .update_thread_labels(
+                &link,
+                EmailThreadId::from_uuid(self.thread_id),
+                label_id,
+                self.add,
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to update thread labels: {e}"),
