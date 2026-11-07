@@ -243,6 +243,8 @@ pub async fn process_message(
                 .duration_since(web_time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as i64)
                 .unwrap_or(0);
+            #[cfg(feature = "transcript")]
+            crate::transcript::clock("blame_ms", now_ms);
             for update in &updates {
                 let imported = session_storage
                     .append_pending_operation(update, document_state)

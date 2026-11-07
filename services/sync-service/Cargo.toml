@@ -11,6 +11,8 @@ default = ["bebop-owned-all", "do-sqlite-snapshot-storage", "search-service"]
 no-network-deps = []
 # Test-only persistence fault injection; never enable in deployed workers.
 migration-test-hooks = []
+# Test-only ordered boundary capture; never enable in deployed workers.
+transcript = []
 do-sqlite-snapshot-storage = []
 kv-snapshot-storage = []
 r2-snapshot-storage = []

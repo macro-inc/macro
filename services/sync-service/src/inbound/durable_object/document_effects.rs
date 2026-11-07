@@ -83,10 +83,10 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
         let editors = take_editors(&self.session.pending_editors);
         let env = self.session.env.clone();
         let document_id = self.document_id.to_owned();
-        self.session.state.wait_until(async move {
+        self.session.state.wait_until(crate::background(async move {
             report_new_doc_state(&document_id, &snapshot, &env, editors).await;
             report_interaction(&document_id, &env, InteractionReason::Edited).await;
-        });
+        }));
         Ok(())
     }
 

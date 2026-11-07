@@ -262,6 +262,8 @@ impl OrederedIds {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_context("Time since unix epoch was negative...?")
             .as_nanos();
+        #[cfg(feature = "transcript")]
+        crate::transcript::clock("op_id_nanos", ts);
         let i = self.counter.fetch_add(1, Self::ORDERING);
         format!("{ts:016x}.{i:08x}")
     }
