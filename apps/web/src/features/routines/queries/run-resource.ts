@@ -7,8 +7,10 @@ import type {
   HistoryRecord,
   HistoryRun,
   HistorySkip,
+  HistoryStart,
   HistoryStep,
 } from '../core/history';
+import { placeTransitionSchema } from '../core/location-trigger';
 
 const resourceSchema = z.object({
   type: z.enum(['chat', 'agent']),
@@ -81,18 +83,39 @@ const runSchema = z
       previous_at: z.string().optional(),
       // An unknown identity hides the line rather than the whole run info.
       code_acts_as: z.enum(['agent', 'owner']).optional().catch(undefined),
-      started_by: z.discriminatedUnion('kind', [
+      started_by: z.union([
         z.object({
           kind: z.literal('schedule'),
           schedule: z.string(),
           timezone: z.string(),
         }),
-        z.object({
-          kind: z.literal('event'),
-          event: z.string(),
-          entity_id: z.string().nullish(),
-        }),
+        z
+          .object({
+            kind: z.literal('event'),
+            event: z.string(),
+            entity_id: z.string().nullish(),
+          })
+          .transform(
+            (event): HistoryStart => ({
+              kind: 'event',
+              event: event.event,
+              entityId: event.entity_id ?? undefined,
+            })
+          ),
         z.object({ kind: z.literal('manual'), by: z.string() }),
+        z
+          .object({
+            kind: z.literal('location'),
+            place: z.object({ name: z.string() }),
+            on: placeTransitionSchema,
+          })
+          .transform(
+            (location): HistoryStart => ({
+              kind: 'location',
+              place: location.place.name,
+              on: location.on,
+            })
+          ),
       ]),
     }),
   })
@@ -102,14 +125,7 @@ const runSchema = z
       timezone: run.timezone,
       previousAt: run.previous_at,
       ...(run.code_acts_as ? { codeActsAs: run.code_acts_as } : {}),
-      start:
-        run.started_by.kind === 'event'
-          ? {
-              kind: 'event',
-              event: run.started_by.event,
-              entityId: run.started_by.entity_id ?? undefined,
-            }
-          : run.started_by,
+      start: run.started_by,
     })
   );
 const stepsSchema = z.object({ steps: z.array(stepSchema) });

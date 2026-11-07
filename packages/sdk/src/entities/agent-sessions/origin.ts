@@ -57,11 +57,14 @@ export type SessionOrigin =
   | { kind: 'requested'; by: User }
   /** A tool handed the agent work, under this user's authority. */
   | { kind: 'dispatched'; onBehalfOf: User }
-  /** A routine fired. */
+  /**
+   * A routine fired: a schedule came due, its owner ran it, an event it
+   * watches happened, or its owner's phone arrived at or left one of its places.
+   */
   | {
       kind: 'routine';
       routine: Routine;
-      firing: 'scheduled' | 'manual' | 'event';
+      firing: 'scheduled' | 'manual' | 'event' | 'location';
     }
   /** Nothing recorded it: an older session, or an unclaimed warm one. */
   | { kind: 'unknown' };
@@ -72,7 +75,7 @@ type RawLineage = Extract<RawCaller, { type: 'agent' }>['lineage'];
 
 function originLineage(
   client: MacroClient,
-  lineage: RawLineage,
+  lineage: RawLineage
 ): SessionOriginLineage {
   if (lineage.type === 'unattributed') {
     return { type: 'unattributed' };
@@ -93,7 +96,7 @@ function originLineage(
 
 function originCaller(
   client: MacroClient,
-  caller: RawCaller,
+  caller: RawCaller
 ): SessionOriginCaller {
   if (caller.type === 'person') {
     return { type: 'person', user: User.byId(client, caller.user) };
@@ -114,7 +117,7 @@ function originCaller(
 export function sessionOrigin(
   client: MacroClient,
   origin: TriggerOrigin,
-  channelId: string | undefined,
+  channelId: string | undefined
 ): SessionOrigin {
   const message = (id: string) =>
     channelId ? Message.byId(client, channelId, id) : undefined;

@@ -152,6 +152,8 @@ pub enum RoutineCause {
     Scheduled,
     /// Its owner started it by hand.
     Manual,
+    /// Its owner's phone arrived at or left a place it watches.
+    Location,
     /// An event it watches happened.
     Event {
         /// The event.

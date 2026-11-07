@@ -16,6 +16,12 @@
 
     "edit-menu:allow-set-native-menu-suppressed",
     "pasteboard:allow-read-pasteboard-text",
+    "geofence:allow-status",
+    "geofence:allow-request-permission",
+    "geofence:allow-set-device",
+    "geofence:allow-device-id",
+    "geofence:allow-sync",
+    "geofence:allow-clear",
     "network-status:allow-watch-status",
     "pasteboard:allow-stage-pasteboard-image",
     "photo-library:allow-pick-photo-library-images",

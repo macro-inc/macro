@@ -16,6 +16,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { newLocationTrigger } from '../core/location-trigger';
 import {
   describeTrigger,
   isGlobalEvent,
@@ -27,7 +28,10 @@ import {
 import { parseRecurringSchedule } from '../core/schedule-language';
 import { isComposing } from './composing';
 import { menuMount } from './routine-search-menu';
-import { TRIGGER_GROUP_ICONS } from './routine-trigger-icons';
+import {
+  TRIGGER_GROUP_ICONS,
+  type TriggerGroup,
+} from './routine-trigger-icons';
 
 type TriggerChoice = {
   key: string;
@@ -37,7 +41,7 @@ type TriggerChoice = {
 };
 
 type TriggerType = {
-  label: 'Schedule' | RoutineEventGroup;
+  label: TriggerGroup;
   icon: Component<{ class?: string }>;
   choices: TriggerChoice[];
 };
@@ -77,6 +81,24 @@ const TRIGGER_TYPES: TriggerType[] = [
         label: 'Once',
         description: 'One time, at a date and time.',
         make: () => newScheduleTrigger('once'),
+      },
+    ],
+  },
+  {
+    label: 'Places',
+    icon: TRIGGER_GROUP_ICONS.Places,
+    choices: [
+      {
+        key: 'location:arrive',
+        label: 'Arrive at a place',
+        description: 'Your phone gets to a place, such as the office.',
+        make: () => newLocationTrigger('arrive'),
+      },
+      {
+        key: 'location:leave',
+        label: 'Leave a place',
+        description: 'Your phone leaves a place, such as home.',
+        make: () => newLocationTrigger('leave'),
       },
     ],
   },
@@ -206,9 +228,9 @@ export function TriggerMenu(props: {
   };
   const group = (type: TriggerType, options: () => JSX.Element) => {
     const label = type.label;
-    return label === 'Schedule' || !props.renderGroup
-      ? options()
-      : props.renderGroup(label, options);
+    if (label === 'Schedule' || label === 'Places' || !props.renderGroup)
+      return options();
+    return props.renderGroup(label, options);
   };
   const query = () => search().trim().toLowerCase();
   const recurring = createMemo(() => {

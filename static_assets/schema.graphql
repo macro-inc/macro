@@ -7721,7 +7721,47 @@ type GraphqlScheduledActionGithubSelector {
 }
 
 """
-Any of several schedules and optional Macro event filters.
+Crossing into or out of a place.
+"""
+enum GraphqlScheduledActionLocationTransition {
+	"""
+	Arriving there.
+	"""
+	ARRIVE
+	"""
+	Leaving.
+	"""
+	LEAVE
+}
+
+"""
+A routine that runs when its owner's phone arrives at or leaves a place.
+"""
+type GraphqlScheduledActionLocationTrigger {
+	"""
+	What the owner calls the place.
+	"""
+	placeName: String!
+	"""
+	Degrees north.
+	"""
+	latitude: Float!
+	"""
+	Degrees east.
+	"""
+	longitude: Float!
+	"""
+	How far from the point still counts as there.
+	"""
+	radiusMeters: Int!
+	"""
+	Which crossing runs the routine.
+	"""
+	on: GraphqlScheduledActionLocationTransition!
+}
+
+"""
+Any of several schedules, places and optional Macro event filters.
 """
 type GraphqlScheduledActionMultipleTrigger {
 	"""
@@ -7732,6 +7772,10 @@ type GraphqlScheduledActionMultipleTrigger {
 	Single runs at exact times.
 	"""
 	once: [GraphqlScheduledActionOnceTrigger!]!
+	"""
+	Places whose crossings run the routine.
+	"""
+	places: [GraphqlScheduledActionLocationTrigger!]!
 	"""
 	Events that can also trigger this routine.
 	"""
@@ -7769,7 +7813,7 @@ type GraphqlScheduledActionPropertySelector {
 """
 The way a routine starts.
 """
-union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionOnceTrigger | GraphqlScheduledActionMultipleTrigger
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionOnceTrigger | GraphqlScheduledActionLocationTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
 The persisted state of a scheduled delivery.

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RoutineCodeStartersData, RoutineCodeStartersErrors, RoutineCodeStartersResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
+import type { ActivateScheduledActionTemplateData, ActivateScheduledActionTemplateErrors, ActivateScheduledActionTemplateResponses, CreateScheduledActionData, CreateScheduledActionErrors, CreateScheduledActionResponses, DeleteScheduledActionData, DeleteScheduledActionErrors, DeleteScheduledActionResponses, DraftRoutineData, DraftRoutineErrors, DraftRoutineResponses, ExecuteScheduledActionNowData, ExecuteScheduledActionNowErrors, ExecuteScheduledActionNowResponses, GetScheduledActionData, GetScheduledActionErrors, GetScheduledActionResponses, GetScheduledActionTemplateData, GetScheduledActionTemplateErrors, GetScheduledActionTemplateResponses, ListLocationFencesData, ListLocationFencesErrors, ListLocationFencesResponses, ListScheduledActionCodeUpgradesData, ListScheduledActionCodeUpgradesErrors, ListScheduledActionCodeUpgradesResponses, ListScheduledActionHistoryData, ListScheduledActionHistoryErrors, ListScheduledActionHistoryResponses, ListScheduledActionsData, ListScheduledActionsErrors, ListScheduledActionsResponses, RegisterLocationDeviceData, RegisterLocationDeviceErrors, RegisterLocationDeviceResponses, RemoveLocationDeviceData, RemoveLocationDeviceErrors, RemoveLocationDeviceResponses, ReportLocationCrossingData, ReportLocationCrossingErrors, ReportLocationCrossingResponses, RoutineCodeStartersData, RoutineCodeStartersErrors, RoutineCodeStartersResponses, ScheduledActionHealthData, ScheduledActionHealthResponses, SetScheduledActionEnabledData, SetScheduledActionEnabledErrors, SetScheduledActionEnabledResponses, ShareScheduledActionTemplateData, ShareScheduledActionTemplateErrors, ShareScheduledActionTemplateResponses, UnshareScheduledActionTemplateData, UnshareScheduledActionTemplateErrors, UnshareScheduledActionTemplateResponses, UpdateScheduledActionData, UpdateScheduledActionErrors, UpdateScheduledActionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -83,6 +83,33 @@ export class Sdk extends HeyApiClient {
     public draftRoutine<ThrowOnError extends boolean = false>(options: Options<DraftRoutineData, ThrowOnError>): RequestResult<DraftRoutineResponses, DraftRoutineErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DraftRoutineResponses, DraftRoutineErrors, ThrowOnError>({
             url: '/scheduled-actions/drafts',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public registerLocationDevice<ThrowOnError extends boolean = false>(options?: Options<RegisterLocationDeviceData, ThrowOnError>): RequestResult<RegisterLocationDeviceResponses, RegisterLocationDeviceErrors, ThrowOnError> {
+        return (options?.client ?? this.client).post<RegisterLocationDeviceResponses, RegisterLocationDeviceErrors, ThrowOnError>({ url: '/scheduled-actions/location/devices', ...options });
+    }
+
+    public removeLocationDevice<ThrowOnError extends boolean = false>(options: Options<RemoveLocationDeviceData, ThrowOnError>): RequestResult<RemoveLocationDeviceResponses, RemoveLocationDeviceErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<RemoveLocationDeviceResponses, RemoveLocationDeviceErrors, ThrowOnError>({ url: '/scheduled-actions/location/devices/{device_id}', ...options });
+    }
+
+    public listLocationFences<ThrowOnError extends boolean = false>(options?: Options<ListLocationFencesData, ThrowOnError>): RequestResult<ListLocationFencesResponses, ListLocationFencesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListLocationFencesResponses, ListLocationFencesErrors, ThrowOnError>({ url: '/scheduled-actions/location/fences', ...options });
+    }
+
+    /**
+     * Authorized by the phone's device token (`Authorization: Bearer mloc_…`),
+     * not a session: the phone reports from the background, without the app.
+     */
+    public reportLocationCrossing<ThrowOnError extends boolean = false>(options: Options<ReportLocationCrossingData, ThrowOnError>): RequestResult<ReportLocationCrossingResponses, ReportLocationCrossingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ReportLocationCrossingResponses, ReportLocationCrossingErrors, ThrowOnError>({
+            url: '/scheduled-actions/location/reports',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

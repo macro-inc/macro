@@ -32,6 +32,18 @@ describe('what started a run', () => {
     expect(describeRunStart({ kind: 'manual', by: 'macro|me' }, person)).toBe(
       'Run by you'
     );
+    expect(
+      describeRunStart(
+        { kind: 'location', place: 'Office', on: 'arrive' },
+        person
+      )
+    ).toBe('Arrived at Office');
+    expect(
+      describeRunStart(
+        { kind: 'location', place: 'Office', on: 'leave' },
+        person
+      )
+    ).toBe('Left Office');
   });
 
   it('says since when, and when it counts as happening only when it started late', () => {

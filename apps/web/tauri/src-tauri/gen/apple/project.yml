@@ -74,6 +74,8 @@ targets:
         NSCameraUsageDescription: "This app needs access to the camera to take photos and videos for attachments."
         NSMicrophoneUsageDescription: "This app needs access to the microphone to record videos for attachments."
         NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload attachments."
+        NSLocationWhenInUseUsageDescription: "Macro uses your location to run your routines when you arrive at or leave places you choose."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Macro uses your location to run your routines when you arrive at or leave places you choose."
         LSApplicationQueriesSchemes:
           - macro
         UIApplicationSceneManifest:

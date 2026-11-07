@@ -31,14 +31,18 @@ export type RoutineEventFilter = Omit<EventFilter, 'ids' | 'condition'> & {
 };
 
 /**
- * One schedule, one exact time, or one set of event selectors. A `once`
- * trigger runs a single time at `at` (RFC 3339), within about a second; a time
- * already past runs as soon as the routine is saved. Use it to check back on
- * something later instead of waiting inside a program.
+ * One schedule, one exact time, one place, or one set of event selectors. A
+ * `once` trigger runs a single time at `at` (RFC 3339), within about a second;
+ * a time already past runs as soon as the routine is saved. Use it to check
+ * back on something later instead of waiting inside a program. A `location`
+ * trigger runs when the owner's phone, with the Macro app allowed to use
+ * location always, arrives at (`on: 'arrive'`) or leaves (`'leave'`) a circle
+ * of 100 to 5000 meters around `place`.
  */
 export type SingleRoutineTrigger =
   | Extract<RoutineTrigger, { type: 'cron' }>
   | Extract<RoutineTrigger, { type: 'once' }>
+  | Extract<RoutineTrigger, { type: 'location' }>
   | { type: 'events'; filters: RoutineEventFilter[] };
 
 /** One or multiple routine triggers. */
@@ -50,6 +54,7 @@ function singleTriggerBody(trigger: SingleRoutineTrigger): RoutineTrigger {
   return match(trigger)
     .with({ type: 'cron' }, (value) => value)
     .with({ type: 'once' }, (value) => value)
+    .with({ type: 'location' }, (value) => value)
     .with({ type: 'events' }, (value) => ({
       type: 'events' as const,
       filters: value.filters.map(({ entities, ...filter }) => ({
@@ -68,6 +73,7 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
     }))
     .with({ type: 'cron' }, singleTriggerBody)
     .with({ type: 'once' }, singleTriggerBody)
+    .with({ type: 'location' }, singleTriggerBody)
     .with({ type: 'events' }, singleTriggerBody)
     .exhaustive();
 }

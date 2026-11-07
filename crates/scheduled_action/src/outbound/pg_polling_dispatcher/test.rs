@@ -147,6 +147,14 @@ impl ScheduledActionExecutor for RecordingExecutor {
             resource: None,
         })
     }
+
+    async fn execute_location(
+        &self,
+        action: ScheduledAction,
+        _: crate::domain::location::LocationFiring,
+    ) -> Result<InProgressExecution> {
+        self.execute_action(action).await
+    }
 }
 
 struct GatedExecutor {
@@ -174,6 +182,14 @@ impl ScheduledActionExecutor for GatedExecutor {
             chat_id: None,
             resource: None,
         })
+    }
+
+    async fn execute_location(
+        &self,
+        action: ScheduledAction,
+        _: crate::domain::location::LocationFiring,
+    ) -> Result<InProgressExecution> {
+        self.execute_action(action).await
     }
 }
 

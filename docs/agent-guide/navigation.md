@@ -1217,8 +1217,9 @@ then **Move up** /
 focus on the moved card), **Duplicate** and **Delete step**.
 
 **Add trigger** opens a menu with **Search triggers** and one row per kind:
-**Schedule** (**On a schedule**, **Once**), **Email**, **Tasks**, **Channels**,
-**Documents**, **Calls** and **GitHub**. Each row opens a submenu of its events, each with a
+**Schedule** (**On a schedule**, **Once**), **Places** (**Arrive at a place**,
+**Leave a place**), **Email**, **Tasks**, **Channels**, **Documents**, **Calls**
+and **GitHub**. Each row opens a submenu of its events, each with a
 one-line description of what makes it fire. Typing flattens the list: a typed
 schedule such as **every weekday at 9am** becomes the top row with its time
 zone, and matching events show their group at the right. Arrow keys, Enter and
@@ -1234,14 +1235,34 @@ agents create through the SDK to check back later), runs within about a second
 of its time, runs as soon as it is saved when the time has passed, and then
 shows **Completed**.
 
+**Arrive at a place** and **Leave a place** open a panel with **Place name**,
+**Use my current location** (the browser's location; a blocked or failed read
+shows its reason under the button), **Latitude** and **Longitude** (pasting
+`40.7128, -74.006` into either fills both), **Within** (100 m, 200 m, 500 m,
+1 km, 5 km; 200 m by default) and **Run when I** (**Arrive** / **Leave**). It
+saves a `location` trigger (`{type: 'location', place: {name, latitude,
+longitude, radius_meters}, on}`) and its chip reads **Arrive at Office** or
+**Leave Office**. Only the Macro iOS and Android apps detect crossings, so the
+panel notes that the phone needs location access set to **Always**; in the
+phone app it also shows the current access, with **Allow location access**
+while the system can still ask. The signed-in phone app keeps the OS watching
+the places of the user's enabled routines (`GET
+/scheduled-actions/location/fences`) on start, on return to the foreground and
+whenever a routine changes; it registers the phone for reports (`POST
+/scheduled-actions/location/devices`) and asks for location access only once
+there is a place, and removes the device on sign-out. The span is
+`routines.geofence_sync`. Runs it starts read **Arrived at Office** or **Left
+Office** in run history.
+
 On a routine's page each trigger reads as a sentence of tokens: the event
-(**New email received**) or schedule (**Weekdays at 9:00 AM**), then **in** and
+(**New email received**), schedule (**Weekdays at 9:00 AM**) or place
+(**Arrive at Office**), then **in** and
 what it watches (**Your inbox**, or a channel, document or task picker that
 saves as soon as you pick). The event token opens the same menu to switch to
 another event (keeping what still applies: a GitHub trigger keeps its
 repositories, bot setting and filters you added; choosing the current event
 changes nothing), with **Remove trigger** at the end;
-a schedule token opens its panel (a bottom sheet on phones), where **Done**
+a schedule or place token opens its panel (a bottom sheet on phones), where **Done**
 applies changes, **Cancel** leaves it unchanged and **Remove trigger** removes
 it. Filters hang below on a
 connector: **✦ Only if | question | ×** for an AI check, or **+ Filter** to add

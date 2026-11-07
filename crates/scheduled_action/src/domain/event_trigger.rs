@@ -34,6 +34,7 @@ use serde_json::Value;
 use system_properties::SystemPropertyKey;
 use utoipa::ToSchema;
 
+use super::location::{LocationTransition, Place};
 use super::models::Schedule;
 
 mod github_selector;
@@ -54,7 +55,8 @@ pub const MAX_FILTERS: usize = 32;
 pub const MAX_EVENTS_PER_FILTER: usize = 15;
 pub const MAX_IDS_PER_FILTER: usize = 100;
 
-/// A routine may run on one trigger or any of several schedules and Macro events.
+/// A routine may run on one trigger or any of several schedules, places and
+/// Macro events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ActionTrigger {
@@ -70,6 +72,11 @@ pub enum ActionTrigger {
     Once {
         #[serde(deserialize_with = "whole_seconds")]
         at: DateTime<Utc>,
+    },
+    /// Fires when the owner's phone arrives at or leaves `place`.
+    Location {
+        place: Place,
+        on: LocationTransition,
     },
     Multiple {
         triggers: RoutineTriggers,
@@ -92,6 +99,11 @@ pub enum RoutineTrigger {
     Once {
         #[serde(deserialize_with = "whole_seconds")]
         at: DateTime<Utc>,
+    },
+    /// Fires when the owner's phone arrives at or leaves `place`.
+    Location {
+        place: Place,
+        on: LocationTransition,
     },
 }
 
@@ -158,7 +170,25 @@ impl ActionTrigger {
                 .0
                 .iter()
                 .any(|t| matches!(t, RoutineTrigger::Cron { .. } | RoutineTrigger::Once { .. })),
-            Self::Events { .. } => false,
+            Self::Events { .. } | Self::Location { .. } => false,
+        }
+    }
+
+    /// Every place a location trigger watches, with the crossing that runs it.
+    pub fn places(&self) -> Vec<(&Place, LocationTransition)> {
+        match self {
+            Self::Location { place, on } => vec![(place, *on)],
+            Self::Multiple { triggers } => triggers
+                .0
+                .iter()
+                .filter_map(|trigger| match trigger {
+                    RoutineTrigger::Location { place, on } => Some((place, *on)),
+                    RoutineTrigger::Cron { .. }
+                    | RoutineTrigger::Events { .. }
+                    | RoutineTrigger::Once { .. } => None,
+                })
+                .collect(),
+            Self::Cron { .. } | Self::Events { .. } | Self::Once { .. } => Vec::new(),
         }
     }
 
@@ -174,7 +204,7 @@ impl ActionTrigger {
                     _ => None,
                 })
                 .collect(),
-            Self::Cron { .. } | Self::Events { .. } => Vec::new(),
+            Self::Cron { .. } | Self::Events { .. } | Self::Location { .. } => Vec::new(),
         }
     }
 
@@ -198,10 +228,10 @@ impl ActionTrigger {
                 .filter_map(|trigger| match trigger {
                     RoutineTrigger::Cron { schedule, timezone } => next(schedule, *timezone),
                     RoutineTrigger::Once { at } => once(*at),
-                    RoutineTrigger::Events { .. } => None,
+                    RoutineTrigger::Events { .. } | RoutineTrigger::Location { .. } => None,
                 })
                 .min(),
-            Self::Events { .. } => None,
+            Self::Events { .. } | Self::Location { .. } => None,
         }
     }
 

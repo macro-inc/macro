@@ -282,6 +282,12 @@ export const scheduledActionExcluded = [
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
   'routineCodeStarters', // The new-routine flow's starter code steps.
   'scheduledActionHealth',
+  // The phone app's geofencing: its device token, the places it monitors, and
+  // the crossings its native code reports with that token.
+  'listLocationFences',
+  'registerLocationDevice',
+  'removeLocationDevice',
+  'reportLocationCrossing',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
 export const scheduledActionBacklog =

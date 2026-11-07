@@ -208,6 +208,17 @@ function readFiring(trigger: Element): Firing {
       tail: '· run by hand',
       destination: undefined,
     };
+  const location = child(trigger, 'location');
+  if (location) {
+    const place = attribute(location, 'place') ?? 'a place';
+    return {
+      tail:
+        attribute(location, 'on') === 'leave'
+          ? `· left ${place}`
+          : `· arrived at ${place}`,
+      destination: undefined,
+    };
+  }
   const event = child(trigger, 'event');
   if (!event) return { tail: undefined, destination: undefined };
 

@@ -16,6 +16,7 @@ use tracing::Instrument;
 use crate::domain::event_runs::{
     ClaimedEventRun, EventExecutionResult, EventExecutor, EventRunOutcome,
 };
+use crate::domain::location::LocationFiring;
 use crate::domain::models::{
     ActionExecutionRecord, ExecutionResource, ExecutionResult, InProgressExecution,
     MAX_ACTION_TIME, ResolvedTaskTarget, RunHistory, RunInfo, ScheduledAction,
@@ -315,21 +316,58 @@ where
     Runner: ScheduledAgentRunner,
 {
     async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
+        let now = Utc::now();
+        // The claim is fenced to `next_run_at`, so a run started once it is
+        // due consumes that firing, whoever started it.
+        let firing = match action.next_run_at {
+            Some(scheduled_for) if scheduled_for <= now => Firing::Scheduled { scheduled_for },
+            _ => Firing::Manual { requested_at: now },
+        };
+        self.start(action, firing).await
+    }
+
+    async fn execute_location(
+        &self,
+        action: ScheduledAction,
+        firing: LocationFiring,
+    ) -> Result<InProgressExecution> {
+        self.start(action, Firing::Location(firing)).await
+    }
+}
+
+/// What a run started on, kept for the whole run.
+enum Firing {
+    Scheduled { scheduled_for: DateTime<Utc> },
+    Manual { requested_at: DateTime<Utc> },
+    Location(LocationFiring),
+}
+
+impl Firing {
+    fn run(&self) -> RoutineRun<'_> {
+        match self {
+            Self::Scheduled { scheduled_for } => RoutineRun::Scheduled {
+                scheduled_for: *scheduled_for,
+            },
+            Self::Manual { requested_at } => RoutineRun::Manual {
+                requested_at: *requested_at,
+            },
+            Self::Location(location) => RoutineRun::Location(location),
+        }
+    }
+}
+
+impl<Rpo, Live, Runner> InProcessExecutor<Rpo, Live, Runner>
+where
+    Rpo: ScheduledActionRepo,
+    Live: ScheduledActionLiveUpdate,
+    Runner: ScheduledAgentRunner,
+{
+    async fn start(&self, action: ScheduledAction, firing: Firing) -> Result<InProgressExecution> {
         action.owner_user()?;
         anyhow::ensure!(!self.cancellation.is_cancelled(), "executor is stopping");
         let id = action.id.context("persisted action required")?;
         let start_time = Utc::now();
         let deadline = start_time + MAX_ACTION_TIME;
-        // The claim is fenced to `next_run_at`, so a run started once it is
-        // due consumes that firing, whoever started it.
-        let firing = match action.next_run_at {
-            Some(scheduled_for) if scheduled_for <= start_time => {
-                RoutineRun::Scheduled { scheduled_for }
-            }
-            _ => RoutineRun::Manual {
-                requested_at: start_time,
-            },
-        };
 
         // Track preparation too: cancellation of an HTTP request must not leak
         // a claim or abandon a run after creating its resource.
@@ -357,7 +395,7 @@ where
             // dies mid-run, its claim goes stale and the poller would otherwise
             // find the same firing due and repeat every step's side effects;
             // a lost firing beats a doubled one.
-            if matches!(firing, RoutineRun::Scheduled { .. }) {
+            if matches!(firing, Firing::Scheduled { .. }) {
                 let consumed = tokio::time::timeout(
                     BOOKKEEPING_TIMEOUT,
                     executor.repo.update_next_run_at(&id),
@@ -383,7 +421,7 @@ where
             }
             let mut ready_tx = Some(ready_tx);
             let mut handle = ExecutionHandle {
-                firing: Some(firing.cause()),
+                firing: Some(firing.run().cause()),
                 ..ExecutionHandle::default()
             };
             let result = bounded(deadline, executor.cancellation.cancelled(), async {
@@ -395,15 +433,19 @@ where
                         resource,
                     }));
                 }
-                executor.runner.run(&action, &mut handle, firing).await
+                executor
+                    .runner
+                    .run(&action, &mut handle, firing.run())
+                    .await
             })
             .await;
             if let Err(error) = &result {
                 executor.cancel(&action, &handle, error).await;
             }
             let trigger = match firing {
-                RoutineRun::Scheduled { .. } => RunTrigger::Scheduled,
-                _ => RunTrigger::Manual,
+                Firing::Scheduled { .. } => RunTrigger::Scheduled,
+                Firing::Manual { .. } => RunTrigger::Manual,
+                Firing::Location(_) => RunTrigger::Location,
             };
             if let Some(run) = finished_run(&action, trigger, start_time, &result) {
                 executor.observer.run_finished(run);
