@@ -209,7 +209,7 @@ impl Transaction<'_> {
                 },
             )?;
             if self.text_content_size(*key) == Utf16Offset::ZERO {
-                self.remove(*key, true)?;
+                self.remove(*key, false)?;
             }
             return Ok(());
         }
