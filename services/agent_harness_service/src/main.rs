@@ -345,6 +345,7 @@ async fn run() -> anyhow::Result<()> {
     });
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );
@@ -356,6 +357,7 @@ async fn run() -> anyhow::Result<()> {
     // Billing page view.
     let recorder = ai_billing::composition::pg_settling_recorder(
         pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         config.settlement_route()?,
@@ -993,7 +995,10 @@ async fn run() -> anyhow::Result<()> {
                 aws_sdk_kms::Client::new(&aws_config),
             )),
             agent_api_keys::outbound::EntitlementKeyPlans::new(
-                ai_billing::composition::pg_entitlement_source(pool.clone()),
+                ai_billing::composition::pg_entitlement_source(
+                    pool.clone(),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+                ),
             ),
         ));
     let inmem = InMemRuntime {

@@ -27,7 +27,11 @@ event contract (schema, sanitization, delivery semantics).
 - `src/domain/invite_rewards.rs`: the `InviteRewarder` port, called when an
   invite is accepted or someone joins through an invite link (rewarding the
   sender or `team_invite_link.created_by`). Billing implements it in
-  `authentication_service`; `teams` cannot depend on `ai_billing`.
+  `authentication_service`.
+- `src/outbound/billing_seats.rs` (feature `ai_billing`, roots only): serves
+  billing's `TeamSeats` port from `TeamRepositoryImpl` and teams'
+  `OpenSeatRelease` from `ai_billing::BillingServiceImpl`. `ai_billing` must
+  never depend on `teams`; domain code in `teams` must not use `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI

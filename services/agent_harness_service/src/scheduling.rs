@@ -126,6 +126,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ));
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );
@@ -150,6 +151,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 provider,
                 ai_billing::composition::pg_settling_recorder(
                     db.clone(),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
                     config.enable_ai_usage_enforcement,
                     config.ai_pricing(),
                     config.settlement_route()?,

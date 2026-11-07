@@ -9,7 +9,7 @@ default = []
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
-ai_billing = { workspace = true, features = ["pg-admission"] }
+ai_billing = { workspace = true }
 ai_usage = { workspace = true }
 bots = { workspace = true, default-features = true, features = ["outbound"] }
 activity = { workspace = true }

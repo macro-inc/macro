@@ -10,6 +10,10 @@ path = "src/bin/backfill_teammate_dms.rs"
 required-features = ["backfill_binary"]
 
 [features]
+# Serves the AI billing domain's TeamSeats port from TeamRepositoryImpl and
+# teams' OpenSeatRelease port from the billing service. Composition roots
+# enable it; neither domain depends on the other otherwise.
+ai_billing = ["dep:ai_billing", "outbound"]
 ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
@@ -54,6 +58,7 @@ ports = [
 ]
 
 [dependencies]
+ai_billing = { workspace = true, optional = true }
 # Core
 ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true }
@@ -120,6 +125,9 @@ url = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+roles_and_permissions = { workspace = true, features = [
+  "outbound",
+] }
 wiremock = { workspace = true }
 macro_db_migrator = { workspace = true }
 models_pagination = { workspace = true }

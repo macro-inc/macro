@@ -1,18 +1,16 @@
 //! Resolves a user's plan and payer from their roles and team membership.
 
 use crate::domain::period::{PeriodBindingSource, SubscriptionPeriod};
-use crate::domain::{BillingError, Entitlement, EntitlementSource, PayerScope, PlanTier, Result};
+use crate::domain::{
+    BillingError, BillingTeam, Entitlement, EntitlementSource, PayerScope, PlanTier, Result,
+    TeamSeats,
+};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
-use teams::domain::model::{Team, TeamError};
-use teams::domain::team_repo::TeamRepository;
 
-#[cfg(test)]
-mod test;
-
-/// [`EntitlementSource`] over the roles service and the teams repository.
+/// [`EntitlementSource`] over the roles service and team membership ([`TeamSeats`]).
 ///
 /// - A member of a paying (or enterprise) team is billed through the team
 ///   owner: every seat keeps its own plan allowance, while credits and overage
@@ -40,7 +38,7 @@ fn entitlement_err(e: impl std::error::Error + Send + Sync + 'static) -> Billing
 impl<P, T> RolesTeamsEntitlementSource<P, T>
 where
     P: UserRolesAndPermissionsService,
-    T: TeamRepository,
+    T: TeamSeats,
 {
     async fn tier_of(&self, user: &MacroUserIdStr<'_>) -> Result<PlanTier> {
         let roles = self
@@ -57,22 +55,22 @@ where
     /// does not mean the team pays.
     #[tracing::instrument(
         skip(self, team),
-        fields(team_id = %team.id(), bills_seats = tracing::field::Empty),
+        fields(team_id = %team.id, bills_seats = tracing::field::Empty),
         err
     )]
-    async fn team_bills_seats(&self, team: &Team) -> Result<bool> {
-        let bills_seats = if team.enterprise() {
+    async fn team_bills_seats(&self, team: &BillingTeam) -> Result<bool> {
+        let bills_seats = if team.enterprise {
             true
         } else {
             let paying = self
                 .teams
-                .get_team_payment_status(team.id())
+                .team_payment_status(&team.id)
                 .await
                 .map_err(entitlement_err)?;
             paying
                 && self
                     .teams
-                    .get_team_subscription_id(team.id())
+                    .team_subscription_id(&team.id)
                     .await
                     .map_err(entitlement_err)?
                     .is_some()
@@ -85,7 +83,7 @@ where
 impl<P, T> PeriodBindingSource for RolesTeamsEntitlementSource<P, T>
 where
     P: UserRolesAndPermissionsService,
-    T: TeamRepository,
+    T: TeamSeats,
 {
     async fn seats(
         &self,
@@ -96,10 +94,10 @@ where
         // an existing webhook candidate, never sufficient evidence of ownership.
         let customer = self
             .teams
-            .get_stripe_customer_id(payer)
+            .stripe_customer_id(payer)
             .await
             .map_err(entitlement_err)?;
-        if customer.as_ref().map(|id| id.as_str()) != Some(observation.customer_id.as_str()) {
+        if customer.as_deref() != Some(observation.customer_id.as_str()) {
             return Ok(None);
         }
         let Some(team_id) = observation.team_id else {
@@ -110,7 +108,7 @@ where
             // another subscription. This uses team facts, not role fallback.
             for team in self
                 .teams
-                .get_user_teams(payer)
+                .user_teams(payer)
                 .await
                 .map_err(entitlement_err)?
             {
@@ -120,22 +118,24 @@ where
             }
             return Ok(Some(vec![payer.clone().into_owned()]));
         };
-        let owner = match self.teams.get_team_owner(&team_id).await {
-            Ok(owner) => owner,
-            Err(TeamError::TeamDoesNotExist) => return Ok(None),
-            Err(error) => return Err(entitlement_err(error)),
+        let Some(owner) = self
+            .teams
+            .team_owner(&team_id)
+            .await
+            .map_err(entitlement_err)?
+        else {
+            return Ok(None);
         };
         let subscription = self
             .teams
-            .get_team_subscription_id(&team_id)
+            .team_subscription_id(&team_id)
             .await
             .map_err(entitlement_err)?;
         if owner.as_ref() != payer.as_ref()
-            || subscription.as_ref().map(|id| id.as_str())
-                != Some(observation.subscription_id.as_str())
+            || subscription.as_deref() != Some(observation.subscription_id.as_str())
             || self
                 .teams
-                .get_team_enterprise_status(&team_id)
+                .team_enterprise_status(&team_id)
                 .await
                 .map_err(entitlement_err)?
         {
@@ -143,12 +143,12 @@ where
         }
         let seats: Vec<_> = self
             .teams
-            .get_team_members(&team_id)
+            .team_members(&team_id)
             .await
             .map_err(entitlement_err)?
             .into_iter()
-            .filter(|member| member.plan == teams::domain::model::SeatPlan::Premium)
-            .map(|member| member.user_id.into_owned())
+            .filter(|member| member.plan == PlanTier::Premium)
+            .map(|member| member.user_id)
             .collect();
         if seats.is_empty() || seats.len() as u64 > observation.quantity {
             return Ok(None);
@@ -160,18 +160,14 @@ where
 impl<P, T> EntitlementSource for RolesTeamsEntitlementSource<P, T>
 where
     P: UserRolesAndPermissionsService,
-    T: TeamRepository,
+    T: TeamSeats,
 {
     #[tracing::instrument(skip(self), err)]
     async fn entitlement(&self, user: &MacroUserIdStr<'_>) -> Result<Entitlement> {
         let user_owned = user.clone().into_owned();
         let own_tier = self.tier_of(user).await?;
 
-        let teams = self
-            .teams
-            .get_user_teams(user)
-            .await
-            .map_err(entitlement_err)?;
+        let teams = self.teams.user_teams(user).await.map_err(entitlement_err)?;
         let Some(team) = teams.into_iter().next() else {
             return Ok(Entitlement::personal(user_owned, own_tier));
         };
@@ -182,7 +178,7 @@ where
             return Ok(Entitlement::personal(user_owned, own_tier));
         }
 
-        let owner = MacroUserIdStr::parse_from_str(team.owner_id())
+        let owner = MacroUserIdStr::parse_from_str(&team.owner_id)
             .map_err(entitlement_err)?
             .into_owned();
         let is_owner = owner.as_ref() == user.as_ref();
@@ -193,20 +189,20 @@ where
         // every seat starts on.
         let members = self
             .teams
-            .get_team_members(team.id())
+            .team_members(&team.id)
             .await
             .map_err(entitlement_err)?;
         let mut seats: Vec<(MacroUserIdStr<'static>, PlanTier)> =
             Vec::with_capacity(members.len() + 1);
         for member in members {
-            let member_id = member.user_id.into_owned();
+            let member_id = member.user_id;
             if seats
                 .iter()
                 .any(|(id, _)| id.as_ref() == member_id.as_ref())
             {
                 continue;
             }
-            seats.push((member_id, PlanTier::from(member.plan)));
+            seats.push((member_id, member.plan));
         }
         if !seats.iter().any(|(id, _)| id.as_ref() == owner.as_ref()) {
             seats.insert(0, (owner.clone(), PlanTier::Premium));
@@ -221,37 +217,30 @@ where
         Ok(Entitlement {
             tier,
             seat_tiers,
-            unlimited: team.enterprise(),
+            unlimited: team.enterprise,
             payer: owner,
             billed_users,
             scope: if is_owner {
-                PayerScope::TeamOwner {
-                    team_id: *team.id(),
-                }
+                PayerScope::TeamOwner { team_id: team.id }
             } else {
-                PayerScope::TeamMember {
-                    team_id: *team.id(),
-                }
+                PayerScope::TeamMember { team_id: team.id }
             },
         })
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn team_payer(&self, team_id: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
-        match self.teams.get_team_owner(&team_id).await {
-            Ok(owner) => Ok(Some(owner)),
-            Err(TeamError::TeamDoesNotExist) => Ok(None),
-            Err(error) => Err(entitlement_err(error)),
-        }
+        self.teams
+            .team_owner(&team_id)
+            .await
+            .map_err(entitlement_err)
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn stripe_customer_id(&self, user: &MacroUserIdStr<'_>) -> Result<Option<String>> {
-        Ok(self
-            .teams
-            .get_stripe_customer_id(user)
+        self.teams
+            .stripe_customer_id(user)
             .await
-            .map_err(entitlement_err)?
-            .map(|id| id.to_string()))
+            .map_err(entitlement_err)
     }
 }

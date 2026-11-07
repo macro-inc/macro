@@ -182,7 +182,7 @@ system_status = { workspace = true, features = [
   "inbound",
   "postgres",
 ] }
-teams = { workspace = true, default-features = true }
+teams = { workspace = true, default-features = true, features = ["ai_billing"] }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }

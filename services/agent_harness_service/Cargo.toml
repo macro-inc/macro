@@ -176,7 +176,7 @@ stream = { workspace = true }
 strum = { workspace = true }
 sync_service_client = { workspace = true }
 system_properties = { workspace = true }
-teams = { workspace = true, features = ["outbound", "ports"] }
+teams = { workspace = true, features = ["ai_billing", "outbound", "ports"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }

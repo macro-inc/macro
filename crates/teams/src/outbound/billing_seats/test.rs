@@ -1,12 +1,24 @@
 use super::*;
-use crate::domain::BillingPeriod;
-use crate::domain::period::{PeriodEvidence, SubscriptionActivity};
+use ai_billing::domain::period::{
+    PeriodBindingSource, PeriodEvidence, SubscriptionActivity, SubscriptionPeriod,
+};
+use ai_billing::domain::{BillingPeriod, Entitlement, EntitlementSource, PayerScope};
+use ai_billing::outbound::RolesTeamsEntitlementSource;
 use chrono::{DateTime, Duration};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl;
 use roles_and_permissions::outbound::pgpool::MacroDB;
 use sqlx::PgPool;
-use teams::outbound::team_repo::TeamRepositoryImpl;
+
+#[test]
+fn every_purchasable_seat_plan_is_a_paid_billing_tier() {
+    // Billing's plan catalog marks every paid tier purchasable; keep that in
+    // step with the seat plans teams lets owners buy.
+    let mut tiers: Vec<_> = SeatPlan::PURCHASABLE.into_iter().map(plan_tier).collect();
+    tiers.dedup();
+    assert_eq!(tiers, vec![PlanTier::Premium, PlanTier::Max]);
+    assert!(tiers.iter().all(|tier| tier.is_paid()));
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

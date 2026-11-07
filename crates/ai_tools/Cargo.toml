@@ -105,7 +105,7 @@ skills = { workspace = true, features = ["ai_tools", "outbound"] }
 properties = { workspace = true, default-features = true, features = ["ai_tools"] }
 soup = { workspace = true, features = ["ai_tools", "outbound"] }
 sqs_client = { workspace = true, features = ["email", "gmail"] }
-teams = { workspace = true, features = ["ai_tools", "outbound"] }
+teams = { workspace = true, features = ["ai_billing", "ai_tools", "outbound"] }
 sqlx.workspace = true
 strum.workspace = true
 static_file_service_client = { workspace = true }
