@@ -269,3 +269,32 @@ fn wrapping_line_break_restores_only_the_captured_focus_endpoint() -> Result<()>
     assert!(range.is_backward(tx.view())?);
     Ok(())
 }
+
+#[test]
+fn unlink_rejects_an_empty_extracted_edge_of_a_nonempty_link() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let before = tx.create_text("a")?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let text = tx.create_text("link")?;
+        tx.append(link, &[text.key()])?;
+        tx.append(paragraph, &[before.key(), link.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(before, Utf16Offset(0)),
+            Point::text(text, Utf16Offset(0)),
+        ))))
+    })?;
+    let previous = editor.state().to_json()?;
+    let result = editor.update(|tx| toggle_link(tx, None, ToggleLinkAttributes::default()));
+    assert!(matches!(
+        result,
+        Err(Error::Invariant("empty link extraction"))
+    ));
+    assert_eq!(editor.state().to_json()?, previous);
+    Ok(())
+}

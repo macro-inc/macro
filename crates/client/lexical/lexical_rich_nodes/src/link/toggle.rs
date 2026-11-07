@@ -86,9 +86,10 @@ fn split_link_at_selection(
     if selected.len() == children.len() {
         return unwrap(tx, link.key());
     }
-    let Some(first) = children.iter().position(extracted_child) else {
-        return Ok(());
-    };
+    let first = children
+        .iter()
+        .position(extracted_child)
+        .ok_or(Error::Invariant("empty link extraction"))?;
     let last = children
         .iter()
         .rposition(extracted_child)
