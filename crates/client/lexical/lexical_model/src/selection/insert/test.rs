@@ -769,3 +769,20 @@ fn text_insertion_keeps_endpoint_roles_chosen_before_element_transfer() -> Resul
     })?;
     Ok(())
 }
+
+#[test]
+fn typing_between_tabs_creates_plain_text_instead_of_splicing_a_tab() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let first = tx.create(Tab::default())?;
+        let last = tx.create(Tab::default())?;
+        tx.append(p, &[first.key(), last.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(Point::text(first, Utf16Offset(1))))))?;
+        tx.insert_text("x")?;
+        assert_eq!(tx.text_content(p).as_ref(), "\tx\t");
+        Ok(())
+    })?;
+    Ok(())
+}
