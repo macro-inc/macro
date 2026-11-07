@@ -2,10 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use agent_changes::domain::{
-    model::{AgentSessionId, PullRequestRef},
-    ports::SessionBranchReader,
-};
+use github_pull_requests::domain::models::{PullRequestRef, RepositorySlug};
 use models_soup::agent_session::AgentPullRequestState;
 
 use super::*;
@@ -18,11 +15,23 @@ fn pull_request_key(url: &str) -> Option<String> {
     ))
 }
 
+/// Use a captured branch only while it still describes the session's current repository.
+fn for_repository<'a>(
+    fact: &'a crate::domain::ports::AgentWorkingBranch,
+    repository_url: &str,
+) -> Option<&'a str> {
+    let current = RepositorySlug::parse(repository_url)?;
+    let captured = RepositorySlug::parse(&fact.repository_url)?;
+    (current.owner.eq_ignore_ascii_case(&captured.owner)
+        && current.name.eq_ignore_ascii_case(&captured.name))
+    .then_some(fact.branch.as_str())
+}
+
 /// Enrich only returned rows, so metadata work is bounded by the page size and
 /// never reads branch facts for sessions outside the caller's visible page.
 pub(super) async fn enrich<F: GithubPullRequestListing>(
     pull_requests: &F,
-    branches: Option<&dyn SessionBranchReader>,
+    branches: Option<&dyn crate::domain::ports::AgentWorkingBranches>,
     user: String,
     sources: Vec<SourceId>,
     items: &mut [SoupCandidate],
@@ -30,9 +39,7 @@ pub(super) async fn enrich<F: GithubPullRequestListing>(
     let sessions: Vec<_> = items
         .iter()
         .filter_map(|candidate| match &candidate.item {
-            SoupItem::AgentSession(session) if session.working_branch.is_none() => {
-                Some(AgentSessionId::new_from_uuid(session.id))
-            }
+            SoupItem::AgentSession(session) if session.working_branch.is_none() => Some(session.id),
             _ => None,
         })
         .collect();
@@ -103,8 +110,8 @@ pub(super) async fn enrich<F: GithubPullRequestListing>(
         };
         if session.working_branch.is_none() {
             session.working_branch = branch_facts
-                .get(&AgentSessionId::new_from_uuid(session.id))
-                .and_then(|fact| fact.for_repository(session.repo_url.as_deref()?))
+                .get(&session.id)
+                .and_then(|fact| for_repository(fact, session.repo_url.as_deref()?))
                 .map(str::to_owned);
         }
         let pull_request = session
