@@ -1,5 +1,4 @@
-//! Deterministic client sync contracts. Hosts execute effects and supply both clocks.
-//! Connection and convergence state machines are implemented separately from these values.
+//! Deterministic client synchronization. Hosts execute effects and supply both clocks.
 #![deny(missing_docs)]
 
 pub use sync_doc_id::SyncDocId;
@@ -21,3 +20,15 @@ pub use wal::*;
 
 #[cfg(test)]
 mod test;
+
+mod connection;
+pub use connection::{Connection, Heartbeat};
+mod peers;
+pub use peers::*;
+
+
+mod presence;
+pub use presence::*;
+
+mod router;
+pub use router::*;

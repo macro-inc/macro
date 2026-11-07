@@ -6560,6 +6560,7 @@ dependencies = [
 name = "doc_sync_core"
 version = "0.1.0"
 dependencies = [
+ "bebop",
  "loro",
  "macro_user_id",
  "postcard",

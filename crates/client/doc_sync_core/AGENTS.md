@@ -2,13 +2,17 @@
 
 ## What it is
 
-Pure sync contracts shared by client hosts. All clocks and identities come from
-callers; transport and durable storage run outside this crate.
+Deterministic client synchronization contracts and machines. All clocks and
+identities come from callers; transport and durable storage run outside this crate.
 
 ## Scope
 
 - No I/O, clock reads, random generation, or unordered output iteration.
-- State-machine transitions belong to the subsequent sync implementation.
+- `Connection` handles socket generations, heartbeat and backoff; `RouterCore`
+  multiplexes independently authorized routes on one physical socket.
+- `PeerSupply` validates host-generated peers; never generate identities here.
+- `PresenceBackend` is the clock-injected port; the production store adapter is
+  deferred until `sync_protocol::presence` lands (WP-42).
 - Storage serde is for Rust-only postcard; host ABI encoding is a separate adapter.
 
 ## Checks

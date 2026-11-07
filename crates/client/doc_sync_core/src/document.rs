@@ -27,7 +27,12 @@ pub trait SyncDoc {
 
     /// Import `bytes` into a throwaway `LoroDoc` seeded from `snapshot`, peer from the supply
     /// and never committed. Used only by the W-11 poison proof.
-    fn probe_import(&mut self, snapshot: &[u8], bytes: &[u8]) -> Result<Imported, ImportFailure>;
+    fn probe_import(
+        &mut self,
+        snapshot: &[u8],
+        bytes: &[u8],
+        new_peer: loro::PeerID,
+    ) -> Result<Imported, ImportFailure>;
 
     /// Seed an empty doc. First-wins is decided by the core, not here.
     fn seed(&mut self, snapshot: &[u8], kind: SeedKind) -> Result<(), ImportFailure>;
@@ -39,6 +44,7 @@ pub trait SyncDoc {
 }
 
 /// `new_ops`: the import grew the oplog vv (W-10.2 stores chatter only then).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Imported {
     /// Whether the visible document state changed.
     pub changed: bool,
@@ -49,6 +55,7 @@ pub struct Imported {
 }
 
 /// Source of bytes imported into the document.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImportOrigin {
     /// Bytes received from the live transport.
     Live,
@@ -63,6 +70,7 @@ pub enum ImportOrigin {
 }
 
 /// Source of the winning initial document snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SeedKind {
     /// Host-provided optimistic initial bytes.
     Optimistic,

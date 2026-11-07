@@ -13,6 +13,23 @@ pub struct SyncOutput {
 
 /// An I/O operation for the host to execute after handling an input.
 pub enum IoEffect {
+    /// Detach this session from its router; other routes and owners remain connected.
+    RouteDetach {
+        /// Route whose ownership the host must release.
+        doc: SyncDocId,
+    },
+    /// Forward to `RouterInput::Reconnect` for this document without closing its shared socket.
+    RouteReconnect {
+        /// Route requiring a freshly authorized subscription.
+        doc: SyncDocId,
+    },
+    /// Open the shared router socket; its route tokens are fetched separately.
+    RouterConnect {
+        /// Physical socket generation.
+        conn: ConnId,
+        /// Opener trace context propagated to the router.
+        traceparent: Option<String>,
+    },
     /// `doc` is the session's doc for `Direct`, and the route's doc from `RouterCore`.
     FetchToken {
         /// Authorization attempt correlation counter.
@@ -106,6 +123,7 @@ pub enum Reply {
 }
 
 /// Connection, durability, and import health exposed to the host.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SyncStatus {
     /// Public connection state.
     pub connection: ConnectionStatus, // Connecting | Connected | Disconnected | Offline (gave up) | Closed(CloseReason)
