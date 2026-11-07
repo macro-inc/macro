@@ -370,7 +370,10 @@ impl History {
         }
         self.current = Some(state);
         self.current_commit = None;
-        for entry in commit.chain() {
+        for entry in commit
+            .chain()
+            .filter(|entry| !entry.changes.is_empty() || entry.selection_changed)
+        {
             self.record(entry, now);
         }
         // Availability is exposed by the owning core after this operation.
