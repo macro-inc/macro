@@ -21885,6 +21885,93 @@
         }
       }
     },
+    "/passwords/teams/{team}/items/{item}/username": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "Read only the current account identifier with normal human view authorization.",
+        "operationId": "passwords_username",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordUsername"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/username/copy": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Read only the current account identifier and record an explicit clipboard action.",
+        "operationId": "passwords_copy_username",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordUsername"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -47404,6 +47491,7 @@
           "version",
           "hasTotp",
           "shared",
+          "shareCount",
           "createdAt",
           "updatedAt"
         ],
@@ -47442,6 +47530,11 @@
           "name": {
             "type": "string",
             "description": "Searchable display name; must not contain credential values."
+          },
+          "shareCount": {
+            "type": "integer",
+            "description": "Number of distinct explicitly shared recipients; a team grant counts once.",
+            "minimum": 0
           },
           "shared": {
             "type": "boolean",
@@ -47594,7 +47687,7 @@
           },
           "username": {
             "$ref": "#/components/schemas/PasswordSecretString",
-            "description": "Private account identifier, disclosed only through protected value reads."
+            "description": "Account identifier; authorized humans may resolve it separately from confidential values."
           }
         },
         "additionalProperties": false
@@ -47643,6 +47736,22 @@
             "format": "int32",
             "description": "Verification-code period in seconds.",
             "minimum": 0
+          }
+        }
+      },
+      "PasswordUsername": {
+        "type": "object",
+        "description": "Current account identifier, without confidential credentials or custom fields.",
+        "required": ["username", "version"],
+        "properties": {
+          "username": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Account identifier stored only in the provider and resolved for authorized humans."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed version used to resolve this identifier."
           }
         }
       },

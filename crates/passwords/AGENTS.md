@@ -36,6 +36,12 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - Only human session credentials are accepted. Secret responses additionally verify
   signed FusionAuth `auth_time` within five minutes; refresh does not extend it.
 - Mutations require `X-Macro-Passwords: 1`; responses use `private, no-store`.
+- Username GET and audited username-copy POST resolve only the current committed
+  identifier with normal human view authorization. Recheck access and revision after
+  the provider read; never reconcile or return passwords, notes or custom fields.
+  Password reveal/copy and verification codes still require recent sign-in.
+- Derive `shareCount` from distinct grant `(kind,id)` pairs already loaded with each
+  record. Count a team grant once; do not fetch grants per list row or expand members.
 - UUIDv7 `operationId` is stable across create/save retries. Pending metadata intents
   reconcile accepted provider writes after a lost response. Team vault locks serialize
   folders, grants and reveal with edits and deletion across replicas; contention

@@ -54,6 +54,11 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
         )
         .route("/teams/{team}/items/{item}/reveal", post(reveal::<A>))
         .route("/teams/{team}/items/{item}/copy", post(copy::<A>))
+        .route("/teams/{team}/items/{item}/username", get(username::<A>))
+        .route(
+            "/teams/{team}/items/{item}/username/copy",
+            post(copy_username::<A>),
+        )
         .route("/teams/{team}/items/{item}/history", get(history::<A>))
         .route("/teams/{team}/items/{item}/activity", get(activity::<A>))
         .route(
@@ -239,6 +244,34 @@ pub async fn detail<A: MacroAuthorizationService>(
         state
             .service
             .get(&actor(user, None)?, TeamId(team), ItemId(item))
+            .await?,
+    ))
+}
+#[utoipa::path(operation_id = "passwords_username",get,path="/passwords/teams/{team}/items/{item}/username",params(("team"=Uuid,Path),("item"=Uuid,Path)),responses((status=200,body=Username)),tag="passwords")]
+/// Read only the current account identifier with normal human view authorization.
+pub async fn username<A: MacroAuthorizationService>(
+    State(state): State<PasswordRouterState<A>>,
+    user: MacroAuthorizationExtractor<A, UserOnly>,
+    Path((team, item)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Username>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .username(&actor(user, None)?, TeamId(team), ItemId(item), false)
+            .await?,
+    ))
+}
+#[utoipa::path(operation_id = "passwords_copy_username",post,path="/passwords/teams/{team}/items/{item}/username/copy",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),responses((status=200,body=Username)),tag="passwords")]
+/// Read only the current account identifier and record an explicit clipboard action.
+pub async fn copy_username<A: MacroAuthorizationService>(
+    State(state): State<PasswordRouterState<A>>,
+    user: MacroAuthorizationExtractor<A, UserOnly>,
+    Path((team, item)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Username>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .username(&actor(user, None)?, TeamId(team), ItemId(item), true)
             .await?,
     ))
 }

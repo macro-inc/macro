@@ -226,6 +226,8 @@ use utoipa::OpenApi;
         passwords::inbound::router::list,
         passwords::inbound::router::create,
         passwords::inbound::router::detail,
+        passwords::inbound::router::username,
+        passwords::inbound::router::copy_username,
         passwords::inbound::router::update,
         passwords::inbound::router::patch,
         passwords::inbound::router::remove,

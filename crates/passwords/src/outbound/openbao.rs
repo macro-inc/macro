@@ -264,6 +264,31 @@ impl SecretProvider for OpenBaoProvider {
         .map_err(|_| Error::Unavailable)?;
         Ok(stored.values)
     }
+    #[tracing::instrument(skip_all,err,name="passwords.openbao.username",fields(team_id=%team.0,item_id=%item.0))]
+    async fn username(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        version: i32,
+    ) -> Result<SecretString, Error> {
+        #[derive(Deserialize)]
+        struct StoredUsername {
+            values: UsernameValue,
+        }
+        #[derive(Deserialize)]
+        struct UsernameValue {
+            username: SecretString,
+        }
+        let stored: StoredUsername = quiet(kv2::read_version(
+            &self.client(team).await?,
+            "passwords",
+            &item.0.to_string(),
+            u64::try_from(version).map_err(|_| Error::Invalid)?,
+        ))
+        .await
+        .map_err(|_| Error::Unavailable)?;
+        Ok(stored.values.username)
+    }
     #[tracing::instrument(skip_all,err,name="passwords.openbao.delete",fields(team_id=%team.0,item_id=%item.0))]
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
         let client = self.client(team).await?;
@@ -393,6 +418,9 @@ impl SecretProvider for UnavailableProvider {
         Err(Error::Unavailable)
     }
     async fn read(&self, _: TeamId, _: ItemId, _: i32) -> Result<SecretValues, Error> {
+        Err(Error::Unavailable)
+    }
+    async fn username(&self, _: TeamId, _: ItemId, _: i32) -> Result<SecretString, Error> {
         Err(Error::Unavailable)
     }
     async fn delete(&self, _: TeamId, _: ItemId) -> Result<(), Error> {

@@ -22,10 +22,17 @@ boundary: secret-provider credentials stay server-side either way.
 Postgres stores the searchable metadata index and grants, never field values,
 notes, passwords, TOTP seeds, or historical secret payloads. OpenBao KV v2 holds
 versioned payloads. Reads of list/detail/history metadata do not resolve values.
-Explicit reveal/copy and TOTP-code operations require recent authentication and
+Password reveal/copy and TOTP-code operations require recent authentication and
 return `Cache-Control: no-store`. Updating metadata and external payloads needs
 version guards: an interrupted provider write must never publish metadata that
 points at missing values. Authorization must precede every provider operation.
+
+Selecting an item resolves its non-secret username through a separate,
+human-authorized projection. Only the username and committed version reach the
+browser; passwords, notes, and custom fields stay protected. Username copies are
+explicitly audited. Neither endpoint populates the metadata index or browser
+query cache. Sharing counts derive from distinct explicit user/team grants
+already loaded with metadata; a team grant counts as one share.
 
 Durable metadata-only intents correlate accepted writes with their logical
 operation IDs. Recovery that resolves a provider operation marker runs only
@@ -71,15 +78,17 @@ Never represent an unimplemented encryption layer as shipped protection.
 
 ## Disclosure and auditing
 
-Reveal, copy, historical-value disclosure, and current TOTP codes require a
-signed authentication time within five minutes. Token refresh must not advance
-that time. Missing, expired, or future authentication times fail closed; the UI
+Protected reveal/copy, historical-value disclosure, and current TOTP codes
+require a signed authentication time within five minutes. Token refresh must not
+advance that time. Missing, expired, or future authentication times fail closed; the UI
 must complete an interactive login before retrying. API keys and agent identities
-cannot obtain human disclosure privileges.
+cannot obtain human disclosure privileges. Username-only view and copy use the
+same human item authorization without the recent-authentication requirement.
 
 The human-session-only vault endpoints are deliberately excluded from SDK entity
-wrappers in v1. They require interactive reauthentication and must not appear as
-agent capabilities. Generated OpenAPI contracts still describe the HTTP API.
+wrappers in v1 and must not appear as agent capabilities. Protected disclosures
+additionally require interactive reauthentication. Generated OpenAPI contracts
+still describe the HTTP API.
 
 Secret wrappers redact debug output and zeroize application-owned plaintext on
 drop. HTTP buffers and browser memory cannot guarantee immediate erasure: keep

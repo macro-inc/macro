@@ -93,6 +93,12 @@ fn routes() -> Vec<(&'static str, String, serde_json::Value)> {
         ("GET", format!("/teams/{team}/items"), serde_json::json!({})),
         ("POST", format!("/teams/{team}/items"), write.clone()),
         ("GET", item.clone(), serde_json::json!({})),
+        ("GET", format!("{item}/username"), serde_json::json!({})),
+        (
+            "POST",
+            format!("{item}/username/copy"),
+            serde_json::json!({}),
+        ),
         ("PUT", item.clone(), write),
         (
             "PATCH",
@@ -317,17 +323,38 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             version: 1,
             has_totp: false,
             shared: false,
+            share_count: 0,
             created_at: now,
             updated_at: now,
             last_used_at: None,
         },
     };
     repository.save(&record, None).await.expect("metadata");
+    use crate::domain::{ports::SecretProvider, service::test::fakes::FakeProvider};
+    let provider = Arc::new(FakeProvider::new());
+    provider
+        .write(
+            first,
+            record.metadata.id,
+            0,
+            Uuid::now_v7(),
+            &SecretValues {
+                username: SecretString("synthetic-identifier".into()),
+                password: SecretString("protected-password-marker".into()),
+                notes: SecretString("protected-notes-marker".into()),
+                fields: vec![SecretField {
+                    label: "protected-label-marker".into(),
+                    value: SecretString("protected-field-marker".into()),
+                }],
+            },
+        )
+        .await
+        .expect("provider fixture");
     let app: Router = router(PasswordRouterState {
         authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
         service: Arc::new(PasswordService {
             repository: repository.clone(),
-            provider: Arc::new(UnavailableProvider),
+            provider: provider.clone(),
             availability: Arc::new(Enabled),
             reauthentication: Arc::new(SessionReauthentication {
                 validation: macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
@@ -335,6 +362,80 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
         }),
     });
     let item = record.metadata.id.0;
+    for (method, path, expected) in [
+        (
+            "GET",
+            format!("/teams/{}/items/{item}/username", first.0),
+            StatusCode::OK,
+        ),
+        (
+            "POST",
+            format!("/teams/{}/items/{item}/username/copy", first.0),
+            StatusCode::OK,
+        ),
+        (
+            "GET",
+            format!("/teams/{}/items/{item}/username", second.0),
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            "POST",
+            format!("/teams/{}/items/{item}/username/copy", second.0),
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            "POST",
+            format!("/teams/{}/items/{item}/reveal", first.0),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "POST",
+            format!("/teams/{}/items/{item}/copy", first.0),
+            StatusCode::UNAUTHORIZED,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header("authorization", "Bearer session")
+                    .header("x-macro-passwords", "1")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), expected);
+        assert_eq!(response.headers()[CACHE_CONTROL], "private, no-store");
+        let body = to_bytes(response.into_body(), 262144).await.expect("body");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("JSON");
+        if expected == StatusCode::OK {
+            assert_eq!(
+                json,
+                serde_json::json!({"username":"synthetic-identifier","version":1})
+            );
+        }
+        for marker in [
+            "protected-password-marker",
+            "protected-notes-marker",
+            "protected-label-marker",
+            "protected-field-marker",
+        ] {
+            assert!(!String::from_utf8_lossy(&body).contains(marker));
+        }
+    }
+    assert!(
+        repository
+            .activity(first, record.metadata.id)
+            .await
+            .expect("copy audit")
+            .iter()
+            .any(|entry| matches!(entry.action, Action::Copy))
+    );
+    assert_eq!(provider.reads.load(std::sync::atomic::Ordering::SeqCst), 0);
     for path in [
         format!("/teams/{}/items", first.0),
         format!("/teams/{}/items/{item}", first.0),

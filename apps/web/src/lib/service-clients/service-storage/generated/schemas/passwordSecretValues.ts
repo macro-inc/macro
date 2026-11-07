@@ -17,6 +17,6 @@ export interface PasswordSecretValues {
   notes: PasswordSecretString;
   /** Private credential, zeroized when the owned buffer is dropped. */
   password: PasswordSecretString;
-  /** Private account identifier, disclosed only through protected value reads. */
+  /** Account identifier; authorized humans may resolve it separately from confidential values. */
   username: PasswordSecretString;
 }

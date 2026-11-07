@@ -2064,6 +2064,7 @@ export * from './passwordsListParams';
 export * from './passwordTeamId';
 export * from './passwordTotpBody';
 export * from './passwordTotpCode';
+export * from './passwordUsername';
 export * from './passwordVersion';
 export * from './passwordWriteItem';
 export * from './passwordWriteItemExpectedVersion';

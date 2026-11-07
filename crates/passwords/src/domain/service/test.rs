@@ -34,6 +34,7 @@ fn owner_and_grants_are_scoped_to_the_team_and_permission() {
             version: 1,
             has_totp: false,
             shared: true,
+            share_count: 0,
             created_at: now,
             updated_at: now,
             last_used_at: None,
@@ -56,7 +57,7 @@ fn owner_and_grants_are_scoped_to_the_team_and_permission() {
 }
 
 #[path = "fakes.rs"]
-mod fakes;
+pub(crate) mod fakes;
 use fakes::*;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -151,6 +152,24 @@ async fn metadata_never_decrypts_and_disclosure_checks_membership_grants_and_rea
         Err(Error::NotFound)
     ));
     recent.recent.store(false, Ordering::SeqCst);
+    let identifier = service
+        .username(&owner, team, metadata.id, true)
+        .await
+        .expect("identifier does not require recent reauthentication");
+    assert_eq!(
+        serde_json::to_value(identifier).expect("username JSON"),
+        serde_json::json!({"username":"login","version":1})
+    );
+    assert!(matches!(
+        service.username(&stranger, team, metadata.id, false).await,
+        Err(Error::NotFound)
+    ));
+    assert!(matches!(
+        service
+            .username(&owner, TeamId(Uuid::from_u128(2)), metadata.id, false)
+            .await,
+        Err(Error::NotFound)
+    ));
     assert!(matches!(
         service
             .reveal(&owner, team, metadata.id, Some(1), true)
@@ -172,6 +191,49 @@ async fn metadata_never_decrypts_and_disclosure_checks_membership_grants_and_rea
         )
         .await
         .expect("share");
+    let duplicate = Grant {
+        kind: GranteeKind::User,
+        id: stranger.user_id.to_string(),
+        permission: Permission::View,
+    };
+    service
+        .share(
+            &owner,
+            team,
+            metadata.id,
+            vec![
+                duplicate.clone(),
+                duplicate,
+                Grant {
+                    kind: GranteeKind::Team,
+                    id: team.0.to_string(),
+                    permission: Permission::View,
+                },
+            ],
+        )
+        .await
+        .expect("duplicate recipient facts");
+    assert_eq!(
+        service
+            .get(&owner, team, metadata.id)
+            .await
+            .expect("detail count")
+            .share_count,
+        2
+    );
+    assert_eq!(
+        service.list(&owner, team, "").await.expect("list count")[0].share_count,
+        2
+    );
+    assert_eq!(
+        service
+            .username(&stranger, team, metadata.id, false)
+            .await
+            .expect("shared identifier")
+            .username
+            .0,
+        "login"
+    );
     assert!(matches!(
         service.share(&stranger, team, metadata.id, vec![]).await,
         Err(Error::NotFound)
@@ -181,6 +243,19 @@ async fn metadata_never_decrypts_and_disclosure_checks_membership_grants_and_rea
         .await
         .expect("shared copy");
     assert_eq!(disclosed.values.password.0, "sensitive-test-marker");
+    *provider.revoke_on_username.lock().expect("fixture lock") = Some(repository.clone());
+    assert!(matches!(
+        service.username(&stranger, team, metadata.id, false).await,
+        Err(Error::NotFound)
+    ));
+    assert_eq!(
+        service
+            .get(&owner, team, metadata.id)
+            .await
+            .expect("revoked count")
+            .share_count,
+        0
+    );
     repository
         .memberships
         .lock()

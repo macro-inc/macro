@@ -268,6 +268,7 @@ pub struct FakeProvider {
     pub tombstones: Mutex<HashSet<Uuid>>,
     pub totp_seeds: Mutex<HashMap<Uuid, SecretString>>,
     pub fail_set: AtomicBool,
+    pub revoke_on_username: Mutex<Option<Arc<FakeRepository>>>,
 }
 impl FakeProvider {
     pub fn new() -> Self {
@@ -278,11 +279,29 @@ impl FakeProvider {
             tombstones: Mutex::new(HashSet::new()),
             totp_seeds: Mutex::new(HashMap::new()),
             fail_set: AtomicBool::new(false),
+            revoke_on_username: Mutex::new(None),
         }
     }
 }
 #[async_trait]
 impl SecretProvider for FakeProvider {
+    async fn username(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretString, Error> {
+        let username = {
+            let stored = self.stored.lock().expect("fixture lock");
+            let stored = stored.get(&item.0).ok_or(Error::NotFound)?;
+            if stored.0 != version {
+                return Err(Error::NotFound);
+            }
+            stored.2.username.clone()
+        };
+        if let Some(repository) = self.revoke_on_username.lock().expect("fixture lock").take() {
+            let mut records = repository.records.lock().expect("fixture lock");
+            let record = records.get_mut(&item.0).expect("record");
+            record.grants.clear();
+            record.revision += 1;
+        }
+        Ok(username)
+    }
     async fn current_version(&self, _: TeamId, item: ItemId) -> Result<Option<i32>, Error> {
         if self
             .tombstones

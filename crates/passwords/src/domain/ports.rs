@@ -91,6 +91,13 @@ pub trait SecretProvider: Send + Sync {
     ) -> Result<i32, Error>;
     /// Resolve one explicit private value version.
     async fn read(&self, team: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error>;
+    /// Resolve only the account identifier, without exposing other fields to the caller.
+    async fn username(
+        &self,
+        team: TeamId,
+        item: ItemId,
+        version: i32,
+    ) -> Result<SecretString, Error>;
     /// Retain a deletion fence while retiring the visible metadata record.
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error>;
     /// List version timestamps without private values.

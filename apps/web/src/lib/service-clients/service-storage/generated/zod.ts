@@ -69209,6 +69209,8 @@ export const passwordsListQueryParams = zod.object({
     .describe('Optional metadata search text; never a value search.'),
 });
 
+export const passwordsListResponseShareCountMin = 0;
+
 export const passwordsListResponseItem = zod
   .object({
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
@@ -69235,6 +69237,12 @@ export const passwordsListResponseItem = zod
     name: zod
       .string()
       .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsListResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
     shared: zod
       .boolean()
       .describe('Whether the item currently has explicit grants.'),
@@ -69346,6 +69354,8 @@ export const passwordsCreateBody = zod
   })
   .describe('Mutation without provider-specific representations.');
 
+export const passwordsCreateResponseShareCountMin = 0;
+
 export const passwordsCreateResponse = zod
   .object({
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
@@ -69372,6 +69382,12 @@ export const passwordsCreateResponse = zod
     name: zod
       .string()
       .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsCreateResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
     shared: zod
       .boolean()
       .describe('Whether the item currently has explicit grants.'),
@@ -69401,6 +69417,8 @@ export const passwordsDetailParams = zod.object({
   item: zod.uuid(),
 });
 
+export const passwordsDetailResponseShareCountMin = 0;
+
 export const passwordsDetailResponse = zod
   .object({
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
@@ -69427,6 +69445,12 @@ export const passwordsDetailResponse = zod
     name: zod
       .string()
       .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsDetailResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
     shared: zod
       .boolean()
       .describe('Whether the item currently has explicit grants.'),
@@ -69538,6 +69562,8 @@ export const passwordsUpdateBody = zod
   })
   .describe('Mutation without provider-specific representations.');
 
+export const passwordsUpdateResponseShareCountMin = 0;
+
 export const passwordsUpdateResponse = zod
   .object({
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
@@ -69564,6 +69590,12 @@ export const passwordsUpdateResponse = zod
     name: zod
       .string()
       .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsUpdateResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
     shared: zod
       .boolean()
       .describe('Whether the item currently has explicit grants.'),
@@ -69642,6 +69674,8 @@ export const passwordsPatchBody = zod
   })
   .describe('A metadata-only change never reads or writes a secret value.');
 
+export const passwordsPatchResponseShareCountMin = 0;
+
 export const passwordsPatchResponse = zod
   .object({
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
@@ -69668,6 +69702,12 @@ export const passwordsPatchResponse = zod
     name: zod
       .string()
       .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsPatchResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
     shared: zod
       .boolean()
       .describe('Whether the item currently has explicit grants.'),
@@ -70000,6 +70040,56 @@ export const passwordsTotpResponse = zod
       .describe('Verification-code period in seconds.'),
   })
   .describe('Current TOTP output is confidential, just like a password.');
+
+/**
+ * @summary Read only the current account identifier with normal human view authorization.
+ */
+export const passwordsUsernameParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsUsernameResponse = zod
+  .object({
+    username: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod
+      .number()
+      .describe('Committed version used to resolve this identifier.'),
+  })
+  .describe(
+    'Current account identifier, without confidential credentials or custom fields.'
+  );
+
+/**
+ * @summary Read only the current account identifier and record an explicit clipboard action.
+ */
+export const passwordsCopyUsernameParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsCopyUsernameHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCopyUsernameResponse = zod
+  .object({
+    username: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod
+      .number()
+      .describe('Committed version used to resolve this identifier.'),
+  })
+  .describe(
+    'Current account identifier, without confidential credentials or custom fields.'
+  );
 
 /**
  * @summary Gets the users pinned items

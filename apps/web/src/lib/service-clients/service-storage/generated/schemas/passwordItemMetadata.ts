@@ -32,6 +32,11 @@ export interface PasswordItemMetadata {
   lastUsedAt?: PasswordItemMetadataLastUsedAt;
   /** Searchable display name; must not contain credential values. */
   name: string;
+  /**
+   * Number of distinct explicitly shared recipients; a team grant counts once.
+   * @minimum 0
+   */
+  shareCount: number;
   /** Whether the item currently has explicit grants. */
   shared: boolean;
   /** Team namespace and authorization boundary. */

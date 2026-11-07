@@ -14419,6 +14419,10 @@ export type PasswordItemMetadata = {
      */
     name: string;
     /**
+     * Number of distinct explicitly shared recipients; a team grant counts once.
+     */
+    shareCount: number;
+    /**
      * Whether the item currently has explicit grants.
      */
     shared: boolean;
@@ -14534,7 +14538,7 @@ export type PasswordSecretValues = {
      */
     password: PasswordSecretString;
     /**
-     * Private account identifier, disclosed only through protected value reads.
+     * Account identifier; authorized humans may resolve it separately from confidential values.
      */
     username: PasswordSecretString;
 };
@@ -14576,6 +14580,20 @@ export type PasswordTotpCode = {
      * Verification-code period in seconds.
      */
     period: number;
+};
+
+/**
+ * Current account identifier, without confidential credentials or custom fields.
+ */
+export type PasswordUsername = {
+    /**
+     * Account identifier stored only in the provider and resolved for authorized humans.
+     */
+    username: PasswordSecretString;
+    /**
+     * Committed version used to resolve this identifier.
+     */
+    version: number;
 };
 
 /**
@@ -31107,6 +31125,44 @@ export type PasswordsTotpResponses = {
 };
 
 export type PasswordsTotpResponse = PasswordsTotpResponses[keyof PasswordsTotpResponses];
+
+export type PasswordsUsernameData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/username';
+};
+
+export type PasswordsUsernameResponses = {
+    200: PasswordUsername;
+};
+
+export type PasswordsUsernameResponse = PasswordsUsernameResponses[keyof PasswordsUsernameResponses];
+
+export type PasswordsCopyUsernameData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/username/copy';
+};
+
+export type PasswordsCopyUsernameResponses = {
+    200: PasswordUsername;
+};
+
+export type PasswordsCopyUsernameResponse = PasswordsCopyUsernameResponses[keyof PasswordsCopyUsernameResponses];
 
 export type GetPinsHandlerData = {
     body?: never;

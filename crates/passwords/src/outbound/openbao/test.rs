@@ -73,6 +73,7 @@ async fn local_provider_versions_totp_isolation_and_deletion_fence() {
         Err(Error::Conflict)
     ));
     values.password.0 = "synthetic-second".into();
+    values.username.0 = "synthetic-second-user".into();
     assert_eq!(
         provider
             .write(first, item, 1, uuid::Uuid::now_v7(), &values)
@@ -89,6 +90,23 @@ async fn local_provider_versions_totp_isolation_and_deletion_fence() {
             .0,
         "synthetic-first"
     );
+    assert_eq!(
+        provider
+            .username(first, item, 1)
+            .await
+            .expect("historical identifier")
+            .0,
+        "synthetic-user"
+    );
+    assert_eq!(
+        provider
+            .username(first, item, 2)
+            .await
+            .expect("current identifier")
+            .0,
+        "synthetic-second-user"
+    );
+    assert!(provider.username(second, item, 2).await.is_err());
     assert_eq!(
         provider
             .read(first, item, 2)
@@ -350,6 +368,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
                     version: 1,
                     has_totp: false,
                     shared: false,
+                    share_count: 0,
                     created_at: now,
                     updated_at: now,
                     last_used_at: None,

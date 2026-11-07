@@ -16,6 +16,16 @@ pub struct PasswordService {
     pub availability: Arc<dyn Availability>,
 }
 impl PasswordService {
+    fn metadata(mut record: Record) -> ItemMetadata {
+        record.metadata.share_count = record
+            .grants
+            .iter()
+            .map(|grant| (matches!(grant.kind, GranteeKind::Team), grant.id.as_str()))
+            .collect::<std::collections::HashSet<_>>()
+            .len();
+        record.metadata.shared = record.metadata.share_count > 0;
+        record.metadata
+    }
     /// List currently enabled vault memberships.
     pub async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
         self.availability.require_enabled(actor).await?;
@@ -135,7 +145,7 @@ impl PasswordService {
             .await?
             .into_iter()
             .filter(|record| Self::permission(actor, team, record, false))
-            .map(|record| record.metadata)
+            .map(Self::metadata)
             .collect())
     }
     /// Read an authorized metadata detail without consulting the secret provider.
@@ -145,7 +155,38 @@ impl PasswordService {
         team: TeamId,
         item: ItemId,
     ) -> Result<ItemMetadata, Error> {
-        Ok(self.access(actor, team, item, false).await?.metadata)
+        Ok(Self::metadata(self.access(actor, team, item, false).await?))
+    }
+    /// Resolve the current account identifier after normal human view authorization.
+    #[tracing::instrument(skip_all,err,name="passwords.username",fields(team_id=%team.0,item_id=%item.0,copy))]
+    pub async fn username(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        copy: bool,
+    ) -> Result<Username, Error> {
+        let _lock = self.repository.lock(team, item).await?;
+        let record = self.access(actor, team, item, false).await?;
+        let username = self
+            .provider
+            .username(team, item, record.metadata.version)
+            .await?;
+        let current = self.access(actor, team, item, false).await?;
+        if current.revision != record.revision
+            || current.metadata.version != record.metadata.version
+        {
+            return Err(Error::Conflict);
+        }
+        if copy {
+            self.repository
+                .audit(team, item, actor, Action::Copy, Uuid::now_v7())
+                .await?;
+        }
+        Ok(Username {
+            username,
+            version: record.metadata.version,
+        })
     }
     #[tracing::instrument(skip_all,err,name="passwords.create",fields(team_id=%team.0))]
     /// Create a credential using a stable operation ID and durable metadata intent.
@@ -179,7 +220,7 @@ impl PasswordService {
                 self.repository
                     .audit(team, id, actor, Action::Create, command.operation_id)
                     .await?;
-                return Ok(record.metadata);
+                return Ok(Self::metadata(record));
             }
             Ok(_) => return Err(Error::Conflict),
             Err(Error::NotFound) => {}
@@ -203,6 +244,7 @@ impl PasswordService {
                 version: 1,
                 has_totp: false,
                 shared: false,
+                share_count: 0,
                 created_at: now,
                 updated_at: now,
                 last_used_at: None,
@@ -216,7 +258,7 @@ impl PasswordService {
         self.repository
             .audit(team, id, actor, Action::Create, command.operation_id)
             .await?;
-        Ok(record.metadata)
+        Ok(Self::metadata(record))
     }
     #[tracing::instrument(skip_all,err,name="passwords.update",fields(team_id=%team.0,item_id=%item.0))]
     /// Update an editable credential with provider CAS and retry recovery.
@@ -240,7 +282,7 @@ impl PasswordService {
                 self.repository
                     .audit(team, item, actor, Action::Update, command.operation_id)
                     .await?;
-                return Ok(record.metadata);
+                return Ok(Self::metadata(record));
             }
             return Err(Error::Conflict);
         }
@@ -261,7 +303,7 @@ impl PasswordService {
         self.repository
             .audit(team, item, actor, Action::Update, command.operation_id)
             .await?;
-        Ok(record.metadata)
+        Ok(Self::metadata(record))
     }
     #[tracing::instrument(skip_all,err,name="passwords.metadata.update",fields(team_id=%team.0,item_id=%item.0))]
     /// Update display fields without resolving or replacing secret values.
@@ -292,7 +334,7 @@ impl PasswordService {
         self.repository
             .audit(team, item, actor, Action::Update, Uuid::now_v7())
             .await?;
-        Ok(record.metadata)
+        Ok(Self::metadata(record))
     }
     /// Deleted items retain internal tombstones for owner retries and durable provider cleanup.
     #[tracing::instrument(skip_all,err,name="passwords.delete",fields(team_id=%team.0,item_id=%item.0))]
@@ -607,4 +649,4 @@ impl PasswordService {
     }
 }
 #[cfg(test)]
-mod test;
+pub(crate) mod test;

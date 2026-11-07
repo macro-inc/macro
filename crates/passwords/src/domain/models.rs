@@ -45,7 +45,7 @@ pub struct SecretString(
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schema(as=PasswordSecretValues)]
 pub struct SecretValues {
-    /// Private account identifier, disclosed only through protected value reads.
+    /// Account identifier; authorized humans may resolve it separately from confidential values.
     pub username: SecretString,
     /// Private credential, zeroized when the owned buffer is dropped.
     pub password: SecretString,
@@ -108,6 +108,10 @@ pub struct ItemMetadata {
     pub has_totp: bool,
     /// Whether the item currently has explicit grants.
     pub shared: bool,
+    /// Number of distinct explicitly shared recipients; a team grant counts once.
+    #[serde(default)]
+    #[schema(required)]
+    pub share_count: usize,
     /// Resource creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Most recent metadata modification timestamp.
@@ -271,6 +275,16 @@ pub struct Revealed {
     /// Private payload; never serialize into the metadata repository.
     pub values: SecretValues,
     /// Committed provider value version.
+    pub version: i32,
+}
+/// Current account identifier, without confidential credentials or custom fields.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as=PasswordUsername)]
+pub struct Username {
+    /// Account identifier stored only in the provider and resolved for authorized humans.
+    pub username: SecretString,
+    /// Committed version used to resolve this identifier.
     pub version: i32,
 }
 /// Immutable provider version metadata, without historic values.
