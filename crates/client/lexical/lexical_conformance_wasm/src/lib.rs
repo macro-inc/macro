@@ -109,16 +109,10 @@ impl CoreHandle {
     #[cfg(feature = "js-nodes")]
     fn transfer_state(editor: &mut Editor, state: EditorState) -> Result<(), BoundaryError> {
         if state.is_empty_state() {
-            let root = state.view().element_data(NodeKey::ROOT)?.clone();
+            let root = state.view().export_json(NodeKey::ROOT)?;
             editor.update(|tx| {
                 tx.clear(NodeKey::ROOT)?;
-                tx.set_indent(NodeKey::ROOT, root.indent)?;
-                tx.element(NodeKey::ROOT)?
-                    .set_format(root.format)?
-                    .set_direction(root.direction)?
-                    .set_style(&root.style)?
-                    .set_text_format(root.text_format)?
-                    .set_text_style(&root.text_style)?;
+                tx.update_from_json(NodeKey::ROOT, &root)?;
                 tx.set_selection(state.selection().cloned())
             })?;
         } else {
