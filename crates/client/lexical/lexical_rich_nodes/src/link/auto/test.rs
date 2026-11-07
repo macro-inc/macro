@@ -283,6 +283,15 @@ fn regex_adapter_selects_code_unit_or_unicode_decoder() {
         (found.index, found.length, found.text),
         (Utf16Offset(0), 2, "😀".into())
     );
+    let unicode_sets = create_link_matcher_with_reg_exp(
+        regress::Regex::with_flags(".", "v").expect("regex"),
+        None,
+    );
+    let found = unicode_sets.find("😀").expect("match");
+    assert_eq!(
+        (found.index, found.length, found.text),
+        (Utf16Offset(0), 2, "😀".into())
+    );
 }
 
 /// upstream: the null autolink listener ignores NodeSelection.

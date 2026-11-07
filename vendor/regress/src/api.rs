@@ -395,7 +395,7 @@ impl From<CompiledRegex> for Regex {
 impl Regex {
     /// Whether this expression uses Unicode code-point matching (`u` or `v`).
     pub fn is_unicode(&self) -> bool {
-        self.cr.flags.unicode
+        self.cr.flags.unicode || self.cr.flags.unicode_sets
     }
 
     /// Construct a regex by parsing `pattern` using the default flags.

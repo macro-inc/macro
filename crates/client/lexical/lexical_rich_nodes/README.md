@@ -65,8 +65,8 @@ cases from ClickAfterLastBlock.test.ts: block decorator, rejected predicate,
 disabled registration and empty root. Shadow-root and stale-last-child cases are
 additional literal checks. Its read-only test is a DOM claim test and remains in
 the view. RichTextImportExtension tests are DOM import tests, outside this model
-package. The heading test involving an empty ListItem inside ListNode belongs to
-the list-node port; this package covers all its non-list heading/quote cases.
+package. The heading Backspace test involving an empty ListItem inside ListNode is also
+ported now that list nodes are available.
 Tier A rich-text/hashtag fixtures are replayed through `lexical_conformance`;
 these literal unit ports also exercise the model directly.
 

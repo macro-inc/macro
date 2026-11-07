@@ -23,6 +23,17 @@ fn astral_prefix_offsets_and_email_protocol_overlap_are_utf16() {
             },
         ]
     );
+    assert_eq!(
+        linkify.matches("😀 https://example.com/😀"),
+        vec![LinkMatch {
+            schema: "https:".into(),
+            index: 3,
+            last_index: 25,
+            raw: "https://example.com/😀".into(),
+            text: "https://example.com/😀".into(),
+            url: "https://example.com/😀".into(),
+        }]
+    );
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
