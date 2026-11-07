@@ -14,7 +14,8 @@ clap = { workspace = true }
 comms_db_client = { workspace = true }
 email_db_client = { workspace = true }
 email_utils = { workspace = true }
-entity_access = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
 entity_access_db_utils = { workspace = true }
 fusionauth = { workspace = true }
 jsonwebtoken = { workspace = true }

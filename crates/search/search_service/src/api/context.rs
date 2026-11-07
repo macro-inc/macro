@@ -2,7 +2,7 @@ use agent_session::domain::search::AgentSessionSearchMetadataService;
 use axum::extract::FromRef;
 use calendar_events::domain::ports::CalendarEventLabelReader;
 use entity_access::domain::service::EntityAccessServiceImpl;
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };

@@ -16,11 +16,8 @@ depended-on crates in the backend.
   `EntityAccessReceipt` — the typed receipt proving a checked access level.
 - `src/inbound/axum_extractors.rs`: Axum extractors that resolve a receipt
   from the request (feature `inbound`).
-- `src/outbound/pg_access_repo.rs`: the Postgres adapter (feature `outbound`).
-  Form Edit/Owner grants Edit on the backing database; form View grants
-  database View only when that form shares its responses.
-- `src/bin/explain_access.rs`: CLI to explain why a user has (or lacks)
-  access to an entity (feature `explain_binary`).
+- The Postgres adapter and the `explain_access` CLI live in
+  `crates/entities/entity_access_outbound`.
 
 ## Scope
 
@@ -42,14 +39,16 @@ depended-on crates in the backend.
 ## Recipes
 
 - Add an entity kind's access check: `src/domain/ports.rs`
-  (`AccessRepository` method) → `src/domain/service.rs` → `src/outbound/pg_access_repo.rs`.
-- Debug a specific grant: `cargo run -p entity_access --bin explain_access
-  --features explain_binary`.
+  (`AccessRepository` method) → `src/domain/service.rs` →
+  `entity_access_outbound`'s `src/pg_access_repo.rs`.
+- Depend on `entity_access_outbound` only where you construct
+  `PgAccessRepository` (composition roots, and tests as a dev-dependency);
+  domain crates take the `AccessRepository`/`EntityAccessService` ports.
 
 ## Checks
 
-- `cargo test -p entity_access` (`SQLX_OFFLINE` unset; requires local
-  MacroDB — `just setup_macrodb`).
+- `cargo test -p entity_access`; the database tests are in
+  `entity_access_outbound`.
 
 The message sender extractor maps signed user `agent_id` attribution to a bot
 receipt scoped to that same user and organization only for new posts. Reads,

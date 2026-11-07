@@ -114,7 +114,8 @@ models_soup = { workspace = true }
 
 [dev-dependencies]
 databases = { workspace = true, features = ["postgres", "gateway"] }
-entity_access = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
 macro_event_broker = { workspace = true }
 
 macro_db_migrator = { workspace = true }

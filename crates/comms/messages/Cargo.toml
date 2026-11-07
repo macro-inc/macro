@@ -82,5 +82,6 @@ initiative = { workspace = true, features = ["postgres"] }
 macro_db_migrator = { workspace = true }
 models_permissions = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-entity_access = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
 macro_db_client = { workspace = true, default-features = true }

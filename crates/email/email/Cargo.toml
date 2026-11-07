@@ -68,6 +68,7 @@ base64 = { workspace = true }
 lexical_client = { workspace = true }
 email_validator = { workspace = true, optional = true }
 entity_access = { workspace = true, default-features = true }
+entity_access_outbound = { workspace = true }
 entity_access_management = { workspace = true, features = [
   "ports",
 ] }

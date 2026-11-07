@@ -163,9 +163,9 @@ pub enum ParticipantRole {
 /// Ordered least to most privileged so comparisons reflect access strength.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
 #[cfg_attr(
-    feature = "outbound",
+    feature = "sqlx",
     sqlx(type_name = "\"team_role\"", rename_all = "lowercase")
 )]
 #[serde(rename_all = "snake_case")]

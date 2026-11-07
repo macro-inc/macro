@@ -5,14 +5,12 @@ use databases::{
     domain::storage::DatabaseStorageService,
     outbound::gateway_event_publisher::NoOpTableEventPublisher, wiring::build_service,
 };
-use entity_access::{
-    domain::{
-        models::{EntityType as AccessEntityType, ViewAccessLevel},
-        ports::EntityAccessService,
-        service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::{EntityType as AccessEntityType, ViewAccessLevel},
+    ports::EntityAccessService,
+    service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};

@@ -24,9 +24,8 @@ comms_db_client = { workspace = true }
 crm = { workspace = true, features = ["search"] }
 document_sub_type = { workspace = true, default-features = true }
 email_db_client = { workspace = true }
-entity_access = { workspace = true, features = [
-  "outbound",
-] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
 indexmap = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_authorization = { workspace = true, default-features = true }

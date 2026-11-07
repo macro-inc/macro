@@ -32,7 +32,8 @@ use email::{
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
 use email_api_client_outbound::GmailApiClientRepository;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{

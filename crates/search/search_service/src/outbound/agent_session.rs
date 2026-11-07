@@ -5,7 +5,7 @@ use std::sync::Arc;
 use agent_session::domain::search::{
     AgentSessionSearchMetadata, AgentSessionSearchMetadataService,
 };
-use entity_access::outbound::{accessible_session_ids, get_user_source_ids};
+use entity_access_outbound::{accessible_session_ids, get_user_source_ids};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use readonly_pool::ReadOnlyPool;
 use rootcause::Report;

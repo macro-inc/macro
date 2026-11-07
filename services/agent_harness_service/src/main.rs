@@ -298,7 +298,7 @@ async fn run() -> anyhow::Result<()> {
     session_list_policy.reconcile(&session_repo).await?;
     let entity_access = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     // Frames reach the owner plus whoever currently holds session access,

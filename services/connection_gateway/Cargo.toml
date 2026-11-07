@@ -41,7 +41,8 @@ connection_gateway_models = { workspace = true }
 cowlike = { workspace = true }
 dashmap = { workspace = true }
 ensure_exists = { workspace = true, features = ["dynamodb"] }
-entity_access = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
 frecency = { workspace = true, features = [
   "inbound",
   "outbound",

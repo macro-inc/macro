@@ -141,6 +141,7 @@ entity_access = { workspace = true, default-features = true, features = [
   "inbound",
   "schema",
 ] }
+entity_access_outbound = { workspace = true }
 entity_access_management = { workspace = true, default-features = true }
 entity_mutation = { workspace = true }
 entity_registry = { workspace = true }

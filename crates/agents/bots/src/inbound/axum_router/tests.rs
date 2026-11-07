@@ -10,6 +10,7 @@ use axum::{
     http::{Request, StatusCode, header},
 };
 use entity_access::domain::models::TeamRole;
+use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
@@ -18,7 +19,7 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access_outbound::PgAccessRepository;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,

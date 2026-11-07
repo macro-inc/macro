@@ -717,6 +717,7 @@ ensure_exists = { path = "crates/platform/ensure_exists" }
 entity_access = { path = "crates/entities/entity_access", default-features = false }
 entity_access_db_utils = { path = "crates/entities/entity_access_db_utils" }
 entity_access_management = { path = "crates/entities/entity_access_management", default-features = false }
+entity_access_outbound = { path = "crates/entities/entity_access_outbound" }
 entity_basic_types = { path = "crates/types/entity_basic_types" }
 entity_mutation = { path = "crates/entities/entity_mutation" }
 entity_registry = { path = "crates/entities/entity_registry" }

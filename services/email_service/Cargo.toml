@@ -109,7 +109,8 @@ document_storage_service_client = { workspace = true }
 doppler-config = { workspace = true }
 ego-tree = { workspace = true }
 email = { workspace = true, features = ["axum", "calendar_invitations", "gmail_token", "inbound", "outbound", "mailbox", "sqs"] }
-entity_access = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
 entity_access_management = { workspace = true, default-features = true }
 email_db_client = { workspace = true }
 email_utils = { workspace = true }

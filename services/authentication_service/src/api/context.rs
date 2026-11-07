@@ -17,7 +17,7 @@ use channels::{
 };
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use entity_access::domain::service::EntityAccessServiceImpl;
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use foreign_entity::domain::service::ForeignEntityServiceImpl;
 use foreign_entity::outbound::pg_foreign_entity_repo::PgForeignEntityRepo;
 use github::domain::service::GithubLinkServiceImpl;

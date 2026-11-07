@@ -19,7 +19,7 @@ use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_storage_service_url::DocumentStorageServiceUrl;
 use entity_access::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
@@ -64,7 +64,7 @@ type Trigger = AgentTriggerService<
     Option<JevTriggerJudge<TriggerClassifier>>,
     MessageThreadHistory<
         entity_access::domain::service::EntityAccessServiceImpl<
-            entity_access::outbound::PgAccessRepository,
+            entity_access_outbound::PgAccessRepository,
         >,
     >,
 >;
@@ -219,7 +219,7 @@ async fn run(
         MessageThreadHistory::new(
             message_reader,
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool.clone()),
+                entity_access_outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
     )
