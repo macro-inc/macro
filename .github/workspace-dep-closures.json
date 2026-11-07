@@ -5203,6 +5203,9 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "document_id": [
+      "crates/document_id"
+    ],
     "document_storage_service": [
       "crates/access_requests",
       "crates/account_manager",
@@ -10226,6 +10229,9 @@
       "crates/system_properties",
       "crates/trigger_context",
       "crates/workspace-hack"
+    ],
+    "lexical_node_id": [
+      "crates/lexical_node_id"
     ],
     "load-test": [
       "crates/macro_env_var",
