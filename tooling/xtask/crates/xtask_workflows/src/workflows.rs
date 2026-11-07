@@ -52,6 +52,7 @@ mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
+mod loro_pair;
 mod native_check_label;
 mod observability_image;
 mod path_validation;
@@ -126,6 +127,11 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
+    WorkflowFile {
+        slug: "loro_pair",
+        file_name: "loro-pair.yml",
+        render_yaml: || render_gh_workflow(loro_pair::loro_pair)(),
+    },
     WorkflowFile {
         slug: "observability_image",
         file_name: "observability_image.yml",
