@@ -86,6 +86,7 @@ struct State {
     confirmed: u64,
     held: Vec<(u64, Effect)>,
     delivery_proofs: Vec<(u64, u64)>,
+    queued_sends: Vec<Effect>,
     completed_puts: Vec<(String, Value, u64)>,
     gate: GateMode,
     effects: Vec<Effect>,
@@ -158,6 +159,7 @@ impl State {
         }
     }
     fn deliver(&mut self, effect: Effect) {
+        self.queued_sends.push(effect.clone());
         if self.gate == GateMode::Held && self.generation > self.confirmed {
             self.held.push((self.generation, effect));
         } else {
@@ -324,6 +326,10 @@ impl SimPorts {
     }
     pub(crate) fn transport_effect(&self, effect: Effect) {
         self.0.borrow_mut().effects.push(effect);
+    }
+    /// Successful send enqueues, excluding failed attempts and preserving gate order.
+    pub fn take_queued_sends(&self) -> Vec<Effect> {
+        std::mem::take(&mut self.0.borrow_mut().queued_sends)
     }
     /// Drain (required write generation, confirmed generation) proofs in delivery order.
     /// This side channel observes the output gate without altering recorded effects.

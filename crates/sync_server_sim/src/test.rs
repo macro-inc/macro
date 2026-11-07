@@ -720,3 +720,33 @@ fn relative_faults_count_across_capabilities_without_matching_clock_reads() {
     assert!(!ports.storage_dump().contains_key("o/failed"));
     block_on(ports.put_pending_operation(&OperationId::new("after".into()), b"c")).unwrap();
 }
+
+#[test]
+fn successful_send_enqueues_exclude_failed_attempts_and_precede_gate_release() {
+    let ports = SimPorts::new();
+    ports.accept(&socket()).unwrap();
+    ports.set_gate(GateMode::Held);
+    block_on(ports.put_pending_operation(&OperationId::new("held".into()), b"x")).unwrap();
+    ports.set_operation_error("connections.send_binary", Some("unavailable".into()));
+    assert!(ports.send_binary(&socket(), &[1, 2]).is_err());
+    assert!(ports.take_queued_sends().is_empty());
+    ports.set_operation_error("connections.send_binary", None);
+    ports.send_binary(&socket(), &[1, 3]).unwrap();
+    let queued = ports.take_queued_sends();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].value["frame"], serde_json::json!([1, 3]));
+    assert!(
+        !ports
+            .take_effects()
+            .iter()
+            .any(|effect| effect.operation == "send")
+    );
+    ports.confirm_through(ports.write_generation());
+    assert!(ports.take_queued_sends().is_empty());
+    assert!(
+        ports
+            .take_effects()
+            .iter()
+            .any(|effect| effect.operation == "send")
+    );
+}

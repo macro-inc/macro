@@ -204,6 +204,7 @@ members = [
   "crates/sync_protocol",
   "crates/sync_server_core",
   "crates/sync_server_sim",
+  "crates/sync_sim",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
@@ -228,6 +229,8 @@ uuid_value = { package = "uuid", version = "1.15.1", default-features = false }
 macro_sync_service_jwt = { path = "crates/macro_sync_service_jwt" }
 sync_server_core = { path = "crates/sync_server_core" }
 sync_protocol = { path = "crates/sync_protocol", default-features = false }
+doc_sync_core = { path = "crates/client/doc_sync_core" }
+sync_server_sim = { path = "crates/sync_server_sim" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -393,6 +396,8 @@ prost-build = "0.14"
 protox = "0.10"
 quote = "1"
 rand = "0.9.0"
+rand_chacha = "0.9.0"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 ratatui = "0.29"
 # uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [

@@ -48,6 +48,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
   repair forged inputs. Keep workerd digest bytes exact.
 - `fork_durable` opens an isolated cold view; `take_completed_puts` and
   `take_delivery_proofs` expose success/generation evidence without changing port effects.
+  `take_queued_sends` distinguishes successful send enqueues from failed attempts.
   Fault `"*"` counts calls through the fault-capable boundary, not diagnostic clock reads.
 - Keep this crate excluded from hakari; no ambient clock or random UUID calls.
 
