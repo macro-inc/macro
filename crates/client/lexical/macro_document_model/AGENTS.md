@@ -10,6 +10,8 @@ Markdown transformers and routes are separate work packages.
 - Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
 - Keep named and full registration on the one source-ordered catalog in editor.rs.
 - Preserve caller object order in standalone JSON-to-markdown wire helpers.
+- Validate activity envelopes separately from lenient stored-node imports; keep unknown card objects.
+- Parse notification attributes in source order and unescape embedded internal link payloads.
 - Use ImportPolicy as the single state/base import mechanism; reproduce upstream loss.
 - Preserve the Export registry without code/list replacements; Headless applies both.
 - Inject NodeClock, NodeRandom and NodeHost through editor extension state; perform no I/O.
