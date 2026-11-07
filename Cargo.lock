@@ -5464,6 +5464,7 @@ dependencies = [
  "models_databases",
  "models_permissions",
  "models_properties",
+ "opentelemetry",
  "properties",
  "rdkafka",
  "rootcause",
@@ -5476,6 +5477,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
  "unfurl",
  "utoipa",
  "uuid",
@@ -6703,6 +6705,7 @@ dependencies = [
  "model_owner",
  "models_databases",
  "models_dcs",
+ "models_pagination",
  "models_permissions",
  "models_properties",
  "models_soup",
@@ -7605,6 +7608,8 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "notification",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rand 0.9.4",
  "redis",
  "regex",
@@ -7630,6 +7635,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "unfurl",
  "unicode-segmentation",
  "url",
@@ -13711,6 +13718,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "natural_time"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "nom 8.0.0",
+ "strsim",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ndk-context"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19264,11 +19281,13 @@ dependencies = [
  "model",
  "models_ai_projection",
  "models_email",
+ "opentelemetry",
  "s3_key",
  "serde",
  "serde_json",
  "strum 0.27.2",
  "tracing",
+ "tracing-opentelemetry",
  "uuid",
  "workspace-hack",
 ]

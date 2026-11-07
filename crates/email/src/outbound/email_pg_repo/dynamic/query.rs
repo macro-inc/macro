@@ -144,7 +144,7 @@ fn push_source_scope(
             // membership subquery revalidates it at execution time so a
             // member or link removed between resolve_filters and this query
             // can't leak threads (same belt-and-suspenders rationale as the
-            // crm_enabled EXISTS below). The subquery alone remains as a
+            // per-thread consent check below). The subquery alone remains as a
             // fallback for resolutions that didn't carry team links.
             Some(team_id) => {
                 if let Some(team_links) = params.resolved.team_link_ids() {
@@ -325,20 +325,12 @@ fn push_thread_candidate_select(
 
     push_source_scope(builder, params, source, per_link_fanout);
 
-    // Belt-and-suspenders killswitch check that covers both the Owned and
-    // Shared branches. Without this, a CRM-scoped request with
-    // `SharedEmailFilter::Include`/`Only` could still return rows after
-    // `team_crm_settings.crm_enabled` flips false between the pre-check
-    // and query execution. EXISTS short-circuits and Postgres planner
-    // treats it as a constant once evaluated per query.
+    // Every CRM candidate, including the caller's own copy and explicit
+    // shares, must satisfy current mailbox consent and domain exclusions.
     if let Some(team_id) = params.team_id {
-        builder.push(
-            r#" AND EXISTS (
-                SELECT 1 FROM team_crm_settings tcs
-                WHERE tcs.team_id = "#,
-        );
+        builder.push(" AND crm_email_thread_allowed(");
         builder.push_bind(team_id);
-        builder.push(" AND tcs.crm_enabled)");
+        builder.push(", t.id)");
     }
 
     let view_thread_filter = build_view_thread_filter(view);

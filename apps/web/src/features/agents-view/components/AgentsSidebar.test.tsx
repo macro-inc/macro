@@ -65,12 +65,19 @@ vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => id,
 }));
 
+let motionStyles: HTMLStyleElement;
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  // Menu actions run once the menu has closed, after its exit animation.
+  motionStyles = document.createElement('style');
+  motionStyles.textContent =
+    '[role="menu"] { animation-name: none; transition-duration: 0s; }';
+  document.head.append(motionStyles);
 });
 
 afterEach(() => {
   cleanup();
+  motionStyles.remove();
   localStorage.clear();
   unreadFilter.mockReturnValue(false);
   sidebarState.agentUpdates = false;

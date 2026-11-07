@@ -59,7 +59,11 @@ document, and stays in the file tabs. Verify moving one into a nested folder
 shared with another user, that user opening it from the folder, and moving it
 back to root, by **Remove from folder** or a drop on the sidebar's **Drive**
 row. Each move toasts success once: databases and forms have no Soup record, so
-the move's result carries no cache patch for them. Databases have no view history and do not appear in **Recent** or
+the move's result carries no cache patch for them. Deleting a folder trashes the
+documents and chats inside it but returns its databases and forms (and those in
+its subfolders) to the root, without the sharing the folder passed down; they show
+no folder chip, even after a reload, and restoring the folder does not file them
+again. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
 
