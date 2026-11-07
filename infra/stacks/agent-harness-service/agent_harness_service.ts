@@ -435,8 +435,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
-              // Daytona cleanup can make two 30-second stop attempts. Give the
-              // draining replica time to release capacity before ECS kills it.
+              // Give the draining replica time to release sessions and transports
+              // before ECS kills it.
               stopTimeout: 120,
               // Shared by the harness and up to eight restricted Deno children.
               cpu: 4096,

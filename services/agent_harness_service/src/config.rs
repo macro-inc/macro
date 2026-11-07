@@ -156,19 +156,6 @@ pub struct Config {
     pub redis_uri: RedisUri,
     /// KMS key for the public MCP OAuth broker's authorization codes.
     pub mcp_oauth_kms_key_id: McpOauthKmsKeyId,
-    /// Base URL of the Daytona REST API.
-    #[macro_config_default(String::from("https://app.daytona.io/api"))]
-    pub daytona_api_url: String,
-    /// API key the Daytona client authenticates with. Empty means the
-    /// managed (sandbox-provisioning) path is unarmed: external sessions
-    /// still work, and a managed spawn fails loudly at spawn time.
-    #[macro_config_default(String::new())]
-    pub daytona_api_key: String,
-    /// Name of the prebuilt Daytona snapshot to create sandboxes from. The
-    /// image is expected to be built and pushed as a snapshot out of band,
-    /// keeping image builds off the first-prompt critical path.
-    #[macro_config_default(String::from("macro-agent-harness"))]
-    pub daytona_snapshot: String,
     /// API key sandboxes run Anthropic models with. Injected into the
     /// sandbox environment at creation, where it activates opencode's
     /// `anthropic` provider — the only provider
@@ -176,12 +163,12 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
-    /// Run sandboxes on the local Docker daemon instead of Daytona.
+    /// Run sandboxes on the local Docker daemon.
     ///
-    /// Default off: a deployed harness must keep using Daytona even if this
-    /// binary is started with a copied local env file. `just run_local` sets
-    /// it. Refused at boot unless `ENVIRONMENT=local`, because this path
-    /// drives the host Docker daemon over a mounted socket.
+    /// Default off: a deployed harness has no sandbox provider and must not
+    /// gain one even if this binary is started with a copied local env file.
+    /// `just run_local` sets it. Refused at boot unless `ENVIRONMENT=local`,
+    /// because this path drives the host Docker daemon over a mounted socket.
     #[macro_config_default(false)]
     pub dev_dangerous_local_containers: bool,
     /// `docker`-compatible binary the local provider drives.

@@ -35,7 +35,6 @@ name: Export CI telemetry
     - Deploy Website
     - Deploy analytics proxy dev
     - Deploy on Push
-    - Ensure Daytona Snapshot
     - Export Datadog observability definitions
     - Migrate Macro Database
     - Native Check Label

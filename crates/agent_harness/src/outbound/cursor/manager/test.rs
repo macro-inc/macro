@@ -880,8 +880,7 @@ async fn resume_answers_session_load_even_before_an_agent_was_minted() {
     );
 }
 
-/// A pipe nothing has moved through for the idle timeout is shut down —
-/// Daytona's reaper made local. The harness side observes a clean end of
+/// A pipe nothing has moved through for the idle timeout is shut down. The harness side observes a clean end of
 /// stream, which is what parks the session until its next prompt resumes it.
 #[tokio::test(start_paused = true)]
 async fn an_idle_pipe_is_shut_down() {

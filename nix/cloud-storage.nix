@@ -958,53 +958,6 @@
           '';
         };
 
-      # The Daytona CLI (sandbox snapshots for crates/agent_harness) is not in
-      # nixpkgs and is only published as prebuilt release binaries, so this
-      # installs the asset rather than building from source. Pinned instead of
-      # tracking `latest` so the shell stays reproducible; bump the version and
-      # the four hashes together.
-      daytona =
-        let
-          version = "0.203.0";
-          asset =
-            {
-              x86_64-linux = {
-                arch = "linux-amd64";
-                hash = "sha256-5r+K1OgFcw1BF1sNJwdlbc0rGAVZSy16eEiCvQ/X8DI=";
-              };
-              aarch64-linux = {
-                arch = "linux-arm64";
-                hash = "sha256-bQa4KpU3gYf2m9+6ClG1qiCa5W+MjX/XgiCv59b1ptA=";
-              };
-              x86_64-darwin = {
-                arch = "darwin-amd64";
-                hash = "sha256-mcygBoN89RsMDmakGy8LEi1XgNc/+g4ImqaTEuPZrW4=";
-              };
-              aarch64-darwin = {
-                arch = "darwin-arm64";
-                hash = "sha256-X29vyGaEGQZN9bNb17SCrIlf3zmtMgaJmKThK7cY2kc=";
-              };
-            }
-            .${system};
-        in
-        pkgs.stdenvNoCC.mkDerivation {
-          pname = "daytona";
-          inherit version;
-          src = pkgs.fetchurl {
-            url = "https://github.com/daytona/clients/releases/download/v${version}/daytona-${asset.arch}";
-            inherit (asset) hash;
-          };
-          dontUnpack = true;
-          # The Linux builds are cgo, so they need their interpreter and
-          # libc rewritten to the store.
-          nativeBuildInputs = pkgs.lib.optionals isLinux [ pkgs.autoPatchelfHook ];
-          installPhase = ''
-            runHook preInstall
-            install -Dm755 $src $out/bin/daytona
-            runHook postInstall
-          '';
-        };
-
       # GoAlert MCP server (github.com/amitray007/goalert-mcp, MIT), built from
       # the reviewed v0.1.0 commit rather than the npm tarball. Bump `rev`,
       # `hash` and `npmDepsHash` together, after re-reviewing the source.
@@ -1042,7 +995,6 @@
       shellTools =
         with pkgs;
         [
-          daytona
           goalert-mcp
           goalert-mcp-macro
           nsc

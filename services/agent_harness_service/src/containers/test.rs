@@ -1,8 +1,7 @@
 use super::*;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::SandboxEgress;
-use agent_harness::outbound::daytona::AnthropicApiKey;
-use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
+use agent_harness::outbound::local::{AnthropicApiKey, LocalContainerManager, LocalSettings};
 use agent_harness::testing::helpers::egress::test_egress;
 use agent_inmem::domain::engine::{TurnEngine, TurnRequest};
 use agent_inmem::domain::mcp::NoMcpServers;
@@ -286,4 +285,32 @@ fn the_in_process_runtime_and_the_harness_agree_on_macros_server_name() {
         agent_inmem::domain::mcp::MACRO_MCP_NAME,
         agent_harness::domain::model::MACRO_MCP_NAME
     );
+}
+
+#[tokio::test]
+async fn preflight_allows_in_memory_sessions_without_a_sandbox_provider() {
+    let (_, sessions) = sessions_with(bot_id::MACRO_NEW_BOT_ID);
+    let containers = RoutedContainers::new(HarnessContainers::Unavailable, None, sessions);
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").expect("valid owner");
+
+    let blocker = containers
+        .preflight(AgentKind::InMemory, &owner)
+        .await
+        .expect("preflight");
+
+    assert!(blocker.is_none());
+}
+
+#[tokio::test]
+async fn preflight_blocks_sandboxed_sessions_without_a_sandbox_provider() {
+    let (_, sessions) = sessions_with(bot_id::MACRO_CODER_BOT_ID);
+    let containers = RoutedContainers::new(HarnessContainers::Unavailable, None, sessions);
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").expect("valid owner");
+
+    let blocker = containers
+        .preflight(AgentKind::SandboxedCoder, &owner)
+        .await
+        .expect("preflight");
+
+    assert!(matches!(blocker, Some(SessionBlocker::SandboxUnavailable)));
 }

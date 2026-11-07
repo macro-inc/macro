@@ -1,7 +1,7 @@
 /**
  * Sessions that exist on screen before they exist on the server.
  *
- * `POST /agent-sessions` does not answer until its Daytona sandbox is booted,
+ * `POST /agent-sessions` does not answer until its runtime is booted,
  * cloned and answering — minutes, not milliseconds. Waiting on that before
  * opening anything means staring at a spinner for the whole provision, so the
  * session's id is minted here and the block opens against it immediately;

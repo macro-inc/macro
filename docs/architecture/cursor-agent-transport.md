@@ -75,10 +75,10 @@ Already an ACP *agent* backed by the Cursor Cloud Agents API, written sans-io:
 
 ### The other providers
 
-Daytona (`outbound/daytona/manager.rs`), namespace, and local
-(`outbound/local/`, PR #5826) are **mutually exclusive deployment choices**. The
-composition root picks exactly one. `ContainerManager::Transport` is a single
-associated type, resolved once.
+Local Docker (`outbound/local/`) provides sandboxes for `run_local`.
+Deployed harnesses use `HarnessContainers::Unavailable`: sandboxed `@coder`
+sessions are declined with a pointer to Runtimes settings. External runtimes
+and in-process sessions remain available.
 
 ---
 
@@ -222,14 +222,14 @@ generalization, not a rewrite.
 ### Provider routing: the part with real blast radius
 
 `ContainerManager` has one associated `Transport` type. Cursor coexists with
-Daytona rather than replacing it, so the choice moves from boot-time to
+local Docker sandboxes, so the choice moves from boot-time to
 per-session.
 
 Introduce a routing manager in the composition root:
 
 ```rust
 pub struct RoutedContainerManager<Sandbox> {
-    sandbox: Sandbox,                  // Daytona | local | namespace
+    sandbox: Sandbox,                  // local Docker | unavailable
     cursor: CursorContainerManager,
 }
 
@@ -293,12 +293,8 @@ one external backing, so the join is 1:1 and the FK *is* the key. `ON DELETE
 CASCADE` means deleting a session cleans this up. `UNIQUE (provider,
 external_id)` stops two sessions from claiming the same Cursor agent.
 
-**This is why the mapping cannot be memory-only.** Daytona's `resume` finds a
-sandbox by label:
-
-```rust
-self.client.find_by_label(SESSION_LABEL, &session.to_string())
-```
+**This is why the mapping cannot be memory-only.** External agent IDs must
+survive harness restarts.
 
 The Cursor API has no labels. `GET /v1/agents` returns `id`, `name`, `status`,
 `env`, `url`, timestamps, `latestRunId` — nothing we can write a session id
@@ -401,8 +397,7 @@ Cursor — the settings UI must say so rather than implying we have.
 
 `POST /v1/sub-tokens` takes a team service-account key and mints 1-hour
 user-scoped tokens by `forUserEmail`. The agent runs *as* that teammate, with
-their attribution and repo access, and we store **one org secret** — exactly how
-`DAYTONA_API_KEY` already works — and zero user secrets.
+their attribution and repo access, and we store **one org secret** and zero user secrets.
 
 This is viable for v1 *precisely because* the repo is hardcoded to
 `macro-inc/macro`: the only people who can productively use `@cursor` are those
@@ -521,12 +516,12 @@ Most of the sandbox lifecycle is meaningless for Cursor. Stating what each port
 method degenerates to, so the small implementation does not read as an
 oversight:
 
-| Port | Daytona | Cursor |
+| Port | Local Docker | Cursor |
 | --- | --- | --- |
-| `spawn` | create sandbox, `ensure_ready.sh`, port preview, ping, dial | build client, spawn `serve` on a duplex pipe. The Cursor agent itself is not created until the first prompt — `CursorSessionService` is lazy by design |
-| `resume` | find by label, start sandbox, re-run readiness, re-dial | read `external_agent_session`, build client, new pipe, `session/load` with the stored agent id. No boot, no readiness, effectively free |
+| `spawn` | create container, wait for sidecar readiness, dial | build client, spawn `serve` on a duplex pipe. The Cursor agent itself is not created until the first prompt — `CursorSessionService` is lazy by design |
+| `resume` | find container, start it, wait for sidecar readiness, re-dial | read `external_agent_session`, build client, new pipe, `session/load` with the stored agent id. No boot, no readiness, effectively free |
 | `teardown` | destroy sandbox | `POST /v1/agents/{id}/archive`, delete the row |
-| idle reaping | stop sandboxes after `IDLE_TIMEOUT` to stop paying | **nothing.** No sandbox to stop and no per-minute cost to us. `ManagedContainers`, `IDLE_TIMEOUT`, `STOP_CONCURRENCY` have no Cursor analogue |
+| idle reaping | none; teardown and shutdown remove containers | none; idle transports close and release their tasks |
 
 Consequences worth being explicit about:
 
@@ -644,7 +639,7 @@ reported as bugs:
 
 - **Repo access is the user's, not ours.** Cursor cloud agents reach GitHub
   through the Cursor GitHub App installation on the key owner's account. A repo
-  our Daytona sandboxes can clone may be invisible to their Cursor agent.
+  our local sandboxes can clone may be invisible to their Cursor agent.
 - **No MCP servers from our side.** `inbound/acp.rs` already logs a warning and
   ignores `mcpServers` on `session/new`. The Cursor API does accept inline MCP
   definitions at create time, so this is a later possibility, not a wall.
@@ -668,7 +663,7 @@ reported as bugs:
   cannot tell from missed runs; and a mirror that lands after newer Macro
   messages appends late, because the log is append-only — with the 1s poll
   that inversion effectively requires the session's pipe to have been down.
-- **Idle pipes retire themselves, Daytona-reaper style.** Five minutes
+- **Idle pipes retire themselves.** Five minutes
   without a frame in either direction closes the pipe, reclaiming its tasks
   and its poll; the session parks on a clean disconnect and the next prompt
   resumes it. A parked session mirrors nothing until then.
