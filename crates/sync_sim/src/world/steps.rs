@@ -170,7 +170,12 @@ impl Sim {
             Step::Storage { profile, fault } => {
                 self.profiles
                     .entry(profile)
-                    .or_insert_with(|| SimStorage::new(self.config.storage.clone()))
+                    .or_insert_with(|| {
+                        SimStorage::with_retention(
+                            self.config.storage.clone(),
+                            self.config.session.wal.ttl,
+                        )
+                    })
                     .fault(fault);
             }
             Step::Server(step) => self.server_step(step)?,
@@ -290,7 +295,9 @@ impl Sim {
         let profile = self
             .profiles
             .entry(spec.profile.clone())
-            .or_insert_with(|| SimStorage::new(self.config.storage.clone()));
+            .or_insert_with(|| {
+                SimStorage::with_retention(self.config.storage.clone(), self.config.session.wal.ttl)
+            });
         let user = profile.user.clone();
         let now = doc_sync_core::Now {
             mono: doc_sync_core::Millis(self.clock.now),

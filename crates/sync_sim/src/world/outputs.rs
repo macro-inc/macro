@@ -24,6 +24,7 @@ impl Sim {
                         continue;
                     };
                     let profile = client.spec.profile.clone();
+                    let wall_offset = client.skew;
                     if let StorageOp::WalAppend { owner, record, .. } = &op {
                         self.emit(Fact::WalAppendIssued {
                             client: name.clone(),
@@ -36,6 +37,15 @@ impl Sim {
                     }
                     let now = self.clock.now;
                     if let Some(store) = self.profiles.get_mut(&profile) {
+                        if !store
+                            .leases
+                            .contains(&(crate::storage::document(&op).clone(), session))
+                        {
+                            return Err(Failure::new(
+                                "storage_lease",
+                                "storage effect preceded its session lease grant",
+                            ));
+                        }
                         let (token, at) = store.issue(
                             PendingWrite {
                                 client: name.clone(),
@@ -46,7 +56,7 @@ impl Sim {
                             now,
                             &mut self.rng,
                         );
-                        self.schedule(at, Pending::Storage(profile, token));
+                        self.schedule(at, Pending::Storage(profile, token, wall_offset));
                     }
                 }
                 IoEffect::FetchToken { attempt, .. } => {

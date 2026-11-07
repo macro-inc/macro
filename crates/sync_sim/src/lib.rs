@@ -14,8 +14,10 @@ mod document;
 mod network;
 pub use network::SimNetwork;
 mod storage;
-pub use storage::SimStorage;
+pub use storage::{SimStorage, StoreImage};
 mod router;
+/// Reusable transaction cases and an independent IndexedDB-style reference model.
+pub mod storage_reference;
 pub use router::SimRouter;
 mod server;
 pub use server::SimServer;
