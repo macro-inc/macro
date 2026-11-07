@@ -30,3 +30,17 @@ impl TextNode for UnlinkedTextNode {
     }
 }
 impl SearchText for UnlinkedTextNode {}
+
+/// Create literal unlinked text, inheriting the current range's format.
+pub fn create_unlinked_text_node(
+    tx: &mut Transaction<'_>,
+    text: Option<&str>,
+) -> crate::ModelResult<Id<UnlinkedTextNode>> {
+    let node = tx.create(UnlinkedTextNode {})?;
+    tx.text(node)?.set_text_content(text.unwrap_or(""))?;
+    if let Some(Selection::Range(range)) = tx.selection() {
+        let format = range.format;
+        tx.text(node)?.set_format(format)?;
+    }
+    Ok(node)
+}

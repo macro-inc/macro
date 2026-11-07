@@ -59,3 +59,161 @@ impl ElementNode for CommentNode {
     }
 }
 impl SearchText for CommentNode {}
+
+/// Create a comment mark with authored ids and draft metadata.
+pub fn create_comment_node(
+    tx: &mut Transaction<'_>,
+    ids: Vec<String>,
+    thread_id: Maybe<i64>,
+    is_draft: Option<bool>,
+) -> crate::ModelResult<Id<CommentNode>> {
+    tx.create(CommentNode {
+        mark: MarkNode { ids },
+        thread_id,
+        is_draft: is_draft.unwrap_or(false),
+    })
+}
+/// Text covered by one mark id, rejoining separate top-level blocks in reading order.
+pub fn get_comment_mark_text(view: StateRef<'_>, mark_id: &str) -> crate::ModelResult<String> {
+    let mut blocks: Vec<String> = Vec::new();
+    let mut block_key = None;
+    for record in lexical_rich_nodes::utils::dfs(view, None, None) {
+        let node = record.node;
+        if !view
+            .get::<CommentNode>(node)
+            .is_some_and(|comment| comment.mark.ids.iter().any(|id| id == mark_id))
+        {
+            continue;
+        }
+        let key = view.top_level_element(node)?;
+        if key.is_some() && key == block_key {
+            if let Some(last) = blocks.last_mut() {
+                last.push_str(&view.text_content(node));
+            }
+            continue;
+        }
+        block_key = key;
+        blocks.push(view.text_content(node).into_owned());
+    }
+    Ok(js_trim(&blocks.join("\n")).into())
+}
+/// Bounds for comment text included in an agent context.
+#[derive(Clone, Copy, Debug)]
+pub struct CommentContextOptions {
+    /// Maximum UTF-16 length of the selected text, before an ellipsis.
+    pub marked_limit: usize,
+    /// Maximum UTF-16 length of the surrounding window, before ellipses.
+    pub surrounding_limit: usize,
+}
+impl Default for CommentContextOptions {
+    fn default() -> Self {
+        Self {
+            marked_limit: 1000,
+            surrounding_limit: 2000,
+        }
+    }
+}
+/// Bounded live marked text and the block window containing it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentMarkContext {
+    /// Marked document text.
+    pub marked_text: String,
+    /// Containing block text, centered at the marked node position.
+    pub surrounding_text: String,
+}
+fn text_before(view: StateRef<'_>, node: NodeKey) -> usize {
+    let mut length = 0;
+    let mut current = Some(node);
+    while let Some(node) = current {
+        if view
+            .parent(node)
+            .is_none_or(|parent| view.is_root_or_shadow_root(parent))
+        {
+            break;
+        }
+        for sibling in view.prev_siblings(node) {
+            length += view.text_content(sibling).encode_utf16().count();
+        }
+        current = view.parent(node);
+    }
+    length
+}
+/// Locate a mark by node position, avoiding repeated-phrase searches in long blocks.
+pub fn get_comment_mark_context(
+    view: StateRef<'_>,
+    mark_id: &str,
+    options: CommentContextOptions,
+) -> crate::ModelResult<Option<CommentMarkContext>> {
+    let mut blocks = Vec::new();
+    let mut offset = None;
+    for record in lexical_rich_nodes::utils::dfs(view, None, None) {
+        let node = record.node;
+        if !view
+            .get::<CommentNode>(node)
+            .is_some_and(|comment| comment.mark.ids.iter().any(|id| id == mark_id))
+        {
+            continue;
+        }
+        offset.get_or_insert_with(|| text_before(view, node));
+        if let Some(block) = view.top_level_element(node)?
+            && !blocks.contains(&block)
+        {
+            blocks.push(block);
+        }
+    }
+    if blocks.is_empty() {
+        return Ok(None);
+    }
+    let marked = get_comment_mark_text(view, mark_id)?;
+    let joined = blocks
+        .iter()
+        .map(|key| view.text_content(*key))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let leading = joined.encode_utf16().count()
+        - joined
+            .trim_start_matches(is_js_whitespace)
+            .encode_utf16()
+            .count();
+    let surrounding = js_trim(&joined);
+    let marked_units: Vec<_> = marked.encode_utf16().collect();
+    let marked_text = if marked_units.len() > options.marked_limit {
+        format!(
+            "{}…",
+            String::from_utf16_lossy(
+                marked_units
+                    .get(..options.marked_limit)
+                    .ok_or(Error::Invariant("invalid mark limit"))?
+            )
+        )
+    } else {
+        marked.clone()
+    };
+    let units: Vec<_> = surrounding.encode_utf16().collect();
+    let surrounding_text = if units.len() <= options.surrounding_limit {
+        surrounding.into()
+    } else {
+        let pad =
+            (options.surrounding_limit - marked_units.len().min(options.surrounding_limit)) / 2;
+        let at = offset.unwrap_or(0).saturating_sub(leading);
+        let start = at
+            .saturating_sub(pad)
+            .min(units.len() - options.surrounding_limit);
+        let end = start + options.surrounding_limit;
+        format!(
+            "{}{}{}",
+            if start > 0 { "…" } else { "" },
+            String::from_utf16_lossy(
+                units
+                    .get(start..end)
+                    .ok_or(Error::Invariant("invalid comment window"))?
+            ),
+            if end < units.len() { "…" } else { "" }
+        )
+    };
+    Ok(Some(CommentMarkContext {
+        marked_text,
+        surrounding_text,
+    }))
+}

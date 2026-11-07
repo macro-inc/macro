@@ -38,3 +38,11 @@ impl ElementNode for ClassedBlockNode {
     }
 }
 impl SearchText for ClassedBlockNode {}
+
+/// Create an authored block, preserving the attributes that static JSON import drops.
+pub fn create_classed_block_node(
+    tx: &mut Transaction<'_>,
+    node: ClassedBlockNode,
+) -> crate::ModelResult<Id<ClassedBlockNode>> {
+    tx.create(node)
+}
