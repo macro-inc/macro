@@ -421,17 +421,6 @@ impl TextMut<'_, '_> {
                     .set_style(&data.style)?
                     .set_detail(data.detail)?;
                 self.tx.writable(part)?.state = state.clone();
-                if i == 0 {
-                    self.tx.replace(original, part, false)?;
-                } else {
-                    self.tx.insert_after(
-                        *parts
-                            .last()
-                            .ok_or(Error::Invariant("missing split predecessor"))?,
-                        part,
-                        true,
-                    )?;
-                }
                 part
             };
             parts.push(part);
@@ -473,6 +462,14 @@ impl TextMut<'_, '_> {
                 }
             }
             self.tx.pending.selection = Some(Selection::Range(range));
+        }
+        if let (Some(parent), Some(index)) = (parent, insertion_index) {
+            if data.is_segmented() {
+                self.tx.splice(parent, index, 0, &parts)?;
+                self.tx.remove(original, false)?;
+            } else {
+                self.tx.splice(parent, index, 1, &parts)?;
+            }
         }
         if let (
             Some(parent),
