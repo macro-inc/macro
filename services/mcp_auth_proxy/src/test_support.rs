@@ -19,9 +19,10 @@ use crate::domain::{
     },
     ports::{
         ClientRegistrationStore, EmailCodeError, EmailCodeProvider, EmailCodeRequestFuture,
-        EmailCodeTokensFuture, GrantRevokedFuture, MacroApiTokenMinter, MintedAccessTokenFuture,
-        OAuthProvider, RefreshTokenBindingFuture, RefreshTokenBindingStore, RegisteredClientFuture,
-        StoreWriteFuture, UpstreamGrantError, UpstreamRevocationFuture, UpstreamTokensFuture,
+        EmailCodeTokensFuture, GrantRevokedFuture, MacroApiTokenMinter, MintedAccessToken,
+        MintedAccessTokenFuture, OAuthProvider, RefreshTokenBindingFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture, UpstreamGrantError,
+        UpstreamRevocationFuture, UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
     resource::McpResources,
@@ -63,8 +64,11 @@ pub const HARNESS_RESOURCE: &str = "https://mcp.macro.com/mcp";
 /// The ChatGPT MCP server, which gets Macro API tokens.
 pub const CHATGPT_RESOURCE: &str = "https://mcp-chatgpt.macro.com/mcp";
 
-/// Minter that spells out what it was asked to sign, standing in for the
-/// harness's Macro API token signer.
+/// The longest token the fake minter signs, like the harness's signer cap.
+pub const MINTED_LIFETIME_CAP_SECONDS: u64 = 900;
+
+/// Minter that spells out what it signed, standing in for the harness's Macro
+/// API token signer, and caps lifetimes as it does.
 pub struct FakeMacroApiTokens;
 
 impl MacroApiTokenMinter for FakeMacroApiTokens {
@@ -75,12 +79,15 @@ impl MacroApiTokenMinter for FakeMacroApiTokens {
         lifetime: Duration,
     ) -> MintedAccessTokenFuture<'a> {
         Box::pin(async move {
-            Ok(AccessToken::from(format!(
-                "macro-api-token for {} via {} for {}s",
-                upstream.as_str(),
-                client_name.unwrap_or("no client"),
-                lifetime.as_secs()
-            )))
+            let seconds = lifetime.as_secs().min(MINTED_LIFETIME_CAP_SECONDS);
+            Ok(MintedAccessToken {
+                token: AccessToken::from(format!(
+                    "macro-api-token for {} via {} for {seconds}s",
+                    upstream.as_str(),
+                    client_name.unwrap_or("no client"),
+                )),
+                lifetime: Duration::from_secs(seconds),
+            })
         })
     }
 }

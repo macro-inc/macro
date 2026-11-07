@@ -341,17 +341,18 @@ where
             });
     }
 
-    /// The access token `resource` is given for an upstream one: the upstream
-    /// token itself, or a Macro API token signed with the client's name.
+    /// The access token `resource` is given for an upstream one, and the
+    /// seconds it is valid for: the upstream token itself, or a Macro API
+    /// token signed with the client's name, which may expire sooner.
     async fn access_token_for(
         &self,
         resource: McpResource,
         upstream: AccessToken,
         client_id: &str,
         expires_in: u64,
-    ) -> Result<AccessToken, TokenExchangeError> {
+    ) -> Result<(AccessToken, u64), TokenExchangeError> {
         match resource {
-            McpResource::Harness => Ok(upstream),
+            McpResource::Harness => Ok((upstream, expires_in)),
             McpResource::Chatgpt => {
                 let client_name = self
                     .client_registrations
@@ -360,14 +361,16 @@ where
                     .map_err(TokenExchangeError::ClientRegistrationStore)?
                     .map(|client| client_label(&client.client_name));
 
-                self.macro_api_tokens
+                let minted = self
+                    .macro_api_tokens
                     .mint(
                         &upstream,
                         client_name.as_deref(),
                         Duration::from_secs(expires_in),
                     )
                     .await
-                    .map_err(TokenExchangeError::MintAccessToken)
+                    .map_err(TokenExchangeError::MintAccessToken)?;
+                Ok((minted.token, minted.lifetime.as_secs()))
             }
         }
     }
@@ -441,7 +444,7 @@ where
                 TokenExchangeError::RefreshFailed(error)
             })?;
         // Before rebinding, so a failed mint leaves the presented token bound.
-        let access_token = self
+        let (access_token, expires_in) = self
             .access_token_for(resource, tokens.access_token, &client_id, tokens.expires_in)
             .await?;
 
@@ -479,7 +482,7 @@ where
             access_token,
             refresh_token: tokens.refresh_token,
             token_type: "Bearer",
-            expires_in: tokens.expires_in,
+            expires_in,
         })
     }
 
@@ -535,9 +538,13 @@ where
             None => return Err(TokenExchangeError::CodeVerifierRequired),
         }
 
-        let expires_in = seconds_until(issued.access_token_expires_at);
-        let access_token = self
-            .access_token_for(resource, issued.access_token, &issued.client_id, expires_in)
+        let (access_token, expires_in) = self
+            .access_token_for(
+                resource,
+                issued.access_token,
+                &issued.client_id,
+                seconds_until(issued.access_token_expires_at),
+            )
             .await?;
 
         let binding = RefreshTokenBinding {

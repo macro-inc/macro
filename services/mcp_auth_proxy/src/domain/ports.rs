@@ -126,13 +126,23 @@ pub trait OAuthProvider: Send + Sync {
 
 /// Boxed future returning an access token the broker minted.
 pub type MintedAccessTokenFuture<'a> =
-    Pin<Box<dyn Future<Output = anyhow::Result<AccessToken>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = anyhow::Result<MintedAccessToken>> + Send + 'a>>;
+
+/// A minted access token and how long it is valid, which a signer may cap
+/// below the lifetime it was asked for.
+pub struct MintedAccessToken {
+    /// The signed token.
+    pub token: AccessToken,
+    /// How long it is valid for.
+    pub lifetime: Duration,
+}
 
 /// Mints the token a resource that hands its bearer straight to Macro's APIs
 /// gets in place of the upstream access token. Those APIs cannot look up which
 /// client a token went to, so the token carries the attribution, signed.
 pub trait MacroApiTokenMinter: Send + Sync {
-    /// A Macro API token for the user `upstream` names, valid for `lifetime`,
+    /// A Macro API token for the user `upstream` names, valid for at most
+    /// `lifetime`,
     /// acting as the Macro bot via the client named `client_name` (`None` when
     /// its registration has lapsed).
     fn mint<'a>(

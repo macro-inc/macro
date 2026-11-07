@@ -9,8 +9,9 @@ use crate::{
     test_support::{
         ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, CHATGPT_RESOURCE, FakeOAuthProvider,
         GATEWAY_REDIRECT_URI, HARNESS_RESOURCE, Harness, LOOPBACK_REDIRECT_URI,
-        REFRESHED_ACCESS_TOKEN, TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN, UPSTREAM_EXPIRES_IN,
-        UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
+        MINTED_LIFETIME_CAP_SECONDS, REFRESHED_ACCESS_TOKEN, TRUSTED_REDIRECT_URI,
+        UPSTREAM_ACCESS_TOKEN, UPSTREAM_EXPIRES_IN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER,
+        code_challenge_for,
     },
 };
 
@@ -1375,13 +1376,13 @@ async fn the_chatgpt_resource_gets_a_macro_api_token_naming_the_client() {
         .await
         .expect("code exchange should succeed");
 
+    // The upstream token lives an hour; the signer caps the minted one, and
+    // expires_in reports the minted lifetime so the client refreshes in time.
     assert_eq!(
         response.access_token.as_str(),
-        format!(
-            "macro-api-token for upstream-access-token via test-client for {}s",
-            response.expires_in
-        )
+        "macro-api-token for upstream-access-token via test-client for 900s"
     );
+    assert_eq!(response.expires_in, MINTED_LIFETIME_CAP_SECONDS);
     assert_eq!(response.refresh_token.as_str(), UPSTREAM_REFRESH_TOKEN);
 }
 
@@ -1401,8 +1402,9 @@ async fn a_chatgpt_refresh_mints_from_the_refreshed_upstream_token() {
 
     assert_eq!(
         response.access_token.as_str(),
-        "macro-api-token for refreshed-access-token via test-client for 3600s"
+        "macro-api-token for refreshed-access-token via test-client for 900s"
     );
+    assert_eq!(response.expires_in, MINTED_LIFETIME_CAP_SECONDS);
 }
 
 /// Deployed clients send whatever resource they derive from their configured
