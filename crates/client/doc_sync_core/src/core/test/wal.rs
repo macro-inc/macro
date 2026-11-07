@@ -576,3 +576,39 @@ fn assisted_retry_schedules_only_the_new_ack_deadline() {
     assert!(h.core.assist_push.is_some());
     assert!(h.out.wake_at.is_none_or(|at| at > retry));
 }
+
+#[test]
+fn adoption_inside_coalesce_window_keeps_local_edit_for_append() {
+    let mut h = Harness::running(TransportKind::None, Persistence::Durable);
+    load_rows(&mut h, vec![row(1)]);
+    let id = h
+        .core
+        .storage
+        .iter()
+        .find_map(|(id, pending)| {
+            matches!(pending.completion, StorageCompletion::Adopt { .. }).then_some(*id)
+        })
+        .unwrap();
+    h.edit();
+    let peer = h.doc.peer_id();
+    let local_end = h.doc.oplog_vv().get(&peer).copied().unwrap();
+    h.send(SyncInput::Storage(StorageEvent::Adopted {
+        id,
+        result: Ok(1),
+    }));
+    h.at(25, SyncInput::Tick);
+    let record = h
+        .out
+        .io
+        .iter()
+        .find_map(|effect| match effect {
+            IoEffect::Storage {
+                op: StorageOp::WalAppend { record, .. },
+                ..
+            } => Some(record),
+            _ => None,
+        })
+        .expect("the local edit must still be appended after adoption replay");
+    let meta = loro::LoroDoc::decode_import_blob_meta(&record.bytes, true).unwrap();
+    assert_eq!(meta.partial_end_vv.get(&peer).copied(), Some(local_end));
+}
