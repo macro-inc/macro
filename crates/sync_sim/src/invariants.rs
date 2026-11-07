@@ -9,9 +9,12 @@ pub use presence::*;
 
 /// Run every currently applicable fact-based invariant.
 pub fn check_all(outcome: &Outcome) -> Result<(), Vec<Failure>> {
+    let hostile = outcome.config.net.hostile.is_some() || outcome.script.iter().any(|step|
+        matches!(step, Step::Net(NetStep::Profile(profile)) if profile.hostile.is_some()));
     let errors = ALL_INVARIANTS
         .iter()
         .filter(|(name, _)| !PENDING_EDITOR_INVARIANTS.contains(name))
+        .filter(|(name, _)| !hostile || HOSTILE_SAFETY_INVARIANTS.contains(name))
         .filter_map(|(_, check)| check(outcome).err())
         .collect::<Vec<_>>();
     if errors.is_empty() {
@@ -22,6 +25,15 @@ pub fn check_all(outcome: &Outcome) -> Result<(), Vec<Failure>> {
 }
 /// One immutable-outcome invariant query.
 pub type Invariant = fn(&Outcome) -> Result<(), Failure>;
+/// S8's hostile-network subset; liveness and quietness are intentionally not asserted.
+pub const HOSTILE_SAFETY_INVARIANTS: &[&str] = &[
+    "no_acked_edit_lost",
+    "no_persisted_edit_lost",
+    "all_docs_equal",
+    "editor_states_equal",
+    "refused_updates_never_applied",
+    "per_step",
+];
 /// Named query registry used by stories and generated scripts.
 pub const ALL_INVARIANTS: &[(&str, Invariant)] = &[
     ("settled", settled),

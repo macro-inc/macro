@@ -33,6 +33,17 @@ pub enum Fact {
         /// Whether black-holed.
         partitioned: bool,
     },
+    /// A real client socket-close instruction, including protocol-error closes.
+    SocketClose {
+        /// Client.
+        client: ClientName,
+        /// Socket generation.
+        connection: u32,
+        /// Wire close status code.
+        code: u16,
+        /// Actual core close cause (independent of its wire status mapping).
+        reason: String,
+    },
     /// Comment request facts supplied by the future editor adapter.
     CommentSent {
         /// Writer.

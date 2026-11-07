@@ -18,7 +18,8 @@ pub fn quiet(outcome: &Outcome) -> Result<(), Failure> {
             Fact::WalAppendIssued { .. }
             | Fact::Status { .. }
             | Fact::Opened { .. }
-            | Fact::Closed { .. } => true,
+            | Fact::Closed { .. }
+            | Fact::SocketClose { .. } => true,
             _ => false,
         };
         if noisy {

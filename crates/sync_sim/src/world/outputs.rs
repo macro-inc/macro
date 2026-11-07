@@ -139,7 +139,13 @@ impl Sim {
                     FrameKind::Ping,
                     Packet::Text("ping".into()),
                 ),
-                IoEffect::SocketClose { conn, code, .. } => {
+                IoEffect::SocketClose { conn, code, reason } => {
+                    self.emit(Fact::SocketClose {
+                        client: name.clone(),
+                        connection: conn.0,
+                        code,
+                        reason: format!("{reason:?}"),
+                    });
                     let key = (name.clone(), session, conn.0);
                     if let Some(link) = self.net.links.get(&key) {
                         let at = link.tails[0].max(self.clock.now).saturating_add(1);
@@ -421,32 +427,42 @@ impl Sim {
             .flat_map(|frame| frame.iter().skip(1).copied())
             .collect::<Vec<_>>();
         let kind = crate::network::kind(&message, direction);
+        let hostile = self.net.profile.hostile.clone().unwrap_or_default();
         let duplicate = matches!(
             kind,
             FrameKind::Update | FrameKind::RemoteUpdate | FrameKind::Ack | FrameKind::Awareness
-        ) && self.net.profile.duplicate > 0.0
-            && self
-                .rng
-                .random_bool(self.net.profile.duplicate.clamp(0.0, 1.0));
-        let corrupted = self.net.corrupt_message(&key, direction, &mut frames);
-        for frame in &frames {
-            self.transmit_frame(
-                key.clone(),
-                direction,
-                kind,
-                Packet::Binary(frame.clone()),
-                corrupted,
+        ) && hostile.duplicate > 0.0
+            && self.rng.random_bool(hostile.duplicate.clamp(0.0, 1.0));
+        if hostile.reorder > 0.0 && self.rng.random_bool(hostile.reorder.clamp(0.0, 1.0)) {
+            let extra = self.rng.random_range(
+                1..=self
+                    .net
+                    .profile
+                    .latency
+                    .0
+                    .0
+                    .max(self.net.profile.latency.1.0)
+                    .max(1)
+                    .saturating_mul(4),
             );
+            if let Some(link) = self.net.links.get_mut(&key) {
+                link.tails[index] = link.tails[index].max(self.clock.now).saturating_add(extra);
+            }
         }
-        if duplicate {
-            for frame in frames {
-                self.transmit_frame(
-                    key.clone(),
-                    direction,
-                    kind,
-                    Packet::Binary(frame),
-                    corrupted,
-                );
+        let corrupted = self.net.corrupt_message(&key, direction, &mut frames);
+        let copies = if duplicate { 2 } else { 1 };
+        for _ in 0..copies {
+            let drop = (frames.len() > 1
+                && hostile.drop_frame > 0.0
+                && self.rng.random_bool(hostile.drop_frame.clamp(0.0, 1.0)))
+            .then(|| self.rng.random_range(0..frames.len()));
+            for (index, frame) in frames.iter().enumerate() {
+                let packet = Packet::Binary(frame.clone());
+                if drop == Some(index) {
+                    self.frame_fact(&key, direction, kind, &packet, "Dropped");
+                } else {
+                    self.transmit_frame(key.clone(), direction, kind, packet, corrupted);
+                }
             }
         }
     }
