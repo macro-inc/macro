@@ -4,8 +4,8 @@
 
 Core to the agent sessions feature: collapses an agent session's raw ACP/ARP
 protocol log into the renderable message vocabulary every caller (harness,
-web, exports) reads sessions through. Builds native (`rlib`) and as wasm
-(`cdylib`) for the browser.
+web, exports) reads sessions through. The browser build is the
+[`agent_fold_wasm`](../agent_fold_wasm/AGENTS.md) wrapper's cdylib.
 
 ## How it works
 

@@ -81,6 +81,11 @@ idle `target/` directories instead). kache also deletes the `target/` of a
 worktree that no longer exists. To build without it, `export RUSTC_WRAPPER=`
 (or point it at `sccache`, which CI uses) after entering the shell.
 
+A crate the browser loads keeps its `cdylib` in a thin `<crate>_wasm` wrapper
+(`pub use <crate>::*;`, built with `wasm-pack --out-name <crate>`), never on the
+library itself: a library `cdylib` links an unused `.so` into every native build,
+and two services built in one target dir overwrite each other's copy.
+
 Gate wasm-only features such as `uuid/js` on
 `[target.'cfg(target_arch = "wasm32")'.dependencies]`: enabled natively, they
 change the feature set of a shared dependency and rebuild everything above it

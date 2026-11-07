@@ -13,6 +13,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | --- | --- |
 | [`crm`](crm/AGENTS.md) | Part of CRM (Sales): a hexagonal crate for companies, contacts, and pipelines (including the legacy-CRM → Sales migration), plus the AI tools/HTTP/GraphQL surfaces over … |
 | [`database_sql`](database_sql/AGENTS.md) | Part of the Databases feature: the SQL subset agents and the console use to read and write Macro databases. |
+| [`database_sql_wasm`](database_sql_wasm/AGENTS.md) | The browser build of `database_sql` (the database SQL engine the web app runs in the browser). |
 | `database_webhooks` |  |
 | [`databases`](databases/AGENTS.md) | The core of the Databases feature (also underlies CRM and Forms storage): tables of typed rows whose cells are entity properties, behind a hexagonal service with Axum … |
 | [`databases_sql`](databases_sql/AGENTS.md) | Part of the Databases feature: runs the `database_sql` engine over Macro databases for agents and authenticated HTTP clients, alongside the browser's direct … |

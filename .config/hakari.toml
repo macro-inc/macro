@@ -77,6 +77,7 @@ workspace-members = [
     # anyhow, either, nom, tracing, thiserror - is contributed by dozens of
     # other members anyway, so the deploy dependency layers are unchanged.
     "agent_fold",
+    "agent_fold_wasm",
     # agent_session_id: the session and replica ids the fold's log carries.
     "agent_session_id",
     # dynamic_ui: the view types the fold's tool details and activity cards hold.
@@ -117,6 +118,7 @@ workspace-members = [
     # the browser (cache worker) as well as in services, so it must stay
     # wasm-safe.
     "database_sql",
+    "database_sql_wasm",
     # models_databases: the typed write ops the SQL engine will emit, so it
     # joins database_sql in the browser and must stay wasm-safe too.
     "models_databases",
@@ -132,19 +134,24 @@ workspace-members = [
     # module in the editor's worker) as well as in the AI tools, so it must
     # stay wasm-safe.
     "pptx_engine",
+    "pptx_engine_wasm",
     # docx_engine: the Word engine runs in the browser (a wasm32 module in the
     # document editor's worker) on top of pptx_engine, so it must stay
     # wasm-safe too.
     "docx_engine",
+    "docx_engine_wasm",
     # fig_engine: the .fig design viewer's parser and rasterizer runs in the
     # browser (a wasm32 module in the viewer's workers), so it must stay
     # wasm-safe.
     "fig_engine",
+    "fig_engine_wasm",
     # psd_engine and ai_engine: the Photoshop and Illustrator engines run in
     # the browser too (wasm32 modules in their editors' workers), on top of
     # fig_engine, so they must stay wasm-safe as well.
     "psd_engine",
+    "psd_engine_wasm",
     "ai_engine",
+    "ai_engine_wasm",
     # password_import: password-manager export parsing runs in the browser
     # (a wasm32 module in the import dialog's worker), so it must stay wasm-safe.
     "password_import",

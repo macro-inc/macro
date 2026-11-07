@@ -4,10 +4,6 @@ name = "docx_engine"
 publish = false
 version = "0.1.0"
 
-[lib]
-# `cdylib` for the browser build; `rlib` so native tools and tests link it.
-crate-type = ["cdylib", "rlib"]
-
 [features]
 default = []
 # Compile the bundled font set into native builds (tests, the corpus CLI).
@@ -36,6 +32,3 @@ thiserror = { workspace = true }
 console_error_panic_hook = { workspace = true }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
-
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = false
