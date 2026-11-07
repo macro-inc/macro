@@ -12343,6 +12343,8 @@ dependencies = [
  "email_validator",
  "macro_redis",
  "redis",
+ "tokio",
+ "uuid",
  "workspace-hack",
 ]
 
