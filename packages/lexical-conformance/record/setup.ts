@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, expect } from 'vitest';
 import { isOracleFrame } from './attribution';
+import { moduleEntropy, moduleReads } from './bootstrap';
 import { SourceCoverage } from './coverage';
 import { Entropy } from './entropy';
 import { captureEvents } from './events';
@@ -33,9 +34,11 @@ afterAll(async () => {
 const disabled = process.env.LEXICAL_MEMBRANE === 'off';
 
 beforeEach(async () => {
+  moduleEntropy.dispose();
   await coverage?.reset();
   resetRandomKey();
   recorder = new Recorder();
+  recorder.trace.push(...moduleReads);
   if (!disabled) activate(recorder);
   entropy = new Entropy(
     (op) => recorder.trace.push(op),
@@ -81,7 +84,7 @@ afterEach(async (context) => {
     activate();
     if (!disabled && recorder.trace.length && !recorder.reasons.size) {
       try {
-        await replay(fixture, resetRandomKey);
+        await replay(JSON.parse(JSON.stringify(fixture)), resetRandomKey);
       } catch (error) {
         recorder.reasons.add(String(error));
       }

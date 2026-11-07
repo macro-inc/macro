@@ -27,6 +27,61 @@ const source = {
   recordedWith: 'lexical-conformance@schema-2',
 };
 
+test('async entry depth suppresses inherited test attribution and restores on exit', () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const exit = recorder.enter('dom-event');
+  try {
+    lexical.$isTextNode(null);
+    const editor = lexical.createEditor({ namespace: 'guarded' });
+    editor.update(() => lexical.$getRoot().getChildrenSize(), {
+      discrete: true,
+    });
+  } finally {
+    exit();
+  }
+  expect(recorder.trace.some((op) => op.fn === 'lexical.$isTextNode')).toBe(
+    false
+  );
+  lexical.$isTextNode(null);
+  expect(recorder.trace.at(-1)?.fn).toBe('lexical.$isTextNode');
+});
+
+test('disposed entropy wrappers delegate to the restored native source', () => {
+  const entropy = new Entropy();
+  entropy.install();
+  const stale = Math.random;
+  expect(() => stale()).toThrow('untaped-entropy');
+  entropy.dispose();
+  expect(stale()).toBeGreaterThanOrEqual(0);
+});
+
+test('read flush and deferred callbacks expose their batching boundaries', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({ namespace: 'boundaries' });
+  editor.update(
+    () => lexical.$getRoot().append(lexical.$createParagraphNode()),
+    {
+      onUpdate: () => {},
+    }
+  );
+  editor.read(() => lexical.$getRoot().getChildrenSize());
+  expect(
+    recorder.trace.filter((op) => op.op === 'tick').map((op) => op.reason)
+  ).toEqual(['read-flush', 'onUpdate']);
+  const result = fixture(recorder, source);
+  result.trace.unshift({
+    op: 'entropy',
+    src: 'module-init',
+    source: 'random',
+    v: 0.5,
+  });
+  await expect(replay(result, resetRandomKey)).rejects.toThrow(
+    'module-init-entropy'
+  );
+});
+
 let tape: Entropy;
 beforeEach(() => {
   resetRandomKey();

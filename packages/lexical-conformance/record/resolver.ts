@@ -19,11 +19,7 @@ export function membranePlugin(): Plugin {
           .replaceAll("process.env.NODE_ENV === 'production'", 'true');
         if (replaced !== code) return { code: replaced, map: null };
       }
-      if (
-        process.env.LEXICAL_MEMBRANE === 'off' ||
-        !id.includes('/__tests__/') ||
-        id.includes('/lexical-conformance/')
-      )
+      if (!id.includes('/__tests__/') || id.includes('/lexical-conformance/'))
         return;
       const source = ts.createSourceFile(
         id,
@@ -33,8 +29,26 @@ export function membranePlugin(): Plugin {
         id.endsWith('tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
       );
       const edits: { start: number; end: number; text: string }[] = [];
+      const awaitBoundary = (node: ts.Node) => {
+        if (
+          ts.isAwaitExpression(node) &&
+          ts.isCallExpression(node.expression) &&
+          ts.isPropertyAccessExpression(node.expression.expression) &&
+          node.expression.expression.name.text === 'update'
+        ) {
+          edits.push({
+            start: node.getStart(source),
+            end: node.end,
+            text: `((__lexAwaited) => { globalThis.__lexRec?.tick('await'); return __lexAwaited; })(${node.getText(source)})`,
+          });
+          return;
+        }
+        ts.forEachChild(node, awaitBoundary);
+      };
+      awaitBoundary(source);
       let serial = 0;
       for (const node of source.statements) {
+        if (process.env.LEXICAL_MEMBRANE === 'off') break;
         if (
           !ts.isImportDeclaration(node) ||
           !ts.isStringLiteral(node.moduleSpecifier) ||
@@ -90,7 +104,7 @@ export function membranePlugin(): Plugin {
       }
       if (!edits.length) return;
       let result = code;
-      for (const edit of edits.reverse())
+      for (const edit of edits.sort((a, b) => b.start - a.start))
         result =
           result.slice(0, edit.start) + edit.text + result.slice(edit.end);
       return {
