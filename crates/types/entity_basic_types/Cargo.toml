@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "entity_basic_types"
+publish = false
+version = "0.1.0"
+
+[features]
+schema = ["dep:utoipa"]
+sqlx = ["dep:sqlx"]
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+document_sub_type = { workspace = true }
+model_file_type = { workspace = true }
+model_owner = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
