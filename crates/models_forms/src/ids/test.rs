@@ -1,4 +1,5 @@
 use super::*;
+use uuid::Uuid;
 
 #[test]
 fn an_id_is_its_uuid_string_on_the_wire() {
@@ -25,10 +26,10 @@ fn an_id_is_its_uuid_string_on_the_wire() {
 
 #[test]
 fn a_new_id_is_time_ordered() {
-    assert_eq!(FormId::new().as_uuid().get_version_num(), 7);
-    assert_eq!(FormSectionId::new().as_uuid().get_version_num(), 7);
-    assert_eq!(FormQuestionId::new().as_uuid().get_version_num(), 7);
-    assert_eq!(FormResponseId::new().as_uuid().get_version_num(), 7);
+    assert_eq!(FormId::generate().as_uuid().get_version_num(), 7);
+    assert_eq!(FormSectionId::generate().as_uuid().get_version_num(), 7);
+    assert_eq!(FormQuestionId::generate().as_uuid().get_version_num(), 7);
+    assert_eq!(FormResponseId::generate().as_uuid().get_version_num(), 7);
 }
 
 #[test]

@@ -57,6 +57,7 @@ members = [
   "crates/models_databases",
   "crates/forms",
   "crates/models_forms",
+  "crates/types/id_newtype",
   "crates/embedding",
   "crates/image_generation",
   "crates/web_search",

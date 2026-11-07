@@ -1,4 +1,5 @@
 use super::*;
+use uuid::Uuid;
 
 #[test]
 fn an_id_is_its_uuid_string_on_the_wire() {
@@ -19,7 +20,7 @@ fn an_id_is_its_uuid_string_on_the_wire() {
 
 #[test]
 fn a_new_id_is_time_ordered() {
-    assert_eq!(TableId::new().as_uuid().get_version_num(), 7);
+    assert_eq!(TableId::generate().as_uuid().get_version_num(), 7);
 }
 
 #[test]

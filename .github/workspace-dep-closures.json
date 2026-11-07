@@ -462,6 +462,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -953,6 +954,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/universal_input",
       "crates/upstream_error",
@@ -1146,6 +1148,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -1589,6 +1592,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack",
       "services/agent_trigger_service"
@@ -1945,6 +1949,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2129,6 +2134,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2402,6 +2408,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -2563,6 +2570,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -2830,6 +2838,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -3368,6 +3377,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -4302,6 +4312,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -4636,6 +4647,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -4756,7 +4768,8 @@
       "crates/model_owner",
       "crates/models_databases",
       "crates/non_empty",
-      "crates/notification_state"
+      "crates/notification_state",
+      "crates/types/id_newtype"
     ],
     "database_webhooks": [
       "crates/activity",
@@ -4823,6 +4836,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/id_newtype",
       "crates/workspace-hack"
     ],
     "databases": [
@@ -4889,6 +4903,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/types/id_newtype",
       "crates/workspace-hack"
     ],
     "databases_sql": [
@@ -5009,6 +5024,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -5430,6 +5446,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -5948,6 +5965,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -6180,6 +6198,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/universal_input",
       "crates/upstream_error",
@@ -6363,6 +6382,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack",
       "services/email_scheduled_handler"
@@ -6480,6 +6500,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -6583,6 +6604,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -7095,6 +7117,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -7730,6 +7753,7 @@
       "crates/sqs_worker",
       "crates/static_file_service_client",
       "crates/system_properties",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -7883,6 +7907,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -7986,6 +8011,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -8138,6 +8164,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8292,6 +8319,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8446,6 +8474,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8646,6 +8675,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8896,6 +8926,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9035,6 +9066,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -9188,6 +9220,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9370,6 +9403,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",
@@ -9419,6 +9453,10 @@
       "crates/model_user",
       "crates/remote_env_var",
       "crates/workspace-hack"
+    ],
+    "id_newtype": [
+      "crates/macro_uuid",
+      "crates/types/id_newtype"
     ],
     "image_generation": [
       "crates/activity",
@@ -9696,6 +9734,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/workspace-hack"
     ],
     "import_jira": [
@@ -10804,6 +10843,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -10985,7 +11025,8 @@
       "crates/cowlike",
       "crates/macro_user_id",
       "crates/macro_uuid",
-      "crates/models_databases"
+      "crates/models_databases",
+      "crates/types/id_newtype"
     ],
     "models_dcs": [
       "crates/models_dcs",
@@ -11010,6 +11051,7 @@
       "crates/macro_uuid",
       "crates/models_databases",
       "crates/models_forms",
+      "crates/types/id_newtype",
       "crates/workspace-hack"
     ],
     "models_grouping": [
@@ -11143,6 +11185,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -11252,6 +11295,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -11561,6 +11605,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -12255,6 +12300,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -12575,6 +12621,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -12725,6 +12772,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -12851,6 +12899,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -12959,6 +13008,7 @@
       "crates/static_file_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -13315,6 +13365,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -13423,6 +13474,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/workspace-hack",
       "services/slack_import_worker"
     ],
@@ -13528,6 +13580,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/workspace-hack"
     ],
     "sns_client": [
@@ -13651,6 +13704,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -13778,6 +13832,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -13901,6 +13956,7 @@
       "crates/system_properties",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/workspace-hack"
     ],
@@ -14038,6 +14094,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -15250,6 +15307,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/id_newtype",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",

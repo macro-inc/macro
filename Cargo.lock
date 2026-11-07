@@ -10549,6 +10549,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
 
 [[package]]
+name = "id_newtype"
+version = "0.1.0"
+dependencies = [
+ "macro_uuid",
+ "nutype",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "iddqd"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13327,8 +13338,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "fractional_index",
+ "id_newtype",
  "macro_user_id",
- "macro_uuid",
  "nom 8.0.0",
  "schemars 1.2.1",
  "serde",
@@ -13385,8 +13396,8 @@ name = "models_forms"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "id_newtype",
  "lazy-regex",
- "macro_uuid",
  "models_databases",
  "schemars 1.2.1",
  "serde",
