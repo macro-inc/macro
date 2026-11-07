@@ -79,6 +79,7 @@
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
+			"services/mcp-chatgpt-worker",
 			"services/bots/anthropic-status-bot",
 			"services/bots/goalert-bot",
 			"services/bots/stripe-payment-bot",

@@ -184,6 +184,34 @@ holding them authorize once more. Rate limiting of `/register` belongs at the
 edge; the broker bounds each registration's size but not how many a caller may
 create.
 
+## Which MCP server a token is for
+
+The broker signs clients in for two MCP servers, which a client names with the
+RFC 8707 `resource` parameter (`domain/resource.rs`):
+
+- **The harness's public MCP** (`McpPublicUrl` + `/mcp`). It gets the
+  FusionAuth access token, and labels what the client writes from that token's
+  recorded client (previous section). Any `resource` other than the ChatGPT
+  server's, or none, is for this server: deployed clients send whatever
+  resource they derive from the URL their user configured (the gateway URL, a
+  bare origin), so the broker does not refuse one it does not recognize.
+- **The ChatGPT MCP server** (`McpChatgptServiceUrl` + `/mcp`, a Cloudflare
+  Worker). It passes its bearer unchanged to Macro's APIs, which accept a
+  FusionAuth token but cannot look up its client, so writes would show as the
+  user's own. This resource gets a Macro API token instead, minted at `/token`
+  for the same user through the `MacroApiTokenMinter` port: the Macro bot via
+  the client's registered name, the attribution public MCP's `ExecuteCode`
+  signs. It expires with the FusionAuth token it was minted from, and the
+  refresh token stays FusionAuth's, so a refresh naming this resource mints a
+  fresh one.
+
+Only the ChatGPT server's exact URL (a trailing slash aside) selects it; a
+lookalike such as its bare origin or an `http` URL gets the harness's token.
+The resource is not stored with the code: it changes only which credential for
+the same user and client is returned, so `/token` decides from its own
+`resource`, which MCP clients send on both grants. A ChatGPT refresh that omits
+it gets a FusionAuth token, which Macro's APIs accept without the client label.
+
 ## Token endpoint errors
 
 `/token` answers errors in the RFC 6749 section 5.2 JSON shape
@@ -229,7 +257,7 @@ binding goes last, so a client that sees a `503` can retry. A token the broker
 does not hold (never issued, expired, or already revoked) gets `200`, as RFC
 7009 section 2.2 requires.
 
-Access tokens are FusionAuth JWTs and are not revocable: presenting one gets
+Access tokens, FusionAuth JWTs or Macro API tokens, are not revocable: presenting one gets
 `400 unsupported_token_type`. Revocation does not cut them short, so an access
 token issued before the revocation stays valid until it expires. Every token
 response carries `expires_in`, which is that remaining window; FusionAuth signs
