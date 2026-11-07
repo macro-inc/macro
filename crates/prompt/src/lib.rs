@@ -12,7 +12,6 @@ pub mod channel_mention;
 pub mod citations;
 pub mod code_mode;
 pub mod coding_agents;
-pub mod connected_toolsets;
 pub mod databases;
 pub mod deferred_tools;
 pub mod do_not;
